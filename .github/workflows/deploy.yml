@@ -43,38 +43,12 @@ jobs:
         cp CONFIGURATION.md deploy/
         cp SECURITY.md deploy/
         cp SETUP.md deploy/
-        cp .htaccess deploy/ 2>/dev/null || true
-        
-        # Create .htaccess if it doesn't exist
-        if [ ! -f deploy/.htaccess ]; then
-          cat > deploy/.htaccess <<'EOF'
-# AviationWX URL Rewriting
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-  
-  # Force HTTPS
-  RewriteCond %{HTTPS} off
-  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-  
-  # Default to index.php for routing
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ index.php [QSA,L]
-</IfModule>
-
-# Security
-<FilesMatch "^(airports\.json|\.git|\.gitignore)">
-  Order allow,deny
-  Deny from all
-</FilesMatch>
-
-# Cache webcam images
-<FilesMatch "\.jpg$">
-  ExpiresActive On
-  ExpiresDefault "access plus 1 minute"
-</FilesMatch>
-EOF
+        # Copy .htaccess
+        if [ -f .htaccess ]; then
+          cp .htaccess deploy/
+          echo "✓ Copied .htaccess"
+        else
+          echo "⚠️  No .htaccess found in repo"
         fi
         
         # Make cache directories writable
