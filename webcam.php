@@ -18,7 +18,16 @@ if (empty($airportId)) {
 
 // Load config
 $configFile = __DIR__ . '/airports.json';
+if (!file_exists($configFile)) {
+    http_response_code(500);
+    die('Configuration file not found');
+}
+
 $config = json_decode(file_get_contents($configFile), true);
+if (json_last_error() !== JSON_ERROR_NONE || !$config) {
+    http_response_code(500);
+    die('Invalid configuration file');
+}
 
 if (!isset($config['airports'][$airportId]['webcams'][$camIndex])) {
     readfile('placeholder.jpg');

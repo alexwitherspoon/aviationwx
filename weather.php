@@ -21,6 +21,10 @@ if (!file_exists($configFile)) {
 }
 
 $config = json_decode(file_get_contents($configFile), true);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    echo json_encode(['success' => false, 'error' => 'Configuration file is not valid JSON: ' . json_last_error_msg()]);
+    exit;
+}
 if (!isset($config['airports'][$airportId])) {
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
@@ -30,19 +34,28 @@ $airport = $config['airports'][$airportId];
 
 // Fetch weather based on source
 $weatherData = null;
-switch ($airport['weather_source']['type']) {
-    case 'tempest':
-        $weatherData = fetchTempestWeather($airport['weather_source']);
-        break;
-    case 'ambient':
-        $weatherData = fetchAmbientWeather($airport['weather_source']);
-        break;
-    case 'metar':
-        $weatherData = fetchMETAR($airport);
-        break;
-    default:
-        echo json_encode(['success' => false, 'error' => 'Unknown weather source type']);
-        exit;
+$weatherError = null;
+try {
+    switch ($airport['weather_source']['type']) {
+        case 'tempest':
+            $weatherData = fetchTempestWeather($airport['weather_source']);
+            break;
+        case 'ambient':
+            $weatherData = fetchAmbientWeather($airport['weather_source']);
+            break;
+        case 'metar':
+            $weatherData = fetchMETAR($airport);
+            break;
+        default:
+            $weatherError = 'Unknown weather source type: ' . $airport['weather_source']['type'];
+    }
+} catch (Exception $e) {
+    $weatherError = 'Error fetching weather: ' . $e->getMessage();
+}
+
+if ($weatherError !== null) {
+    echo json_encode(['success' => false, 'error' => $weatherError]);
+    exit;
 }
 
 if ($weatherData === null) {
@@ -479,28 +492,41 @@ function getSunsetTime($airport) {
  * Update today's peak gust for an airport
  */
 function updatePeakGust($airportId, $currentGust) {
-    $cacheDir = __DIR__ . '/cache';
-    if (!file_exists($cacheDir)) {
-        mkdir($cacheDir, 0755, true);
+    try {
+        $cacheDir = __DIR__ . '/cache';
+        if (!file_exists($cacheDir)) {
+            if (!mkdir($cacheDir, 0755, true)) {
+                error_log("Failed to create cache directory: {$cacheDir}");
+                return;
+            }
+        }
+        
+        $file = $cacheDir . '/peak_gusts.json';
+        $dateKey = date('Y-m-d');
+        
+        $peakGusts = [];
+        if (file_exists($file)) {
+            $content = file_get_contents($file);
+            if ($content !== false) {
+                $peakGusts = json_decode($content, true) ?? [];
+            }
+        }
+        
+        // Initialize today's entry if it doesn't exist
+        if (!isset($peakGusts[$dateKey][$airportId])) {
+            $peakGusts[$dateKey][$airportId] = $currentGust;
+        } else {
+            // Update if current gust is higher
+            $peakGusts[$dateKey][$airportId] = max($peakGusts[$dateKey][$airportId], $currentGust);
+        }
+        
+        $jsonData = json_encode($peakGusts);
+        if ($jsonData !== false) {
+            file_put_contents($file, $jsonData, LOCK_EX);
+        }
+    } catch (Exception $e) {
+        error_log("Error updating peak gust: " . $e->getMessage());
     }
-    
-    $file = $cacheDir . '/peak_gusts.json';
-    $dateKey = date('Y-m-d');
-    
-    $peakGusts = [];
-    if (file_exists($file)) {
-        $peakGusts = json_decode(file_get_contents($file), true) ?? [];
-    }
-    
-    // Initialize today's entry if it doesn't exist
-    if (!isset($peakGusts[$dateKey][$airportId])) {
-        $peakGusts[$dateKey][$airportId] = $currentGust;
-    } else {
-        // Update if current gust is higher
-        $peakGusts[$dateKey][$airportId] = max($peakGusts[$dateKey][$airportId], $currentGust);
-    }
-    
-    file_put_contents($file, json_encode($peakGusts));
 }
 
 /**
@@ -555,37 +581,50 @@ function calculateFlightCategory($weather) {
  * Update today's high and low temperatures for an airport
  */
 function updateTempExtremes($airportId, $currentTemp) {
-    $cacheDir = __DIR__ . '/cache';
-    if (!file_exists($cacheDir)) {
-        mkdir($cacheDir, 0755, true);
-    }
-    
-    $file = $cacheDir . '/temp_extremes.json';
-    $dateKey = date('Y-m-d');
-    
-    $tempExtremes = [];
-    if (file_exists($file)) {
-        $tempExtremes = json_decode(file_get_contents($file), true) ?? [];
-    }
-    
-    // Initialize today's entry if it doesn't exist
-    if (!isset($tempExtremes[$dateKey][$airportId])) {
-        $tempExtremes[$dateKey][$airportId] = [
-            'high' => $currentTemp,
-            'low' => $currentTemp
-        ];
-    } else {
-        // Update high if current is higher
-        if ($currentTemp > $tempExtremes[$dateKey][$airportId]['high']) {
-            $tempExtremes[$dateKey][$airportId]['high'] = $currentTemp;
+    try {
+        $cacheDir = __DIR__ . '/cache';
+        if (!file_exists($cacheDir)) {
+            if (!mkdir($cacheDir, 0755, true)) {
+                error_log("Failed to create cache directory: {$cacheDir}");
+                return;
+            }
         }
-        // Update low if current is lower
-        if ($currentTemp < $tempExtremes[$dateKey][$airportId]['low']) {
-            $tempExtremes[$dateKey][$airportId]['low'] = $currentTemp;
+        
+        $file = $cacheDir . '/temp_extremes.json';
+        $dateKey = date('Y-m-d');
+        
+        $tempExtremes = [];
+        if (file_exists($file)) {
+            $content = file_get_contents($file);
+            if ($content !== false) {
+                $tempExtremes = json_decode($content, true) ?? [];
+            }
         }
+        
+        // Initialize today's entry if it doesn't exist
+        if (!isset($tempExtremes[$dateKey][$airportId])) {
+            $tempExtremes[$dateKey][$airportId] = [
+                'high' => $currentTemp,
+                'low' => $currentTemp
+            ];
+        } else {
+            // Update high if current is higher
+            if ($currentTemp > $tempExtremes[$dateKey][$airportId]['high']) {
+                $tempExtremes[$dateKey][$airportId]['high'] = $currentTemp;
+            }
+            // Update low if current is lower
+            if ($currentTemp < $tempExtremes[$dateKey][$airportId]['low']) {
+                $tempExtremes[$dateKey][$airportId]['low'] = $currentTemp;
+            }
+        }
+        
+        $jsonData = json_encode($tempExtremes);
+        if ($jsonData !== false) {
+            file_put_contents($file, $jsonData, LOCK_EX);
+        }
+    } catch (Exception $e) {
+        error_log("Error updating temp extremes: " . $e->getMessage());
     }
-    
-    file_put_contents($file, json_encode($tempExtremes));
 }
 
 /**

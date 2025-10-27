@@ -15,6 +15,10 @@ if (!file_exists($configFile)) {
 }
 
 $config = json_decode(file_get_contents($configFile), true);
+if (json_last_error() !== JSON_ERROR_NONE || !$config) {
+    http_response_code(500);
+    die('Configuration file is not valid JSON: ' . json_last_error_msg());
+}
 
 // If airport ID provided, show airport page
 if (!empty($airportId)) {
