@@ -248,19 +248,31 @@ function updateWeatherTimestamp() {
 // Fetch weather data
 async function fetchWeather() {
     try {
-        const response = await fetch(`weather.php?airport=${AIRPORT_ID}`);
+        const url = `weather.php?airport=${AIRPORT_ID}`;
+        console.log('Fetching weather from:', url);
+        
+        const response = await fetch(url);
+        console.log('Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('Weather data received:', data);
+        
         if (data.success) {
             displayWeather(data.weather);
             updateWindVisual(data.weather);
             weatherLastUpdated = new Date(); // Record when data was fetched
             updateWeatherTimestamp(); // Update the timestamp
         } else {
+            console.error('Weather API returned error:', data.error);
             displayError(data.error || 'Failed to fetch weather data');
         }
     } catch (error) {
         console.error('Error fetching weather:', error);
-        displayError('Unable to load weather data');
+        displayError('Unable to load weather data. Check browser console for details.');
     }
 }
 
