@@ -97,20 +97,7 @@ Add an entry to `airports.json` following this structure:
 ### Supported Formats
 AviationWX automatically detects and handles webcam source types:
 
-1. **UniFi Cloud Public Sharing** ✨ (Fully Supported - RECOMMENDED)
-   - Example: `https://monitor.ui.com/c87cd716-b253-4018-ae85-09979f2c6197`
-   - Works on shared hosting without ffmpeg
-   - **Publicly accessible** - perfect for Bluehost
-   - No authentication required (share is public)
-   - **Best option for UniFi cameras on private networks**
-   - See UNIFI_CAMERA_SETUP.md for setup instructions
-
-1b. **UniFi Protect Local API** (Local Network Only)
-   - Example: `https://unifi-ip/proxy/protect/api/cameras/CAMERA_ID/snapshot`
-   - Requires username/password authentication
-   - **Only works if cameras are on public network** (not recommended)
-
-2. **MJPEG Streams** - Motion JPEG stream
+1. **MJPEG Streams** - Motion JPEG stream
    - Example: `https://example.com/video.mjpg`
    - Example: `https://example.com/mjpg/stream`
    - Automatically extracts first JPEG frame

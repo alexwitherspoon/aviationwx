@@ -8,16 +8,6 @@
  * Detect webcam source type from URL
  */
 function detectWebcamSourceType($url) {
-    // UniFi Cloud public sharing page (https://monitor.ui.com/share-id)
-    if (stripos($url, 'monitor.ui.com') !== false) {
-        return 'unifi_public';
-    }
-    
-    // UniFi Protect snapshot endpoint (local UniFi system)
-    if (stripos($url, 'snapshot.jpg') !== false || stripos($url, '/api/cameras') !== false) {
-        return 'unifi';
-    }
-    
     if (stripos($url, 'rtsp://') === 0) {
         return 'rtsp';
     }
@@ -72,84 +62,6 @@ function fetchStaticImage($url, $cacheFile) {
             }
         }
     }
-    return false;
-}
-
-/**
- * Fetch snapshot from UniFi Cloud public sharing page
- * 
- * NOTE: UniFi Cloud public sharing pages (monitor.ui.com) are JavaScript-based
- * single-page applications that don't provide direct snapshot URLs.
- * 
- * These pages require JavaScript to load the camera stream, which PHP cannot execute.
- * For now, we'll serve a placeholder and log that UniFi Cloud shares need manual setup.
- * 
- * Recommended alternatives:
- * 1. Use UniFi local API with public exposure (requires port forwarding)
- * 2. Use a different camera system that provides direct HTTP snapshots
- * 3. Keep using existing working cameras (e.g., Coho feeds for KSPB)
- * 
- * Example: https://monitor.ui.com/c87cd716-b253-4018-ae85-09979f2c6197
- */
-function fetchUniFiPublicSnapshot($url, $cacheFile) {
-    echo "    ⚠️  UniFi Cloud sharing pages require JavaScript\n";
-    echo "    💡 These cannot be fetched directly by PHP\n";
-    echo "    💡 Use a camera with direct HTTP snapshot URL instead\n";
-    
-    // Return false - images won't be cached
-    return false;
-}
-
-/**
- * Fetch snapshot from UniFi camera (local UniFi Protect system)
- * 
- * UniFi cameras support HTTP snapshot URLs that work without ffmpeg.
- * 
- * Common UniFi snapshot URL patterns:
- * - UDM/Cloud Key: https://your-ip/api/cameras/CAMERA_ID/snapshot
- * - Direct camera: http://camera-ip/snap.jpg (if camera has this feature)
- * - External access: https://unifi.ui.com/protect/snapshot/CAMERA_ID
- */
-function fetchUniFiSnapshot($url, $cacheFile, $cam) {
-    // UniFi Protect requires authentication, so we'll use curl with basic auth
-    $ch = curl_init();
-    
-    $options = [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
-        CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
-        CURLOPT_SSL_VERIFYPEER => false, // For self-signed certificates
-    ];
-    
-    // Add authentication if credentials are provided
-    if (isset($cam['username']) && isset($cam['password'])) {
-        $options[CURLOPT_USERPWD] = $cam['username'] . ':' . $cam['password'];
-    }
-    
-    curl_setopt_array($ch, $options);
-    
-    $data = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if ($httpCode == 200 && $data && strlen($data) > 100) {
-        // Verify it's actually an image
-        if (strpos($data, "\xff\xd8") === 0) {
-            // JPEG
-            file_put_contents($cacheFile, $data);
-            return true;
-        }
-    }
-    
-    if ($error) {
-        echo "      Error: {$error}\n";
-    }
-    
     return false;
 }
 
@@ -274,16 +186,6 @@ foreach ($config['airports'] as $airportId => $airport) {
         
         $success = false;
         switch ($sourceType) {
-            case 'unifi_public':
-                // UniFi Cloud public sharing page
-                $success = fetchUniFiPublicSnapshot($url, $cacheFile);
-                break;
-                
-            case 'unifi':
-                // UniFi Protect snapshot
-                $success = fetchUniFiSnapshot($url, $cacheFile, $cam);
-                break;
-                
             case 'rtsp':
                 // RTSP stream - use ffmpeg to capture a frame
                 $success = fetchRTSPFrame($url, $cacheFile);

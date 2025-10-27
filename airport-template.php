@@ -34,11 +34,9 @@
                                 $cacheFile = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index . '.jpg';
                                 echo file_exists($cacheFile) ? filemtime($cacheFile) : '0';
                             ?>">--</span></span>
-                            <?php if (stripos($cam['url'], 'monitor.ui.com') === false): ?>
                             <button class="live-btn" onclick="openLiveStream('<?= htmlspecialchars($cam['url']) ?>')">
                                 View Source
                             </button>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
