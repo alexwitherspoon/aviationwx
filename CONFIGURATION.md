@@ -102,21 +102,20 @@ AviationWX automatically detects and handles webcam source types:
    - Example: `https://example.com/mjpg/stream`
    - Automatically extracts first JPEG frame
 
-3. **Static Images** - JPEG or PNG images
+2. **Static Images** - JPEG or PNG images
    - Example: `https://example.com/image.jpg`
    - Example: `https://example.com/webcam.png`
    - Downloads the image directly
    - PNG images are automatically converted to JPEG
 
-4. **RTSP Streams** - Real Time Streaming Protocol
+3. **RTSP Streams** - Real Time Streaming Protocol
    - Example: `rtsp://camera.example.com:554/stream`
    - Example: `rtsp://192.168.1.100:8554/live`
    - **⚠️ Limitation**: RTSP requires `ffmpeg`, which is **not available on shared hosting** (Bluehost, etc.)
-   - **Recommended**: Use the camera's HTTP snapshot URL instead (see RTSP_ALTERNATIVES.md)
+   - **Recommended**: Use the camera's HTTP snapshot URL instead
 
 ### Format Detection
 The system automatically detects the source type from the URL:
-- URLs containing `snapshot.jpg` or `/api/cameras` → UniFi Protect camera
 - URLs starting with `rtsp://` → RTSP stream (limited support on shared hosting)
 - URLs ending in `.jpg`, `.jpeg` → Static JPEG
 - URLs ending in `.png` → Static PNG (converted to JPEG)
@@ -132,30 +131,6 @@ The system automatically detects the source type from the URL:
 - `partner_link`: Link to partner website
 
 ### Webcam Examples
-
-**UniFi Cloud Public Sharing (BEST for Private Networks):**
-```json
-{
-  "name": "Runway Camera",
-  "url": "https://monitor.ui.com/c87cd716-b253-4018-ae85-09979f2c6197",
-  "position": "south",
-  "partner_name": "Airport Security",
-  "partner_link": "https://airport.com"
-}
-```
-
-**UniFi Protect Local API (Local Network Only):**
-```json
-{
-  "name": "Runway Camera",
-  "url": "https://192.168.1.100/proxy/protect/api/cameras/61a1b2c3d4e5/snapshot",
-  "username": "admin",
-  "password": "your-password",
-  "position": "south",
-  "partner_name": "Airport Security",
-  "partner_link": "https://airport.com"
-}
-```
 
 **MJPEG Stream:**
 ```json

@@ -10,9 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
-    services:
-      # Using a service container for testing if needed
-      
     steps:
     - uses: actions/checkout@v4
     
