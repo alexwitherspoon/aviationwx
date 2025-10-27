@@ -238,12 +238,13 @@
 
         <section>
             <h2>Participating Airports</h2>
-            <?php if ($totalAirports > 0): ?>
+            <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
             <div class="airports-list">
                 <?php
                 $config = json_decode(file_get_contents($configFile), true);
-                foreach ($config['airports'] as $airportId => $airport):
-                    $url = 'https://' . $airportId . '.aviationwx.org';
+                if (isset($config['airports'])) {
+                    foreach ($config['airports'] as $airportId => $airport):
+                        $url = 'https://' . $airportId . '.aviationwx.org';
                 ?>
                 <div class="airport-card">
                     <a href="<?= htmlspecialchars($url) ?>">
@@ -252,7 +253,10 @@
                         <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
                     </a>
                 </div>
-                <?php endforeach; ?>
+                <?php 
+                    endforeach;
+                }
+                ?>
             </div>
             <?php else: ?>
             <p style="text-align: center; color: #666; padding: 2rem;">No airports currently configured.</p>
