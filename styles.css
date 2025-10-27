@@ -1,0 +1,291 @@
+/* Aviation Weather - Responsive Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background: #f5f5f5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+/* Header */
+.header {
+    background: #1a1a1a;
+    color: white;
+    padding: 2rem;
+    text-align: center;
+    margin: -1rem -1rem 2rem -1rem;
+}
+
+.header h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.header h2 {
+    font-size: 1.5rem;
+    font-weight: normal;
+    color: #ccc;
+    margin-bottom: 0.5rem;
+}
+
+.location {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+/* Sections */
+section {
+    background: white;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: #1a1a1a;
+}
+
+h3 {
+    font-size: 1.2rem;
+    margin-bottom: 0.75rem;
+    color: #333;
+}
+
+/* Info Grid */
+.info-grid, .freq-grid, .time-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.info-item, .freq-item, .time-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.label {
+    font-size: 0.85rem;
+    color: #666;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.value {
+    font-size: 1.2rem;
+    color: #1a1a1a;
+    font-weight: 600;
+}
+
+/* Frequencies */
+.frequencies {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #eee;
+}
+
+/* Links */
+.links {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #eee;
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background: #0066cc;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.btn:hover {
+    background: #0052a3;
+}
+
+/* Weather Section */
+.weather-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.weather-item {
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.weather-item .label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.weather-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #1a1a1a;
+}
+
+.weather-unit {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Wind Visual */
+.wind-visual-container {
+    display: flex;
+    justify-content: center;
+    padding: 1rem;
+}
+
+#windCanvas {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Webcam Section */
+.webcam-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.webcam-item {
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.webcam-item h3 {
+    padding: 1rem;
+    background: #1a1a1a;
+    color: white;
+    margin: 0;
+    font-size: 1rem;
+}
+
+.webcam-container {
+    position: relative;
+}
+
+.webcam-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.webcam-image:hover {
+    opacity: 0.9;
+}
+
+.webcam-info {
+    padding: 1rem;
+    background: #1a1a1a;
+    color: white;
+}
+
+.last-updated {
+    font-size: 0.85rem;
+    color: #aaa;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.live-btn {
+    width: 100%;
+    padding: 0.75rem;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.live-btn:hover {
+    background: #0052a3;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+    background: white;
+    border-radius: 8px;
+}
+
+.footer a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+
+/* Loading State */
+.loading {
+    text-align: center;
+    color: #999;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .header h1 {
+        font-size: 2rem;
+    }
+    
+    .header h2 {
+        font-size: 1.2rem;
+    }
+    
+    section {
+        padding: 1rem;
+    }
+    
+    .webcam-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-grid, .freq-grid, .time-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Status Colors */
+.status-vfr {
+    color: #28a745;
+}
+
+.status-mvfr {
+    color: #ffc107;
+}
+
+.status-ifr {
+    color: #dc3545;
+}
+

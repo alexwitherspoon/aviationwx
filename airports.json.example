@@ -1,0 +1,55 @@
+{
+  "airports": {
+    "airportid": {
+      "name": "Example Airport",
+      "icao": "KXXX",
+      "address": "City, State",
+      "lat": 45.7710278,
+      "lon": -122.8618333,
+      "elevation_ft": 58,
+      "runways": [
+        {
+          "name": "15/33",
+          "heading_1": 152,
+          "heading_2": 332
+        }
+      ],
+      "frequencies": {
+        "ctaf": "122.8",
+        "asos": "135.875",
+        "approach": "124.35",
+        "departure": "133.0",
+        "clearance": "121.65"
+      },
+      "services": {
+        "fuel_available": true,
+        "repairs_available": true,
+        "100ll": true,
+        "jet_a": false
+      },
+      "weather_source": {
+        "type": "tempest",
+        "station_id": "YOUR_STATION_ID",
+        "api_key": "YOUR_TEMPEST_API_KEY"
+      },
+      "webcams": [
+        {
+          "name": "Example Cam 1",
+          "url": "https://example.com/video.mjpg",
+          "username": "your_username",
+          "password": "your_password",
+          "position": "north",
+          "partner_name": "Partner Name",
+          "partner_link": "https://partner-website.com"
+        }
+      ],
+      "airnav_url": "https://www.airnav.com/airport/KXXX",
+      "metar_station": "KXXX",
+      "nearby_metar_stations": [
+        "KABC",
+        "KDEF"
+      ]
+    }
+  }
+}
+

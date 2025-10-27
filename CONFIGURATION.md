@@ -1,0 +1,264 @@
+# Airport Configuration Guide
+
+## Overview
+
+AviationWX supports dynamic configuration of airports via `airports.json`. Each airport can be configured with its own weather source, webcams, and metadata.
+
+## Supported Weather Sources
+
+### 1. Tempest Weather
+**Requires:** `station_id` and `api_key`
+
+```json
+"weather_source": {
+    "type": "tempest",
+    "station_id": "149918",
+    "api_key": "your-api-key-here"
+}
+```
+
+### 2. Ambient Weather
+**Requires:** `api_key` and `application_key`
+
+```json
+"weather_source": {
+    "type": "ambient",
+    "api_key": "your-api-key-here",
+    "application_key": "your-application-key-here"
+}
+```
+
+### 3. METAR (Fallback/Primary)
+**No API key required** - Uses public METAR data
+
+```json
+"weather_source": {
+    "type": "metar"
+}
+```
+
+## Adding a New Airport
+
+Add an entry to `airports.json` following this structure:
+
+```json
+{
+  "airports": {
+    "airportid": {
+      "name": "Full Airport Name",
+      "icao": "ICAO",
+      "address": "City, State",
+      "lat": 45.7710278,
+      "lon": -122.8618333,
+      "elevation_ft": 58,
+      "runways": [
+        {
+          "name": "15/33",
+          "heading_1": 152,
+          "heading_2": 332
+        }
+      ],
+      "frequencies": {
+        "ctaf": "122.8",
+        "asos": "135.875"
+      },
+      "services": {
+        "fuel_available": true,
+        "repairs_available": true,
+        "100ll": true,
+        "jet_a": false
+      },
+      "weather_source": {
+        "type": "tempest",
+        "station_id": "149918",
+        "api_key": "your-key-here"
+      },
+      "webcams": [
+        {
+          "name": "Camera Name",
+          "url": "https://camera-url.com/stream",
+          "username": "user",
+          "password": "pass",
+          "position": "north",
+          "partner_name": "Partner Name",
+          "partner_link": "https://partner-link.com"
+        }
+      ],
+      "airnav_url": "https://www.airnav.com/airport/KSPB",
+      "metar_station": "KSPB",
+      "nearby_metar_stations": ["KVUO", "KHIO"]
+    }
+  }
+}
+```
+
+## Webcam Configuration
+
+### Supported Formats
+AviationWX automatically detects and handles webcam source types:
+
+1. **UniFi Cloud Public Sharing** ✨ (Fully Supported - RECOMMENDED)
+   - Example: `https://monitor.ui.com/c87cd716-b253-4018-ae85-09979f2c6197`
+   - Works on shared hosting without ffmpeg
+   - **Publicly accessible** - perfect for Bluehost
+   - No authentication required (share is public)
+   - **Best option for UniFi cameras on private networks**
+   - See UNIFI_CAMERA_SETUP.md for setup instructions
+
+1b. **UniFi Protect Local API** (Local Network Only)
+   - Example: `https://unifi-ip/proxy/protect/api/cameras/CAMERA_ID/snapshot`
+   - Requires username/password authentication
+   - **Only works if cameras are on public network** (not recommended)
+
+2. **MJPEG Streams** - Motion JPEG stream
+   - Example: `https://example.com/video.mjpg`
+   - Example: `https://example.com/mjpg/stream`
+   - Automatically extracts first JPEG frame
+
+3. **Static Images** - JPEG or PNG images
+   - Example: `https://example.com/image.jpg`
+   - Example: `https://example.com/webcam.png`
+   - Downloads the image directly
+   - PNG images are automatically converted to JPEG
+
+4. **RTSP Streams** - Real Time Streaming Protocol
+   - Example: `rtsp://camera.example.com:554/stream`
+   - Example: `rtsp://192.168.1.100:8554/live`
+   - **⚠️ Limitation**: RTSP requires `ffmpeg`, which is **not available on shared hosting** (Bluehost, etc.)
+   - **Recommended**: Use the camera's HTTP snapshot URL instead (see RTSP_ALTERNATIVES.md)
+
+### Format Detection
+The system automatically detects the source type from the URL:
+- URLs containing `snapshot.jpg` or `/api/cameras` → UniFi Protect camera
+- URLs starting with `rtsp://` → RTSP stream (limited support on shared hosting)
+- URLs ending in `.jpg`, `.jpeg` → Static JPEG
+- URLs ending in `.png` → Static PNG (converted to JPEG)
+- All other URLs → Treated as MJPEG stream
+
+### Required Fields
+- `name`: Display name for the webcam
+- `url`: Full URL to the stream/image
+- `username`: (optional) For authenticated streams
+- `password`: (optional) For authenticated streams  
+- `position`: Direction the camera faces (for organization)
+- `partner_name`: Partner organization name
+- `partner_link`: Link to partner website
+
+### Webcam Examples
+
+**UniFi Cloud Public Sharing (BEST for Private Networks):**
+```json
+{
+  "name": "Runway Camera",
+  "url": "https://monitor.ui.com/c87cd716-b253-4018-ae85-09979f2c6197",
+  "position": "south",
+  "partner_name": "Airport Security",
+  "partner_link": "https://airport.com"
+}
+```
+
+**UniFi Protect Local API (Local Network Only):**
+```json
+{
+  "name": "Runway Camera",
+  "url": "https://192.168.1.100/proxy/protect/api/cameras/61a1b2c3d4e5/snapshot",
+  "username": "admin",
+  "password": "your-password",
+  "position": "south",
+  "partner_name": "Airport Security",
+  "partner_link": "https://airport.com"
+}
+```
+
+**MJPEG Stream:**
+```json
+{
+  "name": "Main Field View",
+  "url": "https://example.com/mjpg/video.mjpg",
+  "position": "north",
+  "partner_name": "Example Partners",
+  "partner_link": "https://example.com"
+}
+```
+
+**RTSP Stream (Limited Support):**
+```json
+{
+  "name": "Runway Camera",
+  "url": "rtsp://camera.example.com:554/stream1",
+  "username": "admin",
+  "password": "password123",
+  "position": "south",
+  "partner_name": "Partner Name",
+  "partner_link": "https://partner.com"
+}
+```
+
+**Static Image:**
+```json
+{
+  "name": "Weather Station Cam",
+  "url": "https://wx.example.com/webcam.jpg",
+  "position": "east",
+  "partner_name": "Weather Station",
+  "partner_link": "https://wx.example.com"
+}
+```
+
+## Dynamic Features
+
+### Automatic Homepage
+The homepage (`homepage.php`) automatically displays all airports from `airports.json` with working links to each subdomain.
+
+### Dynamic Webcam Support
+- Supports 1-6 webcams per airport
+- Each webcam automatically appears in the grid
+- Responsive layout adjusts to number of webcams
+
+### Weather Source Fallback
+- If Tempest/Ambient lacks visibility/ceiling, METAR data automatically supplements
+- Flight category (VFR/IFR/MVFR) calculated from ceiling and visibility
+- All aviation metrics computed regardless of source
+
+## Testing Locally
+
+```bash
+# Start the server
+php -S localhost:8000
+
+# Access homepage
+open http://localhost:8000/
+
+# Access specific airport
+open http://localhost:8000/?airport=kspb
+
+# Test weather API
+curl http://localhost:8000/weather.php?airport=kspb
+
+# Cache webcam images
+php fetch-webcam.php
+```
+
+## Production Deployment
+
+### Subdomain Setup
+Each airport requires a subdomain DNS entry pointing to the same server:
+- `kspb.aviationwx.org`
+- `airportid.aviationwx.org`
+
+The `.htaccess` file automatically routes subdomains to `index.php` which loads the appropriate airport template.
+
+### Cron Job Setup
+Set up a cron job to refresh webcam images every 60 seconds:
+
+```bash
+* * * * * /usr/bin/php /path/to/fetch-webcam.php
+```
+
+## Configuration Files
+
+- `airports.json` - Airport configuration
+- `cache/peak_gusts.json` - Daily peak gust tracking
+- `cache/temp_extremes.json` - Daily temperature extremes
+- `cache/webcams/` - Cached webcam images
+
