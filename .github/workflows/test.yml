@@ -40,6 +40,9 @@ jobs:
     
     - name: Test weather API endpoint
       run: |
+        # Copy test configuration
+        cp airports.json.test airports.json
+        
         # Start PHP server in background
         php -S localhost:8000 > /dev/null 2>&1 &
         SERVER_PID=$!
@@ -47,11 +50,26 @@ jobs:
         # Wait for server to start
         sleep 2
         
-        # Test homepage
-        curl -f http://localhost:8000/ || exit 1
+        # Test homepage (should work without crashing)
+        curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ | grep -q "^200$" || exit 1
+        echo "✓ Homepage loads"
         
         # Test JSON validation
-        curl -f http://localhost:8000/airports.json.example || exit 1
+        curl -f http://localhost:8000/airports.json.test || exit 1
+        echo "✓ JSON example file loads"
+        
+        # Test weather API endpoint with mocked data
+        php tests/test-weather-endpoint.php airport=kspb > /tmp/test-output.json 2>&1
+        if [ $? -eq 0 ] && grep -q '"success":true' /tmp/test-output.json; then
+            echo "✓ Weather API returns valid JSON"
+            # Validate it's proper JSON
+            php -r "json_decode(file_get_contents('/tmp/test-output.json')); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON'; exit(1); }"
+            echo "✓ Weather API returns valid JSON structure"
+        else
+            echo "✗ Weather API test failed"
+            cat /tmp/test-output.json
+            exit 1
+        fi
         
         # Cleanup
         kill $SERVER_PID 2>/dev/null || true

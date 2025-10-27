@@ -1,0 +1,45 @@
+{
+  "airports": {
+    "kspb": {
+      "name": "Scappoose Airport",
+      "icao": "KSPB",
+      "address": "34020 Sky Way Dr, Scappoose, OR 97056",
+      "lat": 45.7710278,
+      "lon": -122.8618333,
+      "elevation_ft": 58,
+      "runways": [
+        {
+          "name": "15/33",
+          "heading_1": 152,
+          "heading_2": 332
+        }
+      ],
+      "frequencies": {
+        "ctaf": "122.8",
+        "asos": "135.875"
+      },
+      "services": {
+        "fuel_available": true,
+        "repairs_available": true,
+        "100ll": true,
+        "jet_a": false
+      },
+      "weather_source": {
+        "type": "tempest",
+        "station_id": "TEST_STATION",
+        "api_key": "TEST_KEY"
+      },
+      "webcams": [
+        {
+          "name": "Test Webcam",
+          "url": "http://example.com/cam.jpg",
+          "position": "north"
+        }
+      ],
+      "airnav_url": "https://www.airnav.com/airport/KSPB",
+      "metar_station": "KSPB",
+      "nearby_metar_stations": []
+    }
+  }
+}
+

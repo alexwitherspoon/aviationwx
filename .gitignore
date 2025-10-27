@@ -4,6 +4,8 @@ cache/
 # Sensitive configuration files (DO NOT COMMIT)
 airports.json
 # Keep airports.json.example in the repo as a template
+# Keep airports.json.test for CI/CD testing
+!airports.json.test
 
 # IDE files
 .vscode/
