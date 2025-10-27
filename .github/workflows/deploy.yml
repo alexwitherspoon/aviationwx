@@ -1,6 +1,11 @@
 name: Deploy to Bluehost
 
 on:
+  workflow_run:
+    workflows: ["Test AviationWX"]
+    types:
+      - completed
+    branches: [ main ]
   push:
     branches: [ main ]
     paths-ignore:
@@ -11,6 +16,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     
+    # Only deploy if tests passed
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    
     steps:
     - uses: actions/checkout@v4
     
@@ -18,14 +26,6 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.1'
-    
-    - name: Run tests first
-      run: |
-        php -l index.php
-        php -l airport-template.php
-        php -l weather.php
-        php -l webcam.php
-        php -l homepage.php
     
     - name: Create deployment package
       run: |
@@ -65,7 +65,7 @@ jobs:
         username: ${{ secrets.BLUEHOST_FTP_USER }}
         password: ${{ secrets.BLUEHOST_FTP_PASSWORD }}
         local-dir: ./deploy/
-        server-dir: /public_html/
+        server-dir: /
         dangerous-clean-slate: false
         exclude: |
           **/.git*

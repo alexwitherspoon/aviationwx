@@ -59,11 +59,11 @@ jobs:
     - name: Check for secrets in code
       run: |
         echo "Checking for accidental secrets..."
-        if grep -r "bc3bda4a-1c07-432b-b11e-b2402f5b5641" . --exclude-dir=.git; then
+        if grep -r "bc3bda4a-1c07-432b-b11e-b2402f5b5641" . --exclude-dir=.git --exclude-dir=.github; then
           echo "ERROR: Real API keys found in code!"
           exit 1
         fi
-        if grep -r "apple32" . --exclude-dir=.git --exclude-dir=cache; then
+        if grep -r "apple32" . --exclude-dir=.git --exclude-dir=cache --exclude-dir=.github; then
           echo "ERROR: Real passwords found in code!"
           exit 1
         fi

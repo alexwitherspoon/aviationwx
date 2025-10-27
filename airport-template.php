@@ -539,9 +539,23 @@ function updateWebcamTimestamps() {
     <?php endforeach; ?>
 }
 
+// Function to reload webcam images with cache busting
+function reloadWebcamImages() {
+    <?php foreach ($airport['webcams'] as $index => $cam): ?>
+    const img<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
+    if (img<?= $index ?>) {
+        const oldSrc = img<?= $index ?>.src.split('&t=')[0]; // Remove old cache buster
+        img<?= $index ?>.src = oldSrc + '&t=' + Date.now();
+    }
+    <?php endforeach; ?>
+}
+
 // Update relative timestamps every 10 seconds for better responsiveness
 updateWebcamTimestamps();
 setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
+
+// Reload webcam images every 60 seconds to get fresh images
+setInterval(reloadWebcamImages, 60000);
 
 updateWeatherTimestamp();
 setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds
