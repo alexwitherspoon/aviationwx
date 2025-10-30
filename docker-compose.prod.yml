@@ -8,8 +8,8 @@ services:
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:80"  # Bind to localhost only, Nginx handles external
     volumes:
-      # Mount airports.json (create this on production server)
-      - ./airports.json:/var/www/html/airports.json:ro
+      # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
+      - /home/aviationwx/airports.json:/var/www/html/airports.json:ro
       - ./cache:/var/www/html/cache
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html

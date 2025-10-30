@@ -12,7 +12,11 @@ $envConfigPath = getenv('CONFIG_PATH');
 $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
 if (!file_exists($configFile)) {
     http_response_code(500);
-    die('Configuration file not found');
+    die('Configuration file not found: ' . htmlspecialchars($configFile));
+}
+if (is_dir($configFile)) {
+    http_response_code(500);
+    die('Configuration path is a directory, not a file: ' . htmlspecialchars($configFile));
 }
 
 $config = json_decode(file_get_contents($configFile), true);
