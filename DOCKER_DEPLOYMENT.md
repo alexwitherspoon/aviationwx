@@ -32,7 +32,7 @@ useradd -m -s /bin/bash aviationwx
 usermod -aG docker aviationwx
 ```
 
-### 3. Clone and Configure Application
+### 3. Clone Application
 
 ```bash
 # Switch to application user
@@ -42,9 +42,8 @@ su - aviationwx
 git clone https://github.com/alexwitherspoon/aviationwx.git
 cd aviationwx
 
-# Copy example config
-cp airports.json.example airports.json
-# Edit airports.json with your API keys
+# Note: airports.json will be deployed to /home/aviationwx/airports.json
+# by the secrets repo GitHub Actions workflow
 
 # Create SSL certificate directory
 mkdir -p ssl
@@ -88,11 +87,8 @@ curl http://localhost:8080
 
 ### 6.1 Configure App Settings
 
-- Point the app at your host `airports.json`:
-  ```bash
-  export CONFIG_PATH=/home/aviationwx/aviationwx.org/airports.json
-  ```
-- Control refresh cadences (defaults are 60s):
+- `airports.json` is automatically mounted from `/home/aviationwx/airports.json` (deployed by secrets repo)
+- Control refresh cadences via environment variables (defaults are 60s):
   ```bash
   export WEBCAM_REFRESH_DEFAULT=60
   export WEATHER_REFRESH_DEFAULT=60
@@ -128,8 +124,8 @@ This section walks through a clean setup from an empty Droplet to automated depl
 - DigitalOcean account and a Ubuntu 22.04 Droplet IP ready
 - Domain `aviationwx.org` managed in Cloudflare
 - Two GitHub repositories:
-  - App (public): `alexwitherspoon/aviationwx`
-  - Secrets (private): `alexwitherspoon/aviationwx-secrets` (contains only `airports.json`)
+  - App (public): `alexwitherspoon/aviationwx` - cloned to droplet
+  - Secrets (private): `alexwitherspoon/aviationwx-secrets` - deploys `airports.json` directly to `/home/aviationwx/airports.json` via GitHub Actions
 
 ### B. One-time Droplet Bootstrap
 
@@ -142,14 +138,13 @@ This section walks through a clean setup from an empty Droplet to automated depl
 ssh aviationwx@YOUR_DROPLET_IP
 ```
 
-### C. SSH Deploy Keys and Clones
+### C. SSH Deploy Keys and App Repo Clone
 
-1) Place the two deploy keys (already created in GitHub deploy keys) on the droplet at:
+1) Place the deploy key (already created in GitHub deploy keys) on the droplet at:
    - `~/.ssh/deploy_key_aviationwxorg`
-   - `~/.ssh/deploy_key_aviationwxorg_secrets`
-   - Permissions: `chmod 600` on both
+   - Permissions: `chmod 600`
 
-2) SSH config aliases:
+2) SSH config alias:
 ```bash
 cat > ~/.ssh/config << 'EOF'
 Host github-aviationwx
@@ -157,30 +152,24 @@ Host github-aviationwx
     User git
     IdentityFile ~/.ssh/deploy_key_aviationwxorg
     IdentitiesOnly yes
-
-Host github-airports
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/deploy_key_aviationwxorg_secrets
-    IdentitiesOnly yes
 EOF
 chmod 600 ~/.ssh/config
 ssh-keyscan -H github.com >> ~/.ssh/known_hosts
 chmod 644 ~/.ssh/known_hosts
 ```
 
-3) Clone both repos:
+3) Clone the app repo:
 ```bash
 cd ~
 git clone git@github-aviationwx:alexwitherspoon/aviationwx.git
-git clone git@github-airports:alexwitherspoon/aviationwx-secrets.git
 ```
 
-4) Link secrets file:
-```bash
-ln -sf ~/aviationwx-secrets/airports.json ~/aviationwx/airports.json
-chmod 600 ~/aviationwx/airports.json
-```
+4) **Note on airports.json**: The secrets repo (`aviationwx-secrets`) deploys `airports.json` directly to `/home/aviationwx/airports.json` via GitHub Actions. The file must be:
+   - Owner: `aviationwx:aviationwx`
+   - Permissions: `600`
+   - Location: `/home/aviationwx/airports.json`
+
+   The docker-compose configuration mounts this file into the container automatically.
 
 ### D. Cloudflare DNS
 
@@ -324,20 +313,14 @@ With Cloudflare, DNS propagation is nearly instantaneous (1-5 minutes).
 
 ### 8. Set Up Automatic Updates (Optional)
 
+Note: With GitHub Actions deployment, manual update scripts are typically not needed. The workflow automatically deploys on push to `main`.
+
+If you want to manually pull updates locally:
 ```bash
-# Create update script
-cat > update.sh << 'EOF'
-#!/bin/bash
-cd ~/aviationwx.org
+cd ~/aviationwx
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 docker system prune -f
-EOF
-
-chmod +x update.sh
-
-# Add to crontab (updates daily at 2 AM)
-(crontab -l 2>/dev/null; echo "0 2 * * * /home/aviationwx/aviationwx.org/update.sh") | crontab -
 ```
 
 ## Deployment via GitHub Actions
@@ -382,6 +365,7 @@ docker exec -it aviationwx bash
 
 ### Update code
 ```bash
+cd ~/aviationwx
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
