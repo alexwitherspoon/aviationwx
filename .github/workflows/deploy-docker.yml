@@ -29,7 +29,17 @@ jobs:
 
       - name: Sync repository to server
         run: |
-          rsync -az --delete --exclude '.git' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/
+          rsync -az --delete --exclude '.git' --exclude 'cache' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/
+
+      - name: Ensure cache directories exist
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          mkdir -p cache/webcams
+          chmod -R 775 cache
+          chown -R $USER:$USER cache
+          EOF
 
       - name: Deploy via Docker Compose
         run: |
