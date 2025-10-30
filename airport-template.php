@@ -23,16 +23,24 @@
                 <div class="webcam-item">
                     <h3><?= htmlspecialchars($cam['name']) ?></h3>
                     <div class="webcam-container">
-                        <img id="webcam-<?= $index ?>" 
-                             src="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>" 
-                             alt="<?= htmlspecialchars($cam['name']) ?>"
-                             class="webcam-image"
-                             onerror="this.src='placeholder.jpg'"
-                             onclick="openLiveStream(this.src)">
+                        <picture>
+                            <source id="webcam-avif-<?= $index ?>" type="image/avif" srcset="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=avif">
+                            <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp">
+                            <img id="webcam-<?= $index ?>" 
+                                 src="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg" 
+                                 alt="<?= htmlspecialchars($cam['name']) ?>"
+                                 class="webcam-image"
+                                 onerror="this.src='placeholder.jpg'"
+                                 onclick="openLiveStream(this.src)">
+                        </picture>
                         <div class="webcam-info">
                             <span class="last-updated">Last updated: <span id="update-<?= $index ?>" data-timestamp="<?php 
-                                $cacheFile = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index . '.jpg';
-                                echo file_exists($cacheFile) ? filemtime($cacheFile) : '0';
+                                $base = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index;
+                                $ts = 0;
+                                foreach (['.avif', '.webp', '.jpg'] as $ext) {
+                                    if (file_exists($base . $ext)) { $ts = filemtime($base . $ext); break; }
+                                }
+                                echo $ts ? $ts : '0';
                             ?>">--</span></span>
                             <button class="live-btn" onclick="openLiveStream('<?= htmlspecialchars($cam['url']) ?>')">
                                 View Source
@@ -240,9 +248,13 @@ function updateWeatherTimestamp() {
         }
     }
     
-    const timeStr = formatRelativeTime(diffSeconds);
-    document.getElementById('weather-last-updated').textContent = timeStr;
-    document.getElementById('wind-last-updated').textContent = timeStr;
+    const timeStr = diffSeconds >= 3600 ? 'Over an hour stale.' : formatRelativeTime(diffSeconds);
+    const weatherEl = document.getElementById('weather-last-updated');
+    const windEl = document.getElementById('wind-last-updated');
+    weatherEl.textContent = timeStr;
+    windEl.textContent = timeStr;
+    const stale = diffSeconds >= 3600;
+    [weatherEl, windEl].forEach(el => { el.style.color = stale ? '#c00' : '#666'; });
 }
 
 // Fetch weather data
@@ -264,7 +276,7 @@ async function fetchWeather() {
         if (data.success) {
             displayWeather(data.weather);
             updateWindVisual(data.weather);
-            weatherLastUpdated = new Date(); // Record when data was fetched
+            weatherLastUpdated = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : new Date();
             updateWeatherTimestamp(); // Update the timestamp
         } else {
             console.error('Weather API returned error:', data.error);
@@ -554,11 +566,17 @@ function updateWebcamTimestamps() {
 // Function to reload webcam images with cache busting
 function reloadWebcamImages() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
-    const img<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
-    if (img<?= $index ?>) {
-        const oldSrc = img<?= $index ?>.src.split('&t=')[0]; // Remove old cache buster
-        img<?= $index ?>.src = oldSrc + '&t=' + Date.now();
-    }
+    ['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.src) {
+            const base = el.src.split('&t=')[0];
+            el.src = base + '&t=' + Date.now();
+        } else if (el.getAttribute && el.getAttribute('srcset')) {
+            const base = el.getAttribute('srcset').split('&t=')[0];
+            el.setAttribute('srcset', base + '&t=' + Date.now());
+        }
+    });
     <?php endforeach; ?>
 }
 
@@ -566,8 +584,26 @@ function reloadWebcamImages() {
 updateWebcamTimestamps();
 setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
 
-// Reload webcam images every 60 seconds to get fresh images
-setInterval(reloadWebcamImages, 60000);
+// Reload webcam images using per-camera intervals
+<?php foreach ($airport['webcams'] as $index => $cam): 
+    $defaultWebcamRefresh = 60;
+    $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
+    $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
+?>
+setInterval(() => {
+    ['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.src) {
+            const base = el.src.split('&t=')[0];
+            el.src = base + '&t=' + Date.now();
+        } else if (el.getAttribute && el.getAttribute('srcset')) {
+            const base = el.getAttribute('srcset').split('&t=')[0];
+            el.setAttribute('srcset', base + '&t=' + Date.now());
+        }
+    });
+}, <?= max(1, $perCam) * 1000 ?>);
+<?php endforeach; ?>
 
 updateWeatherTimestamp();
 setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds

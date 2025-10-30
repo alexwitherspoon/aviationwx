@@ -8,7 +8,8 @@
 $airportId = isset($_GET['airport']) ? strtolower($_GET['airport']) : '';
 
 // Check if airport config exists
-$configFile = __DIR__ . '/airports.json';
+$envConfigPath = getenv('CONFIG_PATH');
+$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
 if (!file_exists($configFile)) {
     http_response_code(500);
     die('Configuration file not found');

@@ -122,7 +122,7 @@ pkill -f "php -S"
 php -S localhost:8000
 ```
 
-## 🎯 For Production (Bluehost)
+## 🎯 For Production (Docker Droplet)
 
 When deploying, set up this cron job:
 ```bash

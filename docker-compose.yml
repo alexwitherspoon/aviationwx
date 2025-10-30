@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: ${COMPOSE_PROJECT_NAME:-aviationwx}
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      # Mount airports.json from host
+      - ./airports.json:/var/www/html/airports.json:ro
+      # Mount cache directory so it persists
+      - ./cache:/var/www/html/cache
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html
+      - DOMAIN=${DOMAIN:-aviationwx.org}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
