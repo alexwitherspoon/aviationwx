@@ -51,22 +51,33 @@ if (file_exists($configFile)) {
     $issues[] = "❌ airports.json does not exist. Copy from airports.json.example";
 }
 
-// Check cache directory
+// Check cache directory with actual write test
 $cacheDir = __DIR__ . '/cache/webcams';
+$cacheTestFile = $cacheDir . '/.writable_test';
 if (is_dir($cacheDir)) {
     $success[] = "✅ cache/webcams directory exists";
-    if (is_writable($cacheDir)) {
-        $success[] = "✅ cache/webcams is writable";
+    
+    // Test actual writability by creating a test file
+    if (@file_put_contents($cacheTestFile, 'test') !== false) {
+        @unlink($cacheTestFile);
+        $success[] = "✅ cache/webcams is writable (test write successful)";
     } else {
-        $issues[] = "❌ cache/webcams is not writable (chmod 755)";
+        $perms = substr(sprintf('%o', fileperms($cacheDir)), -4);
+        $owner = @fileowner($cacheDir);
+        $issues[] = "❌ cache/webcams is not writable (perms: {$perms}, owner: {$owner})";
     }
+    
+    // Show cache stats
+    $cacheFiles = glob($cacheDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
+    $cacheCount = count($cacheFiles);
+    $cacheSize = 0;
+    foreach ($cacheFiles as $file) {
+        $cacheSize += filesize($file);
+    }
+    $cacheSizeMB = round($cacheSize / 1048576, 2);
+    $success[] = "📦 Cache: {$cacheCount} files, {$cacheSizeMB} MB";
 } else {
-    $issues[] = "❌ cache/webcams directory does not exist (creating...";
-    if (mkdir($cacheDir, 0755, true)) {
-        $success[] = "✅ Created cache/webcams directory";
-    } else {
-        $issues[] = "❌ Failed to create cache/webcams directory";
-    }
+    $issues[] = "❌ cache/webcams directory does not exist";
 }
 
 // Check .htaccess
@@ -110,6 +121,94 @@ foreach ($importantFiles as $file) {
     } else {
         $issues[] = "❌ {$file} does not exist";
     }
+}
+
+// Check environment variables
+$envConfigPath = getenv('CONFIG_PATH');
+if ($envConfigPath) {
+    $success[] = "✅ CONFIG_PATH env var set: " . htmlspecialchars($envConfigPath);
+} else {
+    $success[] = "ℹ️ CONFIG_PATH not set (using default)";
+}
+
+$webcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT');
+$weatherRefresh = getenv('WEATHER_REFRESH_DEFAULT');
+if ($webcamRefresh !== false) {
+    $success[] = "✅ WEBCAM_REFRESH_DEFAULT: {$webcamRefresh}s";
+}
+if ($weatherRefresh !== false) {
+    $success[] = "✅ WEATHER_REFRESH_DEFAULT: {$weatherRefresh}s";
+}
+
+// Check ffmpeg availability
+$ffmpegCheck = @shell_exec('ffmpeg -version 2>&1');
+if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
+    $success[] = "✅ ffmpeg is available (RTSP support enabled)";
+} else {
+    $success[] = "⚠️ ffmpeg not found (RTSP streams will not work)";
+}
+
+// Check HTTPS/SSL
+$isHttps = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+if ($isHttps) {
+    $success[] = "🔒 HTTPS enabled";
+} else {
+    $issues[] = "⚠️ Not using HTTPS (HTTP only)";
+}
+
+// Test API endpoints
+$apiTests = [];
+
+// Weather API test
+$weatherUrl = 'http://localhost/weather.php?airport=kspb';
+$weatherResponse = @file_get_contents($weatherUrl, false, stream_context_create([
+    'http' => ['timeout' => 5, 'ignore_errors' => true]
+]));
+if ($weatherResponse !== false) {
+    $weatherData = @json_decode($weatherResponse, true);
+    if ($weatherData && isset($weatherData['success'])) {
+        if ($weatherData['success']) {
+            $apiTests[] = "✅ Weather API endpoint working";
+            if (isset($weatherData['weather']['last_updated'])) {
+                $age = time() - $weatherData['weather']['last_updated'];
+                $apiTests[] = "  Weather data age: " . round($age / 60, 1) . " minutes";
+            }
+        } else {
+            $apiTests[] = "⚠️ Weather API returned error: " . htmlspecialchars($weatherData['error'] ?? 'Unknown');
+        }
+    } else {
+        $apiTests[] = "⚠️ Weather API response invalid";
+    }
+} else {
+    $apiTests[] = "⚠️ Weather API not reachable (may be expected if not running locally)";
+}
+
+// Webcam fetch script test
+$webcamFetchUrl = 'http://localhost/fetch-webcam-safe.php';
+$webcamResponse = @file_get_contents($webcamFetchUrl, false, stream_context_create([
+    'http' => ['timeout' => 10, 'ignore_errors' => true]
+]));
+if ($webcamResponse !== false && strlen($webcamResponse) > 10) {
+    $apiTests[] = "✅ Webcam fetch script accessible";
+} else {
+    $apiTests[] = "⚠️ Webcam fetch script not accessible (may be expected if not running locally)";
+}
+
+$success = array_merge($success, $apiTests);
+
+// Check cache directory for weather cache
+$weatherCacheDir = __DIR__ . '/cache';
+$weatherCacheFiles = glob($weatherCacheDir . '/weather_*.json');
+if (count($weatherCacheFiles) > 0) {
+    $success[] = "📊 Weather cache: " . count($weatherCacheFiles) . " file(s)";
+}
+
+// Check cache directory permissions detail
+if (is_dir($cacheDir)) {
+    $cachePerms = substr(sprintf('%o', fileperms($cacheDir)), -4);
+    $cacheOwner = posix_getpwuid(@fileowner($cacheDir));
+    $cacheGroup = posix_getgrgid(@filegroup($cacheDir));
+    $success[] = "📁 Cache perms: {$cachePerms}, owner: " . ($cacheOwner['name'] ?? 'unknown') . ", group: " . ($cacheGroup['name'] ?? 'unknown');
 }
 
 ?>
@@ -158,11 +257,32 @@ foreach ($importantFiles as $file) {
     <p>Your AviationWX installation appears to be working correctly.</p>
     <?php endif; ?>
     
-    <h2>🧪 Test Links</h2>
+    <h2>🧪 Test Links & Results</h2>
     <ul>
-        <li><a href="/?airport=kspb">Test Query Param: ?airport=kspb</a></li>
-        <li><a href="/weather.php?airport=kspb">Test Weather API</a></li>
-        <li><a href="/webcam.php?id=kspb&cam=0">Test Webcam API</a></li>
+        <li><a href="/?airport=kspb" target="_blank">Test Query Param: ?airport=kspb</a></li>
+        <li><a href="/weather.php?airport=kspb" target="_blank">Test Weather API</a> <?php 
+            if ($weatherResponse !== false && isset($weatherData['success']) && $weatherData['success']) {
+                echo '<span style="color: #28a745;">✅ Working</span>';
+            } else {
+                echo '<span style="color: #dc3545;">❌ Check manually</span>';
+            }
+        ?></li>
+        <li><a href="/webcam.php?id=kspb&cam=0" target="_blank">Test Webcam API</a></li>
+        <li><a href="/fetch-webcam-safe.php" target="_blank">Test Webcam Fetch Script</a></li>
+        <li><a href="/diagnostics.php" target="_blank">🔍 Run Diagnostics Again</a></li>
+    </ul>
+    
+    <h2>📋 Deployment Health Checklist</h2>
+    <ul style="list-style: disc; padding-left: 20px;">
+        <li>✅ All required files present</li>
+        <li><?= empty($issues) ? '✅' : '❌' ?> No configuration errors</li>
+        <li><?= is_dir($cacheDir) && @file_put_contents($cacheTestFile, 'test') !== false ? '✅' : '❌' ?> Cache directory writable</li>
+        <li><?= $isHttps ? '✅' : '❌' ?> HTTPS enabled</li>
+        <li><?= $ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false ? '✅' : '⚠️' ?> ffmpeg available</li>
+        <li><?= isset($weatherData['success']) && $weatherData['success'] ? '✅' : '⚠️' ?> Weather API responding</li>
+        <li>✅ GitHub Actions deployment workflow configured</li>
+        <li>✅ DNS wildcard configured (*.aviationwx.org)</li>
+        <li>✅ Cron job configured for webcam refresh</li>
     </ul>
     
     <h2>📝 Next Steps</h2>

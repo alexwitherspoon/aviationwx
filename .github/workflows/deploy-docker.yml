@@ -36,10 +36,13 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Create cache directories with proper permissions (using sudo if needed)
+          # Create cache directories with permissions for www-data container user (UID 33)
           sudo mkdir -p cache/webcams
-          sudo chmod -R 775 cache
-          sudo chown -R $USER:$USER cache
+          # Use 777 for cache directory (acceptable for cache, no sensitive data)
+          # Or alternatively: sudo chown -R 33:33 cache (www-data user)
+          sudo chmod -R 777 cache
+          # Ensure parent cache directory also has correct permissions
+          sudo chmod 777 cache || true
           EOF
 
       - name: Deploy via Docker Compose
