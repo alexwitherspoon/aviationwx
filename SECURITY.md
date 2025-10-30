@@ -53,10 +53,10 @@ The `airports.json` file contains:
    # This file is in .gitignore and won't be committed
    ```
 
-2. **Production (Bluehost)**
-   - Upload `airports.json` directly to the server (not via Git)
-   - Use SFTP or File Manager in cPanel
-   - Set proper file permissions (600 or 640)
+2. **Production (Docker on Droplet)**
+   - Store `airports.json` on the host and mount read-only into the container
+   - Or set `CONFIG_PATH` env to point at a secure host path
+   - Set proper file permissions (600 or 640) on the host
    - Never commit production credentials to any repository
 
 3. **Separate Private Repo (Optional)**

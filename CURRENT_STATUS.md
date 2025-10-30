@@ -33,7 +33,7 @@ The webcam fetching script runs out of memory because MJPEG streams send continu
 
 **Solution options:**
 1. Use the manual approach: Get webcam images another way
-2. Set up cron job on Bluehost (recommended)
+2. Set up host cron job on Droplet (recommended)
 3. We can create a simpler fetch script that captures a single frame
 
 ## 🚀 Try It Now
@@ -51,7 +51,7 @@ You should see:
 1. **Open the page** in your browser to see what's working
 2. **Test the weather data** - should show real values
 3. **Decide on webcam approach** - we can fix this next
-4. **When ready for deployment** - we'll upload to Bluehost
+4. **When ready for deployment** - push to main to trigger Docker deploy
 
 No additional dependencies needed - everything works with just PHP!
 

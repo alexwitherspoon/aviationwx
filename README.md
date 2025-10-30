@@ -15,23 +15,18 @@ Real-time aviation weather and conditions for participating airports.
 
 ### Requirements
 
-- PHP 7.4+
-- cPanel with subdomain wildcard support (Bluehost.com recommended)
-- Cron job capability for webcam caching (optional but recommended)
+- Docker and Docker Compose
+- A domain with wildcard DNS (A records for `@` and `*`)
+- Cron capability on the host for webcam refresh (recommended)
 
 ### Setup
 
 #### Automated Deployment (Recommended)
 
 1. **Configure GitHub Actions:**
-   - Add secrets to your repository (Settings → Secrets)
-   - See [DEPLOYMENT.md](DEPLOYMENT.md) for details
+   - Add SSH secrets to your repository (Settings → Secrets)
+   - See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for details
    - Push to `main` branch to trigger deployment
-
-2. **Set up on Bluehost:**
-   - Upload `airports.json` manually (not in Git)
-   - Configure DNS with wildcard `*.aviationwx.org`
-   - Set up cron jobs (see [DEPLOYMENT.md](DEPLOYMENT.md))
 
 #### Manual Setup
 
@@ -51,13 +46,17 @@ Real-time aviation weather and conditions for participating airports.
    - Configure webcam URLs and credentials
    - Add airport metadata
 
-4. Upload all files to your web hosting root directory
-
-5. Configure your subdomain wildcard DNS in cPanel: `*.aviationwx.org` → your server IP
-
-6. Set up cron job to refresh webcam images:
+4. Start locally with Docker
    ```bash
-   */1 * * * * curl -s http://yoursite.com/fetch-webcam-safe.php > /dev/null 2>&1
+   docker compose up -d
+   # Access http://localhost:8080
+   ```
+
+5. Configure wildcard DNS: add A records for `@` and `*` to your server IP
+
+6. Set up host cron to refresh webcam images (example):
+   ```bash
+   */1 * * * * curl -s http://127.0.0.1:8080/fetch-webcam-safe.php > /dev/null 2>&1
    ```
 
 ### ⚠️ Security Note
@@ -84,7 +83,32 @@ Edit `airports.json` to add a new airport:
 }
 ```
 
-Then set up the subdomain in your DNS/hosting panel.
+Then set up wildcard DNS as described in deployment docs.
+
+### Configuration Path and Refresh Intervals
+
+- Set `CONFIG_PATH` env to point the app to your mounted `airports.json`.
+- Webcam refresh cadence can be controlled via env and per-airport:
+  - `WEBCAM_REFRESH_DEFAULT` (seconds) default is 60
+  - Per-airport `webcam_refresh_seconds` in `airports.json`
+  - Per-camera `refresh_seconds` on each webcam entry overrides airport default
+- Weather refresh/cache is similarly configurable:
+  - `WEATHER_REFRESH_DEFAULT` (seconds) default is 60
+  - Per-airport `weather_refresh_seconds` in `airports.json`
+
+### Webcam Sources and Formats
+
+- Supported webcam sources: Static JPEG/PNG, MJPEG streams, and RTSP streams (via ffmpeg snapshot).
+- RTSP options per camera:
+  - `rtsp_transport`: `tcp` (default) or `udp`
+- The fetcher generates multiple formats per image:
+  - `AVIF` (best-effort), `WEBP`, and `JPEG` for broad compatibility.
+- Frontend uses `<picture>` with AVIF/WEBP sources and JPEG fallback.
+
+### Time Since Updated Indicators
+
+- Weather API includes `last_updated` (UNIX) and `last_updated_iso`.
+- UI displays “Time Since Updated” and marks it red when older than 1 hour (shows “Over an hour stale.”).
 
 ## Weather Sources
 

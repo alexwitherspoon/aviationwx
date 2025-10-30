@@ -14,7 +14,8 @@ if (empty($airportId)) {
 }
 
 // Load airport config
-$configFile = __DIR__ . '/airports.json';
+$envConfigPath = getenv('CONFIG_PATH');
+$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
 if (!file_exists($configFile)) {
     echo json_encode(['success' => false, 'error' => 'Configuration not found']);
     exit;
@@ -31,6 +32,29 @@ if (!isset($config['airports'][$airportId])) {
 }
 
 $airport = $config['airports'][$airportId];
+
+// Weather refresh interval (per-airport, with env default)
+$defaultWeatherRefresh = getenv('WEATHER_REFRESH_DEFAULT') !== false ? intval(getenv('WEATHER_REFRESH_DEFAULT')) : 60;
+$airportWeatherRefresh = isset($airport['weather_refresh_seconds']) ? intval($airport['weather_refresh_seconds']) : $defaultWeatherRefresh;
+
+// Cached weather path
+$weatherCacheDir = __DIR__ . '/cache';
+if (!file_exists($weatherCacheDir)) {
+    @mkdir($weatherCacheDir, 0755, true);
+}
+$weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
+
+// Serve cached weather if fresh
+if (file_exists($weatherCacheFile)) {
+    $age = time() - filemtime($weatherCacheFile);
+    if ($age < $airportWeatherRefresh) {
+        $cached = json_decode(file_get_contents($weatherCacheFile), true);
+        if (is_array($cached)) {
+            echo json_encode(['success' => true, 'weather' => $cached]);
+            exit;
+        }
+    }
+}
 
 // Fetch weather based on source
 $weatherData = null;
@@ -117,6 +141,11 @@ if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
 } else {
     $weatherData['dewpoint_spread'] = null;
 }
+
+// Stamp last_updated and write cache
+$weatherData['last_updated'] = time();
+$weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
+@file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
 
 echo json_encode(['success' => true, 'weather' => $weatherData]);
 

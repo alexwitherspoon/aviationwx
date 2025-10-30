@@ -11,7 +11,7 @@ The AviationWX project is **fully implemented and ready for production deploymen
 - ✅ **Airport configuration** via JSON - fully dynamic, supports unlimited airports
 - ✅ **HTTPS enforcement** via `.htaccess`
 - ✅ **Response security headers** configured
-- ✅ **GitHub Actions CI/CD** - automated testing and deployment to Bluehost
+- ✅ **GitHub Actions CI/CD** - automated testing and deployment to Docker Droplet
 
 ### Weather Data Integration
 - ✅ **Multiple weather sources**: Tempest, Ambient Weather, and METAR
@@ -64,7 +64,7 @@ The AviationWX project is **fully implemented and ready for production deploymen
 ✅ DEPLOYMENT.md            - Deployment guide
 ✅ .github/workflows/       - CI/CD automation
    - test.yml              - Automated testing workflow
-   - deploy.yml             - Automated deployment to Bluehost
+   - deploy-docker.yml      - Automated deployment to DigitalOcean Droplet
 ```
 
 ### Webcam Integration
@@ -82,7 +82,7 @@ The AviationWX project is **fully implemented and ready for production deploymen
 
 ### GitHub Actions CI/CD
 - ✅ **Automated testing** - Syntax checks, security scans, git secret detection
-- ✅ **Automated deployment** - FTP upload to Bluehost after successful tests
+- ✅ **Automated deployment** - SSH-based Docker deploy to Droplet
 - ✅ **Test as prerequisite** - Deployment only runs after tests pass
 - ✅ **Merge trigger** - Automatic deployment on push to main branch
 - ✅ **Configuration documented** - Complete setup guide in `.github/SETUP.md`
@@ -141,7 +141,7 @@ The AviationWX project is **fully implemented and ready for production deploymen
   - [ ] FTP_USER
   - [ ] FTP_PASS
   - [ ] FTP_PATH
-- [ ] Set up cron job on Bluehost for webcam refresh
+- [ ] Set up host cron job for webcam refresh
   - Command: `*/1 * * * * php /path/to/fetch-webcam-safe.php`
 - [ ] Configure DNS wildcard subdomain (*.aviationwx.org)
 - [ ] Create `airports.json` with real API keys and credentials
@@ -183,14 +183,14 @@ The AviationWX project is **fully implemented and ready for production deploymen
 
 **What to do now**:
 1. Set up GitHub Actions secrets for deployment
-2. Configure Bluehost cron job for webcam refresh
+2. Configure host cron job for webcam refresh
 3. Deploy via GitHub Actions (automatic on merge)
 4. Configure DNS wildcard subdomain
 5. Test live deployment
 
 ## 🚀 Next Steps
 
-The project is ready for production. All features are implemented, tested, and documented. The next step is to deploy to Bluehost using the automated GitHub Actions workflow.
+The project is ready for production. All features are implemented, tested, and documented. The next step is to deploy to the Droplet using the automated GitHub Actions workflow.
 
 To deploy:
 1. Push your commits to GitHub

@@ -108,11 +108,10 @@ AviationWX automatically detects and handles webcam source types:
    - Downloads the image directly
    - PNG images are automatically converted to JPEG
 
-3. **RTSP Streams** - Real Time Streaming Protocol
+3. **RTSP Streams** - Real Time Streaming Protocol (snapshot via ffmpeg)
    - Example: `rtsp://camera.example.com:554/stream`
    - Example: `rtsp://192.168.1.100:8554/live`
-   - **⚠️ Limitation**: RTSP requires `ffmpeg`, which is **not available on shared hosting** (Bluehost, etc.)
-   - **Recommended**: Use the camera's HTTP snapshot URL instead
+   - Requires `ffmpeg` (included in Docker image). Captures a single high-quality frame per refresh.
 
 ### Format Detection
 The system automatically detects the source type from the URL:
@@ -129,6 +128,9 @@ The system automatically detects the source type from the URL:
 - `position`: Direction the camera faces (for organization)
 - `partner_name`: Partner organization name
 - `partner_link`: Link to partner website
+- Optional per-camera settings:
+  - `refresh_seconds`: Override refresh interval (seconds)
+  - `rtsp_transport`: `tcp` (default) or `udp` for RTSP streams
 
 ### Webcam Examples
 
@@ -143,11 +145,13 @@ The system automatically detects the source type from the URL:
 }
 ```
 
-**RTSP Stream (Limited Support):**
+**RTSP Stream:**
 ```json
 {
   "name": "Runway Camera",
   "url": "rtsp://camera.example.com:554/stream1",
+  "rtsp_transport": "tcp",
+  "refresh_seconds": 30,
   "username": "admin",
   "password": "password123",
   "position": "south",

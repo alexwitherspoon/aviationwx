@@ -120,7 +120,7 @@ aviationwx.org/
 3. Test the KSPB page
 4. Verify weather data loads correctly
 5. Check webcam caching works
-6. Deploy to Bluehost when ready
+6. Deploy to your Docker Droplet when ready
 
 ## Troubleshooting
 
@@ -138,7 +138,7 @@ aviationwx.org/
 - Use the hosts file method (Option 1 above)
 - Or test individual components separately
 
-## Bluehost Deployment Checklist
+## Production Deployment Checklist
 
 - [ ] Upload all files to public_html
 - [ ] Set up subdomain wildcard DNS: *.aviationwx.org
