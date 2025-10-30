@@ -34,96 +34,14 @@ jobs:
 
       - name: Sync repository to server
         run: |
-          rsync -az --delete --exclude '.git' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx.org/
+          rsync -az --delete --exclude '.git' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/
 
       - name: Deploy via Docker Compose
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
-          cd ~/aviationwx.org
+          cd ~/aviationwx
           docker compose -f docker-compose.prod.yml up -d --build
           docker system prune -f
           EOF
-
-name: Deploy to DigitalOcean (Docker)
-
-on:
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - 'README.md'
-      - 'DEPLOYMENT*.md'
-      - '.gitignore'
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.1'
-        extensions: curl, gd, json, mbstring
-    
-    - name: Check syntax
-      run: |
-        echo "Checking PHP syntax..."
-        php -l index.php
-        php -l airport-template.php
-        php -l weather.php
-        php -l webcam.php
-        php -l homepage.php
-    
-    - name: Validate JSON
-      run: |
-        php -r "json_decode(file_get_contents('airports.json.example'), true);"
-    
-    - name: Validate file structure
-      run: |
-        test -f index.php && echo "✓ index.php"
-        test -f Dockerfile && echo "✓ Dockerfile"
-        test -f docker-compose.yml && echo "✓ docker-compose.yml"
-        echo "✓ All required files present"
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Create SSH directory
-      run: mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    
-    - name: Add server to known hosts
-      run: |
-        ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
-        chmod 600 ~/.ssh/known_hosts
-    
-    - name: Setup SSH key
-      run: |
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-    
-    - name: Deploy to DigitalOcean
-      run: |
-        ssh -o StrictHostKeyChecking=no \
-            -i ~/.ssh/id_rsa \
-            ${{ secrets.SSH_USER }}@${{ secrets.HOST }} \
-            "cd aviationwx.org && \
-             git pull && \
-             docker compose -f docker-compose.prod.yml up -d --build && \
-             docker system prune -f"
-    
-    - name: Verify deployment
-      run: |
-        sleep 5
-        curl -f http://${{ secrets.HOST }}/ || exit 1
-        echo "✓ Deployment successful"
 
