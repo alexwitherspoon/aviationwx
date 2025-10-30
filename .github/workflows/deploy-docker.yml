@@ -36,9 +36,10 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          mkdir -p cache/webcams
-          chmod -R 775 cache
-          chown -R $USER:$USER cache
+          # Create cache directories with proper permissions (using sudo if needed)
+          sudo mkdir -p cache/webcams
+          sudo chmod -R 775 cache
+          sudo chown -R $USER:$USER cache
           EOF
 
       - name: Deploy via Docker Compose
