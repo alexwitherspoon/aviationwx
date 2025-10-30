@@ -39,8 +39,8 @@ usermod -aG docker aviationwx
 su - aviationwx
 
 # Clone your repository
-git clone https://github.com/yourusername/aviationwx.org.git
-cd aviationwx.org
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
 
 # Copy example config
 cp airports.json.example airports.json
@@ -116,6 +116,182 @@ curl http://localhost:8080
   }
   ```
 - Defaults: transport `tcp`, timeout 10s, retries 2.
+
+---
+
+## End-to-End Deployment on DigitalOcean (Detailed)
+
+This section walks through a clean setup from an empty Droplet to automated deployments via GitHub Actions, with wildcard TLS and Cloudflare DNS.
+
+### A. Prerequisites
+
+- DigitalOcean account and a Ubuntu 22.04 Droplet IP ready
+- Domain `aviationwx.org` managed in Cloudflare
+- Two GitHub repositories:
+  - App (public): `alexwitherspoon/aviationwx`
+  - Secrets (private): `alexwitherspoon/aviationwx-secrets` (contains only `airports.json`)
+
+### B. One-time Droplet Bootstrap
+
+1) SSH to the droplet as root and run the bootstrap script (edit variables first):
+   - Copy the script from your notes or request it from the maintainer
+   - It creates user `aviationwx`, installs Docker + compose, configures firewall, cron, and directories
+
+2) Reconnect as the deploy user:
+```bash
+ssh aviationwx@YOUR_DROPLET_IP
+```
+
+### C. SSH Deploy Keys and Clones
+
+1) Place the two deploy keys (already created in GitHub deploy keys) on the droplet at:
+   - `~/.ssh/deploy_key_aviationwxorg`
+   - `~/.ssh/deploy_key_aviationwxorg_secrets`
+   - Permissions: `chmod 600` on both
+
+2) SSH config aliases:
+```bash
+cat > ~/.ssh/config << 'EOF'
+Host github-aviationwx
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/deploy_key_aviationwxorg
+    IdentitiesOnly yes
+
+Host github-airports
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/deploy_key_aviationwxorg_secrets
+    IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+chmod 644 ~/.ssh/known_hosts
+```
+
+3) Clone both repos:
+```bash
+cd ~
+git clone git@github-aviationwx:alexwitherspoon/aviationwx.git
+git clone git@github-airports:alexwitherspoon/aviationwx-secrets.git
+```
+
+4) Link secrets file:
+```bash
+ln -sf ~/aviationwx-secrets/airports.json ~/aviationwx/airports.json
+chmod 600 ~/aviationwx/airports.json
+```
+
+### D. Cloudflare DNS
+
+Add these A records in Cloudflare for the `aviationwx.org` zone:
+- `@` → YOUR_DROPLET_IP
+- `*` → YOUR_DROPLET_IP
+
+You may start with DNS only (gray cloud) until TLS is working; then you can enable proxy (orange cloud) if desired.
+
+### E. TLS with Certbot (Wildcard via DNS-01)
+
+1) Install Certbot + plugin:
+```bash
+sudo apt update && sudo apt install -y certbot python3-certbot-dns-cloudflare
+```
+
+2) Create Cloudflare API Token (scoped to the zone):
+- Permissions: Zone → DNS → Edit; Zone → Zone → Read
+- Resources: Include → Specific zone → `aviationwx.org`
+
+3) Store token on droplet:
+```bash
+mkdir -p ~/.secrets
+printf 'dns_cloudflare_api_token = %s\n' 'YOUR_CF_API_TOKEN' > ~/.secrets/cloudflare.ini
+chmod 600 ~/.secrets/cloudflare.ini
+```
+
+4) Issue wildcard certs:
+```bash
+sudo certbot certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials ~/.secrets/cloudflare.ini \
+  -d aviationwx.org -d '*.aviationwx.org' \
+  --non-interactive --agree-tos -m you@example.com
+```
+
+5) Copy certs to app ssl directory:
+```bash
+mkdir -p ~/aviationwx/ssl
+sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ~/aviationwx/ssl/
+sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem   ~/aviationwx/ssl/
+sudo chown -R aviationwx:aviationwx ~/aviationwx/ssl
+```
+
+6) Optional: auto-reload Nginx on renew (deploy hook):
+```bash
+sudo mkdir -p /usr/local/lib/aviationwx
+sudo tee /usr/local/lib/aviationwx/renew-hook.sh >/dev/null <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+APP_HOME="/home/aviationwx/aviationwx"
+cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem "$APP_HOME/ssl/fullchain.pem"
+cp /etc/letsencrypt/live/aviationwx.org/privkey.pem   "$APP_HOME/ssl/privkey.pem"
+chown -R aviationwx:aviationwx "$APP_HOME/ssl"
+cd "$APP_HOME"
+docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || \
+docker compose -f docker-compose.prod.yml up -d nginx
+EOS
+sudo chmod +x /usr/local/lib/aviationwx/renew-hook.sh
+sudo bash -c 'echo deploy-hook = /usr/local/lib/aviationwx/renew-hook.sh >> /etc/letsencrypt/cli.ini'
+sudo certbot renew --dry-run
+```
+
+### F. Start the Stack
+
+```bash
+cd ~/aviationwx
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### G. GitHub Actions Deploy
+
+1) Create a CI SSH key for Actions (on your machine):
+```bash
+ssh-keygen -t ed25519 -f aviationwx_actions -C "gha@aviationwx"
+```
+2) Add the public key to the droplet user’s `~/.ssh/authorized_keys`.
+
+3) In GitHub repo `alexwitherspoon/aviationwx` → Settings → Secrets and variables → Actions:
+- `SSH_PRIVATE_KEY`: contents of `aviationwx_actions` (private key)
+- `HOST`: droplet IP
+- `USER`: `aviationwx`
+
+4) Workflow behavior (`.github/workflows/deploy-docker.yml`):
+- Deploys on push to `main`
+- Deploys when a PR is merged into `main`
+- Can be run manually via workflow_dispatch
+
+### H. Cron for Webcam Refresh
+
+Already installed by bootstrap (host-side cron):
+```bash
+*/1 * * * * curl -s http://127.0.0.1:8080/fetch-webcam-safe.php > /dev/null 2>&1
+```
+
+### I. Verification
+
+```bash
+docker compose -f ~/aviationwx/docker-compose.prod.yml ps
+docker compose -f ~/aviationwx/docker-compose.prod.yml logs -f nginx web
+```
+Visit:
+- `https://aviationwx.org/`
+- `https://aviationwx.org/weather.php?airport=kspb`
+- `https://kspb.aviationwx.org/`
+
+### J. Troubleshooting Tips
+
+- SSH alias resolution errors → run `git`/`ssh` as the `aviationwx` user where the SSH config is defined.
+- 403 on TLS or domain mismatch → check cert files in `~/aviationwx/ssl` and Nginx logs.
+- Missing webcam images → confirm cron is running and `cache/webcams/` is writable.
 
 ### 7. Configure DNS in Cloudflare
 

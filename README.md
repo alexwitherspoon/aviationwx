@@ -25,16 +25,16 @@ Real-time aviation weather and conditions for participating airports.
 
 1. **Configure GitHub Actions:**
    - Add SSH secrets to your repository (Settings → Secrets)
-   - See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for details
-   - Push to `main` branch to trigger deployment
+   - See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for the end-to-end guide
+   - Push to `main` branch (or merge a PR) to trigger deployment
 
 #### Manual Setup
 
 1. Clone this repository:
-   ```bash
-   git clone https://github.com/alexwitherspoon/aviationwx.org.git
-   cd aviationwx.org
-   ```
+```bash
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
+```
 
 2. Copy the example configuration:
    ```bash

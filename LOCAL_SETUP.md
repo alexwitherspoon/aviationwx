@@ -11,8 +11,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/aviationwx.org.git
-cd aviationwx.org
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
 
 # Initialize environment (creates .env from env.example)
 make init
