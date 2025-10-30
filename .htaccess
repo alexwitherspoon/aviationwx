@@ -25,11 +25,11 @@
     Deny from all
 </FilesMatch>
 
-# Cache webcam images for better performance
-<FilesMatch "\.jpg$">
-    ExpiresActive On
-    ExpiresDefault "access plus 1 minute"
-</FilesMatch>
+# Cache webcam images for better performance (nginx handles this in production)
+# <FilesMatch "\.jpg$">
+#     ExpiresActive On
+#     ExpiresDefault "access plus 1 minute"
+# </FilesMatch>
 
 # PHP Settings
 <IfModule mod_php.c>

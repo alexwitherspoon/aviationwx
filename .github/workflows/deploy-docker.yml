@@ -6,17 +6,12 @@ on:
     paths-ignore:
       - "**.md"
       - "**.MD"
-  pull_request:
-    types: [ closed ]
-    branches: [ "main" ]
   workflow_dispatch: {}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    # Only runs on push to main or manual dispatch per triggers above
     steps:
       - name: Checkout
         uses: actions/checkout@v4
