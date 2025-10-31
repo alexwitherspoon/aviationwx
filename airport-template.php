@@ -617,12 +617,79 @@ function reloadWebcamImages() {
 updateWebcamTimestamps();
 setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
 
+// Debounce timestamps per camera to avoid multiple fetches when all formats load
+const timestampCheckPending = {};
+
+// Function to update timestamp when image loads
+function updateWebcamTimestampOnLoad(camIndex) {
+    // Debounce: if a check is already pending for this camera, skip
+    if (timestampCheckPending[camIndex]) {
+        return;
+    }
+    
+    timestampCheckPending[camIndex] = true;
+    
+    const timestampUrl = `/webcam.php?id=<?= $airportId ?>&cam=${camIndex}&mtime=1`;
+    fetch(timestampUrl)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.timestamp) {
+                const elem = document.getElementById(`update-${camIndex}`);
+                if (elem) {
+                    const newTimestamp = parseInt(data.timestamp);
+                    const currentTimestamp = parseInt(elem.dataset.timestamp || '0');
+                    
+                    // Only update if timestamp is newer
+                    if (newTimestamp > currentTimestamp) {
+                        elem.dataset.timestamp = newTimestamp.toString();
+                        // Immediately update the display
+                        const updateDate = new Date(newTimestamp * 1000);
+                        const now = new Date();
+                        const diffSeconds = Math.floor((now - updateDate) / 1000);
+                        let timeStr = '';
+                        
+                        if (diffSeconds < 60) {
+                            timeStr = diffSeconds + ' seconds ago';
+                        } else if (diffSeconds < 3600) {
+                            timeStr = Math.floor(diffSeconds / 60) + ' minutes ago';
+                        } else if (diffSeconds < 86400) {
+                            timeStr = Math.floor(diffSeconds / 3600) + ' hours ago';
+                        } else {
+                            timeStr = updateDate.toLocaleString();
+                        }
+                        
+                        elem.textContent = timeStr;
+                    }
+                }
+            }
+        })
+        .catch(err => {
+            // Silently fail - don't spam console
+        })
+        .finally(() => {
+            // Clear pending flag after 1 second (debounce window)
+            setTimeout(() => {
+                timestampCheckPending[camIndex] = false;
+            }, 1000);
+        });
+}
+
 // Reload webcam images using per-camera intervals
 <?php foreach ($airport['webcams'] as $index => $cam): 
     $defaultWebcamRefresh = 60;
     $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
     $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 ?>
+// Setup image load handlers for camera <?= $index ?>
+['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('load', () => {
+            updateWebcamTimestampOnLoad(<?= $index ?>);
+        }, { once: false }); // Allow multiple calls as images refresh
+    }
+});
+
 setInterval(() => {
     ['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
         const el = document.getElementById(id);

@@ -87,15 +87,30 @@ if (!file_exists($cacheJpg)) {
     servePlaceholder();
 }
 
+// Check if requesting timestamp only (for frontend to get latest mtime)
+if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
+    header('Content-Type: application/json');
+    if (file_exists($cacheJpg)) {
+        $mtime = filemtime($cacheJpg);
+        echo json_encode(['timestamp' => $mtime, 'success' => true]);
+    } else {
+        echo json_encode(['timestamp' => 0, 'success' => false]);
+    }
+    exit;
+}
+
 // Serve cached file if fresh
 if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefresh) {
     $age = time() - filemtime($targetFile);
     $remainingTime = $perCamRefresh - $age;
+    $mtime = filemtime($targetFile);
     
     header('Content-Type: ' . $ctype);
     header('Cache-Control: public, max-age=' . $remainingTime);
     header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: HIT');
+    header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
     
     readfile($targetFile);
     exit;
@@ -103,9 +118,12 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
 
 // Cache expired or file not found - serve stale cache if available, otherwise placeholder
 if (file_exists($targetFile)) {
+    $mtime = filemtime($targetFile);
     header('Content-Type: ' . $ctype);
     header('Cache-Control: public, max-age=0, must-revalidate'); // Stale, revalidate
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: STALE');
+    header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
     readfile($targetFile);
 } else {
     servePlaceholder();
