@@ -75,17 +75,25 @@ jobs:
           
           echo "✓ Containers are running"
           
-          # Check if web container is responding
-          if ! curl -f -s http://127.0.0.1:${APP_PORT:-8080}/ > /dev/null; then
-            echo "❌ Web container is not responding"
-            docker compose -f docker-compose.prod.yml logs web
+          # Wait for Apache to be fully ready
+          echo "Waiting for services to be ready..."
+          sleep 10
+          
+          # Check if web container is responding (from host, using explicit port 8080)
+          APP_PORT=${APP_PORT:-8080}
+          if ! curl -f -s --max-time 5 http://127.0.0.1:${APP_PORT}/ > /dev/null 2>&1; then
+            echo "❌ Web container is not responding on port ${APP_PORT}"
+            echo "Checking container logs..."
+            docker compose -f docker-compose.prod.yml logs web | tail -50
+            echo "Checking container status..."
+            docker compose -f docker-compose.prod.yml ps
             exit 1
           fi
           
-          echo "✓ Web container is responding"
+          echo "✓ Web container is responding on port ${APP_PORT}"
           
-          # Check if diagnostics page loads
-          if ! curl -f -s http://127.0.0.1:${APP_PORT:-8080}/diagnostics.php > /dev/null; then
+          # Check if diagnostics page loads (optional check)
+          if ! curl -f -s --max-time 5 http://127.0.0.1:${APP_PORT}/diagnostics.php > /dev/null 2>&1; then
             echo "⚠️  Diagnostics page not accessible (may be expected)"
           else
             echo "✓ Diagnostics page accessible"
