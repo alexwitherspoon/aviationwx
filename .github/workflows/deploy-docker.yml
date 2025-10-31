@@ -58,6 +58,19 @@ jobs:
           docker compose -f docker-compose.prod.yml up -d --build
           docker system prune -f
           EOF
+
+      - name: Reload Nginx inside container
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          # Attempt a graceful reload; if container not ready, start or restart it
+          if docker compose -f docker-compose.prod.yml ps nginx | grep -q Up; then
+            docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || docker compose -f docker-compose.prod.yml up -d nginx
+          else
+            docker compose -f docker-compose.prod.yml up -d nginx
+          fi
+          EOF
       
       - name: Post-deployment health check
         run: |

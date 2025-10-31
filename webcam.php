@@ -72,12 +72,8 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     exit;
 }
 
-// Rate limiting (100 requests per minute per IP for images)
-// Note: mtime requests are handled above and bypass rate limiting
-if (!checkRateLimit('webcam_api', 100, 60)) {
-    http_response_code(429);
-    servePlaceholder();
-}
+// Defer rate limiting decision until after we know what we can serve
+$isRateLimited = !checkRateLimit('webcam_api', 100, 60);
 
 // Optional format parameter: jpg (default), webp, avif
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
@@ -101,6 +97,24 @@ $ctype = (substr($targetFile, -5) === '.avif') ? 'image/avif' : ((substr($target
 
 // If no cache exists, serve placeholder
 if (!file_exists($cacheJpg)) {
+    servePlaceholder();
+}
+
+// If rate limited, prefer to serve an existing cached image (even if stale) with 200
+if ($isRateLimited) {
+    $fallback = file_exists($targetFile) ? $targetFile : (file_exists($cacheJpg) ? $cacheJpg : null);
+    if ($fallback !== null) {
+        $mtime = @filemtime($fallback) ?: time();
+        header('Content-Type: ' . $ctype);
+        header('Cache-Control: public, max-age=0, must-revalidate');
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+        header('X-Cache-Status: RL-SERVE'); // Served under rate limit
+        header('X-RateLimit': 'exceeded');
+        readfile($fallback);
+        exit;
+    }
+    // As a last resort, serve placeholder with 200
+    // Do NOT set 429 to avoid <img> onerror in browsers
     servePlaceholder();
 }
 

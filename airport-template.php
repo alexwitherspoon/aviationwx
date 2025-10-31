@@ -779,31 +779,39 @@ function safeSwapCameraImage(camIndex) {
             const newTs = parseInt(json.timestamp);
             if (isNaN(newTs) || newTs <= currentTs) return; // Not newer
 
-            // Preload JPG first (universal fallback)
-            const preload = new Image();
             // Build new URLs with cache buster
             const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&t=${Date.now()}`;
             const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&t=${Date.now()}`;
             const avifUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=avif&t=${Date.now()}`;
 
-            preload.onload = () => {
-                // Swap only after load succeeds
+            // Helper to preload an image URL, resolve on load, reject on error
+            const preloadUrl = (url) => new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => reject(new Error('preload_failed'));
+                img.src = url;
+            });
+
+            // Wait for ALL formats to be ready before swapping
+            Promise.all([
+                preloadUrl(jpgUrl),
+                preloadUrl(webpUrl),
+                preloadUrl(avifUrl)
+            ])
+            .then(() => {
                 const img = document.getElementById(`webcam-${camIndex}`);
                 const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
                 const srcAvif = document.getElementById(`webcam-avif-${camIndex}`);
                 if (img) img.src = jpgUrl;
                 if (srcWebp) srcWebp.setAttribute('srcset', webpUrl);
                 if (srcAvif) srcAvif.setAttribute('srcset', avifUrl);
-
+                
                 // Update timestamp immediately after swap
                 updateWebcamTimestampOnLoad(camIndex);
-            };
-            
-            preload.onerror = () => {
-                // Keep current image; try again on next interval
-            };
-            
-            preload.src = jpgUrl;
+            })
+            .catch(() => {
+                // If any format fails, keep current image; try again on next interval
+            });
         })
         .catch(() => {
             // Silently ignore; will retry on next interval
