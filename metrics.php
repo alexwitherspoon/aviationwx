@@ -24,9 +24,9 @@ metric('webcam_cache_exists', is_dir($cacheDir) ? 1 : 0);
 metric('webcam_cache_writable', (is_dir($cacheDir) && is_writable($cacheDir)) ? 1 : 0);
 
 // Count cached files by format
-$counts = ['jpg' => 0, 'webp' => 0, 'avif' => 0];
+$counts = ['jpg' => 0, 'webp' => 0];
 if (is_dir($cacheDir)) {
-    foreach (glob($cacheDir . '/*.{jpg,webp,avif}', GLOB_BRACE) ?: [] as $f) {
+    foreach (glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE) ?: [] as $f) {
         $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
         if (isset($counts[$ext])) $counts[$ext]++;
     }
@@ -46,7 +46,7 @@ if (file_exists($airportsConfig)) {
                 $base = $cacheDir . '/' . strtolower($airportId) . '_' . $idx;
                 $jpg = $base . '.jpg';
                 $webp = $base . '.webp';
-                $avif = $base . '.avif';
+                
 
                 $labels = ['airport' => strtolower($airportId), 'cam' => (string)$idx];
 
@@ -54,16 +54,12 @@ if (file_exists($airportsConfig)) {
                 $now = time();
                 $existsJpg = file_exists($jpg);
                 $existsWebp = file_exists($webp);
-                $existsAvif = file_exists($avif);
                 metric('webcam_cache_ready', $existsJpg ? 1 : 0, $labels + ['format' => 'jpg']);
                 metric('webcam_cache_ready', $existsWebp ? 1 : 0, $labels + ['format' => 'webp']);
-                metric('webcam_cache_ready', $existsAvif ? 1 : 0, $labels + ['format' => 'avif']);
                 metric('webcam_cache_age_seconds', $existsJpg ? max(0, $now - @filemtime($jpg)) : -1, $labels + ['format' => 'jpg']);
                 metric('webcam_cache_age_seconds', $existsWebp ? max(0, $now - @filemtime($webp)) : -1, $labels + ['format' => 'webp']);
-                metric('webcam_cache_age_seconds', $existsAvif ? max(0, $now - @filemtime($avif)) : -1, $labels + ['format' => 'avif']);
                 metric('webcam_cache_size_bytes', $existsJpg ? @filesize($jpg) : 0, $labels + ['format' => 'jpg']);
                 metric('webcam_cache_size_bytes', $existsWebp ? @filesize($webp) : 0, $labels + ['format' => 'webp']);
-                metric('webcam_cache_size_bytes', $existsAvif ? @filesize($avif) : 0, $labels + ['format' => 'avif']);
 
                 // Last RTSP error code if any
                 $errFile = $jpg . '.error.json';

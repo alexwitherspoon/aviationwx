@@ -49,7 +49,7 @@ $cacheDir = __DIR__ . '/cache/webcams';
 $base = $cacheDir . '/' . $airportId . '_' . $camIndex;
 $cacheJpg = $base . '.jpg';
 $cacheWebp = $base . '.webp';
-$cacheAvif = $base . '.avif';
+// AVIF support removed
 
 // Create cache directory if it doesn't exist
 if (!is_dir($cacheDir)) {
@@ -72,7 +72,6 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     }
     $existsJpg = file_exists($cacheJpg);
     $existsWebp = file_exists($cacheWebp);
-    $existsAvif = file_exists($cacheAvif);
     $mtime = 0;
     $size = 0;
     if ($existsJpg) { $mtime = max($mtime, (int)@filemtime($cacheJpg)); $size = max($size, (int)@filesize($cacheJpg)); }
@@ -84,8 +83,7 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
         'size' => $size,
         'formatReady' => [
             'jpg' => $existsJpg,
-            'webp' => $existsWebp,
-            'avif' => $existsAvif,
+            'webp' => $existsWebp
         ]
     ]);
     exit;
@@ -105,7 +103,7 @@ if (function_exists('getRateLimitRemaining')) {
 
 // Optional format parameter: jpg (default), webp, avif
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
-if (!in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) { 
+if (!in_array($fmt, ['jpg', 'jpeg', 'webp'])) { 
     $fmt = 'jpg'; 
 }
 
@@ -115,13 +113,13 @@ $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_se
 $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 
 // Pick target file by requested format with fallback to jpg
-$targetFile = $fmt === 'avif' ? $cacheAvif : ($fmt === 'webp' ? $cacheWebp : $cacheJpg);
+$targetFile = $fmt === 'webp' ? $cacheWebp : $cacheJpg;
 if (!file_exists($targetFile)) { 
     $targetFile = $cacheJpg; 
 }
 
 // Determine content type
-$ctype = (substr($targetFile, -5) === '.avif') ? 'image/avif' : ((substr($targetFile, -5) === '.webp') ? 'image/webp' : 'image/jpeg');
+$ctype = (substr($targetFile, -5) === '.webp') ? 'image/webp' : 'image/jpeg';
 
 // If no cache exists, serve placeholder
 if (!file_exists($cacheJpg)) {

@@ -94,7 +94,6 @@
                             }
                             $imgHash = substr(md5($airportId . '_' . $index . '_' . $mtimeJpg), 0, 8);
                             ?>
-                            <source id="webcam-avif-<?= $index ?>" type="image/avif" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=avif&v=<?= $imgHash ?>">
                             <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp&v=<?= $imgHash ?>">
                             <img id="webcam-<?= $index ?>" 
                                  src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>" 
@@ -866,7 +865,6 @@ function safeSwapCameraImage(camIndex) {
             const hash = json.timestamp ? String(json.timestamp).slice(-8) : Date.now().toString().slice(-8);
             const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&v=${hash}`;
             const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&v=${hash}`;
-            const avifUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=avif&v=${hash}`;
 
             // Show skeleton placeholder while loading
             const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
@@ -900,12 +898,6 @@ function safeSwapCameraImage(camIndex) {
                 preloadUrl(webpUrl).then(() => {
                     const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
                     if (srcWebp) srcWebp.setAttribute('srcset', webpUrl);
-                }).catch(() => {});
-            }
-            if (ready.avif) {
-                preloadUrl(avifUrl).then(() => {
-                    const srcAvif = document.getElementById(`webcam-avif-${camIndex}`);
-                    if (srcAvif) srcAvif.setAttribute('srcset', avifUrl);
                 }).catch(() => {});
             }
         })

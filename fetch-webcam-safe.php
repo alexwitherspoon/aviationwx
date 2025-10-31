@@ -525,7 +525,6 @@ foreach ($config['airports'] as $airportId => $airport) {
         $cacheFileBase = $cacheDir . '/' . $airportId . '_' . $index;
         $cacheFile = $cacheFileBase . '.jpg';
         $cacheWebp = $cacheFileBase . '.webp';
-        $cacheAvif = $cacheFileBase . '.avif';
         $camName = $cam['name'] ?? "Cam {$index}";
         $url = $cam['url'];
         $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
@@ -611,39 +610,19 @@ foreach ($config['airports'] as $airportId => $airport) {
             } else {
                 echo "    ✓ Saved {$size} bytes\n";
             }
-            // Generate WEBP and AVIF in parallel using background processes
-            // This significantly speeds up cache population
+            // Generate WEBP in background (single process)
             if ($isWeb) {
                 echo "<span class='info'>Generating WEBP and AVIF in parallel...</span><br>\n";
             } else {
                 echo "    Generating WEBP and AVIF in parallel...\n";
             }
             
-            // Build commands (allow per-camera transcode timeout and AVIF disable)
             $DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds
             $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
-
-            // Dynamic AVIF disable store
-            $encStateFile = __DIR__ . '/cache/encode_failures.json';
-            $encState = file_exists($encStateFile) ? (@json_decode(file_get_contents($encStateFile), true) ?: []) : [];
-            $encKey = strtolower($airportId) . '_' . $index;
-            $disableAvifCfg = !empty($cam['disable_avif']);
-            $disableAvifDyn = !empty($encState[$encKey]['disable_avif']);
-            $disableAvif = $disableAvifCfg || $disableAvifDyn;
-
             $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
-            if (!$disableAvif) {
-                // Explicit AVIF settings for reliability/perf: libaom-av1, yuv420p, CRF 32, preset 5, avif muxer
-                $cmdAvif = sprintf(
-                    "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -pix_fmt yuv420p -crf 32 -preset 5 -f avif %s",
-                    escapeshellarg($cacheFile),
-                    escapeshellarg($cacheAvif)
-                );
-            }
             
             // Start both processes in background
             $pipesWebp = [];
-            $pipesAvif = [];
             $processes = [];
             
             // Start WEBP generation
@@ -658,18 +637,7 @@ foreach ($config['airports'] as $airportId => $airport) {
                 $processes[] = ['proc' => $processWebp, 'type' => 'webp', 'pipes' => $pipesWebp, 'cache' => $cacheWebp];
             }
             
-            // Start AVIF generation (only if enabled)
-            if (!$disableAvif) {
-            $processAvif = proc_open(($cmdAvif ?? '') . ' 2>&1', [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w']
-            ], $pipesAvif);
-            
-            if (is_resource($processAvif)) {
-                fclose($pipesAvif[0]); // Close stdin
-                $processes[] = ['proc' => $processAvif, 'type' => 'avif', 'pipes' => $pipesAvif, 'cache' => $cacheAvif];
-            }}
+            // (AVIF generation removed)
             
             // Wait for all processes to complete
             $results = [];
@@ -694,28 +662,9 @@ foreach ($config['airports'] as $airportId => $airport) {
                             }
                         } else {
                             if ($isWeb) {
-                                if ($procData['type'] === 'avif') {
-                                    echo "<span class='info'>✗ " . strtoupper($procData['type']) . " generation failed (ignored)</span><br>\n";
-                                } else {
-                                    echo "<span class='error'>✗ " . strtoupper($procData['type']) . " generation failed</span><br>\n";
-                                }
+                                echo "<span class='error'>✗ WEBP generation failed</span><br>\n";
                             } else {
-                                if ($procData['type'] === 'avif') {
-                                    echo "    ✗ " . strtoupper($procData['type']) . " generation failed (ignored)\n";
-                                } else {
-                                    echo "    ✗ " . strtoupper($procData['type']) . " generation failed\n";
-                                }
-                            }
-
-                            // Track AVIF failure counts and optionally disable dynamically
-                            if ($procData['type'] === 'avif') {
-                                $state = $encState[$encKey] ?? ['avif_failures' => 0, 'disable_avif' => false];
-                                $state['avif_failures'] = (int)($state['avif_failures'] ?? 0) + 1;
-                                if ($state['avif_failures'] >= 3) {
-                                    $state['disable_avif'] = true; // auto-disable after 3 consecutive failures
-                                }
-                                $encState[$encKey] = $state;
-                                @file_put_contents($encStateFile, json_encode($encState, JSON_PRETTY_PRINT), LOCK_EX);
+                                echo "    ✗ WEBP generation failed\n";
                             }
                         }
                         
