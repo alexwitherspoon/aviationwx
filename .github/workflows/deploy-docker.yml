@@ -73,8 +73,18 @@ jobs:
           sudo chown root:adm /var/log/aviationwx/app.log || true
           sudo chmod 640 /var/log/aviationwx/app.log || true
           # Create logrotate rule on host for app log
-          sudo bash -lc 'cat >/etc/logrotate.d/aviationwx <<"LR"\n/var/log/aviationwx/app.log {\n    size 100M\n    rotate 50\n    compress\n    delaycompress\n    missingok\n    notifempty\n    copytruncate\n}\nLR'
-          # Force a logrotate config test
+          sudo tee /etc/logrotate.d/aviationwx > /dev/null <<'LR'
+/var/log/aviationwx/app.log {
+    size 100M
+    rotate 50
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+LR
+          # Force a logrotate config test (dry-run)
           if command -v logrotate >/dev/null 2>&1; then sudo logrotate -d /etc/logrotate.conf || true; fi
           EOF
 
