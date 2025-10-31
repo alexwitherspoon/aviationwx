@@ -266,5 +266,39 @@ foreach ($config['airports'] as $airportId => $airport) {
 }
 
 echo "\n\nDone! Webcam images cached.\n";
-echo "View them at: http://localhost:8000/?airport=kspb\n";
+
+// Build dynamic URL based on environment
+$protocol = 'https';
+if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+    $protocol = strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']);
+} elseif (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+    $protocol = 'https';
+} elseif (getenv('DOMAIN')) {
+    $protocol = 'https'; // Default to HTTPS for production
+}
+
+$domain = getenv('DOMAIN') ?: 'aviationwx.org';
+if (isset($_SERVER['HTTP_HOST'])) {
+    $hostParts = explode('.', $_SERVER['HTTP_HOST']);
+    // Use base domain if accessed via subdomain
+    if (count($hostParts) >= 3) {
+        $domain = implode('.', array_slice($hostParts, -2)); // Get last 2 parts (domain.tld)
+    } else {
+        $domain = $_SERVER['HTTP_HOST'];
+    }
+}
+
+// Show URLs for all airports that were processed
+if (isset($config['airports']) && is_array($config['airports'])) {
+    foreach ($config['airports'] as $airportId => $airport) {
+        if (isset($airport['webcams']) && is_array($airport['webcams'])) {
+            $airportName = $airport['name'] ?? $airportId;
+            $subdomainUrl = "{$protocol}://{$airportId}.{$domain}";
+            $queryUrl = "{$protocol}://{$domain}/?airport={$airportId}";
+            echo "View {$airportName} at: {$subdomainUrl} or {$queryUrl}\n";
+        }
+    }
+} else {
+    echo "View at: {$protocol}://{$domain}/?airport=<airport-id>\n";
+}
 

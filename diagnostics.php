@@ -89,7 +89,10 @@ if (file_exists(__DIR__ . '/.htaccess')) {
 
 // Check subdomain detection
 $host = $_SERVER['HTTP_HOST'] ?? 'unknown';
-$subdomain = explode('.', $host)[0] ?? '';
+$hostParts = explode('.', $host);
+// Only extract subdomain if host has 3+ parts (e.g., kspb.aviationwx.org)
+// Don't extract from 2 parts (e.g., aviationwx.org)
+$subdomain = (count($hostParts) >= 3) ? $hostParts[0] : '(none - root domain)';
 $success[] = "📡 Current host: {$host}";
 $success[] = "📡 Detected subdomain: '{$subdomain}'";
 
@@ -148,8 +151,9 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
     $success[] = "⚠️ ffmpeg not found (RTSP streams will not work)";
 }
 
-// Check HTTPS/SSL
-$isHttps = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+// Check HTTPS/SSL (check both HTTPS header and X-Forwarded-Proto from Nginx)
+$isHttps = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || 
+           (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
 if ($isHttps) {
     $success[] = "🔒 HTTPS enabled";
 } else {
