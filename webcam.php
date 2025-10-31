@@ -109,7 +109,7 @@ if ($isRateLimited) {
         header('Cache-Control: public, max-age=0, must-revalidate');
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
         header('X-Cache-Status: RL-SERVE'); // Served under rate limit
-        header('X-RateLimit': 'exceeded');
+        header('X-RateLimit: exceeded');
         readfile($fallback);
         exit;
     }
