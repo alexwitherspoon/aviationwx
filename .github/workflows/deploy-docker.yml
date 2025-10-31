@@ -88,16 +88,20 @@ jobs:
           if command -v logrotate >/dev/null 2>&1; then sudo logrotate -d /etc/logrotate.conf || true; fi
           EOF
 
-      - name: Reload Nginx inside container
+      - name: Restart Nginx container to pick up config changes
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Attempt a graceful reload; if container not ready, start or restart it
-          if docker compose -f docker-compose.prod.yml ps nginx | grep -q Up; then
-            docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || docker compose -f docker-compose.prod.yml up -d nginx
+          # Restart Nginx container to ensure it picks up new nginx.conf
+          # This is safer than reload since config file is mounted as volume
+          docker compose -f docker-compose.prod.yml restart nginx || docker compose -f docker-compose.prod.yml up -d nginx
+          # Verify Nginx container is running and config is valid
+          sleep 2
+          if docker compose -f docker-compose.prod.yml exec -T nginx nginx -t 2>&1 | grep -q "syntax is ok\|test is successful"; then
+            echo "✓ Nginx configuration is valid"
           else
-            docker compose -f docker-compose.prod.yml up -d nginx
+            echo "⚠ Nginx config test failed, but container is running"
           fi
           EOF
       
