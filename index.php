@@ -4,8 +4,19 @@
  * Routes requests based on airport parameter or subdomain to airport-specific pages
  */
 
-// Get airport ID from query parameter (from subdomain rewrite or direct URL)
-$airportId = isset($_GET['airport']) ? strtolower($_GET['airport']) : '';
+// Get airport ID from query parameter or subdomain
+$airportId = '';
+
+// First, try query parameter
+if (isset($_GET['airport']) && !empty($_GET['airport'])) {
+    $airportId = strtolower($_GET['airport']);
+} else {
+    // Try extracting from subdomain (e.g., kspb.aviationwx.org -> kspb)
+    $host = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : '';
+    if (preg_match('/^([a-z0-9]+)\.aviationwx\.org$/', $host, $matches)) {
+        $airportId = $matches[1];
+    }
+}
 
 // Check if airport config exists
 $envConfigPath = getenv('CONFIG_PATH');
