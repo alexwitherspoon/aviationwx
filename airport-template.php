@@ -129,7 +129,7 @@
                 <div style="display: flex; align-items: baseline; gap: 1rem;">
                     <h2 style="margin: 0;">Current Conditions</h2>
                     <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
-                        <button id="temp-unit-toggle" style="background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 0.25rem;" title="Toggle temperature unit">
+                        <button id="temp-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Toggle temperature unit" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                             <span id="temp-unit-display">°F</span>
                         </button>
                     </div>
@@ -372,10 +372,23 @@ function initTempUnitToggle() {
     updateToggle();
 }
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
+// Initialize temperature unit toggle
+// Try multiple initialization methods to ensure it works
+function initTempToggle() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTempUnitToggle);
+    } else {
+        // DOM already loaded
+        initTempUnitToggle();
+    }
+}
+
+// Also try immediate initialization in case script is at end of body
+if (document.getElementById('temp-unit-toggle')) {
     initTempUnitToggle();
-});
+} else {
+    initTempToggle();
+}
 
 // Set weather last updated time to relative
 function updateWeatherTimestamp() {
