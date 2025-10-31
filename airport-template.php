@@ -24,13 +24,13 @@
                     <h3><?= htmlspecialchars($cam['name']) ?></h3>
                     <div class="webcam-container">
                         <picture>
-                            <source id="webcam-avif-<?= $index ?>" type="image/avif" srcset="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=avif">
-                            <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp">
+                            <source id="webcam-avif-<?= $index ?>" type="image/avif" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=avif">
+                            <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp">
                             <img id="webcam-<?= $index ?>" 
-                                 src="webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg" 
+                                 src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
-                                 onerror="this.src='placeholder.jpg'"
+                                 onerror="console.error('Webcam image failed to load:', this.src); this.src='placeholder.jpg'"
                                  onclick="openLiveStream(this.src)">
                         </picture>
                         <div class="webcam-info">
@@ -271,46 +271,56 @@ async function fetchWeather() {
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
         const url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
-        console.log('Fetching weather from:', url);
-        console.log('AIRPORT_ID:', AIRPORT_ID);
+        console.log('[Weather] Fetching from:', url);
+        console.log('[Weather] AIRPORT_ID:', AIRPORT_ID);
         
-        const response = await fetch(url);
-        console.log('Response status:', response.status, response.statusText);
-        console.log('Response URL:', response.url);
-        console.log('Content-Type:', response.headers.get('content-type'));
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin'
+        });
+        
+        console.log('[Weather] Response status:', response.status, response.statusText);
+        console.log('[Weather] Response URL:', response.url);
+        console.log('[Weather] Content-Type:', response.headers.get('content-type'));
         
         if (!response.ok) {
             const text = await response.text();
-            console.error('Error response body:', text);
+            console.error('[Weather] Error response body:', text);
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         // Get response as text first to check if it's valid JSON
         const responseText = await response.text();
-        console.log('Response text (first 200 chars):', responseText.substring(0, 200));
+        console.log('[Weather] Response text (first 500 chars):', responseText.substring(0, 500));
         
         let data;
         try {
             data = JSON.parse(responseText);
-            console.log('Weather data received:', data);
+            console.log('[Weather] Parsed data:', data);
         } catch (parseError) {
-            console.error('JSON parse error:', parseError);
-            console.error('Full response text:', responseText);
+            console.error('[Weather] JSON parse error:', parseError);
+            console.error('[Weather] Full response text length:', responseText.length);
+            console.error('[Weather] Full response text:', responseText);
             throw new Error(`Invalid JSON response from server. See console for details.`);
         }
         
         if (data.success) {
+            console.log('[Weather] Displaying weather data');
             displayWeather(data.weather);
             updateWindVisual(data.weather);
             weatherLastUpdated = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : new Date();
             updateWeatherTimestamp(); // Update the timestamp
         } else {
-            console.error('Weather API returned error:', data.error);
+            console.error('[Weather] API returned error:', data.error);
             displayError(data.error || 'Failed to fetch weather data');
         }
     } catch (error) {
-        console.error('Error fetching weather:', error);
-        displayError('Unable to load weather data. Check browser console for details.');
+        console.error('[Weather] Fetch error:', error);
+        console.error('[Weather] Error stack:', error.stack);
+        displayError('Unable to load weather data: ' + error.message + '. Check browser console for details.');
     }
 }
 
