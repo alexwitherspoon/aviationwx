@@ -4,8 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($airport['name']) ?> - <?= htmlspecialchars($airport['icao']) ?></title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- Resource hints for external APIs -->
+    <link rel="preconnect" href="https://swd.weatherflow.com" crossorigin>
+    <link rel="preconnect" href="https://api.ambientweather.net" crossorigin>
+    <link rel="preconnect" href="https://aviationweather.gov" crossorigin>
+    <link rel="dns-prefetch" href="https://swd.weatherflow.com">
+    <link rel="dns-prefetch" href="https://api.ambientweather.net">
+    <link rel="dns-prefetch" href="https://aviationweather.gov">
+    <?php
+    // Use minified CSS if available, fallback to regular CSS
+    $cssFile = file_exists(__DIR__ . '/styles.min.css') ? 'styles.min.css' : 'styles.css';
+    ?>
+    <link rel="stylesheet" href="<?= htmlspecialchars($cssFile) ?>">
     <meta name="description" content="Real-time weather and conditions for <?= htmlspecialchars($airport['icao']) ?> - <?= htmlspecialchars($airport['name']) ?>">
+    <script>
+        // Register service worker for offline support
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('[SW] Registered:', registration.scope);
+                        
+                        // Check for updates every hour
+                        setInterval(() => {
+                            registration.update();
+                        }, 3600000);
+                    })
+                    .catch((err) => {
+                        console.warn('[SW] Registration failed:', err);
+                    });
+            });
+        }
+    </script>
     <style>
         @keyframes skeleton-loading {
             0% { background-position: 200% 0; }
@@ -49,6 +79,8 @@
                                  src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
+                                 loading="lazy"
+                                 decoding="async"
                                  onerror="console.error('Webcam image failed to load:', this.src); document.getElementById('webcam-skeleton-<?= $index ?>').style.display='none'"
                                  onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
                                  onclick="openLiveStream(this.src)">
@@ -523,12 +555,12 @@ function updateWindVisual(weather) {
             <span style="color: #666;">Gust Factor:</span>
             <span style="font-weight: bold;">${gustFactor > 0 ? gustFactor + ' kts' : '0'}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
-            <span style="color: #666;">Today's Peak Gust:</span>
-            <span style="font-weight: bold;">
-                ${todaysPeakGust > 0 ? Math.round(todaysPeakGust) + ' kts' : '--'}
-                ${weather.peak_gust_time ? `<span style="font-weight: normal; color: #666; margin-left: 6px;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>` : ''}
-            </span>
+        <div style="padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span style="color: #666;">Today's Peak Gust:</span>
+                <span style="font-weight: bold;">${todaysPeakGust > 0 ? Math.round(todaysPeakGust) + ' kts' : '--'}</span>
+            </div>
+            ${weather.peak_gust_time ? `<div style="text-align: right; font-size: 0.9rem; color: #666; padding-left: 0.5rem;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</div>` : ''}
         </div>
     `;
     

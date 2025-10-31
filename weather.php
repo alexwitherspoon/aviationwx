@@ -59,9 +59,14 @@ if (!file_exists($weatherCacheDir)) {
 }
 $weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
 
-// Serve cached weather if fresh
+// Stale-while-revalidate: Serve stale cache immediately, refresh in background
+$hasStaleCache = false;
+$staleData = null;
+
 if (file_exists($weatherCacheFile)) {
     $age = time() - filemtime($weatherCacheFile);
+    
+    // If cache is fresh, serve it normally
     if ($age < $airportWeatherRefresh) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
@@ -75,206 +80,158 @@ if (file_exists($weatherCacheFile)) {
             echo json_encode(['success' => true, 'weather' => $cached]);
             exit;
         }
+    } else {
+        // Cache is stale but exists - serve it immediately, then refresh
+        $staleData = json_decode(file_get_contents($weatherCacheFile), true);
+        if (is_array($staleData)) {
+            $hasStaleCache = true;
+            
+            // Set stale-while-revalidate headers (serve stale, but allow background refresh)
+            header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', stale-while-revalidate=300');
+            header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
+            header('X-Cache-Status: STALE');
+            
+            // Serve stale data immediately with flush
+            ob_clean();
+            echo json_encode(['success' => true, 'weather' => $staleData, 'stale' => true]);
+            
+            // Flush output to client immediately
+            if (function_exists('fastcgi_finish_request')) {
+                // FastCGI - finish request but keep script running
+                fastcgi_finish_request();
+            } else {
+                // Regular PHP - flush output and continue in background
+                if (ob_get_level() > 0) {
+                    ob_end_flush();
+                }
+                flush();
+                
+                // Set time limit for background refresh
+                set_time_limit(30);
+            }
+            
+            // Continue to refresh in background (don't exit here)
+        }
     }
 }
 
-// Fetch weather based on source
-$weatherData = null;
-$weatherError = null;
-try {
-    switch ($airport['weather_source']['type']) {
+/**
+ * Fetch weather data asynchronously using curl_multi (parallel requests)
+ * Fetches primary weather source and METAR in parallel when both are needed
+ */
+function fetchWeatherAsync($airport) {
+    $sourceType = $airport['weather_source']['type'];
+    
+    // Build primary weather URL
+    $primaryUrl = null;
+    switch ($sourceType) {
         case 'tempest':
-            $weatherData = fetchTempestWeather($airport['weather_source']);
+            $apiKey = $airport['weather_source']['api_key'];
+            $stationId = $airport['weather_source']['station_id'];
+            $primaryUrl = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
             break;
         case 'ambient':
-            $weatherData = fetchAmbientWeather($airport['weather_source']);
-            break;
-        case 'metar':
-            $weatherData = fetchMETAR($airport);
+            $apiKey = $airport['weather_source']['api_key'];
+            $appKey = $airport['weather_source']['application_key'];
+            // Ambient uses device list endpoint, not individual device endpoint
+            $primaryUrl = "https://api.ambientweather.net/v1/devices?applicationKey={$appKey}&apiKey={$apiKey}";
             break;
         default:
-            $weatherError = 'Unknown weather source type: ' . $airport['weather_source']['type'];
-    }
-} catch (Exception $e) {
-    $weatherError = 'Error fetching weather: ' . $e->getMessage();
-}
-
-if ($weatherError !== null) {
-    error_log('Weather API error for ' . $airportId . ': ' . $weatherError);
-    ob_clean();
-    echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
-    exit;
-}
-
-if ($weatherData === null) {
-    error_log('Weather API: No data returned for ' . $airportId);
-    ob_clean();
-    echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
-    exit;
-}
-
-// Supplement with METAR data for ceiling and visibility if not available
-if (($weatherData['visibility'] === null || $weatherData['ceiling'] === null) && $airport['weather_source']['type'] !== 'metar') {
-    $metarData = fetchMETAR($airport);
-    if ($metarData !== null) {
-        if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
-            $weatherData['visibility'] = $metarData['visibility'];
-        }
-        if ($weatherData['ceiling'] === null && $metarData['ceiling'] !== null) {
-            $weatherData['ceiling'] = $metarData['ceiling'];
-        }
-        // Always add cloud cover for display purposes
-        if ($metarData['cloud_cover'] !== null) {
-            $weatherData['cloud_cover'] = $metarData['cloud_cover'];
-        }
-    }
-}
-
-// Calculate additional aviation-specific metrics
-$weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
-$weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
-$weatherData['sunrise'] = getSunriseTime($airport);
-$weatherData['sunset'] = getSunsetTime($airport);
-
-// Track and update today's peak gust (store value and timestamp)
-$currentGust = $weatherData['gust_speed'] ?? 0;
-updatePeakGust($airportId, $currentGust);
-$peakGustInfo = getPeakGust($airportId, $currentGust);
-if (is_array($peakGustInfo)) {
-    $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
-    $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
-} else {
-    // Backward compatibility with older scalar cache files
-    $weatherData['peak_gust_today'] = $peakGustInfo;
-    $weatherData['peak_gust_time'] = null;
-}
-
-// Track and update today's high and low temperatures
-if ($weatherData['temperature'] !== null) {
-    $currentTemp = $weatherData['temperature'];
-    updateTempExtremes($airportId, $currentTemp);
-    $tempExtremes = getTempExtremes($airportId, $currentTemp);
-    $weatherData['temp_high_today'] = $tempExtremes['high'];
-    $weatherData['temp_low_today'] = $tempExtremes['low'];
-}
-
-// Calculate VFR/IFR/MVFR status
-$weatherData['flight_category'] = calculateFlightCategory($weatherData);
-$weatherData['flight_category_class'] = 'status-' . strtolower($weatherData['flight_category']);
-
-// Format temperatures to °F for display
-$weatherData['temperature_f'] = $weatherData['temperature'] !== null ? round(($weatherData['temperature'] * 9/5) + 32) : null;
-$weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
-
-// Calculate gust factor
-$weatherData['gust_factor'] = ($weatherData['gust_speed'] && $weatherData['wind_speed']) ? 
-    round($weatherData['gust_speed'] - $weatherData['wind_speed']) : 0;
-
-// Calculate dewpoint spread (temperature - dewpoint)
-if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
-    $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
-} else {
-    $weatherData['dewpoint_spread'] = null;
-}
-
-// Stamp last_updated and write cache
-$weatherData['last_updated'] = time();
-$weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
-@file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
-
-// Set cache headers for fresh data
-header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
-header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
-header('X-Cache-Status: MISS');
-
-ob_clean(); // Clean any buffered output before sending JSON
-echo json_encode(['success' => true, 'weather' => $weatherData]);
-
-/**
- * Fetch weather from Tempest API
- */
-function fetchTempestWeather($source) {
-    $apiKey = $source['api_key'];
-    $stationId = $source['station_id'];
-    
-    // Fetch current observation
-    $url = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
-    $response = @file_get_contents($url);
-    
-    if ($response === false) {
-        return null;
+            // Not async-able (METAR-only or unsupported)
+            return fetchWeatherSync($airport);
     }
     
-    $data = json_decode($response, true);
-    if (!isset($data['obs'][0])) {
-        return null;
-    }
+    // Build METAR URL
+    $stationId = $airport['metar_station'] ?? $airport['icao'];
+    $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
     
-    $obs = $data['obs'][0];
+    // Create multi-handle for parallel requests
+    $mh = curl_multi_init();
+    $ch1 = curl_init($primaryUrl);
+    $ch2 = curl_init($metarUrl);
     
-    // Note: Daily stats (high/low temp, peak gust) are not available from the basic Tempest API
-    // These would require a different API endpoint or subscription level
-    $tempHigh = null;
-    $tempLow = null;
-    $peakGust = null;
-    
-    // Use current gust as peak gust (as it's the only gust data available)
-    if (isset($obs['wind_gust'])) {
-        $peakGust = round($obs['wind_gust'] * 1.943844); // Convert m/s to knots
-    }
-    
-    // Convert pressure from mb to inHg
-    $pressureInHg = isset($obs['sea_level_pressure']) ? $obs['sea_level_pressure'] / 33.8639 : null;
-    
-    // Convert wind speed from m/s to knots
-    $windSpeedKts = isset($obs['wind_avg']) ? round($obs['wind_avg'] * 1.943844) : null;
-    $gustSpeedKts = isset($obs['wind_gust']) ? round($obs['wind_gust'] * 1.943844) : null;
-    
-    return [
-        'temperature' => isset($obs['air_temperature']) ? $obs['air_temperature'] : null, // Celsius
-        'humidity' => isset($obs['relative_humidity']) ? $obs['relative_humidity'] : null,
-        'pressure' => $pressureInHg, // sea level pressure in inHg
-        'wind_speed' => $windSpeedKts,
-        'wind_direction' => isset($obs['wind_direction']) ? round($obs['wind_direction']) : null,
-        'gust_speed' => $gustSpeedKts,
-        'precip_accum' => isset($obs['precip_accum_local_day_final']) ? $obs['precip_accum_local_day_final'] * 0.0393701 : 0, // mm to inches
-        'dewpoint' => isset($obs['dew_point']) ? $obs['dew_point'] : null,
-        'visibility' => null, // Not available from Tempest
-        'ceiling' => null, // Not available from Tempest
-        'temp_high' => $tempHigh,
-        'temp_low' => $tempLow,
-        'peak_gust' => $peakGust,
-    ];
-}
-
-/**
- * Fetch weather from Ambient Weather API
- */
-function fetchAmbientWeather($source) {
-    // Ambient Weather API requires API Key and Application Key
-    if (!isset($source['api_key']) || !isset($source['application_key'])) {
-        return null;
-    }
-    
-    $apiKey = $source['api_key'];
-    $applicationKey = $source['application_key'];
-    
-    // Fetch current conditions
-    $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
-    
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => 10,
-            'ignore_errors' => true,
-        ],
+    // Configure primary weather request
+    curl_setopt_array($ch1, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_USERAGENT => 'AviationWX/1.0',
     ]);
     
-    $response = @file_get_contents($url, false, $context);
+    // Configure METAR request
+    curl_setopt_array($ch2, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_USERAGENT => 'AviationWX/1.0',
+    ]);
     
-    if ($response === false) {
+    // Add handles to multi-curl
+    curl_multi_add_handle($mh, $ch1);
+    curl_multi_add_handle($mh, $ch2);
+    
+    // Execute both requests in parallel
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh, 0.1);
+    } while ($running > 0);
+    
+    // Get responses
+    $primaryResponse = curl_multi_getcontent($ch1);
+    $metarResponse = curl_multi_getcontent($ch2);
+    
+    // Get HTTP codes
+    $primaryCode = curl_getinfo($ch1, CURLINFO_HTTP_CODE);
+    $metarCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+    
+    // Cleanup
+    curl_multi_remove_handle($mh, $ch1);
+    curl_multi_remove_handle($mh, $ch2);
+    curl_multi_close($mh);
+    curl_close($ch1);
+    curl_close($ch2);
+    
+    // Parse primary weather
+    $weatherData = null;
+    if ($primaryResponse !== false && $primaryCode == 200) {
+        switch ($sourceType) {
+            case 'tempest':
+                $weatherData = parseTempestResponse($primaryResponse);
+                break;
+            case 'ambient':
+                $weatherData = parseAmbientResponse($primaryResponse);
+                break;
+        }
+    }
+    
+    if ($weatherData === null) {
         return null;
     }
     
+    // Parse and merge METAR data (non-blocking: use what we got)
+    if ($metarResponse !== false && $metarCode == 200) {
+        $metarData = parseMETARResponse($metarResponse, $airport);
+        if ($metarData !== null) {
+            if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
+                $weatherData['visibility'] = $metarData['visibility'];
+            }
+            if ($weatherData['ceiling'] === null && $metarData['ceiling'] !== null) {
+                $weatherData['ceiling'] = $metarData['ceiling'];
+            }
+            if ($metarData['cloud_cover'] !== null) {
+                $weatherData['cloud_cover'] = $metarData['cloud_cover'];
+            }
+        }
+    }
+    
+    return $weatherData;
+}
+
+/**
+ * Parse Ambient Weather API response (for async use)
+ */
+function parseAmbientResponse($response) {
     $data = json_decode($response, true);
     
     if (!isset($data[0]) || !isset($data[0]['lastData'])) {
@@ -311,19 +268,9 @@ function fetchAmbientWeather($source) {
 }
 
 /**
- * Fetch METAR data from aviationweather.gov
+ * Parse METAR response (for async use)
  */
-function fetchMETAR($airport) {
-    $stationId = $airport['metar_station'] ?? $airport['icao'];
-    
-    // Fetch METAR from aviationweather.gov (new API format)
-    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
-    $response = @file_get_contents($url);
-    
-    if ($response === false) {
-        return null;
-    }
-    
+function parseMETARResponse($response, $airport) {
     $data = json_decode($response, true);
     
     if (!isset($data[0])) {
@@ -444,6 +391,304 @@ function fetchMETAR($airport) {
         'peak_gust' => $gustSpeed,
     ];
 }
+
+/**
+ * Fetch weather synchronously (fallback for METAR-only or errors)
+ */
+function fetchWeatherSync($airport) {
+    switch ($airport['weather_source']['type']) {
+        case 'tempest':
+            return fetchTempestWeather($airport['weather_source']);
+        case 'ambient':
+            return fetchAmbientWeather($airport['weather_source']);
+        case 'metar':
+            return fetchMETAR($airport);
+        default:
+            return null;
+    }
+}
+
+// Fetch weather based on source
+$weatherData = null;
+$weatherError = null;
+try {
+    // Use async fetch when METAR supplementation is needed, otherwise sync
+    if ($airport['weather_source']['type'] !== 'metar') {
+        $weatherData = fetchWeatherAsync($airport);
+    } else {
+        $weatherData = fetchWeatherSync($airport);
+    }
+    
+    if ($weatherData === null) {
+        $weatherError = 'Weather data unavailable';
+    }
+} catch (Exception $e) {
+    $weatherError = 'Error fetching weather: ' . $e->getMessage();
+}
+
+if ($weatherError !== null) {
+    error_log('Weather API error for ' . $airportId . ': ' . $weatherError);
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
+    exit;
+}
+
+if ($weatherData === null) {
+    // If we served stale data, just update cache silently (don't error)
+    if ($hasStaleCache) {
+        // Keep the stale data in cache, but log the failure
+        error_log('Weather API: Failed to refresh for ' . $airportId . ', using stale cache');
+        exit; // Background refresh failed, but we already served stale data
+    }
+    
+    error_log('Weather API: No data returned for ' . $airportId);
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
+    exit;
+}
+
+// Calculate additional aviation-specific metrics
+$weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
+$weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
+$weatherData['sunrise'] = getSunriseTime($airport);
+$weatherData['sunset'] = getSunsetTime($airport);
+
+// Track and update today's peak gust (store value and timestamp)
+$currentGust = $weatherData['gust_speed'] ?? 0;
+updatePeakGust($airportId, $currentGust);
+$peakGustInfo = getPeakGust($airportId, $currentGust);
+if (is_array($peakGustInfo)) {
+    $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
+    $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
+} else {
+    // Backward compatibility with older scalar cache files
+    $weatherData['peak_gust_today'] = $peakGustInfo;
+    $weatherData['peak_gust_time'] = null;
+}
+
+// Track and update today's high and low temperatures
+if ($weatherData['temperature'] !== null) {
+    $currentTemp = $weatherData['temperature'];
+    updateTempExtremes($airportId, $currentTemp);
+    $tempExtremes = getTempExtremes($airportId, $currentTemp);
+    $weatherData['temp_high_today'] = $tempExtremes['high'];
+    $weatherData['temp_low_today'] = $tempExtremes['low'];
+}
+
+// Calculate VFR/IFR/MVFR status
+$weatherData['flight_category'] = calculateFlightCategory($weatherData);
+$weatherData['flight_category_class'] = 'status-' . strtolower($weatherData['flight_category']);
+
+// Format temperatures to °F for display
+$weatherData['temperature_f'] = $weatherData['temperature'] !== null ? round(($weatherData['temperature'] * 9/5) + 32) : null;
+$weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
+
+// Calculate gust factor
+$weatherData['gust_factor'] = ($weatherData['gust_speed'] && $weatherData['wind_speed']) ? 
+    round($weatherData['gust_speed'] - $weatherData['wind_speed']) : 0;
+
+// Calculate dewpoint spread (temperature - dewpoint)
+if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
+    $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
+} else {
+    $weatherData['dewpoint_spread'] = null;
+}
+
+// Stamp last_updated and write cache
+$weatherData['last_updated'] = time();
+$weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
+@file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
+
+// If we served stale data, we're in background refresh mode
+// Don't send headers or output again (already sent to client)
+if ($hasStaleCache) {
+    // Just update the cache silently in background
+    exit;
+}
+
+// Set cache headers for fresh data (first request, not stale)
+header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
+header('X-Cache-Status: MISS');
+
+ob_clean(); // Clean any buffered output before sending JSON
+echo json_encode(['success' => true, 'weather' => $weatherData]);
+
+/**
+ * Parse Tempest API response (for async use)
+ */
+function parseTempestResponse($response) {
+    $data = json_decode($response, true);
+    if (!isset($data['obs'][0])) {
+        return null;
+    }
+    
+    $obs = $data['obs'][0];
+    
+    // Note: Daily stats (high/low temp, peak gust) are not available from the basic Tempest API
+    // These would require a different API endpoint or subscription level
+    $tempHigh = null;
+    $tempLow = null;
+    $peakGust = null;
+    
+    // Use current gust as peak gust (as it's the only gust data available)
+    if (isset($obs['wind_gust'])) {
+        $peakGust = round($obs['wind_gust'] * 1.943844); // Convert m/s to knots
+    }
+    
+    // Convert pressure from mb to inHg
+    $pressureInHg = isset($obs['sea_level_pressure']) ? $obs['sea_level_pressure'] / 33.8639 : null;
+    
+    // Convert wind speed from m/s to knots
+    $windSpeedKts = isset($obs['wind_avg']) ? round($obs['wind_avg'] * 1.943844) : null;
+    $gustSpeedKts = isset($obs['wind_gust']) ? round($obs['wind_gust'] * 1.943844) : null;
+    
+    return [
+        'temperature' => isset($obs['air_temperature']) ? $obs['air_temperature'] : null, // Celsius
+        'humidity' => isset($obs['relative_humidity']) ? $obs['relative_humidity'] : null,
+        'pressure' => $pressureInHg, // sea level pressure in inHg
+        'wind_speed' => $windSpeedKts,
+        'wind_direction' => isset($obs['wind_direction']) ? round($obs['wind_direction']) : null,
+        'gust_speed' => $gustSpeedKts,
+        'precip_accum' => isset($obs['precip_accum_local_day_final']) ? $obs['precip_accum_local_day_final'] * 0.0393701 : 0, // mm to inches
+        'dewpoint' => isset($obs['dew_point']) ? $obs['dew_point'] : null,
+        'visibility' => null, // Not available from Tempest
+        'ceiling' => null, // Not available from Tempest
+        'temp_high' => $tempHigh,
+        'temp_low' => $tempLow,
+        'peak_gust' => $peakGust,
+    ];
+}
+
+/**
+ * Fetch weather from Ambient Weather API
+ */
+function fetchAmbientWeather($source) {
+    // Ambient Weather API requires API Key and Application Key
+    if (!isset($source['api_key']) || !isset($source['application_key'])) {
+        return null;
+    }
+    
+    $apiKey = $source['api_key'];
+    $applicationKey = $source['application_key'];
+    
+    // Fetch current conditions
+    $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
+    
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
+    
+    if ($response === false) {
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    if (!isset($data[0]) || !isset($data[0]['lastData'])) {
+        return null;
+    }
+    
+    $obs = $data[0]['lastData'];
+    
+    // Convert all measurements to our standard format
+    $temperature = isset($obs['tempf']) ? ($obs['tempf'] - 32) / 1.8 : null; // F to C
+    $humidity = isset($obs['humidity']) ? $obs['humidity'] : null;
+    $pressure = isset($obs['baromrelin']) ? $obs['baromrelin'] : null; // Already in inHg
+    $windSpeed = isset($obs['windspeedmph']) ? round($obs['windspeedmph'] * 0.868976) : null; // mph to knots
+    $windDirection = isset($obs['winddir']) ? round($obs['winddir']) : null;
+    $gustSpeed = isset($obs['windgustmph']) ? round($obs['windgustmph'] * 0.868976) : null; // mph to knots
+    $precip = isset($obs['dailyrainin']) ? $obs['dailyrainin'] : 0; // Already in inches
+    $dewpoint = isset($obs['dewPoint']) ? ($obs['dewPoint'] - 32) / 1.8 : null; // F to C
+    
+    return [
+        'temperature' => $temperature,
+        'humidity' => $humidity,
+        'pressure' => $pressure,
+        'wind_speed' => $windSpeed,
+        'wind_direction' => $windDirection,
+        'gust_speed' => $gustSpeed,
+        'precip_accum' => $precip,
+        'dewpoint' => $dewpoint,
+        'visibility' => null, // Not available from Ambient Weather
+        'ceiling' => null, // Not available from Ambient Weather
+        'temp_high' => null,
+        'temp_low' => null,
+        'peak_gust' => $gustSpeed,
+    ];
+}
+
+/**
+ * Fetch weather from Tempest API (synchronous, for fallback)
+ */
+function fetchTempestWeather($source) {
+    $apiKey = $source['api_key'];
+    $stationId = $source['station_id'];
+    
+    // Fetch current observation
+    $url = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
+    $response = @file_get_contents($url);
+    
+    if ($response === false) {
+        return null;
+    }
+    
+    return parseTempestResponse($response);
+}
+
+/**
+ * Fetch weather from Ambient Weather API (synchronous, for fallback)
+ */
+function fetchAmbientWeather($source) {
+    // Ambient Weather API requires API Key and Application Key
+    if (!isset($source['api_key']) || !isset($source['application_key'])) {
+        return null;
+    }
+    
+    $apiKey = $source['api_key'];
+    $applicationKey = $source['application_key'];
+    
+    // Fetch current conditions (uses device list endpoint)
+    $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
+    
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
+    
+    if ($response === false) {
+        return null;
+    }
+    
+    return parseAmbientResponse($response);
+}
+
+/**
+ * Fetch METAR data from aviationweather.gov (synchronous, for fallback)
+ */
+function fetchMETAR($airport) {
+    $stationId = $airport['metar_station'] ?? $airport['icao'];
+    
+    // Fetch METAR from aviationweather.gov (new API format)
+    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+    $response = @file_get_contents($url);
+    
+    if ($response === false) {
+        return null;
+    }
+    
+    return parseMETARResponse($response, $airport);
+}
+
 
 /**
  * Calculate dewpoint

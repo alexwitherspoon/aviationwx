@@ -65,6 +65,17 @@ logs-prod: ## View production logs
 # Quick development workflow
 dev: init up logs ## Start development environment
 
+# Minification (optional - CSS minification for production)
+minify: ## Minify CSS (requires perl or sed)
+	@echo "Minifying CSS..."
+	@perl -pe 's/\/\*.*?\*\///g; s/^\s*//; s/\s*$$//; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g' styles.css > styles.min.css 2>/dev/null || \
+	 sed 's|/\*.*\*/||g; s/^[[:space:]]*//; s/[[:space:]]*$$//; s/[[:space:]]\{1,\}/ /g' styles.css > styles.min.css 2>/dev/null || \
+	 echo "Warning: minification failed (install perl or use online tool)"
+	@if [ -f styles.min.css ]; then \
+		echo "✓ Created styles.min.css"; \
+		ls -lh styles.css styles.min.css; \
+	fi
+
 # Configuration update
 update-config: ## Update configuration and restart
 	@bash config/docker-config.sh

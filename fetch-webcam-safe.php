@@ -583,41 +583,90 @@ foreach ($config['airports'] as $airportId => $airport) {
             } else {
                 echo "    ✓ Saved {$size} bytes\n";
             }
-            // Derive WEBP: optimized for quality/size balance (target ~100-150KB for typical webcam)
-            // -q:v 30 = quality 30/63 (higher number = lower quality = smaller file)
-            // -compression_level 6 = good speed/compression balance
-            $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
-            exec($cmdWebp, $outW, $codeW);
-            if ($codeW === 0 && file_exists($cacheWebp)) {
-                if ($isWeb) {
-                    echo "<span class='success'>✓ Generated WEBP</span><br>\n";
-                } else {
-                    echo "    ✓ Generated WEBP\n";
-                }
+            // Generate WEBP and AVIF in parallel using background processes
+            // This significantly speeds up cache population
+            if ($isWeb) {
+                echo "<span class='info'>Generating WEBP and AVIF in parallel...</span><br>\n";
             } else {
-                if ($isWeb) {
-                    echo "<span class='error'>✗ WEBP generation failed</span><br>\n";
-                } else {
-                    echo "    ✗ WEBP generation failed\n";
-                }
+                echo "    Generating WEBP and AVIF in parallel...\n";
             }
-            // Derive AVIF: optimized for quality/size balance (target ~50-80KB)
-            // -crf 28 = good quality for photos (lower = better quality = larger file)
-            // -pix_fmt yuv420p = standard chroma subsampling
-            // -preset 4 = speed vs compression balance
+            
+            // Build commands
+            $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
             $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p -preset 4 %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
-            exec($cmdAvif, $outA, $codeA);
-            if ($codeA === 0 && file_exists($cacheAvif)) {
-                if ($isWeb) {
-                    echo "<span class='success'>✓ Generated AVIF</span><br>\n";
-                } else {
-                    echo "    ✓ Generated AVIF\n";
+            
+            // Start both processes in background
+            $pipesWebp = [];
+            $pipesAvif = [];
+            $processes = [];
+            
+            // Start WEBP generation
+            $processWebp = proc_open($cmdWebp . ' 2>&1', [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w']
+            ], $pipesWebp);
+            
+            if (is_resource($processWebp)) {
+                fclose($pipesWebp[0]); // Close stdin
+                $processes[] = ['proc' => $processWebp, 'type' => 'webp', 'pipes' => $pipesWebp, 'cache' => $cacheWebp];
+            }
+            
+            // Start AVIF generation
+            $processAvif = proc_open($cmdAvif . ' 2>&1', [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w']
+            ], $pipesAvif);
+            
+            if (is_resource($processAvif)) {
+                fclose($pipesAvif[0]); // Close stdin
+                $processes[] = ['proc' => $processAvif, 'type' => 'avif', 'pipes' => $pipesAvif, 'cache' => $cacheAvif];
+            }
+            
+            // Wait for all processes to complete
+            $results = [];
+            while (!empty($processes)) {
+                foreach ($processes as $key => $procData) {
+                    $status = proc_get_status($procData['proc']);
+                    
+                    if (!$status['running']) {
+                        // Process finished
+                        proc_close($procData['proc']);
+                        
+                        // Check if output file exists
+                        $success = file_exists($procData['cache']) && filesize($procData['cache']) > 0;
+                        $results[$procData['type']] = $success;
+                        
+                        if ($success) {
+                            if ($isWeb) {
+                                echo "<span class='success'>✓ Generated " . strtoupper($procData['type']) . "</span><br>\n";
+                            } else {
+                                echo "    ✓ Generated " . strtoupper($procData['type']) . "\n";
+                            }
+                        } else {
+                            if ($isWeb) {
+                                if ($procData['type'] === 'avif') {
+                                    echo "<span class='info'>✗ " . strtoupper($procData['type']) . " generation failed (ignored)</span><br>\n";
+                                } else {
+                                    echo "<span class='error'>✗ " . strtoupper($procData['type']) . " generation failed</span><br>\n";
+                                }
+                            } else {
+                                if ($procData['type'] === 'avif') {
+                                    echo "    ✗ " . strtoupper($procData['type']) . " generation failed (ignored)\n";
+                                } else {
+                                    echo "    ✗ " . strtoupper($procData['type']) . " generation failed\n";
+                                }
+                            }
+                        }
+                        
+                        unset($processes[$key]);
+                    }
                 }
-            } else {
-                if ($isWeb) {
-                    echo "<span class='info'>✗ AVIF generation failed (ignored)</span><br>\n";
-                } else {
-                    echo "    ✗ AVIF generation failed (ignored)\n";
+                
+                // Small sleep to avoid busy-waiting
+                if (!empty($processes)) {
+                    usleep(50000); // 50ms
                 }
             }
         } else {
