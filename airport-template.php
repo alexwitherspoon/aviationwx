@@ -30,7 +30,7 @@
                                  src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
-                                 onerror="console.error('Webcam image failed to load:', this.src); this.style.display='none'"
+                                 onerror="console.error('Webcam image failed to load:', this.src)"
                                  onclick="openLiveStream(this.src)">
                         </picture>
                         <div class="webcam-info">
@@ -590,17 +590,7 @@ function updateWebcamTimestamps() {
 // Function to reload webcam images with cache busting
 function reloadWebcamImages() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
-    ['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (el.src) {
-            const base = el.src.split('&t=')[0];
-            el.src = base + '&t=' + Date.now();
-        } else if (el.getAttribute && el.getAttribute('srcset')) {
-            const base = el.getAttribute('srcset').split('&t=')[0];
-            el.setAttribute('srcset', base + '&t=' + Date.now());
-        }
-    });
+    safeSwapCameraImage(<?= $index ?>);
     <?php endforeach; ?>
 }
 
@@ -761,17 +751,7 @@ setInterval(() => {
 }, 30000);
 
 setInterval(() => {
-    ['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (el.src) {
-            const base = el.src.split('&t=')[0];
-            el.src = base + '&t=' + Date.now();
-        } else if (el.getAttribute && el.getAttribute('srcset')) {
-            const base = el.getAttribute('srcset').split('&t=')[0];
-            el.setAttribute('srcset', base + '&t=' + Date.now());
-        }
-    });
+    safeSwapCameraImage(<?= $index ?>);
 }, <?= max(1, $perCam) * 1000 ?>);
 <?php endforeach; ?>
 
@@ -781,6 +761,54 @@ setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 sec
 // Fetch weather data every minute
 fetchWeather();
 setInterval(fetchWeather, 60000);
+
+// Safely swap camera image only when the backend has a newer image and the new image is loaded
+function safeSwapCameraImage(camIndex) {
+    const timestampElem = document.getElementById(`update-${camIndex}`);
+    if (!timestampElem) return;
+    const currentTs = parseInt(timestampElem.dataset.timestamp || '0');
+
+    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+    const host = window.location.host;
+    const mtimeUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;
+
+    fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(json => {
+            if (!json || !json.success || !json.timestamp) return; // Nothing to do
+            const newTs = parseInt(json.timestamp);
+            if (isNaN(newTs) || newTs <= currentTs) return; // Not newer
+
+            // Preload JPG first (universal fallback)
+            const preload = new Image();
+            // Build new URLs with cache buster
+            const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&t=${Date.now()}`;
+            const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&t=${Date.now()}`;
+            const avifUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=avif&t=${Date.now()}`;
+
+            preload.onload = () => {
+                // Swap only after load succeeds
+                const img = document.getElementById(`webcam-${camIndex}`);
+                const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
+                const srcAvif = document.getElementById(`webcam-avif-${camIndex}`);
+                if (img) img.src = jpgUrl;
+                if (srcWebp) srcWebp.setAttribute('srcset', webpUrl);
+                if (srcAvif) srcAvif.setAttribute('srcset', avifUrl);
+
+                // Update timestamp immediately after swap
+                updateWebcamTimestampOnLoad(camIndex);
+            };
+            
+            preload.onerror = () => {
+                // Keep current image; try again on next interval
+            };
+            
+            preload.src = jpgUrl;
+        })
+        .catch(() => {
+            // Silently ignore; will retry on next interval
+        });
+}
 </script>
 </body>
 </html>
