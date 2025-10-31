@@ -146,8 +146,13 @@
 
         <!-- Runway Wind Visual -->
         <section class="wind-visual-section">
-            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem;">
-                <h2>Runway Wind</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <h2 style="margin: 0;">Runway Wind</h2>
+                    <button id="wind-speed-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle wind speed unit (kts/mph/km/h)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                        <span id="wind-speed-unit-display">kts</span>
+                    </button>
+                </div>
                 <p style="font-size: 0.85rem; color: #666; margin: 0;">Last updated: <span id="wind-last-updated">--</span></p>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: center;">
@@ -391,6 +396,53 @@ function formatRainfall(inches) {
     }
 }
 
+// Wind speed unit preference (default to knots)
+function getWindSpeedUnit() {
+    const unit = localStorage.getItem('aviationwx_wind_speed_unit');
+    return unit || 'kts'; // Default to knots
+}
+
+function setWindSpeedUnit(unit) {
+    localStorage.setItem('aviationwx_wind_speed_unit', unit);
+}
+
+// Convert knots to miles per hour
+function ktsToMph(kts) {
+    return Math.round(kts * 1.15078);
+}
+
+// Convert knots to kilometers per hour
+function ktsToKmh(kts) {
+    return Math.round(kts * 1.852);
+}
+
+// Format wind speed based on current unit preference
+function formatWindSpeed(kts) {
+    if (kts === null || kts === undefined || kts === 0) return '0';
+    const unit = getWindSpeedUnit();
+    switch (unit) {
+        case 'mph':
+            return ktsToMph(kts);
+        case 'km/h':
+            return ktsToKmh(kts);
+        default: // 'kts'
+            return Math.round(kts);
+    }
+}
+
+// Get wind speed unit label
+function getWindSpeedUnitLabel() {
+    const unit = getWindSpeedUnit();
+    switch (unit) {
+        case 'mph':
+            return 'mph';
+        case 'km/h':
+            return 'km/h';
+        default: // 'kts'
+            return 'kts';
+    }
+}
+
 // Temperature unit toggle handler
 function initTempUnitToggle() {
     const toggle = document.getElementById('temp-unit-toggle');
@@ -471,6 +523,57 @@ if (document.getElementById('distance-unit-toggle')) {
         }
     }
     initDistToggle();
+}
+
+// Wind speed unit toggle handler
+function initWindSpeedUnitToggle() {
+    const toggle = document.getElementById('wind-speed-unit-toggle');
+    const display = document.getElementById('wind-speed-unit-display');
+    
+    function updateToggle() {
+        const unit = getWindSpeedUnit();
+        display.textContent = getWindSpeedUnitLabel();
+        
+        // Determine next unit for tooltip
+        let nextUnit = 'mph';
+        if (unit === 'kts') nextUnit = 'mph';
+        else if (unit === 'mph') nextUnit = 'km/h';
+        else nextUnit = 'kts';
+        
+        toggle.title = `Switch to ${nextUnit === 'mph' ? 'miles per hour' : nextUnit === 'km/h' ? 'kilometers per hour' : 'knots'}`;
+    }
+    
+    toggle.addEventListener('click', () => {
+        const currentUnit = getWindSpeedUnit();
+        // Cycle: kts -> mph -> km/h -> kts
+        let newUnit = 'kts';
+        if (currentUnit === 'kts') newUnit = 'mph';
+        else if (currentUnit === 'mph') newUnit = 'km/h';
+        else newUnit = 'kts';
+        
+        setWindSpeedUnit(newUnit);
+        updateToggle();
+        // Re-render wind data with new unit if we have weather data
+        if (currentWeatherData) {
+            updateWindVisual(currentWeatherData);
+        }
+    });
+    
+    updateToggle();
+}
+
+// Initialize wind speed unit toggle
+if (document.getElementById('wind-speed-unit-toggle')) {
+    initWindSpeedUnitToggle();
+} else {
+    function initWindToggle() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initWindSpeedUnitToggle);
+        } else {
+            initWindSpeedUnitToggle();
+        }
+    }
+    initWindToggle();
 }
 
 // Set weather last updated time to relative
@@ -732,10 +835,11 @@ function updateWindVisual(weather) {
     const windDetails = document.getElementById('wind-details');
     const gustFactor = weather.gust_factor || 0;
     
+    const windUnitLabel = getWindSpeedUnitLabel();
     windDetails.innerHTML = `
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #666;">Wind Speed:</span>
-            <span style="font-weight: bold;">${ws > 0 ? Math.round(ws) + ' kts' : 'Calm'}</span>
+            <span style="font-weight: bold;">${ws > 0 ? formatWindSpeed(ws) + ' ' + windUnitLabel : 'Calm'}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #666;">Wind Direction:</span>
@@ -743,12 +847,12 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #666;">Gust Factor:</span>
-            <span style="font-weight: bold;">${gustFactor > 0 ? gustFactor + ' kts' : '0'}</span>
+            <span style="font-weight: bold;">${gustFactor > 0 ? formatWindSpeed(gustFactor) + ' ' + windUnitLabel : '0'}</span>
         </div>
         <div style="padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                 <span style="color: #666;">Today's Peak Gust:</span>
-                <span style="font-weight: bold;">${todaysPeakGust > 0 ? Math.round(todaysPeakGust) + ' kts' : '--'}</span>
+                <span style="font-weight: bold;">${todaysPeakGust > 0 ? formatWindSpeed(todaysPeakGust) + ' ' + windUnitLabel : '--'}</span>
             </div>
             ${weather.peak_gust_time ? `<div style="text-align: right; font-size: 0.9rem; color: #666; padding-left: 0.5rem;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</div>` : ''}
         </div>
