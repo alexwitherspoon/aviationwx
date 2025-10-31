@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/logger.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -25,6 +26,7 @@ $cacheDir = __DIR__ . '/cache/webcams';
 $status['webcam_cache_dir']['exists'] = is_dir($cacheDir);
 $status['webcam_cache_dir']['writable'] = is_dir($cacheDir) && is_writable($cacheDir);
 
+aviationwx_log('info', 'health probe', $status);
 echo json_encode($status);
 ?>
 

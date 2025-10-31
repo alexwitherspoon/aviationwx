@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/logger.php';
 /**
  * Simple Rate Limiting Utility
  * IP-based rate limiting for API endpoints
@@ -37,6 +38,12 @@ function checkRateLimit($key, $maxRequests = 60, $windowSeconds = 60) {
         
         if (($data['count'] ?? 0) >= $maxRequests) {
             // Rate limit exceeded
+            aviationwx_log('warning', 'rate limit exceeded', [
+                'key' => $key,
+                'ip' => $ip,
+                'limit' => $maxRequests,
+                'reset' => $data['reset'] ?? null
+            ]);
             return false;
         }
         

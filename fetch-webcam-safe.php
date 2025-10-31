@@ -356,6 +356,7 @@ function fetchMJPEGStream($url, $cacheFile) {
 }
 
 require_once __DIR__ . '/config-utils.php';
+require_once __DIR__ . '/logger.php';
 
 /**
  * Circuit breaker: check if camera should be skipped due to backoff
@@ -540,6 +541,7 @@ foreach ($config['airports'] as $airportId => $airport) {
             echo "    URL: {$url}\n";
             echo "    Refresh threshold: {$perCamRefresh}s\n";
         }
+        aviationwx_log('info', 'fetch start', ['airport' => $airportId, 'cam' => $index, 'type' => $sourceType ?? 'unknown']);
         
         // Skip fetch if cache is fresh
         if (file_exists($cacheFile)) {
@@ -603,6 +605,7 @@ foreach ($config['airports'] as $airportId => $airport) {
         if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
             // Success: reset circuit breaker
             recordSuccess($airportId, $index);
+            aviationwx_log('info', 'fetch success', ['airport' => $airportId, 'cam' => $index, 'bytes' => $size]);
             
             $size = filesize($cacheFile);
             if ($isWeb) {
@@ -691,6 +694,7 @@ foreach ($config['airports'] as $airportId => $airport) {
             $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
             $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
             recordFailure($airportId, $index, $sev);
+            aviationwx_log('error', 'fetch failure', ['airport' => $airportId, 'cam' => $index, 'severity' => $sev]);
             $circuit = checkCircuitBreaker($airportId, $index);
             $backoffSecs = $circuit['backoff_remaining'];
             $mins = floor($backoffSecs / 60);
@@ -721,6 +725,8 @@ if ($isWeb) {
 } else {
     echo "\n\nDone! Webcam images cached.\n";
 }
+
+aviationwx_maybe_log_alert();
 
 // Build dynamic URL based on environment
 $protocol = 'https';

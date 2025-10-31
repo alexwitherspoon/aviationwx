@@ -1,4 +1,16 @@
+// Error rate metrics (requires APCu)
+if (function_exists('apcu_fetch')) {
+    $errorCount = apcu_fetch('aviationwx_error_events');
+    $now = time();
+    if (is_array($errorCount)) {
+        $recent = array_values(array_filter($errorCount, fn($t) => $t >= ($now - 3600)));
+        metric('app_errors_last_hour', count($recent));
+    } else {
+        metric('app_errors_last_hour', 0);
+    }
+}
 <?php
+require_once __DIR__ . '/logger.php';
 header('Content-Type: text/plain');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -87,6 +99,8 @@ if (file_exists($airportsConfig)) {
         }
     }
 }
+
+aviationwx_log('info', 'metrics probe');
 
 ?>
 

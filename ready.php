@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/logger.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -36,6 +37,7 @@ if (!function_exists('apcu_fetch')) {
     $errors[] = 'apcu_missing';
 }
 
+aviationwx_log('info', 'ready probe', ['ok' => $ok, 'errors' => $errors]);
 http_response_code($ok ? 200 : 503);
 echo json_encode([
     'ok' => $ok,

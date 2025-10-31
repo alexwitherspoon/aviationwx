@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/logger.php';
 
 /**
  * Serve placeholder image
@@ -24,10 +25,13 @@ function servePlaceholder() {
 }
 
 // Get and validate parameters
+$reqId = aviationwx_get_request_id();
+header('X-Request-ID: ' . $reqId);
 $rawAirportId = $_GET['id'] ?? '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 
 if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    aviationwx_log('error', 'webcam invalid airport id', ['id' => $rawAirportId]);
     servePlaceholder();
 }
 
@@ -41,6 +45,7 @@ if ($camIndex < 0) {
 // Load config (with caching)
 $config = loadConfig();
 if ($config === null || !isset($config['airports'][$airportId]['webcams'][$camIndex])) {
+    aviationwx_log('error', 'webcam config missing or cam index invalid', ['airport' => $airportId, 'cam' => $camIndex]);
     servePlaceholder();
 }
 
@@ -136,7 +141,9 @@ $immutableHash = substr(md5($airportId . '_' . $camIndex . '_' . $fmt . '_' . $f
 if ($isRateLimited) {
     $fallback = file_exists($targetFile) ? $targetFile : (file_exists($cacheJpg) ? $cacheJpg : null);
     if ($fallback !== null) {
+        aviationwx_log('warning', 'webcam rate-limited, serving cached', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt]);
         $mtime = @filemtime($fallback) ?: time();
+        aviationwx_maybe_log_alert();
         header('Content-Type: ' . $ctype);
         header('Cache-Control: public, max-age=0, must-revalidate');
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
@@ -190,6 +197,8 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
     header('X-Cache-Status: HIT');
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
     
+    aviationwx_log('info', 'webcam serve fresh', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt, 'age' => $age]);
+    aviationwx_maybe_log_alert();
     readfile($targetFile);
     exit;
 }
@@ -221,8 +230,11 @@ if (file_exists($targetFile)) {
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: STALE');
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
+    aviationwx_log('info', 'webcam serve stale', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt]);
+    aviationwx_maybe_log_alert();
     readfile($targetFile);
 } else {
+    aviationwx_log('error', 'webcam no cache, serving placeholder', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt]);
     servePlaceholder();
 }
 

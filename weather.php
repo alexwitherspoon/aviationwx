@@ -6,18 +6,27 @@
 
 require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
+require_once __DIR__ . '/logger.php';
 
 // Start output buffering to catch any stray output (errors, warnings, whitespace)
 ob_start();
 
 // Set JSON header
 header('Content-Type: application/json');
+// Correlate
+header('X-Request-ID: ' . aviationwx_get_request_id());
+aviationwx_log('info', 'weather request start', [
+    'airport' => $_GET['airport'] ?? null,
+    'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
+    'ua' => $_SERVER['HTTP_USER_AGENT'] ?? null
+]);
 
 // Rate limiting (60 requests per minute per IP)
 if (!checkRateLimit('weather_api', 60, 60)) {
     http_response_code(429);
     header('Retry-After: 60');
     ob_clean();
+    aviationwx_log('warning', 'weather rate limited');
     echo json_encode(['success' => false, 'error' => 'Too many requests. Please try again later.']);
     exit;
 }
@@ -26,6 +35,7 @@ if (!checkRateLimit('weather_api', 60, 60)) {
 $rawAirportId = $_GET['airport'] ?? '';
 if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
     ob_clean();
+    aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId]);
     echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
     exit;
 }
@@ -36,12 +46,14 @@ $airportId = strtolower(trim($rawAirportId));
 $config = loadConfig();
 if ($config === null) {
     ob_clean();
+    aviationwx_log('error', 'config load failed');
     echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
     exit;
 }
 
 if (!isset($config['airports'][$airportId])) {
     ob_clean();
+    aviationwx_log('error', 'airport not found', ['airport' => $airportId]);
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
 }
@@ -424,10 +436,11 @@ try {
     }
 } catch (Exception $e) {
     $weatherError = 'Error fetching weather: ' . $e->getMessage();
+    aviationwx_log('error', 'weather fetch exception', ['err' => $e->getMessage()]);
 }
 
 if ($weatherError !== null) {
-    error_log('Weather API error for ' . $airportId . ': ' . $weatherError);
+    aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError]);
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
     exit;
@@ -441,7 +454,7 @@ if ($weatherData === null) {
         exit; // Background refresh failed, but we already served stale data
     }
     
-    error_log('Weather API: No data returned for ' . $airportId);
+    aviationwx_log('error', 'weather api no data', ['airport' => $airportId]);
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
     exit;
@@ -528,6 +541,8 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) .
 header('X-Cache-Status: MISS');
 
 ob_clean();
+aviationwx_log('info', 'weather request success', ['airport' => $airportId]);
+aviationwx_maybe_log_alert();
 echo $body;
 
 /**

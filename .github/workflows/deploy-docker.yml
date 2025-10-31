@@ -48,6 +48,10 @@ jobs:
           sudo chmod -R 777 cache
           # Ensure parent cache directory also has correct permissions
           sudo chmod 777 cache || true
+          # Ensure host log directory exists for bind-mount and rotation
+          sudo mkdir -p /var/log/aviationwx
+          sudo chown root:root /var/log/aviationwx
+          sudo chmod 755 /var/log/aviationwx
           EOF
 
       - name: Deploy via Docker Compose
@@ -57,6 +61,21 @@ jobs:
           cd ~/aviationwx
           docker compose -f docker-compose.prod.yml up -d --build
           docker system prune -f
+          EOF
+
+      - name: Ensure app log directory and file
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          # Create log file on host (bind-mounted into container)
+          sudo touch /var/log/aviationwx/app.log
+          sudo chown root:adm /var/log/aviationwx/app.log || true
+          sudo chmod 640 /var/log/aviationwx/app.log || true
+          # Create logrotate rule on host for app log
+          sudo bash -lc 'cat >/etc/logrotate.d/aviationwx <<"LR"\n/var/log/aviationwx/app.log {\n    size 100M\n    rotate 50\n    compress\n    delaycompress\n    missingok\n    notifempty\n    copytruncate\n}\nLR'
+          # Force a logrotate config test
+          if command -v logrotate >/dev/null 2>&1; then sudo logrotate -d /etc/logrotate.conf || true; fi
           EOF
 
       - name: Reload Nginx inside container
