@@ -26,9 +26,11 @@ jobs:
       
       - name: Validate PHP syntax
         run: |
-          find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; | grep -v "No syntax errors"
-          if [ $? -eq 0 ]; then
-            echo "PHP syntax errors found!"
+          echo "Checking PHP syntax..."
+          errors=$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" || true)
+          if [ ! -z "$errors" ]; then
+            echo "❌ PHP syntax errors found:"
+            echo "$errors"
             exit 1
           else
             echo "✓ All PHP files have valid syntax"
