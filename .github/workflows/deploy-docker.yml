@@ -69,7 +69,8 @@ jobs:
           # Copy SSL certificates from Let's Encrypt if they exist
           # This ensures certificates are available for Nginx container
           # All operations run as aviationwx user, using sudo for protected operations
-          if [ -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem ] && [ -f /etc/letsencrypt/live/aviationwx.org/privkey.pem ]; then
+          # Use sudo test to check if files exist (directory permissions are root-only)
+          if sudo test -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem && sudo test -f /etc/letsencrypt/live/aviationwx.org/privkey.pem; then
             echo "Copying SSL certificates from Let's Encrypt..."
             # Copy certificates (requires sudo to read from /etc/letsencrypt/)
             if sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/; then
