@@ -12,15 +12,28 @@ if (isset($_GET['airport']) && !empty($_GET['airport'])) {
     $airportId = strtolower($_GET['airport']);
 } else {
     // Try extracting from subdomain (e.g., kspb.aviationwx.org -> kspb)
-    // Only match if there are exactly 3 parts (subdomain.domain.tld)
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : '';
+    
+    // Debug: Log host detection (can be removed after testing)
+    if (isset($_GET['debug'])) {
+        error_log("Subdomain detection - HTTP_HOST: {$host}");
+    }
+    
+    // Match subdomain pattern (kspb.aviationwx.org)
     if (preg_match('/^([a-z0-9]+)\.aviationwx\.org$/', $host, $matches)) {
         $airportId = $matches[1];
-    }
-    // Also check if host has 3+ parts (handles other TLDs)
-    $hostParts = explode('.', $host);
-    if (count($hostParts) >= 3 && empty($airportId)) {
-        $airportId = $hostParts[0];
+        if (isset($_GET['debug'])) {
+            error_log("Subdomain detected via regex: {$airportId}");
+        }
+    } else {
+        // Also check if host has 3+ parts (handles other TLDs)
+        $hostParts = explode('.', $host);
+        if (count($hostParts) >= 3) {
+            $airportId = $hostParts[0];
+            if (isset($_GET['debug'])) {
+                error_log("Subdomain detected via parts: {$airportId} (from {$host})");
+            }
+        }
     }
 }
 

@@ -211,6 +211,14 @@ const AIRPORT_ID = '<?= $airportId ?>';
 const AIRPORT_DATA = <?= json_encode($airport) ?>;
 const RUNWAYS = <?= json_encode($airport['runways']) ?>;
 
+// Debug logging
+console.log('AviationWX Debug:', {
+    airportId: AIRPORT_ID,
+    host: window.location.host,
+    protocol: window.location.protocol,
+    pathname: window.location.pathname
+});
+
 // Update clocks
 function updateClocks() {
     const now = new Date();
@@ -260,13 +268,19 @@ function updateWeatherTimestamp() {
 // Fetch weather data
 async function fetchWeather() {
     try {
-        const url = `weather.php?airport=${AIRPORT_ID}`;
+        // Use absolute path to ensure it works from subdomains
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        const url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
         console.log('Fetching weather from:', url);
+        console.log('AIRPORT_ID:', AIRPORT_ID);
         
         const response = await fetch(url);
         console.log('Response status:', response.status, response.statusText);
+        console.log('Response URL:', response.url);
         
         if (!response.ok) {
+            const text = await response.text();
+            console.error('Error response body:', text);
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
