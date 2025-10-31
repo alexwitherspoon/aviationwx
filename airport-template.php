@@ -336,8 +336,6 @@ async function fetchWeather() {
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
         const url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
-        console.log('[Weather] Fetching from:', url);
-        console.log('[Weather] AIRPORT_ID:', AIRPORT_ID);
         
         const response = await fetch(url, {
             method: 'GET',
@@ -347,10 +345,6 @@ async function fetchWeather() {
             credentials: 'same-origin'
         });
         
-        console.log('[Weather] Response status:', response.status, response.statusText);
-        console.log('[Weather] Response URL:', response.url);
-        console.log('[Weather] Content-Type:', response.headers.get('content-type'));
-        
         if (!response.ok) {
             const text = await response.text();
             console.error('[Weather] Error response body:', text);
@@ -359,12 +353,10 @@ async function fetchWeather() {
         
         // Get response as text first to check if it's valid JSON
         const responseText = await response.text();
-        console.log('[Weather] Response text (first 500 chars):', responseText.substring(0, 500));
         
         let data;
         try {
             data = JSON.parse(responseText);
-            console.log('[Weather] Parsed data:', data);
         } catch (parseError) {
             console.error('[Weather] JSON parse error:', parseError);
             console.error('[Weather] Full response text length:', responseText.length);
@@ -373,7 +365,6 @@ async function fetchWeather() {
         }
         
         if (data.success) {
-            console.log('[Weather] Displaying weather data');
             displayWeather(data.weather);
             updateWindVisual(data.weather);
             weatherLastUpdated = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : new Date();
