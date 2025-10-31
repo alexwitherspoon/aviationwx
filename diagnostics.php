@@ -443,19 +443,6 @@ if (file_exists($configFilePath)) {
     </ul>
     
     
-        <?php else: ?>
-            <?php if (in_array("❌ airports.json does not exist. Copy from airports.json.example", $issues)): ?>
-                <li>Create <code>airports.json</code> from <code>airports.json.example</code></li>
-            <?php endif; ?>
-            <?php if (in_array("❌ airports.json is not readable (check permissions)", $issues)): ?>
-                <li>Fix permissions: <code>chmod 644 airports.json</code></li>
-            <?php endif; ?>
-            <?php if (in_array("❌ cache/webcams is not writable (chmod 755)", $issues)): ?>
-                <li>Fix cache permissions: <code>chmod -R 755 cache/</code></li>
-            <?php endif; ?>
-        <?php endif; ?>
-    </ol>
-    
     <?php
     // Check if there are RTSP/RTSPS issues and show troubleshooting
     $hasRtspsIssues = false;

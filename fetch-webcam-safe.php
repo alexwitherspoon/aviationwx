@@ -620,8 +620,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             }
             
             // Build commands (allow per-camera transcode timeout and AVIF disable)
-            const DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds
-            $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : DEFAULT_TRANSCODE_TIMEOUT;
+            $DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds
+            $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
 
             // Dynamic AVIF disable store
             $encStateFile = __DIR__ . '/cache/encode_failures.json';
