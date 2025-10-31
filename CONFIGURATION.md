@@ -96,24 +96,79 @@ Add an entry to `airports.json` following this structure:
 ## Airport Timezone Configuration
 
 The `timezone` field in each airport configuration determines:
-- When daily high/low temperatures and peak gust values reset (at local midnight)
-- Sunrise/sunset time display format
-- Daily date calculation for weather tracking
+- **When daily high/low temperatures and peak gust values reset** (at local midnight)
+- **Sunrise/sunset time display format** (shown in local timezone)
+- **Daily date calculation** for weather tracking (determines "today" vs "yesterday")
 
-If not specified, defaults to `America/Los_Angeles`. Use standard PHP timezone identifiers (e.g., `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `UTC`).
+### Default Behavior
 
-**Example:**
+If not specified, defaults to `America/Los_Angeles`. The timezone setting ensures that:
+- Daily statistics (high/low temps, peak gust) reset at local midnight
+- Sunrise/sunset times are displayed in the airport's local time
+- "Today's" values reflect the local calendar day
+
+### Timezone Format
+
+Use standard PHP timezone identifiers. Common examples:
+- `America/New_York` (Eastern Time - EST/EDT)
+- `America/Chicago` (Central Time - CST/CDT)
+- `America/Denver` (Mountain Time - MST/MDT)
+- `America/Los_Angeles` (Pacific Time - PST/PDT)
+- `America/Anchorage` (Alaska Time - AKST/AKDT)
+- `Pacific/Honolulu` (Hawaii Time - HST)
+- `UTC` (Coordinated Universal Time)
+
+For a complete list, see [PHP's timezone list](https://www.php.net/manual/en/timezones.php).
+
+### Configuration Examples
+
+**Pacific Time Airport:**
 ```json
 {
   "airports": {
-    "airportid": {
-      "timezone": "America/Los_Angeles"
+    "kspb": {
+      "name": "Scappoose Airport",
+      "icao": "KSPB",
+      "timezone": "America/Los_Angeles",
+      ...
     }
   }
 }
 ```
 
-Daily values (high/low temperatures, peak gust) reset at midnight in the specified timezone, ensuring the displayed "today" values reflect the local airport day.
+**Eastern Time Airport:**
+```json
+{
+  "airports": {
+    "kjfk": {
+      "name": "John F. Kennedy International Airport",
+      "icao": "KJFK",
+      "timezone": "America/New_York",
+      ...
+    }
+  }
+}
+```
+
+**UTC Airport:**
+```json
+{
+  "airports": {
+    "airportid": {
+      "name": "Example Airport",
+      "timezone": "UTC",
+      ...
+    }
+  }
+}
+```
+
+### Important Notes
+
+- Daily values reset at **local midnight** in the specified timezone
+- If an airport spans multiple timezones, use the primary timezone
+- The timezone setting affects when "today" begins and ends for statistics
+- Sunrise/sunset calculations use the airport's coordinates, but display times use the configured timezone
 
 ## Webcam Configuration
 

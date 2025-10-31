@@ -60,7 +60,8 @@ cd aviationwx
 3. Edit `airports.json` with your actual credentials:
    - Add your weather station API keys
    - Configure webcam URLs and credentials
-   - Add airport metadata
+   - Add airport metadata (name, ICAO, coordinates, elevation)
+   - Set timezone (optional, defaults to `America/Los_Angeles`)
 
 4. Start locally with Docker
    ```bash
@@ -93,11 +94,21 @@ Edit `airports.json` to add a new airport:
     "kspb": {
       "name": "Scappoose Airport",
       "icao": "KSPB",
-      ...
+      "address": "City, State",
+      "lat": 45.7710278,
+      "lon": -122.8618333,
+      "elevation_ft": 58,
+      "timezone": "America/Los_Angeles",
+      "weather_source": { ... },
+      "webcams": [ ... ]
     }
   }
 }
 ```
+
+**Timezone Configuration**: The `timezone` field (optional) determines when daily high/low temperatures and peak gust values reset at local midnight. If not specified, defaults to `America/Los_Angeles`. Use standard PHP timezone identifiers (e.g., `America/New_York`, `America/Chicago`, `America/Denver`, `UTC`).
+
+See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration details.
 
 Then set up wildcard DNS as described in deployment docs.
 
