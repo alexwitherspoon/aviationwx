@@ -8,10 +8,14 @@ require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/logger.php';
 
+// Start output buffering to prevent any stray output from corrupting image headers
+ob_start();
+
 /**
  * Serve placeholder image
  */
 function servePlaceholder() {
+    ob_end_clean(); // Ensure no output before headers (end and clean in one call)
     if (file_exists(__DIR__ . '/placeholder.jpg')) {
         header('Content-Type: image/jpeg');
         header('Cache-Control: public, max-age=3600'); // Cache placeholder for 1 hour
@@ -198,6 +202,7 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
     
     aviationwx_log('info', 'webcam serve fresh', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt, 'age' => $age]);
     aviationwx_maybe_log_alert();
+    ob_end_clean(); // Clear any buffer before sending image (end and clean in one call)
     readfile($targetFile);
     exit;
 }
@@ -231,6 +236,7 @@ if (file_exists($targetFile)) {
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
     aviationwx_log('info', 'webcam serve stale', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt]);
     aviationwx_maybe_log_alert();
+    ob_end_clean(); // Clear any buffer before sending image (end and clean in one call)
     readfile($targetFile);
 } else {
     aviationwx_log('error', 'webcam no cache, serving placeholder', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt]);
