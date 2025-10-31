@@ -467,10 +467,22 @@ if (isset($config['airports']) && is_array($config['airports'])) {
             $airportName = $airport['name'] ?? $airportId;
             $subdomainUrl = "{$protocol}://{$airportId}.{$domain}";
             $queryUrl = "{$protocol}://{$domain}/?airport={$airportId}";
-            echo "View {$airportName} at: {$subdomainUrl} or {$queryUrl}\n";
+            if ($isWeb) {
+                echo "<span class='info'>View {$airportName} at: <a href=\"{$subdomainUrl}\" target='_blank'>{$subdomainUrl}</a> or <a href=\"{$queryUrl}\" target='_blank'>{$queryUrl}</a></span><br>\n";
+            } else {
+                echo "View {$airportName} at: {$subdomainUrl} or {$queryUrl}\n";
+            }
         }
     }
 } else {
-    echo "View at: {$protocol}://{$domain}/?airport=<airport-id>\n";
+    if ($isWeb) {
+        echo "<span class='info'>View at: <a href=\"{$protocol}://{$domain}/?airport=<airport-id>\">{$protocol}://{$domain}/?airport=&lt;airport-id&gt;</a></span><br>\n";
+    } else {
+        echo "View at: {$protocol}://{$domain}/?airport=<airport-id>\n";
+    }
+}
+
+if ($isWeb) {
+    echo "</div></body></html>";
 }
 
