@@ -35,6 +35,63 @@ foreach ($counts as $ext => $cnt) {
     metric('webcam_cache_files_total', $cnt, ['format' => $ext]);
 }
 
+// Per-camera metrics: age, sizes, last error code, backoff
+$airportsConfig = __DIR__ . '/airports.json';
+if (file_exists($airportsConfig)) {
+    $cfg = json_decode(@file_get_contents($airportsConfig), true);
+    if (is_array($cfg) && isset($cfg['airports'])) {
+        foreach ($cfg['airports'] as $airportId => $airport) {
+            $cams = $airport['webcams'] ?? [];
+            foreach ($cams as $idx => $_) {
+                $base = $cacheDir . '/' . strtolower($airportId) . '_' . $idx;
+                $jpg = $base . '.jpg';
+                $webp = $base . '.webp';
+                $avif = $base . '.avif';
+
+                $labels = ['airport' => strtolower($airportId), 'cam' => (string)$idx];
+
+                // File readiness and ages
+                $now = time();
+                $existsJpg = file_exists($jpg);
+                $existsWebp = file_exists($webp);
+                $existsAvif = file_exists($avif);
+                metric('webcam_cache_ready', $existsJpg ? 1 : 0, $labels + ['format' => 'jpg']);
+                metric('webcam_cache_ready', $existsWebp ? 1 : 0, $labels + ['format' => 'webp']);
+                metric('webcam_cache_ready', $existsAvif ? 1 : 0, $labels + ['format' => 'avif']);
+                metric('webcam_cache_age_seconds', $existsJpg ? max(0, $now - @filemtime($jpg)) : -1, $labels + ['format' => 'jpg']);
+                metric('webcam_cache_age_seconds', $existsWebp ? max(0, $now - @filemtime($webp)) : -1, $labels + ['format' => 'webp']);
+                metric('webcam_cache_age_seconds', $existsAvif ? max(0, $now - @filemtime($avif)) : -1, $labels + ['format' => 'avif']);
+                metric('webcam_cache_size_bytes', $existsJpg ? @filesize($jpg) : 0, $labels + ['format' => 'jpg']);
+                metric('webcam_cache_size_bytes', $existsWebp ? @filesize($webp) : 0, $labels + ['format' => 'webp']);
+                metric('webcam_cache_size_bytes', $existsAvif ? @filesize($avif) : 0, $labels + ['format' => 'avif']);
+
+                // Last RTSP error code if any
+                $errFile = $jpg . '.error.json';
+                if (file_exists($errFile)) {
+                    $err = json_decode(@file_get_contents($errFile), true);
+                    $code = $err['code'] ?? 'unknown';
+                    $ts = (int)($err['timestamp'] ?? 0);
+                    metric('webcam_last_error', 1, $labels + ['code' => $code]);
+                    metric('webcam_last_error_age_seconds', $ts > 0 ? max(0, $now - $ts) : -1, $labels);
+                } else {
+                    metric('webcam_last_error', 0, $labels + ['code' => 'none']);
+                }
+
+                // Circuit breaker/backoff state
+                $backoff = __DIR__ . '/cache/backoff.json';
+                if (file_exists($backoff)) {
+                    $bo = json_decode(@file_get_contents($backoff), true) ?: [];
+                    $key = strtolower($airportId) . '_' . $idx;
+                    $st = $bo[$key] ?? [];
+                    $remaining = max(0, (int)($st['next_allowed_time'] ?? 0) - $now);
+                    metric('webcam_backoff_failures', (int)($st['failures'] ?? 0), $labels);
+                    metric('webcam_backoff_remaining_seconds', $remaining, $labels);
+                }
+            }
+        }
+    }
+}
+
 ?>
 
 

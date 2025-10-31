@@ -125,7 +125,26 @@ function classifyRTSPError($exitCode, $errorOutput) {
     return 'unknown';
 }
 
-function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 10, $retries = 2) {
+/**
+ * Map RTSP error code to severity for backoff policy
+ * @param string $code
+ * @return string 'transient' or 'permanent'
+ */
+function mapErrorSeverity($code) {
+    switch ($code) {
+        case 'timeout':
+        case 'connection':
+        case 'dns':
+            return 'transient';
+        case 'auth':
+        case 'tls':
+            return 'permanent';
+        default:
+            return 'transient';
+    }
+}
+
+function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 10, $retries = 2, $maxRuntime = 6) {
     $transport = strtolower($transport) === 'udp' ? 'udp' : 'tcp';
     $timeoutUs = max(1, intval($timeoutSeconds)) * 1000000; // microseconds (for -timeout option in ffmpeg 5.0+)
     $attempt = 0;
@@ -176,6 +195,9 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         // Add input and output
         $cmdArray[] = '-i';
         $cmdArray[] = $url;
+        // Limit capture runtime to avoid hanging streams
+        $cmdArray[] = '-t';
+        $cmdArray[] = (string)max(1, (int)$maxRuntime);
         $cmdArray[] = '-frames:v';
         $cmdArray[] = '1';
         $cmdArray[] = '-q:v';
@@ -377,7 +399,7 @@ function checkCircuitBreaker($airportId, $camIndex) {
  * @param string $airportId
  * @param int $camIndex
  */
-function recordFailure($airportId, $camIndex) {
+function recordFailure($airportId, $camIndex, $severity = 'transient') {
     $backoffFile = __DIR__ . '/cache/backoff.json';
     $key = $airportId . '_' . $camIndex;
     $now = time();
@@ -395,9 +417,13 @@ function recordFailure($airportId, $camIndex) {
     $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
     $state['last_attempt'] = $now;
     
-    // Exponential backoff: min(60, 2^failures * 60) seconds, capped at 3600s (1 hour)
+    // Exponential backoff with severity scaling
+    // Base: min(60, 2^failures * 60) seconds, capped at 3600s (1 hour)
     $failures = $state['failures'];
-    $backoffSeconds = min(3600, max(60, pow(2, min($failures - 1, 5)) * 60));
+    $base = max(60, pow(2, min($failures - 1, 5)) * 60);
+    $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
+    $cap = ($severity === 'permanent') ? 7200 : 3600; // cap 2h for permanent
+    $backoffSeconds = min($cap, (int)round($base * $multiplier));
     $state['backoff_seconds'] = $backoffSeconds;
     $state['next_allowed_time'] = $now + $backoffSeconds;
     
@@ -556,8 +582,10 @@ foreach ($config['airports'] as $airportId => $airport) {
         $success = false;
         switch ($sourceType) {
             case 'rtsp':
-                // RTSP stream - use ffmpeg to capture a frame
-                $success = fetchRTSPFrame($url, $cacheFile, $transport, intval(getenv('RTSP_TIMEOUT') ?: 10), 2);
+                // RTSP stream - use ffmpeg to capture a frame with per-camera settings
+                $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: 10);
+                $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : 6;
+                $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, 2, $maxRuntime);
                 break;
                 
             case 'static_jpeg':
@@ -591,9 +619,22 @@ foreach ($config['airports'] as $airportId => $airport) {
                 echo "    Generating WEBP and AVIF in parallel...\n";
             }
             
-            // Build commands
+            // Build commands (allow per-camera transcode timeout and AVIF disable)
+            const DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds
+            $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : DEFAULT_TRANSCODE_TIMEOUT;
+
+            // Dynamic AVIF disable store
+            $encStateFile = __DIR__ . '/cache/encode_failures.json';
+            $encState = file_exists($encStateFile) ? (@json_decode(file_get_contents($encStateFile), true) ?: []) : [];
+            $encKey = strtolower($airportId) . '_' . $index;
+            $disableAvifCfg = !empty($cam['disable_avif']);
+            $disableAvifDyn = !empty($encState[$encKey]['disable_avif']);
+            $disableAvif = $disableAvifCfg || $disableAvifDyn;
+
             $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
-            $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p -preset 4 %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
+            if (!$disableAvif) {
+                $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p -preset 4 %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
+            }
             
             // Start both processes in background
             $pipesWebp = [];
@@ -612,8 +653,9 @@ foreach ($config['airports'] as $airportId => $airport) {
                 $processes[] = ['proc' => $processWebp, 'type' => 'webp', 'pipes' => $pipesWebp, 'cache' => $cacheWebp];
             }
             
-            // Start AVIF generation
-            $processAvif = proc_open($cmdAvif . ' 2>&1', [
+            // Start AVIF generation (only if enabled)
+            if (!$disableAvif) {
+            $processAvif = proc_open(($cmdAvif ?? '') . ' 2>&1', [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w']
@@ -622,10 +664,11 @@ foreach ($config['airports'] as $airportId => $airport) {
             if (is_resource($processAvif)) {
                 fclose($pipesAvif[0]); // Close stdin
                 $processes[] = ['proc' => $processAvif, 'type' => 'avif', 'pipes' => $pipesAvif, 'cache' => $cacheAvif];
-            }
+            }}
             
             // Wait for all processes to complete
             $results = [];
+            $startTs = microtime(true);
             while (!empty($processes)) {
                 foreach ($processes as $key => $procData) {
                     $status = proc_get_status($procData['proc']);
@@ -658,6 +701,17 @@ foreach ($config['airports'] as $airportId => $airport) {
                                     echo "    ✗ " . strtoupper($procData['type']) . " generation failed\n";
                                 }
                             }
+
+                            // Track AVIF failure counts and optionally disable dynamically
+                            if ($procData['type'] === 'avif') {
+                                $state = $encState[$encKey] ?? ['avif_failures' => 0, 'disable_avif' => false];
+                                $state['avif_failures'] = (int)($state['avif_failures'] ?? 0) + 1;
+                                if ($state['avif_failures'] >= 3) {
+                                    $state['disable_avif'] = true; // auto-disable after 3 consecutive failures
+                                }
+                                $encState[$encKey] = $state;
+                                @file_put_contents($encStateFile, json_encode($encState, JSON_PRETTY_PRINT), LOCK_EX);
+                            }
                         }
                         
                         unset($processes[$key]);
@@ -666,12 +720,23 @@ foreach ($config['airports'] as $airportId => $airport) {
                 
                 // Small sleep to avoid busy-waiting
                 if (!empty($processes)) {
+                    // Enforce overall transcode timeout
+                    if ((microtime(true) - $startTs) > $transcodeTimeout) {
+                        // Kill remaining processes
+                        foreach ($processes as $pk => $pd) {
+                            @proc_terminate($pd['proc']);
+                        }
+                        // Let the loop detect completion next iteration
+                    }
                     usleep(50000); // 50ms
                 }
             }
         } else {
-            // Failure: record and update backoff
-            recordFailure($airportId, $index);
+            // Failure: record and update backoff with severity mapping
+            // Try to read last RTSP error code for severity (if exists)
+            $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
+            $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
+            recordFailure($airportId, $index, $sev);
             $circuit = checkCircuitBreaker($airportId, $index);
             $backoffSecs = $circuit['backoff_remaining'];
             $mins = floor($backoffSecs / 60);

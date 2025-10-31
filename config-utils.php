@@ -86,6 +86,39 @@ function loadConfig($useCache = true) {
         error_log('Configuration file is not valid JSON: ' . json_last_error_msg() . ' (file: ' . $configFile . ')');
         return null;
     }
+
+    // Basic schema validation (lightweight)
+    $errors = [];
+    if (!isset($config['airports']) || !is_array($config['airports'])) {
+        $errors[] = 'Root.airports must be an object';
+    } else {
+        foreach ($config['airports'] as $aid => $ap) {
+            if (!validateAirportId($aid)) {
+                $errors[] = "Airport key '{$aid}' is invalid (3-4 lowercase alphanumerics)";
+            }
+            if (!isset($ap['webcams']) || !is_array($ap['webcams'])) {
+                // Allow no webcams
+                continue;
+            }
+            foreach ($ap['webcams'] as $idx => $cam) {
+                if (!isset($cam['name']) || !isset($cam['url'])) {
+                    $errors[] = "Airport '{$aid}' webcam index {$idx} missing required fields (name,url)";
+                    continue;
+                }
+                if (isset($cam['type']) && !in_array($cam['type'], ['rtsp','mjpeg','static_jpeg','static_png'])) {
+                    $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid type '{$cam['type']}'";
+                }
+                if (isset($cam['rtsp_transport']) && !in_array(strtolower($cam['rtsp_transport']), ['tcp','udp'])) {
+                    $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid rtsp_transport";
+                }
+            }
+        }
+    }
+    if (!empty($errors)) {
+        // Log and fail-fast
+        foreach ($errors as $e) { error_log('[config] ' . $e); }
+        return null;
+    }
     
     // Cache in static variable (with mtime)
     $cachedConfig = $config;

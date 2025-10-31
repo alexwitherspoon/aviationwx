@@ -442,12 +442,7 @@ if (file_exists($configFilePath)) {
         <li>✅ Cron job configured for webcam refresh</li>
     </ul>
     
-    <h2>📝 Next Steps</h2>
-    <ol>
-        <?php if (empty($issues)): ?>
-            <li>✅ Configuration is good!</li>
-            <li>Set up DNS wildcard subdomain: <code>*.aviationwx.org</code></li>
-            <li>Configure cron job for webcam refresh</li>
+    
         <?php else: ?>
             <?php if (in_array("❌ airports.json does not exist. Copy from airports.json.example", $issues)): ?>
                 <li>Create <code>airports.json</code> from <code>airports.json.example</code></li>

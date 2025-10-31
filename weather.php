@@ -506,13 +506,29 @@ if ($hasStaleCache) {
     exit;
 }
 
-// Set cache headers for fresh data (first request, not stale)
+// Build ETag for response based on content
+$payload = ['success' => true, 'weather' => $weatherData];
+$body = json_encode($payload);
+$etag = 'W/"' . sha1($body) . '"';
+
+// Conditional requests support
+$ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+if ($ifNoneMatch === $etag) {
+    header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+    header('ETag: ' . $etag);
+    header('X-Cache-Status: MISS');
+    http_response_code(304);
+    exit;
+}
+
+// Set cache headers for fresh data (short-lived)
 header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+header('ETag: ' . $etag);
 header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
 header('X-Cache-Status: MISS');
 
-ob_clean(); // Clean any buffered output before sending JSON
-echo json_encode(['success' => true, 'weather' => $weatherData]);
+ob_clean();
+echo $body;
 
 /**
  * Parse Tempest API response (for async use)

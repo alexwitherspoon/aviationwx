@@ -24,7 +24,28 @@
                 navigator.serviceWorker.register('/sw.js')
                     .then((registration) => {
                         console.log('[SW] Registered:', registration.scope);
-                        
+
+                        // If there's a waiting SW, activate it immediately
+                        if (registration.waiting) {
+                            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        }
+
+                        // Listen for updates; when installed and waiting, take over
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (!newWorker) return;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                }
+                            });
+                        });
+
+                        // Auto-reload when new SW takes control
+                        navigator.serviceWorker.addEventListener('controllerchange', () => {
+                            window.location.reload();
+                        });
+
                         // Check for updates every hour
                         setInterval(() => {
                             registration.update();

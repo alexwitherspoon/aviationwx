@@ -178,7 +178,14 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
     }
     
     header('Content-Type: ' . $ctype);
-    header('Cache-Control: public, max-age=' . $remainingTime);
+    // For URLs with immutable hash (v=), allow immutable and s-maxage for CDNs
+    $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
+    $cc = $hasHash ? 'public, max-age=' . $remainingTime . ', s-maxage=' . $remainingTime . ', immutable' : 'public, max-age=' . $remainingTime;
+    header('Cache-Control: ' . $cc);
+    if ($hasHash) {
+        header('Surrogate-Control: max-age=' . $remainingTime . ', stale-while-revalidate=60');
+        header('CDN-Cache-Control: max-age=' . $remainingTime . ', stale-while-revalidate=60');
+    }
     header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
     header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
@@ -205,7 +212,13 @@ if (file_exists($targetFile)) {
         exit;
     }
     header('Content-Type: ' . $ctype);
-    header('Cache-Control: public, max-age=0, must-revalidate'); // Stale, revalidate
+    $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
+    $cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate' : 'public, max-age=0, must-revalidate';
+    header('Cache-Control: ' . $cc); // Stale, revalidate
+    if ($hasHash) {
+        header('Surrogate-Control: max-age=0');
+        header('CDN-Cache-Control: max-age=0');
+    }
     header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: STALE');

@@ -138,6 +138,11 @@ The system automatically detects the source type from the URL:
 - `password`: For authenticated streams/images
 - `refresh_seconds`: Override refresh interval (seconds) - overrides airport `webcam_refresh_seconds` default
 - `rtsp_transport`: `tcp` (default, recommended) or `udp` for RTSP/RTSPS streams only
+// RTSP/RTSPS advanced options
+- `rtsp_fetch_timeout`: Timeout in seconds for capturing a single frame from RTSP (default: 10)
+- `rtsp_max_runtime`: Max ffmpeg runtime in seconds for the RTSP capture (default: 6)
+- `transcode_timeout`: Max seconds allowed to generate WEBP/AVIF (default: 8)
+- `disable_avif`: When true, skip AVIF generation for this camera
 
 ### Webcam Examples
 
@@ -160,6 +165,9 @@ The system automatically detects the source type from the URL:
   "type": "rtsp",
   "rtsp_transport": "tcp",
   "refresh_seconds": 30,
+  "rtsp_fetch_timeout": 10,
+  "rtsp_max_runtime": 6,
+  "transcode_timeout": 8,
   "username": "admin",
   "password": "password123",
   "position": "south",
@@ -176,6 +184,10 @@ The system automatically detects the source type from the URL:
   "type": "rtsp",
   "rtsp_transport": "tcp",
   "refresh_seconds": 60,
+  "rtsp_fetch_timeout": 10,
+  "rtsp_max_runtime": 6,
+  "transcode_timeout": 8,
+  "disable_avif": false,
   "position": "north",
   "partner_name": "Partner Name",
   "partner_link": "https://partner.com"
@@ -183,6 +195,11 @@ The system automatically detects the source type from the URL:
 ```
 
 **Note**: For RTSPS streams, always set `"type": "rtsp"` explicitly and use `"rtsp_transport": "tcp"` for best reliability.
+
+### Error Handling and Backoff (RTSP)
+- Errors are classified into transient (timeout, connection, DNS) and permanent (auth, TLS).
+- Transient errors back off exponentially up to 1 hour; permanent errors up to 2 hours.
+- AVIF generation failures are tracked; after 3 consecutive AVIF errors, AVIF is auto-disabled for that camera (persisted to `cache/encode_failures.json`). Set `"disable_avif": true` to force-disable.
 
 **Static Image:**
 ```json

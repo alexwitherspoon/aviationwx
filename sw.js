@@ -1,7 +1,7 @@
 // AviationWX Service Worker
 // Provides offline support and background sync for weather data
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `aviationwx-${CACHE_VERSION}`;
 const STATIC_CACHE = `${CACHE_NAME}-static`;
 const WEATHER_CACHE = `${CACHE_NAME}-weather`;
@@ -13,6 +13,19 @@ const STATIC_ASSETS = [
     '/styles.min.css',
     '/index.php'
 ];
+
+// Allow page to message the SW (skip waiting, clear caches)
+self.addEventListener('message', (event) => {
+    const data = event.data || {};
+    if (data && data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+    if (data && data.type === 'CLEAR_CACHES') {
+        event.waitUntil(
+            caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n))))
+        );
+    }
+});
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -32,7 +45,7 @@ self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and take control
 self.addEventListener('activate', (event) => {
     console.log('[SW] Activating service worker...');
     
@@ -54,7 +67,7 @@ self.addEventListener('activate', (event) => {
     return self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - selective strategies
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
     
@@ -63,7 +76,12 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
-    // Handle weather API requests with stale-while-revalidate
+    // Never cache webcam images via SW (Nginx handles caching); bypass
+    if (url.pathname === '/webcam.php') {
+        return; // Let browser request pass through
+    }
+
+    // Handle weather API requests with network-first + 3s timeout, then cache
     if (url.pathname === '/weather.php') {
         event.respondWith(
             (async () => {
@@ -114,7 +132,7 @@ self.addEventListener('fetch', (event) => {
     }
     
     // Handle static assets - cache first, fallback to network
-    if (STATIC_ASSETS.some(asset => url.pathname === asset || url.pathname.startsWith('/styles'))) {
+    if (STATIC_ASSETS.some(asset => url.pathname === asset) || url.pathname.startsWith('/styles')) {
         event.respondWith(
             caches.match(event.request).then((cachedResponse) => {
                 if (cachedResponse) {
