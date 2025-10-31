@@ -96,9 +96,11 @@ $isRateLimited = !checkRateLimit('webcam_api', 100, 60);
 // Rate limit headers for image responses
 if (function_exists('getRateLimitRemaining')) {
     $rl = getRateLimitRemaining('webcam_api', 100, 60);
-    header('X-RateLimit-Limit: 100');
-    header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
-    header('X-RateLimit-Reset: ' . (int)$rl['reset']);
+    if (is_array($rl)) {
+        header('X-RateLimit-Limit: 100');
+        header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
+        header('X-RateLimit-Reset: ' . (int)$rl['reset']);
+    }
 }
 
 // Optional format parameter: jpg (default), webp, avif

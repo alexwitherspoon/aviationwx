@@ -56,7 +56,7 @@ function checkRateLimit($key, $maxRequests = 60, $windowSeconds = 60) {
  * @param string $key Rate limit key
  * @param int $maxRequests Maximum requests allowed
  * @param int $windowSeconds Time window in seconds (optional, for consistency)
- * @return int Remaining requests, or -1 if unknown
+ * @return array|int Returns array with 'remaining' and 'reset' keys, or -1 if APCu unavailable
  */
 function getRateLimitRemaining($key, $maxRequests = 60, $windowSeconds = 60) {
     if (!function_exists('apcu_fetch')) {
@@ -70,17 +70,27 @@ function getRateLimitRemaining($key, $maxRequests = 60, $windowSeconds = 60) {
     
     if ($data === false) {
         // No rate limit data exists, so all requests are available
-        return $maxRequests;
+        return [
+            'remaining' => $maxRequests,
+            'reset' => time() + $windowSeconds
+        ];
     }
     
-    // Extract count from the data array
+    // Extract count and reset time from the data array
     $currentCount = is_array($data) ? ($data['count'] ?? 0) : (is_numeric($data) ? $data : 0);
+    $resetTime = is_array($data) ? ($data['reset'] ?? time() + $windowSeconds) : (time() + $windowSeconds);
     
     // Check if window expired
     if (is_array($data) && isset($data['reset']) && time() >= $data['reset']) {
         // Window expired, all requests are available
-        return $maxRequests;
+        return [
+            'remaining' => $maxRequests,
+            'reset' => time() + $windowSeconds
+        ];
     }
     
-    return max(0, $maxRequests - $currentCount);
+    return [
+        'remaining' => max(0, $maxRequests - $currentCount),
+        'reset' => (int)$resetTime
+    ];
 }
