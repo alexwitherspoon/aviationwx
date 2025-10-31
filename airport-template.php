@@ -126,7 +126,14 @@
         <!-- Weather Data -->
         <section class="weather-section">
             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem;">
-                <h2>Current Conditions</h2>
+                <div style="display: flex; align-items: baseline; gap: 1rem;">
+                    <h2 style="margin: 0;">Current Conditions</h2>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                        <button id="temp-unit-toggle" style="background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 0.25rem;" title="Toggle temperature unit">
+                            <span id="temp-unit-display">°F</span>
+                        </button>
+                    </div>
+                </div>
                 <p style="font-size: 0.85rem; color: #666; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
             </div>
             <div id="weather-data" class="weather-grid">
@@ -298,6 +305,66 @@ setInterval(updateClocks, 1000);
 // Store weather update time
 let weatherLastUpdated = null;
 
+// Store current weather data globally for toggle re-rendering
+let currentWeatherData = null;
+
+// Temperature unit preference (default to F)
+function getTempUnit() {
+    const unit = localStorage.getItem('aviationwx_temp_unit');
+    return unit || 'F'; // Default to Fahrenheit
+}
+
+function setTempUnit(unit) {
+    localStorage.setItem('aviationwx_temp_unit', unit);
+}
+
+// Convert Celsius to Fahrenheit
+function cToF(c) {
+    return Math.round((c * 9/5) + 32);
+}
+
+// Convert Fahrenheit to Celsius
+function fToC(f) {
+    return Math.round((f - 32) * 5/9);
+}
+
+// Format temperature based on current unit preference
+function formatTemp(tempC) {
+    if (tempC === null || tempC === undefined) return '--';
+    const unit = getTempUnit();
+    return unit === 'C' ? Math.round(tempC) : cToF(tempC);
+}
+
+// Temperature unit toggle handler
+function initTempUnitToggle() {
+    const toggle = document.getElementById('temp-unit-toggle');
+    const display = document.getElementById('temp-unit-display');
+    
+    function updateToggle() {
+        const unit = getTempUnit();
+        display.textContent = unit === 'C' ? '°C' : '°F';
+        toggle.title = `Switch to ${unit === 'C' ? 'Fahrenheit' : 'Celsius'}`;
+    }
+    
+    toggle.addEventListener('click', () => {
+        const currentUnit = getTempUnit();
+        const newUnit = currentUnit === 'F' ? 'C' : 'F';
+        setTempUnit(newUnit);
+        updateToggle();
+        // Re-render weather data with new unit if we have weather data
+        if (currentWeatherData) {
+            displayWeather(currentWeatherData);
+        }
+    });
+    
+    updateToggle();
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initTempUnitToggle();
+});
+
 // Set weather last updated time to relative
 function updateWeatherTimestamp() {
     if (weatherLastUpdated === null) {
@@ -365,6 +432,7 @@ async function fetchWeather() {
         }
         
         if (data.success) {
+            currentWeatherData = data.weather; // Store globally for toggle re-rendering
             displayWeather(data.weather);
             updateWindVisual(data.weather);
             weatherLastUpdated = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : new Date();
@@ -459,15 +527,15 @@ function displayWeather(weather) {
         
         <!-- Temperature -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">${weather.temp_high_today ? Math.round((weather.temp_high_today * 9/5) + 32) : '--'}</span><span class="weather-unit">°F</span></div>
-            <div class="weather-item"><span class="label">Current Temperature</span><span class="weather-value">${weather.temperature_f || '--'}</span><span class="weather-unit">°F</span></div>
-            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">${weather.temp_low_today ? Math.round((weather.temp_low_today * 9/5) + 32) : '--'}</span><span class="weather-unit">°F</span></div>
+            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">${formatTemp(weather.temp_high_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Current Temperature</span><span class="weather-value">${formatTemp(weather.temperature)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">${formatTemp(weather.temp_low_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
         </div>
         
         <!-- Moisture & Precipitation -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${weather.dewpoint_spread !== null ? weather.dewpoint_spread.toFixed(1) : '--'}</span><span class="weather-unit">°C</span></div>
-            <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${weather.dewpoint_f || '--'}</span><span class="weather-unit">°F</span></div>
+            <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(weather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${weather.precip_accum > 0 ? weather.precip_accum.toFixed(2) : '0.00'}</span><span class="weather-unit">in</span></div>
         </div>
         
