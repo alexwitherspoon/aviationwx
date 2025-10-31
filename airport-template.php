@@ -335,6 +335,18 @@ function formatTemp(tempC) {
     return unit === 'C' ? Math.round(tempC) : cToF(tempC);
 }
 
+// Format temperature spread (allows decimals) based on current unit preference
+function formatTempSpread(spreadC) {
+    if (spreadC === null || spreadC === undefined) return '--';
+    const unit = getTempUnit();
+    if (unit === 'C') {
+        return spreadC.toFixed(1);
+    } else {
+        // Convert spread from Celsius to Fahrenheit (spread conversion is same as temp: multiply by 9/5)
+        return (spreadC * 9/5).toFixed(1);
+    }
+}
+
 // Temperature unit toggle handler
 function initTempUnitToggle() {
     const toggle = document.getElementById('temp-unit-toggle');
@@ -534,7 +546,7 @@ function displayWeather(weather) {
         
         <!-- Moisture & Precipitation -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${weather.dewpoint_spread !== null ? weather.dewpoint_spread.toFixed(1) : '--'}</span><span class="weather-unit">°C</span></div>
+            <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(weather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(weather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${weather.precip_accum > 0 ? weather.precip_accum.toFixed(2) : '0.00'}</span><span class="weather-unit">in</span></div>
         </div>
