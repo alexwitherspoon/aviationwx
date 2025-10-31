@@ -797,8 +797,9 @@ function updatePeakGust($airportId, $currentGust) {
             }
         }
         
-        // Clean up old entries (older than 2 days) to prevent file bloat
+        // Clean up old entries (older than 2 days) to prevent file bloat and stale data
         $currentDate = new DateTime($dateKey);
+        $cleaned = 0;
         foreach ($peakGusts as $key => $value) {
             if (!is_string($key) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $key)) {
                 continue; // Skip invalid keys
@@ -807,7 +808,11 @@ function updatePeakGust($airportId, $currentGust) {
             $daysDiff = $currentDate->diff($entryDate)->days;
             if ($daysDiff > 2) {
                 unset($peakGusts[$key]);
+                $cleaned++;
             }
+        }
+        if ($cleaned > 0) {
+            aviationwx_log('info', 'cleaned old peak gusts', ['removed' => $cleaned, 'date_key' => $dateKey]);
         }
         
         // Normalize existing entry to structured format {value, ts}
@@ -818,8 +823,16 @@ function updatePeakGust($airportId, $currentGust) {
             $existingValue = is_numeric($existing) ? (float)$existing : 0;
         }
 
-        // If no entry or current gust is higher, update value and timestamp (now)
-        if (!isset($peakGusts[$dateKey][$airportId]) || $currentGust > $existingValue) {
+        // If no entry for today (new day) or current gust is higher, update value and timestamp
+        // This ensures we never use yesterday's data for today
+        if (!isset($peakGusts[$dateKey][$airportId])) {
+            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGust]);
+            $peakGusts[$dateKey][$airportId] = [
+                'value' => $currentGust,
+                'ts' => time(), // store as UNIX timestamp (UTC)
+            ];
+        } elseif ($currentGust > $existingValue) {
+            // Update if current gust is higher (only for today's entry)
             $peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGust,
                 'ts' => time(), // store as UNIX timestamp (UTC)
@@ -849,9 +862,11 @@ function getPeakGust($airportId, $currentGust) {
     }
 
     $peakGusts = json_decode(file_get_contents($file), true) ?? [];
+    
+    // Only return data for today's date key (never yesterday or older dates)
     $entry = $peakGusts[$dateKey][$airportId] ?? null;
     if ($entry === null) {
-        // No entry for today, return current gust as today's value
+        // No entry for today - return current gust as today's value
         return ['value' => $currentGust, 'ts' => null];
     }
 
@@ -860,13 +875,12 @@ function getPeakGust($airportId, $currentGust) {
         $value = $entry['value'] ?? 0;
         $ts = $entry['ts'] ?? null;
         // Ensure we return at least the current gust if it's higher
-        if ($currentGust > $value) {
-            $value = $currentGust;
-        }
+        // Only use today's stored value, never yesterday's
+        $value = max($value, $currentGust);
         return ['value' => $value, 'ts' => $ts];
     }
 
-    // Legacy scalar format
+    // Legacy scalar format - ensure we only use today's data
     $value = max((float)$entry, $currentGust);
     return ['value' => $value, 'ts' => null];
 }
