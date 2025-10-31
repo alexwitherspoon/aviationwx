@@ -30,7 +30,7 @@
                                  src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
-                                 onerror="console.error('Webcam image failed to load:', this.src); this.src='placeholder.jpg'"
+                                 onerror="console.error('Webcam image failed to load:', this.src); this.style.display='none'"
                                  onclick="openLiveStream(this.src)">
                         </picture>
                         <div class="webcam-info">

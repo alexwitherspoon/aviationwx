@@ -10,6 +10,8 @@
     RewriteCond %{HTTP_HOST} ^([^\.]+)\.aviationwx\.org$ [NC]
     # Exclude www and bare domain
     RewriteCond %1 !^(www|aviationwx)$ [NC]
+    # Exclude existing PHP files (weather.php, webcam.php, etc.)
+    RewriteCond %{REQUEST_FILENAME} !-f
     # Rewrite to index.php with airport parameter
     RewriteRule ^(.*)$ index.php?airport=%1 [QSA,L]
 
