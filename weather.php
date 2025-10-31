@@ -561,69 +561,6 @@ function parseTempestResponse($response) {
 }
 
 /**
- * Fetch weather from Ambient Weather API
- */
-function fetchAmbientWeather($source) {
-    // Ambient Weather API requires API Key and Application Key
-    if (!isset($source['api_key']) || !isset($source['application_key'])) {
-        return null;
-    }
-    
-    $apiKey = $source['api_key'];
-    $applicationKey = $source['application_key'];
-    
-    // Fetch current conditions
-    $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
-    
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => 10,
-            'ignore_errors' => true,
-        ],
-    ]);
-    
-    $response = @file_get_contents($url, false, $context);
-    
-    if ($response === false) {
-        return null;
-    }
-    
-    $data = json_decode($response, true);
-    
-    if (!isset($data[0]) || !isset($data[0]['lastData'])) {
-        return null;
-    }
-    
-    $obs = $data[0]['lastData'];
-    
-    // Convert all measurements to our standard format
-    $temperature = isset($obs['tempf']) ? ($obs['tempf'] - 32) / 1.8 : null; // F to C
-    $humidity = isset($obs['humidity']) ? $obs['humidity'] : null;
-    $pressure = isset($obs['baromrelin']) ? $obs['baromrelin'] : null; // Already in inHg
-    $windSpeed = isset($obs['windspeedmph']) ? round($obs['windspeedmph'] * 0.868976) : null; // mph to knots
-    $windDirection = isset($obs['winddir']) ? round($obs['winddir']) : null;
-    $gustSpeed = isset($obs['windgustmph']) ? round($obs['windgustmph'] * 0.868976) : null; // mph to knots
-    $precip = isset($obs['dailyrainin']) ? $obs['dailyrainin'] : 0; // Already in inches
-    $dewpoint = isset($obs['dewPoint']) ? ($obs['dewPoint'] - 32) / 1.8 : null; // F to C
-    
-    return [
-        'temperature' => $temperature,
-        'humidity' => $humidity,
-        'pressure' => $pressure,
-        'wind_speed' => $windSpeed,
-        'wind_direction' => $windDirection,
-        'gust_speed' => $gustSpeed,
-        'precip_accum' => $precip,
-        'dewpoint' => $dewpoint,
-        'visibility' => null, // Not available from Ambient Weather
-        'ceiling' => null, // Not available from Ambient Weather
-        'temp_high' => null,
-        'temp_low' => null,
-        'peak_gust' => $gustSpeed,
-    ];
-}
-
-/**
  * Fetch weather from Tempest API (synchronous, for fallback)
  */
 function fetchTempestWeather($source) {
