@@ -312,6 +312,32 @@ if (is_dir($cacheDir)) {
     $success[] = "📁 Cache perms: {$cachePerms}, owner: " . ($cacheOwner['name'] ?? 'unknown') . ", group: " . ($cacheGroup['name'] ?? 'unknown');
 }
 
+// Check configuration cache status
+require_once __DIR__ . '/config-utils.php';
+$envConfigPath = getenv('CONFIG_PATH');
+$configFilePath = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
+if (file_exists($configFilePath)) {
+    $fileMtime = filemtime($configFilePath);
+    $fileMtimeStr = date('Y-m-d H:i:s', $fileMtime);
+    $success[] = "📄 Config file modified: {$fileMtimeStr}";
+    
+    if (function_exists('apcu_fetch')) {
+        $cacheTimeKey = 'aviationwx_config_mtime';
+        $cachedMtime = apcu_fetch($cacheTimeKey);
+        if ($cachedMtime !== false) {
+            if ($cachedMtime === $fileMtime) {
+                $success[] = "✅ Config cache is valid (file hasn't changed)";
+            } else {
+                $success[] = "🔄 Config cache will auto-invalidate (file changed since last cache)";
+            }
+        } else {
+            $success[] = "ℹ️ Config cache empty (will be created on next load)";
+        }
+    } else {
+        $success[] = "ℹ️ APCu not available (config cache disabled)";
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -370,6 +396,7 @@ if (is_dir($cacheDir)) {
         ?></li>
         <li><a href="/webcam.php?id=kspb&cam=0" target="_blank">Test Webcam API</a></li>
         <li><a href="/fetch-webcam-safe.php" target="_blank">Test Webcam Fetch Script</a></li>
+        <li><a href="/clear-cache.php" target="_blank" onclick="return confirm('Clear configuration cache? This will force reload of airports.json');">🗑️ Clear Config Cache</a></li>
         <li><a href="/diagnostics.php" target="_blank">🔍 Run Diagnostics Again</a></li>
     </ul>
     

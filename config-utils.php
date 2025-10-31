@@ -18,25 +18,12 @@ function validateAirportId($id) {
 /**
  * Load airport configuration with caching
  * Uses APCu cache if available, falls back to static variable for request lifetime
+ * Automatically invalidates cache when file modification time changes
  */
 function loadConfig($useCache = true) {
     static $cachedConfig = null;
     
-    // Try APCu cache first (if available)
-    if ($useCache && function_exists('apcu_fetch')) {
-        $cacheKey = 'aviationwx_config';
-        $cached = apcu_fetch($cacheKey);
-        if ($cached !== false) {
-            return $cached;
-        }
-    }
-    
-    // Use static cache for request lifetime
-    if ($cachedConfig !== null) {
-        return $cachedConfig;
-    }
-    
-    // Load from file
+    // Get config file path
     $envConfigPath = getenv('CONFIG_PATH');
     $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
     
@@ -49,6 +36,43 @@ function loadConfig($useCache = true) {
         error_log('Configuration path is a directory: ' . $configFile);
         return null;
     }
+    
+    // Get file modification time for cache invalidation
+    $fileMtime = filemtime($configFile);
+    $cacheKey = 'aviationwx_config';
+    $cacheTimeKey = 'aviationwx_config_mtime';
+    
+    // Try APCu cache first (if available)
+    if ($useCache && function_exists('apcu_fetch')) {
+        // Check if cached file mtime matches current file mtime
+        $cachedMtime = apcu_fetch($cacheTimeKey);
+        if ($cachedMtime !== false && $cachedMtime === $fileMtime) {
+            // File hasn't changed, return cached config
+            $cached = apcu_fetch($cacheKey);
+            if ($cached !== false) {
+                // Also update static cache
+                $cachedConfig = $cached;
+                return $cached;
+            }
+        } else {
+            // File changed or cache expired, clear old cache
+            apcu_delete($cacheKey);
+            apcu_delete($cacheTimeKey);
+        }
+    }
+    
+    // Use static cache for request lifetime (but check file hasn't changed)
+    // We also store file mtime in a static variable to detect changes
+    static $cachedConfigMtime = null;
+    
+    if ($cachedConfig !== null && $cachedConfigMtime === $fileMtime) {
+        // File hasn't changed in this request, return cached config
+        return $cachedConfig;
+    }
+    
+    // File changed or no cache, clear static cache
+    $cachedConfig = null;
+    $cachedConfigMtime = null;
     
     // Read and validate JSON
     $jsonContent = @file_get_contents($configFile);
@@ -63,12 +87,14 @@ function loadConfig($useCache = true) {
         return null;
     }
     
-    // Cache in static variable
+    // Cache in static variable (with mtime)
     $cachedConfig = $config;
+    $cachedConfigMtime = $fileMtime;
     
-    // Cache in APCu if available (1 hour TTL)
+    // Cache in APCu if available (1 hour TTL, but invalidated on file change)
     if ($useCache && function_exists('apcu_store')) {
-        apcu_store('aviationwx_config', $config, 3600);
+        apcu_store($cacheKey, $config, 3600);
+        apcu_store($cacheTimeKey, $fileMtime, 3600);
     }
     
     return $config;
@@ -76,10 +102,12 @@ function loadConfig($useCache = true) {
 
 /**
  * Clear configuration cache
+ * Removes both the config data and the modification time check
  */
 function clearConfigCache() {
     if (function_exists('apcu_delete')) {
         apcu_delete('aviationwx_config');
+        apcu_delete('aviationwx_config_mtime');
     }
 }
 
