@@ -7,6 +7,8 @@
       "lat": 45.7710278,
       "lon": -122.8618333,
       "elevation_ft": 58,
+      "webcam_refresh_seconds": 60,
+      "weather_refresh_seconds": 60,
       "runways": [
         {
           "name": "15/33",
@@ -34,13 +36,42 @@
       },
       "webcams": [
         {
-          "name": "Example Cam 1",
+          "name": "North Runway Camera (MJPEG Example)",
           "url": "https://example.com/video.mjpg",
-          "username": "your_username",
-          "password": "your_password",
           "position": "north",
           "partner_name": "Partner Name",
+          "partner_link": "https://partner-website.com",
+          "refresh_seconds": 60
+        },
+        {
+          "name": "South Runway Camera (RTSP Example)",
+          "url": "rtsp://camera.example.com:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "refresh_seconds": 60,
+          "username": "admin",
+          "password": "password123",
+          "position": "south",
+          "partner_name": "Partner Name",
           "partner_link": "https://partner-website.com"
+        },
+        {
+          "name": "East Camera (RTSPS Secure Example)",
+          "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "refresh_seconds": 30,
+          "position": "east",
+          "partner_name": "Partner Name",
+          "partner_link": "https://partner-website.com"
+        },
+        {
+          "name": "West Camera (Static Image Example)",
+          "url": "https://example.com/webcam.jpg",
+          "position": "west",
+          "partner_name": "Partner Name",
+          "partner_link": "https://partner-website.com",
+          "refresh_seconds": 120
         }
       ],
       "airnav_url": "https://www.airnav.com/airport/KXXX",
@@ -52,4 +83,3 @@
     }
   }
 }
-

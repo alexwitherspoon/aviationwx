@@ -108,29 +108,35 @@ AviationWX automatically detects and handles webcam source types:
    - Downloads the image directly
    - PNG images are automatically converted to JPEG
 
-3. **RTSP Streams** - Real Time Streaming Protocol (snapshot via ffmpeg)
+3. **RTSP/RTSPS Streams** - Real Time Streaming Protocol (snapshot via ffmpeg)
    - Example: `rtsp://camera.example.com:554/stream`
+   - Example: `rtsps://camera.example.com:7447/stream?enableSrtp` (secure RTSP over TLS)
    - Example: `rtsp://192.168.1.100:8554/live`
    - Requires `ffmpeg` (included in Docker image). Captures a single high-quality frame per refresh.
+   - **RTSPS Support**: Secure RTSP streams over TLS are fully supported
 
 ### Format Detection
 The system automatically detects the source type from the URL:
-- URLs starting with `rtsp://` → RTSP stream (limited support on shared hosting)
-- URLs ending in `.jpg`, `.jpeg` → Static JPEG
-- URLs ending in `.png` → Static PNG (converted to JPEG)
+- URLs starting with `rtsp://` or `rtsps://` → RTSP stream (requires ffmpeg)
+- URLs ending in `.jpg`, `.jpeg` → Static JPEG image
+- URLs ending in `.png` → Static PNG image (automatically converted to JPEG)
 - All other URLs → Treated as MJPEG stream
+
+**Explicit Type Override**: You can force a specific source type by adding `"type": "rtsp"`, `"type": "mjpeg"`, `"type": "static_jpeg"`, or `"type": "static_png"` to any webcam entry.
 
 ### Required Fields
 - `name`: Display name for the webcam
 - `url`: Full URL to the stream/image
-- `username`: (optional) For authenticated streams
-- `password`: (optional) For authenticated streams  
 - `position`: Direction the camera faces (for organization)
 - `partner_name`: Partner organization name
 - `partner_link`: Link to partner website
-- Optional per-camera settings:
-  - `refresh_seconds`: Override refresh interval (seconds)
-  - `rtsp_transport`: `tcp` (default) or `udp` for RTSP streams
+
+### Optional Fields
+- `type`: Explicit source type override (`rtsp`, `mjpeg`, `static_jpeg`, `static_png`) - useful when auto-detection is incorrect
+- `username`: For authenticated streams/images
+- `password`: For authenticated streams/images
+- `refresh_seconds`: Override refresh interval (seconds) - overrides airport `webcam_refresh_seconds` default
+- `rtsp_transport`: `tcp` (default, recommended) or `udp` for RTSP/RTSPS streams only
 
 ### Webcam Examples
 
@@ -150,6 +156,7 @@ The system automatically detects the source type from the URL:
 {
   "name": "Runway Camera",
   "url": "rtsp://camera.example.com:554/stream1",
+  "type": "rtsp",
   "rtsp_transport": "tcp",
   "refresh_seconds": 30,
   "username": "admin",
@@ -159,6 +166,22 @@ The system automatically detects the source type from the URL:
   "partner_link": "https://partner.com"
 }
 ```
+
+**RTSPS Stream (Secure RTSP over TLS):**
+```json
+{
+  "name": "Secure Runway Camera",
+  "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+  "type": "rtsp",
+  "rtsp_transport": "tcp",
+  "refresh_seconds": 60,
+  "position": "north",
+  "partner_name": "Partner Name",
+  "partner_link": "https://partner.com"
+}
+```
+
+**Note**: For RTSPS streams, always set `"type": "rtsp"` explicitly and use `"rtsp_transport": "tcp"` for best reliability.
 
 **Static Image:**
 ```json

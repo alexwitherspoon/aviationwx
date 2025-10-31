@@ -108,12 +108,16 @@ Then set up wildcard DNS as described in deployment docs.
 
 ### Webcam Sources and Formats
 
-- Supported webcam sources: Static JPEG/PNG, MJPEG streams, and RTSP streams (via ffmpeg snapshot).
-- RTSP options per camera:
-  - `rtsp_transport`: `tcp` (default) or `udp`
-- The fetcher generates multiple formats per image:
-  - `AVIF` (best-effort), `WEBP`, and `JPEG` for broad compatibility.
-- Frontend uses `<picture>` with AVIF/WEBP sources and JPEG fallback.
+- **Supported webcam sources**: Static JPEG/PNG, MJPEG streams, RTSP streams, and RTSPS (secure RTSP over TLS) via ffmpeg snapshot
+- **RTSP/RTSPS options per camera**:
+  - `type`: `rtsp` (explicit type, recommended for RTSPS URLs)
+  - `rtsp_transport`: `tcp` (default, recommended) or `udp`
+  - `refresh_seconds`: Override refresh interval per camera
+- **Image format generation**: The fetcher automatically generates multiple formats per image:
+  - `AVIF` (best-effort), `WEBP`, and `JPEG` for broad compatibility
+- **Frontend**: Uses `<picture>` element with AVIF/WEBP sources and JPEG fallback
+
+See [CONFIGURATION.md](CONFIGURATION.md) for detailed webcam configuration examples including RTSP/RTSPS setup.
 
 ### Time Since Updated Indicators
 
