@@ -34,14 +34,6 @@
                                  onclick="openLiveStream(this.src)">
                         </picture>
                         <div class="webcam-info">
-                            <span class="last-updated">Last updated: <span id="update-<?= $index ?>" data-timestamp="<?php 
-                                $base = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index;
-                                $ts = 0;
-                                foreach (['.avif', '.webp', '.jpg'] as $ext) {
-                                    if (file_exists($base . $ext)) { $ts = filemtime($base . $ext); break; }
-                                }
-                                echo $ts ? $ts : '0';
-                            ?>">--</span></span>
                             <button class="live-btn" onclick="openLiveStream('<?= htmlspecialchars($cam['url']) ?>')">
                                 View Source
                             </button>
@@ -601,6 +593,7 @@ setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
 // Debounce timestamps per camera to avoid multiple fetches when all formats load
 const timestampCheckPending = {};
 const timestampCheckRetries = {}; // Track retry attempts
+const CAM_TS = {}; // In-memory timestamps per camera (no UI field)
 
 // Helper to format relative time
 function formatRelativeTime(seconds) {
@@ -622,14 +615,23 @@ function formatRelativeTime(seconds) {
 
 // Helper to update timestamp display
 function updateTimestampDisplay(elem, timestamp) {
-    if (!elem || !timestamp) return;
+    if (!timestamp) return;
     
     const updateDate = new Date(timestamp * 1000);
     const now = new Date();
     const diffSeconds = Math.floor((now - updateDate) / 1000);
     
-    elem.textContent = formatRelativeTime(diffSeconds);
-    elem.dataset.timestamp = timestamp.toString();
+    if (elem) {
+        elem.textContent = formatRelativeTime(diffSeconds);
+        elem.dataset.timestamp = timestamp.toString();
+    }
+    CAM_TS[lastCamIndexForElem(elem)] = timestamp; // best-effort record
+}
+
+function lastCamIndexForElem(elem) {
+    if (!elem || !elem.id) return undefined;
+    const m = elem.id.match(/^update-(\d+)$/);
+    return m ? parseInt(m[1]) : undefined;
 }
 
 // Function to update timestamp when image loads
@@ -667,17 +669,15 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
         })
         .then(data => {
             if (data && data.success && data.timestamp) {
-                const elem = document.getElementById(`update-${camIndex}`);
-                if (elem) {
-                    const newTimestamp = parseInt(data.timestamp);
-                    const currentTimestamp = parseInt(elem.dataset.timestamp || '0');
-                    
-                    // Only update if timestamp is newer
-                    if (newTimestamp > currentTimestamp || retryCount > 0) {
-                        updateTimestampDisplay(elem, newTimestamp);
-                        // Reset retry count on success
-                        timestampCheckRetries[camIndex] = 0;
-                    }
+                const elem = document.getElementById(`update-${camIndex}`); // may be null (UI removed)
+                const newTimestamp = parseInt(data.timestamp);
+                const currentTimestamp = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : (elem ? parseInt(elem.dataset.timestamp || '0') : 0);
+                // Only update if timestamp is newer
+                if (newTimestamp > currentTimestamp || retryCount > 0) {
+                    updateTimestampDisplay(elem, newTimestamp);
+                    CAM_TS[camIndex] = newTimestamp;
+                    // Reset retry count on success
+                    timestampCheckRetries[camIndex] = 0;
                 }
             } else {
                 throw new Error('Invalid response data');
@@ -764,9 +764,8 @@ setInterval(fetchWeather, 60000);
 
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
 function safeSwapCameraImage(camIndex) {
-    const timestampElem = document.getElementById(`update-${camIndex}`);
-    if (!timestampElem) return;
-    const currentTs = parseInt(timestampElem.dataset.timestamp || '0');
+    const timestampElem = document.getElementById(`update-${camIndex}`); // may be null
+    const currentTs = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : (timestampElem ? parseInt(timestampElem.dataset.timestamp || '0') : 0);
 
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
@@ -807,6 +806,7 @@ function safeSwapCameraImage(camIndex) {
                 if (srcAvif) srcAvif.setAttribute('srcset', avifUrl);
                 
                 // Update timestamp immediately after swap
+                CAM_TS[camIndex] = newTs;
                 updateWebcamTimestampOnLoad(camIndex);
             })
             .catch(() => {
