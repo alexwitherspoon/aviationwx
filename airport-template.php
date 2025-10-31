@@ -719,7 +719,7 @@ function displayWeather(weather) {
     container.innerHTML = `
         <!-- Current Status -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class}">${weather.flight_category}</span></div>
+            <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class}">${weather.flight_category} ${weatherEmojis}</span></div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌅</span>
@@ -747,15 +747,12 @@ function displayWeather(weather) {
         <div class="weather-group">
             <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(weather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(weather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
+            <div class="weather-item"><span class="label">Humidity</span><span class="weather-value">${weather.humidity !== null && weather.humidity !== undefined ? Math.round(weather.humidity) : '--'}</span><span class="weather-unit">${weather.humidity !== null && weather.humidity !== undefined ? '%' : ''}</span></div>
         </div>
         
         <!-- Visibility & Ceiling -->
         <div class="weather-group">
-            <div class="weather-item">
-                <div class="label" style="display: block;">Weather</div>
-                <div class="weather-value" style="font-size: 1.5rem;">${weatherEmojis}</div>
-            </div>
+            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
             <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${weather.visibility !== null ? weather.visibility.toFixed(1) : '--'}</span><span class="weather-unit">${weather.visibility !== null ? 'SM' : ''}</span></div>
             <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? weather.ceiling : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? 'ft AGL' : ''}</span></div>
         </div>
