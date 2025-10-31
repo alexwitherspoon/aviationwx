@@ -562,10 +562,6 @@ function displayError(msg) {
     document.getElementById('weather-data').innerHTML = `<div class="weather-item loading">${msg}</div>`;
 }
 
-function formatTemp(c) {
-    if (c === null || c === undefined) return '--';
-    return Math.round((c * 9/5) + 32);
-}
 
 let windAnimationFrame = null;
 let windDirection = 0;
