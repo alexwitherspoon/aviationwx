@@ -30,9 +30,22 @@ function servePlaceholder() {
 
 // Get and validate parameters
 $reqId = aviationwx_get_request_id();
-header('X-Request-ID: ' . $reqId);
 $rawAirportId = $_GET['id'] ?? '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
+
+// Determine if we're serving JSON (mtime=1) or image early
+$isJsonRequest = isset($_GET['mtime']) && $_GET['mtime'] === '1';
+
+// Set Content-Type early based on request type to prevent Nginx/Cloudflare override
+if ($isJsonRequest) {
+    header('Content-Type: application/json');
+} else {
+    // Set a default image/jpeg - will be adjusted for WEBP later if needed
+    header('Content-Type: image/jpeg');
+}
+
+// Set request ID after Content-Type to ensure it's not overridden
+header('X-Request-ID: ' . $reqId);
 
 if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
     aviationwx_log('error', 'webcam invalid airport id', ['id' => $rawAirportId]);
@@ -68,7 +81,7 @@ if (!is_dir($cacheDir)) {
 // Check if requesting timestamp only (for frontend to get latest mtime)
 // Exempt timestamp requests from rate limiting (they're lightweight and frequent)
 if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
-    header('Content-Type: application/json');
+    // Content-Type already set earlier for JSON requests
     header('Cache-Control: no-cache, no-store, must-revalidate'); // Don't cache timestamp responses
     header('Pragma: no-cache');
     header('Expires: 0');
@@ -147,7 +160,10 @@ if ($isRateLimited) {
         aviationwx_log('warning', 'webcam rate-limited, serving cached', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt]);
         $mtime = @filemtime($fallback) ?: time();
         aviationwx_maybe_log_alert();
-        header('Content-Type: ' . $ctype);
+        // Update Content-Type if serving WEBP
+        if ($ctype !== 'image/jpeg') {
+            header('Content-Type: ' . $ctype);
+        }
         header('Cache-Control: public, max-age=0, must-revalidate');
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
         header('X-Cache-Status: RL-SERVE'); // Served under rate limit
@@ -178,14 +194,17 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
     $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
     $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
     if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)$mtime) {
-        header('Cache-Control: public, max-age=' . $remainingTime);
-        header('ETag: ' . $etagVal);
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
-        http_response_code(304);
-        exit;
-    }
-    
+    header('Cache-Control: public, max-age=' . $remainingTime);
+    header('ETag: ' . $etagVal);
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+    http_response_code(304);
+    exit;
+}
+
+// Update Content-Type if serving WEBP (already set to image/jpeg earlier)
+if ($ctype !== 'image/jpeg') {
     header('Content-Type: ' . $ctype);
+}
     // For URLs with immutable hash (v=), allow immutable and s-maxage for CDNs
     $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
     $cc = $hasHash ? 'public, max-age=' . $remainingTime . ', s-maxage=' . $remainingTime . ', immutable' : 'public, max-age=' . $remainingTime;
@@ -222,7 +241,10 @@ if (file_exists($targetFile)) {
         http_response_code(304);
         exit;
     }
-    header('Content-Type: ' . $ctype);
+    // Update Content-Type if serving WEBP (already set to image/jpeg earlier)
+    if ($ctype !== 'image/jpeg') {
+        header('Content-Type: ' . $ctype);
+    }
     $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
     $cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate' : 'public, max-age=0, must-revalidate';
     header('Cache-Control: ' . $cc); // Stale, revalidate
