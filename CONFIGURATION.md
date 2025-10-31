@@ -51,6 +51,7 @@ Add an entry to `airports.json` following this structure:
       "lat": 45.7710278,
       "lon": -122.8618333,
       "elevation_ft": 58,
+      "timezone": "America/Los_Angeles",
       "runways": [
         {
           "name": "15/33",
@@ -91,6 +92,28 @@ Add an entry to `airports.json` following this structure:
   }
 }
 ```
+
+## Airport Timezone Configuration
+
+The `timezone` field in each airport configuration determines:
+- When daily high/low temperatures and peak gust values reset (at local midnight)
+- Sunrise/sunset time display format
+- Daily date calculation for weather tracking
+
+If not specified, defaults to `America/Los_Angeles`. Use standard PHP timezone identifiers (e.g., `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `UTC`).
+
+**Example:**
+```json
+{
+  "airports": {
+    "airportid": {
+      "timezone": "America/Los_Angeles"
+    }
+  }
+}
+```
+
+Daily values (high/low temperatures, peak gust) reset at midnight in the specified timezone, ensuring the displayed "today" values reflect the local airport day.
 
 ## Webcam Configuration
 

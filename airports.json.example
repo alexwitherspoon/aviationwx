@@ -7,6 +7,7 @@
       "lat": 45.7710278,
       "lon": -122.8618333,
       "elevation_ft": 58,
+      "timezone": "America/Los_Angeles",
       "webcam_refresh_seconds": 60,
       "weather_refresh_seconds": 60,
       "runways": [

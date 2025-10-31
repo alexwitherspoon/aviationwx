@@ -50,14 +50,14 @@ $weatherData['sunrise'] = getSunriseTime($airport);
 $weatherData['sunset'] = getSunsetTime($airport);
 
 // Track and update today's peak gust
-updatePeakGust($airportId, $weatherData['gust_speed'] ?? 0);
-$weatherData['peak_gust_today'] = getPeakGust($airportId, $weatherData['gust_speed'] ?? 0);
+updatePeakGust($airportId, $weatherData['gust_speed'] ?? 0, $airport);
+$weatherData['peak_gust_today'] = getPeakGust($airportId, $weatherData['gust_speed'] ?? 0, $airport);
 
 // Track and update today's high and low temperatures
 if ($weatherData['temperature'] !== null) {
     $currentTemp = $weatherData['temperature'];
-    updateTempExtremes($airportId, $currentTemp);
-    $tempExtremes = getTempExtremes($airportId, $currentTemp);
+    updateTempExtremes($airportId, $currentTemp, $airport);
+    $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
     $weatherData['temp_high_today'] = $tempExtremes['high'];
     $weatherData['temp_low_today'] = $tempExtremes['low'];
 }
