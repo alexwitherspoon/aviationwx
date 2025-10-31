@@ -194,13 +194,17 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
             }
             
             // Test ffmpeg RTSPS command (quick timeout test)
+            // Use timeout option correctly for RTSP streams
             $testCmd = sprintf(
-                "timeout 5 ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -stimeout 5000000 -i %s -frames:v 1 -f null - 2>&1 | head -5",
+                "timeout 5 ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -stimeout 5000000 -i %s -frames:v 1 -f null - 2>&1 | head -3",
                 escapeshellarg($testUrl)
             );
             $testOutput = @shell_exec($testCmd);
             if ($testOutput) {
-                $success[] = "🔍 RTSPS test output: " . htmlspecialchars(substr(trim($testOutput), 0, 100));
+                $cleanOutput = htmlspecialchars(substr(trim($testOutput), 0, 150), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8', false);
+                // Remove HTML entity encoding of apostrophes if they exist
+                $cleanOutput = str_replace('&#039;', "'", $cleanOutput);
+                $success[] = "🔍 RTSPS test output: " . $cleanOutput;
             }
         }
     }

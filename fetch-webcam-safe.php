@@ -86,29 +86,56 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
     // Check if this is RTSPS (secure RTSP)
     $isRtsps = stripos($url, 'rtsps://') === 0;
     
+    // Detect if we're in web context for better output formatting
+    $isWeb = !empty($_SERVER['REQUEST_METHOD']);
+    
     while ($attempt <= $retries) {
         $attempt++;
-        echo "    Attempt {$attempt}/" . ($retries + 1) . " using {$transport}, timeout {$timeoutSeconds}s\n";
+        if ($isWeb) {
+            echo "<span class='attempt'>Attempt {$attempt}/" . ($retries + 1) . " using {$transport}, timeout {$timeoutSeconds}s</span><br>\n";
+        } else {
+            echo "    Attempt {$attempt}/" . ($retries + 1) . " using {$transport}, timeout {$timeoutSeconds}s\n";
+        }
         
         // Build ffmpeg command with appropriate options
         // For RTSPS, force TCP and add specific flags
-        $rtspTransportFlag = '';
-        $extraFlags = '';
         if ($isRtsps) {
             // RTSPS requires TCP transport
             $transport = 'tcp';
-            // RTSPS-specific options: prefer TCP, reduce buffer for faster response
-            $extraFlags = ' -rtsp_flags prefer_tcp -fflags nobuffer';
         }
         
-        $cmd = sprintf(
-            "ffmpeg -hide_banner -loglevel warning -rtsp_transport %s -stimeout %d%s -i %s -frames:v 1 -q:v 2 -y %s 2>&1",
-            escapeshellarg($transport),
-            $stimeoutUs,
-            $extraFlags,
-            escapeshellarg($url),
-            escapeshellarg($jpegTmp)
-        );
+        // Build ffmpeg command properly
+        // -stimeout must be specified as microseconds (not seconds)
+        // Build command array for proper escaping
+        $cmdArray = [
+            'ffmpeg',
+            '-hide_banner',
+            '-loglevel', 'warning',
+            '-rtsp_transport', $transport,
+            '-stimeout', (string)$stimeoutUs
+        ];
+        
+        // Add RTSPS-specific flags if needed
+        if ($isRtsps) {
+            $cmdArray[] = '-rtsp_flags';
+            $cmdArray[] = 'prefer_tcp';
+            $cmdArray[] = '-fflags';
+            $cmdArray[] = 'nobuffer';
+        }
+        
+        // Add input and output
+        $cmdArray[] = '-i';
+        $cmdArray[] = $url;
+        $cmdArray[] = '-frames:v';
+        $cmdArray[] = '1';
+        $cmdArray[] = '-q:v';
+        $cmdArray[] = '2';
+        $cmdArray[] = '-y';
+        $cmdArray[] = $jpegTmp;
+        
+        // Escape each argument properly
+        $cmdEscaped = array_map('escapeshellarg', $cmdArray);
+        $cmd = implode(' ', $cmdEscaped) . ' 2>&1';
         
         // Capture both stdout and stderr
         exec($cmd, $output, $code);
@@ -116,24 +143,43 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         
         if ($code === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
             rename($jpegTmp, $cacheFile);
-            echo "    ✓ Captured frame via ffmpeg\n";
+            if ($isWeb) {
+                echo "<span class='success'>✓ Captured frame via ffmpeg</span><br>\n";
+            } else {
+                echo "    ✓ Captured frame via ffmpeg\n";
+            }
             return true;
         }
         
         // Show detailed error for debugging
-        echo "    ✗ ffmpeg failed (code {$code})\n";
+        if ($isWeb) {
+            echo "<span class='error'>✗ ffmpeg failed (code {$code})</span><br>\n";
+        } else {
+            echo "    ✗ ffmpeg failed (code {$code})\n";
+        }
+        
         if (!empty($errorOutput)) {
             // Extract meaningful error messages (avoid verbose output)
             $errorLines = array_filter($output, function($line) {
-                return stripos($line, 'error') !== false || 
-                       stripos($line, 'failed') !== false ||
-                       stripos($line, 'timeout') !== false ||
-                       stripos($line, 'connection') !== false ||
-                       stripos($line, 'refused') !== false;
+                $line = trim($line);
+                return !empty($line) && (
+                    stripos($line, 'error') !== false || 
+                    stripos($line, 'failed') !== false ||
+                    stripos($line, 'timeout') !== false ||
+                    stripos($line, 'connection') !== false ||
+                    stripos($line, 'refused') !== false ||
+                    stripos($line, 'unrecognized') !== false
+                );
             });
             if (!empty($errorLines)) {
-                foreach (array_slice($errorLines, 0, 3) as $errLine) {
-                    echo "      " . trim($errLine) . "\n";
+                $shownErrors = array_slice($errorLines, 0, 2); // Show max 2 error lines
+                foreach ($shownErrors as $errLine) {
+                    $cleanErr = htmlspecialchars(trim($errLine), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    if ($isWeb) {
+                        echo "<span class='error' style='margin-left: 20px; font-size: 0.9em;'>" . $cleanErr . "</span><br>\n";
+                    } else {
+                        echo "      " . trim($errLine) . "\n";
+                    }
                 }
             }
         }
@@ -224,16 +270,45 @@ if (!is_dir($cacheDir)) {
     mkdir($cacheDir, 0755, true);
 }
 
-echo "AviationWX Webcam Fetcher\n";
-echo "==========================\n\n";
+// Check if we're in a web context (add HTML) or CLI (plain text)
+$isWeb = !empty($_SERVER['REQUEST_METHOD']);
+
+if ($isWeb) {
+    header('Content-Type: text/html; charset=utf-8');
+    echo "<!DOCTYPE html><html><head><title>AviationWX Webcam Fetcher</title>";
+    echo "<style>
+        body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+        .header { background: #333; color: #fff; padding: 10px; margin: -20px -20px 20px -20px; }
+        .airport { background: #fff; padding: 15px; margin-bottom: 15px; border-left: 4px solid #007bff; }
+        .webcam { margin: 10px 0; padding: 10px; background: #f9f9f9; border-radius: 4px; }
+        .success { color: #28a745; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+        .info { color: #666; }
+        .attempt { color: #856404; margin-left: 20px; font-size: 0.9em; }
+        .url { word-break: break-all; color: #0066cc; }
+        pre { margin: 5px 0; white-space: pre-wrap; }
+    </style></head><body>";
+    echo '<div class="header"><h2>🔌 AviationWX Webcam Fetcher</h2></div>';
+} else {
+    echo "AviationWX Webcam Fetcher\n";
+    echo "==========================\n\n";
+}
 
 foreach ($config['airports'] as $airportId => $airport) {
     if (!isset($airport['webcams'])) {
-        echo "No webcams configured for {$airportId}\n";
+        if ($isWeb) {
+            echo "<div class='info'>No webcams configured for {$airportId}</div>\n";
+        } else {
+            echo "No webcams configured for {$airportId}\n";
+        }
         continue;
     }
     
-    echo "Airport: {$airportId} ({$airport['name']})\n";
+    if ($isWeb) {
+        echo "<div class='airport'><h3>✈️ Airport: {$airportId} ({$airport['name']})</h3>\n";
+    } else {
+        echo "Airport: {$airportId} ({$airport['name']})\n";
+    }
     $defaultWebcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT') !== false ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 60;
     $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
     
@@ -247,15 +322,26 @@ foreach ($config['airports'] as $airportId => $airport) {
         $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
         $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
         
-        echo "\n  Fetching: {$camName}...\n";
-        echo "    URL: {$url}\n";
-        echo "    Refresh threshold: {$perCamRefresh}s\n";
+        if ($isWeb) {
+            echo "<div class='webcam'>";
+            echo "<strong>{$camName}</strong><br>";
+            echo "<span class='info'>URL: <span class='url'>{$url}</span></span><br>";
+            echo "<span class='info'>Refresh threshold: {$perCamRefresh}s</span><br>";
+        } else {
+            echo "\n  Fetching: {$camName}...\n";
+            echo "    URL: {$url}\n";
+            echo "    Refresh threshold: {$perCamRefresh}s\n";
+        }
         
         // Skip fetch if cache is fresh
         if (file_exists($cacheFile)) {
             $age = time() - filemtime($cacheFile);
             if ($age < $perCamRefresh) {
-                echo "    ✓ Skipped (fresh cache, age {$age}s)\n";
+                if ($isWeb) {
+                    echo "<span class='success'>✓ Skipped (fresh cache, age {$age}s)</span></div>\n";
+                } else {
+                    echo "    ✓ Skipped (fresh cache, age {$age}s)\n";
+                }
                 continue;
             }
         }
@@ -263,7 +349,11 @@ foreach ($config['airports'] as $airportId => $airport) {
         // Determine source type and handle accordingly
         // Allow explicit type override per camera in config
         $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
-        echo "    Type: {$sourceType}\n";
+        if ($isWeb) {
+            echo "<span class='info'>Type: {$sourceType}</span><br>";
+        } else {
+            echo "    Type: {$sourceType}\n";
+        }
         
         $success = false;
         switch ($sourceType) {
@@ -287,30 +377,67 @@ foreach ($config['airports'] as $airportId => $airport) {
         
         if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
             $size = filesize($cacheFile);
-            echo "    ✓ Saved {$size} bytes\n";
+            if ($isWeb) {
+                echo "<span class='success'>✓ Saved " . number_format($size) . " bytes</span><br>\n";
+            } else {
+                echo "    ✓ Saved {$size} bytes\n";
+            }
             // Derive WEBP
             $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
             exec($cmdWebp, $outW, $codeW);
             if ($codeW === 0 && file_exists($cacheWebp)) {
-                echo "    ✓ Generated WEBP\n";
+                if ($isWeb) {
+                    echo "<span class='success'>✓ Generated WEBP</span><br>\n";
+                } else {
+                    echo "    ✓ Generated WEBP\n";
+                }
             } else {
-                echo "    ✗ WEBP generation failed\n";
+                if ($isWeb) {
+                    echo "<span class='error'>✗ WEBP generation failed</span><br>\n";
+                } else {
+                    echo "    ✗ WEBP generation failed\n";
+                }
             }
             // Derive AVIF (best-effort)
             $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
             exec($cmdAvif, $outA, $codeA);
             if ($codeA === 0 && file_exists($cacheAvif)) {
-                echo "    ✓ Generated AVIF\n";
+                if ($isWeb) {
+                    echo "<span class='success'>✓ Generated AVIF</span><br>\n";
+                } else {
+                    echo "    ✓ Generated AVIF\n";
+                }
             } else {
-                echo "    ✗ AVIF generation failed (ignored)\n";
+                if ($isWeb) {
+                    echo "<span class='info'>✗ AVIF generation failed (ignored)</span><br>\n";
+                } else {
+                    echo "    ✗ AVIF generation failed (ignored)\n";
+                }
             }
         } else {
-            echo "    ✗ Failed to cache image\n";
+            if ($isWeb) {
+                echo "<span class='error'>✗ Failed to cache image</span><br>\n";
+            } else {
+                echo "    ✗ Failed to cache image\n";
+            }
         }
+        
+        if ($isWeb) {
+            echo "</div>"; // Close webcam div
+        }
+    }
+    
+    if ($isWeb) {
+        echo "</div>"; // Close airport div
     }
 }
 
-echo "\n\nDone! Webcam images cached.\n";
+if ($isWeb) {
+    echo "<div style='margin-top: 20px; padding: 15px; background: #fff; border-left: 4px solid #28a745;'>";
+    echo "<strong>✓ Done!</strong> Webcam images cached.<br>";
+} else {
+    echo "\n\nDone! Webcam images cached.\n";
+}
 
 // Build dynamic URL based on environment
 $protocol = 'https';
