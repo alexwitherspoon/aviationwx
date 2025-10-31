@@ -613,11 +613,11 @@ foreach ($config['airports'] as $airportId => $airport) {
             } else {
                 echo "    ✓ Saved {$size} bytes\n";
             }
-            // Generate WEBP in background (single process)
+            // Generate WEBP in background
             if ($isWeb) {
-                echo "<span class='info'>Generating WEBP and AVIF in parallel...</span><br>\n";
+                echo "<span class='info'>Generating WEBP in background...</span><br>\n";
             } else {
-                echo "    Generating WEBP and AVIF in parallel...\n";
+                echo "    Generating WEBP in background...\n";
             }
             
             $DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds

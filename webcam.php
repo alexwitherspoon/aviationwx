@@ -81,7 +81,6 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     $size = 0;
     if ($existsJpg) { $mtime = max($mtime, (int)@filemtime($cacheJpg)); $size = max($size, (int)@filesize($cacheJpg)); }
     if ($existsWebp) { $mtime = max($mtime, (int)@filemtime($cacheWebp)); $size = max($size, (int)@filesize($cacheWebp)); }
-    if ($existsAvif) { $mtime = max($mtime, (int)@filemtime($cacheAvif)); $size = max($size, (int)@filesize($cacheAvif)); }
     echo json_encode([
         'success' => $mtime > 0,
         'timestamp' => $mtime,
@@ -106,7 +105,7 @@ if (function_exists('getRateLimitRemaining')) {
     }
 }
 
-// Optional format parameter: jpg (default), webp, avif
+// Optional format parameter: jpg (default), webp
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
 if (!in_array($fmt, ['jpg', 'jpeg', 'webp'])) { 
     $fmt = 'jpg'; 

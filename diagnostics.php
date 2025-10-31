@@ -68,7 +68,7 @@ if (is_dir($cacheDir)) {
     }
     
     // Show cache stats
-    $cacheFiles = glob($cacheDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
+    $cacheFiles = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
     $cacheCount = count($cacheFiles);
     $cacheSize = 0;
     foreach ($cacheFiles as $file) {

@@ -89,10 +89,17 @@
                             // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
                             $base = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index;
                             $mtimeJpg = 0;
-                            foreach (['.jpg', '.avif', '.webp'] as $ext) {
-                                if (file_exists($base . $ext)) { $mtimeJpg = filemtime($base . $ext); break; }
+                            $sizeJpg = 0;
+                            foreach (['.jpg', '.webp'] as $ext) {
+                                $filePath = $base . $ext;
+                                if (file_exists($filePath)) {
+                                    $mtimeJpg = filemtime($filePath);
+                                    $sizeJpg = filesize($filePath);
+                                    break;
+                                }
                             }
-                            $imgHash = substr(md5($airportId . '_' . $index . '_' . $mtimeJpg), 0, 8);
+                            // Match webcam.php hash generation: airport_id + cam_index + fmt + mtime + size
+                            $imgHash = substr(md5($airportId . '_' . $index . '_jpg_' . $mtimeJpg . '_' . $sizeJpg), 0, 8);
                             ?>
                             <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp&v=<?= $imgHash ?>">
                             <img id="webcam-<?= $index ?>" 
@@ -893,7 +900,7 @@ function safeSwapCameraImage(camIndex) {
                 if (skeleton) skeleton.style.display = 'none';
             });
 
-            // Upgrade WEBP/AVIF if available; do not block on them
+            // Upgrade WEBP if available; do not block on it
             if (ready.webp) {
                 preloadUrl(webpUrl).then(() => {
                     const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
