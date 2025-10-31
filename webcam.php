@@ -4,41 +4,29 @@
  * Fetches and caches webcam images from MJPEG streams
  */
 
-/**
- * Validate and sanitize airport ID
- */
-function validateAirportId($id) {
-    if (empty($id)) {
-        return false;
-    }
-    return preg_match('/^[a-z0-9]{3,4}$/', strtolower(trim($id))) === 1;
-}
+require_once __DIR__ . '/config-utils.php';
+require_once __DIR__ . '/rate-limit.php';
 
 /**
- * Load airport configuration safely
+ * Serve placeholder image
  */
-function loadWebcamConfig() {
-    $envConfigPath = getenv('CONFIG_PATH');
-    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
-    
-    if (!file_exists($configFile)) {
-        error_log('Webcam API: Configuration file not found');
-        return null;
+function servePlaceholder() {
+    if (file_exists(__DIR__ . '/placeholder.jpg')) {
+        header('Content-Type: image/jpeg');
+        header('Cache-Control: public, max-age=3600'); // Cache placeholder for 1 hour
+        readfile(__DIR__ . '/placeholder.jpg');
+    } else {
+        header('Content-Type: image/png');
+        header('Cache-Control: public, max-age=3600');
+        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
     }
-    
-    $jsonContent = @file_get_contents($configFile);
-    if ($jsonContent === false) {
-        error_log('Webcam API: Failed to read configuration file');
-        return null;
-    }
-    
-    $config = json_decode($jsonContent, true);
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
-        error_log('Webcam API: Invalid JSON in configuration file');
-        return null;
-    }
-    
-    return $config;
+    exit;
+}
+
+// Rate limiting (100 requests per minute per IP for images)
+if (!checkRateLimit('webcam_api', 100, 60)) {
+    http_response_code(429);
+    servePlaceholder();
 }
 
 // Optional format parameter: jpg (default), webp, avif
@@ -52,15 +40,7 @@ $rawAirportId = $_GET['id'] ?? '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 
 if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
-    // Serve placeholder instead of revealing error
-    if (file_exists('placeholder.jpg')) {
-        header('Content-Type: image/jpeg');
-        readfile('placeholder.jpg');
-    } else {
-        header('Content-Type: image/png');
-        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
-    }
-    exit;
+    servePlaceholder();
 }
 
 $airportId = strtolower(trim($rawAirportId));
@@ -70,23 +50,10 @@ if ($camIndex < 0) {
     $camIndex = 0;
 }
 
-// Load config
-$config = loadWebcamConfig();
-if ($config === null) {
-    http_response_code(503);
-    if (file_exists('placeholder.jpg')) {
-        header('Content-Type: image/jpeg');
-        readfile('placeholder.jpg');
-    } else {
-        header('Content-Type: image/png');
-        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
-    }
-    exit;
-}
-
-if (!isset($config['airports'][$airportId]['webcams'][$camIndex])) {
-    readfile('placeholder.jpg');
-    exit;
+// Load config (with caching)
+$config = loadConfig();
+if ($config === null || !isset($config['airports'][$airportId]['webcams'][$camIndex])) {
+    servePlaceholder();
 }
 
 $cam = $config['airports'][$airportId]['webcams'][$camIndex];
@@ -98,7 +65,7 @@ $cacheAvif = $base . '.avif';
 
 // Create cache directory if it doesn't exist
 if (!is_dir($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
+    @mkdir($cacheDir, 0755, true);
 }
 
 // Determine refresh threshold
@@ -108,43 +75,39 @@ $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']
 
 // Pick target file by requested format with fallback to jpg
 $targetFile = $fmt === 'avif' ? $cacheAvif : ($fmt === 'webp' ? $cacheWebp : $cacheJpg);
-if (!file_exists($targetFile)) { $targetFile = $cacheJpg; }
+if (!file_exists($targetFile)) { 
+    $targetFile = $cacheJpg; 
+}
+
+// Determine content type
+$ctype = (substr($targetFile, -5) === '.avif') ? 'image/avif' : ((substr($targetFile, -5) === '.webp') ? 'image/webp' : 'image/jpeg');
+
+// If no cache exists, serve placeholder
+if (!file_exists($cacheJpg)) {
+    servePlaceholder();
+}
 
 // Serve cached file if fresh
 if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefresh) {
-    $ctype = (substr($targetFile, -5) === '.avif') ? 'image/avif' : ((substr($targetFile, -5) === '.webp') ? 'image/webp' : 'image/jpeg');
+    $age = time() - filemtime($targetFile);
+    $remainingTime = $perCamRefresh - $age;
+    
     header('Content-Type: ' . $ctype);
+    header('Cache-Control: public, max-age=' . $remainingTime);
+    header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
+    header('X-Cache-Status: HIT');
+    
     readfile($targetFile);
     exit;
 }
 
-// If no cache, return a simple error message as text
-// We don't want to fetch MJPEG on every page load - that should be done via cron
-if (!file_exists($cacheJpg)) {
-    header('Content-Type: text/plain');
-    echo "Webcam image not yet cached. Please wait for the cron job to refresh images.";
-    exit;
+// Cache expired or file not found - serve stale cache if available, otherwise placeholder
+if (file_exists($targetFile)) {
+    header('Content-Type: ' . $ctype);
+    header('Cache-Control: public, max-age=0, must-revalidate'); // Stale, revalidate
+    header('X-Cache-Status: STALE');
+    readfile($targetFile);
+} else {
+    servePlaceholder();
 }
-
-// Fetch new image (only if cache is old and doesn't exist or is stale)
-// We skip this on-demand fetch to avoid timeouts - use fetch-webcam.php via cron instead
-if (!file_exists($cacheJpg)) {
-    // No cache file exists yet - serve placeholder and exit
-    // Don't try to fetch during page load - this should be handled by cron
-    header('Content-Type: image/jpeg');
-    if (file_exists('placeholder.jpg')) {
-        readfile('placeholder.jpg');
-    } else {
-        // Create a simple 1x1 pixel as fallback
-        header('Content-Type: image/png');
-        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
-    }
-    exit;
-}
-
-// Serve cached image (best available format)
-$serveFile = file_exists($targetFile) ? $targetFile : $cacheJpg;
-$ctype = (substr($serveFile, -5) === '.avif') ? 'image/avif' : ((substr($serveFile, -5) === '.webp') ? 'image/webp' : 'image/jpeg');
-header('Content-Type: ' . $ctype);
-readfile($serveFile);
 

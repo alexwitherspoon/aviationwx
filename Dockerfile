@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip \
+    && docker-php-ext-install apcu \
+    && docker-php-ext-enable apcu \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable Apache mod_rewrite
@@ -32,7 +34,9 @@ RUN mkdir -p /var/www/html/cache/webcams \
 RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "upload_max_filesize = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "post_max_size = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "max_execution_time = 60" >> /usr/local/etc/php/conf.d/custom.ini
+    && echo "max_execution_time = 60" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "apc.enabled = 1" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "apc.shm_size = 64M" >> /usr/local/etc/php/conf.d/custom.ini
 
 # Expose port
 EXPOSE 80

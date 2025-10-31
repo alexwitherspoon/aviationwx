@@ -166,35 +166,10 @@ function fetchMJPEGStream($url, $cacheFile) {
     return false;
 }
 
-/**
- * Load airport configuration safely
- */
-function loadWebcamFetchConfig() {
-    $envConfigPath = getenv('CONFIG_PATH');
-    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
-    
-    if (!file_exists($configFile)) {
-        error_log('Webcam fetcher: Configuration file not found');
-        return null;
-    }
-    
-    $jsonContent = @file_get_contents($configFile);
-    if ($jsonContent === false) {
-        error_log('Webcam fetcher: Failed to read configuration file');
-        return null;
-    }
-    
-    $config = json_decode($jsonContent, true);
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
-        error_log('Webcam fetcher: Invalid JSON in configuration file');
-        return null;
-    }
-    
-    return $config;
-}
+require_once __DIR__ . '/config-utils.php';
 
-// Load config (support CONFIG_PATH env override)
-$config = loadWebcamFetchConfig();
+// Load config (support CONFIG_PATH env override, no cache for CLI script)
+$config = loadConfig(false);
 
 if ($config === null || !is_array($config)) {
     die("Error: Could not load configuration\n");

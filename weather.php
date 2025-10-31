@@ -4,47 +4,22 @@
  * Fetches weather data from configured source for the specified airport
  */
 
+require_once __DIR__ . '/config-utils.php';
+require_once __DIR__ . '/rate-limit.php';
+
 // Start output buffering to catch any stray output (errors, warnings, whitespace)
 ob_start();
 
 // Set JSON header
 header('Content-Type: application/json');
 
-/**
- * Validate and sanitize airport ID
- */
-function validateAirportId($id) {
-    if (empty($id)) {
-        return false;
-    }
-    return preg_match('/^[a-z0-9]{3,4}$/', strtolower(trim($id))) === 1;
-}
-
-/**
- * Load airport configuration safely
- */
-function loadWeatherConfig() {
-    $envConfigPath = getenv('CONFIG_PATH');
-    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
-    
-    if (!file_exists($configFile)) {
-        error_log('Weather API: Configuration file not found');
-        return null;
-    }
-    
-    $jsonContent = @file_get_contents($configFile);
-    if ($jsonContent === false) {
-        error_log('Weather API: Failed to read configuration file');
-        return null;
-    }
-    
-    $config = json_decode($jsonContent, true);
-    if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
-        error_log('Weather API: Invalid JSON in configuration file: ' . json_last_error_msg());
-        return null;
-    }
-    
-    return $config;
+// Rate limiting (60 requests per minute per IP)
+if (!checkRateLimit('weather_api', 60, 60)) {
+    http_response_code(429);
+    header('Retry-After: 60');
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Too many requests. Please try again later.']);
+    exit;
 }
 
 // Get and validate airport ID
@@ -57,8 +32,8 @@ if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
 
 $airportId = strtolower(trim($rawAirportId));
 
-// Load airport config
-$config = loadWeatherConfig();
+// Load airport config (with caching)
+$config = loadConfig();
 if ($config === null) {
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
@@ -90,7 +65,13 @@ if (file_exists($weatherCacheFile)) {
     if ($age < $airportWeatherRefresh) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
-            ob_clean(); // Clean any buffered output
+            // Set cache headers for cached responses
+            $remainingTime = $airportWeatherRefresh - $age;
+            header('Cache-Control: public, max-age=' . $remainingTime);
+            header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
+            header('X-Cache-Status: HIT');
+            
+            ob_clean();
             echo json_encode(['success' => true, 'weather' => $cached]);
             exit;
         }
@@ -191,6 +172,11 @@ if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
 $weatherData['last_updated'] = time();
 $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
 @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
+
+// Set cache headers for fresh data
+header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
+header('X-Cache-Status: MISS');
 
 ob_clean(); // Clean any buffered output before sending JSON
 echo json_encode(['success' => true, 'weather' => $weatherData]);

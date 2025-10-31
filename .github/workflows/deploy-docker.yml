@@ -53,4 +53,67 @@ jobs:
           docker compose -f docker-compose.prod.yml up -d --build
           docker system prune -f
           EOF
+      
+      - name: Post-deployment health check
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          echo "Running post-deployment health checks..."
+          
+          # Wait for containers to be ready
+          sleep 5
+          
+          # Check if containers are running
+          if ! docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+            echo "❌ Containers are not running"
+            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.prod.yml logs
+            exit 1
+          fi
+          
+          echo "✓ Containers are running"
+          
+          # Check if web container is responding
+          if ! curl -f -s http://127.0.0.1:${APP_PORT:-8080}/ > /dev/null; then
+            echo "❌ Web container is not responding"
+            docker compose -f docker-compose.prod.yml logs web
+            exit 1
+          fi
+          
+          echo "✓ Web container is responding"
+          
+          # Check if diagnostics page loads
+          if ! curl -f -s http://127.0.0.1:${APP_PORT:-8080}/diagnostics.php > /dev/null; then
+            echo "⚠️  Diagnostics page not accessible (may be expected)"
+          else
+            echo "✓ Diagnostics page accessible"
+          fi
+          
+          # Check if config-utils.php exists
+          if ! docker compose -f docker-compose.prod.yml exec -T web test -f /var/www/html/config-utils.php; then
+            echo "❌ config-utils.php not found in container"
+            exit 1
+          fi
+          
+          echo "✓ config-utils.php present"
+          
+          # Check if rate-limit.php exists
+          if ! docker compose -f docker-compose.prod.yml exec -T web test -f /var/www/html/rate-limit.php; then
+            echo "❌ rate-limit.php not found in container"
+            exit 1
+          fi
+          
+          echo "✓ rate-limit.php present"
+          
+          # Check APCu extension
+          if ! docker compose -f docker-compose.prod.yml exec -T web php -m | grep -q apcu; then
+            echo "⚠️  APCu extension not loaded (rate limiting will be disabled)"
+          else
+            echo "✓ APCu extension loaded"
+          fi
+          
+          echo "✅ All health checks passed"
+          EOF
 

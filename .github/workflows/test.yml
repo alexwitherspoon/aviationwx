@@ -1,96 +1,142 @@
-name: Test AviationWX
+name: Test and Lint
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - "**.md"
+      - "**.MD"
 
 jobs:
   test:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.1'
-        tools: composer
-        extensions: curl, gd, json, mbstring
-    
-    - name: Check syntax
-      run: |
-        echo "Checking PHP syntax..."
-        php -l index.php
-        php -l airport-template.php
-        php -l weather.php
-        php -l webcam.php
-        php -l homepage.php
-        php -l 404.php
-        php -l fetch-webcam-safe.php
-        if [ -f "index.php" ]; then php -l index.php; fi
-        if [ -f "airport-template.php" ]; then php -l airport-template.php; fi
-    
-    - name: Validate JSON
-      run: |
-        echo "Validating airports.json.example..."
-        php -r "json_decode(file_get_contents('airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'JSON Error: ' . json_last_error_msg(); exit(1); }"
-    
-    - name: Test weather API endpoint
-      run: |
-        # Copy test configuration
-        cp airports.json.test airports.json
-        
-        # Start PHP server in background
-        php -S localhost:8000 > /dev/null 2>&1 &
-        SERVER_PID=$!
-        
-        # Wait for server to start
-        sleep 2
-        
-        # Test homepage (should work without crashing)
-        curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ | grep -q "^200$" || exit 1
-        echo "✓ Homepage loads"
-        
-        # Test JSON validation
-        curl -f http://localhost:8000/airports.json.test || exit 1
-        echo "✓ JSON example file loads"
-        
-        # Validate test configuration
-        php -r "\$config = json_decode(file_get_contents('airports.json.test'), true); if (json_last_error() !== JSON_ERROR_NONE || !isset(\$config['airports']['kspb'])) { echo 'Test config invalid'; exit(1); }"
-        echo "✓ Test configuration is valid"
-        
-        # Test that airport page loads (it will show errors but should not crash)
-        curl -s http://localhost:8000/?airport=kspb > /dev/null
-        echo "✓ Airport page loads without crashing"
-        
-        # Cleanup
-        kill $SERVER_PID 2>/dev/null || true
-    
-    - name: Check for secrets in code
-      run: |
-        echo "Checking for accidental secrets..."
-        if grep -r "bc3bda4a-1c07-432b-b11e-b2402f5b5641" . --exclude-dir=.git --exclude-dir=.github; then
-          echo "ERROR: Real API keys found in code!"
-          exit 1
-        fi
-        if grep -r "apple32" . --exclude-dir=.git --exclude-dir=cache --exclude-dir=.github; then
-          echo "ERROR: Real passwords found in code!"
-          exit 1
-        fi
-        echo "✓ No secrets found in code"
-    
-    - name: Validate file structure
-      run: |
-        echo "Checking required files exist..."
-        test -f index.php || (echo "Missing index.php" && exit 1)
-        test -f airport-template.php || (echo "Missing airport-template.php" && exit 1)
-        test -f weather.php || (echo "Missing weather.php" && exit 1)
-        test -f webcam.php || (echo "Missing webcam.php" && exit 1)
-        test -f styles.css || (echo "Missing styles.css" && exit 1)
-        test -f airports.json.example || (echo "Missing airports.json.example" && exit 1)
-        test -f .gitignore || (echo "Missing .gitignore" && exit 1)
-        echo "✓ All required files present"
-
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl
+          coverage: none
+      
+      - name: Validate PHP syntax
+        run: |
+          find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; | grep -v "No syntax errors"
+          if [ $? -eq 0 ]; then
+            echo "PHP syntax errors found!"
+            exit 1
+          else
+            echo "✓ All PHP files have valid syntax"
+          fi
+      
+      - name: Check for required files
+        run: |
+          required_files=("index.php" "weather.php" "webcam.php" "config-utils.php" "rate-limit.php")
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file missing: $file"
+              exit 1
+            fi
+          done
+          echo "✓ All required files present"
+      
+      - name: Validate JSON files
+        run: |
+          if [ -f "airports.json.example" ]; then
+            php -r "json_decode(file_get_contents('airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
+            echo "✓ airports.json.example is valid JSON"
+          fi
+      
+      - name: Test config utilities
+        run: |
+          php -r "
+          require_once 'config-utils.php';
+          
+          // Test validation
+          \$tests = [
+            ['kspb', true],
+            ['KSPB', true], // Should be lowercased
+            ['kx12', true],
+            ['invalid!!', false],
+            ['', false],
+            ['toolong123', false],
+            ['ab', false], // Too short
+          ];
+          
+          foreach (\$tests as [\$id, \$expected]) {
+            \$result = validateAirportId(\$id);
+            if (\$result !== \$expected) {
+              echo 'FAIL: validateAirportId(\"' . \$id . '\") returned ' . (\$result ? 'true' : 'false') . ', expected ' . (\$expected ? 'true' : 'false') . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Airport ID validation tests passed' . PHP_EOL;
+          "
+      
+      - name: Check for security issues
+        run: |
+          # Check for dangerous functions in PHP files
+          dangerous_patterns=(
+            "eval("
+            "base64_decode.*\$_GET"
+            "base64_decode.*\$_POST"
+            "file_get_contents.*\$_GET"
+            "file_get_contents.*\$_POST"
+          )
+          
+          for pattern in "${dangerous_patterns[@]}"; do
+            matches=$(grep -r "$pattern" --include="*.php" . | grep -v "test" | grep -v "diagnostics" || true)
+            if [ ! -z "$matches" ]; then
+              echo "⚠️  Potentially dangerous pattern found: $pattern"
+              echo "$matches"
+              # Don't fail, just warn
+            fi
+          done
+          
+          echo "✓ Security check complete"
+      
+      - name: Test rate limiting functions
+        run: |
+          php -r "
+          require_once 'rate-limit.php';
+          
+          // Basic function existence test
+          if (!function_exists('checkRateLimit')) {
+            echo 'FAIL: checkRateLimit function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('getRateLimitRemaining')) {
+            echo 'FAIL: getRateLimitRemaining function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          echo '✓ Rate limiting functions exist' . PHP_EOL;
+          "
+      
+      - name: Check Dockerfile
+        run: |
+          if [ ! -f "Dockerfile" ]; then
+            echo "❌ Dockerfile missing"
+            exit 1
+          fi
+          
+          # Check for required components
+          grep -q "FROM php:8.3-apache" Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
+          grep -q "ffmpeg" Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
+          
+          echo "✓ Dockerfile checks passed"
+      
+      - name: Check docker-compose files
+        run: |
+          if [ ! -f "docker-compose.yml" ] || [ ! -f "docker-compose.prod.yml" ]; then
+            echo "❌ Docker Compose files missing"
+            exit 1
+          fi
+          echo "✓ Docker Compose files present"

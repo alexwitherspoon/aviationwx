@@ -5,9 +5,19 @@ Real-time aviation weather and conditions for participating airports.
 ## Features
 
 - **Live Weather Data** from Tempest, Ambient, or METAR sources
-- **Live Webcams** with automatic caching (MJPEG streams and static images)
+- **Live Webcams** with automatic caching (MJPEG streams, RTSP streams via ffmpeg, and static images)
 - **Wind Visualization** with runway alignment
 - **Aviation-Specific Metrics**: Density altitude, VFR/IFR/MVFR status
+- **Multiple Image Formats**: AVIF, WEBP, and JPEG with automatic fallback
+- **Time Since Updated Indicators**: Shows data age with visual warnings for stale data
+- **Performance Optimizations**: 
+  - Config caching (APCu)
+  - HTTP cache headers for API responses
+  - Rate limiting on API endpoints
+- **Security Features**:
+  - Input validation and sanitization
+  - Rate limiting (60 req/min for weather, 100 req/min for webcams)
+  - Sanitized error messages
 - **Mobile-First Responsive Design**
 - **Easy Configuration** via JSON config files
 
