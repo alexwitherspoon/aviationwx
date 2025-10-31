@@ -8,7 +8,7 @@
  * Detect webcam source type from URL
  */
 function detectWebcamSourceType($url) {
-    if (stripos($url, 'rtsp://') === 0) {
+    if (stripos($url, 'rtsp://') === 0 || stripos($url, 'rtsps://') === 0) {
         return 'rtsp';
     }
     
@@ -217,7 +217,8 @@ foreach ($config['airports'] as $airportId => $airport) {
         }
         
         // Determine source type and handle accordingly
-        $sourceType = detectWebcamSourceType($url);
+        // Allow explicit type override per camera in config
+        $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
         echo "    Type: {$sourceType}\n";
         
         $success = false;
