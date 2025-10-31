@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y \
     libpcre3-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip \
-    && pecl install apcu \
+    && pecl channel-update pecl.php.net \
+    && pecl install -a apcu \
     && docker-php-ext-enable apcu \
     && rm -rf /var/lib/apt/lists/*
 
