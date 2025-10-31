@@ -143,12 +143,69 @@ if ($weatherRefresh !== false) {
     $success[] = "✅ WEATHER_REFRESH_DEFAULT: {$weatherRefresh}s";
 }
 
-// Check ffmpeg availability
+// Check ffmpeg availability and RTSP support
 $ffmpegCheck = @shell_exec('ffmpeg -version 2>&1');
+$ffmpegAvailable = false;
+$ffmpegVersion = 'unknown';
 if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
-    $success[] = "✅ ffmpeg is available (RTSP support enabled)";
+    $ffmpegAvailable = true;
+    // Extract version
+    if (preg_match('/ffmpeg version ([^\s]+)/', $ffmpegCheck, $matches)) {
+        $ffmpegVersion = $matches[1];
+    }
+    $success[] = "✅ ffmpeg is available (version: {$ffmpegVersion})";
+    
+    // Check RTSP protocol support
+    $rtspCheck = @shell_exec('ffmpeg -protocols 2>&1 | grep -i rtsp');
+    if ($rtspCheck) {
+        $success[] = "✅ ffmpeg RTSP protocol support: enabled";
+    } else {
+        $success[] = "⚠️ ffmpeg RTSP protocol support: not detected (may still work)";
+    }
+    
+    // Test RTSP connectivity if we have RTSPS streams configured
+    if (isset($config) && isset($config['airports'])) {
+        $hasRtsps = false;
+        foreach ($config['airports'] as $airport) {
+            if (isset($airport['webcams']) && is_array($airport['webcams'])) {
+                foreach ($airport['webcams'] as $cam) {
+                    if (isset($cam['url']) && stripos($cam['url'], 'rtsps://') === 0) {
+                        $hasRtsps = true;
+                        $testUrl = $cam['url'];
+                        break 2;
+                    }
+                }
+            }
+        }
+        
+        if ($hasRtsps) {
+            // Try a quick connectivity test (just check if URL is reachable)
+            $urlParts = parse_url($testUrl);
+            if ($urlParts && isset($urlParts['host']) && isset($urlParts['port'])) {
+                $host = $urlParts['host'];
+                $port = $urlParts['port'];
+                $testSocket = @fsockopen($host, $port, $errno, $errstr, 3);
+                if ($testSocket) {
+                    fclose($testSocket);
+                    $success[] = "✅ RTSPS connectivity: {$host}:{$port} is reachable";
+                } else {
+                    $issues[] = "⚠️ RTSPS connectivity: Cannot connect to {$host}:{$port} ({$errstr})";
+                }
+            }
+            
+            // Test ffmpeg RTSPS command (quick timeout test)
+            $testCmd = sprintf(
+                "timeout 5 ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -stimeout 5000000 -i %s -frames:v 1 -f null - 2>&1 | head -5",
+                escapeshellarg($testUrl)
+            );
+            $testOutput = @shell_exec($testCmd);
+            if ($testOutput) {
+                $success[] = "🔍 RTSPS test output: " . htmlspecialchars(substr(trim($testOutput), 0, 100));
+            }
+        }
+    }
 } else {
-    $success[] = "⚠️ ffmpeg not found (RTSP streams will not work)";
+    $issues[] = "⚠️ ffmpeg not found (RTSP/RTSPS streams will not work)";
 }
 
 // Check HTTPS/SSL (check both HTTPS header and X-Forwarded-Proto from Nginx)
@@ -187,15 +244,51 @@ if ($weatherResponse !== false) {
     $apiTests[] = "⚠️ Weather API not reachable (may be expected if not running locally)";
 }
 
-// Webcam fetch script test
+// Webcam fetch script test and analyze webcam configuration
 $webcamFetchUrl = 'http://localhost/fetch-webcam-safe.php';
 $webcamResponse = @file_get_contents($webcamFetchUrl, false, stream_context_create([
-    'http' => ['timeout' => 10, 'ignore_errors' => true]
+    'http' => ['timeout' => 15, 'ignore_errors' => true]
 ]));
 if ($webcamResponse !== false && strlen($webcamResponse) > 10) {
     $apiTests[] = "✅ Webcam fetch script accessible";
+    
+    // Analyze webcam fetch output for RTSP/RTSPS issues
+    if (isset($config) && isset($config['airports'])) {
+        foreach ($config['airports'] as $airportId => $airport) {
+            if (isset($airport['webcams']) && is_array($airport['webcams'])) {
+                foreach ($airport['webcams'] as $idx => $cam) {
+                    if (isset($cam['url'])) {
+                        $url = $cam['url'];
+                        $camName = $cam['name'] ?? "Camera {$idx}";
+                        
+                        // Check if this is RTSP/RTSPS
+                        if (stripos($url, 'rtsp://') === 0 || stripos($url, 'rtsps://') === 0) {
+                            // Check if fetch output shows failures for this camera
+                            if (stripos($webcamResponse, $camName) !== false) {
+                                if (stripos($webcamResponse, "✗ ffmpeg failed") !== false) {
+                                    $issues[] = "⚠️ RTSP/RTSPS issue detected for {$camName}: ffmpeg capture failing";
+                                    // Extract specific error if available
+                                    if (preg_match('/' . preg_quote($camName, '/') . '.*?✗ ffmpeg failed \(code (\d+)\)/s', $webcamResponse, $matches)) {
+                                        $errorCode = $matches[1];
+                                        $errorDesc = [
+                                            '1' => 'General error',
+                                            '2' => 'Bug in ffmpeg',
+                                            '4' => 'Protocol not found',
+                                            '5' => 'Codec not found',
+                                            '8' => 'Network/connection error (check firewall, URL, credentials)'
+                                        ];
+                                        $issues[] = "   Error code {$errorCode}: " . ($errorDesc[$errorCode] ?? 'Unknown error');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 } else {
-    $apiTests[] = "⚠️ Webcam fetch script not accessible (may be expected if not running locally)";
+    $apiTests[] = "⚠️ Webcam fetch script not accessible";
 }
 
 $success = array_merge($success, $apiTests);
@@ -307,6 +400,35 @@ if (is_dir($cacheDir)) {
             <?php endif; ?>
         <?php endif; ?>
     </ol>
+    
+    <?php
+    // Check if there are RTSP/RTSPS issues and show troubleshooting
+    $hasRtspsIssues = false;
+    foreach ($issues as $issue) {
+        if (stripos($issue, 'RTSP') !== false || stripos($issue, 'RTSPS') !== false) {
+            $hasRtspsIssues = true;
+            break;
+        }
+    }
+    
+    if ($hasRtspsIssues): ?>
+    <h2>🔧 RTSP/RTSPS Troubleshooting</h2>
+    <p><strong>Exit code 8 from ffmpeg</strong> typically indicates network/connection issues. Try these steps:</p>
+    <ol>
+        <li><strong>Test connectivity from the server:</strong>
+            <pre>docker compose -f docker-compose.prod.yml exec web bash -c "timeout 5 nc -zv 76.9.251.18 7447"</pre>
+            If this fails, the server may not be able to reach the camera (firewall, network routing).
+        </li>
+        <li><strong>Test ffmpeg command manually:</strong>
+            <pre>docker compose -f docker-compose.prod.yml exec web ffmpeg -rtsp_transport tcp -i "rtsps://76.9.251.18:7447/STREAM_ID?enableSrtp" -frames:v 1 -f null - 2>&1</pre>
+            Replace STREAM_ID with your actual stream ID. Check the output for specific error messages.
+        </li>
+        <li><strong>Check camera authentication:</strong> Ensure credentials are correct if the stream requires authentication.</li>
+        <li><strong>Check firewall rules:</strong> Ensure the DigitalOcean droplet can reach the camera IP on port 7447 (TCP).</li>
+        <li><strong>Verify RTSPS URL format:</strong> Some cameras require specific URL parameters or paths.</li>
+        <li><strong>Check camera logs:</strong> The camera server may be rejecting connections or have rate limiting enabled.</li>
+    </ol>
+    <?php endif; ?>
 </body>
 </html>
 

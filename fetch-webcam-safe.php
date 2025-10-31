@@ -83,24 +83,68 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
     $jpegTmp = $cacheFile . '.tmp.jpg';
     @unlink($jpegTmp);
     
+    // Check if this is RTSPS (secure RTSP)
+    $isRtsps = stripos($url, 'rtsps://') === 0;
+    
     while ($attempt <= $retries) {
         $attempt++;
         echo "    Attempt {$attempt}/" . ($retries + 1) . " using {$transport}, timeout {$timeoutSeconds}s\n";
+        
+        // Build ffmpeg command with appropriate options
+        // For RTSPS, force TCP and add specific flags
+        $rtspTransportFlag = '';
+        $extraFlags = '';
+        if ($isRtsps) {
+            // RTSPS requires TCP transport
+            $transport = 'tcp';
+            // RTSPS-specific options: prefer TCP, reduce buffer for faster response
+            $extraFlags = ' -rtsp_flags prefer_tcp -fflags nobuffer';
+        }
+        
         $cmd = sprintf(
-            "ffmpeg -hide_banner -loglevel error -rtsp_transport %s -stimeout %d -i %s -frames:v 1 -q:v 2 -y %s",
+            "ffmpeg -hide_banner -loglevel warning -rtsp_transport %s -stimeout %d%s -i %s -frames:v 1 -q:v 2 -y %s 2>&1",
             escapeshellarg($transport),
             $stimeoutUs,
+            $extraFlags,
             escapeshellarg($url),
             escapeshellarg($jpegTmp)
         );
-        exec($cmd, $out, $code);
+        
+        // Capture both stdout and stderr
+        exec($cmd, $output, $code);
+        $errorOutput = implode("\n", $output);
+        
         if ($code === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
             rename($jpegTmp, $cacheFile);
             echo "    ✓ Captured frame via ffmpeg\n";
             return true;
         }
+        
+        // Show detailed error for debugging
         echo "    ✗ ffmpeg failed (code {$code})\n";
+        if (!empty($errorOutput)) {
+            // Extract meaningful error messages (avoid verbose output)
+            $errorLines = array_filter($output, function($line) {
+                return stripos($line, 'error') !== false || 
+                       stripos($line, 'failed') !== false ||
+                       stripos($line, 'timeout') !== false ||
+                       stripos($line, 'connection') !== false ||
+                       stripos($line, 'refused') !== false;
+            });
+            if (!empty($errorLines)) {
+                foreach (array_slice($errorLines, 0, 3) as $errLine) {
+                    echo "      " . trim($errLine) . "\n";
+                }
+            }
+        }
+        
         @unlink($jpegTmp);
+        
+        // If it's RTSPS and TCP failed, we could try different options on retry
+        if ($isRtsps && $attempt < ($retries + 1)) {
+            // RTSPS should use TCP, but we might need different flags
+            usleep(500000); // Wait 0.5s between retries
+        }
     }
     return false;
 }
