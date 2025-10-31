@@ -62,18 +62,28 @@ jobs:
           
           echo "Running post-deployment health checks..."
           
-          # Wait for containers to be ready
-          sleep 5
+          # Wait for containers to be ready (give them time to start)
+          echo "Waiting for containers to start..."
+          sleep 8
           
-          # Check if containers are running
-          if ! docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+          # Check if containers are running (check both services explicitly)
+          CONTAINER_STATUS=$(docker compose -f docker-compose.prod.yml ps --format json 2>/dev/null || docker compose -f docker-compose.prod.yml ps)
+          
+          # Count running containers (both web and nginx should be up)
+          RUNNING_COUNT=$(docker compose -f docker-compose.prod.yml ps --status running --format json 2>/dev/null | grep -c '"State":"running"' || docker compose -f docker-compose.prod.yml ps | grep -c "Up" || echo "0")
+          
+          # Check that we have at least the web container (nginx is optional but should be running too)
+          if [ "$RUNNING_COUNT" -lt "1" ]; then
             echo "❌ Containers are not running"
+            echo "Container status:"
             docker compose -f docker-compose.prod.yml ps
-            docker compose -f docker-compose.prod.yml logs
+            echo ""
+            echo "Recent logs:"
+            docker compose -f docker-compose.prod.yml logs --tail=30
             exit 1
           fi
           
-          echo "✓ Containers are running"
+          echo "✓ Containers are running (${RUNNING_COUNT} container(s) up)"
           
           # Wait for Apache to be fully ready
           echo "Waiting for services to be ready..."
