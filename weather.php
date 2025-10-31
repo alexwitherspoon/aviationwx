@@ -4,11 +4,16 @@
  * Fetches weather data from configured source for the specified airport
  */
 
+// Start output buffering to catch any stray output (errors, warnings, whitespace)
+ob_start();
+
+// Set JSON header
 header('Content-Type: application/json');
 
 // Get airport ID
 $airportId = $_GET['airport'] ?? '';
 if (empty($airportId)) {
+    ob_clean(); // Clean any buffered output
     echo json_encode(['success' => false, 'error' => 'Airport ID required']);
     exit;
 }
@@ -17,16 +22,19 @@ if (empty($airportId)) {
 $envConfigPath = getenv('CONFIG_PATH');
 $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
 if (!file_exists($configFile)) {
+    ob_clean(); // Clean any buffered output
     echo json_encode(['success' => false, 'error' => 'Configuration not found']);
     exit;
 }
 
 $config = json_decode(file_get_contents($configFile), true);
 if (json_last_error() !== JSON_ERROR_NONE) {
+    ob_clean(); // Clean any buffered output
     echo json_encode(['success' => false, 'error' => 'Configuration file is not valid JSON: ' . json_last_error_msg()]);
     exit;
 }
 if (!isset($config['airports'][$airportId])) {
+    ob_clean(); // Clean any buffered output
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
 }
@@ -50,6 +58,7 @@ if (file_exists($weatherCacheFile)) {
     if ($age < $airportWeatherRefresh) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
+            ob_clean(); // Clean any buffered output
             echo json_encode(['success' => true, 'weather' => $cached]);
             exit;
         }
@@ -78,11 +87,13 @@ try {
 }
 
 if ($weatherError !== null) {
+    ob_clean(); // Clean any buffered output
     echo json_encode(['success' => false, 'error' => $weatherError]);
     exit;
 }
 
 if ($weatherData === null) {
+    ob_clean(); // Clean any buffered output
     echo json_encode(['success' => false, 'error' => 'Failed to fetch weather data']);
     exit;
 }
@@ -147,6 +158,7 @@ $weatherData['last_updated'] = time();
 $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
 @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
 
+ob_clean(); // Clean any buffered output before sending JSON
 echo json_encode(['success' => true, 'weather' => $weatherData]);
 
 /**

@@ -277,6 +277,7 @@ async function fetchWeather() {
         const response = await fetch(url);
         console.log('Response status:', response.status, response.statusText);
         console.log('Response URL:', response.url);
+        console.log('Content-Type:', response.headers.get('content-type'));
         
         if (!response.ok) {
             const text = await response.text();
@@ -284,8 +285,19 @@ async function fetchWeather() {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const data = await response.json();
-        console.log('Weather data received:', data);
+        // Get response as text first to check if it's valid JSON
+        const responseText = await response.text();
+        console.log('Response text (first 200 chars):', responseText.substring(0, 200));
+        
+        let data;
+        try {
+            data = JSON.parse(responseText);
+            console.log('Weather data received:', data);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            console.error('Full response text:', responseText);
+            throw new Error(`Invalid JSON response from server. See console for details.`);
+        }
         
         if (data.success) {
             displayWeather(data.weather);
