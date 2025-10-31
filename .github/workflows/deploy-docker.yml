@@ -1,4 +1,4 @@
-name: Deploy to Droplet (Docker)
+name: Deploy to Production
 
 on:
   workflow_run:
