@@ -773,6 +773,7 @@ function getSunsetTime($airport) {
 
 /**
  * Update today's peak gust for an airport
+ * Uses UTC date for date key to ensure consistent daily reset regardless of server timezone
  */
 function updatePeakGust($airportId, $currentGust) {
     try {
@@ -785,13 +786,27 @@ function updatePeakGust($airportId, $currentGust) {
         }
         
         $file = $cacheDir . '/peak_gusts.json';
-        $dateKey = date('Y-m-d');
+        // Use UTC date for consistent daily reset across all timezones
+        $dateKey = gmdate('Y-m-d');
         
         $peakGusts = [];
         if (file_exists($file)) {
             $content = file_get_contents($file);
             if ($content !== false) {
                 $peakGusts = json_decode($content, true) ?? [];
+            }
+        }
+        
+        // Clean up old entries (older than 2 days) to prevent file bloat
+        $currentDate = new DateTime($dateKey);
+        foreach ($peakGusts as $key => $value) {
+            if (!is_string($key) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $key)) {
+                continue; // Skip invalid keys
+            }
+            $entryDate = new DateTime($key);
+            $daysDiff = $currentDate->diff($entryDate)->days;
+            if ($daysDiff > 2) {
+                unset($peakGusts[$key]);
             }
         }
         
@@ -822,10 +837,12 @@ function updatePeakGust($airportId, $currentGust) {
 
 /**
  * Get today's peak gust for an airport
+ * Uses UTC date for date key to ensure consistent daily reset regardless of server timezone
  */
 function getPeakGust($airportId, $currentGust) {
     $file = __DIR__ . '/cache/peak_gusts.json';
-    $dateKey = date('Y-m-d');
+    // Use UTC date for consistent daily reset across all timezones
+    $dateKey = gmdate('Y-m-d');
 
     if (!file_exists($file)) {
         return ['value' => $currentGust, 'ts' => null];
@@ -834,6 +851,7 @@ function getPeakGust($airportId, $currentGust) {
     $peakGusts = json_decode(file_get_contents($file), true) ?? [];
     $entry = $peakGusts[$dateKey][$airportId] ?? null;
     if ($entry === null) {
+        // No entry for today, return current gust as today's value
         return ['value' => $currentGust, 'ts' => null];
     }
 
@@ -841,12 +859,14 @@ function getPeakGust($airportId, $currentGust) {
     if (is_array($entry)) {
         $value = $entry['value'] ?? 0;
         $ts = $entry['ts'] ?? null;
+        // Ensure we return at least the current gust if it's higher
         if ($currentGust > $value) {
             $value = $currentGust;
         }
         return ['value' => $value, 'ts' => $ts];
     }
 
+    // Legacy scalar format
     $value = max((float)$entry, $currentGust);
     return ['value' => $value, 'ts' => null];
 }
@@ -880,6 +900,7 @@ function calculateFlightCategory($weather) {
 
 /**
  * Update today's high and low temperatures for an airport
+ * Uses UTC date for date key to ensure consistent daily reset regardless of server timezone
  */
 function updateTempExtremes($airportId, $currentTemp) {
     try {
@@ -892,7 +913,8 @@ function updateTempExtremes($airportId, $currentTemp) {
         }
         
         $file = $cacheDir . '/temp_extremes.json';
-        $dateKey = date('Y-m-d');
+        // Use UTC date for consistent daily reset across all timezones
+        $dateKey = gmdate('Y-m-d');
         
         $tempExtremes = [];
         if (file_exists($file)) {
@@ -930,10 +952,12 @@ function updateTempExtremes($airportId, $currentTemp) {
 
 /**
  * Get today's high and low temperatures for an airport
+ * Uses UTC date for date key to ensure consistent daily reset regardless of server timezone
  */
 function getTempExtremes($airportId, $currentTemp) {
     $file = __DIR__ . '/cache/temp_extremes.json';
-    $dateKey = date('Y-m-d');
+    // Use UTC date for consistent daily reset across all timezones
+    $dateKey = gmdate('Y-m-d');
     
     if (!file_exists($file)) {
         return ['high' => $currentTemp, 'low' => $currentTemp];
