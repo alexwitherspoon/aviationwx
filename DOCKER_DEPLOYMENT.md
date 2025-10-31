@@ -95,23 +95,51 @@ curl http://localhost:8080
   ```
   You can also set per-airport values in `airports.json` with `webcam_refresh_seconds` and `weather_refresh_seconds`.
 
-### 6.2 RTSP Snapshot Support
+### 6.2 RTSP/RTSPS Snapshot Support
 
-- ffmpeg is installed in the Docker image and used to capture a single high-quality frame from RTSP streams.
+- ffmpeg is installed in the Docker image and used to capture a single high-quality frame from RTSP/RTSPS streams.
+- **RTSPS (Secure RTSP over TLS) is fully supported** for encrypted camera feeds.
 - Per-camera options in `airports.json`:
+  
+  **Standard RTSP:**
   ```json
   {
     "webcams": [
       {
         "name": "Runway Cam",
         "url": "rtsp://user:pass@camera-ip:554/stream",
+        "type": "rtsp",
         "rtsp_transport": "tcp",
-        "refresh_seconds": 30
+        "refresh_seconds": 30,
+        "position": "north",
+        "partner_name": "Partner Name",
+        "partner_link": "https://partner.com"
       }
     ]
   }
   ```
-- Defaults: transport `tcp`, timeout 10s, retries 2.
+  
+  **RTSPS (Secure):**
+  ```json
+  {
+    "webcams": [
+      {
+        "name": "Secure Runway Cam",
+        "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+        "type": "rtsp",
+        "rtsp_transport": "tcp",
+        "refresh_seconds": 60,
+        "position": "south",
+        "partner_name": "Partner Name",
+        "partner_link": "https://partner.com"
+      }
+    ]
+  }
+  ```
+  
+- **Defaults**: transport `tcp` (recommended), timeout 10s, retries 2.
+- **Important**: Always set `"type": "rtsp"` explicitly for RTSPS URLs.
+- See [CONFIGURATION.md](CONFIGURATION.md) for complete webcam configuration examples.
 
 ---
 
