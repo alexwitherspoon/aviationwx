@@ -633,7 +633,12 @@ foreach ($config['airports'] as $airportId => $airport) {
 
             $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
             if (!$disableAvif) {
-                $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p -preset 4 %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
+                // Explicit AVIF settings for reliability/perf: libaom-av1, yuv420p, CRF 32, preset 5, avif muxer
+                $cmdAvif = sprintf(
+                    "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -pix_fmt yuv420p -crf 32 -preset 5 -f avif %s",
+                    escapeshellarg($cacheFile),
+                    escapeshellarg($cacheAvif)
+                );
             }
             
             // Start both processes in background
