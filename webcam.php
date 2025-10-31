@@ -4,12 +4,26 @@
  * Fetches and caches webcam images from MJPEG streams
  */
 
+// Start output buffering IMMEDIATELY to catch any output from included files
+ob_start();
+
 require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/logger.php';
 
-// Start output buffering to prevent any stray output from corrupting image headers
-ob_start();
+// Clear any output that may have been captured from included files
+ob_clean();
+
+// Determine if we're serving JSON (mtime=1) or image early - check BEFORE any other processing
+$isJsonRequest = isset($_GET['mtime']) && $_GET['mtime'] === '1';
+
+// Set Content-Type IMMEDIATELY based on request type to prevent Nginx/Cloudflare override
+if ($isJsonRequest) {
+    header('Content-Type: application/json', true);
+} else {
+    // Set image/jpeg immediately - will be adjusted for WEBP later if needed
+    header('Content-Type: image/jpeg', true);
+}
 
 /**
  * Serve placeholder image
@@ -30,22 +44,12 @@ function servePlaceholder() {
 
 // Get and validate parameters
 $reqId = aviationwx_get_request_id();
-$rawAirportId = $_GET['id'] ?? '';
-$camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
-
-// Determine if we're serving JSON (mtime=1) or image early
-$isJsonRequest = isset($_GET['mtime']) && $_GET['mtime'] === '1';
-
-// Set Content-Type early based on request type to prevent Nginx/Cloudflare override
-if ($isJsonRequest) {
-    header('Content-Type: application/json');
-} else {
-    // Set a default image/jpeg - will be adjusted for WEBP later if needed
-    header('Content-Type: image/jpeg');
-}
 
 // Set request ID after Content-Type to ensure it's not overridden
 header('X-Request-ID: ' . $reqId);
+
+$rawAirportId = $_GET['id'] ?? '';
+$camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 
 if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
     aviationwx_log('error', 'webcam invalid airport id', ['id' => $rawAirportId]);
@@ -201,9 +205,9 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
     exit;
 }
 
-// Update Content-Type if serving WEBP (already set to image/jpeg earlier)
+// Update Content-Type if serving WEBP (already set to image/jpeg at top)
 if ($ctype !== 'image/jpeg') {
-    header('Content-Type: ' . $ctype);
+    header('Content-Type: ' . $ctype, true);
 }
     // For URLs with immutable hash (v=), allow immutable and s-maxage for CDNs
     $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
