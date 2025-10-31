@@ -166,13 +166,38 @@ function fetchMJPEGStream($url, $cacheFile) {
     return false;
 }
 
-// Load config (support CONFIG_PATH env override)
-$envConfigPath = getenv('CONFIG_PATH');
-$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
-$config = json_decode(file_get_contents($configFile), true);
+/**
+ * Load airport configuration safely
+ */
+function loadWebcamFetchConfig() {
+    $envConfigPath = getenv('CONFIG_PATH');
+    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
+    
+    if (!file_exists($configFile)) {
+        error_log('Webcam fetcher: Configuration file not found');
+        return null;
+    }
+    
+    $jsonContent = @file_get_contents($configFile);
+    if ($jsonContent === false) {
+        error_log('Webcam fetcher: Failed to read configuration file');
+        return null;
+    }
+    
+    $config = json_decode($jsonContent, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
+        error_log('Webcam fetcher: Invalid JSON in configuration file');
+        return null;
+    }
+    
+    return $config;
+}
 
-if (!$config) {
-    die("Error: Could not load airports.json\n");
+// Load config (support CONFIG_PATH env override)
+$config = loadWebcamFetchConfig();
+
+if ($config === null || !is_array($config)) {
+    die("Error: Could not load configuration\n");
 }
 
 $cacheDir = __DIR__ . '/cache/webcams';

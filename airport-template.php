@@ -211,13 +211,7 @@ const AIRPORT_ID = '<?= $airportId ?>';
 const AIRPORT_DATA = <?= json_encode($airport) ?>;
 const RUNWAYS = <?= json_encode($airport['runways']) ?>;
 
-// Debug logging
-console.log('AviationWX Debug:', {
-    airportId: AIRPORT_ID,
-    host: window.location.host,
-    protocol: window.location.protocol,
-    pathname: window.location.pathname
-});
+// Production logging removed - only log errors in console
 
 // Update clocks
 function updateClocks() {

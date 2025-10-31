@@ -4,32 +4,84 @@
  * Fetches and caches webcam images from MJPEG streams
  */
 
+/**
+ * Validate and sanitize airport ID
+ */
+function validateAirportId($id) {
+    if (empty($id)) {
+        return false;
+    }
+    return preg_match('/^[a-z0-9]{3,4}$/', strtolower(trim($id))) === 1;
+}
+
+/**
+ * Load airport configuration safely
+ */
+function loadWebcamConfig() {
+    $envConfigPath = getenv('CONFIG_PATH');
+    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
+    
+    if (!file_exists($configFile)) {
+        error_log('Webcam API: Configuration file not found');
+        return null;
+    }
+    
+    $jsonContent = @file_get_contents($configFile);
+    if ($jsonContent === false) {
+        error_log('Webcam API: Failed to read configuration file');
+        return null;
+    }
+    
+    $config = json_decode($jsonContent, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
+        error_log('Webcam API: Invalid JSON in configuration file');
+        return null;
+    }
+    
+    return $config;
+}
+
 // Optional format parameter: jpg (default), webp, avif
-$fmt = isset($_GET['fmt']) ? strtolower($_GET['fmt']) : 'jpg';
-if (!in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) { $fmt = 'jpg'; }
+$fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
+if (!in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) { 
+    $fmt = 'jpg'; 
+}
 
-// Get parameters
-$airportId = $_GET['id'] ?? '';
-$camIndex = intval($_GET['cam'] ?? 0);
+// Get and validate parameters
+$rawAirportId = $_GET['id'] ?? '';
+$camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 
-if (empty($airportId)) {
-    // Serve placeholder
-    readfile('placeholder.jpg');
+if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    // Serve placeholder instead of revealing error
+    if (file_exists('placeholder.jpg')) {
+        header('Content-Type: image/jpeg');
+        readfile('placeholder.jpg');
+    } else {
+        header('Content-Type: image/png');
+        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+    }
     exit;
 }
 
-// Load config (supports CONFIG_PATH)
-$envConfigPath = getenv('CONFIG_PATH');
-$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
-if (!file_exists($configFile)) {
-    http_response_code(500);
-    die('Configuration file not found');
+$airportId = strtolower(trim($rawAirportId));
+
+// Validate cam index is non-negative
+if ($camIndex < 0) {
+    $camIndex = 0;
 }
 
-$config = json_decode(file_get_contents($configFile), true);
-if (json_last_error() !== JSON_ERROR_NONE || !$config) {
-    http_response_code(500);
-    die('Invalid configuration file');
+// Load config
+$config = loadWebcamConfig();
+if ($config === null) {
+    http_response_code(503);
+    if (file_exists('placeholder.jpg')) {
+        header('Content-Type: image/jpeg');
+        readfile('placeholder.jpg');
+    } else {
+        header('Content-Type: image/png');
+        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+    }
+    exit;
 }
 
 if (!isset($config['airports'][$airportId]['webcams'][$camIndex])) {

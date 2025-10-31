@@ -10,31 +10,63 @@ ob_start();
 // Set JSON header
 header('Content-Type: application/json');
 
-// Get airport ID
-$airportId = $_GET['airport'] ?? '';
-if (empty($airportId)) {
-    ob_clean(); // Clean any buffered output
-    echo json_encode(['success' => false, 'error' => 'Airport ID required']);
+/**
+ * Validate and sanitize airport ID
+ */
+function validateAirportId($id) {
+    if (empty($id)) {
+        return false;
+    }
+    return preg_match('/^[a-z0-9]{3,4}$/', strtolower(trim($id))) === 1;
+}
+
+/**
+ * Load airport configuration safely
+ */
+function loadWeatherConfig() {
+    $envConfigPath = getenv('CONFIG_PATH');
+    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
+    
+    if (!file_exists($configFile)) {
+        error_log('Weather API: Configuration file not found');
+        return null;
+    }
+    
+    $jsonContent = @file_get_contents($configFile);
+    if ($jsonContent === false) {
+        error_log('Weather API: Failed to read configuration file');
+        return null;
+    }
+    
+    $config = json_decode($jsonContent, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
+        error_log('Weather API: Invalid JSON in configuration file: ' . json_last_error_msg());
+        return null;
+    }
+    
+    return $config;
+}
+
+// Get and validate airport ID
+$rawAirportId = $_GET['airport'] ?? '';
+if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
     exit;
 }
+
+$airportId = strtolower(trim($rawAirportId));
 
 // Load airport config
-$envConfigPath = getenv('CONFIG_PATH');
-$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
-if (!file_exists($configFile)) {
-    ob_clean(); // Clean any buffered output
-    echo json_encode(['success' => false, 'error' => 'Configuration not found']);
+$config = loadWeatherConfig();
+if ($config === null) {
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
     exit;
 }
 
-$config = json_decode(file_get_contents($configFile), true);
-if (json_last_error() !== JSON_ERROR_NONE) {
-    ob_clean(); // Clean any buffered output
-    echo json_encode(['success' => false, 'error' => 'Configuration file is not valid JSON: ' . json_last_error_msg()]);
-    exit;
-}
 if (!isset($config['airports'][$airportId])) {
-    ob_clean(); // Clean any buffered output
+    ob_clean();
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
 }
@@ -87,14 +119,16 @@ try {
 }
 
 if ($weatherError !== null) {
-    ob_clean(); // Clean any buffered output
-    echo json_encode(['success' => false, 'error' => $weatherError]);
+    error_log('Weather API error for ' . $airportId . ': ' . $weatherError);
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
     exit;
 }
 
 if ($weatherData === null) {
-    ob_clean(); // Clean any buffered output
-    echo json_encode(['success' => false, 'error' => 'Failed to fetch weather data']);
+    error_log('Weather API: No data returned for ' . $airportId);
+    ob_clean();
+    echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
     exit;
 }
 
