@@ -131,6 +131,9 @@
                     <button id="temp-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle temperature unit (F/C)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                         <span id="temp-unit-display">°F</span>
                     </button>
+                    <button id="distance-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle distance unit (ft/m)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                        <span id="distance-unit-display">ft</span>
+                    </button>
                 </div>
                 <p style="font-size: 0.85rem; color: #666; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
             </div>
@@ -345,6 +348,49 @@ function formatTempSpread(spreadC) {
     }
 }
 
+// Distance/altitude unit preference (default to imperial/feet)
+function getDistanceUnit() {
+    const unit = localStorage.getItem('aviationwx_distance_unit');
+    return unit || 'ft'; // Default to feet
+}
+
+function setDistanceUnit(unit) {
+    localStorage.setItem('aviationwx_distance_unit', unit);
+}
+
+// Convert feet to meters
+function ftToM(ft) {
+    return Math.round(ft * 0.3048);
+}
+
+// Convert meters to feet
+function mToFt(m) {
+    return Math.round(m / 0.3048);
+}
+
+// Convert inches to centimeters
+function inToCm(inches) {
+    return (inches * 2.54).toFixed(2);
+}
+
+// Format altitude (feet) based on current unit preference
+function formatAltitude(ft) {
+    if (ft === null || ft === undefined || ft === '--') return '--';
+    const unit = getDistanceUnit();
+    return unit === 'm' ? ftToM(ft) : Math.round(ft);
+}
+
+// Format rainfall (inches) based on current unit preference
+function formatRainfall(inches) {
+    if (inches === null || inches === undefined) return '0.00';
+    const unit = getDistanceUnit();
+    if (unit === 'm') {
+        return inToCm(inches);
+    } else {
+        return inches.toFixed(2);
+    }
+}
+
 // Temperature unit toggle handler
 function initTempUnitToggle() {
     const toggle = document.getElementById('temp-unit-toggle');
@@ -360,6 +406,31 @@ function initTempUnitToggle() {
         const currentUnit = getTempUnit();
         const newUnit = currentUnit === 'F' ? 'C' : 'F';
         setTempUnit(newUnit);
+        updateToggle();
+        // Re-render weather data with new unit if we have weather data
+        if (currentWeatherData) {
+            displayWeather(currentWeatherData);
+        }
+    });
+    
+    updateToggle();
+}
+
+// Distance unit toggle handler
+function initDistanceUnitToggle() {
+    const toggle = document.getElementById('distance-unit-toggle');
+    const display = document.getElementById('distance-unit-display');
+    
+    function updateToggle() {
+        const unit = getDistanceUnit();
+        display.textContent = unit === 'm' ? 'm' : 'ft';
+        toggle.title = `Switch to ${unit === 'm' ? 'feet' : 'meters'}`;
+    }
+    
+    toggle.addEventListener('click', () => {
+        const currentUnit = getDistanceUnit();
+        const newUnit = currentUnit === 'ft' ? 'm' : 'ft';
+        setDistanceUnit(newUnit);
         updateToggle();
         // Re-render weather data with new unit if we have weather data
         if (currentWeatherData) {
@@ -386,6 +457,20 @@ if (document.getElementById('temp-unit-toggle')) {
     initTempUnitToggle();
 } else {
     initTempToggle();
+}
+
+// Initialize distance unit toggle
+if (document.getElementById('distance-unit-toggle')) {
+    initDistanceUnitToggle();
+} else {
+    function initDistToggle() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDistanceUnitToggle);
+        } else {
+            initDistanceUnitToggle();
+        }
+    }
+    initDistToggle();
 }
 
 // Set weather last updated time to relative
@@ -559,7 +644,7 @@ function displayWeather(weather) {
         <div class="weather-group">
             <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(weather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(weather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${weather.precip_accum > 0 ? weather.precip_accum.toFixed(2) : '0.00'}</span><span class="weather-unit">in</span></div>
+            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
         </div>
         
         <!-- Visibility & Ceiling -->
@@ -575,8 +660,8 @@ function displayWeather(weather) {
         <!-- Pressure & Altitude -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Pressure</span><span class="weather-value">${weather.pressure ? weather.pressure.toFixed(2) : '--'}</span><span class="weather-unit">inHg</span></div>
-            <div class="weather-item"><span class="label">Pressure Altitude</span><span class="weather-value">${weather.pressure_altitude || '--'}</span><span class="weather-unit">ft</span></div>
-            <div class="weather-item"><span class="label">Density Altitude</span><span class="weather-value">${weather.density_altitude || '--'}</span><span class="weather-unit">ft</span></div>
+            <div class="weather-item"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(weather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(weather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
         </div>
     `;
 }
