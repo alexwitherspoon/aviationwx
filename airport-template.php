@@ -570,7 +570,7 @@ function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0) {
 
 function openLiveStream(url) { window.open(url, '_blank'); }
 
-// Update webcam timestamps
+// Update webcam timestamps (called periodically to refresh relative time display)
 function updateWebcamTimestamps() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
     const timestamp<?= $index ?> = document.getElementById('update-<?= $index ?>')?.dataset.timestamp;
@@ -578,20 +578,11 @@ function updateWebcamTimestamps() {
         const updateDate = new Date(parseInt(timestamp<?= $index ?>) * 1000);
         const now = new Date();
         const diffSeconds = Math.floor((now - updateDate) / 1000);
-        let timeStr = '';
-        
-        if (diffSeconds < 60) {
-            timeStr = diffSeconds + ' seconds ago';
-        } else if (diffSeconds < 3600) {
-            timeStr = Math.floor(diffSeconds / 60) + ' minutes ago';
-        } else if (diffSeconds < 86400) {
-            timeStr = Math.floor(diffSeconds / 3600) + ' hours ago';
-        } else {
-            timeStr = updateDate.toLocaleString();
-        }
         
         const elem = document.getElementById('update-<?= $index ?>');
-        if (elem) elem.textContent = timeStr;
+        if (elem) {
+            elem.textContent = formatRelativeTime(diffSeconds);
+        }
     }
     <?php endforeach; ?>
 }
@@ -619,9 +610,40 @@ setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
 
 // Debounce timestamps per camera to avoid multiple fetches when all formats load
 const timestampCheckPending = {};
+const timestampCheckRetries = {}; // Track retry attempts
+
+// Helper to format relative time
+function formatRelativeTime(seconds) {
+    // Handle edge cases
+    if (isNaN(seconds) || seconds < 0) {
+        return '--';
+    }
+    
+    if (seconds < 60) {
+        return seconds + ' seconds ago';
+    } else if (seconds < 3600) {
+        return Math.floor(seconds / 60) + ' minutes ago';
+    } else if (seconds < 86400) {
+        return Math.floor(seconds / 3600) + ' hours ago';
+    } else {
+        return Math.floor(seconds / 86400) + ' days ago';
+    }
+}
+
+// Helper to update timestamp display
+function updateTimestampDisplay(elem, timestamp) {
+    if (!elem || !timestamp) return;
+    
+    const updateDate = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - updateDate) / 1000);
+    
+    elem.textContent = formatRelativeTime(diffSeconds);
+    elem.dataset.timestamp = timestamp.toString();
+}
 
 // Function to update timestamp when image loads
-function updateWebcamTimestampOnLoad(camIndex) {
+function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
     // Debounce: if a check is already pending for this camera, skip
     if (timestampCheckPending[camIndex]) {
         return;
@@ -629,48 +651,76 @@ function updateWebcamTimestampOnLoad(camIndex) {
     
     timestampCheckPending[camIndex] = true;
     
-    const timestampUrl = `/webcam.php?id=<?= $airportId ?>&cam=${camIndex}&mtime=1`;
-    fetch(timestampUrl)
-        .then(response => response.json())
+    // Build absolute URL (works with subdomains)
+    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+    const host = window.location.host;
+    const timestampUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    fetch(timestampUrl, {
+        signal: controller.signal,
+        cache: 'no-store', // Prevent browser caching
+        credentials: 'same-origin'
+    })
+        .then(response => {
+            clearTimeout(timeoutId);
+            
+            // Check response status
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            return response.json();
+        })
         .then(data => {
-            if (data.success && data.timestamp) {
+            if (data && data.success && data.timestamp) {
                 const elem = document.getElementById(`update-${camIndex}`);
                 if (elem) {
                     const newTimestamp = parseInt(data.timestamp);
                     const currentTimestamp = parseInt(elem.dataset.timestamp || '0');
                     
                     // Only update if timestamp is newer
-                    if (newTimestamp > currentTimestamp) {
-                        elem.dataset.timestamp = newTimestamp.toString();
-                        // Immediately update the display
-                        const updateDate = new Date(newTimestamp * 1000);
-                        const now = new Date();
-                        const diffSeconds = Math.floor((now - updateDate) / 1000);
-                        let timeStr = '';
-                        
-                        if (diffSeconds < 60) {
-                            timeStr = diffSeconds + ' seconds ago';
-                        } else if (diffSeconds < 3600) {
-                            timeStr = Math.floor(diffSeconds / 60) + ' minutes ago';
-                        } else if (diffSeconds < 86400) {
-                            timeStr = Math.floor(diffSeconds / 3600) + ' hours ago';
-                        } else {
-                            timeStr = updateDate.toLocaleString();
-                        }
-                        
-                        elem.textContent = timeStr;
+                    if (newTimestamp > currentTimestamp || retryCount > 0) {
+                        updateTimestampDisplay(elem, newTimestamp);
+                        // Reset retry count on success
+                        timestampCheckRetries[camIndex] = 0;
                     }
                 }
+            } else {
+                throw new Error('Invalid response data');
             }
         })
         .catch(err => {
-            // Silently fail - don't spam console
+            clearTimeout(timeoutId);
+            
+            // Retry logic: up to 2 retries with exponential backoff
+            if (retryCount < 2 && err.name !== 'AbortError') {
+                timestampCheckRetries[camIndex] = (timestampCheckRetries[camIndex] || 0) + 1;
+                const backoff = Math.min(500 * Math.pow(2, retryCount), 2000); // 500ms, 1000ms, 2000ms max
+                
+                setTimeout(() => {
+                    timestampCheckPending[camIndex] = false;
+                    updateWebcamTimestampOnLoad(camIndex, retryCount + 1);
+                }, backoff);
+                return; // Don't clear pending flag yet
+            }
+            
+            // Failed after retries - silently fail (don't spam console)
+            // Only log on first failure to avoid noise
+            if (retryCount === 0 && err.name !== 'AbortError') {
+                // Could optionally log here for debugging: console.debug('Timestamp check failed:', err);
+            }
         })
         .finally(() => {
-            // Clear pending flag after 1 second (debounce window)
-            setTimeout(() => {
-                timestampCheckPending[camIndex] = false;
-            }, 1000);
+            // Clear pending flag after debounce window (only if not retrying)
+            if (timestampCheckRetries[camIndex] === 0 || retryCount >= 2) {
+                setTimeout(() => {
+                    timestampCheckPending[camIndex] = false;
+                }, 1000);
+            }
         });
 }
 
@@ -681,14 +731,34 @@ function updateWebcamTimestampOnLoad(camIndex) {
     $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 ?>
 // Setup image load handlers for camera <?= $index ?>
-['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-        el.addEventListener('load', () => {
+// Note: For picture elements, only the final <img> fires load events
+const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
+if (imgEl<?= $index ?>) {
+    // Check timestamp on initial load (images may already be cached)
+    if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
+        // Image already loaded, check timestamp immediately
+        setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), 100);
+    } else {
+        // Image not loaded yet, wait for load event
+        imgEl<?= $index ?>.addEventListener('load', () => {
             updateWebcamTimestampOnLoad(<?= $index ?>);
         }, { once: false }); // Allow multiple calls as images refresh
     }
-});
+    
+    // Also listen for error events - don't check timestamp if image failed
+    imgEl<?= $index ?>.addEventListener('error', () => {
+        // Don't update timestamp if image failed to load
+    });
+}
+
+// Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
+// This helps catch cases where backend updated but browser cached the image
+setInterval(() => {
+    const imgEl = document.getElementById('webcam-<?= $index ?>');
+    if (imgEl && imgEl.complete && imgEl.naturalHeight !== 0) {
+        updateWebcamTimestampOnLoad(<?= $index ?>);
+    }
+}, 30000);
 
 setInterval(() => {
     ['webcam-avif-<?= $index ?>','webcam-webp-<?= $index ?>','webcam-<?= $index ?>'].forEach(id => {

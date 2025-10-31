@@ -23,18 +23,6 @@ function servePlaceholder() {
     exit;
 }
 
-// Rate limiting (100 requests per minute per IP for images)
-if (!checkRateLimit('webcam_api', 100, 60)) {
-    http_response_code(429);
-    servePlaceholder();
-}
-
-// Optional format parameter: jpg (default), webp, avif
-$fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
-if (!in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) { 
-    $fmt = 'jpg'; 
-}
-
 // Get and validate parameters
 $rawAirportId = $_GET['id'] ?? '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
@@ -68,6 +56,35 @@ if (!is_dir($cacheDir)) {
     @mkdir($cacheDir, 0755, true);
 }
 
+// Check if requesting timestamp only (for frontend to get latest mtime)
+// Exempt timestamp requests from rate limiting (they're lightweight and frequent)
+if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-cache, no-store, must-revalidate'); // Don't cache timestamp responses
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    if (file_exists($cacheJpg)) {
+        $mtime = filemtime($cacheJpg);
+        echo json_encode(['timestamp' => $mtime, 'success' => true]);
+    } else {
+        echo json_encode(['timestamp' => 0, 'success' => false]);
+    }
+    exit;
+}
+
+// Rate limiting (100 requests per minute per IP for images)
+// Note: mtime requests are handled above and bypass rate limiting
+if (!checkRateLimit('webcam_api', 100, 60)) {
+    http_response_code(429);
+    servePlaceholder();
+}
+
+// Optional format parameter: jpg (default), webp, avif
+$fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
+if (!in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) { 
+    $fmt = 'jpg'; 
+}
+
 // Determine refresh threshold
 $defaultWebcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT') !== false ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 60;
 $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_seconds']) ? intval($config['airports'][$airportId]['webcam_refresh_seconds']) : $defaultWebcamRefresh;
@@ -85,18 +102,6 @@ $ctype = (substr($targetFile, -5) === '.avif') ? 'image/avif' : ((substr($target
 // If no cache exists, serve placeholder
 if (!file_exists($cacheJpg)) {
     servePlaceholder();
-}
-
-// Check if requesting timestamp only (for frontend to get latest mtime)
-if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
-    header('Content-Type: application/json');
-    if (file_exists($cacheJpg)) {
-        $mtime = filemtime($cacheJpg);
-        echo json_encode(['timestamp' => $mtime, 'success' => true]);
-    } else {
-        echo json_encode(['timestamp' => 0, 'success' => false]);
-    }
-    exit;
 }
 
 // Serve cached file if fresh
