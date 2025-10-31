@@ -924,8 +924,28 @@ function updateTempExtremes($airportId, $currentTemp) {
             }
         }
         
-        // Initialize today's entry if it doesn't exist
+        // Clean up old entries (older than 2 days) to prevent file bloat and stale data
+        $currentDate = new DateTime($dateKey);
+        $cleaned = 0;
+        foreach ($tempExtremes as $key => $value) {
+            if (!is_string($key) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $key)) {
+                continue; // Skip invalid keys
+            }
+            $entryDate = new DateTime($key);
+            $daysDiff = $currentDate->diff($entryDate)->days;
+            if ($daysDiff > 2) {
+                unset($tempExtremes[$key]);
+                $cleaned++;
+            }
+        }
+        if ($cleaned > 0) {
+            aviationwx_log('info', 'cleaned old temp extremes', ['removed' => $cleaned, 'date_key' => $dateKey]);
+        }
+        
+        // Initialize today's entry if it doesn't exist (always start fresh for new day)
+        // This ensures we never use yesterday's data for today
         if (!isset($tempExtremes[$dateKey][$airportId])) {
+            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp]);
             $tempExtremes[$dateKey][$airportId] = [
                 'high' => $currentTemp,
                 'low' => $currentTemp
@@ -965,14 +985,17 @@ function getTempExtremes($airportId, $currentTemp) {
     
     $tempExtremes = json_decode(file_get_contents($file), true) ?? [];
     
+    // Only return data for today's date key (never yesterday or older dates)
     if (isset($tempExtremes[$dateKey][$airportId])) {
-        // Return the stored extremes, ensuring current temp is included
+        $stored = $tempExtremes[$dateKey][$airportId];
+        // Ensure we return data for today only, with current temp included
         return [
-            'high' => max($tempExtremes[$dateKey][$airportId]['high'], $currentTemp),
-            'low' => min($tempExtremes[$dateKey][$airportId]['low'], $currentTemp)
+            'high' => max($stored['high'] ?? $currentTemp, $currentTemp),
+            'low' => min($stored['low'] ?? $currentTemp, $currentTemp)
         ];
     }
     
+    // No entry for today - return current temp as today's value
     return ['high' => $currentTemp, 'low' => $currentTemp];
 }
 
