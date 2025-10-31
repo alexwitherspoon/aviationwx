@@ -59,31 +59,50 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
+          # Verify we're running as the correct user
+          CURRENT_USER=$(whoami)
+          echo "Running as user: $CURRENT_USER"
+          
           # Create SSL directory if it doesn't exist
           mkdir -p ssl
           
           # Copy SSL certificates from Let's Encrypt if they exist
           # This ensures certificates are available for Nginx container
+          # All operations run as aviationwx user, using sudo for protected operations
           if [ -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem ] && [ -f /etc/letsencrypt/live/aviationwx.org/privkey.pem ]; then
             echo "Copying SSL certificates from Let's Encrypt..."
-            sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/ 2>/dev/null || true
-            sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/ 2>/dev/null || true
-            # Set correct ownership and permissions
-            sudo chown -R aviationwx:aviationwx ssl/ || true
+            # Copy certificates (requires sudo to read from /etc/letsencrypt/)
+            if sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/; then
+              if sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/; then
+                # Set correct ownership and permissions
+                sudo chown -R $CURRENT_USER:$CURRENT_USER ssl/
+                sudo chmod 644 ssl/fullchain.pem
+                sudo chmod 600 ssl/privkey.pem
+                echo "✓ SSL certificates copied successfully"
+              else
+                echo "⚠️  Failed to copy privkey.pem"
+                exit 1
+              fi
+            else
+              echo "⚠️  Failed to copy fullchain.pem"
+              exit 1
+            fi
+          elif [ -f ssl/fullchain.pem ] && [ -f ssl/privkey.pem ]; then
+            echo "✓ SSL certificates already exist in ~/aviationwx/ssl/"
+            # Verify permissions are correct
+            sudo chown -R $CURRENT_USER:$CURRENT_USER ssl/ || true
             sudo chmod 644 ssl/fullchain.pem || true
             sudo chmod 600 ssl/privkey.pem || true
-            echo "✓ SSL certificates copied"
-          elif [ ! -f ssl/fullchain.pem ] || [ ! -f ssl/privkey.pem ]; then
+          else
             echo "⚠️  SSL certificates not found in /etc/letsencrypt/live/aviationwx.org/ or ~/aviationwx/ssl/"
             echo "⚠️  Nginx container may fail to start without certificates"
-            echo "⚠️  To fix: Copy certificates manually:"
+            echo "⚠️  To fix: Copy certificates manually as user aviationwx:"
             echo "   sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ~/aviationwx/ssl/"
             echo "   sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ~/aviationwx/ssl/"
             echo "   sudo chown -R aviationwx:aviationwx ~/aviationwx/ssl"
             echo "   sudo chmod 644 ~/aviationwx/ssl/fullchain.pem"
             echo "   sudo chmod 600 ~/aviationwx/ssl/privkey.pem"
-          else
-            echo "✓ SSL certificates already exist in ~/aviationwx/ssl/"
+            exit 1
           fi
           EOF
 
