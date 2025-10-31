@@ -6,6 +6,15 @@
     <title><?= htmlspecialchars($airport['name']) ?> - <?= htmlspecialchars($airport['icao']) ?></title>
     <link rel="stylesheet" href="styles.css">
     <meta name="description" content="Real-time weather and conditions for <?= htmlspecialchars($airport['icao']) ?> - <?= htmlspecialchars($airport['name']) ?>">
+    <style>
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .webcam-skeleton {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -23,14 +32,25 @@
                 <div class="webcam-item">
                     <h3><?= htmlspecialchars($cam['name']) ?></h3>
                     <div class="webcam-container">
-                        <picture>
-                            <source id="webcam-avif-<?= $index ?>" type="image/avif" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=avif">
-                            <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp">
+                        <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; height: 300px; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
+                        <picture style="position: relative; z-index: 2;">
+                            <?php
+                            // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
+                            $base = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index;
+                            $mtimeJpg = 0;
+                            foreach (['.jpg', '.avif', '.webp'] as $ext) {
+                                if (file_exists($base . $ext)) { $mtimeJpg = filemtime($base . $ext); break; }
+                            }
+                            $imgHash = substr(md5($airportId . '_' . $index . '_' . $mtimeJpg), 0, 8);
+                            ?>
+                            <source id="webcam-avif-<?= $index ?>" type="image/avif" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=avif&v=<?= $imgHash ?>">
+                            <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp&v=<?= $imgHash ?>">
                             <img id="webcam-<?= $index ?>" 
-                                 src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg" 
+                                 src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
-                                 onerror="console.error('Webcam image failed to load:', this.src)"
+                                 onerror="console.error('Webcam image failed to load:', this.src); document.getElementById('webcam-skeleton-<?= $index ?>').style.display='none'"
+                                 onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
                                  onclick="openLiveStream(this.src)">
                         </picture>
                         <div class="webcam-info">
@@ -742,13 +762,7 @@ if (imgEl<?= $index ?>) {
 }
 
 // Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
-// This helps catch cases where backend updated but browser cached the image
-setInterval(() => {
-    const imgEl = document.getElementById('webcam-<?= $index ?>');
-    if (imgEl && imgEl.complete && imgEl.naturalHeight !== 0) {
-        updateWebcamTimestampOnLoad(<?= $index ?>);
-    }
-}, 30000);
+// Debounced: batched across all cameras to reduce requests
 
 setInterval(() => {
     safeSwapCameraImage(<?= $index ?>);
@@ -757,6 +771,22 @@ setInterval(() => {
 
 updateWeatherTimestamp();
 setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds
+
+// Batched timestamp refresh for all webcams (debounced to reduce requests)
+let timestampBatchPending = false;
+function batchRefreshAllTimestamps() {
+    if (timestampBatchPending) return;
+    timestampBatchPending = true;
+    <?php foreach ($airport['webcams'] as $index => $cam): ?>
+    const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
+    if (imgEl<?= $index ?> && imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
+        updateWebcamTimestampOnLoad(<?= $index ?>);
+    }
+    <?php endforeach; ?>
+    setTimeout(() => { timestampBatchPending = false; }, 1000);
+}
+// Refresh all timestamps every 30 seconds (batched)
+setInterval(batchRefreshAllTimestamps, 30000);
 
 // Fetch weather data every minute
 fetchWeather();
@@ -778,10 +808,16 @@ function safeSwapCameraImage(camIndex) {
             const newTs = parseInt(json.timestamp);
             if (isNaN(newTs) || newTs <= currentTs) return; // Not newer
 
-            // Build new URLs with cache buster
-            const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&t=${Date.now()}`;
-            const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&t=${Date.now()}`;
-            const avifUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=avif&t=${Date.now()}`;
+            const ready = json.formatReady || {};
+            // Use immutable hash from mtime for CDN-friendly URLs (hash changes only when file updates)
+            const hash = json.timestamp ? String(json.timestamp).slice(-8) : Date.now().toString().slice(-8);
+            const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&v=${hash}`;
+            const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&v=${hash}`;
+            const avifUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=avif&v=${hash}`;
+
+            // Show skeleton placeholder while loading
+            const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
+            if (skeleton) skeleton.style.display = 'block';
 
             // Helper to preload an image URL, resolve on load, reject on error
             const preloadUrl = (url) => new Promise((resolve, reject) => {
@@ -791,27 +827,34 @@ function safeSwapCameraImage(camIndex) {
                 img.src = url;
             });
 
-            // Wait for ALL formats to be ready before swapping
-            Promise.all([
-                preloadUrl(jpgUrl),
-                preloadUrl(webpUrl),
-                preloadUrl(avifUrl)
-            ])
-            .then(() => {
+            // Progressive fallback: ensure JPG first, then upgrade sources independently
+            const jpgPromise = ready.jpg ? preloadUrl(jpgUrl) : Promise.reject(new Error('jpg_not_ready'));
+            jpgPromise.then(() => {
                 const img = document.getElementById(`webcam-${camIndex}`);
-                const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
-                const srcAvif = document.getElementById(`webcam-avif-${camIndex}`);
-                if (img) img.src = jpgUrl;
-                if (srcWebp) srcWebp.setAttribute('srcset', webpUrl);
-                if (srcAvif) srcAvif.setAttribute('srcset', avifUrl);
-                
-                // Update timestamp immediately after swap
+                if (img) {
+                    img.src = jpgUrl;
+                    if (skeleton) skeleton.style.display = 'none';
+                }
                 CAM_TS[camIndex] = newTs;
                 updateWebcamTimestampOnLoad(camIndex);
-            })
-            .catch(() => {
-                // If any format fails, keep current image; try again on next interval
+            }).catch(() => {
+                // Hide skeleton on failure
+                if (skeleton) skeleton.style.display = 'none';
             });
+
+            // Upgrade WEBP/AVIF if available; do not block on them
+            if (ready.webp) {
+                preloadUrl(webpUrl).then(() => {
+                    const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
+                    if (srcWebp) srcWebp.setAttribute('srcset', webpUrl);
+                }).catch(() => {});
+            }
+            if (ready.avif) {
+                preloadUrl(avifUrl).then(() => {
+                    const srcAvif = document.getElementById(`webcam-avif-${camIndex}`);
+                    if (srcAvif) srcAvif.setAttribute('srcset', avifUrl);
+                }).catch(() => {});
+            }
         })
         .catch(() => {
             // Silently ignore; will retry on next interval

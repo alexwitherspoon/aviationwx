@@ -162,5 +162,36 @@ jobs:
           fi
           
           echo "✅ All health checks passed"
+          
+          # Test webcam endpoints (smoke test)
+          echo "Testing webcam endpoints..."
+          # Test JPG endpoint for sample airport (assuming kspb exists)
+          if curl -f -s --max-time 10 "http://127.0.0.1:${APP_PORT}/webcam.php?id=kspb&cam=0&fmt=jpg" > /tmp/webcam_test.jpg 2>/dev/null; then
+            SIZE=$(stat -f%z /tmp/webcam_test.jpg 2>/dev/null || stat -c%s /tmp/webcam_test.jpg 2>/dev/null || echo "0")
+            CTYPE=$(curl -sI "http://127.0.0.1:${APP_PORT}/webcam.php?id=kspb&cam=0&fmt=jpg" 2>/dev/null | grep -i 'content-type' | cut -d' ' -f2 | tr -d '\r' || echo "")
+            if [ "$SIZE" -gt "0" ] && echo "$CTYPE" | grep -qi "image/jpeg"; then
+              echo "✓ Webcam JPG endpoint working (size: ${SIZE} bytes, type: ${CTYPE})"
+              rm -f /tmp/webcam_test.jpg
+            else
+              echo "⚠️  Webcam JPG endpoint returned invalid response (size: ${SIZE}, type: ${CTYPE})"
+            fi
+          else
+            echo "⚠️  Webcam JPG endpoint not accessible (may be expected if no webcams configured)"
+          fi
+          
+          # Test WEBP endpoint
+          if curl -f -s --max-time 10 "http://127.0.0.1:${APP_PORT}/webcam.php?id=kspb&cam=0&fmt=webp" > /tmp/webcam_test.webp 2>/dev/null; then
+            SIZE=$(stat -f%z /tmp/webcam_test.webp 2>/dev/null || stat -c%s /tmp/webcam_test.webp 2>/dev/null || echo "0")
+            CTYPE=$(curl -sI "http://127.0.0.1:${APP_PORT}/webcam.php?id=kspb&cam=0&fmt=webp" 2>/dev/null | grep -i 'content-type' | cut -d' ' -f2 | tr -d '\r' || echo "")
+            if [ "$SIZE" -gt "0" ] && echo "$CTYPE" | grep -qi "image/webp"; then
+              echo "✓ Webcam WEBP endpoint working (size: ${SIZE} bytes, type: ${CTYPE})"
+              rm -f /tmp/webcam_test.webp
+            else
+              echo "⚠️  Webcam WEBP endpoint returned invalid response (size: ${SIZE}, type: ${CTYPE})"
+            fi
+          else
+            echo "ℹ️  Webcam WEBP endpoint not accessible (may be expected if WEBP not generated yet)"
+          fi
+          
           EOF
 

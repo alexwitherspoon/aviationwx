@@ -63,17 +63,43 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     header('Cache-Control: no-cache, no-store, must-revalidate'); // Don't cache timestamp responses
     header('Pragma: no-cache');
     header('Expires: 0');
-    if (file_exists($cacheJpg)) {
-        $mtime = filemtime($cacheJpg);
-        echo json_encode(['timestamp' => $mtime, 'success' => true]);
-    } else {
-        echo json_encode(['timestamp' => 0, 'success' => false]);
+    // Rate limit headers (for observability; mtime endpoint is not limited)
+    if (function_exists('getRateLimitRemaining')) {
+        $rl = getRateLimitRemaining('webcam_api', 100, 60);
+        header('X-RateLimit-Limit: 100');
+        header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
+        header('X-RateLimit-Reset: ' . (int)$rl['reset']);
     }
+    $existsJpg = file_exists($cacheJpg);
+    $existsWebp = file_exists($cacheWebp);
+    $existsAvif = file_exists($cacheAvif);
+    $mtime = 0;
+    $size = 0;
+    if ($existsJpg) { $mtime = max($mtime, (int)@filemtime($cacheJpg)); $size = max($size, (int)@filesize($cacheJpg)); }
+    if ($existsWebp) { $mtime = max($mtime, (int)@filemtime($cacheWebp)); $size = max($size, (int)@filesize($cacheWebp)); }
+    if ($existsAvif) { $mtime = max($mtime, (int)@filemtime($cacheAvif)); $size = max($size, (int)@filesize($cacheAvif)); }
+    echo json_encode([
+        'success' => $mtime > 0,
+        'timestamp' => $mtime,
+        'size' => $size,
+        'formatReady' => [
+            'jpg' => $existsJpg,
+            'webp' => $existsWebp,
+            'avif' => $existsAvif,
+        ]
+    ]);
     exit;
 }
 
 // Defer rate limiting decision until after we know what we can serve
 $isRateLimited = !checkRateLimit('webcam_api', 100, 60);
+// Rate limit headers for image responses
+if (function_exists('getRateLimitRemaining')) {
+    $rl = getRateLimitRemaining('webcam_api', 100, 60);
+    header('X-RateLimit-Limit: 100');
+    header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
+    header('X-RateLimit-Reset: ' . (int)$rl['reset']);
+}
 
 // Optional format parameter: jpg (default), webp, avif
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
@@ -100,6 +126,12 @@ if (!file_exists($cacheJpg)) {
     servePlaceholder();
 }
 
+// Generate immutable cache-friendly hash (for CDN compatibility)
+// Use file mtime + size to create stable hash that changes only when file updates
+$fileMtime = file_exists($targetFile) ? filemtime($targetFile) : 0;
+$fileSize = file_exists($targetFile) ? filesize($targetFile) : 0;
+$immutableHash = substr(md5($airportId . '_' . $camIndex . '_' . $fmt . '_' . $fileMtime . '_' . $fileSize), 0, 8);
+
 // If rate limited, prefer to serve an existing cached image (even if stale) with 200
 if ($isRateLimited) {
     $fallback = file_exists($targetFile) ? $targetFile : (file_exists($cacheJpg) ? $cacheJpg : null);
@@ -118,15 +150,35 @@ if ($isRateLimited) {
     servePlaceholder();
 }
 
+// Common ETag builder
+$etag = function(string $file): string {
+    $mt = (int)@filemtime($file);
+    $sz = (int)@filesize($file);
+    return 'W/"' . sha1($file . '|' . $mt . '|' . $sz) . '"';
+};
+
 // Serve cached file if fresh
 if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefresh) {
     $age = time() - filemtime($targetFile);
     $remainingTime = $perCamRefresh - $age;
     $mtime = filemtime($targetFile);
+    $etagVal = $etag($targetFile);
+    
+    // Conditional requests
+    $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)$mtime) {
+        header('Cache-Control: public, max-age=' . $remainingTime);
+        header('ETag: ' . $etagVal);
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+        http_response_code(304);
+        exit;
+    }
     
     header('Content-Type: ' . $ctype);
     header('Cache-Control: public, max-age=' . $remainingTime);
     header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
+    header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: HIT');
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
@@ -138,8 +190,21 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
 // Cache expired or file not found - serve stale cache if available, otherwise placeholder
 if (file_exists($targetFile)) {
     $mtime = filemtime($targetFile);
+    $etagVal = $etag($targetFile);
+    
+    // Conditional requests for stale file
+    $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)$mtime) {
+        header('Cache-Control: public, max-age=0, must-revalidate');
+        header('ETag: ' . $etagVal);
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+        http_response_code(304);
+        exit;
+    }
     header('Content-Type: ' . $ctype);
     header('Cache-Control: public, max-age=0, must-revalidate'); // Stale, revalidate
+    header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: STALE');
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp

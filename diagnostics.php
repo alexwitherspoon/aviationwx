@@ -201,8 +201,11 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
             );
             $testOutput = @shell_exec($testCmd);
             if ($testOutput) {
-                $cleanOutput = htmlspecialchars(substr(trim($testOutput), 0, 150), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8', false);
-                // Remove HTML entity encoding of apostrophes if they exist
+                // Sanitize output: remove URLs, IPs, paths
+                $cleanOutput = preg_replace('/https?:\/\/[^\s]+/', '[URL_REDACTED]', $testOutput);
+                $cleanOutput = preg_replace('/rtsp[s]?:\/\/[^\s]+/', '[RTSP_URL_REDACTED]', $cleanOutput);
+                $cleanOutput = preg_replace('/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/', '[IP_REDACTED]', $cleanOutput);
+                $cleanOutput = htmlspecialchars(substr(trim($cleanOutput), 0, 150), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8', false);
                 $cleanOutput = str_replace('&#039;', "'", $cleanOutput);
                 $success[] = "🔍 RTSPS test output: " . $cleanOutput;
             }
@@ -210,6 +213,32 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
     }
 } else {
     $issues[] = "⚠️ ffmpeg not found (RTSP/RTSPS streams will not work)";
+}
+
+// Check RTSP error statistics from cache
+$cacheDir = __DIR__ . '/cache/webcams';
+$errorCounts = ['timeout' => 0, 'auth' => 0, 'tls' => 0, 'dns' => 0, 'connection' => 0, 'unknown' => 0];
+if (is_dir($cacheDir)) {
+    foreach (glob($cacheDir . '/*.error.json') as $errorFile) {
+        $errorData = @json_decode(file_get_contents($errorFile), true);
+        if ($errorData && isset($errorData['code'])) {
+            $code = $errorData['code'];
+            if (isset($errorCounts[$code])) {
+                $errorCounts[$code]++;
+            } else {
+                $errorCounts['unknown']++;
+            }
+        }
+    }
+    $totalErrors = array_sum($errorCounts);
+    if ($totalErrors > 0) {
+        $success[] = "📊 RTSP Error Statistics:";
+        foreach ($errorCounts as $code => $count) {
+            if ($count > 0) {
+                $success[] = "  - {$code}: {$count}";
+            }
+        }
+    }
 }
 
 // Check HTTPS/SSL (check both HTTPS header and X-Forwarded-Proto from Nginx)

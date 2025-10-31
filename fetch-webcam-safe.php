@@ -76,6 +76,55 @@ function fetchStaticImage($url, $cacheFile) {
  * 3. Use a cloud service to proxy RTSP to HTTP
  * 4. Configure the camera to stream directly as MJPEG
  */
+/**
+ * Classify RTSP error from ffmpeg output/exit code
+ * @param int $exitCode
+ * @param string $errorOutput
+ * @return string Error code: 'timeout', 'auth', 'tls', 'dns', 'connection', 'unknown'
+ */
+function classifyRTSPError($exitCode, $errorOutput) {
+    $output = strtolower($errorOutput);
+    
+    // Timeout errors
+    if (stripos($output, 'timeout') !== false || $exitCode === 124) {
+        return 'timeout';
+    }
+    
+    // Authentication errors
+    if (stripos($output, 'unauthorized') !== false || 
+        stripos($output, '401') !== false ||
+        stripos($output, '403') !== false ||
+        stripos($output, 'authentication') !== false) {
+        return 'auth';
+    }
+    
+    // TLS/SSL errors
+    if (stripos($output, 'ssl') !== false || 
+        stripos($output, 'tls') !== false ||
+        stripos($output, 'certificate') !== false ||
+        stripos($output, 'handshake') !== false) {
+        return 'tls';
+    }
+    
+    // DNS/resolution errors
+    if (stripos($output, 'name or service not known') !== false ||
+        stripos($output, 'could not resolve') !== false ||
+        stripos($output, 'getaddrinfo') !== false ||
+        stripos($output, 'dns') !== false) {
+        return 'dns';
+    }
+    
+    // Connection refused/network errors
+    if (stripos($output, 'connection refused') !== false ||
+        stripos($output, 'connection reset') !== false ||
+        stripos($output, 'network is unreachable') !== false ||
+        stripos($output, 'no route to host') !== false) {
+        return 'connection';
+    }
+    
+    return 'unknown';
+}
+
 function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 10, $retries = 2) {
     $transport = strtolower($transport) === 'udp' ? 'udp' : 'tcp';
     $timeoutUs = max(1, intval($timeoutSeconds)) * 1000000; // microseconds (for -timeout option in ffmpeg 5.0+)
@@ -152,14 +201,40 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
             return true;
         }
         
-        // Show detailed error for debugging
+        // Classify error for observability
+        $errorCode = classifyRTSPError($code, $errorOutput);
+        
+        // Store error code in a metadata file for diagnostics
+        $errorFile = $cacheFile . '.error.json';
+        @file_put_contents($errorFile, json_encode([
+            'code' => $errorCode,
+            'timestamp' => time(),
+            'exit_code' => $code,
+            'attempt' => $attempt
+        ]), LOCK_EX);
+        
+        // Show detailed error for debugging (with sanitization)
         if ($isWeb) {
-            echo "<span class='error'>✗ ffmpeg failed (code {$code})</span><br>\n";
+            echo "<span class='error'>✗ ffmpeg failed (code {$code}, type: {$errorCode})</span><br>\n";
         } else {
-            echo "    ✗ ffmpeg failed (code {$code})\n";
+            echo "    ✗ ffmpeg failed (code {$code}, type: {$errorCode})\n";
         }
         
         if (!empty($errorOutput)) {
+            // Sanitize error output: remove sensitive info (URLs with credentials, IPs, file paths)
+            $sanitizeError = function($line) {
+                // Remove URLs (may contain credentials)
+                $line = preg_replace('/https?:\/\/[^\s]+/', '[URL_REDACTED]', $line);
+                $line = preg_replace('/rtsp[s]?:\/\/[^\s]+/', '[RTSP_URL_REDACTED]', $line);
+                // Remove file paths
+                $line = preg_replace('/\/[^\s:]+/', '[PATH_REDACTED]', $line);
+                // Remove IP addresses
+                $line = preg_replace('/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/', '[IP_REDACTED]', $line);
+                // Remove email-like patterns
+                $line = preg_replace('/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/', '[EMAIL_REDACTED]', $line);
+                return $line;
+            };
+            
             // Extract meaningful error messages (avoid verbose output)
             $errorLines = array_filter($output, function($line) {
                 $line = trim($line);
@@ -175,11 +250,12 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
             if (!empty($errorLines)) {
                 $shownErrors = array_slice($errorLines, 0, 2); // Show max 2 error lines
                 foreach ($shownErrors as $errLine) {
-                    $cleanErr = htmlspecialchars(trim($errLine), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    $sanitized = $sanitizeError($errLine);
+                    $cleanErr = htmlspecialchars(trim($sanitized), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                     if ($isWeb) {
                         echo "<span class='error' style='margin-left: 20px; font-size: 0.9em;'>" . $cleanErr . "</span><br>\n";
                     } else {
-                        echo "      " . trim($errLine) . "\n";
+                        echo "      " . trim($sanitized) . "\n";
                     }
                 }
             }
@@ -259,6 +335,105 @@ function fetchMJPEGStream($url, $cacheFile) {
 
 require_once __DIR__ . '/config-utils.php';
 
+/**
+ * Circuit breaker: check if camera should be skipped due to backoff
+ * @param string $airportId
+ * @param int $camIndex
+ * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
+ */
+function checkCircuitBreaker($airportId, $camIndex) {
+    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $key = $airportId . '_' . $camIndex;
+    $now = time();
+    
+    if (!file_exists($backoffFile)) {
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+    }
+    
+    $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    
+    if (!isset($backoffData[$key])) {
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+    }
+    
+    $state = $backoffData[$key];
+    $nextAllowed = (int)($state['next_allowed_time'] ?? 0);
+    
+    if ($nextAllowed > $now) {
+        $remaining = $nextAllowed - $now;
+        return [
+            'skip' => true,
+            'reason' => 'circuit_open',
+            'backoff_remaining' => $remaining,
+            'failures' => (int)($state['failures'] ?? 0)
+        ];
+    }
+    
+    return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+}
+
+/**
+ * Record a failure and update backoff state
+ * @param string $airportId
+ * @param int $camIndex
+ */
+function recordFailure($airportId, $camIndex) {
+    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $key = $airportId . '_' . $camIndex;
+    $now = time();
+    
+    $backoffData = [];
+    if (file_exists($backoffFile)) {
+        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    }
+    
+    if (!isset($backoffData[$key])) {
+        $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
+    }
+    
+    $state = &$backoffData[$key];
+    $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
+    $state['last_attempt'] = $now;
+    
+    // Exponential backoff: min(60, 2^failures * 60) seconds, capped at 3600s (1 hour)
+    $failures = $state['failures'];
+    $backoffSeconds = min(3600, max(60, pow(2, min($failures - 1, 5)) * 60));
+    $state['backoff_seconds'] = $backoffSeconds;
+    $state['next_allowed_time'] = $now + $backoffSeconds;
+    
+    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+}
+
+/**
+ * Record a success and reset backoff state
+ * @param string $airportId
+ * @param int $camIndex
+ */
+function recordSuccess($airportId, $camIndex) {
+    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $key = $airportId . '_' . $camIndex;
+    $now = time();
+    
+    $backoffData = [];
+    if (file_exists($backoffFile)) {
+        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    }
+    
+    if (!isset($backoffData[$key])) {
+        return; // No previous state to reset
+    }
+    
+    // Reset on success
+    $backoffData[$key] = [
+        'failures' => 0,
+        'next_allowed_time' => 0,
+        'last_attempt' => $now,
+        'backoff_seconds' => 0
+    ];
+    
+    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+}
+
 // Load config (support CONFIG_PATH env override, no cache for CLI script)
 $config = loadConfig(false);
 
@@ -269,6 +444,13 @@ if ($config === null || !is_array($config)) {
 $cacheDir = __DIR__ . '/cache/webcams';
 if (!is_dir($cacheDir)) {
     mkdir($cacheDir, 0755, true);
+}
+
+// Ensure backoff cache file directory exists
+$backoffFile = __DIR__ . '/cache/backoff.json';
+$backoffDir = dirname($backoffFile);
+if (!is_dir($backoffDir)) {
+    @mkdir($backoffDir, 0755, true);
 }
 
 // Check if we're in a web context (add HTML) or CLI (plain text)
@@ -347,6 +529,21 @@ foreach ($config['airports'] as $airportId => $airport) {
             }
         }
         
+        // Check circuit breaker: skip if in backoff period
+        $circuit = checkCircuitBreaker($airportId, $index);
+        if ($circuit['skip']) {
+            $remaining = $circuit['backoff_remaining'];
+            $failures = $circuit['failures'] ?? 0;
+            $mins = floor($remaining / 60);
+            $secs = $remaining % 60;
+            if ($isWeb) {
+                echo "<span class='info'>⏸️ Skipped (circuit open: {$failures} failure(s), backoff {$mins}m {$secs}s remaining)</span></div>\n";
+            } else {
+                echo "    ⏸️ Skipped (circuit open: {$failures} failure(s), backoff {$mins}m {$secs}s remaining)\n";
+            }
+            continue;
+        }
+        
         // Determine source type and handle accordingly
         // Allow explicit type override per camera in config
         $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
@@ -377,14 +574,19 @@ foreach ($config['airports'] as $airportId => $airport) {
         }
         
         if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
+            // Success: reset circuit breaker
+            recordSuccess($airportId, $index);
+            
             $size = filesize($cacheFile);
             if ($isWeb) {
                 echo "<span class='success'>✓ Saved " . number_format($size) . " bytes</span><br>\n";
             } else {
                 echo "    ✓ Saved {$size} bytes\n";
             }
-            // Derive WEBP
-            $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
+            // Derive WEBP: optimized for quality/size balance (target ~100-150KB for typical webcam)
+            // -q:v 30 = quality 30/63 (higher number = lower quality = smaller file)
+            // -compression_level 6 = good speed/compression balance
+            $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
             exec($cmdWebp, $outW, $codeW);
             if ($codeW === 0 && file_exists($cacheWebp)) {
                 if ($isWeb) {
@@ -399,8 +601,11 @@ foreach ($config['airports'] as $airportId => $airport) {
                     echo "    ✗ WEBP generation failed\n";
                 }
             }
-            // Derive AVIF (best-effort)
-            $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
+            // Derive AVIF: optimized for quality/size balance (target ~50-80KB)
+            // -crf 28 = good quality for photos (lower = better quality = larger file)
+            // -pix_fmt yuv420p = standard chroma subsampling
+            // -preset 4 = speed vs compression balance
+            $cmdAvif = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -crf 28 -pix_fmt yuv420p -preset 4 %s", escapeshellarg($cacheFile), escapeshellarg($cacheAvif));
             exec($cmdAvif, $outA, $codeA);
             if ($codeA === 0 && file_exists($cacheAvif)) {
                 if ($isWeb) {
@@ -416,10 +621,19 @@ foreach ($config['airports'] as $airportId => $airport) {
                 }
             }
         } else {
+            // Failure: record and update backoff
+            recordFailure($airportId, $index);
+            $circuit = checkCircuitBreaker($airportId, $index);
+            $backoffSecs = $circuit['backoff_remaining'];
+            $mins = floor($backoffSecs / 60);
+            $secs = $backoffSecs % 60;
+            
             if ($isWeb) {
                 echo "<span class='error'>✗ Failed to cache image</span><br>\n";
+                echo "<span class='info'>Circuit breaker: next attempt in {$mins}m {$secs}s</span><br>\n";
             } else {
                 echo "    ✗ Failed to cache image\n";
+                echo "    Circuit breaker: next attempt in {$mins}m {$secs}s\n";
             }
         }
         
