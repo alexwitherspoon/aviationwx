@@ -54,6 +54,39 @@ jobs:
           sudo chmod 755 /var/log/aviationwx
           EOF
 
+      - name: Ensure SSL certificates are in place
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          # Create SSL directory if it doesn't exist
+          mkdir -p ssl
+          
+          # Copy SSL certificates from Let's Encrypt if they exist
+          # This ensures certificates are available for Nginx container
+          if [ -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem ] && [ -f /etc/letsencrypt/live/aviationwx.org/privkey.pem ]; then
+            echo "Copying SSL certificates from Let's Encrypt..."
+            sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/ 2>/dev/null || true
+            sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/ 2>/dev/null || true
+            # Set correct ownership and permissions
+            sudo chown -R aviationwx:aviationwx ssl/ || true
+            sudo chmod 644 ssl/fullchain.pem || true
+            sudo chmod 600 ssl/privkey.pem || true
+            echo "✓ SSL certificates copied"
+          elif [ ! -f ssl/fullchain.pem ] || [ ! -f ssl/privkey.pem ]; then
+            echo "⚠️  SSL certificates not found in /etc/letsencrypt/live/aviationwx.org/ or ~/aviationwx/ssl/"
+            echo "⚠️  Nginx container may fail to start without certificates"
+            echo "⚠️  To fix: Copy certificates manually:"
+            echo "   sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ~/aviationwx/ssl/"
+            echo "   sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ~/aviationwx/ssl/"
+            echo "   sudo chown -R aviationwx:aviationwx ~/aviationwx/ssl"
+            echo "   sudo chmod 644 ~/aviationwx/ssl/fullchain.pem"
+            echo "   sudo chmod 600 ~/aviationwx/ssl/privkey.pem"
+          else
+            echo "✓ SSL certificates already exist in ~/aviationwx/ssl/"
+          fi
+          EOF
+
       - name: Deploy via Docker Compose
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
