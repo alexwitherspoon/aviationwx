@@ -55,9 +55,10 @@ function checkRateLimit($key, $maxRequests = 60, $windowSeconds = 60) {
  * Get remaining rate limit for this key
  * @param string $key Rate limit key
  * @param int $maxRequests Maximum requests allowed
+ * @param int $windowSeconds Time window in seconds (optional, for consistency)
  * @return int Remaining requests, or -1 if unknown
  */
-function getRateLimitRemaining($key, $maxRequests = 60) {
+function getRateLimitRemaining($key, $maxRequests = 60, $windowSeconds = 60) {
     if (!function_exists('apcu_fetch')) {
         return -1;
     }
@@ -65,11 +66,21 @@ function getRateLimitRemaining($key, $maxRequests = 60) {
     $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     $ip = trim(explode(',', $ip)[0]);
     $rateLimitKey = 'rate_limit_' . $key . '_' . md5($ip);
-    $current = apcu_fetch($rateLimitKey);
+    $data = apcu_fetch($rateLimitKey);
     
-    if ($current === false) {
+    if ($data === false) {
+        // No rate limit data exists, so all requests are available
         return $maxRequests;
     }
     
-    return max(0, $maxRequests - $current);
+    // Extract count from the data array
+    $currentCount = is_array($data) ? ($data['count'] ?? 0) : (is_numeric($data) ? $data : 0);
+    
+    // Check if window expired
+    if (is_array($data) && isset($data['reset']) && time() >= $data['reset']) {
+        // Window expired, all requests are available
+        return $maxRequests;
+    }
+    
+    return max(0, $maxRequests - $currentCount);
 }
