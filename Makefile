@@ -45,10 +45,10 @@ test: ## Test the application
 	@echo "✓ Tests complete"
 
 smoke: ## Smoke test main endpoints (requires running containers)
-	@echo "Smoke testing..."
-	@echo "- Homepage" && curl -sf http://localhost:8080 >/dev/null && echo " ✓"
-	@echo "- Weather (kspb)" && curl -sf "http://localhost:8080/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
-	@echo "- Webcam fetch script (dry run)" && docker compose exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
+    @echo "Smoke testing..."
+    @echo "- Homepage" && curl -sf http://127.0.0.1:8080 >/dev/null && echo " ✓"
+    @echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:8080/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
+    @echo "- Webcam fetch script (PHP present)" && docker compose exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
 
 clean: ## Remove containers and volumes
 	@docker compose down -v

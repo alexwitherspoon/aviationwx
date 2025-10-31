@@ -112,7 +112,8 @@ AviationWX automatically detects and handles webcam source types:
    - Example: `rtsp://camera.example.com:554/stream`
    - Example: `rtsps://camera.example.com:7447/stream?enableSrtp` (secure RTSP over TLS)
    - Example: `rtsp://192.168.1.100:8554/live`
-   - Requires `ffmpeg` (included in Docker image). Captures a single high-quality frame per refresh.
+  - Requires `ffmpeg` (included in Docker image). Captures a single high-quality frame per refresh.
+  - ffmpeg 5.0+ uses `-timeout` for RTSP timeouts (the old `-stimeout` is not supported)
    - **RTSPS Support**: Secure RTSP streams over TLS are fully supported
 
 ### Format Detection
@@ -195,6 +196,10 @@ The system automatically detects the source type from the URL:
 ```
 
 ## Dynamic Features
+### Configuration Cache (Automatic)
+- The configuration (`airports.json`) is cached in APCu for performance.
+- The cache automatically invalidates when the file's modification time changes.
+- You can force a cache clear by visiting `/clear-cache.php`.
 
 ### Automatic Homepage
 The homepage (`homepage.php`) automatically displays all airports from `airports.json` with working links to each subdomain.

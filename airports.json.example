@@ -66,6 +66,16 @@
           "partner_link": "https://partner-website.com"
         },
         {
+          "name": "VPN Camera (Tailscale/WireGuard Example)",
+          "url": "rtsp://100.64.0.10:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "refresh_seconds": 60,
+          "position": "south-east",
+          "partner_name": "Partner Name",
+          "partner_link": "https://partner-website.com"
+        },
+        {
           "name": "West Camera (Static Image Example)",
           "url": "https://example.com/webcam.jpg",
           "position": "west",

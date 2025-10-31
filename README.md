@@ -2,6 +2,12 @@
 
 Real-time aviation weather and conditions for participating airports.
 
+Quick links:
+- Deployment guide: [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+- Configuration guide: [CONFIGURATION.md](CONFIGURATION.md)
+- Diagnostics: visit `/diagnostics.php`
+- Clear config cache: visit `/clear-cache.php`
+
 ## Features
 
 - **Live Weather Data** from Tempest, Ambient, or METAR sources
@@ -95,9 +101,11 @@ Edit `airports.json` to add a new airport:
 
 Then set up wildcard DNS as described in deployment docs.
 
-### Configuration Path and Refresh Intervals
+### Configuration Path, Caching and Refresh Intervals
 
 - Set `CONFIG_PATH` env to point the app to your mounted `airports.json`.
+- Config cache: automatically invalidates when `airports.json` changes (mtime-based)
+- Manual cache clear endpoint: `GET /clear-cache.php`
 - Webcam refresh cadence can be controlled via env and per-airport:
   - `WEBCAM_REFRESH_DEFAULT` (seconds) default is 60
   - Per-airport `webcam_refresh_seconds` in `airports.json`
@@ -113,6 +121,7 @@ Then set up wildcard DNS as described in deployment docs.
   - `type`: `rtsp` (explicit type, recommended for RTSPS URLs)
   - `rtsp_transport`: `tcp` (default, recommended) or `udp`
   - `refresh_seconds`: Override refresh interval per camera
+- ffmpeg 5.0+ uses the `-timeout` option (the old `-stimeout` is no longer supported)
 - **Image format generation**: The fetcher automatically generates multiple formats per image:
   - `AVIF` (best-effort), `WEBP`, and `JPEG` for broad compatibility
 - **Frontend**: Uses `<picture>` element with AVIF/WEBP sources and JPEG fallback

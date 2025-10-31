@@ -18,7 +18,7 @@ ssh root@YOUR_DROPLET_IP
 # Update system
 apt update && apt upgrade -y
 
-# Install Docker & Docker Compose
+# Install Docker & Docker Compose (Compose v2)
 curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
 apt install docker-compose-plugin -y
@@ -137,7 +137,7 @@ curl http://localhost:8080
   }
   ```
   
-- **Defaults**: transport `tcp` (recommended), timeout 10s, retries 2.
+- **Defaults**: transport `tcp` (recommended), timeout 10s, retries 2. (ffmpeg 5.0+ uses `-timeout` not `-stimeout`)
 - **Important**: Always set `"type": "rtsp"` explicitly for RTSPS URLs.
 - See [CONFIGURATION.md](CONFIGURATION.md) for complete webcam configuration examples.
 
@@ -282,9 +282,9 @@ ssh-keygen -t ed25519 -f aviationwx_actions -C "gha@aviationwx"
 - `USER`: `aviationwx`
 
 4) Workflow behavior (`.github/workflows/deploy-docker.yml`):
-- Deploys on push to `main`
-- Deploys when a PR is merged into `main`
+- Deploys on push to `main` (not on PR creation)
 - Can be run manually via workflow_dispatch
+- Post-deploy health checks: waits for containers, checks via `docker compose exec` inside the `web` container, then (optionally) host port
 
 ### H. Cron for Webcam Refresh
 
@@ -303,6 +303,10 @@ Visit:
 - `https://aviationwx.org/`
 - `https://aviationwx.org/weather.php?airport=kspb`
 - `https://kspb.aviationwx.org/`
+
+Diagnostics:
+- `https://aviationwx.org/diagnostics.php` (shows HTTPS, cache dir status, ffmpeg, API checks)
+- `https://aviationwx.org/clear-cache.php` (manually clears config cache)
 
 ### J. Troubleshooting Tips
 
