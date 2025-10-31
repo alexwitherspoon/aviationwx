@@ -78,7 +78,7 @@ function fetchStaticImage($url, $cacheFile) {
  */
 function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 10, $retries = 2) {
     $transport = strtolower($transport) === 'udp' ? 'udp' : 'tcp';
-    $stimeoutUs = max(1, intval($timeoutSeconds)) * 1000000; // microseconds
+    $timeoutUs = max(1, intval($timeoutSeconds)) * 1000000; // microseconds (for -timeout option in ffmpeg 5.0+)
     $attempt = 0;
     $jpegTmp = $cacheFile . '.tmp.jpg';
     @unlink($jpegTmp);
@@ -105,14 +105,15 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         }
         
         // Build ffmpeg command properly
-        // -stimeout must be specified as microseconds (not seconds)
+        // Note: ffmpeg 5.0+ uses -timeout instead of -stimeout
+        // The timeout is specified in microseconds
         // Build command array for proper escaping
         $cmdArray = [
             'ffmpeg',
             '-hide_banner',
             '-loglevel', 'warning',
             '-rtsp_transport', $transport,
-            '-stimeout', (string)$stimeoutUs
+            '-timeout', (string)$timeoutUs
         ];
         
         // Add RTSPS-specific flags if needed

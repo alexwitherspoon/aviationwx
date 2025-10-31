@@ -194,9 +194,9 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
             }
             
             // Test ffmpeg RTSPS command (quick timeout test)
-            // Use timeout option correctly for RTSP streams
+            // Use timeout option correctly for RTSP streams (ffmpeg 5.0+ uses -timeout, not -stimeout)
             $testCmd = sprintf(
-                "timeout 5 ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -stimeout 5000000 -i %s -frames:v 1 -f null - 2>&1 | head -3",
+                "timeout 5 ffmpeg -hide_banner -loglevel error -rtsp_transport tcp -timeout 5000000 -i %s -frames:v 1 -f null - 2>&1 | head -3",
                 escapeshellarg($testUrl)
             );
             $testOutput = @shell_exec($testCmd);
