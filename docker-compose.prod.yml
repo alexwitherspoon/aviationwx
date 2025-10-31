@@ -33,6 +33,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./ssl:/etc/nginx/ssl:ro  # SSL certificates
+      - /var/log/aviationwx:/var/log/aviationwx  # Unified log directory
     depends_on:
       - web
     logging:
