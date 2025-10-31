@@ -136,9 +136,18 @@ $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $air
 $weatherData['sunrise'] = getSunriseTime($airport);
 $weatherData['sunset'] = getSunsetTime($airport);
 
-// Track and update today's peak gust
-updatePeakGust($airportId, $weatherData['gust_speed'] ?? 0);
-$weatherData['peak_gust_today'] = getPeakGust($airportId, $weatherData['gust_speed'] ?? 0);
+// Track and update today's peak gust (store value and timestamp)
+$currentGust = $weatherData['gust_speed'] ?? 0;
+updatePeakGust($airportId, $currentGust);
+$peakGustInfo = getPeakGust($airportId, $currentGust);
+if (is_array($peakGustInfo)) {
+    $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
+    $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
+} else {
+    // Backward compatibility with older scalar cache files
+    $weatherData['peak_gust_today'] = $peakGustInfo;
+    $weatherData['peak_gust_time'] = null;
+}
 
 // Track and update today's high and low temperatures
 if ($weatherData['temperature'] !== null) {
@@ -573,12 +582,20 @@ function updatePeakGust($airportId, $currentGust) {
             }
         }
         
-        // Initialize today's entry if it doesn't exist
-        if (!isset($peakGusts[$dateKey][$airportId])) {
-            $peakGusts[$dateKey][$airportId] = $currentGust;
+        // Normalize existing entry to structured format {value, ts}
+        $existing = $peakGusts[$dateKey][$airportId] ?? null;
+        if (is_array($existing)) {
+            $existingValue = $existing['value'] ?? 0;
         } else {
-            // Update if current gust is higher
-            $peakGusts[$dateKey][$airportId] = max($peakGusts[$dateKey][$airportId], $currentGust);
+            $existingValue = is_numeric($existing) ? (float)$existing : 0;
+        }
+
+        // If no entry or current gust is higher, update value and timestamp (now)
+        if (!isset($peakGusts[$dateKey][$airportId]) || $currentGust > $existingValue) {
+            $peakGusts[$dateKey][$airportId] = [
+                'value' => $currentGust,
+                'ts' => time(), // store as UNIX timestamp (UTC)
+            ];
         }
         
         $jsonData = json_encode($peakGusts);
@@ -596,19 +613,29 @@ function updatePeakGust($airportId, $currentGust) {
 function getPeakGust($airportId, $currentGust) {
     $file = __DIR__ . '/cache/peak_gusts.json';
     $dateKey = date('Y-m-d');
-    
+
     if (!file_exists($file)) {
-        return $currentGust;
+        return ['value' => $currentGust, 'ts' => null];
     }
-    
+
     $peakGusts = json_decode(file_get_contents($file), true) ?? [];
-    
-    if (isset($peakGusts[$dateKey][$airportId])) {
-        // Return the higher of stored peak or current gust
-        return max($peakGusts[$dateKey][$airportId], $currentGust);
+    $entry = $peakGusts[$dateKey][$airportId] ?? null;
+    if ($entry === null) {
+        return ['value' => $currentGust, 'ts' => null];
     }
-    
-    return $currentGust;
+
+    // Support both legacy scalar and new structured format
+    if (is_array($entry)) {
+        $value = $entry['value'] ?? 0;
+        $ts = $entry['ts'] ?? null;
+        if ($currentGust > $value) {
+            $value = $currentGust;
+        }
+        return ['value' => $value, 'ts' => $ts];
+    }
+
+    $value = max((float)$entry, $currentGust);
+    return ['value' => $value, 'ts' => null];
 }
 
 /**

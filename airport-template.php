@@ -513,7 +513,10 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
             <span style="color: #666;">Today's Peak Gust:</span>
-            <span style="font-weight: bold;">${todaysPeakGust > 0 ? Math.round(todaysPeakGust) + ' kts' : '--'}</span>
+            <span style="font-weight: bold;">
+                ${todaysPeakGust > 0 ? Math.round(todaysPeakGust) + ' kts' : '--'}
+                ${weather.peak_gust_time ? `<span style="font-weight: normal; color: #666; margin-left: 6px;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>` : ''}
+            </span>
         </div>
     `;
     
