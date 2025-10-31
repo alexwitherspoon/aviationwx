@@ -74,16 +74,16 @@ jobs:
           sudo chmod 640 /var/log/aviationwx/app.log || true
           # Create logrotate rule on host for app log
           sudo tee /etc/logrotate.d/aviationwx > /dev/null <<'LR'
-/var/log/aviationwx/app.log {
-    size 100M
-    rotate 50
-    compress
-    delaycompress
-    missingok
-    notifempty
-    copytruncate
-}
-LR
+            /var/log/aviationwx/app.log {
+                size 100M
+                rotate 50
+                compress
+                delaycompress
+                missingok
+                notifempty
+                copytruncate
+            }
+            LR
           # Force a logrotate config test (dry-run)
           if command -v logrotate >/dev/null 2>&1; then sudo logrotate -d /etc/logrotate.conf || true; fi
           EOF
