@@ -1,0 +1,409 @@
+name: Non-Blocking Tests
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {} # Allow manual trigger
+
+jobs:
+  performance-tests:
+    name: Performance Tests (Non-Blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block PR if these fail
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl, json, mbstring
+          coverage: none
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Run Performance Tests
+        run: |
+          echo "Running performance tests..."
+          vendor/bin/phpunit --testsuite Performance --testdox --log-junit performance-results.xml || [ $? -eq 1 ]
+        continue-on-error: true
+        env:
+          CONFIG_PATH: tests/Fixtures/airports.json.test
+      
+      - name: Upload Performance Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-test-results
+          path: performance-results.xml
+          retention-days: 7
+  
+  e2e-tests:
+    name: End-to-End Tests (Non-Blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block PR if these fail
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl, json, mbstring
+          coverage: none
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Create test airports.json
+        run: |
+          # Create airports.json from example for Docker
+          if [ ! -f airports.json ]; then
+            cp airports.json.example airports.json
+            echo "✓ Created airports.json from example"
+          fi
+      
+      - name: Start Docker containers
+        run: |
+          # Start local instance for testing
+          docker compose up -d
+          sleep 15  # Wait for containers to be ready
+          docker compose ps
+      
+      - name: Wait for health check
+        run: |
+          timeout=60
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
+              echo "✓ Service is ready"
+              exit 0
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+            echo "Waiting for service... ${elapsed}s"
+          done
+          echo "⚠ Service did not become ready in time"
+          docker compose logs web
+      
+      - name: Run E2E Tests
+        run: |
+          echo "Running E2E tests with mocked APIs..."
+          echo "Note: These tests use mocked API responses"
+          vendor/bin/phpunit --testsuite E2E --testdox --log-junit e2e-results.xml || [ $? -eq 1 ]
+        continue-on-error: true
+        env:
+          TEST_API_URL: http://localhost:8080
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down
+      
+      - name: Upload E2E Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: e2e-results.xml
+          retention-days: 7
+  
+  smoke-tests:
+    name: Smoke Tests - Local (Non-Blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block PR if these fail
+    if: github.event_name == 'pull_request' || github.event_name == 'push'  # Auto on PRs and pushes
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl, json, mbstring
+          coverage: none
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Create test airports.json
+        run: |
+          # Create airports.json from example for Docker
+          if [ ! -f airports.json ]; then
+            cp airports.json.example airports.json
+            echo "✓ Created airports.json from example"
+          fi
+      
+      - name: Start Docker containers
+        run: |
+          docker compose up -d
+          sleep 15
+      
+      - name: Run Smoke Tests (Local)
+        run: |
+          echo "Running smoke tests against local instance..."
+          echo "Note: Docker container uses airports.json (mounted from host)"
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml || [ $? -eq 1 ]
+        continue-on-error: true
+        env:
+          TEST_API_URL: http://localhost:8080
+          # Note: CONFIG_PATH not set here - Docker container should use /var/www/html/airports.json
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down
+      
+      - name: Upload Smoke Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: smoke-results.xml
+          retention-days: 7
+  
+  smoke-tests-production:
+    name: Smoke Tests - Production (Manual Only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: github.event_name == 'workflow_dispatch'  # Only manual dispatch
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl, json, mbstring
+          coverage: none
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Run Smoke Tests (Production)
+        run: |
+          echo "⚠️  WARNING: Running smoke tests against PRODUCTION"
+          echo "Production URL: https://aviationwx.org"
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-prod-results.xml
+        env:
+          TEST_PROD_URL: https://aviationwx.org
+      
+      - name: Upload Production Smoke Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-prod-test-results
+          path: smoke-prod-results.xml
+          retention-days: 7
+  
+  browser-tests:
+    name: Browser Compatibility Tests (Non-Blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block PR if these fail
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tests/Browser/package.json
+      
+      - name: Install Playwright dependencies
+        working-directory: tests/Browser
+        run: |
+          npm install
+          # Only install browsers we test in CI (Chromium, Firefox, WebKit)
+          # This speeds up installation significantly
+          npx playwright install --with-deps chromium firefox webkit
+      
+      - name: Create test airports.json
+        run: |
+          # Create airports.json from example for Docker
+          if [ ! -f airports.json ]; then
+            cp airports.json.example airports.json
+            echo "✓ Created airports.json from example"
+          fi
+      
+      - name: Start Docker containers
+        run: |
+          docker compose up -d
+          sleep 15
+          docker compose ps
+      
+      - name: Wait for service to be ready
+        run: |
+          timeout=60
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8080/ 2>/dev/null; then
+              echo "✓ Service is ready"
+              exit 0
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          echo "⚠ Service did not become ready"
+          docker compose logs web
+      
+      - name: Run Browser Tests
+        working-directory: tests/Browser
+        run: |
+          npx playwright test
+        env:
+          TEST_BASE_URL: http://localhost:8080
+      
+      - name: Upload Playwright Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/Browser/playwright-report/
+          retention-days: 7
+      
+      - name: Upload Playwright Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: tests/Browser/playwright-results.json
+          retention-days: 7
+      
+      - name: Upload Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: tests/Browser/test-results/
+          retention-days: 7
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down
+  
+  test-results-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [performance-tests, e2e-tests, smoke-tests, browser-tests]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-test-results*'
+          merge-multiple: true
+          path: test-results
+      
+      - name: Generate Test Summary
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Performance Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results/performance-results.xml ]; then
+            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### E2E Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results/e2e-results.xml ]; then
+            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Smoke Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results/smoke-results.xml ]; then
+            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Browser Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results/playwright-results.json ]; then
+            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Check which tests passed/failed
+            const results = {
+              performance: 'unknown',
+              e2e: 'unknown',
+              smoke: 'unknown',
+              browser: 'unknown'
+            };
+            
+            try {
+              if (fs.existsSync('test-results/performance-results.xml')) {
+                const content = fs.readFileSync('test-results/performance-results.xml', 'utf8');
+                results.performance = content.includes('failures="0"') ? 'passed' : 'failed';
+              }
+            } catch (e) {}
+            
+            try {
+              if (fs.existsSync('test-results/e2e-results.xml')) {
+                const content = fs.readFileSync('test-results/e2e-results.xml', 'utf8');
+                results.e2e = content.includes('failures="0"') ? 'passed' : 'failed';
+              }
+            } catch (e) {}
+            
+            try {
+              if (fs.existsSync('test-results/smoke-results.xml')) {
+                const content = fs.readFileSync('test-results/smoke-results.xml', 'utf8');
+                results.smoke = content.includes('failures="0"') ? 'passed' : 'failed';
+              }
+            } catch (e) {}
+            
+            const comment = `## 📊 Non-Blocking Test Results
+            
+            These tests provide quality assurance but do **not block PR merges**.
+            
+            | Test Suite | Status |
+            |------------|--------|
+            | Performance Tests | ${results.performance === 'passed' ? '✅ Passed' : results.performance === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
+            | E2E Tests | ${results.e2e === 'passed' ? '✅ Passed' : results.e2e === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
+            | Smoke Tests | ${results.smoke === 'passed' ? '✅ Passed' : results.smoke === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
+            | Browser Tests | ${results.browser === 'passed' ? '✅ Passed' : results.browser === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
+            
+            📦 **Test artifacts** are available in the workflow run artifacts section.
+            
+            💡 **Note:** These tests are non-blocking. Review failures but they won't prevent merge.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

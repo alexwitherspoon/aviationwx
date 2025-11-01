@@ -1,0 +1,161 @@
+name: PR Quality Gates
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
+
+jobs:
+  quality-gates:
+    name: Quality Gates (Block PR if Failed)
+    runs-on: ubuntu-latest
+    fail-fast: true
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better diffs
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl, json, mbstring
+          coverage: none
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Run All PHPUnit Tests
+        run: |
+          echo "Running full PHPUnit test suite..."
+          vendor/bin/phpunit --testdox
+      
+      - name: Check Test Coverage (Minimum Threshold)
+        run: |
+          echo "Checking test coverage..."
+          # Run tests with coverage
+          vendor/bin/phpunit --coverage-clover=coverage.xml
+          
+          # Check that critical files have tests
+          critical_files=(
+            "weather.php"
+            "config-utils.php"
+            "rate-limit.php"
+          )
+          
+          for file in "${critical_files[@]}"; do
+            if ! grep -q "$file" coverage.xml 2>/dev/null; then
+              echo "⚠️  Warning: $file may not have test coverage"
+            fi
+          done
+          
+          echo "✓ Coverage check complete"
+      
+      - name: Validate Stale Data Safety Implementation
+        run: |
+          echo "🔒 Validating stale data safety implementation..."
+          
+          # Check that nullStaleFieldsBySource function exists
+          if ! grep -q "function nullStaleFieldsBySource" weather.php; then
+            echo "❌ CRITICAL: nullStaleFieldsBySource function missing!"
+            exit 1
+          fi
+          
+          # Check that stale data threshold is set correctly (3 hours)
+          if ! grep -q "maxStaleHours = 3" weather.php; then
+            echo "⚠️  Warning: Stale data threshold may not be set correctly"
+          fi
+          
+          # Check that daily tracking values are preserved
+          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" weather.php; then
+            echo "⚠️  Warning: Daily tracking values preservation may be missing"
+          fi
+          
+          echo "✓ Stale data safety validation complete"
+      
+      - name: Validate Flight Category Logic
+        run: |
+          echo "🔒 Validating flight category calculation logic..."
+          
+          # Check that calculateFlightCategory function exists
+          if ! grep -q "function calculateFlightCategory" weather.php; then
+            echo "❌ CRITICAL: calculateFlightCategory function missing!"
+            exit 1
+          fi
+          
+          # Check for all flight categories
+          categories=("LIFR" "IFR" "MVFR" "VFR")
+          for category in "${categories[@]}"; do
+            if ! grep -q "return '$category'" weather.php; then
+              echo "⚠️  Warning: Flight category $category may not be handled"
+            fi
+          done
+          
+          echo "✓ Flight category validation complete"
+      
+      - name: Check for Breaking Changes
+        run: |
+          echo "Checking for breaking changes..."
+          
+          # Check if critical functions are being removed or renamed
+          critical_functions=(
+            "calculateFlightCategory"
+            "calculateDensityAltitude"
+            "calculatePressureAltitude"
+            "nullStaleFieldsBySource"
+            "validateAirportId"
+            "checkRateLimit"
+          )
+          
+          for func in "${critical_functions[@]}"; do
+            if ! grep -q "function $func" weather.php config-utils.php rate-limit.php 2>/dev/null; then
+              echo "❌ CRITICAL: Function $func missing or removed!"
+              exit 1
+            fi
+          done
+          
+          echo "✓ No breaking changes detected"
+      
+      - name: Validate API Response Structure
+        run: |
+          echo "Validating API response structure..."
+          
+          # Check that weather.php returns JSON
+          if ! grep -q "Content-Type: application/json" weather.php; then
+            echo "❌ CRITICAL: API response doesn't set JSON header!"
+            exit 1
+          fi
+          
+          # Check for error handling
+          if ! grep -q "success.*false" weather.php; then
+            echo "⚠️  Warning: Error response structure may be missing"
+          fi
+          
+          echo "✓ API response validation complete"
+      
+      - name: Security Checks
+        run: |
+          echo "Running security checks..."
+          
+          # Check for SQL injection risks (even though we use JSON files)
+          if grep -r "mysql_query\|mysqli_query\|pg_query" --include="*.php" . | grep -v "test\|vendor" | grep -v "^$"; then
+            echo "❌ CRITICAL: Potential SQL injection risk detected!"
+            exit 1
+          fi
+          
+          # Check for XSS vulnerabilities in output
+          if grep -r "echo.*\$_GET\|echo.*\$_POST\|echo.*\$_REQUEST" --include="*.php" . | grep -v "test\|vendor" | grep -v "json_encode"; then
+            echo "⚠️  Warning: Potential XSS vulnerability - ensure all output is sanitized"
+          fi
+          
+          # Check that rate limiting is enforced
+          if ! grep -q "checkRateLimit" weather.php; then
+            echo "❌ CRITICAL: Rate limiting not enforced in weather.php!"
+            exit 1
+          fi
+          
+          echo "✓ Security checks complete"
+

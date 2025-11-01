@@ -1,6 +1,6 @@
 {
   "airports": {
-    "airportid": {
+    "kxxx": {
       "name": "Example Airport",
       "icao": "KXXX",
       "address": "City, State",
