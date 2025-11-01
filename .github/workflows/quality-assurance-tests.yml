@@ -473,18 +473,45 @@ jobs:
             console.log('Mobile screenshot found:', mobileScreenshot);
             console.log('Desktop screenshot found:', desktopScreenshot);
             
-            // Build screenshot section
+            // Convert screenshots to base64 for embedding
+            const encodeScreenshot = (filePath) => {
+              try {
+                if (fs.existsSync(filePath)) {
+                  const imageBuffer = fs.readFileSync(filePath);
+                  const base64 = imageBuffer.toString('base64');
+                  const ext = path.extname(filePath).toLowerCase().slice(1) || 'png';
+                  const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+                  return `data:${mimeType};base64,${base64}`;
+                }
+              } catch (e) {
+                console.log(`Error encoding screenshot ${filePath}:`, e.message);
+              }
+              return null;
+            };
+            
+            const mobileScreenshotBase64 = mobileScreenshot ? encodeScreenshot(mobileScreenshot) : null;
+            const desktopScreenshotBase64 = desktopScreenshot ? encodeScreenshot(desktopScreenshot) : null;
+            
+            // Build screenshot section with embedded images
             let screenshotSection = '';
             if (mobileScreenshot || desktopScreenshot) {
               screenshotSection = '\n\n### 📸 Browser Test Screenshots\n\n';
-              screenshotSection += 'Screenshots from browser compatibility tests:\n\n';
-              if (mobileScreenshot) {
-                screenshotSection += `- **Mobile View**: Screenshot available in [workflow artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n`;
+              
+              // Embed images using HTML img tags with base64 data URIs
+              // GitHub PR comments support HTML in markdown
+              if (mobileScreenshotBase64) {
+                screenshotSection += '<details>\n<summary><strong>📱 Mobile View</strong></summary>\n\n';
+                screenshotSection += `<img src="${mobileScreenshotBase64}" alt="Mobile Browser Test Screenshot" width="400" />\n\n`;
+                screenshotSection += '</details>\n\n';
               }
-              if (desktopScreenshot) {
-                screenshotSection += `- **Desktop View**: Screenshot available in [workflow artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n`;
+              
+              if (desktopScreenshotBase64) {
+                screenshotSection += '<details>\n<summary><strong>🖥️ Desktop View</strong></summary>\n\n';
+                screenshotSection += `<img src="${desktopScreenshotBase64}" alt="Desktop Browser Test Screenshot" width="600" />\n\n`;
+                screenshotSection += '</details>\n\n';
               }
-              screenshotSection += '\n> 💡 **Tip**: Download the `playwright-screenshots` artifact from the workflow run to view full-size screenshots.\n';
+              
+              screenshotSection += '> 💡 **Tip**: Full-size screenshots are available in [workflow artifacts](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n';
             } else {
               screenshotSection = '\n\n> ⚠️ No screenshots found. Check test-results directory for screenshot files.';
               // List what files we found
