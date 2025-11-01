@@ -92,7 +92,7 @@ Returns a cached webcam image for the specified airport and camera.
 - `cam` (required): Camera index (0-based, e.g., `0`, `1`)
 
 **Response:**
-- Content-Type: `image/jpeg`, `image/webp`, or `image/avif` (depending on browser support)
+- Content-Type: `image/jpeg` or `image/webp` (depending on browser support)
 - Binary image data
 
 **HTTP Status Codes:**

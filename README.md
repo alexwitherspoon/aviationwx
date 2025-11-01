@@ -25,7 +25,7 @@ Quick links:
 - **Daily Peak Gust**: Tracks and displays today's peak wind gust
 - **Unit Toggles**: Switch between temperature units (F/C), distance units (ft/m), and wind speed units (kts/mph/km/h)
 - **Stale Data Safety**: Automatically displays "---" for weather data older than 3 hours (per-source checking preserves valid data)
-- **Multiple Image Formats**: AVIF, WEBP, and JPEG with automatic fallback
+- **Multiple Image Formats**: WEBP and JPEG with automatic fallback
 - **Time Since Updated Indicators**: Shows data age with visual warnings for stale data
 - **Performance Optimizations**: 
   - Config caching (APCu)
@@ -141,8 +141,8 @@ Then set up wildcard DNS as described in deployment docs.
   - `refresh_seconds`: Override refresh interval per camera
 - ffmpeg 5.0+ uses the `-timeout` option (the old `-stimeout` is no longer supported)
 - **Image format generation**: The fetcher automatically generates multiple formats per image:
-  - `AVIF` (best-effort), `WEBP`, and `JPEG` for broad compatibility
-- **Frontend**: Uses `<picture>` element with AVIF/WEBP sources and JPEG fallback
+  - `WEBP` and `JPEG` for broad compatibility
+- **Frontend**: Uses `<picture>` element with WEBP sources and JPEG fallback
 
 See [CONFIGURATION.md](CONFIGURATION.md) for detailed webcam configuration examples including RTSP/RTSPS setup.
 
