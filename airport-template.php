@@ -689,56 +689,69 @@ async function fetchWeather() {
 }
 
 function displayWeather(weather) {
-    // Determine weather emojis based on conditions
+    // Determine weather emojis based on abnormal conditions only
     function getWeatherEmojis(weather) {
         const emojis = [];
         const tempF = weather.temperature_f;
         const precip = weather.precip_accum || 0;
         const windSpeed = weather.wind_speed || 0;
         
-        // Temperature emoji
-        if (tempF !== null) {
-            if (tempF > 80) emojis.push('🔥'); // Hot
-            else if (tempF > 50) emojis.push('☀️'); // Warm/Sunny
-            else if (tempF > 32) emojis.push('🌤️'); // Cool
-            else emojis.push('❄️'); // Freezing
-        }
-        
-        // Precipitation emoji
+        // Precipitation emoji (always show if present - abnormal condition)
         if (precip > 0.01) {
-            if (tempF < 32) emojis.push('❄️'); // Snow
-            else emojis.push('🌧️'); // Rain
-        }
-        
-        // Wind emoji
-        if (windSpeed > 20) emojis.push('💨'); // Strong wind
-        else if (windSpeed > 10) emojis.push('🌬️'); // Moderate wind
-        
-        // Cloud emoji based on ceiling
-        if (weather.ceiling !== null) {
-            if (weather.ceiling < 1000) emojis.push('☁️'); // Overcast
-            else if (weather.ceiling < 3000) emojis.push('🌥️'); // Broken
-            else if (weather.cloud_cover === 'SCT') emojis.push('⛅'); // Scattered
-            else emojis.push('☀️'); // Clear or few clouds
-        } else if (weather.cloud_cover) {
-            switch (weather.cloud_cover) {
-                case 'OVC':
-                case 'OVX':
-                    emojis.push('☁️');
-                    break;
-                case 'BKN':
-                    emojis.push('🌥️');
-                    break;
-                case 'SCT':
-                    emojis.push('⛅');
-                    break;
-                case 'FEW':
-                    emojis.push('🌤️');
-                    break;
+            if (tempF !== null && tempF < 32) {
+                emojis.push('❄️'); // Snow
+            } else {
+                emojis.push('🌧️'); // Rain
             }
         }
         
-        return emojis.length > 0 ? emojis.join(' ') : '🌡️';
+        // High wind emoji (only show if concerning - abnormal condition)
+        if (windSpeed > 25) {
+            emojis.push('💨'); // Strong wind (>25 kts)
+        } else if (windSpeed > 15) {
+            emojis.push('🌬️'); // Moderate wind (15-25 kts)
+        }
+        // No emoji for ≤ 15 kts (normal wind)
+        
+        // Low ceiling/poor visibility emoji (only show if concerning - abnormal condition)
+        if (weather.ceiling !== null) {
+            if (weather.ceiling < 1000) {
+                emojis.push('☁️'); // Low ceiling (<1000 ft AGL - IFR/LIFR)
+            } else if (weather.ceiling < 3000) {
+                emojis.push('🌥️'); // Marginal ceiling (1000-3000 ft AGL - MVFR)
+            }
+            // No emoji for ≥ 3000 ft (normal VFR ceiling)
+        } else if (weather.cloud_cover) {
+            // Fallback to cloud cover if ceiling not available
+            switch (weather.cloud_cover) {
+                case 'OVC':
+                case 'OVX':
+                    emojis.push('☁️'); // Overcast (typically low ceiling)
+                    break;
+                case 'BKN':
+                    emojis.push('🌥️'); // Broken (marginal conditions)
+                    break;
+                // No emoji for SCT or FEW (normal VFR conditions)
+            }
+        }
+        
+        // Poor visibility (if available and concerning)
+        if (weather.visibility !== null && weather.visibility < 3) {
+            emojis.push('🌫️'); // Poor visibility (< 3 SM)
+        }
+        
+        // Extreme temperatures (only show if extreme - abnormal condition)
+        if (tempF !== null) {
+            if (tempF > 90) {
+                emojis.push('🥵'); // Extreme heat (>90°F)
+            } else if (tempF < 20) {
+                emojis.push('❄️'); // Extreme cold (<20°F)
+            }
+            // No emoji for 20°F to 90°F (normal temperature range)
+        }
+        
+        // Return emojis if any, otherwise empty string (no emojis for normal conditions)
+        return emojis.length > 0 ? emojis.join(' ') : '';
     }
     
     const weatherEmojis = getWeatherEmojis(weather);
@@ -1208,4 +1221,5 @@ function safeSwapCameraImage(camIndex) {
 </script>
 </body>
 </html>
+
 
