@@ -354,16 +354,20 @@ h3 {
     }
 }
 
-/* Status Colors */
+/* Status Colors - Standard Aviation Weather Colors */
 .status-vfr {
-    color: #28a745;
+    color: #28a745; /* Green - VFR: Visibility > 5 miles, Ceiling > 3,000 feet */
 }
 
 .status-mvfr {
-    color: #ffc107;
+    color: #0066cc; /* Blue - MVFR: Visibility 3-5 miles, Ceiling 1,000-3,000 feet */
 }
 
 .status-ifr {
-    color: #dc3545;
+    color: #dc3545; /* Red - IFR: Visibility 1-3 miles, Ceiling 500-1,000 feet */
+}
+
+.status-lifr {
+    color: #ff00ff; /* Magenta - LIFR: Visibility < 1 mile, Ceiling < 500 feet */
 }
 
