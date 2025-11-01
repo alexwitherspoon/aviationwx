@@ -67,8 +67,7 @@ function checkRateLimit($key, $maxRequests = 60, $windowSeconds = 60) {
  */
 function getRateLimitRemaining($key, $maxRequests = 60, $windowSeconds = 60) {
     if (!function_exists('apcu_fetch')) {
-        // Return max requests if APCu unavailable (simulates no rate limit)
-        return $maxRequests;
+        return -1;
     }
     
     $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
@@ -97,6 +96,8 @@ function getRateLimitRemaining($key, $maxRequests = 60, $windowSeconds = 60) {
         ];
     }
     
-    // Return remaining count as integer for compatibility with tests
-    return (int)max(0, $maxRequests - $currentCount);
+    return [
+        'remaining' => max(0, $maxRequests - $currentCount),
+        'reset' => (int)$resetTime
+    ];
 }
