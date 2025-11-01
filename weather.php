@@ -816,15 +816,14 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
 
     if ($weatherData === null) {
-    // If we have stale cache, serve it instead of erroring
-    if ($hasStaleCache && $staleData !== null) {
-        // Serve stale data as fallback (stale-while-revalidate pattern)
-        aviationwx_log('warning', 'weather api refresh failed, serving stale cache', ['airport' => $airportId]);
-        ob_clean();
-        echo json_encode(['success' => true, 'weather' => $staleData]);
-        exit;
+    // If we already served stale cache, just exit silently (background refresh failed)
+    if ($hasStaleCache) {
+        // Request already finished with stale cache response, just update cache in background
+        aviationwx_log('warning', 'weather api refresh failed, stale cache was served', ['airport' => $airportId]);
+        exit; // Don't send another response, request already finished
     }
     
+    // No stale cache available - send error response
     aviationwx_log('error', 'weather api no data', ['airport' => $airportId]);
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
