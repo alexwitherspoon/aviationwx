@@ -16,9 +16,14 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should display airport information', async ({ page }) => {
-    // Wait for content to be rendered (check for common elements)
-    // The page loads content via JavaScript, so we need to wait for it
-    await page.waitForTimeout(2000);
+    // Wait for the airport name/ICAO to appear (h1 element contains airport name)
+    // The page renders this immediately in HTML, not via JavaScript
+    try {
+      await page.waitForSelector('h1', { state: 'visible', timeout: 5000 });
+    } catch (e) {
+      // Fallback: wait a bit more if h1 not found
+      await page.waitForTimeout(2000);
+    }
     
     // Check for airport name or ICAO code in the page
     const pageContent = await page.textContent('body');
@@ -28,13 +33,6 @@ test.describe('Aviation Weather Dashboard', () => {
     expect(pageContent.trim().length).toBeGreaterThan(0);
     
     // Check for airport identifier or name (case insensitive)
-    const hasAirportInfo = /KSPB|Scappoose/i.test(pageContent);
-    if (!hasAirportInfo) {
-      // If not found, check if page loaded correctly
-      const title = await page.title();
-      const url = page.url();
-      console.log(`Page title: ${title}, URL: ${url}, Content length: ${pageContent?.length || 0}`);
-    }
     expect(pageContent).toMatch(/KSPB|Scappoose/i);
   });
 
@@ -100,8 +98,19 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should display flight category', async ({ page }) => {
-    // Wait for JavaScript to render content
-    await page.waitForTimeout(2000);
+    // Wait for weather data to be loaded and displayed
+    // Flight category is rendered via JavaScript after fetching weather data
+    // Wait for either the condition status element or give it time to load
+    try {
+      // Try waiting for condition status element (contains flight category)
+      await page.waitForSelector('[class*="condition"], [class*="status"]', { 
+        state: 'visible', 
+        timeout: 10000 
+      });
+    } catch (e) {
+      // Fallback: wait for JavaScript to fetch and render data
+      await page.waitForTimeout(3000);
+    }
     
     const pageContent = await page.textContent('body');
     
@@ -110,10 +119,9 @@ test.describe('Aviation Weather Dashboard', () => {
     expect(pageContent.trim().length).toBeGreaterThan(0);
     
     // Should show flight category (VFR, MVFR, IFR, LIFR, or --- if unavailable)
-    // Also allow empty if data not available yet (JavaScript still loading)
-    if (pageContent.trim().length > 10) {
-      expect(pageContent).toMatch(/VFR|MVFR|IFR|LIFR|---/);
-    }
+    // The flight category may not be available if weather data fetch failed
+    // but we should still see something (even if it's "---")
+    expect(pageContent).toMatch(/VFR|MVFR|IFR|LIFR|---/);
   });
 
   test('should handle missing data gracefully', async ({ page }) => {
