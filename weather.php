@@ -689,17 +689,18 @@ if ($metarStale || ($weatherData['visibility'] === null && $weatherData['ceiling
     }
 }
 
-// Stamp last_updated and write cache (only update timestamp if data is fresh)
-// If data was stale, keep the old timestamp to indicate when it was last valid
-if ($dataAge <= $maxStaleSeconds) {
+// Set overall last_updated to most recent source timestamp
+$lastUpdated = max(
+    $weatherData['last_updated_primary'] ?? 0,
+    $weatherData['last_updated_metar'] ?? 0
+);
+if ($lastUpdated > 0) {
+    $weatherData['last_updated'] = $lastUpdated;
+    $weatherData['last_updated_iso'] = date('c', $lastUpdated);
+} else {
+    // Fallback if no source timestamps (shouldn't happen with new code)
     $weatherData['last_updated'] = time();
     $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
-} else {
-    // Keep original last_updated timestamp even though data is stale
-    // This way frontend can see how old the data is
-    if (!isset($weatherData['last_updated_iso']) && isset($weatherData['last_updated'])) {
-        $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
-    }
 }
 
 @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
