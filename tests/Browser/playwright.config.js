@@ -43,10 +43,10 @@ module.exports = defineConfig({
   },
 
   // Configure projects for major browsers
-  // In CI: Only test core browsers (Chromium, Firefox, WebKit) for speed
+  // In CI: Test core browsers plus mobile/tablet for responsive design
   // In local dev: Test all browsers including Edge and mobile/tablet
   projects: process.env.CI ? [
-    // Core browsers only in CI (faster)
+    // Core browsers for desktop
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
@@ -58,6 +58,15 @@ module.exports = defineConfig({
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+    },
+    // Mobile and tablet viewports for responsive testing
+    {
+      name: 'Mobile Chrome',
+      use: { ...devices['Pixel 5'] },
+    },
+    {
+      name: 'Tablet',
+      use: { ...devices['iPad Pro'] },
     },
   ] : [
     // All browsers in local development

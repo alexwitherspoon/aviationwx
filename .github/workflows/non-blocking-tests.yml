@@ -233,8 +233,7 @@ jobs:
         working-directory: tests/Browser
         run: |
           npm install
-          # Only install browsers we test in CI (Chromium, Firefox, WebKit)
-          # This speeds up installation significantly
+          # Install browsers we test in CI (Chromium, Firefox, WebKit for desktop + mobile)
           npx playwright install --with-deps chromium firefox webkit
       
       - name: Create test airports.json
@@ -292,7 +291,7 @@ jobs:
           retention-days: 7
       
       - name: Upload Screenshots
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-screenshots
@@ -324,6 +323,13 @@ jobs:
           pattern: '*-test-results*'
           merge-multiple: true
           path: test-results
+      
+      - name: Download browser screenshots
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'playwright-screenshots'
+          path: test-results/screenshots
+          if-no-files-found: ignore
       
       - name: Generate Test Summary
         run: |
@@ -394,6 +400,100 @@ jobs:
               }
             } catch (e) {}
             
+            // Parse Playwright JSON results for browser tests
+            try {
+              if (fs.existsSync('test-results/playwright-results.json')) {
+                const playwrightData = JSON.parse(fs.readFileSync('test-results/playwright-results.json', 'utf8'));
+                const totalTests = playwrightData.stats?.total || 0;
+                const failedTests = playwrightData.stats?.failures || 0;
+                const skippedTests = playwrightData.stats?.skipped || 0;
+                if (totalTests > 0 && failedTests === 0) {
+                  results.browser = skippedTests > 0 ? 'passed-with-skipped' : 'passed';
+                } else if (failedTests > 0) {
+                  results.browser = 'failed';
+                } else {
+                  results.browser = 'unknown';
+                }
+              }
+            } catch (e) {
+              console.log('Error parsing Playwright results:', e.message);
+            }
+            
+            // Find representative screenshots (mobile and desktop)
+            let mobileScreenshot = null;
+            let desktopScreenshot = null;
+            const screenshotsDir = 'test-results/screenshots/playwright-screenshots/test-results';
+            
+            try {
+              if (fs.existsSync(screenshotsDir)) {
+                // Look for mobile screenshot (contains 'mobile' in name)
+                const files = fs.readdirSync(screenshotsDir, { recursive: true });
+                for (const file of files) {
+                  const fullPath = path.join(screenshotsDir, file);
+                  if (file.includes('screenshot') && file.endsWith('.png')) {
+                    if (file.includes('mobile') && !mobileScreenshot) {
+                      mobileScreenshot = fullPath;
+                    } else if ((file.includes('desktop') || file.includes('chromium')) && !desktopScreenshot) {
+                      desktopScreenshot = fullPath;
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('Error finding screenshots:', e.message);
+            }
+            
+            // Upload screenshots and get URLs if available
+            let mobileScreenshotUrl = '';
+            let desktopScreenshotUrl = '';
+            
+            if (mobileScreenshot && fs.existsSync(mobileScreenshot)) {
+              try {
+                const screenshotData = fs.readFileSync(mobileScreenshot);
+                const screenshotBase64 = screenshotData.toString('base64');
+                const uploadResult = await github.rest.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: 0, // We'll use a different approach - direct upload
+                });
+                // Instead, we'll attach to the PR as an image in markdown
+                mobileScreenshotUrl = `![Mobile Screenshot](${context.payload.repository.html_url}/blob/${context.sha}/${mobileScreenshot})`;
+              } catch (e) {
+                console.log('Could not upload mobile screenshot:', e.message);
+              }
+            }
+            
+            if (desktopScreenshot && fs.existsSync(desktopScreenshot)) {
+              try {
+                const screenshotData = fs.readFileSync(desktopScreenshot);
+                // We'll include screenshots in the comment using a workaround
+                const screenshotBase64 = screenshotData.toString('base64');
+                desktopScreenshotUrl = `![Desktop Screenshot](data:image/png;base64,${screenshotBase64})`;
+              } catch (e) {
+                console.log('Could not process desktop screenshot:', e.message);
+              }
+            }
+            
+            // Build comment with screenshots
+            let screenshotSection = '';
+            if (mobileScreenshot || desktopScreenshot) {
+              screenshotSection = '\n\n## 📸 Visual Test Results\n\n';
+              if (mobileScreenshot) {
+                screenshotSection += '### Mobile View\n';
+                try {
+                  const screenshotBase64 = fs.readFileSync(mobileScreenshot).toString('base64');
+                  screenshotSection += `![Mobile Screenshot](data:image/png;base64,${screenshotBase64})\n\n`;
+                } catch (e) {}
+              }
+              if (desktopScreenshot) {
+                screenshotSection += '### Desktop View\n';
+                try {
+                  const screenshotBase64 = fs.readFileSync(desktopScreenshot).toString('base64');
+                  screenshotSection += `![Desktop Screenshot](data:image/png;base64,${screenshotBase64})\n\n`;
+                } catch (e) {}
+              }
+            }
+            
             const comment = `## 📊 Non-Blocking Test Results
             
             These tests provide quality assurance but do **not block PR merges**.
@@ -403,8 +503,8 @@ jobs:
             | Performance Tests | ${results.performance === 'passed' ? '✅ Passed' : results.performance === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
             | E2E Tests | ${results.e2e === 'passed' ? '✅ Passed' : results.e2e === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
             | Smoke Tests | ${results.smoke === 'passed' ? '✅ Passed' : results.smoke === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
-            | Browser Tests | ${results.browser === 'passed' ? '✅ Passed' : results.browser === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
-            
+            | Browser Tests | ${results.browser === 'passed' || results.browser === 'passed-with-skipped' ? '✅ Passed' : results.browser === 'failed' ? '⚠️ Failed' : '⏭️ Skipped'} |
+            ${screenshotSection}
             📦 **Test artifacts** are available in the workflow run artifacts section.
             
             💡 **Note:** These tests are non-blocking. Review failures but they won't prevent merge.`;

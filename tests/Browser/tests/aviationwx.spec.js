@@ -42,12 +42,21 @@ test.describe('Aviation Weather Dashboard', () => {
     await page.waitForSelector('h1', { state: 'visible', timeout: 5000 });
   });
 
-  test('should display airport information', async ({ page }) => {
+  test('should display airport information', async ({ page, browserName }) => {
     // Wait for the airport name/ICAO to appear (h1 element contains airport name)
     // The page renders this immediately in HTML, not via JavaScript
     // Already waited in beforeEach, but ensure it's still there
     try {
       const h1 = await page.waitForSelector('h1', { state: 'visible', timeout: 5000 });
+      
+      // Take a representative screenshot for mobile/desktop summary
+      // Save with viewport identifier for easy identification
+      const viewportType = page.viewportSize().width < 768 ? 'mobile' : 
+                          page.viewportSize().width < 1024 ? 'tablet' : 'desktop';
+      await page.screenshot({ 
+        path: `test-results/screenshot-${viewportType}-${browserName}.png`,
+        fullPage: true 
+      });
       
       // Check for airport name or ICAO code in the h1 element
       // Format is: "Scappoose Airport (KSPB)" or similar
