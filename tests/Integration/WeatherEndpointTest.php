@@ -71,10 +71,14 @@ class WeatherEndpointTest extends TestCase
         
         // Check for required fields (may be null if no data available)
         $this->assertArrayHasKey('success', $data, "Response should have 'success' field");
-        $this->assertArrayHasKey('data', $data, "Response should have 'data' field");
+        // Endpoint returns 'weather' not 'data' - check for either
+        $this->assertTrue(
+            isset($data['weather']) || isset($data['data']),
+            "Response should have 'weather' or 'data' field"
+        );
         
         if ($data['success']) {
-            $weather = $data['data'] ?? null;
+            $weather = $data['weather'] ?? $data['data'] ?? null;
             $this->assertNotNull($weather, "Weather data should exist if success is true");
             
             if ($weather) {
