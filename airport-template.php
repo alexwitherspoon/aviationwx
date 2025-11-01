@@ -242,7 +242,7 @@
                 );
                 ?>
                 <a href="<?= htmlspecialchars($faa_weather_url) ?>" target="_blank" rel="noopener" class="btn">
-                    View on FAA Weather
+                    FAA Weather
                 </a>
             </div>
         </section>
