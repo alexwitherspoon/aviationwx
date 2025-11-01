@@ -1,4 +1,4 @@
-name: Non-Blocking Tests
+name: Quality Assurance Tests
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   performance-tests:
-    name: Performance Tests (Non-Blocking)
+    name: Performance Tests
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't block PR if these fail
     
@@ -51,7 +51,7 @@ jobs:
           retention-days: 7
   
   e2e-tests:
-    name: End-to-End Tests (Non-Blocking)
+    name: End-to-End Tests
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't block PR if these fail
     
@@ -124,7 +124,7 @@ jobs:
           retention-days: 7
   
   smoke-tests:
-    name: Smoke Tests - Local (Non-Blocking)
+    name: Smoke Tests - Local
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't block PR if these fail
     if: github.event_name == 'pull_request' || github.event_name == 'push'  # Auto on PRs and pushes
@@ -220,7 +220,7 @@ jobs:
           retention-days: 7
   
   browser-tests:
-    name: Browser Compatibility Tests (Non-Blocking)
+    name: Browser Compatibility Tests
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't block PR if these fail
     
