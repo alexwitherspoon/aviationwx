@@ -1,5 +1,7 @@
 # AviationWX.org - Progress Report
 
+> **Note**: This file tracks historical development progress. For current project status, see [README.md](README.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## ✅ Production Ready Status
 
 The AviationWX project is **fully implemented and ready for production deployment**. All core features are working, tested, and documented.

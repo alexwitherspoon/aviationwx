@@ -3,10 +3,15 @@
 Real-time aviation weather and conditions for participating airports.
 
 Quick links:
-- Deployment guide: [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
-- Configuration guide: [CONFIGURATION.md](CONFIGURATION.md)
-- Diagnostics: visit `/diagnostics.php`
-- Clear config cache: visit `/clear-cache.php`
+- 🚀 **Getting Started**: [LOCAL_SETUP.md](LOCAL_SETUP.md) (for developers)
+- 📖 **Configuration Guide**: [CONFIGURATION.md](CONFIGURATION.md)
+- 🏗️ **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
+- 🔌 **API Documentation**: [API.md](API.md)
+- 🚢 **Deployment**: [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+- 🔒 **Security**: [SECURITY.md](SECURITY.md)
+- 🤝 **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 🛠️ **Diagnostics**: visit `/diagnostics.php`
+- 🗑️ **Clear Cache**: visit `/clear-cache.php`
 
 ## Features
 
@@ -301,7 +306,15 @@ MIT License - See LICENSE file
 
 ## Contributing
 
-Contributions welcome! Please feel free to submit a Pull Request.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and instructions.
+
+Quick start:
+1. Fork the repository
+2. Set up local development (see [LOCAL_SETUP.md](LOCAL_SETUP.md))
+3. Create a branch for your changes
+4. Submit a Pull Request
+
+For more details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Support
 
