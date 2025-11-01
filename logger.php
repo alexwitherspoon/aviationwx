@@ -1,18 +1,29 @@
 <?php
 // Lightweight JSONL logger with simple rotation and APCu-backed error counter
 
-define('AVIATIONWX_LOG_DIR', '/var/log/aviationwx');
-define('AVIATIONWX_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
-define('AVIATIONWX_LOG_MAX_BYTES', 100 * 1024 * 1024); // 100MB per file
-define('AVIATIONWX_LOG_MAX_FILES', 50); // ~5GB cap
+if (!defined('AVIATIONWX_LOG_DIR')) {
+    define('AVIATIONWX_LOG_DIR', '/var/log/aviationwx');
+}
+if (!defined('AVIATIONWX_LOG_FILE')) {
+    define('AVIATIONWX_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
+}
+if (!defined('AVIATIONWX_LOG_MAX_BYTES')) {
+    define('AVIATIONWX_LOG_MAX_BYTES', 100 * 1024 * 1024); // 100MB per file
+}
+if (!defined('AVIATIONWX_LOG_MAX_FILES')) {
+    define('AVIATIONWX_LOG_MAX_FILES', 50); // ~5GB cap
+}
 
+if (!function_exists('aviationwx_init_log_dir')) {
 function aviationwx_init_log_dir(): void {
     @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
     if (!file_exists(AVIATIONWX_LOG_FILE)) {
         @touch(AVIATIONWX_LOG_FILE);
     }
 }
+}
 
+if (!function_exists('aviationwx_rotate_log_if_needed')) {
 function aviationwx_rotate_log_if_needed(): void {
     clearstatcache(true, AVIATIONWX_LOG_FILE);
     $size = @filesize(AVIATIONWX_LOG_FILE);
@@ -29,7 +40,9 @@ function aviationwx_rotate_log_if_needed(): void {
         @touch(AVIATIONWX_LOG_FILE);
     }
 }
+}
 
+if (!function_exists('aviationwx_get_request_id')) {
 function aviationwx_get_request_id(): string {
     static $reqId = null;
     if ($reqId !== null) return $reqId;
@@ -40,7 +53,9 @@ function aviationwx_get_request_id(): string {
     }
     return $reqId;
 }
+}
 
+if (!function_exists('aviationwx_log')) {
 function aviationwx_log(string $level, string $message, array $context = []): void {
     aviationwx_init_log_dir();
     aviationwx_rotate_log_if_needed();
@@ -58,7 +73,9 @@ function aviationwx_log(string $level, string $message, array $context = []): vo
     }
     @file_put_contents(AVIATIONWX_LOG_FILE, json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
 }
+}
 
+if (!function_exists('aviationwx_record_error_event')) {
 function aviationwx_record_error_event(): void {
     if (!function_exists('apcu_fetch')) return;
     $key = 'aviationwx_error_events';
@@ -71,7 +88,9 @@ function aviationwx_record_error_event(): void {
     $events = array_values(array_filter($events, fn($t) => $t >= $threshold));
     apcu_store($key, $events, 3600);
 }
+}
 
+if (!function_exists('aviationwx_error_rate_last_hour')) {
 function aviationwx_error_rate_last_hour(): int {
     if (!function_exists('apcu_fetch')) return 0;
     $events = apcu_fetch('aviationwx_error_events');
@@ -81,12 +100,15 @@ function aviationwx_error_rate_last_hour(): int {
     $events = array_values(array_filter($events, fn($t) => $t >= $threshold));
     return count($events);
 }
+}
 
+if (!function_exists('aviationwx_maybe_log_alert')) {
 function aviationwx_maybe_log_alert(): void {
     $count = aviationwx_error_rate_last_hour();
     if ($count >= 5) {
         aviationwx_log('alert', 'High error rate in last 60 minutes', ['errors_last_hour' => $count]);
     }
+}
 }
 
 ?>
