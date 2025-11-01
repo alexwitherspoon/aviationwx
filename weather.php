@@ -93,9 +93,34 @@ if (file_exists($weatherCacheFile)) {
             exit;
         }
     } else {
-        // Cache is stale but exists - serve it immediately, then refresh
+        // Cache is stale but exists - check if it's older than 3 hours
         $staleData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($staleData)) {
+            // Safety check: If cached data is older than 3 hours, null out critical elements
+            $maxStaleHours = 3;
+            $maxStaleSeconds = $maxStaleHours * 3600;
+            if (isset($staleData['last_updated']) && $staleData['last_updated'] > 0) {
+                $dataAge = time() - $staleData['last_updated'];
+                if ($dataAge > $maxStaleSeconds) {
+                    // Null out critical fields for stale cached data
+                    $criticalFields = [
+                        'temperature', 'temperature_f', 'temp_high_today', 'temp_low_today',
+                        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+                        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+                        'pressure', 'pressure_altitude', 'density_altitude',
+                        'visibility', 'ceiling', 'flight_category',
+                        'precip_accum', 'peak_gust_today'
+                    ];
+                    foreach ($criticalFields as $field) {
+                        if (isset($staleData[$field])) {
+                            $staleData[$field] = null;
+                        }
+                    }
+                    $staleData['flight_category'] = null;
+                    $staleData['flight_category_class'] = '';
+                }
+            }
+            
             $hasStaleCache = true;
             
             // Set stale-while-revalidate headers (serve stale, but allow background refresh)
