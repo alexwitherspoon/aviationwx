@@ -37,6 +37,15 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
+      - name: Update cache version for cache busting
+        run: |
+          # Generate a unique version based on commit SHA and timestamp
+          DEPLOY_VERSION="$(git rev-parse --short HEAD)-$(date +%s)"
+          echo "Updating cache version to: ${DEPLOY_VERSION}"
+          bash scripts/update-cache-version.sh "${DEPLOY_VERSION}"
+          git add sw.js || true
+          git commit -m "Update cache version to ${DEPLOY_VERSION}" || true
+
       - name: Sync repository to server
         run: |
           rsync -az --delete --exclude '.git' --exclude 'cache' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/
@@ -238,6 +247,21 @@ jobs:
             LR
           # Force a logrotate config test (dry-run)
           if command -v logrotate >/dev/null 2>&1; then sudo logrotate -d /etc/logrotate.conf || true; fi
+          EOF
+
+      - name: Purge browser and service worker caches on server
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          # Force service worker update by updating sw.js timestamp
+          # This ensures clients will download new version
+          touch sw.js || true
+          echo "✓ Updated service worker file timestamp to force cache bust"
+          
+          # If using Nginx proxy_cache, we would purge here
+          # Currently not using proxy_cache, but keeping this for future reference
+          # docker exec nginx nginx -s reload || true
           EOF
 
       - name: Restart Nginx container to pick up config changes

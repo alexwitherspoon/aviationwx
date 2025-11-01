@@ -18,38 +18,69 @@
     <link rel="stylesheet" href="<?= htmlspecialchars($cssFile) ?>">
     <meta name="description" content="Real-time weather and conditions for <?= htmlspecialchars($airport['icao']) ?> - <?= htmlspecialchars($airport['name']) ?>">
     <script>
-        // Register service worker for offline support
+        // Register service worker for offline support with cache busting
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
+                // Add cache-busting query parameter based on service worker file modification time
+                // This ensures the service worker is re-fetched when the file changes on deploy
+                const swMtime = <?= file_exists(__DIR__ . '/sw.js') ? filemtime(__DIR__ . '/sw.js') : time() ?>;
+                const swUrl = '/sw.js?v=' + swMtime;
+                
+                navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' })
                     .then((registration) => {
                         console.log('[SW] Registered:', registration.scope);
 
+                        // Check for updates immediately after registration
+                        registration.update();
+
                         // If there's a waiting SW, activate it immediately
                         if (registration.waiting) {
+                            console.log('[SW] Waiting service worker found, activating...');
                             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                            // Force reload after a short delay
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 100);
                         }
 
                         // Listen for updates; when installed and waiting, take over
                         registration.addEventListener('updatefound', () => {
+                            console.log('[SW] Update found, new service worker installing...');
                             const newWorker = registration.installing;
                             if (!newWorker) return;
+                            
                             newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                if (newWorker.state === 'installed') {
+                                    if (navigator.serviceWorker.controller) {
+                                        // There's a new SW waiting - activate it immediately
+                                        console.log('[SW] New service worker installed, activating...');
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        // Force reload after activation
+                                        setTimeout(() => {
+                                            window.location.reload();
+                                        }, 100);
+                                    } else {
+                                        // First install
+                                        console.log('[SW] Service worker installed for first time');
+                                    }
                                 }
                             });
                         });
 
                         // Auto-reload when new SW takes control
+                        let refreshing = false;
                         navigator.serviceWorker.addEventListener('controllerchange', () => {
-                            window.location.reload();
+                            if (!refreshing) {
+                                refreshing = true;
+                                console.log('[SW] Controller changed, reloading page...');
+                                window.location.reload();
+                            }
                         });
 
-                        // Check for updates every hour
+                        // Check for updates every 5 minutes (reduced from 1 hour for faster updates)
                         setInterval(() => {
                             registration.update();
-                        }, 3600000);
+                        }, 300000); // 5 minutes
                     })
                     .catch((err) => {
                         console.warn('[SW] Registration failed:', err);
