@@ -473,6 +473,39 @@ jobs:
             console.log('Mobile screenshot found:', mobileScreenshot);
             console.log('Desktop screenshot found:', desktopScreenshot);
             
+            // Determine if tests passed or failed
+            const browserTestsPassed = browserResults.status === 'passed' || browserResults.status === 'passed-with-skipped';
+            const hasBrowserTestFailures = browserResults.failed > 0;
+            
+            // Find failure screenshots (from test failures)
+            let failureScreenshots = [];
+            const findFailureScreenshots = (dir) => {
+              try {
+                if (!fs.existsSync(dir)) return;
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                  const fullPath = path.join(dir, entry.name);
+                  if (entry.isDirectory()) {
+                    findFailureScreenshots(fullPath);
+                  } else if (entry.isFile() && entry.name.endsWith('.png')) {
+                    // Failure screenshots are typically in subdirectories with test names
+                    // or have "failed" in the path
+                    const pathLower = fullPath.toLowerCase();
+                    if (pathLower.includes('failed') || 
+                        pathLower.includes('error') ||
+                        (fullPath.includes('test-results') && fullPath.split(path.sep).length > 3)) {
+                      failureScreenshots.push(fullPath);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.log('Error finding failure screenshots:', e.message);
+              }
+            };
+            
+            findFailureScreenshots(screenshotsDir);
+            console.log('Failure screenshots found:', failureScreenshots.length);
+            
             // Convert screenshots to base64 for embedding
             const encodeScreenshot = (filePath) => {
               try {
@@ -489,29 +522,68 @@ jobs:
               return null;
             };
             
-            const mobileScreenshotBase64 = mobileScreenshot ? encodeScreenshot(mobileScreenshot) : null;
-            const desktopScreenshotBase64 = desktopScreenshot ? encodeScreenshot(desktopScreenshot) : null;
-            
-            // Build screenshot section with embedded images
+            // Build screenshot section - prioritize working website or failure screenshots
             let screenshotSection = '';
-            if (mobileScreenshot || desktopScreenshot) {
-              screenshotSection = '\n\n### 📸 Browser Test Screenshots\n\n';
+            
+            if (browserTestsPassed && (mobileScreenshot || desktopScreenshot)) {
+              // Tests passed - show working website screenshot
+              screenshotSection = '\n\n### ✅ Working Website Screenshot\n\n';
+              screenshotSection += 'All browser tests passed! Here\'s a screenshot of the working website:\n\n';
               
-              // Embed images using HTML img tags with base64 data URIs
-              // GitHub PR comments support HTML in markdown
-              if (mobileScreenshotBase64) {
-                screenshotSection += '<details>\n<summary><strong>📱 Mobile View</strong></summary>\n\n';
-                screenshotSection += `<img src="${mobileScreenshotBase64}" alt="Mobile Browser Test Screenshot" width="400" />\n\n`;
-                screenshotSection += '</details>\n\n';
+              // Prefer desktop screenshot for "working website" highlight
+              if (desktopScreenshot) {
+                const desktopBase64 = encodeScreenshot(desktopScreenshot);
+                if (desktopBase64) {
+                  screenshotSection += `<img src="${desktopBase64}" alt="Working Website - Desktop View" width="800" style="max-width: 100%; border: 2px solid #28a745; border-radius: 4px;" />\n\n`;
+                }
+              } else if (mobileScreenshot) {
+                const mobileBase64 = encodeScreenshot(mobileScreenshot);
+                if (mobileBase64) {
+                  screenshotSection += `<img src="${mobileBase64}" alt="Working Website - Mobile View" width="400" style="max-width: 100%; border: 2px solid #28a745; border-radius: 4px;" />\n\n`;
+                }
               }
               
-              if (desktopScreenshotBase64) {
-                screenshotSection += '<details>\n<summary><strong>🖥️ Desktop View</strong></summary>\n\n';
-                screenshotSection += `<img src="${desktopScreenshotBase64}" alt="Desktop Browser Test Screenshot" width="600" />\n\n`;
-                screenshotSection += '</details>\n\n';
+              screenshotSection += '> ✅ All browser tests passed successfully!\n\n';
+              screenshotSection += '> 💡 Full-size screenshots are available in [workflow artifacts](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n';
+            } else if (hasBrowserTestFailures && failureScreenshots.length > 0) {
+              // Tests failed - show failure screenshots only
+              screenshotSection = '\n\n### ⚠️ Test Failure Screenshots\n\n';
+              screenshotSection += `${failureScreenshots.length} failure screenshot(s) found:\n\n`;
+              
+              // Limit to first 3 failure screenshots to avoid huge comments
+              const screenshotsToShow = failureScreenshots.slice(0, 3);
+              for (const failureScreenshot of screenshotsToShow) {
+                const base64 = encodeScreenshot(failureScreenshot);
+                if (base64) {
+                  const screenshotName = path.basename(failureScreenshot);
+                  screenshotSection += `<details>\n<summary><strong>🔴 ${screenshotName}</strong></summary>\n\n`;
+                  screenshotSection += `<img src="${base64}" alt="Test Failure Screenshot: ${screenshotName}" width="600" style="max-width: 100%; border: 2px solid #dc3545; border-radius: 4px;" />\n\n`;
+                  screenshotSection += '</details>\n\n';
+                }
               }
               
-              screenshotSection += '> 💡 **Tip**: Full-size screenshots are available in [workflow artifacts](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n';
+              if (failureScreenshots.length > 3) {
+                screenshotSection += `> *Showing first 3 of ${failureScreenshots.length} failure screenshots. View all in [workflow artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).*\n\n`;
+              }
+              
+              screenshotSection += '> 💡 All failure screenshots are available in [workflow artifacts](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n';
+            } else if (!browserTestsPassed && (mobileScreenshot || desktopScreenshot)) {
+              // Tests failed but no specific failure screenshots - show any available screenshots
+              screenshotSection = '\n\n### ⚠️ Browser Test Results\n\n';
+              
+              if (desktopScreenshot) {
+                const desktopBase64 = encodeScreenshot(desktopScreenshot);
+                if (desktopBase64) {
+                  screenshotSection += `<img src="${desktopBase64}" alt="Browser Test Screenshot" width="600" style="max-width: 100%;" />\n\n`;
+                }
+              } else if (mobileScreenshot) {
+                const mobileBase64 = encodeScreenshot(mobileScreenshot);
+                if (mobileBase64) {
+                  screenshotSection += `<img src="${mobileBase64}" alt="Browser Test Screenshot" width="400" style="max-width: 100%;" />\n\n`;
+                }
+              }
+              
+              screenshotSection += '> 💡 Screenshots are available in [workflow artifacts](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n';
             } else {
               screenshotSection = '\n\n> ⚠️ No screenshots found. Check test-results directory for screenshot files.';
               // List what files we found
