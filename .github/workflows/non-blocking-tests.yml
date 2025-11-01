@@ -429,69 +429,54 @@ jobs:
                 // Look for mobile screenshot (contains 'mobile' in name)
                 const files = fs.readdirSync(screenshotsDir, { recursive: true });
                 for (const file of files) {
-                  const fullPath = path.join(screenshotsDir, file);
-                  if (file.includes('screenshot') && file.endsWith('.png')) {
+                  if (typeof file === 'string' && file.includes('screenshot') && file.endsWith('.png')) {
+                    const fullPath = path.join(screenshotsDir, file);
                     if (file.includes('mobile') && !mobileScreenshot) {
                       mobileScreenshot = fullPath;
-                    } else if ((file.includes('desktop') || file.includes('chromium')) && !desktopScreenshot) {
+                    } else if ((file.includes('desktop') || file.includes('chromium') || file.includes('webkit')) && !desktopScreenshot) {
                       desktopScreenshot = fullPath;
                     }
                   }
+                }
+                
+                // If recursive didn't work, try direct directory scan
+                if (!mobileScreenshot || !desktopScreenshot) {
+                  const scanDir = (dir) => {
+                    try {
+                      const entries = fs.readdirSync(dir, { withFileTypes: true });
+                      for (const entry of entries) {
+                        const fullPath = path.join(dir, entry.name);
+                        if (entry.isDirectory()) {
+                          scanDir(fullPath);
+                        } else if (entry.isFile() && entry.name.includes('screenshot') && entry.name.endsWith('.png')) {
+                          if (entry.name.includes('mobile') && !mobileScreenshot) {
+                            mobileScreenshot = fullPath;
+                          } else if ((entry.name.includes('desktop') || entry.name.includes('chromium')) && !desktopScreenshot) {
+                            desktopScreenshot = fullPath;
+                          }
+                        }
+                      }
+                    } catch (e) {}
+                  };
+                  scanDir(screenshotsDir);
                 }
               }
             } catch (e) {
               console.log('Error finding screenshots:', e.message);
             }
             
-            // Upload screenshots and get URLs if available
-            let mobileScreenshotUrl = '';
-            let desktopScreenshotUrl = '';
-            
-            if (mobileScreenshot && fs.existsSync(mobileScreenshot)) {
-              try {
-                const screenshotData = fs.readFileSync(mobileScreenshot);
-                const screenshotBase64 = screenshotData.toString('base64');
-                const uploadResult = await github.rest.repos.uploadReleaseAsset({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  release_id: 0, // We'll use a different approach - direct upload
-                });
-                // Instead, we'll attach to the PR as an image in markdown
-                mobileScreenshotUrl = `![Mobile Screenshot](${context.payload.repository.html_url}/blob/${context.sha}/${mobileScreenshot})`;
-              } catch (e) {
-                console.log('Could not upload mobile screenshot:', e.message);
-              }
-            }
-            
-            if (desktopScreenshot && fs.existsSync(desktopScreenshot)) {
-              try {
-                const screenshotData = fs.readFileSync(desktopScreenshot);
-                // We'll include screenshots in the comment using a workaround
-                const screenshotBase64 = screenshotData.toString('base64');
-                desktopScreenshotUrl = `![Desktop Screenshot](data:image/png;base64,${screenshotBase64})`;
-              } catch (e) {
-                console.log('Could not process desktop screenshot:', e.message);
-              }
-            }
-            
-            // Build comment with screenshots
+            // Build screenshot section - reference artifacts since GitHub doesn't support base64 in PR comments
             let screenshotSection = '';
             if (mobileScreenshot || desktopScreenshot) {
               screenshotSection = '\n\n## 📸 Visual Test Results\n\n';
+              screenshotSection += 'Screenshots from browser compatibility tests:\n\n';
               if (mobileScreenshot) {
-                screenshotSection += '### Mobile View\n';
-                try {
-                  const screenshotBase64 = fs.readFileSync(mobileScreenshot).toString('base64');
-                  screenshotSection += `![Mobile Screenshot](data:image/png;base64,${screenshotBase64})\n\n`;
-                } catch (e) {}
+                screenshotSection += `- **Mobile View**: Screenshot available in [workflow artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n`;
               }
               if (desktopScreenshot) {
-                screenshotSection += '### Desktop View\n';
-                try {
-                  const screenshotBase64 = fs.readFileSync(desktopScreenshot).toString('base64');
-                  screenshotSection += `![Desktop Screenshot](data:image/png;base64,${screenshotBase64})\n\n`;
-                } catch (e) {}
+                screenshotSection += `- **Desktop View**: Screenshot available in [workflow artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n`;
               }
+              screenshotSection += '\n> 💡 **Tip**: Download the `playwright-screenshots` artifact from the workflow run to view full-size screenshots.\n';
             }
             
             const comment = `## 📊 Non-Blocking Test Results
