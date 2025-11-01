@@ -148,6 +148,16 @@ function parseMETARResponse($response, $airport) {
         $precip = floatval($metarData['precip']); // Already in inches
     }
     
+    // Parse observation time (when the METAR was actually measured)
+    $obsTime = null;
+    if (isset($metarData['obsTime'])) {
+        // obsTime is in ISO 8601 format (e.g., '2025-01-26T16:54:00Z')
+        $timestamp = strtotime($metarData['obsTime']);
+        if ($timestamp !== false) {
+            $obsTime = $timestamp;
+        }
+    }
+    
     return [
         'temperature' => $temperature,
         'dewpoint' => $dewpoint,
@@ -163,6 +173,7 @@ function parseMETARResponse($response, $airport) {
         'temp_high' => null,
         'temp_low' => null,
         'peak_gust' => null,
+        'obs_time' => $obsTime, // Observation time when METAR was measured
     ];
 }
 
