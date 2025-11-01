@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         failOnRisky="false"
+         failOnWarning="true"
+         beStrictAboutOutputDuringTests="false"
+         requireCoverageMetadata="false"
+         beStrictAboutCoverageMetadata="false">
+    
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+            <exclude>tests/Integration/SmokeTest.php</exclude>
+            <exclude>tests/Integration/WeatherEndpointTest.php</exclude>
+        </testsuite>
+        <testsuite name="Performance">
+            <directory>tests/Performance</directory>
+        </testsuite>
+        <testsuite name="E2E">
+            <file>tests/Integration/WeatherEndpointTest.php</file>
+        </testsuite>
+        <testsuite name="Smoke">
+            <file>tests/Integration/SmokeTest.php</file>
+        </testsuite>
+    </testsuites>
+    
+    <source>
+        <include>
+            <file>weather.php</file>
+            <file>config-utils.php</file>
+            <file>rate-limit.php</file>
+            <file>logger.php</file>
+        </include>
+        <exclude>
+            <directory>vendor</directory>
+            <directory>tests</directory>
+            <directory>cache</directory>
+        </exclude>
+    </source>
+    
+    <coverage>
+        <report>
+            <html outputDirectory="coverage"/>
+            <text outputFile="php://stdout"/>
+        </report>
+    </coverage>
+    
+    <php>
+        <ini name="error_reporting" value="-1"/>
+        <ini name="display_errors" value="1"/>
+        <ini name="display_startup_errors" value="1"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="CONFIG_PATH" value="tests/Fixtures/airports.json.test" force="true"/>
+    </php>
+</phpunit>
+
