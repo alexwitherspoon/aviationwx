@@ -152,10 +152,11 @@ jobs:
       - name: Run Smoke Tests (Local)
         run: |
           echo "Running smoke tests against local instance..."
+          echo "Note: Docker container uses airports.json (mounted from host)"
           vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml
         env:
           TEST_API_URL: http://localhost:8080
-          CONFIG_PATH: tests/Fixtures/airports.json.test
+          # Note: CONFIG_PATH not set here - Docker container should use /var/www/html/airports.json
       
       - name: Cleanup
         if: always()
