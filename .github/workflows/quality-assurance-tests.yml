@@ -223,6 +223,12 @@ jobs:
     name: Browser Compatibility Tests
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't block PR if these fail
+    # Permissions for posting PR comments
+    permissions:
+      pull-requests: write
+      contents: read
+      issues: write
+      actions: read
     
     steps:
       - name: Checkout code
@@ -318,11 +324,6 @@ jobs:
       - name: Generate and Post Test Summary
         if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
-        permissions:
-          pull-requests: write
-          contents: read
-          issues: write
-          actions: read
         with:
           script: |
             const fs = require('fs');
