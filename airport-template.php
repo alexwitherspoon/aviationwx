@@ -353,6 +353,35 @@ function formatTempSpread(spreadC) {
     }
 }
 
+// Format timestamp as "at h:m:am/pm" using airport's timezone
+function formatTempTimestamp(timestamp) {
+    if (timestamp === null || timestamp === undefined) return '';
+    
+    try {
+        // Get airport timezone, default to 'America/Los_Angeles' if not available
+        const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || 'America/Los_Angeles';
+        
+        // Create date from timestamp (assumes UTC seconds)
+        const date = new Date(timestamp * 1000);
+        
+        // Format in airport's local timezone
+        const options = {
+            timeZone: timezone,
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        };
+        
+        const formatted = date.toLocaleTimeString('en-US', options);
+        
+        // Return formatted time with "at" prefix
+        return ` at ${formatted}`;
+    } catch (error) {
+        console.error('[TempTimestamp] Error formatting timestamp:', error);
+        return '';
+    }
+}
+
 // Distance/altitude unit preference (default to imperial/feet)
 function getDistanceUnit() {
     const unit = localStorage.getItem('aviationwx_distance_unit');
@@ -738,9 +767,9 @@ function displayWeather(weather) {
         
         <!-- Temperature -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">${formatTemp(weather.temp_high_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">${formatTemp(weather.temp_high_today)}${formatTempTimestamp(weather.temp_high_ts)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
             <div class="weather-item"><span class="label">Current Temperature</span><span class="weather-value">${formatTemp(weather.temperature)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">${formatTemp(weather.temp_low_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">${formatTemp(weather.temp_low_today)}${formatTempTimestamp(weather.temp_low_ts)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
         </div>
         
         <!-- Moisture & Precipitation -->

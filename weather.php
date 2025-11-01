@@ -486,6 +486,8 @@ if ($weatherData['temperature'] !== null) {
     $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
     $weatherData['temp_high_today'] = $tempExtremes['high'];
     $weatherData['temp_low_today'] = $tempExtremes['low'];
+    $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
+    $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
 }
 
 // Calculate VFR/IFR/MVFR status
@@ -990,20 +992,25 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null) {
         
         // Initialize today's entry if it doesn't exist (always start fresh for new day)
         // This ensures we never use yesterday's data for today
+        $now = time(); // Current timestamp in UTC
         if (!isset($tempExtremes[$dateKey][$airportId])) {
             aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp]);
             $tempExtremes[$dateKey][$airportId] = [
                 'high' => $currentTemp,
-                'low' => $currentTemp
+                'low' => $currentTemp,
+                'high_ts' => $now,  // Timestamp when high was recorded
+                'low_ts' => $now    // Timestamp when low was recorded
             ];
         } else {
             // Update high if current is higher
             if ($currentTemp > $tempExtremes[$dateKey][$airportId]['high']) {
                 $tempExtremes[$dateKey][$airportId]['high'] = $currentTemp;
+                $tempExtremes[$dateKey][$airportId]['high_ts'] = $now; // Update timestamp when new high is set
             }
             // Update low if current is lower
             if ($currentTemp < $tempExtremes[$dateKey][$airportId]['low']) {
                 $tempExtremes[$dateKey][$airportId]['low'] = $currentTemp;
+                $tempExtremes[$dateKey][$airportId]['low_ts'] = $now; // Update timestamp when new low is set
             }
         }
         
@@ -1028,7 +1035,13 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
     
     if (!file_exists($file)) {
-        return ['high' => $currentTemp, 'low' => $currentTemp];
+        $now = time();
+        return [
+            'high' => $currentTemp, 
+            'low' => $currentTemp,
+            'high_ts' => $now,
+            'low_ts' => $now
+        ];
     }
     
     $tempExtremes = json_decode(file_get_contents($file), true) ?? [];
@@ -1036,14 +1049,42 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     // Only return data for today's date key (never yesterday or older dates)
     if (isset($tempExtremes[$dateKey][$airportId])) {
         $stored = $tempExtremes[$dateKey][$airportId];
+        
+        // Determine high/low values (including current temp)
+        // Note: We compare against stored values, not computed max/min
+        $highValue = max($stored['high'] ?? $currentTemp, $currentTemp);
+        $lowValue = min($stored['low'] ?? $currentTemp, $currentTemp);
+        
+        // Determine timestamps - use stored timestamps unless current temp sets a new record
+        $highTs = $stored['high_ts'] ?? time();
+        $lowTs = $stored['low_ts'] ?? time();
+        
+        // If current temp is a new high, update timestamp
+        if ($currentTemp > ($stored['high'] ?? PHP_INT_MIN)) {
+            $highTs = time();
+        }
+        
+        // If current temp is a new low, update timestamp
+        if ($currentTemp < ($stored['low'] ?? PHP_INT_MAX)) {
+            $lowTs = time();
+        }
+        
         // Ensure we return data for today only, with current temp included
         return [
-            'high' => max($stored['high'] ?? $currentTemp, $currentTemp),
-            'low' => min($stored['low'] ?? $currentTemp, $currentTemp)
+            'high' => $highValue,
+            'low' => $lowValue,
+            'high_ts' => $highTs,
+            'low_ts' => $lowTs
         ];
     }
     
     // No entry for today - return current temp as today's value
-    return ['high' => $currentTemp, 'low' => $currentTemp];
+    $now = time();
+    return [
+        'high' => $currentTemp, 
+        'low' => $currentTemp,
+        'high_ts' => $now,
+        'low_ts' => $now
+    ];
 }
 
