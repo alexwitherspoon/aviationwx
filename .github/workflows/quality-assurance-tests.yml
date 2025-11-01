@@ -218,6 +218,43 @@ jobs:
           path: smoke-prod-results.xml
           retention-days: 7
   
+  external-links-tests:
+    name: External Links Validation
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block PR if these fail (external services can be flaky)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl, json, mbstring
+          coverage: none
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Run External Links Validation Tests
+        run: |
+          echo "Validating external links (AirNav, SkyVector, AOPA, FAA Weather)..."
+          echo "Note: These tests check URL formats and reachability"
+          vendor/bin/phpunit tests/Integration/ExternalLinksTest.php --testdox --log-junit external-links-results.xml || [ $? -eq 1 ]
+        continue-on-error: true
+        env:
+          CONFIG_PATH: tests/Fixtures/airports.json.test
+      
+      - name: Upload External Links Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-links-test-results
+          path: external-links-results.xml
+          retention-days: 7
+  
   browser-tests:
     name: Browser Compatibility Tests
     runs-on: ubuntu-latest

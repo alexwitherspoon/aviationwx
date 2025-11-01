@@ -21,7 +21,8 @@
         }
       ],
       "metar_station": "KSPB",
-      "nearby_metar_stations": ["KVUO", "KHIO"]
+      "nearby_metar_stations": ["KVUO", "KHIO"],
+      "airnav_url": "https://www.airnav.com/airport/KSPB"
     }
   }
 }
