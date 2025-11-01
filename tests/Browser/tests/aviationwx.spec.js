@@ -8,13 +8,6 @@ test.describe('Aviation Weather Dashboard', () => {
   let consoleErrors = [];
   
   test.beforeEach(async ({ page }) => {
-    // Clear localStorage to ensure clean state between tests
-    await page.goto('about:blank');
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
-    
     // Reset console errors array for this test
     consoleErrors = [];
     
@@ -25,7 +18,21 @@ test.describe('Aviation Weather Dashboard', () => {
       }
     });
     
+    // Navigate to the page first
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    
+    // Clear localStorage/sessionStorage AFTER navigating to a real page
+    // (about:blank doesn't allow localStorage access for security reasons)
+    try {
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+    } catch (e) {
+      // If clearing fails, continue - might be a test environment issue
+      console.warn('Could not clear localStorage:', e.message);
+    }
+    
     // Wait for page to load (use domcontentloaded for speed, networkidle can be slow)
     await page.waitForLoadState('domcontentloaded');
     // Wait for body to be visible
