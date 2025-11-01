@@ -3,11 +3,12 @@
 Real-time aviation weather and conditions for participating airports.
 
 Quick links:
-- 🚀 **Getting Started**: [LOCAL_SETUP.md](LOCAL_SETUP.md) (for developers)
+- 🚀 **Local Development**: [LOCAL_SETUP.md](LOCAL_SETUP.md) (Docker-based development)
+- 🖥️ **Production Deployment**: [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) (Ubuntu LTS VPS from scratch)
 - 📖 **Configuration Guide**: [CONFIGURATION.md](CONFIGURATION.md)
 - 🏗️ **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
 - 🔌 **API Documentation**: [API.md](API.md)
-- 🚢 **Deployment**: [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+- 🚢 **Deployment Details**: [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) (CI/CD, advanced config)
 - 🔒 **Security**: [SECURITY.md](SECURITY.md)
 - 🤝 **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 🛠️ **Diagnostics**: visit `/diagnostics.php`
