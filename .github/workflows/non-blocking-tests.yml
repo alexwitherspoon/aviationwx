@@ -308,27 +308,27 @@ jobs:
         if: always()
         run: |
           docker compose down
-  
-  test-results-summary:
-    name: Test Results Summary
+    name: Test Results Summary (All Tests)
     runs-on: ubuntu-latest
     needs: [performance-tests, e2e-tests, smoke-tests, browser-tests]
     if: always()
-    permissions:
+      permissions:
       pull-requests: write
       contents: read
       issues: write
+      actions: read  # Required to check status of other workflow runs
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Download all test results
+      - name: Download non-blocking test results (this workflow)
         uses: actions/download-artifact@v4
         with:
           pattern: '*-test-results*'
           merge-multiple: true
           path: test-results
+          if-no-files-found: ignore
       
       - name: Download browser screenshots
         uses: actions/download-artifact@v4
@@ -339,34 +339,46 @@ jobs:
       
       - name: Generate Test Summary
         run: |
-          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# 📊 Complete Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This summary includes results from all test suites." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Blocking Tests (Must Pass)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Blocking tests run in separate workflows and **must pass** for PR merges:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test and Lint** workflow: Unit tests, Integration tests, Critical Safety tests" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Quality Gates** workflow: All PHPUnit tests, Security checks, Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ⚠️ Check the workflow status in the GitHub UI for blocking test results." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📈 Non-Blocking Tests (Quality Assurance)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Performance Tests" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/performance-results.xml ]; then
-            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Results available" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No results found" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### E2E Tests" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/e2e-results.xml ]; then
-            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Results available" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No results found" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Smoke Tests" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/smoke-results.xml ]; then
-            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Results available" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No results found" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Browser Tests" >> $GITHUB_STEP_SUMMARY
+          echo "### Browser Compatibility Tests" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/playwright-results.json ]; then
-            echo "✓ Results available" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Results available" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠ No results found" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No results found" >> $GITHUB_STEP_SUMMARY
           fi
       
       - name: Comment PR with Results
@@ -472,7 +484,60 @@ jobs:
               screenshotSection += '\n> 💡 **Tip**: Download the `playwright-screenshots` artifact from the workflow run to view full-size screenshots.\n';
             }
             
-            const comment = `## 📊 Non-Blocking Test Results
+            // Get status of blocking test workflows
+            const getBlockingTestStatus = async () => {
+              try {
+                const { data: runs } = await github.rest.actions.listWorkflowRunsForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  event: 'pull_request',
+                  per_page: 100
+                });
+                
+                const prNumber = context.issue.number;
+                const testRun = runs.workflow_runs.find(run => 
+                  run.name === 'Test and Lint' && 
+                  run.pull_requests?.some(pr => pr.number === prNumber)
+                );
+                
+                const prChecksRun = runs.workflow_runs.find(run => 
+                  run.name === 'PR Quality Gates' && 
+                  run.pull_requests?.some(pr => pr.number === prNumber)
+                );
+                
+                const testStatus = testRun ? 
+                  (testRun.conclusion === 'success' ? '✅ Passed' : 
+                   testRun.conclusion === 'failure' ? '❌ Failed' : 
+                   testRun.status === 'in_progress' ? '🔄 In Progress' : '⏸️ Not Started') : '⏭️ Skipped';
+                
+                const prChecksStatus = prChecksRun ? 
+                  (prChecksRun.conclusion === 'success' ? '✅ Passed' : 
+                   prChecksRun.conclusion === 'failure' ? '❌ Failed' : 
+                   prChecksRun.status === 'in_progress' ? '🔄 In Progress' : '⏸️ Not Started') : '⏭️ Skipped';
+                
+                return { testStatus, prChecksStatus, testRunId: testRun?.id, prChecksRunId: prChecksRun?.id };
+              } catch (e) {
+                console.log('Error checking blocking test status:', e.message);
+                return { testStatus: '❓ Unknown', prChecksStatus: '❓ Unknown' };
+              }
+            };
+            
+            const blockingStatus = await getBlockingTestStatus();
+            
+            const comment = `## 📊 Complete Test Results Summary
+            
+            This summary includes results from **all test suites** (blocking and non-blocking).
+            
+            ### 🔒 Blocking Tests (Must Pass for Merge)
+            
+            | Test Suite | Status | Details |
+            |------------|--------|---------|
+            | **Test and Lint** (Unit, Integration, Critical Safety) | ${blockingStatus.testStatus} | ${blockingStatus.testRunId ? `[View workflow run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${blockingStatus.testRunId})` : 'Not available'} |
+            | **PR Quality Gates** (All Tests, Security, Validation) | ${blockingStatus.prChecksStatus} | ${blockingStatus.prChecksRunId ? `[View workflow run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${blockingStatus.prChecksRunId})` : 'Not available'} |
+            
+            > ⚠️ **Note:** Blocking tests must pass before PR can be merged.
+            
+            ### 📈 Non-Blocking Tests (Quality Assurance)
             
             These tests provide quality assurance but do **not block PR merges**.
             
@@ -485,7 +550,7 @@ jobs:
             ${screenshotSection}
             📦 **Test artifacts** are available in the workflow run artifacts section.
             
-            💡 **Note:** These tests are non-blocking. Review failures but they won't prevent merge.`;
+            💡 **Note:** Non-blocking tests provide quality assurance. Review failures but they won't prevent merge.`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
