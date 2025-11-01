@@ -9,9 +9,6 @@ on:
       - "**.md"
       - "**.MD"
 
-# Stop all jobs if one fails
-fail-fast: true
-
 # Default permissions for all jobs in this workflow
 permissions:
   contents: read

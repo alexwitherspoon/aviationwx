@@ -15,7 +15,6 @@ jobs:
   quality-gates:
     name: Quality Gates (Block PR if Failed)
     runs-on: ubuntu-latest
-    fail-fast: true
     
     steps:
       - name: Checkout code
