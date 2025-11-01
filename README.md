@@ -18,6 +18,7 @@ Quick links:
 - **Daily Temperature Extremes**: Tracks and displays today's high/low temperatures with timestamps
 - **Daily Peak Gust**: Tracks and displays today's peak wind gust
 - **Unit Toggles**: Switch between temperature units (F/C), distance units (ft/m), and wind speed units (kts/mph/km/h)
+- **Stale Data Safety**: Automatically displays "---" for weather data older than 3 hours (per-source checking preserves valid data)
 - **Multiple Image Formats**: AVIF, WEBP, and JPEG with automatic fallback
 - **Time Since Updated Indicators**: Shows data age with visual warnings for stale data
 - **Performance Optimizations**: 
@@ -223,10 +224,38 @@ The dashboard tracks and displays:
 
 Peak gust resets daily at local airport midnight (based on airport timezone configuration).
 
+#### Stale Data Safety Check
+
+To prevent pilots from using dangerously outdated weather information, the system automatically checks data staleness and displays "---" for invalid data:
+
+**3-Hour Safety Threshold:**
+- Any weather data element older than 3 hours is considered stale
+- Stale data displays as "---" instead of potentially outdated values
+- Prevents pilots from making flight decisions based on old information
+
+**Per-Source Checking:**
+- The system tracks separate timestamps for primary source (Tempest/Ambient) and METAR data
+- Only fields from stale sources are nulled out - valid data from fresh sources is preserved
+- Example: If primary source is stale but METAR is fresh, visibility/ceiling still display
+- Example: If METAR is stale but primary source is fresh, temperature/wind still display
+
+**Fields Affected by Staleness:**
+- **Primary Source** (stale >3 hours): Current temperature, dewpoint, humidity, wind, pressure, precipitation
+- **METAR Source** (stale >3 hours): Visibility, ceiling, cloud cover, flight category
+
+**Fields Preserved (Never Stale):**
+- **Daily Tracking Values**: Today's high/low temperatures and peak gust are preserved regardless of data staleness, as they represent valid historical data for the day
+
+**Behavior:**
+- Data < 3 hours old: Displayed normally
+- Data > 3 hours old: Displays "---" for stale fields only
+- Daily tracking values: Always displayed (valid historical data)
+
 ### Time Since Updated Indicators
 
 - Weather API includes `last_updated` (UNIX) and `last_updated_iso`.
 - UI displays "Time Since Updated" and marks it red when older than 1 hour (shows "Over an hour stale.").
+- Note: Stale data safety check (3-hour threshold) automatically nulls outdated data regardless of UI indicator.
 
 ## Weather Sources
 
