@@ -5,6 +5,12 @@ on:
     branches: [ "main" ]
     types: [ opened, synchronize, reopened, ready_for_review ]
 
+# Default permissions for all jobs in this workflow
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
 jobs:
   quality-gates:
     name: Quality Gates (Block PR if Failed)
