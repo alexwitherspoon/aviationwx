@@ -212,14 +212,14 @@
             </div>
 
             <div class="links">
-                <a href="<?= htmlspecialchars($airport['airnav_url']) ?>" target="_blank" rel="noopener" class="btn" style="margin-right: 1rem;">
-                    View on AirNav
+                <a href="<?= htmlspecialchars($airport['airnav_url']) ?>" target="_blank" rel="noopener" class="btn">
+                    AirNav
                 </a>
-                <a href="https://skyvector.com/airport/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn" style="margin-right: 1rem;">
-                    View on SkyVector
+                <a href="https://skyvector.com/airport/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn">
+                    SkyVector
                 </a>
-                <a href="https://www.aopa.org/destinations/airports/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn" style="margin-right: 1rem;">
-                    View on AOPA
+                <a href="https://www.aopa.org/destinations/airports/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn">
+                    AOPA
                 </a>
                 <?php
                 // Generate FAA Weather Cams URL

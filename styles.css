@@ -106,6 +106,10 @@ h3 {
     padding-top: 1.5rem;
     border-top: 1px solid #eee;
     text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
 }
 
 .btn {
@@ -117,6 +121,8 @@ h3 {
     border-radius: 4px;
     font-weight: 600;
     transition: background 0.2s;
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .btn:hover {
@@ -352,6 +358,16 @@ h3 {
     
     .info-grid, .freq-grid, .time-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .links {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    
+    .btn {
+        width: 100% !important;
+        text-align: center !important;
     }
 }
 
