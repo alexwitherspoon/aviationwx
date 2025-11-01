@@ -60,7 +60,7 @@ aviationwx.org/
 **`webcam.php`**: Serves cached webcam images
 - Handles image requests with cache headers
 - Returns placeholder if image missing
-- Supports multiple formats (AVIF, WEBP, JPEG)
+- Supports multiple formats (WEBP, JPEG)
 
 **`fetch-webcam-safe.php`**: Fetches and caches webcam images
 - Runs via cron (recommended every minute)
@@ -129,7 +129,7 @@ For each webcam:
   ↓
 Fetch image (HTTP/MJPEG/RTSP)
   ↓
-Generate formats (AVIF/WEBP/JPEG)
+Generate formats (WEBP/JPEG)
   ↓
 Save to cache/webcams/
   ↓
@@ -170,7 +170,7 @@ Serve with cache headers
 ### 5. Multiple Image Formats
 
 - **Why**: Browser compatibility and performance
-- **Implementation**: Generate AVIF/WEBP/JPEG, serve via `<picture>` element
+- **Implementation**: Generate WEBP/JPEG, serve via `<picture>` element
 - **Benefit**: Best format per browser, smaller file sizes
 
 ## Security Considerations

@@ -75,7 +75,6 @@ $cacheDir = __DIR__ . '/cache/webcams';
 $base = $cacheDir . '/' . $airportId . '_' . $camIndex;
 $cacheJpg = $base . '.jpg';
 $cacheWebp = $base . '.webp';
-// AVIF support removed
 
 // Create cache directory if it doesn't exist
 if (!is_dir($cacheDir)) {

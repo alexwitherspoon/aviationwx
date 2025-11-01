@@ -640,7 +640,6 @@ foreach ($config['airports'] as $airportId => $airport) {
                 $processes[] = ['proc' => $processWebp, 'type' => 'webp', 'pipes' => $pipesWebp, 'cache' => $cacheWebp];
             }
             
-            // (AVIF generation removed)
             
             // Wait for all processes to complete
             $results = [];
