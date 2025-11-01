@@ -45,10 +45,53 @@ test: ## Test the application
 	@echo "✓ Tests complete"
 
 smoke: ## Smoke test main endpoints (requires running containers)
-    @echo "Smoke testing..."
-    @echo "- Homepage" && curl -sf http://127.0.0.1:8080 >/dev/null && echo " ✓"
-    @echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:8080/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
-    @echo "- Webcam fetch script (PHP present)" && docker compose exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
+	@echo "Smoke testing..."
+	@echo "- Homepage" && curl -sf http://127.0.0.1:8080 >/dev/null && echo " ✓"
+	@echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:8080/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
+	@echo "- Webcam fetch script (PHP present)" && docker compose exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
+
+test-performance: ## Run performance tests
+	@if [ -f vendor/bin/phpunit ]; then \
+		echo "Running performance tests..."; \
+		vendor/bin/phpunit --testsuite Performance --testdox; \
+	else \
+		echo "PHPUnit not installed. Run 'composer install' first."; \
+		exit 1; \
+	fi
+
+test-e2e: ## Run end-to-end integration tests (uses mocked APIs)
+	@if [ -f vendor/bin/phpunit ]; then \
+		echo "Running E2E tests..."; \
+		echo "Note: These tests use mocked API responses (no real API keys)."; \
+		echo "Requires Docker to be running (tests against localhost:8080)."; \
+		vendor/bin/phpunit --testsuite E2E --testdox; \
+	else \
+		echo "PHPUnit not installed. Run 'composer install' first."; \
+		exit 1; \
+	fi
+
+test-smoke: ## Run smoke tests for production endpoint
+	@if [ -f vendor/bin/phpunit ]; then \
+		echo "Running smoke tests..."; \
+		echo "Set TEST_PROD_URL to test production (e.g., TEST_PROD_URL=https://aviationwx.org)"; \
+		vendor/bin/phpunit --testsuite Smoke --testdox; \
+	else \
+		echo "PHPUnit not installed. Run 'composer install' first."; \
+		exit 1; \
+	fi
+
+test-browser: ## Run browser compatibility tests (requires Docker)
+	@if [ ! -f tests/Browser/package.json ]; then \
+		echo "Browser tests not set up. Installing dependencies..."; \
+		cd tests/Browser && npm install; \
+	fi
+	@if [ -f tests/Browser/node_modules/.bin/playwright ]; then \
+		echo "Running browser compatibility tests..."; \
+		cd tests/Browser && npx playwright test; \
+	else \
+		echo "Playwright not installed. Run 'cd tests/Browser && npm install' first."; \
+		exit 1; \
+	fi
 
 clean: ## Remove containers and volumes
 	@docker compose down -v
