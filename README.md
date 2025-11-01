@@ -45,46 +45,42 @@ Quick links:
 - A domain with wildcard DNS (A records for `@` and `*`)
 - Cron capability on the host for webcam refresh (recommended)
 
-### Setup
+## Quick Start
 
-#### Automated Deployment (Recommended)
+### For Local Development
 
-1. **Configure GitHub Actions:**
-   - Add SSH secrets to your repository (Settings → Secrets)
-   - See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for the end-to-end guide
-   - Push to `main` branch (or merge a PR) to trigger deployment
+See [LOCAL_SETUP.md](LOCAL_SETUP.md) for complete local development setup guide.
 
-#### Manual Setup
-
-1. Clone this repository:
+**Quick commands**:
 ```bash
+# Clone repository
 git clone https://github.com/alexwitherspoon/aviationwx.git
 cd aviationwx
+
+# Initialize and start
+make init        # Create .env from example
+make config      # Generate configs
+cp airports.json.example airports.json  # Copy config template
+# Edit airports.json with your API keys
+make up          # Start Docker containers
+
+# Access: http://localhost:8080
 ```
 
-2. Copy the example configuration:
-   ```bash
-   cp airports.json.example airports.json
-   ```
+### For Production Deployment (Ubuntu LTS VPS)
 
-3. Edit `airports.json` with your actual credentials:
-   - Add your weather station API keys
-   - Configure webcam URLs and credentials
-   - Add airport metadata (name, ICAO, coordinates, elevation)
-   - Set timezone (optional, defaults to `America/Los_Angeles`)
+See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for complete step-by-step deployment guide from scratch.
 
-4. Start locally with Docker
-   ```bash
-   docker compose up -d
-   # Access http://localhost:8080
-   ```
+**Highlights**:
+1. Set up fresh Ubuntu 22.04 LTS VPS
+2. Install Docker & Docker Compose
+3. Configure DNS (wildcard subdomain)
+4. Set up SSL certificates (Let's Encrypt)
+5. Deploy application
+6. Configure cron for webcam refresh
+7. Set up automatic deployments (GitHub Actions - optional)
 
-5. Configure wildcard DNS: add A records for `@` and `*` to your server IP
-
-6. Set up host cron to refresh webcam images (example):
-   ```bash
-   */1 * * * * curl -s http://127.0.0.1:8080/fetch-webcam-safe.php > /dev/null 2>&1
-   ```
+For detailed deployment guide with all steps, see [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md).
 
 ### ⚠️ Security Note
 

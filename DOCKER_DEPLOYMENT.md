@@ -1,4 +1,21 @@
-# Docker Deployment to DigitalOcean
+# Docker Deployment Guide
+
+Complete guide for deploying AviationWX.org using Docker and Docker Compose.
+
+## Quick Links
+
+- **Fresh Ubuntu VPS Setup**: See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for step-by-step from scratch
+- **Local Development**: See [LOCAL_SETUP.md](LOCAL_SETUP.md) for local setup
+- **This Guide**: Detailed deployment process, GitHub Actions setup, and advanced configuration
+
+## Overview
+
+This guide covers:
+1. Docker-based deployment architecture
+2. GitHub Actions CI/CD setup
+3. SSL certificate management
+4. Production configuration
+5. Maintenance and updates
 
 ## Quick Start
 

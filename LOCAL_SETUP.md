@@ -1,9 +1,14 @@
 # Local Development Setup
 
+Complete guide for setting up AviationWX.org for local development and testing.
+
 ## Prerequisites
 
-- Docker Desktop installed (Mac/Windows) or Docker + Docker Compose (Linux)
-- Git
+- **Docker Desktop** (Mac/Windows) or **Docker + Docker Compose** (Linux)
+- **Git** installed
+- **Text editor** for configuration files
+
+**Note**: This guide uses Docker for a consistent development environment. For a minimal PHP-based setup (without Docker), see [LOCAL_COMMANDS.md](LOCAL_COMMANDS.md) for quick reference commands.
 
 ## Quick Start
 
@@ -258,23 +263,34 @@ aviationwx.org/
 └── [application files...]
 ```
 
+## Testing Checklist
+
+Once local setup is complete, verify:
+
+- ✅ Homepage loads: http://localhost:8080
+- ✅ Airport page loads: http://localhost:8080/?airport=kspb
+- ✅ Weather data displays correctly
+- ✅ Unit toggles work (temperature, distance, wind speed)
+- ✅ Webcam images display (if configured)
+- ✅ Wind visualization works
+- ✅ All features functioning
+
 ## Next Steps
 
-Once local setup works:
-
-1. **Test all features**:
-   - Homepage loads
-   - Airport page loads
-   - Weather data displays
-   - Webcam images work (if configured)
-
-2. **Ready for production?**
-   - See `DOCKER_DEPLOYMENT.md` for DigitalOcean setup
-   - Or continue with Bluehost (current hosting)
-
-3. **Deploy**:
+1. **Continue Development**:
+   - Make code changes
+   - Test locally
+   - Commit changes
    - Push to GitHub
-   - Use GitHub Actions for automated deployment
+
+2. **Ready for Production?**
+   - See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for Ubuntu LTS VPS deployment from scratch
+   - Or see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for detailed deployment guide
+
+3. **Contributing**:
+   - See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
+   - Follow coding standards
+   - Submit Pull Requests
 
 ## Environment Variables Explained
 
