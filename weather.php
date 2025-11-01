@@ -249,24 +249,31 @@ aviationwx_log('info', 'weather request start', [
     'ua' => $_SERVER['HTTP_USER_AGENT'] ?? null
 ]);
 
+// Get and validate airport ID (do this BEFORE setting headers)
+$rawAirportId = $_GET['airport'] ?? '';
+if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    ob_clean(); // Clear any buffered output
+    http_response_code(400);
+    header('Content-Type: application/json');
+    header('X-Request-ID: ' . aviationwx_get_request_id());
+    aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId]);
+    echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
+    exit;
+}
+
 // Rate limiting (60 requests per minute per IP)
 if (!checkRateLimit('weather_api', 60, 60)) {
+    ob_clean(); // Clear any buffered output
     http_response_code(429);
     header('Retry-After: 60');
-    ob_clean();
+    header('Content-Type: application/json');
+    header('X-Request-ID: ' . aviationwx_get_request_id());
     aviationwx_log('warning', 'weather rate limited');
     echo json_encode(['success' => false, 'error' => 'Too many requests. Please try again later.']);
     exit;
 }
 
-// Get and validate airport ID
-$rawAirportId = $_GET['airport'] ?? '';
-if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
-    ob_clean();
-    aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId]);
-    echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
-    exit;
-}
+// Set JSON header for successful requests
 
 $airportId = strtolower(trim($rawAirportId));
 

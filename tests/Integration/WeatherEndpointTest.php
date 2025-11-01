@@ -70,12 +70,16 @@ class WeatherEndpointTest extends TestCase
         $data = json_decode($response['body'], true);
         
         // Check for required fields (may be null if no data available)
+        $this->assertIsArray($data, "Response should be an array");
         $this->assertArrayHasKey('success', $data, "Response should have 'success' field");
         // Endpoint returns 'weather' not 'data' - check for either
-        $this->assertTrue(
-            isset($data['weather']) || isset($data['data']),
-            "Response should have 'weather' or 'data' field"
-        );
+        // Note: If success is false, weather/data may not be present
+        if ($data['success'] ?? false) {
+            $this->assertTrue(
+                isset($data['weather']) || isset($data['data']),
+                "Response should have 'weather' or 'data' field when success is true"
+            );
+        }
         
         if ($data['success']) {
             $weather = $data['weather'] ?? $data['data'] ?? null;
