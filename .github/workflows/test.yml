@@ -29,6 +29,10 @@ jobs:
           extensions: apcu, gd, zip, curl
           coverage: none
       
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
       - name: Validate PHP syntax
         run: |
           echo "Checking PHP syntax..."
