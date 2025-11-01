@@ -72,13 +72,16 @@ if (!file_exists($weatherCacheDir)) {
 $weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
 
 // Helper function to null out stale fields based on source timestamps
+// Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
+// considered stale - they represent valid historical data for the day regardless of current measurement age
 function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $primarySourceFields = [
-        'temperature', 'temperature_f', 'temp_high_today', 'temp_low_today',
+        'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
         'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
-        'pressure', 'precip_accum', 'peak_gust_today',
+        'pressure', 'precip_accum',
         'pressure_altitude', 'density_altitude'
+        // Note: temp_high_today, temp_low_today, peak_gust_today are preserved (daily tracking values)
     ];
     
     $metarSourceFields = [
@@ -620,11 +623,13 @@ $maxStaleHours = 3;
 $maxStaleSeconds = $maxStaleHours * 3600;
 
 // Fields that come from PRIMARY source (Tempest/Ambient)
+// Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
+// included here - they represent valid historical data for the day regardless of current measurement age
 $primarySourceFields = [
-    'temperature', 'temperature_f', 'temp_high_today', 'temp_low_today',
+    'temperature', 'temperature_f',
     'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
     'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
-    'pressure', 'precip_accum', 'peak_gust_today',
+    'pressure', 'precip_accum',
     'pressure_altitude', 'density_altitude' // Calculated from primary data
 ];
 
