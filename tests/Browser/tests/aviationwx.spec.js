@@ -6,8 +6,10 @@ test.describe('Aviation Weather Dashboard', () => {
   
   test.beforeEach(async ({ page }) => {
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    // Wait for page to load
-    await page.waitForLoadState('networkidle');
+    // Wait for page to load (use domcontentloaded for speed, networkidle can be slow)
+    await page.waitForLoadState('domcontentloaded');
+    // Wait for body to be visible (faster than networkidle)
+    await page.waitForSelector('body', { state: 'visible' });
   });
 
   test('should display airport information', async ({ page }) => {
@@ -17,11 +19,8 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should display weather data when available', async ({ page }) => {
-    // Wait for weather data to load (check for temperature or weather section)
-    const weatherSection = page.locator('.weather-data, [class*="weather"], [class*="temperature"]').first();
-    
-    // Weather data may take time to load
-    await page.waitForTimeout(2000);
+    // Wait for body to be ready (faster than fixed timeout)
+    await page.waitForSelector('body', { state: 'visible' });
     
     const pageContent = await page.textContent('body');
     
@@ -81,7 +80,8 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should display flight category', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    // Wait for content instead of fixed timeout
+    await page.waitForSelector('body', { state: 'visible' });
     
     const pageContent = await page.textContent('body');
     
@@ -90,7 +90,8 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should handle missing data gracefully', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    // Wait for content instead of fixed timeout
+    await page.waitForSelector('body', { state: 'visible' });
     
     const pageContent = await page.textContent('body');
     
@@ -123,7 +124,9 @@ test.describe('Aviation Weather Dashboard', () => {
       }
     });
     
-    await page.waitForTimeout(3000);
+    // Wait for page to be ready instead of fixed timeout
+    await page.waitForSelector('body', { state: 'visible' });
+    await page.waitForTimeout(1000); // Short wait for console errors to appear
     
     // Filter out known acceptable errors (like API fetch failures in test)
     const criticalErrors = errors.filter(err => 
@@ -143,8 +146,9 @@ test.describe('Aviation Weather Dashboard', () => {
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
     
-    // Verify page loads
-    await page.waitForLoadState('networkidle');
+    // Verify page loads (faster than networkidle)
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('body', { state: 'visible' });
     
     const body = page.locator('body');
     await expect(body).toBeVisible();
@@ -158,7 +162,8 @@ test.describe('Aviation Weather Dashboard', () => {
     // Set tablet viewport
     await page.setViewportSize({ width: 768, height: 1024 });
     
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('body', { state: 'visible' });
     
     const body = page.locator('body');
     await expect(body).toBeVisible();
@@ -168,7 +173,8 @@ test.describe('Aviation Weather Dashboard', () => {
     // Set desktop viewport
     await page.setViewportSize({ width: 1920, height: 1080 });
     
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('body', { state: 'visible' });
     
     const body = page.locator('body');
     await expect(body).toBeVisible();
@@ -191,7 +197,8 @@ test.describe('Aviation Weather Dashboard', () => {
     
     // Reload page
     await page.reload();
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('body', { state: 'visible' });
+    await page.waitForSelector('#temp-unit-toggle', { state: 'visible' });
     
     // Unit should be preserved (stored in localStorage)
     const preservedState = await toggle.textContent();

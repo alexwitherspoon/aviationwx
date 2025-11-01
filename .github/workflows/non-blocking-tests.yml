@@ -228,6 +228,8 @@ jobs:
         working-directory: tests/Browser
         run: |
           npm install
+          # Only install browsers we test in CI (Chromium, Firefox, WebKit)
+          # This speeds up installation significantly
           npx playwright install --with-deps chromium firefox webkit
       
       - name: Start Docker containers

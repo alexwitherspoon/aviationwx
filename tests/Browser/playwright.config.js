@@ -11,8 +11,8 @@ module.exports = defineConfig({
   // Output directory for test results
   outputDir: './test-results',
   
-  // Test timeout
-  timeout: 30000,
+  // Test timeout (reduced from 30s to 15s for faster failure detection)
+  timeout: 15000,
   
   // Run tests in parallel
   fullyParallel: true,
@@ -20,11 +20,12 @@ module.exports = defineConfig({
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
   
-  // Retry on CI only
-  retries: process.env.CI ? 2 : 0,
+  // Retry on CI only (reduced from 2 to 1 for speed)
+  retries: process.env.CI ? 1 : 0,
   
-  // Opt out of parallel tests on CI
-  workers: process.env.CI ? 1 : undefined,
+  // Run tests in parallel in CI (increased from 1 to 2-4 workers for speed)
+  // Use 2 workers in CI to balance speed vs resource usage
+  workers: process.env.CI ? 2 : undefined,
   
   // Reporter configuration
   reporter: [
@@ -42,38 +43,49 @@ module.exports = defineConfig({
   },
 
   // Configure projects for major browsers
-  projects: [
+  // In CI: Only test core browsers (Chromium, Firefox, WebKit) for speed
+  // In local dev: Test all browsers including Edge and mobile/tablet
+  projects: process.env.CI ? [
+    // Core browsers only in CI (faster)
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
     },
-
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
     },
-
+  ] : [
+    // All browsers in local development
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
     {
       name: 'Microsoft Edge',
       use: { ...devices['Desktop Edge'], channel: 'msedge' },
     },
-    
     // Mobile viewports
     {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
     },
-
     {
       name: 'Mobile Safari',
       use: { ...devices['iPhone 12'] },
     },
-    
     // Tablet viewports
     {
       name: 'Tablet',
