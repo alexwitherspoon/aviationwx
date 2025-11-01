@@ -328,7 +328,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: 'playwright-screenshots'
-          path: test-results/screenshots
+          path: test-results/browser-screenshots
           if-no-files-found: ignore
       
       - name: Generate Test Summary
@@ -422,48 +422,35 @@ jobs:
             // Find representative screenshots (mobile and desktop)
             let mobileScreenshot = null;
             let desktopScreenshot = null;
-            const screenshotsDir = 'test-results/screenshots/playwright-screenshots/test-results';
+            const screenshotsDir = 'test-results/browser-screenshots/playwright-screenshots';
             
-            try {
-              if (fs.existsSync(screenshotsDir)) {
-                // Look for mobile screenshot (contains 'mobile' in name)
-                const files = fs.readdirSync(screenshotsDir, { recursive: true });
-                for (const file of files) {
-                  if (typeof file === 'string' && file.includes('screenshot') && file.endsWith('.png')) {
-                    const fullPath = path.join(screenshotsDir, file);
-                    if (file.includes('mobile') && !mobileScreenshot) {
+            // Helper function to recursively find screenshots
+            const findScreenshots = (dir) => {
+              try {
+                if (!fs.existsSync(dir)) return;
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                  const fullPath = path.join(dir, entry.name);
+                  if (entry.isDirectory()) {
+                    findScreenshots(fullPath);
+                  } else if (entry.isFile() && entry.name.includes('screenshot') && entry.name.endsWith('.png')) {
+                    // Check for mobile screenshot (Mobile Chrome or contains 'mobile')
+                    if ((entry.name.includes('mobile') || entry.name.includes('Mobile')) && !mobileScreenshot) {
                       mobileScreenshot = fullPath;
-                    } else if ((file.includes('desktop') || file.includes('chromium') || file.includes('webkit')) && !desktopScreenshot) {
+                    } 
+                    // Check for desktop screenshot (chromium, desktop, or not mobile/tablet)
+                    else if ((entry.name.includes('chromium') || entry.name.includes('desktop') || 
+                             (!entry.name.includes('mobile') && !entry.name.includes('tablet') && !entry.name.includes('Tablet'))) && !desktopScreenshot) {
                       desktopScreenshot = fullPath;
                     }
                   }
                 }
-                
-                // If recursive didn't work, try direct directory scan
-                if (!mobileScreenshot || !desktopScreenshot) {
-                  const scanDir = (dir) => {
-                    try {
-                      const entries = fs.readdirSync(dir, { withFileTypes: true });
-                      for (const entry of entries) {
-                        const fullPath = path.join(dir, entry.name);
-                        if (entry.isDirectory()) {
-                          scanDir(fullPath);
-                        } else if (entry.isFile() && entry.name.includes('screenshot') && entry.name.endsWith('.png')) {
-                          if (entry.name.includes('mobile') && !mobileScreenshot) {
-                            mobileScreenshot = fullPath;
-                          } else if ((entry.name.includes('desktop') || entry.name.includes('chromium')) && !desktopScreenshot) {
-                            desktopScreenshot = fullPath;
-                          }
-                        }
-                      }
-                    } catch (e) {}
-                  };
-                  scanDir(screenshotsDir);
-                }
+              } catch (e) {
+                console.log('Error scanning directory:', dir, e.message);
               }
-            } catch (e) {
-              console.log('Error finding screenshots:', e.message);
-            }
+            };
+            
+            findScreenshots(screenshotsDir);
             
             // Build screenshot section - reference artifacts since GitHub doesn't support base64 in PR comments
             let screenshotSection = '';
