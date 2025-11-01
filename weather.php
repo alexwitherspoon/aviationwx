@@ -1023,16 +1023,25 @@ function parseTempestResponse($response) {
     $peakGust = null;
     
     // Use current gust as peak gust (as it's the only gust data available)
-    if (isset($obs['wind_gust'])) {
-        $peakGust = round($obs['wind_gust'] * 1.943844); // Convert m/s to knots
-    }
+    // This will be set later if wind_gust is numeric
     
     // Convert pressure from mb to inHg
     $pressureInHg = isset($obs['sea_level_pressure']) ? $obs['sea_level_pressure'] / 33.8639 : null;
     
     // Convert wind speed from m/s to knots
-    $windSpeedKts = isset($obs['wind_avg']) ? round($obs['wind_avg'] * 1.943844) : null;
-    $gustSpeedKts = isset($obs['wind_gust']) ? round($obs['wind_gust'] * 1.943844) : null;
+    // Add type checks to handle unexpected input types gracefully
+    $windSpeedKts = null;
+    if (isset($obs['wind_avg']) && is_numeric($obs['wind_avg'])) {
+        $windSpeedKts = (int)round((float)$obs['wind_avg'] * 1.943844);
+    }
+    $gustSpeedKts = null;
+    if (isset($obs['wind_gust']) && is_numeric($obs['wind_gust'])) {
+        $gustSpeedKts = (int)round((float)$obs['wind_gust'] * 1.943844);
+    }
+    // Also update peak_gust calculation
+    if ($gustSpeedKts !== null) {
+        $peakGust = $gustSpeedKts;
+    }
     
     return [
         'temperature' => isset($obs['air_temperature']) ? $obs['air_temperature'] : null, // Celsius
@@ -1186,7 +1195,7 @@ function calculateDensityAltitude($weather, $airport) {
     $actualTempF = ($tempC * 9/5) + 32;
     $densityAlt = $stationElevation + (120 * ($actualTempF - $stdTempF));
     
-    return round($densityAlt);
+    return (int)round($densityAlt);
 }
 
 /**
@@ -1407,23 +1416,28 @@ function calculateFlightCategory($weather) {
         return 'LIFR';
     }
     
-    // IFR: ceiling 500 to < 1000 ft OR visibility 1 to < 3 SM
+    // IFR: ceiling 500 to < 1000 ft OR visibility 1 to <= 3 SM (includes exactly 3 SM)
     if ($ceiling !== null && $ceiling >= 500 && $ceiling < 1000) {
         return 'IFR';
     }
-    if ($visibility !== null && $visibility >= 1 && $visibility < 3) {
+    if ($visibility !== null && $visibility >= 1 && $visibility <= 3) {
         return 'IFR';
     }
     
-    // MVFR: ceiling 1000 to < 3000 ft OR visibility 3 to 5 SM
+    // MVFR: ceiling 1000 to < 3000 ft OR visibility > 3 to <= 5 SM (excludes 3 SM which is IFR)
     if ($ceiling !== null && $ceiling >= 1000 && $ceiling < 3000) {
         return 'MVFR';
     }
-    if ($visibility !== null && $visibility >= 3 && $visibility <= 5) {
+    if ($visibility !== null && $visibility > 3 && $visibility <= 5) {
         return 'MVFR';
     }
     
     // VFR: all other conditions (visibility > 5 SM and ceiling > 3000 ft)
+    // But only if we have at least one piece of valid data
+    if ($visibility === null && $ceiling === null) {
+        return null; // Cannot determine category without any data
+    }
+    
     return 'VFR';
 }
 
@@ -1533,31 +1547,13 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     if (isset($tempExtremes[$dateKey][$airportId])) {
         $stored = $tempExtremes[$dateKey][$airportId];
         
-        // Determine high/low values (including current temp)
-        // Note: We compare against stored values, not computed max/min
-        $highValue = max($stored['high'] ?? $currentTemp, $currentTemp);
-        $lowValue = min($stored['low'] ?? $currentTemp, $currentTemp);
-        
-        // Determine timestamps - use stored timestamps unless current temp sets a new record
-        $highTs = $stored['high_ts'] ?? time();
-        $lowTs = $stored['low_ts'] ?? time();
-        
-        // If current temp is a new high, update timestamp
-        if ($currentTemp > ($stored['high'] ?? PHP_INT_MIN)) {
-            $highTs = time();
-        }
-        
-        // If current temp is a new low, update timestamp
-        if ($currentTemp < ($stored['low'] ?? PHP_INT_MAX)) {
-            $lowTs = time();
-        }
-        
-        // Ensure we return data for today only, with current temp included
+        // Return stored values without modification (this is a getter function)
+        // updateTempExtremes is responsible for updating values
         return [
-            'high' => $highValue,
-            'low' => $lowValue,
-            'high_ts' => $highTs,
-            'low_ts' => $lowTs
+            'high' => $stored['high'] ?? $currentTemp,
+            'low' => $stored['low'] ?? $currentTemp,
+            'high_ts' => $stored['high_ts'] ?? time(),
+            'low_ts' => $stored['low_ts'] ?? time()
         ];
     }
     

@@ -14,6 +14,10 @@ function validateAirportId($id) {
     if (empty($id)) {
         return false;
     }
+    // Check for whitespace BEFORE trimming (reject IDs with whitespace)
+    if (preg_match('/\s/', $id)) {
+        return false;
+    }
     return preg_match('/^[a-z0-9]{3,4}$/', strtolower(trim($id))) === 1;
 }
 
