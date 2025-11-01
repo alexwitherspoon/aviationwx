@@ -110,7 +110,3 @@ function aviationwx_maybe_log_alert(): void {
     }
 }
 }
-
-?>
-
-
