@@ -42,9 +42,15 @@ jobs:
           # Generate a unique version based on commit SHA and timestamp
           DEPLOY_VERSION="$(git rev-parse --short HEAD)-$(date +%s)"
           echo "Updating cache version to: ${DEPLOY_VERSION}"
+          
+          # Update the cache version in sw.js
+          # The script handles missing files and verification
           bash scripts/update-cache-version.sh "${DEPLOY_VERSION}"
-          git add sw.js || true
-          git commit -m "Update cache version to ${DEPLOY_VERSION}" || true
+          
+          # Note: We don't commit sw.js changes during deployment
+          # The updated file will be synced to the server via rsync
+          # This avoids creating unnecessary commits and deployment loops
+          echo "✓ Cache version updated (will be synced to server)"
 
       - name: Sync repository to server
         run: |
