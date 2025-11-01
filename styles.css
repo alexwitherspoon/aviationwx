@@ -110,6 +110,7 @@ h3 {
     flex-wrap: wrap;
     gap: 0.75rem;
     justify-content: center;
+    align-items: center; /* Ensure buttons align properly */
 }
 
 .btn {
@@ -363,11 +364,23 @@ h3 {
     .links {
         flex-direction: column !important;
         align-items: stretch !important;
+        gap: 0 !important; /* Remove gap, use margins instead for Safari compatibility */
+        row-gap: 0 !important;
+        column-gap: 0 !important;
     }
     
     .btn {
         width: 100% !important;
         text-align: center !important;
+        margin-bottom: 1.25rem !important; /* Use margin for spacing - works better in Safari */
+        margin-top: 0 !important;
+        min-height: 48px; /* Ensure consistent button height */
+        box-sizing: border-box; /* Ensure padding is included in height calculation */
+    }
+    
+    /* Remove margin from last button to prevent extra spacing */
+    .links .btn:last-child {
+        margin-bottom: 0 !important;
     }
 }
 
