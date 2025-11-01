@@ -82,6 +82,31 @@ if (file_exists($weatherCacheFile)) {
     if ($age < $airportWeatherRefresh) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
+            // Safety check: If cached data is older than 3 hours, null out critical elements
+            $maxStaleHours = 3;
+            $maxStaleSeconds = $maxStaleHours * 3600;
+            if (isset($cached['last_updated']) && $cached['last_updated'] > 0) {
+                $dataAge = time() - $cached['last_updated'];
+                if ($dataAge > $maxStaleSeconds) {
+                    // Null out critical fields for stale cached data
+                    $criticalFields = [
+                        'temperature', 'temperature_f', 'temp_high_today', 'temp_low_today',
+                        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+                        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+                        'pressure', 'pressure_altitude', 'density_altitude',
+                        'visibility', 'ceiling', 'flight_category',
+                        'precip_accum', 'peak_gust_today'
+                    ];
+                    foreach ($criticalFields as $field) {
+                        if (isset($cached[$field])) {
+                            $cached[$field] = null;
+                        }
+                    }
+                    $cached['flight_category'] = null;
+                    $cached['flight_category_class'] = '';
+                }
+            }
+            
             // Set cache headers for cached responses
             $remainingTime = $airportWeatherRefresh - $age;
             header('Cache-Control: public, max-age=' . $remainingTime);
