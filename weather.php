@@ -931,23 +931,22 @@ function calculateFlightCategory($weather) {
     
     // LIFR: ceiling < 500 ft AND visibility < 1 SM
     // (Most restrictive - check first)
-    if ($ceiling !== null && $ceiling < 500) {
-        if ($visibility !== null && $visibility < 1) {
-            return 'LIFR';
-        }
-        // If only ceiling is < 500, but visibility is >= 1, still LIFR
-        if ($visibility === null) {
-            return 'LIFR';
-        }
+    // Both conditions must be met, but if one is missing, use the worst category based on what we know
+    $lifrCeiling = ($ceiling !== null && $ceiling < 500);
+    $lifrVisibility = ($visibility !== null && $visibility < 1);
+    
+    if ($lifrCeiling && $lifrVisibility) {
+        return 'LIFR';
     }
-    if ($visibility !== null && $visibility < 1) {
-        if ($ceiling !== null && $ceiling < 500) {
-            return 'LIFR';
-        }
-        // If only visibility is < 1, but ceiling is >= 500, still LIFR
-        if ($ceiling === null) {
-            return 'LIFR';
-        }
+    // If ceiling < 500 but visibility unknown, check if visibility would make it IFR or worse
+    // If visibility < 1 but ceiling unknown, check if ceiling would make it IFR or worse
+    if ($lifrCeiling && $visibility === null) {
+        // Ceiling alone indicates LIFR range, but without visibility, use worst case
+        return 'LIFR';
+    }
+    if ($lifrVisibility && $ceiling === null) {
+        // Visibility alone indicates LIFR range, but without ceiling, use worst case
+        return 'LIFR';
     }
     
     // IFR: ceiling 500 to < 1000 ft OR visibility 1 to < 3 SM
