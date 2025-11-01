@@ -751,13 +751,13 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             $weatherData = fetchMETAR($airport);
             // METAR-only: all data is from METAR source
             if ($weatherData !== null) {
-                // Use observation time if available, otherwise fall back to fetch time
-                $weatherData['last_updated_metar'] = isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null 
-                    ? $weatherData['obs_time'] 
-                    : time();
-                $weatherData['last_updated_primary'] = null;
-                // Remove internal obs_time field - we've already used it for last_updated_metar
-                unset($weatherData['obs_time']);
+            // Use observation time if available, otherwise fall back to fetch time
+            $weatherData['last_updated_metar'] = isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null 
+                ? $weatherData['obs_time'] 
+                : time();
+            $weatherData['last_updated_primary'] = null;
+            // Keep obs_time field for frontend - it represents the actual observation time
+            // last_updated_metar tracks when data was fetched/processed, obs_time is when observation occurred
             }
             return $weatherData;
         default:

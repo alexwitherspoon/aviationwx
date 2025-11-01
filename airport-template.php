@@ -802,8 +802,8 @@ function displayWeather(weather) {
         <!-- Visibility & Ceiling -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
-            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${weather.visibility !== null ? weather.visibility.toFixed(1) : '--'}</span><span class="weather-unit">${weather.visibility !== null ? 'SM' : ''}</span>${weather.visibility !== null && weather.last_updated_metar ? formatTempTimestamp(weather.last_updated_metar) : ''}</div>
-            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? weather.ceiling : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? 'ft AGL' : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && weather.last_updated_metar ? formatTempTimestamp(weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${weather.visibility !== null ? weather.visibility.toFixed(1) : '--'}</span><span class="weather-unit">${weather.visibility !== null ? 'SM' : ''}</span>${weather.visibility !== null && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? weather.ceiling : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? 'ft AGL' : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
         </div>
         
         <!-- Pressure & Altitude -->
