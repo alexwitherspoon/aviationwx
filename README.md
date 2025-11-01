@@ -14,6 +14,10 @@ Quick links:
 - **Live Webcams** with automatic caching (MJPEG streams, RTSP streams via ffmpeg, and static images)
 - **Wind Visualization** with runway alignment
 - **Aviation-Specific Metrics**: Density altitude, VFR/IFR/MVFR status
+- **Weather Status Emojis**: Visual indicators for abnormal conditions (precipitation, high winds, low ceiling, extreme temps)
+- **Daily Temperature Extremes**: Tracks and displays today's high/low temperatures with timestamps
+- **Daily Peak Gust**: Tracks and displays today's peak wind gust
+- **Unit Toggles**: Switch between temperature units (F/C), distance units (ft/m), and wind speed units (kts/mph/km/h)
 - **Multiple Image Formats**: AVIF, WEBP, and JPEG with automatic fallback
 - **Time Since Updated Indicators**: Shows data age with visual warnings for stale data
 - **Performance Optimizations**: 
@@ -139,10 +143,90 @@ Then set up wildcard DNS as described in deployment docs.
 
 See [CONFIGURATION.md](CONFIGURATION.md) for detailed webcam configuration examples including RTSP/RTSPS setup.
 
+### Dashboard Features
+
+#### Unit Toggles
+
+The dashboard includes three unit toggle buttons that allow users to switch between different measurement units:
+
+1. **Temperature Unit Toggle** (F ↔ C)
+   - Located next to "Current Conditions" heading
+   - Affects: Temperature, Today's High/Low, Dewpoint, Dewpoint Spread
+   - Default: Fahrenheit (°F)
+   - Preference stored in localStorage
+
+2. **Distance Unit Toggle** (ft ↔ m, in ↔ cm)
+   - Located next to Temperature toggle
+   - Affects: 
+     - Rainfall Today (inches ↔ centimeters)
+     - Pressure Altitude (feet ↔ meters)
+     - Density Altitude (feet ↔ meters)
+   - Pressure remains in inHg regardless of toggle
+   - Default: Imperial (ft/in)
+   - Preference stored in localStorage
+
+3. **Wind Speed Unit Toggle** (kts ↔ mph ↔ km/h)
+   - Located in "Runway Wind" section header
+   - Cycles through: knots → miles per hour → kilometers per hour → knots
+   - Affects: Wind Speed, Gust Factor, Today's Peak Gust
+   - Pressure remains in inHg regardless of toggle
+   - Default: Knots (kts)
+   - Preference stored in localStorage
+
+All unit preferences persist across page refreshes using browser localStorage.
+
+#### Weather Status Emojis
+
+Weather status emojis appear next to the Condition status (e.g., "VFR 🌧️") to highlight abnormal or noteworthy weather conditions. Emojis only display when conditions are outside normal ranges:
+
+**Precipitation** (always shown if present):
+- 🌧️ **Rain**: Precipitation > 0.01" and temperature ≥ 32°F
+- ❄️ **Snow**: Precipitation > 0.01" and temperature < 32°F
+
+**High Wind** (shown when concerning):
+- 💨 **Strong Wind**: Wind speed > 25 knots
+- 🌬️ **Moderate Wind**: Wind speed 15-25 knots
+- *No emoji*: Wind speed ≤ 15 knots (normal)
+
+**Low Ceiling/Poor Visibility** (shown when concerning):
+- ☁️ **Low Ceiling**: Ceiling < 1,000 ft AGL (IFR/LIFR conditions)
+- 🌥️ **Marginal Ceiling**: Ceiling 1,000-3,000 ft AGL (MVFR conditions)
+- 🌫️ **Poor Visibility**: Visibility < 3 SM (when available)
+- *No emoji*: Ceiling ≥ 3,000 ft and visibility ≥ 3 SM (normal VFR)
+
+**Extreme Temperatures** (shown when extreme):
+- 🥵 **Extreme Heat**: Temperature > 90°F
+- ❄️ **Extreme Cold**: Temperature < 20°F
+- *No emoji*: Temperature 20°F to 90°F (normal range)
+
+**Examples:**
+- "VFR" (no emojis) - Normal conditions
+- "VFR 🌧️" - Rainy but otherwise normal conditions
+- "IFR ☁️ 💨" - Low ceiling with strong wind
+- "VFR 🥵" - Very hot day
+- "VFR ❄️" - Snow or extreme cold
+
+Normal VFR days with moderate temperatures and light winds will not display emojis, keeping the interface clean.
+
+#### Daily Temperature Tracking
+
+The dashboard tracks and displays:
+- **Today's High Temperature**: Maximum temperature for the current day with timestamp showing when it was recorded (e.g., "72°F at 2:30 PM")
+- **Today's Low Temperature**: Minimum temperature for the current day with timestamp showing when it was recorded (e.g., "55°F at 6:15 AM")
+
+Temperatures reset daily at local airport midnight (based on airport timezone configuration). The timestamps use the airport's local timezone.
+
+#### Daily Peak Gust Tracking
+
+The dashboard tracks and displays:
+- **Today's Peak Gust**: Maximum wind gust speed for the current day
+
+Peak gust resets daily at local airport midnight (based on airport timezone configuration).
+
 ### Time Since Updated Indicators
 
 - Weather API includes `last_updated` (UNIX) and `last_updated_iso`.
-- UI displays “Time Since Updated” and marks it red when older than 1 hour (shows “Over an hour stale.”).
+- UI displays "Time Since Updated" and marks it red when older than 1 hour (shows "Over an hour stale.").
 
 ## Weather Sources
 
