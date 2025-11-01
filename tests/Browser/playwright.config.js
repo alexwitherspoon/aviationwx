@@ -11,8 +11,8 @@ module.exports = defineConfig({
   // Output directory for test results
   outputDir: './test-results',
   
-  // Test timeout (reduced from 30s to 15s for faster failure detection)
-  timeout: 15000,
+  // Test timeout (reduced from 30s to 10s for faster failure detection)
+  timeout: 10000,
   
   // Run tests in parallel
   fullyParallel: true,
@@ -20,12 +20,12 @@ module.exports = defineConfig({
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
   
-  // Retry on CI only (reduced from 2 to 1 for speed)
-  retries: process.env.CI ? 1 : 0,
+  // Retry on CI only (disabled for speed - failures are caught by other test suites)
+  retries: 0,
   
-  // Run tests in parallel in CI (increased from 1 to 2-4 workers for speed)
-  // Use 2 workers in CI to balance speed vs resource usage
-  workers: process.env.CI ? 2 : undefined,
+  // Run tests in parallel in CI (increased from 1 to 4 workers for speed)
+  // Use 4 workers in CI - Ubuntu runners have enough resources
+  workers: process.env.CI ? 4 : undefined,
   
   // Reporter configuration
   reporter: [
@@ -37,37 +37,30 @@ module.exports = defineConfig({
   // Shared settings for all projects
   use: {
     baseURL: process.env.TEST_BASE_URL || 'http://localhost:8080',
-    trace: 'on-first-retry',
+    trace: 'off', // Disable trace for speed
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'off', // Disable video for speed
   },
 
   // Configure projects for major browsers
-  // In CI: Test core browsers plus mobile/tablet for responsive design
+  // In CI: Test critical browsers only (Chromium desktop + mobile for speed)
   // In local dev: Test all browsers including Edge and mobile/tablet
   projects: process.env.CI ? [
-    // Core browsers for desktop
+    // Core browser for desktop (Chromium only - fastest and most compatible)
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    // Mobile and tablet viewports for responsive testing
+    // Mobile viewport for responsive testing (most important)
     {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
     },
-    {
-      name: 'Tablet',
-      use: { ...devices['iPad Pro'] },
-    },
+    // Optionally add Firefox if time allows (commented out for speed)
+    // {
+    //   name: 'firefox',
+    //   use: { ...devices['Desktop Firefox'] },
+    // },
   ] : [
     // All browsers in local development
     {

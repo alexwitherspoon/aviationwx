@@ -239,8 +239,9 @@ jobs:
         working-directory: tests/Browser
         run: |
           npm install
-          # Install browsers we test in CI (Chromium, Firefox, WebKit for desktop + mobile)
-          npx playwright install --with-deps chromium firefox webkit
+          # Install only browsers we test in CI (Chromium for desktop + mobile)
+          # This speeds up installation significantly
+          npx playwright install --with-deps chromium
       
       - name: Create test airports.json
         run: |
@@ -301,7 +302,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-screenshots
-          path: tests/Browser/test-results/
+          path: tests/Browser/test-results/**/*.png
+          if-no-files-found: ignore
           retention-days: 7
       
       - name: Cleanup

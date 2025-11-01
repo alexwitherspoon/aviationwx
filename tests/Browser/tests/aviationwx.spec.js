@@ -53,10 +53,21 @@ test.describe('Aviation Weather Dashboard', () => {
       // Save with viewport identifier for easy identification
       const viewportType = page.viewportSize().width < 768 ? 'mobile' : 
                           page.viewportSize().width < 1024 ? 'tablet' : 'desktop';
+      
+      // Ensure test-results directory exists
+      const testResultsDir = path.join(__dirname, '..', 'test-results');
+      if (!fs.existsSync(testResultsDir)) {
+        fs.mkdirSync(testResultsDir, { recursive: true });
+      }
+      
+      const screenshotPath = path.join(testResultsDir, `screenshot-${viewportType}-${browserName}.png`);
       await page.screenshot({ 
-        path: `test-results/screenshot-${viewportType}-${browserName}.png`,
+        path: screenshotPath,
         fullPage: true 
       });
+      
+      // Log screenshot location for debugging
+      console.log(`Screenshot saved to: ${screenshotPath}`);
       
       // Check for airport name or ICAO code in the h1 element
       // Format is: "Scappoose Airport (KSPB)" or similar
