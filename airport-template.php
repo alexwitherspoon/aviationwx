@@ -762,7 +762,7 @@ function displayWeather(weather) {
     container.innerHTML = `
         <!-- Current Status -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class}">${weather.flight_category} ${weatherEmojis}</span></div>
+            <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '---'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌅</span>

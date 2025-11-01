@@ -509,9 +509,54 @@ if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
     $weatherData['dewpoint_spread'] = null;
 }
 
-// Stamp last_updated and write cache
-$weatherData['last_updated'] = time();
-$weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
+// Safety check: If weather data is older than 3 hours, null out all critical data elements
+// This ensures pilots don't see dangerously out-of-date information
+// Check the age BEFORE updating last_updated timestamp
+$maxStaleHours = 3;
+$maxStaleSeconds = $maxStaleHours * 3600;
+$dataAge = time() - ($weatherData['last_updated'] ?? 0);
+
+if ($dataAge > $maxStaleSeconds) {
+    aviationwx_log('warning', 'weather data stale - nulling out critical elements', [
+        'airport' => $airportId,
+        'age_hours' => round($dataAge / 3600, 2),
+        'max_age_hours' => $maxStaleHours
+    ]);
+    
+    // Null out all critical weather data elements to display "---" in frontend
+    $criticalFields = [
+        'temperature', 'temperature_f', 'temp_high_today', 'temp_low_today',
+        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+        'pressure', 'pressure_altitude', 'density_altitude',
+        'visibility', 'ceiling', 'flight_category',
+        'precip_accum', 'peak_gust_today'
+    ];
+    
+    foreach ($criticalFields as $field) {
+        if (isset($weatherData[$field])) {
+            $weatherData[$field] = null;
+        }
+    }
+    
+    // Set flight category to null so it shows "---" instead of a category
+    $weatherData['flight_category'] = null;
+    $weatherData['flight_category_class'] = '';
+}
+
+// Stamp last_updated and write cache (only update timestamp if data is fresh)
+// If data was stale, keep the old timestamp to indicate when it was last valid
+if ($dataAge <= $maxStaleSeconds) {
+    $weatherData['last_updated'] = time();
+    $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
+} else {
+    // Keep original last_updated timestamp even though data is stale
+    // This way frontend can see how old the data is
+    if (!isset($weatherData['last_updated_iso']) && isset($weatherData['last_updated'])) {
+        $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
+    }
+}
+
 @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
 
 // If we served stale data, we're in background refresh mode
