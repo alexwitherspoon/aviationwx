@@ -197,6 +197,18 @@ class SmokeTest extends TestCase
      */
     public function testResponseTime_IsAcceptable()
     {
+        // Make a warmup request to account for cache warming
+        // First request might be slower due to cache miss, cold start, etc.
+        $warmupResponse = $this->makeRequest('weather.php?airport=kspb');
+        if ($warmupResponse['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        // Small delay to let cache settle
+        usleep(100000); // 100ms
+        
+        // Now measure the actual response time (should be cached/faster)
         $start = microtime(true);
         $response = $this->makeRequest('weather.php?airport=kspb');
         $elapsed = microtime(true) - $start;
@@ -206,55 +218,90 @@ class SmokeTest extends TestCase
             return;
         }
         
-        // Production responses should be reasonably fast
-        // Allow more time for first request (cache warming)
-        $maxTime = 5.0; // 5 seconds max
+        // Production responses should be reasonably fast after cache warmup
+        // Allow more time for CI environment
+        $maxTime = getenv('CI') ? 3.0 : 2.0; // 3s in CI, 2s locally
         
         $this->assertLessThan(
             $maxTime,
             $elapsed,
-            "Endpoint should respond in reasonable time (took: {$elapsed}s, max: {$maxTime}s)"
+            "Endpoint should respond quickly after cache warmup (took: {$elapsed}s, max: {$maxTime}s)"
         );
     }
     
     /**
-     * Helper method to make HTTP request
+     * Helper method to make HTTP request with retry logic
      */
-    private function makeRequest(string $path, bool $includeHeaders = true): array
+    private function makeRequest(string $path, bool $includeHeaders = true, int $maxRetries = 3): array
     {
         $url = rtrim($this->baseUrl, '/') . '/' . ltrim($path, '/');
         
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $lastError = null;
+        $lastResponse = null;
         
-        $headers = [];
-        if ($includeHeaders) {
-            curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($ch, $header) use (&$headers) {
-                $len = strlen($header);
-                $header = explode(':', $header, 2);
-                if (count($header) == 2) {
-                    $headers[strtolower(trim($header[0]))] = trim($header[1]);
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            // Increase timeout for CI environment
+            $timeout = getenv('CI') ? 15 : 10;
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, getenv('CI') ? 10 : 5);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            
+            $headers = [];
+            if ($includeHeaders) {
+                curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($ch, $header) use (&$headers) {
+                    $len = strlen($header);
+                    $header = explode(':', $header, 2);
+                    if (count($header) == 2) {
+                        $headers[strtolower(trim($header[0]))] = trim($header[1]);
+                    }
+                    return $len;
+                });
+            }
+            
+            $body = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            $response = [
+                'http_code' => $httpCode,
+                'body' => $body,
+                'headers' => $headers,
+                'error' => $error
+            ];
+            
+            // Success - return immediately
+            if ($httpCode > 0 && $httpCode < 500) {
+                return $response;
+            }
+            
+            // Transient error - retry with exponential backoff
+            if ($httpCode == 0 || in_array($httpCode, [502, 503, 504])) {
+                $lastError = $error ?: "HTTP $httpCode";
+                $lastResponse = $response;
+                
+                if ($attempt < $maxRetries) {
+                    $delay = pow(2, $attempt - 1) * 1000000; // microseconds
+                    usleep($delay);
+                    continue;
                 }
-                return $len;
-            });
+            }
+            
+            // Non-retryable error - return immediately
+            return $response;
         }
         
-        $body = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        
-        return [
-            'http_code' => $httpCode,
-            'body' => $body,
-            'headers' => $headers,
-            'error' => $error
+        // All retries exhausted
+        return $lastResponse ?? [
+            'http_code' => 0,
+            'body' => '',
+            'headers' => [],
+            'error' => $lastError ?? 'Request failed after retries'
         ];
     }
 }

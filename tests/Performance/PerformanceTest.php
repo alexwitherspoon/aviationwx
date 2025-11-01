@@ -224,14 +224,15 @@ class PerformanceTest extends TestCase
         $allowed = 0;
         $blocked = 0;
         
-        // Make rapid requests
+        // Make rapid requests as fast as possible to actually hit rate limit
+        // Don't sleep between requests - we want to hit the limit quickly
         for ($i = 0; $i < ($maxRequests * 2); $i++) {
             if (checkRateLimit($key, $maxRequests, $windowSeconds)) {
                 $allowed++;
             } else {
                 $blocked++;
             }
-            usleep(10000); // 10ms between requests
+            // No sleep - make requests as fast as possible to test rate limiting
         }
         
         // First batch should be allowed, subsequent should be blocked
