@@ -1,0 +1,29 @@
+{
+  "airports": {
+    "kspb": {
+      "name": "Scappoose Airport",
+      "icao": "KSPB",
+      "address": "Scappoose, Oregon",
+      "lat": 45.7710278,
+      "lon": -122.8618333,
+      "elevation_ft": 58,
+      "timezone": "America/Los_Angeles",
+      "weather_source": {
+        "type": "tempest",
+        "station_id": "12345",
+        "api_key": "test_api_key_12345"
+      },
+      "webcams": [
+        {
+          "name": "Test Camera 1",
+          "url": "https://example.com/cam1.jpg",
+          "position": "north"
+        }
+      ],
+      "metar_station": "KSPB",
+      "nearby_metar_stations": ["KVUO", "KHIO"],
+      "airnav_url": "https://www.airnav.com/airport/KSPB"
+    }
+  }
+}
+

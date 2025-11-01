@@ -8,73 +8,313 @@ require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/logger.php';
 
-// Start output buffering to catch any stray output (errors, warnings, whitespace)
-ob_start();
+<<<<<<< HEAD
+/**
+ * Parse Ambient Weather API response (for async use)
+ */
+function parseAmbientResponse($response) {
+    $data = json_decode($response, true);
+    
+    if (!isset($data[0]) || !isset($data[0]['lastData'])) {
+        return null;
+    }
+    
+    $obs = $data[0]['lastData'];
+    
+    // Convert all measurements to our standard format
+    $temperature = isset($obs['tempf']) && is_numeric($obs['tempf']) ? ((float)$obs['tempf'] - 32) / 1.8 : null; // F to C
+    $humidity = isset($obs['humidity']) ? $obs['humidity'] : null;
+    $pressure = isset($obs['baromrelin']) ? $obs['baromrelin'] : null; // Already in inHg
+    $windSpeed = isset($obs['windspeedmph']) && is_numeric($obs['windspeedmph']) ? (int)round((float)$obs['windspeedmph'] * 0.868976) : null; // mph to knots
+    $windDirection = isset($obs['winddir']) && is_numeric($obs['winddir']) ? (int)round((float)$obs['winddir']) : null;
+    $gustSpeed = isset($obs['windgustmph']) && is_numeric($obs['windgustmph']) ? (int)round((float)$obs['windgustmph'] * 0.868976) : null; // mph to knots
+    $precip = isset($obs['dailyrainin']) ? $obs['dailyrainin'] : 0; // Already in inches
+    $dewpoint = isset($obs['dewPoint']) && is_numeric($obs['dewPoint']) ? ((float)$obs['dewPoint'] - 32) / 1.8 : null; // F to C
+    
+    return [
+        'temperature' => $temperature,
+        'humidity' => $humidity,
+        'pressure' => $pressure,
+        'wind_speed' => $windSpeed,
+        'wind_direction' => $windDirection,
+        'gust_speed' => $gustSpeed,
+        'precip_accum' => $precip,
+        'dewpoint' => $dewpoint,
+        'visibility' => null, // Not available from Ambient Weather
+        'ceiling' => null, // Not available from Ambient Weather
+        'temp_high' => null,
+        'temp_low' => null,
+        'peak_gust' => $gustSpeed,
+    ];
+}
 
-// Set JSON header
-header('Content-Type: application/json');
-// Correlate
-header('X-Request-ID: ' . aviationwx_get_request_id());
-aviationwx_log('info', 'weather request start', [
+/**
+ * Parse METAR response (for async use)
+ */
+function parseMETARResponse($response, $airport) {
+    $data = json_decode($response, true);
+    
+    if (!isset($data[0])) {
+        return null;
+    }
+    
+    $metarData = $data[0];
+    
+    // Parse visibility - use parsed visibility from JSON
+    $visibility = null;
+    if (isset($metarData['visib'])) {
+        $visStr = str_replace('+', '', $metarData['visib']);
+        // Handle "1 1/2" format
+        if (preg_match('/(\d+)\s+(\d+\/\d+)/', $visStr, $matches)) {
+            $visibility = floatval($matches[1]) + floatval($matches[2]);
+        } elseif (strpos($visStr, '/') !== false) {
+            $parts = explode('/', $visStr);
+            $visibility = floatval($parts[0]) / floatval($parts[1]);
+        } else {
+            $visibility = floatval($visStr);
+        }
+    }
+    
+    // Parse ceiling and cloud cover from clouds array
+    $ceiling = null;
+    $cloudCover = null;
+    $cloudLayer = null;
+    
+    if (isset($metarData['clouds']) && is_array($metarData['clouds'])) {
+        foreach ($metarData['clouds'] as $cloud) {
+            if (isset($cloud['cover'])) {
+                $cover = $cloud['cover'];
+                
+                // Record the first cloud layer for reference
+                if ($cloudLayer === null) {
+                    $cloudLayer = [
+                        'cover' => $cover,
+                        'base' => isset($cloud['base']) ? intval($cloud['base']) : null
+                    ];
+                }
+                
+                // Ceiling exists when BKN or OVC (broken or overcast)
+                // Note: CLR/SKC (clear) should not set cloud_cover
+                if (in_array($cover, ['BKN', 'OVC', 'OVX'])) {
+                    if (isset($cloud['base'])) {
+                        $ceiling = intval($cloud['base']);
+                        if ($cover !== 'CLR' && $cover !== 'SKC') {
+                            $cloudCover = $cover;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    // If no ceiling found but clouds exist, use lowest base
+    // Note: CLR (clear) should not set cloud_cover - clear sky means no clouds
+    if ($ceiling === null && isset($cloudLayer) && $cloudLayer['base'] !== null) {
+        $ceiling = $cloudLayer['base'];
+        // Only set cloud_cover if it's not CLR (clear)
+        if ($cloudLayer['cover'] !== 'CLR' && $cloudLayer['cover'] !== 'SKC') {
+            $cloudCover = $cloudLayer['cover'];
+        }
+    }
+    
+    // Parse temperature (Celsius)
+    $temperature = isset($metarData['temp']) ? $metarData['temp'] : null;
+    
+    // Parse dewpoint (Celsius)
+    $dewpoint = isset($metarData['dewp']) ? $metarData['dewp'] : null;
+    
+    // Parse wind direction and speed (already in knots)
+    $windDirection = isset($metarData['wdir']) ? (int)round($metarData['wdir']) : null;
+    $windSpeed = isset($metarData['wspd']) ? (int)round($metarData['wspd']) : null;
+    
+    // Parse pressure (altimeter setting in inHg)
+    $pressure = null;
+    if (isset($metarData['altim'])) {
+        $pressure = (float)$metarData['altim'];
+    }
+    
+    // Calculate humidity from temperature and dewpoint
+    $humidity = null;
+    if ($temperature !== null && $dewpoint !== null) {
+        $humidity = calculateHumidityFromDewpoint($temperature, $dewpoint);
+    }
+    
+    // Parse precipitation (METAR doesn't always have this)
+    // Check both pcp24hr and precip fields for compatibility
+    $precip = null;
+    if (isset($metarData['pcp24hr']) && is_numeric($metarData['pcp24hr'])) {
+        $precip = floatval($metarData['pcp24hr']); // Already in inches
+    } elseif (isset($metarData['precip']) && is_numeric($metarData['precip'])) {
+        $precip = floatval($metarData['precip']); // Already in inches
+    }
+    
+    // Parse observation time (when the METAR was actually measured)
+    $obsTime = null;
+    if (isset($metarData['obsTime'])) {
+        // obsTime is in ISO 8601 format (e.g., '2025-01-26T16:54:00Z')
+        $timestamp = strtotime($metarData['obsTime']);
+        if ($timestamp !== false) {
+            $obsTime = $timestamp;
+        }
+    }
+    
+    return [
+        'temperature' => $temperature,
+        'dewpoint' => $dewpoint,
+        'humidity' => $humidity,
+        'wind_direction' => $windDirection,
+        'wind_speed' => $windSpeed,
+        'gust_speed' => null, // METAR doesn't always include gusts
+        'pressure' => $pressure,
+        'visibility' => $visibility,
+        'ceiling' => $ceiling,
+        'cloud_cover' => $cloudCover,
+        'precip_accum' => $precip, // Precipitation if available
+        'temp_high' => null,
+        'temp_low' => null,
+        'peak_gust' => null,
+        'obs_time' => $obsTime, // Observation time when METAR was measured
+    ];
+}
+
+/**
+ * Helper function to null out stale fields based on source timestamps
+ * Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
+ * considered stale - they represent valid historical data for the day regardless of current measurement age
+ */
+function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
+    $primarySourceFields = [
+        'temperature', 'temperature_f',
+        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+        'pressure', 'precip_accum',
+        'pressure_altitude', 'density_altitude'
+        // Note: temp_high_today, temp_low_today, peak_gust_today are preserved (daily tracking values)
+    ];
+    
+    $metarSourceFields = [
+        'visibility', 'ceiling', 'cloud_cover'
+    ];
+    
+    $primaryStale = false;
+    if (isset($data['last_updated_primary']) && $data['last_updated_primary'] > 0) {
+        $primaryAge = time() - $data['last_updated_primary'];
+        $primaryStale = ($primaryAge >= $maxStaleSeconds); // >= means at threshold is stale
+        
+        if ($primaryStale) {
+            foreach ($primarySourceFields as $field) {
+                if (isset($data[$field])) {
+                    $data[$field] = null;
+                }
+            }
+        }
+    }
+    
+    $metarStale = false;
+    if (isset($data['last_updated_metar']) && $data['last_updated_metar'] > 0) {
+        $metarAge = time() - $data['last_updated_metar'];
+        $metarStale = ($metarAge >= $maxStaleSeconds); // >= means at threshold is stale
+        
+        if ($metarStale) {
+            foreach ($metarSourceFields as $field) {
+                if (isset($data[$field])) {
+                    $data[$field] = null;
+                }
+            }
+        }
+    }
+    
+    // Recalculate flight category if METAR data is stale
+    // Note: If METAR is stale, visibility and ceiling are nulled, but we might still have
+    // valid ceiling from primary source or other data that allows category calculation
+    if ($metarStale) {
+        $data['flight_category'] = calculateFlightCategory($data);
+        if ($data['flight_category'] === null) {
+            $data['flight_category_class'] = '';
+        } else {
+            $data['flight_category_class'] = 'status-' . strtolower($data['flight_category']);
+        }
+    } elseif ($data['visibility'] === null && $data['ceiling'] === null) {
+        // If both are null but METAR is not stale, recalculate anyway
+        $data['flight_category'] = calculateFlightCategory($data);
+        if ($data['flight_category'] === null) {
+            $data['flight_category_class'] = '';
+        } else {
+            $data['flight_category_class'] = 'status-' . strtolower($data['flight_category']);
+        }
+    }
+}
+
+// Only execute endpoint logic when called as a web request (not when included for testing)
+    if (php_sapi_name() !== 'cli' && !empty($_SERVER['REQUEST_METHOD'])) {
+    // Start output buffering to catch any stray output (errors, warnings, whitespace)
+    ob_start();
+
+    // Set JSON header
+    header('Content-Type: application/json');
+    // Correlate
+    header('X-Request-ID: ' . aviationwx_get_request_id());
+    aviationwx_log('info', 'weather request start', [
     'airport' => $_GET['airport'] ?? null,
     'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
     'ua' => $_SERVER['HTTP_USER_AGENT'] ?? null
-]);
+    ]);
 
-// Rate limiting (60 requests per minute per IP)
-if (!checkRateLimit('weather_api', 60, 60)) {
+    // Rate limiting (60 requests per minute per IP)
+    if (!checkRateLimit('weather_api', 60, 60)) {
     http_response_code(429);
     header('Retry-After: 60');
     ob_clean();
     aviationwx_log('warning', 'weather rate limited');
     echo json_encode(['success' => false, 'error' => 'Too many requests. Please try again later.']);
     exit;
-}
+    }
 
-// Get and validate airport ID
-$rawAirportId = $_GET['airport'] ?? '';
-if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    // Get and validate airport ID
+    $rawAirportId = $_GET['airport'] ?? '';
+    if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
     ob_clean();
     aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId]);
     echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
     exit;
-}
+    }
 
-$airportId = strtolower(trim($rawAirportId));
+    $airportId = strtolower(trim($rawAirportId));
 
-// Load airport config (with caching)
-$config = loadConfig();
-if ($config === null) {
+    // Load airport config (with caching)
+    $config = loadConfig();
+    if ($config === null) {
     ob_clean();
     aviationwx_log('error', 'config load failed');
     echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
     exit;
-}
+    }
 
-if (!isset($config['airports'][$airportId])) {
+    if (!isset($config['airports'][$airportId])) {
     ob_clean();
     aviationwx_log('error', 'airport not found', ['airport' => $airportId]);
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
-}
+    }
 
-$airport = $config['airports'][$airportId];
+    $airport = $config['airports'][$airportId];
 
-// Weather refresh interval (per-airport, with env default)
-$defaultWeatherRefresh = getenv('WEATHER_REFRESH_DEFAULT') !== false ? intval(getenv('WEATHER_REFRESH_DEFAULT')) : 60;
-$airportWeatherRefresh = isset($airport['weather_refresh_seconds']) ? intval($airport['weather_refresh_seconds']) : $defaultWeatherRefresh;
+    // Weather refresh interval (per-airport, with env default)
+    $defaultWeatherRefresh = getenv('WEATHER_REFRESH_DEFAULT') !== false ? intval(getenv('WEATHER_REFRESH_DEFAULT')) : 60;
+    $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) ? intval($airport['weather_refresh_seconds']) : $defaultWeatherRefresh;
 
-// Cached weather path
-$weatherCacheDir = __DIR__ . '/cache';
-if (!file_exists($weatherCacheDir)) {
+    // Cached weather path
+    $weatherCacheDir = __DIR__ . '/cache';
+    if (!file_exists($weatherCacheDir)) {
     @mkdir($weatherCacheDir, 0755, true);
-}
-$weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
+    }
+    $weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
 
-// Helper function to null out stale fields based on source timestamps
-// Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
-// considered stale - they represent valid historical data for the day regardless of current measurement age
-function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
+    // Helper function to null out stale fields based on source timestamps
+    // Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
+    // considered stale - they represent valid historical data for the day regardless of current measurement age
+    function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $primarySourceFields = [
         'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
@@ -125,13 +365,13 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             $data['flight_category_class'] = 'status-' . strtolower($data['flight_category']);
         }
     }
-}
+    }
 
-// Stale-while-revalidate: Serve stale cache immediately, refresh in background
-$hasStaleCache = false;
-$staleData = null;
+    // Stale-while-revalidate: Serve stale cache immediately, refresh in background
+    $hasStaleCache = false;
+    $staleData = null;
 
-if (file_exists($weatherCacheFile)) {
+    if (file_exists($weatherCacheFile)) {
     $age = time() - filemtime($weatherCacheFile);
     
     // If cache is fresh, serve it normally
@@ -191,13 +431,13 @@ if (file_exists($weatherCacheFile)) {
             // Continue to refresh in background (don't exit here)
         }
     }
-}
+    }
 
-/**
- * Fetch weather data asynchronously using curl_multi (parallel requests)
- * Fetches primary weather source and METAR in parallel when both are needed
- */
-function fetchWeatherAsync($airport) {
+    /**
+     * Fetch weather data asynchronously using curl_multi (parallel requests)
+     * Fetches primary weather source and METAR in parallel when both are needed
+     */
+    function fetchWeatherAsync($airport) {
     $sourceType = $airport['weather_source']['type'];
     
     // Build primary weather URL
@@ -316,12 +556,12 @@ function fetchWeatherAsync($airport) {
     }
     
     return $weatherData;
-}
+    }
 
-/**
- * Parse Ambient Weather API response (for async use)
- */
-function parseAmbientResponse($response) {
+    /**
+     * Parse Ambient Weather API response (for async use)
+     */
+    function parseAmbientResponse($response) {
     $data = json_decode($response, true);
     
     if (!isset($data[0]) || !isset($data[0]['lastData'])) {
@@ -355,12 +595,12 @@ function parseAmbientResponse($response) {
         'temp_low' => null,
         'peak_gust' => $gustSpeed,
     ];
-}
+    }
 
-/**
- * Parse METAR response (for async use)
- */
-function parseMETARResponse($response, $airport) {
+    /**
+     * Parse METAR response (for async use)
+     */
+    function parseMETARResponse($response, $airport) {
     $data = json_decode($response, true);
     
     if (!isset($data[0])) {
@@ -491,12 +731,12 @@ function parseMETARResponse($response, $airport) {
         'peak_gust' => $gustSpeed,
         'obs_time' => $obsTime, // Observation time when METAR was measured
     ];
-}
+    }
 
-/**
- * Fetch weather synchronously (fallback for METAR-only or errors)
- */
-function fetchWeatherSync($airport) {
+    /**
+     * Fetch weather synchronously (fallback for METAR-only or errors)
+     */
+    function fetchWeatherSync($airport) {
     $sourceType = $airport['weather_source']['type'];
     $weatherData = null;
     
@@ -511,13 +751,13 @@ function fetchWeatherSync($airport) {
             $weatherData = fetchMETAR($airport);
             // METAR-only: all data is from METAR source
             if ($weatherData !== null) {
-                // Use observation time if available, otherwise fall back to fetch time
-                $weatherData['last_updated_metar'] = isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null 
-                    ? $weatherData['obs_time'] 
-                    : time();
-                $weatherData['last_updated_primary'] = null;
-                // Remove internal obs_time field - we've already used it for last_updated_metar
-                unset($weatherData['obs_time']);
+            // Use observation time if available, otherwise fall back to fetch time
+            $weatherData['last_updated_metar'] = isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null 
+                ? $weatherData['obs_time'] 
+                : time();
+            $weatherData['last_updated_primary'] = null;
+            // Keep obs_time field for frontend - it represents the actual observation time
+            // last_updated_metar tracks when data was fetched/processed, obs_time is when observation occurred
             }
             return $weatherData;
         default:
@@ -548,12 +788,12 @@ function fetchWeatherSync($airport) {
     }
     
     return $weatherData;
-}
+    }
 
-// Fetch weather based on source
-$weatherData = null;
-$weatherError = null;
-try {
+    // Fetch weather based on source
+    $weatherData = null;
+    $weatherError = null;
+    try {
     // Use async fetch when METAR supplementation is needed, otherwise sync
     if ($airport['weather_source']['type'] !== 'metar') {
         $weatherData = fetchWeatherAsync($airport);
@@ -564,19 +804,19 @@ try {
     if ($weatherData === null) {
         $weatherError = 'Weather data unavailable';
     }
-} catch (Exception $e) {
+    } catch (Exception $e) {
     $weatherError = 'Error fetching weather: ' . $e->getMessage();
     aviationwx_log('error', 'weather fetch exception', ['err' => $e->getMessage()]);
-}
+    }
 
-if ($weatherError !== null) {
+    if ($weatherError !== null) {
     aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError]);
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
     exit;
-}
+    }
 
-if ($weatherData === null) {
+    if ($weatherData === null) {
     // If we served stale data, just update cache silently (don't error)
     if ($hasStaleCache) {
         // Keep the stale data in cache, but log the failure
@@ -588,29 +828,29 @@ if ($weatherData === null) {
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
     exit;
-}
+    }
 
-// Calculate additional aviation-specific metrics
-$weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
-$weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
-$weatherData['sunrise'] = getSunriseTime($airport);
-$weatherData['sunset'] = getSunsetTime($airport);
+    // Calculate additional aviation-specific metrics
+    $weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
+    $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
+    $weatherData['sunrise'] = getSunriseTime($airport);
+    $weatherData['sunset'] = getSunsetTime($airport);
 
-// Track and update today's peak gust (store value and timestamp)
-$currentGust = $weatherData['gust_speed'] ?? 0;
-updatePeakGust($airportId, $currentGust, $airport);
-$peakGustInfo = getPeakGust($airportId, $currentGust, $airport);
-if (is_array($peakGustInfo)) {
+    // Track and update today's peak gust (store value and timestamp)
+    $currentGust = $weatherData['gust_speed'] ?? 0;
+    updatePeakGust($airportId, $currentGust, $airport);
+    $peakGustInfo = getPeakGust($airportId, $currentGust, $airport);
+    if (is_array($peakGustInfo)) {
     $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
     $weatherData['peak_gust_time'] = $peakGustInfo['ts'] ?? null; // UNIX timestamp (UTC)
-} else {
+    } else {
     // Backward compatibility with older scalar cache files
     $weatherData['peak_gust_today'] = $peakGustInfo;
     $weatherData['peak_gust_time'] = null;
-}
+    }
 
-// Track and update today's high and low temperatures
-if ($weatherData['temperature'] !== null) {
+    // Track and update today's high and low temperatures
+    if ($weatherData['temperature'] !== null) {
     $currentTemp = $weatherData['temperature'];
     updateTempExtremes($airportId, $currentTemp, $airport);
     $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
@@ -618,51 +858,51 @@ if ($weatherData['temperature'] !== null) {
     $weatherData['temp_low_today'] = $tempExtremes['low'];
     $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
     $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
-}
+    }
 
-// Calculate VFR/IFR/MVFR status
-$weatherData['flight_category'] = calculateFlightCategory($weatherData);
-$weatherData['flight_category_class'] = 'status-' . strtolower($weatherData['flight_category']);
+    // Calculate VFR/IFR/MVFR status
+    $weatherData['flight_category'] = calculateFlightCategory($weatherData);
+    $weatherData['flight_category_class'] = 'status-' . strtolower($weatherData['flight_category']);
 
-// Format temperatures to °F for display
-$weatherData['temperature_f'] = $weatherData['temperature'] !== null ? round(($weatherData['temperature'] * 9/5) + 32) : null;
-$weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
+    // Format temperatures to °F for display
+    $weatherData['temperature_f'] = $weatherData['temperature'] !== null ? round(($weatherData['temperature'] * 9/5) + 32) : null;
+    $weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
 
-// Calculate gust factor
-$weatherData['gust_factor'] = ($weatherData['gust_speed'] && $weatherData['wind_speed']) ? 
+    // Calculate gust factor
+    $weatherData['gust_factor'] = ($weatherData['gust_speed'] && $weatherData['wind_speed']) ? 
     round($weatherData['gust_speed'] - $weatherData['wind_speed']) : 0;
 
-// Calculate dewpoint spread (temperature - dewpoint)
-if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
+    // Calculate dewpoint spread (temperature - dewpoint)
+    if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
     $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
-} else {
+    } else {
     $weatherData['dewpoint_spread'] = null;
-}
+    }
 
-// Safety check: If weather data is older than 3 hours, null out only fields from stale sources
-// This ensures pilots don't see dangerously out-of-date information while preserving valid data
-$maxStaleHours = 3;
-$maxStaleSeconds = $maxStaleHours * 3600;
+    // Safety check: If weather data is older than 3 hours, null out only fields from stale sources
+    // This ensures pilots don't see dangerously out-of-date information while preserving valid data
+    $maxStaleHours = 3;
+    $maxStaleSeconds = $maxStaleHours * 3600;
 
-// Fields that come from PRIMARY source (Tempest/Ambient)
-// Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
-// included here - they represent valid historical data for the day regardless of current measurement age
-$primarySourceFields = [
+    // Fields that come from PRIMARY source (Tempest/Ambient)
+    // Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
+    // included here - they represent valid historical data for the day regardless of current measurement age
+    $primarySourceFields = [
     'temperature', 'temperature_f',
     'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
     'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
     'pressure', 'precip_accum',
     'pressure_altitude', 'density_altitude' // Calculated from primary data
-];
+    ];
 
-// Fields that come from METAR source
-$metarSourceFields = [
+    // Fields that come from METAR source
+    $metarSourceFields = [
     'visibility', 'ceiling', 'cloud_cover'
-];
+    ];
 
-// Check primary source staleness
-$primaryStale = false;
-if (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
+    // Check primary source staleness
+    $primaryStale = false;
+    if (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
     $primaryAge = time() - $weatherData['last_updated_primary'];
     $primaryStale = ($primaryAge > $maxStaleSeconds);
     
@@ -681,11 +921,11 @@ if (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_pr
             }
         }
     }
-}
+    }
 
-// Check METAR source staleness
-$metarStale = false;
-if (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
+    // Check METAR source staleness
+    $metarStale = false;
+    if (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
     $metarAge = time() - $weatherData['last_updated_metar'];
     $metarStale = ($metarAge > $maxStaleSeconds);
     
@@ -704,66 +944,67 @@ if (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_meta
             }
         }
     }
-}
+    }
 
-// If visibility or ceiling is stale, recalculate flight category (will be null if both are null)
-if ($metarStale || ($weatherData['visibility'] === null && $weatherData['ceiling'] === null)) {
+    // If visibility or ceiling is stale, recalculate flight category (will be null if both are null)
+    if ($metarStale || ($weatherData['visibility'] === null && $weatherData['ceiling'] === null)) {
     $weatherData['flight_category'] = calculateFlightCategory($weatherData);
     if ($weatherData['flight_category'] === null) {
         $weatherData['flight_category_class'] = '';
     } else {
         $weatherData['flight_category_class'] = 'status-' . strtolower($weatherData['flight_category']);
     }
-}
+    }
 
-// Set overall last_updated to most recent source timestamp
-$lastUpdated = max(
+    // Set overall last_updated to most recent source timestamp
+    $lastUpdated = max(
     $weatherData['last_updated_primary'] ?? 0,
     $weatherData['last_updated_metar'] ?? 0
-);
-if ($lastUpdated > 0) {
+    );
+    if ($lastUpdated > 0) {
     $weatherData['last_updated'] = $lastUpdated;
     $weatherData['last_updated_iso'] = date('c', $lastUpdated);
-} else {
+    } else {
     // Fallback if no source timestamps (shouldn't happen with new code)
     $weatherData['last_updated'] = time();
     $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
-}
+    }
 
-@file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
+    @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
 
-// If we served stale data, we're in background refresh mode
-// Don't send headers or output again (already sent to client)
-if ($hasStaleCache) {
+    // If we served stale data, we're in background refresh mode
+    // Don't send headers or output again (already sent to client)
+    if ($hasStaleCache) {
     // Just update the cache silently in background
     exit;
-}
+    }
 
-// Build ETag for response based on content
-$payload = ['success' => true, 'weather' => $weatherData];
-$body = json_encode($payload);
-$etag = 'W/"' . sha1($body) . '"';
+    // Build ETag for response based on content
+    $payload = ['success' => true, 'weather' => $weatherData];
+    $body = json_encode($payload);
+    $etag = 'W/"' . sha1($body) . '"';
 
-// Conditional requests support
-$ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-if ($ifNoneMatch === $etag) {
+    // Conditional requests support
+    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    if ($ifNoneMatch === $etag) {
     header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
     header('ETag: ' . $etag);
     header('X-Cache-Status: MISS');
     http_response_code(304);
     exit;
+    }
+
+    // Set cache headers for fresh data (short-lived)
+    header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+    header('ETag: ' . $etag);
+    header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
+    header('X-Cache-Status: MISS');
+
+    ob_clean();
+    aviationwx_log('info', 'weather request success', ['airport' => $airportId]);
+    aviationwx_maybe_log_alert();
+    echo $body;
 }
-
-// Set cache headers for fresh data (short-lived)
-header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
-header('ETag: ' . $etag);
-header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
-header('X-Cache-Status: MISS');
-
-ob_clean();
-aviationwx_log('info', 'weather request success', ['airport' => $airportId]);
-aviationwx_maybe_log_alert();
-echo $body;
 
 /**
  * Parse Tempest API response (for async use)

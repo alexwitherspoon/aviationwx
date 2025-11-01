@@ -218,8 +218,31 @@
                 <a href="https://skyvector.com/airport/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn" style="margin-right: 1rem;">
                     View on SkyVector
                 </a>
-                <a href="https://www.aopa.org/destinations/airports/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn">
+                <a href="https://www.aopa.org/destinations/airports/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn" style="margin-right: 1rem;">
                     View on AOPA
+                </a>
+                <?php
+                // Generate FAA Weather Cams URL
+                // URL format: https://weathercams.faa.gov/map/{min_lon},{min_lat},{max_lon},{max_lat}/airport/{icao}/
+                // Create bounding box around airport (2 degree buffer for visibility)
+                $buffer = 2.0;
+                $min_lon = $airport['lon'] - $buffer;
+                $min_lat = $airport['lat'] - $buffer;
+                $max_lon = $airport['lon'] + $buffer;
+                $max_lat = $airport['lat'] + $buffer;
+                // Remove K prefix from ICAO if present (e.g., KSPB -> SPB)
+                $faa_icao = preg_replace('/^K/', '', strtoupper($airport['icao']));
+                $faa_weather_url = sprintf(
+                    'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
+                    $min_lon,
+                    $min_lat,
+                    $max_lon,
+                    $max_lat,
+                    $faa_icao
+                );
+                ?>
+                <a href="<?= htmlspecialchars($faa_weather_url) ?>" target="_blank" rel="noopener" class="btn">
+                    FAA Weather
                 </a>
             </div>
         </section>
@@ -802,8 +825,8 @@ function displayWeather(weather) {
         <!-- Visibility & Ceiling -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
-            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${weather.visibility !== null ? weather.visibility.toFixed(1) : '--'}</span><span class="weather-unit">${weather.visibility !== null ? 'SM' : ''}</span>${weather.visibility !== null && weather.last_updated_metar ? formatTempTimestamp(weather.last_updated_metar) : ''}</div>
-            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? weather.ceiling : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? 'ft AGL' : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && weather.last_updated_metar ? formatTempTimestamp(weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${weather.visibility !== null ? weather.visibility.toFixed(1) : '--'}</span><span class="weather-unit">${weather.visibility !== null ? 'SM' : ''}</span>${weather.visibility !== null && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? weather.ceiling : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? 'ft AGL' : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
         </div>
         
         <!-- Pressure & Altitude -->
