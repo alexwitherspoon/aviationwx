@@ -918,29 +918,55 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
 }
 
 /**
- * Calculate VFR/IFR/MVFR flight category based on ceiling and visibility
+ * Calculate flight category (VFR, MVFR, IFR, LIFR) based on ceiling and visibility
+ * Uses standard aviation weather category definitions:
+ * - LIFR (Magenta): Visibility < 1 mile, Ceiling < 500 feet
+ * - IFR (Red): Visibility 1 to < 3 miles, Ceiling 500 to < 1,000 feet
+ * - MVFR (Blue): Visibility 3 to 5 miles, Ceiling 1,000 to < 3,000 feet
+ * - VFR (Green): Visibility > 5 miles, Ceiling > 3,000 feet
  */
 function calculateFlightCategory($weather) {
     $ceiling = $weather['ceiling'] ?? null;
     $visibility = $weather['visibility'] ?? null;
     
-    // IFR: ceiling < 1000 ft or visibility < 3 SM
-    if ($ceiling !== null && $ceiling < 1000) {
+    // LIFR: ceiling < 500 ft AND visibility < 1 SM
+    // (Most restrictive - check first)
+    if ($ceiling !== null && $ceiling < 500) {
+        if ($visibility !== null && $visibility < 1) {
+            return 'LIFR';
+        }
+        // If only ceiling is < 500, but visibility is >= 1, still LIFR
+        if ($visibility === null) {
+            return 'LIFR';
+        }
+    }
+    if ($visibility !== null && $visibility < 1) {
+        if ($ceiling !== null && $ceiling < 500) {
+            return 'LIFR';
+        }
+        // If only visibility is < 1, but ceiling is >= 500, still LIFR
+        if ($ceiling === null) {
+            return 'LIFR';
+        }
+    }
+    
+    // IFR: ceiling 500 to < 1000 ft OR visibility 1 to < 3 SM
+    if ($ceiling !== null && $ceiling >= 500 && $ceiling < 1000) {
         return 'IFR';
     }
-    if ($visibility !== null && $visibility < 3) {
+    if ($visibility !== null && $visibility >= 1 && $visibility < 3) {
         return 'IFR';
     }
     
-    // MVFR: ceiling < 3000 ft or visibility < 5 SM
-    if ($ceiling !== null && $ceiling < 3000) {
+    // MVFR: ceiling 1000 to < 3000 ft OR visibility 3 to 5 SM
+    if ($ceiling !== null && $ceiling >= 1000 && $ceiling < 3000) {
         return 'MVFR';
     }
-    if ($visibility !== null && $visibility < 5) {
+    if ($visibility !== null && $visibility >= 3 && $visibility <= 5) {
         return 'MVFR';
     }
     
-    // VFR: all other conditions
+    // VFR: all other conditions (visibility > 5 SM and ceiling > 3000 ft)
     return 'VFR';
 }
 
