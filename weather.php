@@ -8,7 +8,6 @@ require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/logger.php';
 
-<<<<<<< HEAD
 /**
  * Parse Ambient Weather API response (for async use)
  */
