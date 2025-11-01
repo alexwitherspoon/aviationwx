@@ -297,7 +297,10 @@ function fetchWeatherAsync($airport) {
     if ($metarResponse !== false && $metarCode == 200) {
         $metarData = parseMETARResponse($metarResponse, $airport);
         if ($metarData !== null) {
-            $metarTimestamp = time(); // Track when METAR data was fetched
+            // Use observation time if available, otherwise fall back to fetch time
+            $metarTimestamp = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
+                ? $metarData['obs_time'] 
+                : time();
             $weatherData['last_updated_metar'] = $metarTimestamp;
             
             if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
@@ -461,6 +464,16 @@ function parseMETARResponse($response, $airport) {
         $precip = floatval($metarData['pcp24hr']); // Already in inches
     }
     
+    // Parse observation time (when the METAR was actually measured)
+    $obsTime = null;
+    if (isset($metarData['obsTime'])) {
+        // obsTime is in ISO 8601 format (e.g., '2025-01-26T16:54:00Z')
+        $timestamp = strtotime($metarData['obsTime']);
+        if ($timestamp !== false) {
+            $obsTime = $timestamp;
+        }
+    }
+    
     return [
         'temperature' => $temperature,
         'humidity' => $humidity,
@@ -476,6 +489,7 @@ function parseMETARResponse($response, $airport) {
         'temp_high' => null,
         'temp_low' => null,
         'peak_gust' => $gustSpeed,
+        'obs_time' => $obsTime, // Observation time when METAR was measured
     ];
 }
 
@@ -497,8 +511,13 @@ function fetchWeatherSync($airport) {
             $weatherData = fetchMETAR($airport);
             // METAR-only: all data is from METAR source
             if ($weatherData !== null) {
-                $weatherData['last_updated_metar'] = time();
+                // Use observation time if available, otherwise fall back to fetch time
+                $weatherData['last_updated_metar'] = isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null 
+                    ? $weatherData['obs_time'] 
+                    : time();
                 $weatherData['last_updated_primary'] = null;
+                // Remove internal obs_time field - we've already used it for last_updated_metar
+                unset($weatherData['obs_time']);
             }
             return $weatherData;
         default:
@@ -511,7 +530,10 @@ function fetchWeatherSync($airport) {
         // Try to fetch METAR for visibility/ceiling if not already present
         $metarData = fetchMETAR($airport);
         if ($metarData !== null) {
-            $weatherData['last_updated_metar'] = time();
+            // Use observation time if available, otherwise fall back to fetch time
+            $weatherData['last_updated_metar'] = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
+                ? $metarData['obs_time'] 
+                : time();
             
             if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
                 $weatherData['visibility'] = $metarData['visibility'];
