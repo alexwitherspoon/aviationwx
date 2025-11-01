@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/alexwitherspoon/aviationwx.org#readme
+    about: Check the README and documentation files for setup and usage information
+  - name: Ask a Question
+    url: https://github.com/alexwitherspoon/aviationwx.org/discussions
+    about: Use GitHub Discussions for general questions and community support
+
