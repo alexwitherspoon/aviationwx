@@ -158,6 +158,51 @@ function parseMETARResponse($response, $airport) {
         }
     }
     
+    // If obsTime not available, try to parse from raw METAR string (rawOb)
+    if ($obsTime === null && isset($metarData['rawOb'])) {
+        $rawOb = $metarData['rawOb'];
+        // METAR observation time format is DDHHMMZ (e.g., "012353Z" = day 01, time 23:53 UTC)
+        // Pattern: day (2 digits), hour (2 digits), minute (2 digits), 'Z'
+        if (preg_match('/\b(\d{2})(\d{4})Z\b/', $rawOb, $matches)) {
+            $day = intval($matches[1]);
+            $hour = intval(substr($matches[2], 0, 2));
+            $minute = intval(substr($matches[2], 2, 2));
+            
+            // Validate ranges
+            if ($day >= 1 && $day <= 31 && $hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
+                // Get current UTC time to determine year and month
+                $now = new DateTime('now', new DateTimeZone('UTC'));
+                $year = intval($now->format('Y'));
+                $month = intval($now->format('m'));
+                
+                // Try to create the observation time
+                // Note: We need to handle month rollovers - if day is greater than current day,
+                // it might be from the previous month
+                try {
+                    $obsDateTime = new DateTime("{$year}-{$month}-{$day} {$hour}:{$minute}:00", new DateTimeZone('UTC'));
+                    
+                    // If the observation time is more than 3 days in the future, assume it's from previous month
+                    $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                    if ($daysDiff > 3) {
+                        // Subtract one month
+                        $obsDateTime->modify('-1 month');
+                    }
+                    // If the observation time is more than 3 days in the past (but less than 28 days), assume it's from next month
+                    // (This handles end-of-month cases)
+                    elseif ($daysDiff < -25) {
+                        // Add one month
+                        $obsDateTime->modify('+1 month');
+                    }
+                    
+                    $obsTime = $obsDateTime->getTimestamp();
+                } catch (Exception $e) {
+                    // Invalid date, leave obsTime as null
+                    error_log("Failed to parse METAR observation time from rawOb: " . $e->getMessage());
+                }
+            }
+        }
+    }
+    
     return [
         'temperature' => $temperature,
         'dewpoint' => $dewpoint,
@@ -489,6 +534,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 : time();
             $weatherData['last_updated_metar'] = $metarTimestamp;
             
+            // Copy obs_time from METAR data so frontend can use it for visibility/ceiling timestamps
+            if (isset($metarData['obs_time']) && $metarData['obs_time'] !== null) {
+                $weatherData['obs_time'] = $metarData['obs_time'];
+            }
+            
             if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
                 $weatherData['visibility'] = $metarData['visibility'];
             }
@@ -548,6 +598,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             $weatherData['last_updated_metar'] = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
                 ? $metarData['obs_time'] 
                 : time();
+            
+            // Copy obs_time from METAR data so frontend can use it for visibility/ceiling timestamps
+            if (isset($metarData['obs_time']) && $metarData['obs_time'] !== null) {
+                $weatherData['obs_time'] = $metarData['obs_time'];
+            }
             
             if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
                 $weatherData['visibility'] = $metarData['visibility'];
