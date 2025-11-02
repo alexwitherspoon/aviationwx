@@ -52,7 +52,7 @@ jobs:
   e2e-tests:
     name: End-to-End Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't block PR if these fail
+    # These are critical - must pass before deployment
     
     steps:
       - name: Checkout code
@@ -104,8 +104,7 @@ jobs:
         run: |
           echo "Running E2E tests with mocked APIs..."
           echo "Note: These tests use mocked API responses"
-          vendor/bin/phpunit --testsuite E2E --testdox --log-junit e2e-results.xml || [ $? -eq 1 ]
-        continue-on-error: true
+          vendor/bin/phpunit --testsuite E2E --testdox --log-junit e2e-results.xml
         env:
           TEST_API_URL: http://localhost:8080
       
@@ -125,7 +124,7 @@ jobs:
   smoke-tests:
     name: Smoke Tests - Local
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't block PR if these fail
+    # These are critical - must pass before deployment
     if: github.event_name == 'pull_request' || github.event_name == 'push'  # Auto on PRs and pushes
     
     steps:
@@ -160,8 +159,7 @@ jobs:
         run: |
           echo "Running smoke tests against local instance..."
           echo "Note: Docker container uses airports.json (mounted from host)"
-          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml || [ $? -eq 1 ]
-        continue-on-error: true
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml
         env:
           TEST_API_URL: http://localhost:8080
           # Note: CONFIG_PATH not set here - Docker container should use /var/www/html/airports.json
