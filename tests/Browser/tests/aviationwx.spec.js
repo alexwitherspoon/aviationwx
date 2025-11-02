@@ -322,10 +322,14 @@ test.describe('Aviation Weather Dashboard', () => {
     }
     
     // Filter out known acceptable errors (like API fetch failures in test)
+    // HTTP 503 (Service Unavailable) is expected when weather API is unavailable in CI
     const criticalErrors = consoleErrors.filter(err => 
       !err.includes('Failed to fetch') && 
       !err.includes('network') &&
       !err.includes('404') &&
+      !err.includes('503') &&  // Service unavailable - weather API can't fetch data (expected in CI)
+      !err.includes('Service Unavailable') &&
+      !err.includes('Unable to fetch weather data') &&  // Error message when service unavailable
       !err.includes('ChunkLoadError') // Webpack chunk loading errors are sometimes transient
     );
     
