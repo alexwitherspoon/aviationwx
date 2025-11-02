@@ -1,8 +1,8 @@
 {
   "airports": {
-    "airportid": {
+    "kspb": {
       "name": "Example Airport",
-      "icao": "KXXX",
+      "icao": "KSPB",
       "address": "City, State",
       "lat": 45.7710278,
       "lon": -122.8618333,
@@ -85,8 +85,8 @@
           "refresh_seconds": 120
         }
       ],
-      "airnav_url": "https://www.airnav.com/airport/KXXX",
-      "metar_station": "KXXX",
+      "airnav_url": "https://www.airnav.com/airport/KSPB",
+      "metar_station": "KSPB",
       "nearby_metar_stations": [
         "KABC",
         "KDEF"
