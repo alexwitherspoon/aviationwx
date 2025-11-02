@@ -415,8 +415,8 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 }
                 flush();
                 
-                // Set time limit for background refresh
-                set_time_limit(30);
+                // Set time limit for background refresh (increased to handle slow APIs)
+                set_time_limit(45);
             }
             
             // Continue to refresh in background (don't exit here)
@@ -428,8 +428,9 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
      * Fetch weather data asynchronously using curl_multi (parallel requests)
      * Fetches primary weather source and METAR in parallel when both are needed
      */
-    function fetchWeatherAsync($airport) {
+    function fetchWeatherAsync($airport, $airportId = null) {
     $sourceType = $airport['weather_source']['type'];
+    $airportId = $airportId ?? 'unknown';
     
     // Build primary weather URL
     $primaryUrl = null;
@@ -456,8 +457,21 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     
     // Create multi-handle for parallel requests
     $mh = curl_multi_init();
+    if ($mh === false) {
+        aviationwx_log('error', 'failed to init curl_multi', ['airport' => $airportId]);
+        return null;
+    }
+    
     $ch1 = curl_init($primaryUrl);
     $ch2 = curl_init($metarUrl);
+    
+    if ($ch1 === false || $ch2 === false) {
+        if ($ch1 !== false) curl_close($ch1);
+        if ($ch2 !== false) curl_close($ch2);
+        curl_multi_close($mh);
+        aviationwx_log('error', 'failed to init curl handles', ['airport' => $airportId]);
+        return null;
+    }
     
     // Configure primary weather request
     curl_setopt_array($ch1, [
@@ -465,6 +479,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         CURLOPT_TIMEOUT => 10,
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_USERAGENT => 'AviationWX/1.0',
+        CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
     ]);
     
     // Configure METAR request
@@ -473,26 +488,75 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         CURLOPT_TIMEOUT => 10,
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_USERAGENT => 'AviationWX/1.0',
+        CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
     ]);
     
     // Add handles to multi-curl
     curl_multi_add_handle($mh, $ch1);
     curl_multi_add_handle($mh, $ch2);
     
-    // Execute both requests in parallel
+    // Execute both requests in parallel with overall timeout protection
     $running = null;
+    $startTime = microtime(true);
+    $maxOverallTimeout = 15; // Overall timeout of 15 seconds (5s buffer over individual timeouts)
+    
     do {
-        curl_multi_exec($mh, $running);
-        curl_multi_select($mh, 0.1);
+        $status = curl_multi_exec($mh, $running);
+        if ($status !== CURLM_OK && $status !== CURLM_CALL_MULTI_PERFORM) {
+            break;
+        }
+        
+        // Check for overall timeout
+        $elapsed = microtime(true) - $startTime;
+        if ($elapsed > $maxOverallTimeout) {
+            aviationwx_log('warning', 'curl_multi overall timeout exceeded', [
+                'airport' => $airportId,
+                'elapsed' => round($elapsed, 2),
+                'max_timeout' => $maxOverallTimeout
+            ]);
+            // Force cleanup and break
+            break;
+        }
+        
+        if ($running > 0) {
+            curl_multi_select($mh, 0.1);
+        }
     } while ($running > 0);
     
-    // Get responses
+    // Get responses and error information
     $primaryResponse = curl_multi_getcontent($ch1);
     $metarResponse = curl_multi_getcontent($ch2);
     
-    // Get HTTP codes
+    // Get HTTP codes and curl error info
     $primaryCode = curl_getinfo($ch1, CURLINFO_HTTP_CODE);
     $metarCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+    $primaryError = curl_error($ch1);
+    $metarError = curl_error($ch2);
+    $primaryErrno = curl_errno($ch1);
+    $metarErrno = curl_errno($ch2);
+    
+    // Log errors if they occurred
+    if ($primaryResponse === false || $primaryCode !== 200 || !empty($primaryError)) {
+        aviationwx_log('warning', 'primary weather API error', [
+            'airport' => $airportId,
+            'source' => $sourceType,
+            'http_code' => $primaryCode,
+            'curl_error' => $primaryError ?: null,
+            'curl_errno' => $primaryErrno !== 0 ? $primaryErrno : null,
+            'response_received' => $primaryResponse !== false
+        ]);
+    }
+    
+    if ($metarResponse === false || $metarCode !== 200 || !empty($metarError)) {
+        aviationwx_log('warning', 'METAR API error', [
+            'airport' => $airportId,
+            'station' => $stationId,
+            'http_code' => $metarCode,
+            'curl_error' => $metarError ?: null,
+            'curl_errno' => $metarErrno !== 0 ? $metarErrno : null,
+            'response_received' => $metarResponse !== false
+        ]);
+    }
     
     // Cleanup
     curl_multi_remove_handle($mh, $ch1);
@@ -516,6 +580,12 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         if ($weatherData !== null) {
             $primaryTimestamp = time(); // Track when primary data was fetched
             $weatherData['last_updated_primary'] = $primaryTimestamp;
+        } else {
+            aviationwx_log('warning', 'primary weather response parse failed', [
+                'airport' => $airportId,
+                'source' => $sourceType,
+                'response_length' => strlen($primaryResponse)
+            ]);
         }
     }
     
@@ -548,6 +618,12 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             if ($metarData['cloud_cover'] !== null) {
                 $weatherData['cloud_cover'] = $metarData['cloud_cover'];
             }
+        } else {
+            aviationwx_log('warning', 'METAR response parse failed', [
+                'airport' => $airportId,
+                'station' => $stationId,
+                'response_length' => strlen($metarResponse)
+            ]);
         }
     }
     
@@ -625,7 +701,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     try {
     // Use async fetch when METAR supplementation is needed, otherwise sync
     if ($airport['weather_source']['type'] !== 'metar') {
-        $weatherData = fetchWeatherAsync($airport);
+        $weatherData = fetchWeatherAsync($airport, $airportId);
     } else {
         $weatherData = fetchWeatherSync($airport);
     }
@@ -900,7 +976,16 @@ function fetchTempestWeather($source) {
     
     // Fetch current observation
     $url = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
-    $response = @file_get_contents($url);
+    
+    // Create context with explicit timeout (10 seconds)
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
     
     if ($response === false) {
         return null;
@@ -948,7 +1033,16 @@ function fetchMETAR($airport) {
     
     // Fetch METAR from aviationweather.gov (new API format)
     $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
-    $response = @file_get_contents($url);
+    
+    // Create context with explicit timeout (10 seconds)
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
     
     if ($response === false) {
         return null;
