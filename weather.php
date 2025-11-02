@@ -318,6 +318,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Get and validate airport ID
     $rawAirportId = $_GET['airport'] ?? '';
     if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    http_response_code(400);
     ob_clean();
     aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId]);
     echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
@@ -329,6 +330,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Load airport config (with caching)
     $config = loadConfig();
     if ($config === null) {
+    http_response_code(500);
     ob_clean();
     aviationwx_log('error', 'config load failed');
     echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
@@ -336,6 +338,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
 
     if (!isset($config['airports'][$airportId])) {
+    http_response_code(404);
     ob_clean();
     aviationwx_log('error', 'airport not found', ['airport' => $airportId]);
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
@@ -715,6 +718,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
 
     if ($weatherError !== null) {
+    http_response_code(503);
     aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError]);
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
@@ -730,6 +734,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
     
     // No stale cache available - send error response
+    http_response_code(503);
     aviationwx_log('error', 'weather api no data', ['airport' => $airportId]);
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);

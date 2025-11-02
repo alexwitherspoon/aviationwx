@@ -244,10 +244,48 @@ test.describe('Aviation Weather Dashboard', () => {
     // Wait for content instead of fixed timeout
     await page.waitForSelector('body', { state: 'visible' });
     
-    const pageContent = await page.textContent('body');
+    // Check for actual error messages displayed to users (not in source code)
+    // Look for error messages in visible text, not in script tags or comments
+    const visibleErrors = await page.evaluate(() => {
+      // Get all visible text content (excluding script/style tags)
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode: function(node) {
+            // Skip text nodes inside script, style, or noscript tags
+            let parent = node.parentElement;
+            while (parent && parent !== document.body) {
+              const tagName = parent.tagName.toLowerCase();
+              if (['script', 'style', 'noscript'].includes(tagName)) {
+                return NodeFilter.FILTER_REJECT;
+              }
+              parent = parent.parentElement;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        }
+      );
+      
+      let text = '';
+      let node;
+      while (node = walker.nextNode()) {
+        text += node.textContent + ' ';
+      }
+      
+      // Check for error indicators in visible text (case insensitive)
+      const errorPatterns = [
+        /error/i,
+        /undefined/i,
+        /NaN/i,
+        /null/i
+      ];
+      
+      return errorPatterns.some(pattern => pattern.test(text));
+    });
     
-    // Should not show error messages or broken layouts
-    expect(pageContent).not.toMatch(/undefined|null|NaN|error/i);
+    // Should not show error messages to users
+    expect(visibleErrors).toBe(false);
   });
 
   test('should display webcam images if available', async ({ page }) => {
@@ -369,11 +407,12 @@ test.describe('Aviation Weather Dashboard', () => {
     const newState = await toggle.textContent();
     expect(newState).not.toBe(initialText);
     
-    // Verify localStorage was written before reload
+    // Verify localStorage was written before reload (using correct key)
     const localStorageValue = await page.evaluate(() => {
-      return localStorage.getItem('tempUnit');
+      return localStorage.getItem('aviationwx_temp_unit');
     });
     expect(localStorageValue).toBeTruthy();
+    expect(['F', 'C']).toContain(localStorageValue);
     
     // Reload page
     await page.reload();
