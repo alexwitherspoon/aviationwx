@@ -1316,59 +1316,95 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
 
 /**
  * Calculate flight category (VFR, MVFR, IFR, LIFR) based on ceiling and visibility
- * Uses standard aviation weather category definitions:
- * - LIFR (Magenta): Visibility < 1 mile, Ceiling < 500 feet
- * - IFR (Red): Visibility 1 to < 3 miles, Ceiling 500 to < 1,000 feet
- * - MVFR (Blue): Visibility 3 to 5 miles, Ceiling 1,000 to < 3,000 feet
- * - VFR (Green): Visibility > 5 miles, Ceiling > 3,000 feet
+ * Uses standard FAA aviation weather category definitions (worst-case rule):
+ * - LIFR (Magenta): Visibility < 1 mile OR Ceiling < 500 feet
+ * - IFR (Red): Visibility 1 to <= 3 miles OR Ceiling 500 to < 1,000 feet
+ * - MVFR (Blue): Visibility 3 to 5 miles OR Ceiling 1,000 to < 3,000 feet
+ * - VFR (Green): Visibility > 3 miles AND Ceiling >= 1,000 feet (BOTH must be true)
+ * 
+ * For categories other than VFR, the WORST of the two conditions determines the category.
+ * VFR requires BOTH conditions to meet minimums per FAA standards.
  */
 function calculateFlightCategory($weather) {
     $ceiling = $weather['ceiling'] ?? null;
     $visibility = $weather['visibility'] ?? null;
     
-    // LIFR: ceiling < 500 ft AND visibility < 1 SM
-    // (Most restrictive - check first)
-    // Both conditions must be met, but if one is missing, use the worst category based on what we know
-    $lifrCeiling = ($ceiling !== null && $ceiling < 500);
-    $lifrVisibility = ($visibility !== null && $visibility < 1);
-    
-    if ($lifrCeiling && $lifrVisibility) {
-        return 'LIFR';
-    }
-    // If ceiling < 500 but visibility unknown, check if visibility would make it IFR or worse
-    // If visibility < 1 but ceiling unknown, check if ceiling would make it IFR or worse
-    if ($lifrCeiling && $visibility === null) {
-        // Ceiling alone indicates LIFR range, but without visibility, use worst case
-        return 'LIFR';
-    }
-    if ($lifrVisibility && $ceiling === null) {
-        // Visibility alone indicates LIFR range, but without ceiling, use worst case
-        return 'LIFR';
-    }
-    
-    // IFR: ceiling 500 to < 1000 ft OR visibility 1 to <= 3 SM (includes exactly 3 SM)
-    if ($ceiling !== null && $ceiling >= 500 && $ceiling < 1000) {
-        return 'IFR';
-    }
-    if ($visibility !== null && $visibility >= 1 && $visibility <= 3) {
-        return 'IFR';
-    }
-    
-    // MVFR: ceiling 1000 to < 3000 ft OR visibility > 3 to <= 5 SM (excludes 3 SM which is IFR)
-    if ($ceiling !== null && $ceiling >= 1000 && $ceiling < 3000) {
-        return 'MVFR';
-    }
-    if ($visibility !== null && $visibility > 3 && $visibility <= 5) {
-        return 'MVFR';
-    }
-    
-    // VFR: all other conditions (visibility > 5 SM and ceiling > 3000 ft)
-    // But only if we have at least one piece of valid data
+    // Cannot determine category without any data
     if ($visibility === null && $ceiling === null) {
-        return null; // Cannot determine category without any data
+        return null;
     }
     
-    return 'VFR';
+    // Determine category for visibility and ceiling separately (worst-case rule)
+    $visibilityCategory = null;
+    $ceilingCategory = null;
+    
+    // Categorize visibility
+    if ($visibility !== null) {
+        if ($visibility < 1) {
+            $visibilityCategory = 'LIFR';
+        } elseif ($visibility >= 1 && $visibility <= 3) {
+            $visibilityCategory = 'IFR';
+        } elseif ($visibility > 3 && $visibility <= 5) {
+            $visibilityCategory = 'MVFR';
+        } else {
+            $visibilityCategory = 'VFR';  // > 5 SM
+        }
+    }
+    
+    // Categorize ceiling
+    if ($ceiling !== null) {
+        if ($ceiling < 500) {
+            $ceilingCategory = 'LIFR';
+        } elseif ($ceiling >= 500 && $ceiling < 1000) {
+            $ceilingCategory = 'IFR';
+        } elseif ($ceiling >= 1000 && $ceiling < 3000) {
+            $ceilingCategory = 'MVFR';
+        } else {
+            $ceilingCategory = 'VFR';  // >= 3000 ft
+        }
+    }
+    
+    // If both are categorized, use worst-case (most restrictive) category
+    // Order of restrictiveness: LIFR > IFR > MVFR > VFR
+    if ($visibilityCategory !== null && $ceilingCategory !== null) {
+        // VFR requires BOTH conditions to be VFR (or better)
+        // If either is not VFR, use the worst of the two
+        if ($visibilityCategory === 'VFR' && $ceilingCategory === 'VFR') {
+            return 'VFR';
+        }
+        
+        // Otherwise, use worst-case category
+        $categoryOrder = ['LIFR' => 0, 'IFR' => 1, 'MVFR' => 2, 'VFR' => 3];
+        $visibilityOrder = $categoryOrder[$visibilityCategory];
+        $ceilingOrder = $categoryOrder[$ceilingCategory];
+        
+        return ($visibilityOrder < $ceilingOrder) ? $visibilityCategory : $ceilingCategory;
+    }
+    
+    // If only one is known, check if VFR is still possible
+    // VFR requires visibility >= 3 SM AND ceiling >= 1,000 ft
+    if ($visibilityCategory !== null && $ceiling === null) {
+        // If visibility is not VFR, use that category
+        if ($visibilityCategory !== 'VFR') {
+            return $visibilityCategory;
+        }
+        // If visibility is VFR and ceiling is null (unlimited/no clouds), ceiling is effectively VFR
+        // Unlimited ceiling means no restriction - this is VFR conditions
+        return 'VFR';
+    }
+    
+    if ($ceilingCategory !== null && $visibility === null) {
+        // If ceiling is not VFR, use that category
+        if ($ceilingCategory !== 'VFR') {
+            return $ceilingCategory;
+        }
+        // If ceiling is VFR but visibility unknown, cannot confirm VFR
+        // Return MVFR as conservative estimate (visibility could be 3-5 SM)
+        return 'MVFR';
+    }
+    
+    // Should not reach here, but fallback
+    return null;
 }
 
 /**
