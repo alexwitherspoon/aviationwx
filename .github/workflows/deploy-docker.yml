@@ -21,7 +21,7 @@ jobs:
       test-success: ${{ steps.check.outputs.test-success }}
       qa-success: ${{ steps.check.outputs.qa-success }}
     steps:
-      - name: Check required workflows status
+      - name: Wait for and check required workflows status
         id: check
         uses: actions/github-script@v7
         with:
@@ -31,35 +31,93 @@ jobs:
             
             core.info(`Checking workflow statuses for commit: ${commitSha}`);
             
-            // Check Test and Lint workflow
-            const testRuns = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'test.yml',
-              head_sha: commitSha,
-              per_page: 1
-            });
+            const maxWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
+            const checkInterval = 30 * 1000; // Check every 30 seconds
+            const startTime = Date.now();
             
-            // Check QA Tests workflow
-            const qaRuns = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'quality-assurance-tests.yml',
-              head_sha: commitSha,
-              per_page: 1
-            });
+            let testRun = null;
+            let qaRun = null;
+            let testSuccess = false;
+            let qaSuccess = false;
             
-            const testRun = testRuns.data.workflow_runs[0];
-            const qaRun = qaRuns.data.workflow_runs[0];
+            // Wait for both workflows to complete
+            while (Date.now() - startTime < maxWaitTime) {
+              // Check Test and Lint workflow
+              const testRuns = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'test.yml',
+                head_sha: commitSha,
+                per_page: 1
+              });
+              
+              // Check QA Tests workflow
+              const qaRuns = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'quality-assurance-tests.yml',
+                head_sha: commitSha,
+                per_page: 1
+              });
+              
+              testRun = testRuns.data.workflow_runs[0];
+              qaRun = qaRuns.data.workflow_runs[0];
+              
+              const testStatus = testRun?.status; // queued, in_progress, completed
+              const testConclusion = testRun?.conclusion; // success, failure, cancelled, etc.
+              const qaStatus = qaRun?.status;
+              const qaConclusion = qaRun?.conclusion;
+              
+              core.info(`Test and Lint: ${testStatus || 'not found'} (${testConclusion || 'pending'})`);
+              core.info(`Quality Assurance Tests: ${qaStatus || 'not found'} (${qaConclusion || 'pending'})`);
+              
+              // Check if both workflows have completed
+              if (testStatus === 'completed' && qaStatus === 'completed') {
+                testSuccess = testConclusion === 'success';
+                qaSuccess = qaConclusion === 'success';
+                break;
+              }
+              
+              // If one has failed, we can stop waiting (but still check both conclusions)
+              if (testStatus === 'completed' && testConclusion !== 'success' && testConclusion !== null) {
+                testSuccess = false;
+                if (qaStatus === 'completed') {
+                  qaSuccess = qaConclusion === 'success';
+                  break;
+                }
+              }
+              
+              if (qaStatus === 'completed' && qaConclusion !== 'success' && qaConclusion !== null) {
+                qaSuccess = false;
+                if (testStatus === 'completed') {
+                  testSuccess = testConclusion === 'success';
+                  break;
+                }
+              }
+              
+              // Wait before checking again
+              core.info('Waiting for both workflows to complete...');
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+            }
             
-            const testSuccess = testRun?.conclusion === 'success';
-            const qaSuccess = qaRun?.conclusion === 'success';
+            // Final check - ensure we have both workflows
+            if (!testRun || !qaRun) {
+              core.setFailed('❌ Could not find one or both required workflows');
+              return;
+            }
             
-            core.info(`Test and Lint: ${testRun?.conclusion || 'not found'} (${testRun?.id || 'N/A'})`);
-            core.info(`Quality Assurance Tests: ${qaRun?.conclusion || 'not found'} (${qaRun?.id || 'N/A'})`);
+            if (testRun.status !== 'completed' || qaRun.status !== 'completed') {
+              core.setFailed(`❌ One or both workflows are still running after wait period:
+                - Test and Lint: ${testRun.status} (${testRun.conclusion || 'pending'})
+                - Quality Assurance Tests: ${qaRun.status} (${qaRun.conclusion || 'pending'})`);
+              return;
+            }
             
             core.setOutput('test-success', testSuccess ? 'true' : 'false');
             core.setOutput('qa-success', qaSuccess ? 'true' : 'false');
+            
+            core.info(`Test and Lint: ${testRun.conclusion || 'unknown'} (ID: ${testRun.id})`);
+            core.info(`Quality Assurance Tests: ${qaRun.conclusion || 'unknown'} (ID: ${qaRun.id})`);
             
             if (!testSuccess) {
               core.error(`❌ Test and Lint workflow did not succeed for commit ${commitSha}`);
