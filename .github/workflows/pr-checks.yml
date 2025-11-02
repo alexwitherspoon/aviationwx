@@ -38,7 +38,7 @@ jobs:
           echo "Running full PHPUnit test suite..."
           # PHPUnit returns exit code 1 for warnings even with failOnWarning=false
           # Run tests and capture exit code
-          vendor/bin/phpunit --testdox --log-junit=test-results.xml
+          vendor/bin/phpunit --testdox --log-junit=test-results.xml --no-coverage
           exit_code=$?
           
           # Exit code 0 = success, 1 = warnings, 2+ = failures
