@@ -2,7 +2,9 @@ name: Deploy to Production
 
 on:
   workflow_run:
-    workflows: ["Test and Lint", "Quality Assurance Tests"]
+    # Only trigger on Quality Assurance Tests completion (typically runs last)
+    # The check-prerequisites job will verify BOTH workflows have succeeded
+    workflows: ["Quality Assurance Tests"]
     types:
       - completed
     branches: [ "main" ]
@@ -26,6 +28,28 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // Only deploy on push events (commits/merges to main), not on pull_request events
+            // workflow_run event contains the event that triggered the source workflow
+            const triggeringEvent = '${{ github.event.workflow_run && github.event.workflow_run.event || github.event_name }}';
+            
+            core.info(`Triggering event: ${triggeringEvent}`);
+            
+            // Skip deployment if triggered by a pull_request event
+            if (triggeringEvent === 'pull_request') {
+              core.info('⏭️  Skipping deployment - triggered by pull_request event (only deploy on push/merge to main)');
+              core.setOutput('test-success', 'false');
+              core.setOutput('qa-success', 'false');
+              return;
+            }
+            
+            // Verify this is a push event (direct commit or merge to main)
+            if (triggeringEvent !== 'push') {
+              core.warning(`⚠️  Unexpected event type: ${triggeringEvent}. Only push events trigger deployment.`);
+              core.setOutput('test-success', 'false');
+              core.setOutput('qa-success', 'false');
+              return;
+            }
+            
             // Get the commit SHA - use workflow_run head_sha if available, otherwise context.sha
             const commitSha = '${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}';
             
