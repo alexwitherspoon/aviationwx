@@ -699,19 +699,34 @@ function updateWeatherTimestamp() {
 }
 
 // Fetch weather data
-async function fetchWeather() {
+// Parameters:
+//   forceRefresh: if true, bypass cache to force a fresh fetch
+async function fetchWeather(forceRefresh = false) {
     try {
+        // Check if existing data is stale (>5 minutes old)
+        // If so, force a refresh to bypass cache
+        const shouldForceRefresh = forceRefresh || (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > 5 * 60 * 1000);
+        
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
         const url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
         
-        const response = await fetch(url, {
+        // Build fetch options
+        const fetchOptions = {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
             },
             credentials: 'same-origin'
-        });
+        };
+        
+        // If data is stale or we're forcing refresh, bypass cache
+        if (shouldForceRefresh) {
+            fetchOptions.cache = 'reload'; // Bypass browser cache
+            console.log('[Weather] Forcing refresh - bypassing cache due to stale data');
+        }
+        
+        const response = await fetch(url, fetchOptions);
         
         if (!response.ok) {
             const text = await response.text();
@@ -733,11 +748,31 @@ async function fetchWeather() {
         }
         
         if (data.success) {
+            const isStale = data.stale === true || false;
             currentWeatherData = data.weather; // Store globally for toggle re-rendering
             displayWeather(data.weather);
             updateWindVisual(data.weather);
             weatherLastUpdated = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : new Date();
             updateWeatherTimestamp(); // Update the timestamp
+            
+            // If server indicates data is stale, schedule a fresh fetch soon (30 seconds)
+            if (isStale) {
+                console.log('[Weather] Received stale data from server - scheduling refresh in 30 seconds');
+                // Clear any existing stale refresh timer
+                if (window.staleRefreshTimer) {
+                    clearTimeout(window.staleRefreshTimer);
+                }
+                // Schedule a refresh with cache bypass in 30 seconds
+                window.staleRefreshTimer = setTimeout(() => {
+                    fetchWeather(true); // Force refresh
+                }, 30000);
+            } else {
+                // Clear stale refresh timer if we got fresh data
+                if (window.staleRefreshTimer) {
+                    clearTimeout(window.staleRefreshTimer);
+                    window.staleRefreshTimer = null;
+                }
+            }
         } else {
             console.error('[Weather] API returned error:', data.error);
             displayError(data.error || 'Failed to fetch weather data');
