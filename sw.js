@@ -81,14 +81,17 @@ self.addEventListener('fetch', (event) => {
         return; // Let browser request pass through
     }
 
-    // Handle weather API requests with network-first + 3s timeout, then cache
+    // Handle weather API requests with network-first + 5s timeout, then cache
+    // Only serve cached data if network fails AND cache is relatively fresh (<10 minutes)
     if (url.pathname === '/weather.php') {
         event.respondWith(
             (async () => {
                 try {
-                    // Try network first (with timeout)
+                    // Try network first (with longer timeout for slow networks)
+                    // Note: Client can use cache: 'reload' to bypass cache, which will make
+                    // the browser fetch directly and may bypass SW intercept entirely
                     const networkPromise = fetch(event.request).catch(() => null);
-                    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
+                    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
                     const networkResponse = await Promise.race([networkPromise, timeoutPromise]);
                     
                     if (networkResponse && networkResponse.ok) {
@@ -101,10 +104,32 @@ self.addEventListener('fetch', (event) => {
                         return networkResponse;
                     }
                     
-                    // Network failed or timed out - try cache
+                    // Network failed or timed out - try cache, but only if relatively fresh
                     const cachedResponse = await caches.match(event.request);
                     if (cachedResponse) {
-                        console.log('[SW] Serving weather from cache');
+                        // Check if cached response is stale (>10 minutes)
+                        // Parse response to check timestamp
+                        try {
+                            const cachedData = await cachedResponse.clone().json();
+                            if (cachedData && cachedData.weather && cachedData.weather.last_updated) {
+                                const cacheAge = Date.now() / 1000 - cachedData.weather.last_updated;
+                                const maxStaleAge = 10 * 60; // 10 minutes
+                                
+                                if (cacheAge > maxStaleAge) {
+                                    console.log('[SW] Cached weather data is too stale - not serving', cacheAge);
+                                    // Don't serve stale cache - return network error or offline message
+                                    return networkResponse || new Response(
+                                        JSON.stringify({ success: false, error: 'Weather data unavailable - please refresh' }),
+                                        { status: 503, headers: { 'Content-Type': 'application/json' } }
+                                    );
+                                }
+                            }
+                        } catch (parseErr) {
+                            // If we can't parse the cached response, serve it anyway (better than nothing)
+                            console.warn('[SW] Could not parse cached response for staleness check', parseErr);
+                        }
+                        
+                        console.log('[SW] Serving weather from cache (network unavailable)');
                         return cachedResponse;
                     }
                     
@@ -115,9 +140,25 @@ self.addEventListener('fetch', (event) => {
                     );
                 } catch (err) {
                     console.error('[SW] Fetch error:', err);
-                    // Try cache as last resort
+                    // Try cache as last resort (only if relatively fresh)
                     const cachedResponse = await caches.match(event.request);
                     if (cachedResponse) {
+                        // Quick staleness check
+                        try {
+                            const cachedData = await cachedResponse.clone().json();
+                            if (cachedData && cachedData.weather && cachedData.weather.last_updated) {
+                                const cacheAge = Date.now() / 1000 - cachedData.weather.last_updated;
+                                if (cacheAge > 10 * 60) {
+                                    // Too stale, don't serve
+                                    return new Response(
+                                        JSON.stringify({ success: false, error: 'Weather data unavailable' }),
+                                        { status: 503, headers: { 'Content-Type': 'application/json' } }
+                                    );
+                                }
+                            }
+                        } catch (parseErr) {
+                            // Serve anyway if we can't parse
+                        }
                         return cachedResponse;
                     }
                     // Return offline error
