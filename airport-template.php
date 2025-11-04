@@ -283,7 +283,7 @@
             <div class="time-grid">
                 <div class="time-item">
                     <span class="label">Local Time:</span>
-                    <span class="value" id="localTime">--:--:--</span> <span style="font-size: 0.85rem; color: #666;">PDT</span>
+                    <span class="value" id="localTime">--:--:--</span> <span id="localTimezone" style="font-size: 0.85rem; color: #666;">--</span>
                 </div>
                 <div class="time-item">
                     <span class="label">Zulu Time:</span>
@@ -362,8 +362,83 @@ const RUNWAYS = <?= json_encode($airport['runways']) ?>;
 // Update clocks
 function updateClocks() {
     const now = new Date();
-    const localTime = now.toLocaleTimeString('en-US', { hour12: false });
+    
+    // Get airport timezone, default to 'America/Los_Angeles' if not available
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || 'America/Los_Angeles';
+    
+    // Format local time in airport's timezone
+    const localTimeOptions = {
+        timeZone: timezone,
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    };
+    const localTime = now.toLocaleTimeString('en-US', localTimeOptions);
     document.getElementById('localTime').textContent = localTime;
+    
+    // Get timezone abbreviation and UTC offset (e.g., PST, PDT, EST, EDT)
+    // Use Intl.DateTimeFormat for reliable timezone abbreviation
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            timeZoneName: 'short'
+        });
+        const parts = formatter.formatToParts(now);
+        const timezonePart = parts.find(part => part.type === 'timeZoneName');
+        const timezoneAbbr = timezonePart ? timezonePart.value : '--';
+        
+        // Calculate UTC offset in hours
+        // Use a simple approach: format the same moment in both UTC and local timezone
+        // and calculate the difference
+        const utcTimeStr = now.toLocaleTimeString('en-US', {
+            timeZone: 'UTC',
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        const localTimeStr = now.toLocaleTimeString('en-US', {
+            timeZone: timezone,
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        
+        // Parse time strings to get hours, minutes, seconds
+        const parseTime = (timeStr) => {
+            const parts = timeStr.split(':').map(Number);
+            return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        };
+        
+        let utcSeconds = parseTime(utcTimeStr);
+        let localSeconds = parseTime(localTimeStr);
+        
+        // Calculate offset (local - UTC)
+        // Handle day boundaries by checking if difference is > 12 hours
+        let offsetSeconds = localSeconds - utcSeconds;
+        if (offsetSeconds > 12 * 3600) {
+            offsetSeconds -= 24 * 3600; // Subtract a day (local is next day)
+        } else if (offsetSeconds < -12 * 3600) {
+            offsetSeconds += 24 * 3600; // Add a day (local is previous day)
+        }
+        
+        const offsetHours = offsetSeconds / 3600;
+        
+        // Format offset as "(UTC-7)" or "(UTC+5)" with sign
+        // Note: offset is inverted (UTC-7 means UTC is 7 hours ahead, so local is UTC-7)
+        const offsetSign = offsetHours >= 0 ? '+' : '';
+        const offsetDisplay = `(UTC${offsetSign}${Math.round(offsetHours)})`;
+        
+        // Display timezone abbreviation with offset
+        document.getElementById('localTimezone').textContent = `${timezoneAbbr} ${offsetDisplay}`;
+    } catch (error) {
+        console.error('[Time] Error getting timezone abbreviation:', error);
+        document.getElementById('localTimezone').textContent = '--';
+    }
+    
+    // Zulu time (UTC)
     const zuluTime = now.toISOString().substr(11, 8);
     document.getElementById('zuluTime').textContent = zuluTime;
 }
