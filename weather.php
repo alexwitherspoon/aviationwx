@@ -1259,7 +1259,23 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         if (file_exists($file)) {
             $content = file_get_contents($file);
             if ($content !== false) {
-                $peakGusts = json_decode($content, true) ?? [];
+                $decoded = json_decode($content, true);
+                $jsonError = json_last_error();
+                
+                // Validate JSON format - if invalid, delete and recreate file
+                if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
+                    aviationwx_log('warning', 'peak_gusts.json has invalid format - recreating', [
+                        'airport' => $airportId,
+                        'json_error' => json_last_error_msg(),
+                        'json_error_code' => $jsonError
+                    ]);
+                    // Delete corrupted file
+                    @unlink($file);
+                    // Start with empty array
+                    $peakGusts = [];
+                } else {
+                    $peakGusts = $decoded;
+                }
             }
         }
         
@@ -1332,7 +1348,28 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
         return ['value' => $currentGust, 'ts' => null];
     }
 
-    $peakGusts = json_decode(file_get_contents($file), true) ?? [];
+    $content = file_get_contents($file);
+    if ($content === false) {
+        return ['value' => $currentGust, 'ts' => null];
+    }
+    
+    $decoded = json_decode($content, true);
+    $jsonError = json_last_error();
+    
+    // Validate JSON format - if invalid, delete and recreate file
+    if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
+        aviationwx_log('warning', 'peak_gusts.json has invalid format - recreating', [
+            'airport' => $airportId,
+            'json_error' => json_last_error_msg(),
+            'json_error_code' => $jsonError
+        ]);
+        // Delete corrupted file
+        @unlink($file);
+        // Return current gust as today's value (file will be recreated on next update)
+        return ['value' => $currentGust, 'ts' => null];
+    }
+    
+    $peakGusts = $decoded;
     
     // Only return data for today's date key (never yesterday or older dates)
     $entry = $peakGusts[$dateKey][$airportId] ?? null;
@@ -1477,7 +1514,23 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
         if (file_exists($file)) {
             $content = file_get_contents($file);
             if ($content !== false) {
-                $tempExtremes = json_decode($content, true) ?? [];
+                $decoded = json_decode($content, true);
+                $jsonError = json_last_error();
+                
+                // Validate JSON format - if invalid, delete and recreate file
+                if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
+                    aviationwx_log('warning', 'temp_extremes.json has invalid format - recreating', [
+                        'airport' => $airportId,
+                        'json_error' => json_last_error_msg(),
+                        'json_error_code' => $jsonError
+                    ]);
+                    // Delete corrupted file
+                    @unlink($file);
+                    // Start with empty array
+                    $tempExtremes = [];
+                } else {
+                    $tempExtremes = $decoded;
+                }
             }
         }
         
@@ -1555,7 +1608,40 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
         ];
     }
     
-    $tempExtremes = json_decode(file_get_contents($file), true) ?? [];
+    $content = file_get_contents($file);
+    if ($content === false) {
+        $now = time();
+        return [
+            'high' => $currentTemp, 
+            'low' => $currentTemp,
+            'high_ts' => $now,
+            'low_ts' => $now
+        ];
+    }
+    
+    $decoded = json_decode($content, true);
+    $jsonError = json_last_error();
+    
+    // Validate JSON format - if invalid, delete and recreate file
+    if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
+        aviationwx_log('warning', 'temp_extremes.json has invalid format - recreating', [
+            'airport' => $airportId,
+            'json_error' => json_last_error_msg(),
+            'json_error_code' => $jsonError
+        ]);
+        // Delete corrupted file
+        @unlink($file);
+        // Return current temp as today's value (file will be recreated on next update)
+        $now = time();
+        return [
+            'high' => $currentTemp, 
+            'low' => $currentTemp,
+            'high_ts' => $now,
+            'low_ts' => $now
+        ];
+    }
+    
+    $tempExtremes = $decoded;
     
     // Only return data for today's date key (never yesterday or older dates)
     if (isset($tempExtremes[$dateKey][$airportId])) {
