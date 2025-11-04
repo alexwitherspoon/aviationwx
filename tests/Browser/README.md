@@ -117,7 +117,15 @@ More traditional, supports more browsers but more complex setup.
    - Stale data indicators
    - API error handling
 
-5. **Webcam Display**
+5. **Cache and Stale Data Handling** (tested in `cache-and-stale-data.spec.js`)
+   - Cache-busting parameter detection
+   - Stale cache detection (server data older than client)
+   - Visual indicators for stale data
+   - Concurrent fetch prevention
+   - Service Worker cache-busting handling
+   - Network timeout handling on slow connections
+
+6. **Webcam Display**
    - Images load correctly
    - Fallback to placeholder if missing
    - Multiple webcams display in grid
@@ -153,11 +161,28 @@ browser-tests:
 
 ## Current Status
 
-Browser tests are **not yet implemented** but this directory is prepared for future implementation.
+Browser tests are **implemented** using Playwright.
 
-To implement:
-1. Choose a testing framework (Playwright recommended)
-2. Create test files in `tests/Browser/`
-3. Add to CI/CD workflow (optional, non-blocking)
-4. Run locally with `npm test` or similar
+### Test Files
+
+- `tests/aviationwx.spec.js` - Core functionality tests (weather display, toggles, responsiveness)
+- `tests/cache-and-stale-data.spec.js` - Cache-busting and stale data detection tests (added for mobile client improvements)
+
+### Running Tests Locally
+
+```bash
+cd tests/Browser
+npm install
+npx playwright test
+
+# Run specific test file
+npx playwright test cache-and-stale-data.spec.js
+
+# Run in headed mode (see browser)
+npx playwright test --headed
+```
+
+### CI/CD Integration
+
+Browser tests run automatically in CI via `.github/workflows/quality-assurance-tests.yml` in the `browser-tests` job. The tests run against a local Docker container at `http://localhost:8080`.
 

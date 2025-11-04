@@ -689,27 +689,63 @@ function updateWeatherTimestamp() {
         }
     }
     
-    const timeStr = diffSeconds >= 3600 ? 'Over an hour stale.' : formatRelativeTime(diffSeconds);
+    // Solution C: Enhanced visual indicators for stale data
+    // Show warnings earlier (5 minutes) and more aggressive styling
+    const isStale = diffSeconds >= 300; // 5 minutes - earlier warning
+    const isVeryStale = diffSeconds >= 3600; // 1 hour - critical warning
+    
+    let timeStr;
+    if (isVeryStale) {
+        timeStr = '⚠️ Over an hour stale - data may be outdated';
+    } else if (isStale) {
+        timeStr = '⚠️ ' + formatRelativeTime(diffSeconds) + ' - refreshing...';
+    } else {
+        timeStr = formatRelativeTime(diffSeconds);
+    }
+    
     const weatherEl = document.getElementById('weather-last-updated');
     const windEl = document.getElementById('wind-last-updated');
     weatherEl.textContent = timeStr;
     windEl.textContent = timeStr;
-    const stale = diffSeconds >= 3600;
-    [weatherEl, windEl].forEach(el => { el.style.color = stale ? '#c00' : '#666'; });
+    
+    // Apply visual styling based on staleness
+    [weatherEl, windEl].forEach(el => {
+        if (isVeryStale) {
+            el.style.color = '#c00'; // Red for very stale
+            el.style.fontWeight = 'bold';
+        } else if (isStale) {
+            el.style.color = '#f80'; // Orange for stale
+            el.style.fontWeight = '500';
+        } else {
+            el.style.color = '#666'; // Gray for fresh
+            el.style.fontWeight = 'normal';
+        }
+    });
 }
+
+// Track fetching state for visual indicators
+let isFetchingWeather = false;
 
 // Fetch weather data
 // Parameters:
 //   forceRefresh: if true, bypass cache to force a fresh fetch
 async function fetchWeather(forceRefresh = false) {
+    // Prevent concurrent fetches
+    if (isFetchingWeather && !forceRefresh) {
+        console.log('[Weather] Fetch already in progress, skipping...');
+        return;
+    }
+    
     try {
+        isFetchingWeather = true;
+        
         // Check if existing data is stale (>5 minutes old)
         // If so, force a refresh to bypass cache
         const shouldForceRefresh = forceRefresh || (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > 5 * 60 * 1000);
         
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
-        const url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
+        let url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
         
         // Build fetch options
         const fetchOptions = {
@@ -720,9 +756,14 @@ async function fetchWeather(forceRefresh = false) {
             credentials: 'same-origin'
         };
         
-        // If data is stale or we're forcing refresh, bypass cache
+        // If data is stale or we're forcing refresh, bypass cache using multiple strategies
         if (shouldForceRefresh) {
-            fetchOptions.cache = 'reload'; // Bypass browser cache
+            // Strategy 1: Add cache-busting query parameter (forces Service Worker to treat as new request)
+            url += `&_cb=${Date.now()}`;
+            // Strategy 2: Use cache: 'reload' to bypass browser cache
+            fetchOptions.cache = 'reload';
+            // Strategy 3: Add Cache-Control header to bypass Service Worker cache
+            fetchOptions.headers['Cache-Control'] = 'no-cache';
             console.log('[Weather] Forcing refresh - bypassing cache due to stale data');
         }
         
@@ -749,10 +790,23 @@ async function fetchWeather(forceRefresh = false) {
         
         if (data.success) {
             const isStale = data.stale === true || false;
+            const serverTimestamp = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : null;
+            
+            // Solution C: Detect if server data is older than client data (indicates stale cache was served)
+            const serverDataIsStale = serverTimestamp && weatherLastUpdated && 
+                serverTimestamp.getTime() < weatherLastUpdated.getTime();
+            
+            if (serverDataIsStale) {
+                console.warn('[Weather] Server data is older than client data - stale cache detected, forcing immediate refresh');
+                // Force immediate refresh with cache bypass
+                setTimeout(() => fetchWeather(true), 100);
+                return; // Don't update UI with stale data
+            }
+            
             currentWeatherData = data.weather; // Store globally for toggle re-rendering
             displayWeather(data.weather);
             updateWindVisual(data.weather);
-            weatherLastUpdated = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : new Date();
+            weatherLastUpdated = serverTimestamp || new Date();
             updateWeatherTimestamp(); // Update the timestamp
             
             // If server indicates data is stale, schedule a fresh fetch soon (30 seconds)
@@ -781,6 +835,8 @@ async function fetchWeather(forceRefresh = false) {
         console.error('[Weather] Fetch error:', error);
         console.error('[Weather] Error stack:', error.stack);
         displayError('Unable to load weather data: ' + error.message + '. Check browser console for details.');
+    } finally {
+        isFetchingWeather = false;
     }
 }
 
