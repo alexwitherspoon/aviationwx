@@ -214,28 +214,16 @@ jobs:
           sudo chmod 755 /var/log/aviationwx
           EOF
 
-      - name: Clear daily tracking cache files
+      - name: Preserve daily tracking cache files
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Clear daily tracking files so they start fresh on deployment
-          # These files track daily high/low temperatures and peak gusts per airport
-          # Clearing them ensures a fresh start for tracking new daily values
-          echo "Clearing daily tracking cache files..."
-          if [ -f cache/peak_gusts.json ]; then
-            sudo rm -f cache/peak_gusts.json
-            echo "✓ Removed cache/peak_gusts.json (peak gust tracking)"
-          else
-            echo "ℹ️  cache/peak_gusts.json does not exist (nothing to clear)"
-          fi
-          if [ -f cache/temp_extremes.json ]; then
-            sudo rm -f cache/temp_extremes.json
-            echo "✓ Removed cache/temp_extremes.json (temperature extremes tracking)"
-          else
-            echo "ℹ️  cache/temp_extremes.json does not exist (nothing to clear)"
-          fi
-          echo "✓ Daily tracking cache cleared - all airports will start fresh"
+          # Daily tracking files (peak_gusts.json, temp_extremes.json) are now preserved across deployments
+          # The application will automatically detect and handle invalid/corrupted JSON formats
+          # by deleting and recreating the files if needed. This preserves valid data across deployments.
+          echo "ℹ️  Daily tracking cache files are preserved across deployments"
+          echo "ℹ️  Application will automatically handle invalid formats if detected"
           EOF
 
       - name: Ensure SSL certificates are in place
