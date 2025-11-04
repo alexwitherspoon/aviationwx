@@ -81,17 +81,65 @@ self.addEventListener('fetch', (event) => {
         return; // Let browser request pass through
     }
 
-    // Handle weather API requests with network-first + 5s timeout, then cache
+    // Handle weather API requests with network-first + dynamic timeout, then cache
     // Only serve cached data if network fails AND cache is relatively fresh (<10 minutes)
     if (url.pathname === '/weather.php') {
         event.respondWith(
             (async () => {
                 try {
-                    // Try network first (with longer timeout for slow networks)
-                    // Note: Client can use cache: 'reload' to bypass cache, which will make
-                    // the browser fetch directly and may bypass SW intercept entirely
+                    // Solution A: Detect forced refresh requests
+                    // Check for cache-busting query parameter or Cache-Control header
+                    const hasCacheBusting = url.searchParams.has('_cb');
+                    const hasNoCacheHeader = event.request.headers.get('Cache-Control') === 'no-cache' ||
+                        event.request.cache === 'reload';
+                    const isForcedRefresh = hasCacheBusting || hasNoCacheHeader;
+                    
+                    // If forced refresh, bypass cache entirely and use longer timeout for mobile
+                    if (isForcedRefresh) {
+                        console.log('[SW] Forced refresh detected - bypassing cache entirely');
+                        // Detect slow connection (mobile networks) and use longer timeout
+                        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                        const isSlowConnection = connection && (
+                            connection.effectiveType === 'slow-2g' || 
+                            connection.effectiveType === '2g' ||
+                            connection.saveData === true
+                        );
+                        const timeout = isSlowConnection ? 15000 : 10000; // 15s for slow, 10s for normal
+                        
+                        // Create a new request with cache-busting headers for forced refresh
+                        const newHeaders = new Headers(event.request.headers);
+                        newHeaders.set('Cache-Control', 'no-cache');
+                        const newRequest = new Request(event.request, {
+                            cache: 'no-store', // Don't cache forced refresh responses
+                            headers: newHeaders
+                        });
+                        
+                        const networkPromise = fetch(newRequest).catch(() => null);
+                        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), timeout));
+                        const networkResponse = await Promise.race([networkPromise, timeoutPromise]);
+                        
+                        if (networkResponse && networkResponse.ok) {
+                            return networkResponse;
+                        }
+                        // For forced refresh, don't fall back to cache - return error
+                        return networkResponse || new Response(
+                            JSON.stringify({ success: false, error: 'Weather data unavailable - please try again' }),
+                            { status: 503, headers: { 'Content-Type': 'application/json' } }
+                        );
+                    }
+                    
+                    // Normal request: network-first with timeout
+                    // Detect slow connection for dynamic timeout
+                    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                    const isSlowConnection = connection && (
+                        connection.effectiveType === 'slow-2g' || 
+                        connection.effectiveType === '2g' ||
+                        connection.saveData === true
+                    );
+                    const timeout = isSlowConnection ? 15000 : 8000; // 15s for slow, 8s for normal (increased from 5s)
+                    
                     const networkPromise = fetch(event.request).catch(() => null);
-                    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
+                    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), timeout));
                     const networkResponse = await Promise.race([networkPromise, timeoutPromise]);
                     
                     if (networkResponse && networkResponse.ok) {
