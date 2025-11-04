@@ -454,6 +454,11 @@
                     <h3>📱 Mobile & Desktop Friendly</h3>
                     <p>Lightweight, quick-loading website optimized for both mobile devices and desktops. Fast access to weather data when you need it most.</p>
                 </div>
+                
+                <div class="feature-card">
+                    <h3>🆓 Free for All</h3>
+                    <p>No fees, no subscriptions, no ads, and no apps needed. Access all weather data and webcams completely free—just visit the website in your browser.</p>
+                </div>
             </div>
         </section>
 
@@ -493,8 +498,8 @@
                 return floor($diff / 86400) . 'd ago';
             }
             
-            // Function to get oldest timestamp from displayed data
-            function getOldestDataTimestamp($weather) {
+            // Function to get newest timestamp from displayed data
+            function getNewestDataTimestamp($weather) {
                 if (!$weather) return null;
                 $timestamps = [];
                 
@@ -519,7 +524,7 @@
                     }
                 }
                 
-                return !empty($timestamps) ? min($timestamps) : null;
+                return !empty($timestamps) ? max($timestamps) : null;
             }
             ?>
             <div class="airports-list">
@@ -533,7 +538,7 @@
                         $temperature = ($temperature * 9/5) + 32;
                     }
                     $windSpeed = $weather['wind_speed'] ?? null;
-                    $oldestTimestamp = getOldestDataTimestamp($weather);
+                    $newestTimestamp = getNewestDataTimestamp($weather);
                 ?>
                 <div class="airport-card">
                     <a href="<?= htmlspecialchars($url) ?>">
@@ -569,11 +574,11 @@
                                 </div>
                             </div>
                             
-                            <?php if ($oldestTimestamp): ?>
+                            <?php if ($newestTimestamp): ?>
                             <div class="metric" style="flex-basis: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e9ecef;">
                                 <div class="metric-label" style="font-size: 0.7rem;">Last Updated</div>
                                 <div class="metric-value" style="font-size: 0.8rem; color: #666; font-weight: 500;">
-                                    <?= htmlspecialchars(formatRelativeTime($oldestTimestamp)) ?>
+                                    <?= htmlspecialchars(formatRelativeTime($newestTimestamp)) ?>
                                 </div>
                             </div>
                             <?php endif; ?>
@@ -660,12 +665,6 @@
                 <div class="contact-info" style="margin-top: 2rem;">
                     <strong>Ready to get started?</strong><br>
                     Contact Alex Witherspoon: <a href="mailto:alex@alexwitherspoon.com">alex@alexwitherspoon.com</a>
-                </div>
-                
-                <div class="btn-group" style="margin-top: 1.5rem; justify-content: flex-start;">
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONFIGURATION.md" class="btn-secondary" target="_blank" rel="noopener">
-                        View Configuration Guide
-                    </a>
                 </div>
             </div>
 
