@@ -1,3 +1,9 @@
+<?php
+// Prevent caching of homepage to ensure fresh data on each visit
+header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -378,8 +384,7 @@
     <div class="container">
         <div class="hero">
             <h1>✈️ AviationWX.org</h1>
-            <p>Real-time weather and conditions for participating airports</p>
-            <p class="subtitle">Get instant access to weather data, webcams, and aviation metrics at airports across the network.</p>
+            <p>Get instant access to weather data, webcams, and aviation metrics at airports across the network.</p>
         </div>
 
         <!-- Stats -->
@@ -476,12 +481,20 @@
             $airportsOnPage = array_slice($airports, $startIndex, $airportsPerPage, true);
             
             // Function to fetch weather data for an airport
+            // Always reads fresh from disk (no PHP-level caching) to ensure up-to-date data
             function getAirportWeather($airportId) {
                 $cacheFile = __DIR__ . '/cache/weather_' . $airportId . '.json';
                 if (file_exists($cacheFile)) {
+                    // Clear any PHP opcache for this file to ensure fresh read
+                    if (function_exists('opcache_invalidate')) {
+                        @opcache_invalidate($cacheFile, true);
+                    }
+                    // Read file directly with no caching
                     $cacheData = json_decode(file_get_contents($cacheFile), true);
                     // Cache file stores weather data directly (not wrapped in 'weather' key)
                     if ($cacheData && is_array($cacheData)) {
+                        // Add file modification time to data for freshness checking
+                        $cacheData['_cache_file_mtime'] = filemtime($cacheFile);
                         return $cacheData;
                     }
                 }
@@ -499,6 +512,7 @@
             }
             
             // Function to get newest timestamp from displayed data
+            // Uses observation timestamps from weather sources (not file modification time)
             function getNewestDataTimestamp($weather) {
                 if (!$weather) return null;
                 $timestamps = [];
@@ -522,6 +536,16 @@
                     if (isset($weather['last_updated_metar']) && $weather['last_updated_metar'] > 0) {
                         $timestamps[] = $weather['last_updated_metar'];
                     }
+                }
+                
+                // Use observation time if available (more accurate than fetch time)
+                if (isset($weather['obs_time_primary']) && $weather['obs_time_primary'] > 0) {
+                    $timestamps[] = $weather['obs_time_primary'];
+                }
+                
+                // Fallback to general last_updated if no source-specific timestamps
+                if (empty($timestamps) && isset($weather['last_updated']) && $weather['last_updated'] > 0) {
+                    $timestamps[] = $weather['last_updated'];
                 }
                 
                 return !empty($timestamps) ? max($timestamps) : null;
