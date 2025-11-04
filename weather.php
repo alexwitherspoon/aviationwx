@@ -20,6 +20,14 @@ function parseAmbientResponse($response) {
     
     $obs = $data[0]['lastData'];
     
+    // Parse observation time (when the weather was actually measured)
+    // Ambient Weather provides dateutc in milliseconds (Unix timestamp * 1000)
+    $obsTime = null;
+    if (isset($obs['dateutc']) && is_numeric($obs['dateutc'])) {
+        // Convert from milliseconds to seconds
+        $obsTime = (int)($obs['dateutc'] / 1000);
+    }
+    
     // Convert all measurements to our standard format
     $temperature = isset($obs['tempf']) && is_numeric($obs['tempf']) ? ((float)$obs['tempf'] - 32) / 1.8 : null; // F to C
     $humidity = isset($obs['humidity']) ? $obs['humidity'] : null;
@@ -44,6 +52,7 @@ function parseAmbientResponse($response) {
         'temp_high' => null,
         'temp_low' => null,
         'peak_gust' => $gustSpeed,
+        'obs_time' => $obsTime, // Observation time when weather was actually measured
     ];
 }
 
@@ -583,6 +592,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         if ($weatherData !== null) {
             $primaryTimestamp = time(); // Track when primary data was fetched
             $weatherData['last_updated_primary'] = $primaryTimestamp;
+            // Preserve observation time from primary source (when weather was actually measured)
+            // This is critical for accurate timestamps in temperature/gust tracking
+            if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
+                $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+            }
         } else {
             aviationwx_log('warning', 'primary weather response parse failed', [
                 'airport' => $airportId,
@@ -669,6 +683,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     
     if ($weatherData !== null) {
         $weatherData['last_updated_primary'] = time();
+        // Preserve observation time from primary source (when weather was actually measured)
+        // This is critical for accurate timestamps in temperature/gust tracking
+        if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
+            $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+        }
         
         // Try to fetch METAR for visibility/ceiling if not already present
         $metarData = fetchMETAR($airport);
@@ -749,7 +768,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
 
     // Track and update today's peak gust (store value and timestamp)
     $currentGust = $weatherData['gust_speed'] ?? 0;
-    updatePeakGust($airportId, $currentGust, $airport);
+    // Use explicit observation time from primary source (when weather was actually observed)
+    // This is critical for pilot safety - must show accurate observation times
+    // Prefer obs_time_primary (explicit observation time from API), fall back to last_updated_primary (fetch time), then current time
+    $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
+    updatePeakGust($airportId, $currentGust, $airport, $obsTimestamp);
     $peakGustInfo = getPeakGust($airportId, $currentGust, $airport);
     if (is_array($peakGustInfo)) {
     $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
@@ -763,7 +786,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Track and update today's high and low temperatures
     if ($weatherData['temperature'] !== null) {
     $currentTemp = $weatherData['temperature'];
-    updateTempExtremes($airportId, $currentTemp, $airport);
+    // Use explicit observation time from primary source (when weather was actually observed)
+    // This is critical for pilot safety - must show accurate observation times
+    // Prefer obs_time_primary (explicit observation time from API), fall back to last_updated_primary (fetch time), then current time
+    $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
+    updateTempExtremes($airportId, $currentTemp, $airport, $obsTimestamp);
     $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
     $weatherData['temp_high_today'] = $tempExtremes['high'];
     $weatherData['temp_low_today'] = $tempExtremes['low'];
@@ -928,6 +955,13 @@ function parseTempestResponse($response) {
     
     $obs = $data['obs'][0];
     
+    // Parse observation time (when the weather was actually measured)
+    // Tempest provides timestamp as Unix timestamp in seconds
+    $obsTime = null;
+    if (isset($obs['timestamp']) && is_numeric($obs['timestamp'])) {
+        $obsTime = (int)$obs['timestamp'];
+    }
+    
     // Note: Daily stats (high/low temp, peak gust) are not available from the basic Tempest API
     // These would require a different API endpoint or subscription level
     $tempHigh = null;
@@ -969,6 +1003,7 @@ function parseTempestResponse($response) {
         'temp_high' => $tempHigh,
         'temp_low' => $tempLow,
         'peak_gust' => $peakGust,
+        'obs_time' => $obsTime, // Observation time when weather was actually measured
     ];
 }
 
@@ -1200,8 +1235,12 @@ function getSunsetTime($airport) {
  * Update today's peak gust for an airport
  * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight
  * Still uses Y-m-d format for consistency, but calculated from local timezone
+ * @param string $airportId Airport identifier
+ * @param float $currentGust Current gust speed value
+ * @param array|null $airport Airport configuration array
+ * @param int|null $obsTimestamp Observation timestamp (when the weather was actually observed), defaults to current time
  */
-function updatePeakGust($airportId, $currentGust, $airport = null) {
+function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp = null) {
     try {
         $cacheDir = __DIR__ . '/cache';
         if (!file_exists($cacheDir)) {
@@ -1250,19 +1289,22 @@ function updatePeakGust($airportId, $currentGust, $airport = null) {
             $existingValue = is_numeric($existing) ? (float)$existing : 0;
         }
 
+        // Use observation timestamp if provided, otherwise fall back to current time
+        $timestamp = $obsTimestamp !== null ? $obsTimestamp : time();
+        
         // If no entry for today (new day) or current gust is higher, update value and timestamp
         // This ensures we never use yesterday's data for today
         if (!isset($peakGusts[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGust]);
+            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGust, 'obs_ts' => $timestamp]);
             $peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGust,
-                'ts' => time(), // store as UNIX timestamp (UTC)
+                'ts' => $timestamp, // Observation timestamp (when weather was actually observed)
             ];
         } elseif ($currentGust > $existingValue) {
             // Update if current gust is higher (only for today's entry)
             $peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGust,
-                'ts' => time(), // store as UNIX timestamp (UTC)
+                'ts' => $timestamp, // Observation timestamp (when weather was actually observed)
             ];
         }
         
@@ -1411,8 +1453,12 @@ function calculateFlightCategory($weather) {
  * Update today's high and low temperatures for an airport
  * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight
  * Still uses Y-m-d format for consistency, but calculated from local timezone
+ * @param string $airportId Airport identifier
+ * @param float $currentTemp Current temperature value
+ * @param array|null $airport Airport configuration array
+ * @param int|null $obsTimestamp Observation timestamp (when the weather was actually observed), defaults to current time
  */
-function updateTempExtremes($airportId, $currentTemp, $airport = null) {
+function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimestamp = null) {
     try {
         $cacheDir = __DIR__ . '/cache';
         if (!file_exists($cacheDir)) {
@@ -1453,27 +1499,29 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null) {
             aviationwx_log('info', 'cleaned old temp extremes', ['removed' => $cleaned, 'date_key' => $dateKey]);
         }
         
+        // Use observation timestamp if provided, otherwise fall back to current time
+        $obsTs = $obsTimestamp !== null ? $obsTimestamp : time();
+        
         // Initialize today's entry if it doesn't exist (always start fresh for new day)
         // This ensures we never use yesterday's data for today
-        $now = time(); // Current timestamp in UTC
         if (!isset($tempExtremes[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp]);
+            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp, 'obs_ts' => $obsTs]);
             $tempExtremes[$dateKey][$airportId] = [
                 'high' => $currentTemp,
                 'low' => $currentTemp,
-                'high_ts' => $now,  // Timestamp when high was recorded
-                'low_ts' => $now    // Timestamp when low was recorded
+                'high_ts' => $obsTs,  // Observation timestamp (when weather was actually observed)
+                'low_ts' => $obsTs    // Observation timestamp (when weather was actually observed)
             ];
         } else {
             // Update high if current is higher
             if ($currentTemp > $tempExtremes[$dateKey][$airportId]['high']) {
                 $tempExtremes[$dateKey][$airportId]['high'] = $currentTemp;
-                $tempExtremes[$dateKey][$airportId]['high_ts'] = $now; // Update timestamp when new high is set
+                $tempExtremes[$dateKey][$airportId]['high_ts'] = $obsTs; // Observation timestamp (when weather was actually observed)
             }
             // Update low if current is lower
             if ($currentTemp < $tempExtremes[$dateKey][$airportId]['low']) {
                 $tempExtremes[$dateKey][$airportId]['low'] = $currentTemp;
-                $tempExtremes[$dateKey][$airportId]['low_ts'] = $now; // Update timestamp when new low is set
+                $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs; // Observation timestamp (when weather was actually observed)
             }
         }
         
