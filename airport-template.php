@@ -295,7 +295,9 @@
         <!-- Footer -->
         <footer class="footer">
             <p>
-                <a href="https://aviationwx.org">aviationwx.org</a>
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source</a>
             </p>
             <p>
                 <?php
