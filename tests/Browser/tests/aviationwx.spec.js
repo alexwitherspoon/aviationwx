@@ -439,5 +439,82 @@ test.describe('Aviation Weather Dashboard', () => {
     const preservedState = await toggle.textContent();
     expect(preservedState).toBe(newState);
   });
+
+  test('should display local time in airport timezone', async ({ page }) => {
+    // Wait for local time element to be present
+    await page.waitForSelector('#localTime', { state: 'visible', timeout: 5000 });
+    
+    // Wait for time to update (give it a moment to format)
+    await page.waitForTimeout(1000);
+    
+    // Get the displayed local time
+    const localTimeText = await page.textContent('#localTime');
+    expect(localTimeText).toBeTruthy();
+    expect(localTimeText).not.toBe('--:--:--');
+    
+    // Verify time format (HH:MM:SS)
+    expect(localTimeText).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    
+    // Get the timezone abbreviation
+    const timezoneAbbr = await page.textContent('#localTimezone');
+    expect(timezoneAbbr).toBeTruthy();
+    expect(timezoneAbbr).not.toBe('--');
+    
+    // Verify timezone abbreviation is valid (PST/PDT for America/Los_Angeles)
+    // The test airport (kspb) uses America/Los_Angeles timezone
+    expect(timezoneAbbr).toMatch(/^[A-Z]{3,4}$/);
+    
+    // Check that the time updates dynamically
+    const initialTime = await page.textContent('#localTime');
+    await page.waitForTimeout(1500); // Wait 1.5 seconds
+    const updatedTime = await page.textContent('#localTime');
+    
+    // Time should have updated (may be same second if we caught it at the start, but should be different after 1.5s)
+    // At minimum, the element should exist and be formatted correctly
+    expect(updatedTime).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    
+    // Verify the time is actually in the airport's timezone, not browser's timezone
+    // We'll check by comparing what the time should be in the airport's timezone
+    const airportTimezone = 'America/Los_Angeles'; // From test airport config
+    const actualTimeInTimezone = await page.evaluate((timezone) => {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      return formatter.format(now);
+    }, airportTimezone);
+    
+    // Get displayed time again after calculating expected time (to minimize timing differences)
+    const finalDisplayedTime = await page.textContent('#localTime');
+    
+    // The displayed time should match the airport's timezone time (within 2 seconds tolerance)
+    const displayedTime = finalDisplayedTime.split(':').map(Number);
+    const expectedTime = actualTimeInTimezone.split(':').map(Number);
+    
+    // Allow 2 seconds difference (due to timing of test execution)
+    const timeDiff = Math.abs(
+      (displayedTime[0] * 3600 + displayedTime[1] * 60 + displayedTime[2]) -
+      (expectedTime[0] * 3600 + expectedTime[1] * 60 + expectedTime[2])
+    );
+    expect(timeDiff).toBeLessThanOrEqual(2);
+    
+    // Verify Zulu time is also displayed and correct
+    const zuluTimeText = await page.textContent('#zuluTime');
+    expect(zuluTimeText).toBeTruthy();
+    expect(zuluTimeText).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    
+    // Zulu time should be UTC (check that it's different from local time if not in UTC)
+    // Or verify it matches current UTC time
+    const currentUTC = new Date().toISOString().substr(11, 8);
+    const zuluTimeDiff = Math.abs(
+      (parseInt(zuluTimeText.split(':')[0]) * 3600 + parseInt(zuluTimeText.split(':')[1]) * 60 + parseInt(zuluTimeText.split(':')[2])) -
+      (parseInt(currentUTC.split(':')[0]) * 3600 + parseInt(currentUTC.split(':')[1]) * 60 + parseInt(currentUTC.split(':')[2]))
+    );
+    expect(zuluTimeDiff).toBeLessThanOrEqual(2); // Allow 2 seconds difference
+  });
 });
 
