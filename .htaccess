@@ -21,8 +21,37 @@
     RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
 
-# Security - Protect sensitive files
-<FilesMatch "^(airports\.json|\.git|\.gitignore|SECURITY\.md)$">
+# Security - Protect sensitive files and directories
+# Deny access to configuration files
+<FilesMatch "^(airports\.json|airports\.json\.test|composer\.json|composer\.lock|phpunit\.xml|\.env|\.gitignore|SECURITY\.md|nginx\.conf|Dockerfile|docker-compose\.yml|docker-compose\.prod\.yml|Makefile)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Deny access to test files and directories
+<FilesMatch "^test">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Deny access to test-local.php and diagnostics
+<FilesMatch "^(test-local\.php|test-local\.sh|diagnostics\.php|clear-cache\.php|metrics\.php|health\.php|ready\.php)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Deny access to scripts directory
+<IfModule mod_rewrite.c>
+    RewriteRule ^scripts/ - [F,L]
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^tests/ - [F,L]
+    RewriteRule ^\.github/ - [F,L]
+    RewriteRule ^vendor/ - [F,L]
+    RewriteRule ^node_modules/ - [F,L]
+</IfModule>
+
+# Deny access to hidden files (starting with .)
+<FilesMatch "^\.">
     Order allow,deny
     Deny from all
 </FilesMatch>

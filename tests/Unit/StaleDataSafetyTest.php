@@ -175,5 +175,64 @@ class StaleDataSafetyTest extends TestCase
         // Should remain (not yet stale)
         $this->assertEquals(15.0, $data['temperature']);
     }
+
+    /**
+     * Test mergeWeatherDataWithFallback respects staleness checks
+     * This ensures that merge function properly respects the staleness threshold
+     */
+    public function testMergeWeatherDataWithFallback_RespectsStaleness()
+    {
+        $newData = [
+            'temperature' => 16.0,
+            'wind_speed' => null,  // Missing
+            'last_updated_primary' => time() - 1800,
+        ];
+        
+        $existingData = createTestWeatherData([
+            'wind_speed' => 10,
+            'last_updated_primary' => time() - 4 * 3600,  // 4 hours ago (stale)
+        ]);
+        
+        $maxStaleSeconds = 3 * 3600;  // 3 hours
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        
+        // Stale wind_speed should not be preserved
+        $this->assertNull($result['wind_speed'], 'Merge should not preserve stale values');
+        
+        // But non-stale data should work
+        $existingData2 = createTestWeatherData([
+            'wind_speed' => 10,
+            'last_updated_primary' => time() - 3600,  // 1 hour ago (not stale)
+        ]);
+        
+        $result2 = mergeWeatherDataWithFallback($newData, $existingData2, $maxStaleSeconds);
+        $this->assertEquals(10, $result2['wind_speed'], 'Merge should preserve non-stale values');
+    }
+
+    /**
+     * Test mergeWeatherDataWithFallback preserves daily tracking even when source is stale
+     */
+    public function testMergeWeatherDataWithFallback_DailyTrackingEvenWhenStale()
+    {
+        $newData = [
+            'temperature' => 16.0,
+            'last_updated_primary' => time() - 1800,
+        ];
+        
+        $existingData = createTestWeatherData([
+            'temp_high_today' => 20.0,
+            'temp_low_today' => 10.0,
+            'peak_gust_today' => 25,
+            'last_updated_primary' => time() - 5 * 3600,  // 5 hours ago (very stale)
+        ]);
+        
+        $maxStaleSeconds = 3 * 3600;  // 3 hours
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        
+        // Daily tracking should always be preserved, regardless of staleness
+        $this->assertEquals(20.0, $result['temp_high_today'], 'Daily tracking should be preserved even when source is stale');
+        $this->assertEquals(10.0, $result['temp_low_today'], 'Daily tracking should be preserved even when source is stale');
+        $this->assertEquals(25, $result['peak_gust_today'], 'Daily tracking should be preserved even when source is stale');
+    }
 }
 
