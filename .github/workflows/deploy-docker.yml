@@ -430,38 +430,49 @@ jobs:
           docker system prune -f
           EOF
 
-      - name: Ensure unified log directory and file
+      - name: Ensure dual log directory and files
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Create unified log directory and file (used by both PHP app and Nginx)
+          # Create log directory and both log files (user.log and app.log)
           # Nginx container runs as nginx user (UID 101), PHP runs as www-data (UID 33)
           sudo mkdir -p /var/log/aviationwx
-          sudo touch /var/log/aviationwx/app.log
+          sudo touch /var/log/aviationwx/user.log /var/log/aviationwx/app.log
           # Allow both www-data (33) and nginx (101) groups to write
           # Use 664 permissions so both services can append
           sudo chown root:adm /var/log/aviationwx || true
           sudo chmod 775 /var/log/aviationwx || true
-          sudo chown root:adm /var/log/aviationwx/app.log || true
-          sudo chmod 664 /var/log/aviationwx/app.log || true
+          sudo chown root:adm /var/log/aviationwx/user.log /var/log/aviationwx/app.log || true
+          sudo chmod 664 /var/log/aviationwx/user.log /var/log/aviationwx/app.log || true
           
           # Ensure Nginx user (101) can write - add adm group or set group to nginx
           # Check if nginx group exists (UID 101), if so add it to adm group or make it group owner
           if getent group nginx >/dev/null 2>&1; then
             # If nginx group exists, make it the group owner
-            sudo chgrp nginx /var/log/aviationwx /var/log/aviationwx/app.log || true
+            sudo chgrp nginx /var/log/aviationwx /var/log/aviationwx/user.log /var/log/aviationwx/app.log || true
           else
             # If nginx group doesn't exist on host, use 666 permissions (all can write)
             # This is safe since it's just log files
-            sudo chmod 666 /var/log/aviationwx/app.log || true
+            sudo chmod 666 /var/log/aviationwx/user.log /var/log/aviationwx/app.log || true
           fi
           
-          # Create logrotate rule on host for unified log
+          # Create logrotate rules on host for both log files (1GB total each = 10 files × 100MB)
           sudo tee /etc/logrotate.d/aviationwx > /dev/null <<'LR'
+            /var/log/aviationwx/user.log {
+                size 100M
+                rotate 10
+                compress
+                delaycompress
+                missingok
+                notifempty
+                copytruncate
+                # Ensure permissions are preserved after rotation
+                create 664 root adm
+            }
             /var/log/aviationwx/app.log {
                 size 100M
-                rotate 50
+                rotate 10
                 compress
                 delaycompress
                 missingok

@@ -26,7 +26,7 @@ $cacheDir = __DIR__ . '/cache/webcams';
 $status['webcam_cache_dir']['exists'] = is_dir($cacheDir);
 $status['webcam_cache_dir']['writable'] = is_dir($cacheDir) && is_writable($cacheDir);
 
-aviationwx_log('info', 'health probe', $status);
+aviationwx_log('info', 'health probe', $status, 'app');
 echo json_encode($status);
 ?>
 

@@ -505,14 +505,14 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     'airport' => $_GET['airport'] ?? null,
     'ip' => $_SERVER['REMOTE_ADDR'] ?? null,
     'ua' => $_SERVER['HTTP_USER_AGENT'] ?? null
-    ]);
+    ], 'user');
 
     // Rate limiting (60 requests per minute per IP)
     if (!checkRateLimit('weather_api', 60, 60)) {
     http_response_code(429);
     header('Retry-After: 60');
     ob_clean();
-    aviationwx_log('warning', 'weather rate limited');
+    aviationwx_log('warning', 'weather rate limited', [], 'app');
     echo json_encode(['success' => false, 'error' => 'Too many requests. Please try again later.']);
     exit;
     }
@@ -522,7 +522,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
     http_response_code(400);
     ob_clean();
-    aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId]);
+    aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId], 'user');
     echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
     exit;
     }
@@ -534,7 +534,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     if ($config === null) {
     http_response_code(500);
     ob_clean();
-    aviationwx_log('error', 'config load failed');
+    aviationwx_log('error', 'config load failed', [], 'app');
     echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
     exit;
     }
@@ -542,7 +542,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     if (!isset($config['airports'][$airportId])) {
     http_response_code(404);
     ob_clean();
-    aviationwx_log('error', 'airport not found', ['airport' => $airportId]);
+    aviationwx_log('error', 'airport not found', ['airport' => $airportId], 'user');
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
     }
@@ -619,7 +619,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                     'airport' => $airportId,
                     'cache_age' => $age,
                     'refresh_interval' => $airportWeatherRefresh
-                ]);
+                ], 'app');
             } else {
                 // Regular PHP - flush output and continue in background
                 if (ob_get_level() > 0) {
@@ -633,7 +633,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                     'airport' => $airportId,
                     'cache_age' => $age,
                     'refresh_interval' => $airportWeatherRefresh
-                ]);
+                ], 'app');
             }
             
             // Continue to refresh in background (don't exit here)
@@ -656,7 +656,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             'airport' => $airportId,
             'backoff_remaining' => $primaryCircuit['backoff_remaining'],
             'failures' => $primaryCircuit['failures']
-        ]);
+        ], 'app');
         // Don't skip METAR fetch - continue with METAR only
     }
     
@@ -667,7 +667,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             'airport' => $airportId,
             'backoff_remaining' => $metarCircuit['backoff_remaining'],
             'failures' => $metarCircuit['failures']
-        ]);
+        ], 'app');
         // If both are in backoff, return null
         if ($primaryCircuit['skip']) {
             return null;
@@ -711,7 +711,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Create multi-handle for parallel requests
     $mh = curl_multi_init();
     if ($mh === false) {
-        aviationwx_log('error', 'failed to init curl_multi', ['airport' => $airportId]);
+        aviationwx_log('error', 'failed to init curl_multi', ['airport' => $airportId], 'app');
         return null;
     }
     
@@ -723,7 +723,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         $ch1 = curl_init($primaryUrl);
         if ($ch1 === false) {
             curl_multi_close($mh);
-            aviationwx_log('error', 'failed to init primary curl handle', ['airport' => $airportId]);
+            aviationwx_log('error', 'failed to init primary curl handle', ['airport' => $airportId], 'app');
             recordWeatherFailure($airportId, 'primary', 'transient');
             return null;
         }
@@ -746,7 +746,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 curl_close($ch1);
             }
             curl_multi_close($mh);
-            aviationwx_log('error', 'failed to init METAR curl handle', ['airport' => $airportId]);
+            aviationwx_log('error', 'failed to init METAR curl handle', ['airport' => $airportId], 'app');
             recordWeatherFailure($airportId, 'metar', 'transient');
             return null;
         }
@@ -778,7 +778,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'airport' => $airportId,
                 'elapsed' => round($elapsed, 2),
                 'max_timeout' => $maxOverallTimeout
-            ]);
+            ], 'app');
             // Force cleanup and break
             break;
         }
@@ -826,7 +826,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'curl_errno' => $primaryErrno !== 0 ? $primaryErrno : null,
                 'response_received' => $primaryResponse !== false,
                 'severity' => $primarySeverity
-            ]);
+            ], 'app');
         }
     }
     
@@ -845,7 +845,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'curl_errno' => $metarErrno !== 0 ? $metarErrno : null,
                 'response_received' => $metarResponse !== false,
                 'severity' => $metarSeverity
-            ]);
+            ], 'app');
         }
     }
     
@@ -886,7 +886,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                     'airport' => $airportId,
                     'source' => $sourceType,
                     'response_length' => strlen($primaryResponse)
-                ]);
+                ], 'app');
             }
         } catch (Exception $e) {
             aviationwx_log('error', 'primary weather parse exception', [
@@ -894,7 +894,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'source' => $sourceType,
                 'err' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
+            ], 'app');
             // Continue - we'll try to use what we have
         } catch (Throwable $e) {
             aviationwx_log('error', 'primary weather parse throwable', [
@@ -902,7 +902,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'source' => $sourceType,
                 'err' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
+            ], 'app');
             // Continue - we'll try to use what we have
         }
     }
@@ -922,7 +922,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'station' => $stationId,
                 'err' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
+            ], 'app');
             $metarData = null;
         } catch (Throwable $e) {
             aviationwx_log('error', 'METAR parse throwable', [
@@ -930,7 +930,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'station' => $stationId,
                 'err' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
+            ], 'app');
             $metarData = null;
         }
         
@@ -965,7 +965,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 'airport' => $airportId,
                 'station' => $stationId,
                 'response_length' => strlen($metarResponse)
-            ]);
+            ], 'app');
         }
     }
     
@@ -995,7 +995,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                     'airport' => $airportId,
                     'backoff_remaining' => $primaryCircuit['backoff_remaining'],
                     'failures' => $primaryCircuit['failures']
-                ]);
+                ], 'app');
                 // Continue to try METAR even if primary is in backoff
             } else {
                 if ($sourceType === 'tempest') {
@@ -1018,7 +1018,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                     'airport' => $airportId,
                     'backoff_remaining' => $metarCircuit['backoff_remaining'],
                     'failures' => $metarCircuit['failures']
-                ]);
+                ], 'app');
                 return null;
             }
             $weatherData = fetchMETAR($airport);
@@ -1112,7 +1112,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         aviationwx_log('warning', 'weather fetch returned null', [
             'airport' => $airportId,
             'source' => $airport['weather_source']['type'] ?? 'unknown'
-        ]);
+        ], 'app');
     }
     } catch (Exception $e) {
     $weatherError = 'Error fetching weather: ' . $e->getMessage();
@@ -1120,19 +1120,19 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         'airport' => $airportId,
         'err' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
-    ]);
+    ], 'app');
     } catch (Throwable $e) {
     $weatherError = 'Error fetching weather: ' . $e->getMessage();
     aviationwx_log('error', 'weather fetch throwable', [
         'airport' => $airportId,
         'err' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
-    ]);
+    ], 'app');
     }
 
     if ($weatherError !== null) {
     http_response_code(503);
-    aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError]);
+    aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError], 'app');
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
     exit;
@@ -1145,13 +1145,13 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         aviationwx_log('warning', 'weather api refresh failed, stale cache was served', [
             'airport' => $airportId,
             'weather_error' => $weatherError ?? 'unknown error'
-        ]);
+        ], 'app');
         exit; // Don't send another response, request already finished
     }
     
     // No stale cache available - send error response
     http_response_code(503);
-    aviationwx_log('error', 'weather api no data', ['airport' => $airportId]);
+    aviationwx_log('error', 'weather api no data', ['airport' => $airportId], 'app');
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);
     exit;
@@ -1247,7 +1247,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             'source' => 'primary',
             'age_hours' => round($primaryAge / 3600, 2),
             'max_age_hours' => $maxStaleHours
-        ]);
+        ], 'app');
         
         // Null out only primary source fields
         foreach ($primarySourceFields as $field) {
@@ -1270,7 +1270,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             'source' => 'metar',
             'age_hours' => round($metarAge / 3600, 2),
             'max_age_hours' => $maxStaleHours
-        ]);
+        ], 'app');
         
         // Null out only METAR source fields
         foreach ($metarSourceFields as $field) {
@@ -1345,20 +1345,20 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         aviationwx_log('error', 'failed to write weather cache file', [
             'airport' => $airportId,
             'file' => $weatherCacheFile
-        ]);
+        ], 'app');
     } else {
         aviationwx_log('info', 'weather cache updated', [
             'airport' => $airportId,
             'cache_size' => $cacheWriteResult,
             'last_updated' => $weatherData['last_updated'] ?? null
-        ]);
+        ], 'app');
     }
 
     // If we served stale data, we're in background refresh mode
     // Don't send headers or output again (already sent to client)
     if ($hasStaleCache) {
     // Just update the cache silently in background
-    aviationwx_log('info', 'background refresh completed successfully', ['airport' => $airportId]);
+    aviationwx_log('info', 'background refresh completed successfully', ['airport' => $airportId], 'app');
     exit;
     }
 
@@ -1384,7 +1384,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     header('X-Cache-Status: MISS');
 
     ob_clean();
-    aviationwx_log('info', 'weather request success', ['airport' => $airportId]);
+    aviationwx_log('info', 'weather request success', ['airport' => $airportId], 'user');
     aviationwx_maybe_log_alert();
     echo $body;
 }
@@ -1713,7 +1713,7 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
                         'airport' => $airportId,
                         'json_error' => json_last_error_msg(),
                         'json_error_code' => $jsonError
-                    ]);
+                    ], 'app');
                     // Delete corrupted file
                     @unlink($file);
                     // Start with empty array
@@ -1739,7 +1739,7 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
             }
         }
         if ($cleaned > 0) {
-            aviationwx_log('info', 'cleaned old peak gusts', ['removed' => $cleaned, 'date_key' => $dateKey]);
+            aviationwx_log('info', 'cleaned old peak gusts', ['removed' => $cleaned, 'date_key' => $dateKey], 'app');
         }
         
         // Normalize existing entry to structured format {value, ts}
@@ -1756,7 +1756,7 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         // If no entry for today (new day) or current gust is higher, update value and timestamp
         // This ensures we never use yesterday's data for today
         if (!isset($peakGusts[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGust, 'obs_ts' => $timestamp]);
+            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGust, 'obs_ts' => $timestamp], 'app');
             $peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGust,
                 'ts' => $timestamp, // Observation timestamp (when weather was actually observed)
@@ -1807,7 +1807,7 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
             'airport' => $airportId,
             'json_error' => json_last_error_msg(),
             'json_error_code' => $jsonError
-        ]);
+        ], 'app');
         // Delete corrupted file
         @unlink($file);
         // Return current gust as today's value (file will be recreated on next update)
@@ -1968,7 +1968,7 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
                         'airport' => $airportId,
                         'json_error' => json_last_error_msg(),
                         'json_error_code' => $jsonError
-                    ]);
+                    ], 'app');
                     // Delete corrupted file
                     @unlink($file);
                     // Start with empty array
@@ -1994,7 +1994,7 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
             }
         }
         if ($cleaned > 0) {
-            aviationwx_log('info', 'cleaned old temp extremes', ['removed' => $cleaned, 'date_key' => $dateKey]);
+            aviationwx_log('info', 'cleaned old temp extremes', ['removed' => $cleaned, 'date_key' => $dateKey], 'app');
         }
         
         // Use observation timestamp if provided, otherwise fall back to current time
@@ -2003,7 +2003,7 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
         // Initialize today's entry if it doesn't exist (always start fresh for new day)
         // This ensures we never use yesterday's data for today
         if (!isset($tempExtremes[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp, 'obs_ts' => $obsTs]);
+            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp, 'obs_ts' => $obsTs], 'app');
             $tempExtremes[$dateKey][$airportId] = [
                 'high' => $currentTemp,
                 'low' => $currentTemp,
@@ -2073,7 +2073,7 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
             'airport' => $airportId,
             'json_error' => json_last_error_msg(),
             'json_error_code' => $jsonError
-        ]);
+        ], 'app');
         // Delete corrupted file
         @unlink($file);
         // Return current temp as today's value (file will be recreated on next update)

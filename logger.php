@@ -1,5 +1,6 @@
 <?php
 // Lightweight JSONL logger with simple rotation and APCu-backed error counter
+// Supports dual logging: user.log for user activity, app.log for system messages
 
 if (!defined('AVIATIONWX_LOG_DIR')) {
     define('AVIATIONWX_LOG_DIR', '/var/log/aviationwx');
@@ -7,37 +8,62 @@ if (!defined('AVIATIONWX_LOG_DIR')) {
 if (!defined('AVIATIONWX_LOG_FILE')) {
     define('AVIATIONWX_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
 }
+if (!defined('AVIATIONWX_USER_LOG_FILE')) {
+    define('AVIATIONWX_USER_LOG_FILE', AVIATIONWX_LOG_DIR . '/user.log');
+}
+if (!defined('AVIATIONWX_APP_LOG_FILE')) {
+    define('AVIATIONWX_APP_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
+}
 if (!defined('AVIATIONWX_LOG_MAX_BYTES')) {
     define('AVIATIONWX_LOG_MAX_BYTES', 100 * 1024 * 1024); // 100MB per file
 }
 if (!defined('AVIATIONWX_LOG_MAX_FILES')) {
-    define('AVIATIONWX_LOG_MAX_FILES', 50); // ~5GB cap
+    define('AVIATIONWX_LOG_MAX_FILES', 10); // 10 files × 100MB = 1GB total per log type
+}
+
+if (!function_exists('aviationwx_get_log_file_path')) {
+function aviationwx_get_log_file_path(string $logType = 'app'): string {
+    if ($logType === 'user') {
+        return AVIATIONWX_USER_LOG_FILE;
+    }
+    return AVIATIONWX_APP_LOG_FILE;
+}
 }
 
 if (!function_exists('aviationwx_init_log_dir')) {
 function aviationwx_init_log_dir(): void {
     @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
-    if (!file_exists(AVIATIONWX_LOG_FILE)) {
-        @touch(AVIATIONWX_LOG_FILE);
+    if (!file_exists(AVIATIONWX_USER_LOG_FILE)) {
+        @touch(AVIATIONWX_USER_LOG_FILE);
+    }
+    if (!file_exists(AVIATIONWX_APP_LOG_FILE)) {
+        @touch(AVIATIONWX_APP_LOG_FILE);
     }
 }
 }
 
 if (!function_exists('aviationwx_rotate_log_if_needed')) {
-function aviationwx_rotate_log_if_needed(): void {
-    clearstatcache(true, AVIATIONWX_LOG_FILE);
-    $size = @filesize(AVIATIONWX_LOG_FILE);
+function aviationwx_rotate_log_if_needed(string $logFile): void {
+    clearstatcache(true, $logFile);
+    $size = @filesize($logFile);
     if ($size !== false && $size > AVIATIONWX_LOG_MAX_BYTES) {
-        // Rotate: app.log.N -> app.log.N+1, delete > MAX_FILES
+        // Rotate: logfile -> logfile.1 -> logfile.2 -> ... -> logfile.N, delete > MAX_FILES
         for ($i = AVIATIONWX_LOG_MAX_FILES - 1; $i >= 1; $i--) {
-            $src = AVIATIONWX_LOG_FILE . '.' . $i;
-            $dst = AVIATIONWX_LOG_FILE . '.' . ($i + 1);
+            $src = $logFile . '.' . $i;
+            $dst = $logFile . '.' . ($i + 1);
             if (file_exists($src)) {
                 @rename($src, $dst);
             }
         }
-        @rename(AVIATIONWX_LOG_FILE, AVIATIONWX_LOG_FILE . '.1');
-        @touch(AVIATIONWX_LOG_FILE);
+        // Delete files beyond MAX_FILES
+        for ($i = AVIATIONWX_LOG_MAX_FILES + 1; $i <= AVIATIONWX_LOG_MAX_FILES + 10; $i++) {
+            $oldFile = $logFile . '.' . $i;
+            if (file_exists($oldFile)) {
+                @unlink($oldFile);
+            }
+        }
+        @rename($logFile, $logFile . '.1');
+        @touch($logFile);
     }
 }
 }
@@ -56,9 +82,10 @@ function aviationwx_get_request_id(): string {
 }
 
 if (!function_exists('aviationwx_log')) {
-function aviationwx_log(string $level, string $message, array $context = []): void {
+function aviationwx_log(string $level, string $message, array $context = [], string $logType = 'app'): void {
     aviationwx_init_log_dir();
-    aviationwx_rotate_log_if_needed();
+    $logFile = aviationwx_get_log_file_path($logType);
+    aviationwx_rotate_log_if_needed($logFile);
     $now = (new DateTime('now', new DateTimeZone('UTC')))->format('c');
     $entry = [
         'ts' => $now,
@@ -71,7 +98,7 @@ function aviationwx_log(string $level, string $message, array $context = []): vo
     if (in_array($entry['level'], ['warning','error','critical','alert','emergency'], true)) {
         aviationwx_record_error_event();
     }
-    @file_put_contents(AVIATIONWX_LOG_FILE, json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
+    @file_put_contents($logFile, json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
 }
 }
 

@@ -85,7 +85,7 @@ foreach ($config['airports'] as $airportId => $airport) {
                 aviationwx_log('info', 'weather refresh triggered (stale cache)', [
                     'airport' => $airportId,
                     'last_updated' => $lastUpdated
-                ]);
+                ], 'app');
                 if ($isWeb) {
                     echo "<span class='info'>✓ Refresh triggered (cache was stale)</span><br>\n";
                 } else {
@@ -95,7 +95,7 @@ foreach ($config['airports'] as $airportId => $airport) {
                 aviationwx_log('info', 'weather refresh triggered (fresh cache)', [
                     'airport' => $airportId,
                     'last_updated' => $lastUpdated
-                ]);
+                ], 'app');
                 if ($isWeb) {
                     echo "<span class='success'>✓ Cache refreshed</span><br>\n";
                 } else {
@@ -106,7 +106,7 @@ foreach ($config['airports'] as $airportId => $airport) {
             aviationwx_log('warning', 'weather refresh returned invalid response', [
                 'airport' => $airportId,
                 'http_code' => $httpCode
-            ]);
+            ], 'app');
             if ($isWeb) {
                 echo "<span class='error'>✗ Invalid response</span><br>\n";
             } else {
@@ -118,7 +118,7 @@ foreach ($config['airports'] as $airportId => $airport) {
             'airport' => $airportId,
             'http_code' => $httpCode,
             'error' => $error
-        ]);
+        ], 'app');
         if ($isWeb) {
             echo "<span class='error'>✗ Failed: HTTP {$httpCode}" . ($error ? " - {$error}" : "") . "</span><br>\n";
         } else {

@@ -459,7 +459,10 @@ docker compose -f docker-compose.prod.yml logs -f web
 # Nginx logs
 docker compose -f docker-compose.prod.yml logs -f nginx
 
-# System logs (if configured)
+# User activity logs (user requests, responses, rate limiting)
+tail -f /var/log/aviationwx/user.log
+
+# Application/system logs (background operations, API errors, circuit breakers)
 tail -f /var/log/aviationwx/app.log
 ```
 

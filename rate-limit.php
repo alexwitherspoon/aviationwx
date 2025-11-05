@@ -43,7 +43,7 @@ function checkRateLimit($key, $maxRequests = 60, $windowSeconds = 60) {
                 'ip' => $ip,
                 'limit' => $maxRequests,
                 'reset' => $data['reset'] ?? null
-            ]);
+            ], 'app');
             return false;
         }
         
