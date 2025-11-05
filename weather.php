@@ -133,10 +133,15 @@ function parseMETARResponse($response, $airport) {
     $dewpoint = isset($metarData['dewp']) ? $metarData['dewp'] : null;
     
     // Parse wind direction and speed (already in knots)
-    // Handle variable wind direction ("VRB") - set to null if not numeric
+    // Handle variable wind direction ("VRB") - set to "VRB" string if not numeric
     $windDirection = null;
-    if (isset($metarData['wdir']) && is_numeric($metarData['wdir'])) {
-        $windDirection = (int)round((float)$metarData['wdir']);
+    if (isset($metarData['wdir'])) {
+        if (is_numeric($metarData['wdir'])) {
+            $windDirection = (int)round((float)$metarData['wdir']);
+        } elseif (strtoupper($metarData['wdir']) === 'VRB') {
+            // Variable wind direction - set to "VRB" string for display
+            $windDirection = 'VRB';
+        }
     }
     // Handle wind speed - check if numeric before rounding
     $windSpeed = null;
