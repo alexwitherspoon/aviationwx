@@ -266,14 +266,14 @@ crontab -e
 # As aviationwx user, set up cron to refresh weather data periodically
 crontab -e
 
-# Add this line (every 5 minutes):
-*/5 * * * * cd ~/aviationwx && docker compose -f docker-compose.prod.yml exec -T web php fetch-weather-safe.php > /dev/null 2>&1
+# Add this line (every 1 minute):
+* * * * * cd ~/aviationwx && docker compose -f docker-compose.prod.yml exec -T web php fetch-weather-safe.php > /dev/null 2>&1
 
 # Or if using host-based execution:
-*/5 * * * * cd ~/aviationwx && php fetch-weather-safe.php > /dev/null 2>&1
+* * * * * cd ~/aviationwx && php fetch-weather-safe.php > /dev/null 2>&1
 ```
 
-**Note**: The cron job runs `fetch-weather-safe.php` to refresh weather cache every 5 minutes. This ensures:
+**Note**: The cron job runs `fetch-weather-safe.php` to refresh weather cache every 1 minute. This ensures:
 - Weather data stays fresh even when no users are visiting
 - Daily tracking (min/max temperature, peak gust) initializes promptly after midnight
 - Prevents stale data issues after overnight periods with no traffic
