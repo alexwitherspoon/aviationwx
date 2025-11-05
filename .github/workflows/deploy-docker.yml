@@ -53,7 +53,13 @@ jobs:
             // Get the commit SHA - use workflow_run head_sha if available, otherwise context.sha
             const commitSha = '${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}';
             
+            // Get the triggering workflow run ID if available (from workflow_run event)
+            const triggeringWorkflowRunId = '${{ github.event.workflow_run && github.event.workflow_run.id || "" }}';
+            
             core.info(`Checking workflow statuses for commit: ${commitSha}`);
+            if (triggeringWorkflowRunId) {
+              core.info(`Triggered by workflow run ID: ${triggeringWorkflowRunId}`);
+            }
             
             const maxWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
             const checkInterval = 30 * 1000; // Check every 30 seconds
@@ -64,29 +70,96 @@ jobs:
             let testSuccess = false;
             let qaSuccess = false;
             
+            // Get workflow IDs first for more specific filtering
+            const workflows = await github.rest.actions.listWorkflowsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            const testWorkflow = workflows.data.workflows.find(w => w.name === 'Test and Lint');
+            const qaWorkflow = workflows.data.workflows.find(w => w.name === 'Quality Assurance Tests');
+            
+            if (!testWorkflow || !qaWorkflow) {
+              core.setFailed('❌ Could not find workflow definitions');
+              return;
+            }
+            
+            core.info(`Found workflows - Test and Lint: ${testWorkflow.id}, Quality Assurance Tests: ${qaWorkflow.id}`);
+            
             // Wait for both workflows to complete
             while (Date.now() - startTime < maxWaitTime) {
-              // Get all workflow runs for this commit, then filter by name
-              const allRuns = await github.rest.actions.listWorkflowRunsForRepo({
+              // Get workflow runs by workflow ID for more specific filtering
+              // This ensures we get runs for the specific workflow, not just by name
+              const testRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
+                workflow_id: testWorkflow.id,
                 head_sha: commitSha,
-                per_page: 30
+                per_page: 10
               });
               
-              // Find Test and Lint workflow run
-              testRun = allRuns.data.workflow_runs.find(run => run.name === 'Test and Lint');
+              const qaRuns = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: qaWorkflow.id,
+                head_sha: commitSha,
+                per_page: 10
+              });
               
-              // Find Quality Assurance Tests workflow run
-              qaRun = allRuns.data.workflow_runs.find(run => run.name === 'Quality Assurance Tests');
+              // Find the most recent run for this commit (should be the first one)
+              // Filter to ensure it's from a push event (not pull_request) and matches the exact commit SHA
+              testRun = testRuns.data.workflow_runs.find(run => 
+                run.head_sha === commitSha && 
+                (run.event === 'push' || run.event === 'workflow_dispatch')
+              );
+              
+              // If no exact match, try the first run (might be a race condition)
+              if (!testRun && testRuns.data.workflow_runs.length > 0) {
+                const firstRun = testRuns.data.workflow_runs[0];
+                // Only use if it's a push event and matches commit (within reasonable time window)
+                if (firstRun.event === 'push' && firstRun.head_sha === commitSha) {
+                  testRun = firstRun;
+                }
+              }
+              
+              // If we have a triggering workflow run ID, use that to find the exact QA run
+              if (triggeringWorkflowRunId) {
+                qaRun = qaRuns.data.workflow_runs.find(run => 
+                  run.id.toString() === triggeringWorkflowRunId
+                );
+              }
+              
+              // If not found by ID, try finding by commit SHA and event type
+              if (!qaRun) {
+                qaRun = qaRuns.data.workflow_runs.find(run => 
+                  run.head_sha === commitSha && 
+                  (run.event === 'push' || run.event === 'workflow_dispatch')
+                );
+              }
+              
+              // If no exact match, try the first run
+              if (!qaRun && qaRuns.data.workflow_runs.length > 0) {
+                const firstRun = qaRuns.data.workflow_runs[0];
+                // Only use if it's a push event and matches commit (within reasonable time window)
+                if (firstRun.event === 'push' && firstRun.head_sha === commitSha) {
+                  qaRun = firstRun;
+                }
+              }
               
               const testStatus = testRun?.status; // queued, in_progress, completed
               const testConclusion = testRun?.conclusion; // success, failure, cancelled, etc.
               const qaStatus = qaRun?.status;
               const qaConclusion = qaRun?.conclusion;
               
-              core.info(`Test and Lint: ${testStatus || 'not found'} (${testConclusion || 'pending'})`);
-              core.info(`Quality Assurance Tests: ${qaStatus || 'not found'} (${qaConclusion || 'pending'})`);
+              core.info(`Test and Lint: ${testStatus || 'not found'} (${testConclusion || 'pending'}) - Run ID: ${testRun?.id || 'N/A'}`);
+              core.info(`Quality Assurance Tests: ${qaStatus || 'not found'} (${qaConclusion || 'pending'}) - Run ID: ${qaRun?.id || 'N/A'}`);
+              
+              // If workflows haven't started yet (queued), wait a bit longer
+              if ((testStatus === 'queued' || !testRun) && (qaStatus === 'queued' || !qaRun)) {
+                core.info('Workflows are queued or not found yet, waiting...');
+                await new Promise(resolve => setTimeout(resolve, checkInterval));
+                continue;
+              }
               
               // Check if both workflows have completed
               if (testStatus === 'completed' && qaStatus === 'completed') {
@@ -119,7 +192,34 @@ jobs:
             
             // Final check - ensure we have both workflows
             if (!testRun || !qaRun) {
-              core.setFailed('❌ Could not find one or both required workflows');
+              // Get diagnostic info for debugging
+              const allTestRuns = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: testWorkflow.id,
+                per_page: 5
+              });
+              
+              const allQaRuns = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: qaWorkflow.id,
+                per_page: 5
+              });
+              
+              core.error(`❌ Could not find one or both required workflows for commit ${commitSha}`);
+              core.error(`Recent Test and Lint runs: ${allTestRuns.data.workflow_runs.map(r => `${r.head_sha.substring(0, 7)} (${r.status})`).join(', ')}`);
+              core.error(`Recent Quality Assurance Tests runs: ${allQaRuns.data.workflow_runs.map(r => `${r.head_sha.substring(0, 7)} (${r.status})`).join(', ')}`);
+              core.error(`Looking for commit: ${commitSha}`);
+              
+              if (!testRun) {
+                core.error(`Test and Lint: No run found for commit ${commitSha}`);
+              }
+              if (!qaRun) {
+                core.error(`Quality Assurance Tests: No run found for commit ${commitSha}`);
+              }
+              
+              core.setFailed('❌ Could not find one or both required workflows for this commit');
               return;
             }
             
