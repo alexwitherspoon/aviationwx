@@ -54,7 +54,9 @@ jobs:
             const commitSha = '${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}';
             
             // Get the triggering workflow run ID if available (from workflow_run event)
-            const triggeringWorkflowRunId = '${{ github.event.workflow_run && github.event.workflow_run.id || "" }}';
+            // GitHub Actions expressions can't use empty strings directly, so we check in JavaScript
+            const triggeringWorkflowRunIdRaw = '${{ github.event.workflow_run && github.event.workflow_run.id }}';
+            const triggeringWorkflowRunId = (triggeringWorkflowRunIdRaw && triggeringWorkflowRunIdRaw !== '') ? triggeringWorkflowRunIdRaw : null;
             
             core.info(`Checking workflow statuses for commit: ${commitSha}`);
             if (triggeringWorkflowRunId) {
