@@ -35,11 +35,11 @@ function loadConfig($useCache = true) {
     
     // Validate file exists and is not a directory
     if (!file_exists($configFile)) {
-        aviationwx_log('error', 'config file not found', ['path' => $configFile]);
+        aviationwx_log('error', 'config file not found', ['path' => $configFile], 'app');
         return null;
     }
     if (is_dir($configFile)) {
-        aviationwx_log('error', 'config path is directory', ['path' => $configFile]);
+        aviationwx_log('error', 'config path is directory', ['path' => $configFile], 'app');
         return null;
     }
     
@@ -83,13 +83,13 @@ function loadConfig($useCache = true) {
     // Read and validate JSON
     $jsonContent = @file_get_contents($configFile);
     if ($jsonContent === false) {
-        aviationwx_log('error', 'config read failed', ['path' => $configFile]);
+        aviationwx_log('error', 'config read failed', ['path' => $configFile], 'app');
         return null;
     }
     
     $config = json_decode($jsonContent, true);
     if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
-        aviationwx_log('error', 'config invalid json', ['error' => json_last_error_msg(), 'path' => $configFile]);
+        aviationwx_log('error', 'config invalid json', ['error' => json_last_error_msg(), 'path' => $configFile], 'app');
         return null;
     }
 
@@ -122,11 +122,11 @@ function loadConfig($useCache = true) {
     }
     if (!empty($errors)) {
         // Log and fail-fast
-        aviationwx_log('error', 'config schema errors', ['errors' => $errors]);
+        aviationwx_log('error', 'config schema errors', ['errors' => $errors], 'app');
         return null;
     }
 
-    aviationwx_log('info', 'config loaded', ['path' => $configFile, 'mtime' => $fileMtime]);
+    aviationwx_log('info', 'config loaded', ['path' => $configFile, 'mtime' => $fileMtime], 'app');
     
     // Cache in static variable (with mtime)
     $cachedConfig = $config;

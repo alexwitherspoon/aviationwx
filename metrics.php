@@ -100,7 +100,7 @@ if (file_exists($airportsConfig)) {
     }
 }
 
-aviationwx_log('info', 'metrics probe');
+aviationwx_log('info', 'metrics probe', [], 'app');
 
 ?>
 

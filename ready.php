@@ -37,7 +37,7 @@ if (!function_exists('apcu_fetch')) {
     $errors[] = 'apcu_missing';
 }
 
-aviationwx_log('info', 'ready probe', ['ok' => $ok, 'errors' => $errors]);
+aviationwx_log('info', 'ready probe', ['ok' => $ok, 'errors' => $errors], 'app');
 http_response_code($ok ? 200 : 503);
 echo json_encode([
     'ok' => $ok,
