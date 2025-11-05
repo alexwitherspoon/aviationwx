@@ -1112,7 +1112,9 @@ function updateWindVisual(weather) {
     
     // Draw wind only if speed > 0
     const ws = weather.wind_speed || 0;
-    const wd = weather.wind_direction || 0;
+    const wd = weather.wind_direction;
+    const isVariableWind = wd === 'VRB' || wd === 'vrb';
+    const windDirNumeric = typeof wd === 'number' && wd > 0 ? wd : null;
     
     // Get today's peak gust from server
     const todaysPeakGust = weather.peak_gust_today || 0;
@@ -1129,7 +1131,7 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #666;">Wind Direction:</span>
-            <span style="font-weight: bold;">${wd > 0 ? wd + '°' : '--'}</span>
+            <span style="font-weight: bold;">${isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '--')}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #666;">Gust Factor:</span>
@@ -1144,13 +1146,20 @@ function updateWindVisual(weather) {
         </div>
     `;
     
-    if (ws > 1) {
-        // Store for animation
-        windDirection = (wd * Math.PI) / 180;
+    if (ws > 1 && !isVariableWind && windDirNumeric !== null) {
+        // Store for animation (only if we have a valid numeric direction)
+        windDirection = (windDirNumeric * Math.PI) / 180;
         windSpeed = ws;
         
         // Draw wind arrow
         drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
+    } else if (ws > 1 && isVariableWind) {
+        // Variable wind - draw "VRB" text
+        ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+        ctx.strokeText('VRB', cx, cy);
+        ctx.fillStyle = '#dc3545';
+        ctx.fillText('VRB', cx, cy);
     } else {
         // Calm conditions - draw a circle
         ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
