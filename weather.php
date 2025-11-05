@@ -133,7 +133,11 @@ function parseMETARResponse($response, $airport) {
     $dewpoint = isset($metarData['dewp']) ? $metarData['dewp'] : null;
     
     // Parse wind direction and speed (already in knots)
-    $windDirection = isset($metarData['wdir']) ? (int)round($metarData['wdir']) : null;
+    // Handle variable wind direction ("VRB") - set to null if not numeric
+    $windDirection = null;
+    if (isset($metarData['wdir']) && is_numeric($metarData['wdir'])) {
+        $windDirection = (int)round((float)$metarData['wdir']);
+    }
     $windSpeed = isset($metarData['wspd']) ? (int)round($metarData['wspd']) : null;
     
     // Parse pressure (altimeter setting in inHg)
