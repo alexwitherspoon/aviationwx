@@ -158,14 +158,16 @@ The dashboard includes three unit toggle buttons that allow users to switch betw
    - Default: Fahrenheit (°F)
    - Preference stored in localStorage
 
-2. **Distance Unit Toggle** (ft ↔ m, in ↔ cm)
+2. **Distance Unit Toggle** (ft ↔ m, in ↔ cm, SM ↔ km)
    - Located next to Temperature toggle
    - Affects: 
      - Rainfall Today (inches ↔ centimeters)
      - Pressure Altitude (feet ↔ meters)
      - Density Altitude (feet ↔ meters)
+     - Ceiling (feet ↔ meters)
+     - Visibility (statute miles ↔ kilometers)
    - Pressure remains in inHg regardless of toggle
-   - Default: Imperial (ft/in)
+   - Default: Imperial (ft/in/SM)
    - Preference stored in localStorage
 
 3. **Wind Speed Unit Toggle** (kts ↔ mph ↔ km/h)
