@@ -243,7 +243,9 @@ make config  # If Makefile exists
 # Or manually create configs
 ```
 
-### 6. Set Up Webcam Refresh Cron Job
+### 6. Set Up Cron Jobs
+
+#### 6.1 Webcam Refresh Cron Job
 
 ```bash
 # As aviationwx user, set up cron to refresh webcam images every minute
@@ -257,6 +259,30 @@ crontab -e
 ```
 
 **Note**: The cron job runs `fetch-webcam-safe.php` to update webcam images every minute.
+
+#### 6.2 Weather Refresh Cron Job
+
+```bash
+# As aviationwx user, set up cron to refresh weather data periodically
+crontab -e
+
+# Add this line (every 5 minutes):
+*/5 * * * * cd ~/aviationwx && docker compose -f docker-compose.prod.yml exec -T web php fetch-weather-safe.php > /dev/null 2>&1
+
+# Or if using host-based execution:
+*/5 * * * * cd ~/aviationwx && php fetch-weather-safe.php > /dev/null 2>&1
+```
+
+**Note**: The cron job runs `fetch-weather-safe.php` to refresh weather cache every 5 minutes. This ensures:
+- Weather data stays fresh even when no users are visiting
+- Daily tracking (min/max temperature, peak gust) initializes promptly after midnight
+- Prevents stale data issues after overnight periods with no traffic
+
+**Environment Variable**: If your weather endpoint requires a specific URL, set `WEATHER_REFRESH_URL`:
+```bash
+# In crontab or environment
+WEATHER_REFRESH_URL=http://localhost:8080
+```
 
 ### 7. Deploy Application
 

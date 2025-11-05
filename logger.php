@@ -106,7 +106,8 @@ if (!function_exists('aviationwx_maybe_log_alert')) {
 function aviationwx_maybe_log_alert(): void {
     $count = aviationwx_error_rate_last_hour();
     if ($count >= 5) {
-        aviationwx_log('alert', 'High error rate in last 60 minutes', ['errors_last_hour' => $count]);
+        // Use 'info' level to avoid feedback loop - this is a metric, not an error
+        aviationwx_log('info', 'High error rate in last 60 minutes', ['errors_last_hour' => $count]);
     }
 }
 }

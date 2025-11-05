@@ -37,6 +37,7 @@ Quick reference for deployment options. For detailed guides, see the linked docu
 
 - **Configuration**: Mount `airports.json` on host, bind-mount into container (read-only)
 - **Webcam Refresh**: Set up cron job to run `fetch-webcam-safe.php` every minute
+- **Weather Refresh**: Set up cron job to run `fetch-weather-safe.php` every 5 minutes (recommended)
 - **DNS**: Configure wildcard DNS (A records for `@` and `*`)
 - **SSL**: Nginx handles HTTPS redirects; certificates mounted into container
 - **Caching**: Weather data cached server-side; webcam images cached on disk
