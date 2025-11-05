@@ -420,6 +420,13 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             if (function_exists('fastcgi_finish_request')) {
                 // FastCGI - finish request but keep script running
                 fastcgi_finish_request();
+                // Set time limit for background refresh (increased to handle slow APIs)
+                set_time_limit(45);
+                aviationwx_log('info', 'background refresh started', [
+                    'airport' => $airportId,
+                    'cache_age' => $age,
+                    'refresh_interval' => $airportWeatherRefresh
+                ]);
             } else {
                 // Regular PHP - flush output and continue in background
                 if (ob_get_level() > 0) {
@@ -429,6 +436,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 
                 // Set time limit for background refresh (increased to handle slow APIs)
                 set_time_limit(45);
+                aviationwx_log('info', 'background refresh started', [
+                    'airport' => $airportId,
+                    'cache_age' => $age,
+                    'refresh_interval' => $airportWeatherRefresh
+                ]);
             }
             
             // Continue to refresh in background (don't exit here)
@@ -730,10 +742,25 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     
     if ($weatherData === null) {
         $weatherError = 'Weather data unavailable';
+        aviationwx_log('warning', 'weather fetch returned null', [
+            'airport' => $airportId,
+            'source' => $airport['weather_source']['type'] ?? 'unknown'
+        ]);
     }
     } catch (Exception $e) {
     $weatherError = 'Error fetching weather: ' . $e->getMessage();
-    aviationwx_log('error', 'weather fetch exception', ['err' => $e->getMessage()]);
+    aviationwx_log('error', 'weather fetch exception', [
+        'airport' => $airportId,
+        'err' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
+    } catch (Throwable $e) {
+    $weatherError = 'Error fetching weather: ' . $e->getMessage();
+    aviationwx_log('error', 'weather fetch throwable', [
+        'airport' => $airportId,
+        'err' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ]);
     }
 
     if ($weatherError !== null) {
@@ -748,7 +775,10 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // If we already served stale cache, just exit silently (background refresh failed)
     if ($hasStaleCache) {
         // Request already finished with stale cache response, just update cache in background
-        aviationwx_log('warning', 'weather api refresh failed, stale cache was served', ['airport' => $airportId]);
+        aviationwx_log('warning', 'weather api refresh failed, stale cache was served', [
+            'airport' => $airportId,
+            'weather_error' => $weatherError ?? 'unknown error'
+        ]);
         exit; // Don't send another response, request already finished
     }
     
@@ -908,12 +938,26 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
     }
 
-    @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
+    $cacheWriteResult = @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
+    
+    if ($cacheWriteResult === false) {
+        aviationwx_log('error', 'failed to write weather cache file', [
+            'airport' => $airportId,
+            'file' => $weatherCacheFile
+        ]);
+    } else {
+        aviationwx_log('info', 'weather cache updated', [
+            'airport' => $airportId,
+            'cache_size' => $cacheWriteResult,
+            'last_updated' => $weatherData['last_updated'] ?? null
+        ]);
+    }
 
     // If we served stale data, we're in background refresh mode
     // Don't send headers or output again (already sent to client)
     if ($hasStaleCache) {
     // Just update the cache silently in background
+    aviationwx_log('info', 'background refresh completed successfully', ['airport' => $airportId]);
     exit;
     }
 
