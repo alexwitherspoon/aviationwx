@@ -245,6 +245,82 @@ function parseMETARResponse($response, $airport) {
 }
 
 /**
+ * Merge new weather data with existing cache, preserving last known good values
+ * for fields that are missing or invalid in new data
+ */
+function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds) {
+    if (!is_array($existingData) || !is_array($newData)) {
+        return $newData;
+    }
+    
+    // Fields that should be preserved from cache if new data is missing/invalid
+    $preservableFields = [
+        'temperature', 'temperature_f',
+        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+        'pressure', 'precip_accum',
+        'pressure_altitude', 'density_altitude',
+        'visibility', 'ceiling', 'cloud_cover'
+    ];
+    
+    // Track which source each field comes from for staleness checking
+    $primarySourceFields = [
+        'temperature', 'temperature_f',
+        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+        'pressure', 'precip_accum',
+        'pressure_altitude', 'density_altitude'
+    ];
+    
+    $metarSourceFields = [
+        'visibility', 'ceiling', 'cloud_cover'
+    ];
+    
+    $result = $newData;
+    
+    // For each field, check if we should preserve the old value
+    foreach ($preservableFields as $field) {
+        $newValue = $newData[$field] ?? null;
+        $oldValue = $existingData[$field] ?? null;
+        
+        // If new value is missing/null, check if we can use old value
+        if ($newValue === null && $oldValue !== null) {
+            // Determine which source this field comes from
+            $isPrimaryField = in_array($field, $primarySourceFields);
+            $isMetarField = in_array($field, $metarSourceFields);
+            
+            // Check if old value is still fresh enough to use
+            $isStale = false;
+            if ($isPrimaryField && isset($existingData['last_updated_primary'])) {
+                $age = time() - $existingData['last_updated_primary'];
+                $isStale = ($age >= $maxStaleSeconds);
+            } elseif ($isMetarField && isset($existingData['last_updated_metar'])) {
+                $age = time() - $existingData['last_updated_metar'];
+                $isStale = ($age >= $maxStaleSeconds);
+            }
+            
+            // Preserve old value if it's not too stale
+            if (!$isStale) {
+                $result[$field] = $oldValue;
+            }
+        }
+    }
+    
+    // Preserve daily tracking values (always valid)
+    $dailyTrackingFields = [
+        'temp_high_today', 'temp_low_today', 'peak_gust_today',
+        'temp_high_ts', 'temp_low_ts', 'peak_gust_time'
+    ];
+    foreach ($dailyTrackingFields as $field) {
+        if (isset($existingData[$field]) && !isset($result[$field])) {
+            $result[$field] = $existingData[$field];
+        }
+    }
+    
+    return $result;
+}
+
+/**
  * Helper function to null out stale fields based on source timestamps
  * Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
  * considered stale - they represent valid historical data for the day regardless of current measurement age
@@ -602,32 +678,50 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     curl_close($ch1);
     curl_close($ch2);
     
-    // Parse primary weather
+    // Parse primary weather with error handling
     $weatherData = null;
     $primaryTimestamp = null;
     if ($primaryResponse !== false && $primaryCode == 200) {
-        switch ($sourceType) {
-            case 'tempest':
-                $weatherData = parseTempestResponse($primaryResponse);
-                break;
-            case 'ambient':
-                $weatherData = parseAmbientResponse($primaryResponse);
-                break;
-        }
-        if ($weatherData !== null) {
-            $primaryTimestamp = time(); // Track when primary data was fetched
-            $weatherData['last_updated_primary'] = $primaryTimestamp;
-            // Preserve observation time from primary source (when weather was actually measured)
-            // This is critical for accurate timestamps in temperature/gust tracking
-            if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
-                $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+        try {
+            switch ($sourceType) {
+                case 'tempest':
+                    $weatherData = parseTempestResponse($primaryResponse);
+                    break;
+                case 'ambient':
+                    $weatherData = parseAmbientResponse($primaryResponse);
+                    break;
             }
-        } else {
-            aviationwx_log('warning', 'primary weather response parse failed', [
+            if ($weatherData !== null) {
+                $primaryTimestamp = time(); // Track when primary data was fetched
+                $weatherData['last_updated_primary'] = $primaryTimestamp;
+                // Preserve observation time from primary source (when weather was actually measured)
+                // This is critical for accurate timestamps in temperature/gust tracking
+                if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
+                    $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+                }
+            } else {
+                aviationwx_log('warning', 'primary weather response parse failed', [
+                    'airport' => $airportId,
+                    'source' => $sourceType,
+                    'response_length' => strlen($primaryResponse)
+                ]);
+            }
+        } catch (Exception $e) {
+            aviationwx_log('error', 'primary weather parse exception', [
                 'airport' => $airportId,
                 'source' => $sourceType,
-                'response_length' => strlen($primaryResponse)
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
+            // Continue - we'll try to use what we have
+        } catch (Throwable $e) {
+            aviationwx_log('error', 'primary weather parse throwable', [
+                'airport' => $airportId,
+                'source' => $sourceType,
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Continue - we'll try to use what we have
         }
     }
     
@@ -638,7 +732,26 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Parse and merge METAR data (non-blocking: use what we got)
     $metarTimestamp = null;
     if ($metarResponse !== false && $metarCode == 200) {
-        $metarData = parseMETARResponse($metarResponse, $airport);
+        try {
+            $metarData = parseMETARResponse($metarResponse, $airport);
+        } catch (Exception $e) {
+            aviationwx_log('error', 'METAR parse exception', [
+                'airport' => $airportId,
+                'station' => $stationId,
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $metarData = null;
+        } catch (Throwable $e) {
+            aviationwx_log('error', 'METAR parse throwable', [
+                'airport' => $airportId,
+                'station' => $stationId,
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $metarData = null;
+        }
+        
         if ($metarData !== null) {
             // Use observation time if available, otherwise fall back to fetch time
             $metarTimestamp = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
@@ -651,13 +764,15 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 $weatherData['obs_time'] = $metarData['obs_time'];
             }
             
-            if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
+            // Safely merge METAR data - only update if new value is valid
+            // Use null coalescing to preserve existing values if new ones are null
+            if ($metarData['visibility'] !== null && $metarData['visibility'] !== false) {
                 $weatherData['visibility'] = $metarData['visibility'];
             }
-            if ($weatherData['ceiling'] === null && $metarData['ceiling'] !== null) {
+            if ($metarData['ceiling'] !== null && $metarData['ceiling'] !== false) {
                 $weatherData['ceiling'] = $metarData['ceiling'];
             }
-            if ($metarData['cloud_cover'] !== null) {
+            if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
                 $weatherData['cloud_cover'] = $metarData['cloud_cover'];
             }
         } else {
@@ -727,13 +842,15 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 $weatherData['obs_time'] = $metarData['obs_time'];
             }
             
-            if ($weatherData['visibility'] === null && $metarData['visibility'] !== null) {
+            // Safely merge METAR data - only update if new value is valid
+            // Use null coalescing to preserve existing values if new ones are null
+            if ($metarData['visibility'] !== null && $metarData['visibility'] !== false) {
                 $weatherData['visibility'] = $metarData['visibility'];
             }
-            if ($weatherData['ceiling'] === null && $metarData['ceiling'] !== null) {
+            if ($metarData['ceiling'] !== null && $metarData['ceiling'] !== false) {
                 $weatherData['ceiling'] = $metarData['ceiling'];
             }
-            if ($metarData['cloud_cover'] !== null) {
+            if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
                 $weatherData['cloud_cover'] = $metarData['cloud_cover'];
             }
         }
@@ -885,7 +1002,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $primaryStale = false;
     if (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
     $primaryAge = time() - $weatherData['last_updated_primary'];
-    $primaryStale = ($primaryAge > $maxStaleSeconds);
+    $primaryStale = ($primaryAge >= $maxStaleSeconds); // >= means at threshold is stale
     
     if ($primaryStale) {
         aviationwx_log('warning', 'primary weather source stale - nulling primary fields', [
@@ -908,7 +1025,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $metarStale = false;
     if (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
     $metarAge = time() - $weatherData['last_updated_metar'];
-    $metarStale = ($metarAge > $maxStaleSeconds);
+    $metarStale = ($metarAge >= $maxStaleSeconds); // >= means at threshold is stale
     
     if ($metarStale) {
         aviationwx_log('warning', 'METAR source stale - nulling METAR fields', [
@@ -937,6 +1054,20 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
     }
 
+    // Merge with existing cache to preserve last known good values for missing/invalid fields
+    $existingCache = null;
+    if (file_exists($weatherCacheFile)) {
+        $existingCacheJson = @file_get_contents($weatherCacheFile);
+        if ($existingCacheJson !== false) {
+            $existingCache = json_decode($existingCacheJson, true);
+        }
+    }
+    
+    // If we have existing cache, merge it with new data to preserve good values
+    if (is_array($existingCache)) {
+        $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds);
+    }
+    
     // Set overall last_updated to most recent source timestamp
     $lastUpdated = max(
     $weatherData['last_updated_primary'] ?? 0,

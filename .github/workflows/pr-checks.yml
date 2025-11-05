@@ -88,6 +88,12 @@ jobs:
             exit 1
           fi
           
+          # Check that mergeWeatherDataWithFallback function exists
+          if ! grep -q "function mergeWeatherDataWithFallback" weather.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
+            exit 1
+          fi
+          
           # Check that stale data threshold is set correctly (3 hours)
           if ! grep -q "maxStaleHours = 3" weather.php; then
             echo "⚠️  Warning: Stale data threshold may not be set correctly"
@@ -96,6 +102,16 @@ jobs:
           # Check that daily tracking values are preserved
           if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" weather.php; then
             echo "⚠️  Warning: Daily tracking values preservation may be missing"
+          fi
+          
+          # Check for VRB wind direction handling
+          if ! grep -q "wdir.*VRB\|'VRB'" weather.php; then
+            echo "⚠️  Warning: VRB (variable wind direction) handling may be missing"
+          fi
+          
+          # Check for error handling around parsing
+          if ! grep -q "try.*catch.*Exception\|try.*catch.*Throwable" weather.php; then
+            echo "⚠️  Warning: Error handling around parsing may be missing"
           fi
           
           echo "✓ Stale data safety validation complete"
@@ -130,6 +146,7 @@ jobs:
             "calculateDensityAltitude"
             "calculatePressureAltitude"
             "nullStaleFieldsBySource"
+            "mergeWeatherDataWithFallback"
             "validateAirportId"
             "checkRateLimit"
           )

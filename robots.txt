@@ -1,0 +1,28 @@
+# AviationWX.org robots.txt
+# Allow all crawlers to index public pages
+User-agent: *
+Allow: /
+Allow: /weather.php
+Allow: /webcam.php
+
+# Disallow access to sensitive areas
+Disallow: /scripts/
+Disallow: /config/
+Disallow: /tests/
+Disallow: /vendor/
+Disallow: /node_modules/
+Disallow: /cache/
+Disallow: /airports.json
+Disallow: /composer.json
+Disallow: /phpunit.xml
+Disallow: /test-local.php
+Disallow: /diagnostics.php
+Disallow: /clear-cache.php
+Disallow: /metrics.php
+Disallow: /.htaccess
+Disallow: /.git/
+Disallow: /.github/
+
+# Sitemap (if you create one later)
+# Sitemap: https://aviationwx.org/sitemap.xml
+

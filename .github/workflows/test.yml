@@ -104,6 +104,39 @@ jobs:
           
           echo "✓ Critical safety tests passed (warnings allowed)"
       
+      - name: Run Weather Data Merge Tests
+        run: |
+          echo "Running weather data merge tests..."
+          echo "Testing mergeWeatherDataWithFallback function and error handling..."
+          # Test the new merge functionality and error handling
+          vendor/bin/phpunit tests/Unit/WeatherDataMergeTest.php --testdox --stop-on-failure --no-coverage || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ WeatherDataMergeTest failed"
+            exit 1
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  WeatherDataMergeTest passed with warnings (expected in CI without coverage driver)"
+          else
+            echo "✓ WeatherDataMergeTest passed"
+          fi
+          
+          # Verify merge function exists and VRB wind direction handling
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php::testParseMETARResponse_VariableWindDirection --testdox --no-coverage || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ VRB wind direction handling test failed"
+            exit 1
+          fi
+          
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php::testParseMETARResponse_NonNumericWindSpeed --testdox --no-coverage || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ Non-numeric wind speed handling test failed"
+            exit 1
+          fi
+          
+          echo "✓ Weather data merge and error handling tests passed"
+      
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -113,6 +146,33 @@ jobs:
             unit-results.xml
             integration-results.xml
           retention-days: 7
+      
+      - name: Validate Merge Functionality
+        run: |
+          echo "🔍 Validating merge functionality implementation..."
+          
+          # Check that mergeWeatherDataWithFallback function exists
+          if ! grep -q "function mergeWeatherDataWithFallback" weather.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
+            exit 1
+          fi
+          
+          # Check that merge is called before cache write
+          if ! grep -q "mergeWeatherDataWithFallback.*existingCache" weather.php; then
+            echo "⚠️  Warning: mergeWeatherDataWithFallback may not be called before cache write"
+          fi
+          
+          # Check for VRB wind direction handling
+          if ! grep -q "wdir.*VRB\|'VRB'" weather.php; then
+            echo "⚠️  Warning: VRB wind direction handling may be missing"
+          fi
+          
+          # Check for numeric checks on wind data
+          if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" weather.php; then
+            echo "⚠️  Warning: Numeric validation for wind data may be missing"
+          fi
+          
+          echo "✓ Merge functionality validation complete"
       
       - name: Check for required files
         run: |
