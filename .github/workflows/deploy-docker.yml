@@ -72,30 +72,20 @@ jobs:
             let testSuccess = false;
             let qaSuccess = false;
             
-            // Get workflow IDs first for more specific filtering
-            const workflows = await github.rest.actions.listWorkflowsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
+            // Use workflow file paths instead of IDs (more reliable)
+            const testWorkflowPath = '.github/workflows/test.yml';
+            const qaWorkflowPath = '.github/workflows/quality-assurance-tests.yml';
             
-            const testWorkflow = workflows.data.workflows.find(w => w.name === 'Test and Lint');
-            const qaWorkflow = workflows.data.workflows.find(w => w.name === 'Quality Assurance Tests');
-            
-            if (!testWorkflow || !qaWorkflow) {
-              core.setFailed('❌ Could not find workflow definitions');
-              return;
-            }
-            
-            core.info(`Found workflows - Test and Lint: ${testWorkflow.id}, Quality Assurance Tests: ${qaWorkflow.id}`);
+            core.info(`Looking for workflows: ${testWorkflowPath} and ${qaWorkflowPath}`);
             
             // Wait for both workflows to complete
             while (Date.now() - startTime < maxWaitTime) {
-              // Get workflow runs by workflow ID for more specific filtering
+              // Get workflow runs by workflow file path for more specific filtering
               // This ensures we get runs for the specific workflow, not just by name
               const testRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                workflow_id: testWorkflow.id,
+                workflow_id: testWorkflowPath,
                 head_sha: commitSha,
                 per_page: 10
               });
@@ -103,7 +93,7 @@ jobs:
               const qaRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                workflow_id: qaWorkflow.id,
+                workflow_id: qaWorkflowPath,
                 head_sha: commitSha,
                 per_page: 10
               });
@@ -198,14 +188,14 @@ jobs:
               const allTestRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                workflow_id: testWorkflow.id,
+                workflow_id: testWorkflowPath,
                 per_page: 5
               });
               
               const allQaRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                workflow_id: qaWorkflow.id,
+                workflow_id: qaWorkflowPath,
                 per_page: 5
               });
               
