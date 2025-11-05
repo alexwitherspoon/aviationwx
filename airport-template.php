@@ -143,11 +143,6 @@
                                  onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
                                  onclick="openLiveStream(this.src)">
                         </picture>
-                        <div class="webcam-info">
-                            <button class="live-btn" onclick="openLiveStream('<?= htmlspecialchars($cam['url']) ?>')">
-                                View Source
-                            </button>
-                        </div>
                     </div>
                 </div>
                 <?php endforeach; ?>
