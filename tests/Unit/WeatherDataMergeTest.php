@@ -137,15 +137,15 @@ class WeatherDataMergeTest extends TestCase
         $maxStaleSeconds = 3 * 3600;
         
         // Test with null newData
-        $result1 = mergeWeatherDataWithFallback(null, $this->createTestWeatherData(), $maxStaleSeconds);
+        $result1 = mergeWeatherDataWithFallback(null, createTestWeatherData(), $maxStaleSeconds);
         $this->assertNull($result1, 'Should return null when newData is null');
         
         // Test with null existingData
-        $result2 = mergeWeatherDataWithFallback($this->createTestWeatherData(), null, $maxStaleSeconds);
+        $result2 = mergeWeatherDataWithFallback(createTestWeatherData(), null, $maxStaleSeconds);
         $this->assertIsArray($result2, 'Should return array when existingData is null');
         
         // Test with non-array newData
-        $result3 = mergeWeatherDataWithFallback('not an array', $this->createTestWeatherData(), $maxStaleSeconds);
+        $result3 = mergeWeatherDataWithFallback('not an array', createTestWeatherData(), $maxStaleSeconds);
         $this->assertEquals('not an array', $result3, 'Should return newData as-is when not array');
     }
 
