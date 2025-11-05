@@ -138,7 +138,11 @@ function parseMETARResponse($response, $airport) {
     if (isset($metarData['wdir']) && is_numeric($metarData['wdir'])) {
         $windDirection = (int)round((float)$metarData['wdir']);
     }
-    $windSpeed = isset($metarData['wspd']) ? (int)round($metarData['wspd']) : null;
+    // Handle wind speed - check if numeric before rounding
+    $windSpeed = null;
+    if (isset($metarData['wspd']) && is_numeric($metarData['wspd'])) {
+        $windSpeed = (int)round((float)$metarData['wspd']);
+    }
     
     // Parse pressure (altimeter setting in inHg)
     $pressure = null;
@@ -1042,7 +1046,7 @@ function parseTempestResponse($response) {
         'humidity' => isset($obs['relative_humidity']) ? $obs['relative_humidity'] : null,
         'pressure' => $pressureInHg, // sea level pressure in inHg
         'wind_speed' => $windSpeedKts,
-        'wind_direction' => isset($obs['wind_direction']) ? round($obs['wind_direction']) : null,
+        'wind_direction' => isset($obs['wind_direction']) && is_numeric($obs['wind_direction']) ? (int)round((float)$obs['wind_direction']) : null,
         'gust_speed' => $gustSpeedKts,
         'precip_accum' => isset($obs['precip_accum_local_day_final']) ? $obs['precip_accum_local_day_final'] * 0.0393701 : 0, // mm to inches
         'dewpoint' => isset($obs['dew_point']) ? $obs['dew_point'] : null,
