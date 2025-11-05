@@ -539,11 +539,16 @@ header('Expires: 0');
                 }
                 
                 // Use observation time if available (more accurate than fetch time)
+                // Prefer observation times from both sources over fetch times
                 if (isset($weather['obs_time_primary']) && $weather['obs_time_primary'] > 0) {
                     $timestamps[] = $weather['obs_time_primary'];
                 }
+                if (isset($weather['obs_time_metar']) && $weather['obs_time_metar'] > 0) {
+                    $timestamps[] = $weather['obs_time_metar'];
+                }
                 
                 // Fallback to general last_updated if no source-specific timestamps
+                // This uses the latest observation time from all sources (calculated in weather.php)
                 if (empty($timestamps) && isset($weather['last_updated']) && $weather['last_updated'] > 0) {
                     $timestamps[] = $weather['last_updated'];
                 }

@@ -9,6 +9,110 @@ require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/logger.php';
 
 /**
+ * Circuit breaker: check if weather API should be skipped due to backoff
+ * @param string $airportId
+ * @param string $sourceType 'primary' or 'metar'
+ * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
+ */
+function checkWeatherCircuitBreaker($airportId, $sourceType) {
+    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $key = $airportId . '_weather_' . $sourceType;
+    $now = time();
+    
+    if (!file_exists($backoffFile)) {
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+    }
+    
+    $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    
+    if (!isset($backoffData[$key])) {
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+    }
+    
+    $state = $backoffData[$key];
+    $nextAllowed = (int)($state['next_allowed_time'] ?? 0);
+    
+    if ($nextAllowed > $now) {
+        $remaining = $nextAllowed - $now;
+        return [
+            'skip' => true,
+            'reason' => 'circuit_open',
+            'backoff_remaining' => $remaining,
+            'failures' => (int)($state['failures'] ?? 0)
+        ];
+    }
+    
+    return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+}
+
+/**
+ * Record a weather API failure and update backoff state
+ * @param string $airportId
+ * @param string $sourceType 'primary' or 'metar'
+ * @param string $severity 'transient' or 'permanent'
+ */
+function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') {
+    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $key = $airportId . '_weather_' . $sourceType;
+    $now = time();
+    
+    $backoffData = [];
+    if (file_exists($backoffFile)) {
+        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    }
+    
+    if (!isset($backoffData[$key])) {
+        $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
+    }
+    
+    $state = &$backoffData[$key];
+    $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
+    $state['last_attempt'] = $now;
+    
+    // Exponential backoff with severity scaling
+    // Base: min(60, 2^failures * 60) seconds, capped at 3600s (1 hour)
+    $failures = $state['failures'];
+    $base = max(60, pow(2, min($failures - 1, 5)) * 60);
+    $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
+    $cap = ($severity === 'permanent') ? 7200 : 3600; // cap 2h for permanent
+    $backoffSeconds = min($cap, (int)round($base * $multiplier));
+    $state['backoff_seconds'] = $backoffSeconds;
+    $state['next_allowed_time'] = $now + $backoffSeconds;
+    
+    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+}
+
+/**
+ * Record a weather API success and reset backoff state
+ * @param string $airportId
+ * @param string $sourceType 'primary' or 'metar'
+ */
+function recordWeatherSuccess($airportId, $sourceType) {
+    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $key = $airportId . '_weather_' . $sourceType;
+    $now = time();
+    
+    $backoffData = [];
+    if (file_exists($backoffFile)) {
+        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    }
+    
+    if (!isset($backoffData[$key])) {
+        return; // No previous state to reset
+    }
+    
+    // Reset on success
+    $backoffData[$key] = [
+        'failures' => 0,
+        'next_allowed_time' => 0,
+        'last_attempt' => $now,
+        'backoff_seconds' => 0
+    ];
+    
+    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+}
+
+/**
  * Parse Ambient Weather API response (for async use)
  */
 function parseAmbientResponse($response) {
@@ -545,28 +649,64 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $sourceType = $airport['weather_source']['type'];
     $airportId = $airportId ?? 'unknown';
     
+    // Check circuit breaker for primary source
+    $primaryCircuit = checkWeatherCircuitBreaker($airportId, 'primary');
+    if ($primaryCircuit['skip']) {
+        aviationwx_log('warning', 'primary weather API circuit breaker open - skipping fetch', [
+            'airport' => $airportId,
+            'backoff_remaining' => $primaryCircuit['backoff_remaining'],
+            'failures' => $primaryCircuit['failures']
+        ]);
+        // Don't skip METAR fetch - continue with METAR only
+    }
+    
+    // Check circuit breaker for METAR source
+    $metarCircuit = checkWeatherCircuitBreaker($airportId, 'metar');
+    if ($metarCircuit['skip']) {
+        aviationwx_log('warning', 'METAR API circuit breaker open - skipping fetch', [
+            'airport' => $airportId,
+            'backoff_remaining' => $metarCircuit['backoff_remaining'],
+            'failures' => $metarCircuit['failures']
+        ]);
+        // If both are in backoff, return null
+        if ($primaryCircuit['skip']) {
+            return null;
+        }
+        // Otherwise continue with primary only
+    }
+    
     // Build primary weather URL
     $primaryUrl = null;
-    switch ($sourceType) {
-        case 'tempest':
-            $apiKey = $airport['weather_source']['api_key'];
-            $stationId = $airport['weather_source']['station_id'];
-            $primaryUrl = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
-            break;
-        case 'ambient':
-            $apiKey = $airport['weather_source']['api_key'];
-            $appKey = $airport['weather_source']['application_key'];
-            // Ambient uses device list endpoint, not individual device endpoint
-            $primaryUrl = "https://api.ambientweather.net/v1/devices?applicationKey={$appKey}&apiKey={$apiKey}";
-            break;
-        default:
-            // Not async-able (METAR-only or unsupported)
-            return fetchWeatherSync($airport);
+    if (!$primaryCircuit['skip']) {
+        switch ($sourceType) {
+            case 'tempest':
+                $apiKey = $airport['weather_source']['api_key'];
+                $stationId = $airport['weather_source']['station_id'];
+                $primaryUrl = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
+                break;
+            case 'ambient':
+                $apiKey = $airport['weather_source']['api_key'];
+                $appKey = $airport['weather_source']['application_key'];
+                // Ambient uses device list endpoint, not individual device endpoint
+                $primaryUrl = "https://api.ambientweather.net/v1/devices?applicationKey={$appKey}&apiKey={$apiKey}";
+                break;
+            default:
+                // Not async-able (METAR-only or unsupported)
+                return fetchWeatherSync($airport);
+        }
     }
     
     // Build METAR URL
-    $stationId = $airport['metar_station'] ?? $airport['icao'];
-    $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+    $metarUrl = null;
+    if (!$metarCircuit['skip']) {
+        $stationId = $airport['metar_station'] ?? $airport['icao'];
+        $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+    }
+    
+    // If both are skipped, return null
+    if ($primaryCircuit['skip'] && $metarCircuit['skip']) {
+        return null;
+    }
     
     // Create multi-handle for parallel requests
     $mh = curl_multi_init();
@@ -575,38 +715,50 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         return null;
     }
     
-    $ch1 = curl_init($primaryUrl);
-    $ch2 = curl_init($metarUrl);
+    $ch1 = null;
+    $ch2 = null;
     
-    if ($ch1 === false || $ch2 === false) {
-        if ($ch1 !== false) curl_close($ch1);
-        if ($ch2 !== false) curl_close($ch2);
-        curl_multi_close($mh);
-        aviationwx_log('error', 'failed to init curl handles', ['airport' => $airportId]);
-        return null;
+    // Initialize primary curl handle if not in backoff
+    if ($primaryUrl !== null) {
+        $ch1 = curl_init($primaryUrl);
+        if ($ch1 === false) {
+            curl_multi_close($mh);
+            aviationwx_log('error', 'failed to init primary curl handle', ['airport' => $airportId]);
+            recordWeatherFailure($airportId, 'primary', 'transient');
+            return null;
+        }
+        curl_setopt_array($ch1, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_USERAGENT => 'AviationWX/1.0',
+            CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
+        ]);
+        curl_multi_add_handle($mh, $ch1);
     }
     
-    // Configure primary weather request
-    curl_setopt_array($ch1, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_USERAGENT => 'AviationWX/1.0',
-        CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
-    ]);
-    
-    // Configure METAR request
-    curl_setopt_array($ch2, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_USERAGENT => 'AviationWX/1.0',
-        CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
-    ]);
-    
-    // Add handles to multi-curl
-    curl_multi_add_handle($mh, $ch1);
-    curl_multi_add_handle($mh, $ch2);
+    // Initialize METAR curl handle if not in backoff
+    if ($metarUrl !== null) {
+        $ch2 = curl_init($metarUrl);
+        if ($ch2 === false) {
+            if ($ch1 !== null) {
+                curl_multi_remove_handle($mh, $ch1);
+                curl_close($ch1);
+            }
+            curl_multi_close($mh);
+            aviationwx_log('error', 'failed to init METAR curl handle', ['airport' => $airportId]);
+            recordWeatherFailure($airportId, 'metar', 'transient');
+            return null;
+        }
+        curl_setopt_array($ch2, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_USERAGENT => 'AviationWX/1.0',
+            CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
+        ]);
+        curl_multi_add_handle($mh, $ch2);
+    }
     
     // Execute both requests in parallel with overall timeout protection
     $running = null;
@@ -637,46 +789,76 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     } while ($running > 0);
     
     // Get responses and error information
-    $primaryResponse = curl_multi_getcontent($ch1);
-    $metarResponse = curl_multi_getcontent($ch2);
+    $primaryResponse = $ch1 !== null ? curl_multi_getcontent($ch1) : null;
+    $metarResponse = $ch2 !== null ? curl_multi_getcontent($ch2) : null;
     
     // Get HTTP codes and curl error info
-    $primaryCode = curl_getinfo($ch1, CURLINFO_HTTP_CODE);
-    $metarCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-    $primaryError = curl_error($ch1);
-    $metarError = curl_error($ch2);
-    $primaryErrno = curl_errno($ch1);
-    $metarErrno = curl_errno($ch2);
+    $primaryCode = $ch1 !== null ? curl_getinfo($ch1, CURLINFO_HTTP_CODE) : 0;
+    $metarCode = $ch2 !== null ? curl_getinfo($ch2, CURLINFO_HTTP_CODE) : 0;
+    $primaryError = $ch1 !== null ? curl_error($ch1) : '';
+    $metarError = $ch2 !== null ? curl_error($ch2) : '';
+    $primaryErrno = $ch1 !== null ? curl_errno($ch1) : 0;
+    $metarErrno = $ch2 !== null ? curl_errno($ch2) : 0;
     
-    // Log errors if they occurred
-    if ($primaryResponse === false || $primaryCode !== 200 || !empty($primaryError)) {
-        aviationwx_log('warning', 'primary weather API error', [
-            'airport' => $airportId,
-            'source' => $sourceType,
-            'http_code' => $primaryCode,
-            'curl_error' => $primaryError ?: null,
-            'curl_errno' => $primaryErrno !== 0 ? $primaryErrno : null,
-            'response_received' => $primaryResponse !== false
-        ]);
+    // Determine failure severity based on HTTP code
+    $primarySeverity = 'transient';
+    if ($primaryCode !== 0 && $primaryCode >= 400 && $primaryCode < 500) {
+        $primarySeverity = 'permanent'; // 4xx errors are likely permanent (bad API key, etc.)
     }
     
-    if ($metarResponse === false || $metarCode !== 200 || !empty($metarError)) {
-        aviationwx_log('warning', 'METAR API error', [
-            'airport' => $airportId,
-            'station' => $stationId,
-            'http_code' => $metarCode,
-            'curl_error' => $metarError ?: null,
-            'curl_errno' => $metarErrno !== 0 ? $metarErrno : null,
-            'response_received' => $metarResponse !== false
-        ]);
+    $metarSeverity = 'transient';
+    if ($metarCode !== 0 && $metarCode >= 400 && $metarCode < 500) {
+        $metarSeverity = 'permanent'; // 4xx errors are likely permanent
+    }
+    
+    // Check primary response and record success/failure
+    if ($ch1 !== null) {
+        if ($primaryResponse !== false && $primaryCode == 200 && empty($primaryError)) {
+            recordWeatherSuccess($airportId, 'primary');
+        } elseif (!$primaryCircuit['skip']) {
+            // Only record failure if we actually attempted the request (not in backoff)
+            recordWeatherFailure($airportId, 'primary', $primarySeverity);
+            aviationwx_log('warning', 'primary weather API error', [
+                'airport' => $airportId,
+                'source' => $sourceType,
+                'http_code' => $primaryCode,
+                'curl_error' => $primaryError ?: null,
+                'curl_errno' => $primaryErrno !== 0 ? $primaryErrno : null,
+                'response_received' => $primaryResponse !== false,
+                'severity' => $primarySeverity
+            ]);
+        }
+    }
+    
+    // Check METAR response and record success/failure
+    if ($ch2 !== null) {
+        if ($metarResponse !== false && $metarCode == 200 && empty($metarError)) {
+            recordWeatherSuccess($airportId, 'metar');
+        } elseif (!$metarCircuit['skip']) {
+            // Only record failure if we actually attempted the request (not in backoff)
+            recordWeatherFailure($airportId, 'metar', $metarSeverity);
+            aviationwx_log('warning', 'METAR API error', [
+                'airport' => $airportId,
+                'station' => $stationId,
+                'http_code' => $metarCode,
+                'curl_error' => $metarError ?: null,
+                'curl_errno' => $metarErrno !== 0 ? $metarErrno : null,
+                'response_received' => $metarResponse !== false,
+                'severity' => $metarSeverity
+            ]);
+        }
     }
     
     // Cleanup
-    curl_multi_remove_handle($mh, $ch1);
-    curl_multi_remove_handle($mh, $ch2);
+    if ($ch1 !== null) {
+        curl_multi_remove_handle($mh, $ch1);
+        curl_close($ch1);
+    }
+    if ($ch2 !== null) {
+        curl_multi_remove_handle($mh, $ch2);
+        curl_close($ch2);
+    }
     curl_multi_close($mh);
-    curl_close($ch1);
-    curl_close($ch2);
     
     // Parse primary weather with error handling
     $weatherData = null;
@@ -759,8 +941,11 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 : time();
             $weatherData['last_updated_metar'] = $metarTimestamp;
             
-            // Copy obs_time from METAR data so frontend can use it for visibility/ceiling timestamps
+            // Preserve METAR observation time separately (for comparison with primary source)
+            // This is critical when METAR is hourly but primary source is more frequent
             if (isset($metarData['obs_time']) && $metarData['obs_time'] !== null) {
+                $weatherData['obs_time_metar'] = $metarData['obs_time'];
+                // Also copy to obs_time for backward compatibility (used by frontend for visibility/ceiling timestamps)
                 $weatherData['obs_time'] = $metarData['obs_time'];
             }
             
@@ -793,19 +978,56 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     /**
      * Fetch weather synchronously (fallback for METAR-only or errors)
      */
-    function fetchWeatherSync($airport) {
+    function fetchWeatherSync($airport, $airportId = null) {
     $sourceType = $airport['weather_source']['type'];
+    $airportId = $airportId ?? 'unknown';
     $weatherData = null;
+    
+    // Check circuit breaker for primary source (if applicable)
+    $primaryCircuit = checkWeatherCircuitBreaker($airportId, 'primary');
+    $metarCircuit = checkWeatherCircuitBreaker($airportId, 'metar');
     
     switch ($sourceType) {
         case 'tempest':
-            $weatherData = fetchTempestWeather($airport['weather_source']);
-            break;
         case 'ambient':
-            $weatherData = fetchAmbientWeather($airport['weather_source']);
+            if ($primaryCircuit['skip']) {
+                aviationwx_log('warning', 'primary weather API circuit breaker open - skipping sync fetch', [
+                    'airport' => $airportId,
+                    'backoff_remaining' => $primaryCircuit['backoff_remaining'],
+                    'failures' => $primaryCircuit['failures']
+                ]);
+                // Continue to try METAR even if primary is in backoff
+            } else {
+                if ($sourceType === 'tempest') {
+                    $weatherData = fetchTempestWeather($airport['weather_source']);
+                } else {
+                    $weatherData = fetchAmbientWeather($airport['weather_source']);
+                }
+                // Record success/failure for primary source
+                if ($weatherData !== null) {
+                    recordWeatherSuccess($airportId, 'primary');
+                } else {
+                    recordWeatherFailure($airportId, 'primary', 'transient');
+                }
+            }
             break;
         case 'metar':
+            // METAR-only source
+            if ($metarCircuit['skip']) {
+                aviationwx_log('warning', 'METAR API circuit breaker open - skipping sync fetch', [
+                    'airport' => $airportId,
+                    'backoff_remaining' => $metarCircuit['backoff_remaining'],
+                    'failures' => $metarCircuit['failures']
+                ]);
+                return null;
+            }
             $weatherData = fetchMETAR($airport);
+            // Record success/failure for METAR source
+            if ($weatherData !== null) {
+                recordWeatherSuccess($airportId, 'metar');
+            } else {
+                recordWeatherFailure($airportId, 'metar', 'transient');
+            }
             // METAR-only: all data is from METAR source
             if ($weatherData !== null) {
             // Use observation time if available, otherwise fall back to fetch time
@@ -813,6 +1035,10 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 ? $weatherData['obs_time'] 
                 : time();
             $weatherData['last_updated_primary'] = null;
+            // Preserve METAR observation time separately for consistency
+            if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
+                $weatherData['obs_time_metar'] = $weatherData['obs_time'];
+            }
             // Keep obs_time field for frontend - it represents the actual observation time
             // last_updated_metar tracks when data was fetched/processed, obs_time is when observation occurred
             }
@@ -830,28 +1056,39 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         }
         
         // Try to fetch METAR for visibility/ceiling if not already present
-        $metarData = fetchMETAR($airport);
-        if ($metarData !== null) {
-            // Use observation time if available, otherwise fall back to fetch time
-            $weatherData['last_updated_metar'] = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
-                ? $metarData['obs_time'] 
-                : time();
-            
-            // Copy obs_time from METAR data so frontend can use it for visibility/ceiling timestamps
-            if (isset($metarData['obs_time']) && $metarData['obs_time'] !== null) {
-                $weatherData['obs_time'] = $metarData['obs_time'];
+        if (!$metarCircuit['skip']) {
+            $metarData = fetchMETAR($airport);
+            // Record success/failure for METAR source
+            if ($metarData !== null) {
+                recordWeatherSuccess($airportId, 'metar');
+            } else {
+                recordWeatherFailure($airportId, 'metar', 'transient');
             }
-            
-            // Safely merge METAR data - only update if new value is valid
-            // Use null coalescing to preserve existing values if new ones are null
-            if ($metarData['visibility'] !== null && $metarData['visibility'] !== false) {
-                $weatherData['visibility'] = $metarData['visibility'];
-            }
-            if ($metarData['ceiling'] !== null && $metarData['ceiling'] !== false) {
-                $weatherData['ceiling'] = $metarData['ceiling'];
-            }
-            if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
-                $weatherData['cloud_cover'] = $metarData['cloud_cover'];
+            if ($metarData !== null) {
+                // Use observation time if available, otherwise fall back to fetch time
+                $weatherData['last_updated_metar'] = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
+                    ? $metarData['obs_time'] 
+                    : time();
+                
+                // Preserve METAR observation time separately (for comparison with primary source)
+                // This is critical when METAR is hourly but primary source is more frequent
+                if (isset($metarData['obs_time']) && $metarData['obs_time'] !== null) {
+                    $weatherData['obs_time_metar'] = $metarData['obs_time'];
+                    // Also copy to obs_time for backward compatibility (used by frontend for visibility/ceiling timestamps)
+                    $weatherData['obs_time'] = $metarData['obs_time'];
+                }
+                
+                // Safely merge METAR data - only update if new value is valid
+                // Use null coalescing to preserve existing values if new ones are null
+                if ($metarData['visibility'] !== null && $metarData['visibility'] !== false) {
+                    $weatherData['visibility'] = $metarData['visibility'];
+                }
+                if ($metarData['ceiling'] !== null && $metarData['ceiling'] !== false) {
+                    $weatherData['ceiling'] = $metarData['ceiling'];
+                }
+                if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
+                    $weatherData['cloud_cover'] = $metarData['cloud_cover'];
+                }
             }
         }
     }
@@ -867,7 +1104,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     if ($airport['weather_source']['type'] !== 'metar') {
         $weatherData = fetchWeatherAsync($airport, $airportId);
     } else {
-        $weatherData = fetchWeatherSync($airport);
+        $weatherData = fetchWeatherSync($airport, $airportId);
     }
     
     if ($weatherData === null) {
@@ -1068,11 +1305,31 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds);
     }
     
-    // Set overall last_updated to most recent source timestamp
-    $lastUpdated = max(
-    $weatherData['last_updated_primary'] ?? 0,
-    $weatherData['last_updated_metar'] ?? 0
-    );
+    // Set overall last_updated to most recent observation time from ALL data sources
+    // This ensures we pick the latest observation time even if METAR is hourly (low frequency)
+    // and primary source is more frequent (e.g., every few minutes)
+    // Prefer observation time (obs_time_primary/obs_time_metar) over fetch time (last_updated_primary/last_updated_metar)
+    // This ensures the "last updated" on the page shows when the weather observation was made, not when it was fetched
+    
+    // Collect all available observation times (preferred) and fetch times (fallback)
+    $allTimes = [];
+    
+    // Primary source: prefer observation time, fallback to fetch time
+    if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
+        $allTimes[] = $weatherData['obs_time_primary'];
+    } elseif (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
+        $allTimes[] = $weatherData['last_updated_primary'];
+    }
+    
+    // METAR source: prefer observation time, fallback to fetch time
+    if (isset($weatherData['obs_time_metar']) && $weatherData['obs_time_metar'] > 0) {
+        $allTimes[] = $weatherData['obs_time_metar'];
+    } elseif (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
+        $allTimes[] = $weatherData['last_updated_metar'];
+    }
+    
+    // Use the latest (most recent) time from all sources
+    $lastUpdated = !empty($allTimes) ? max($allTimes) : time();
     if ($lastUpdated > 0) {
     $weatherData['last_updated'] = $lastUpdated;
     $weatherData['last_updated_iso'] = date('c', $lastUpdated);
