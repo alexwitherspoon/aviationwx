@@ -2,7 +2,18 @@
 
 Real-time aviation weather and conditions for participating airports.
 
-Quick links:
+## CI Status
+
+**Test and Lint:**
+[![Test and Lint](https://github.com/alexwitherspoon/aviationwx/actions/workflows/test.yml/badge.svg)](https://github.com/alexwitherspoon/aviationwx/actions/workflows/test.yml)
+
+**Quality Assurance Tests:**
+[![Quality Assurance Tests](https://github.com/alexwitherspoon/aviationwx/actions/workflows/quality-assurance-tests.yml/badge.svg)](https://github.com/alexwitherspoon/aviationwx/actions/workflows/quality-assurance-tests.yml)
+
+**Deploy to Production:**
+[![Deploy to Production](https://github.com/alexwitherspoon/aviationwx/actions/workflows/deploy-docker.yml/badge.svg)](https://github.com/alexwitherspoon/aviationwx/actions/workflows/deploy-docker.yml)
+
+## Quick links:
 - 🚀 **Local Development**: [LOCAL_SETUP.md](LOCAL_SETUP.md) (Docker-based development)
 - 🖥️ **Production Deployment**: [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) (Ubuntu LTS VPS from scratch)
 - 📖 **Configuration Guide**: [CONFIGURATION.md](CONFIGURATION.md)
