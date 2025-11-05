@@ -558,6 +558,29 @@ function formatRainfall(inches) {
     }
 }
 
+// Convert statute miles to kilometers
+function smToKm(sm) {
+    return sm * 1.609344;
+}
+
+// Format visibility (statute miles) based on current unit preference
+function formatVisibility(sm) {
+    if (sm === null || sm === undefined) return '--';
+    const unit = getDistanceUnit();
+    if (unit === 'm') {
+        return smToKm(sm).toFixed(1);
+    } else {
+        return sm.toFixed(1);
+    }
+}
+
+// Format ceiling (feet) based on current unit preference
+function formatCeiling(ft) {
+    if (ft === null || ft === undefined) return null;
+    const unit = getDistanceUnit();
+    return unit === 'm' ? ftToM(ft) : Math.round(ft);
+}
+
 // Wind speed unit preference (default to knots)
 function getWindSpeedUnit() {
     const unit = localStorage.getItem('aviationwx_wind_speed_unit');
@@ -1019,8 +1042,8 @@ function displayWeather(weather) {
         <!-- Visibility & Ceiling -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
-            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${weather.visibility !== null ? weather.visibility.toFixed(1) : '--'}</span><span class="weather-unit">${weather.visibility !== null ? 'SM' : ''}</span>${weather.visibility !== null && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
-            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? weather.ceiling : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? 'ft AGL' : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? formatCeiling(weather.ceiling) : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time || weather.last_updated_metar) : ''}</div>
         </div>
         
         <!-- Pressure & Altitude -->
