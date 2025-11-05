@@ -785,8 +785,8 @@ function updateWeatherTimestamp() {
     }
     
     // Solution C: Enhanced visual indicators for stale data
-    // Show warnings earlier (5 minutes) and more aggressive styling
-    const isStale = diffSeconds >= 300; // 5 minutes - earlier warning
+    // Show warnings earlier (20 minutes) and more aggressive styling
+    const isStale = diffSeconds >= 1200; // 20 minutes - earlier warning
     const isVeryStale = diffSeconds >= 3600; // 1 hour - critical warning
     
     let timeStr;
@@ -834,9 +834,9 @@ async function fetchWeather(forceRefresh = false) {
     try {
         isFetchingWeather = true;
         
-        // Check if existing data is stale (>5 minutes old)
+        // Check if existing data is stale (>20 minutes old)
         // If so, force a refresh to bypass cache
-        const shouldForceRefresh = forceRefresh || (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > 5 * 60 * 1000);
+        const shouldForceRefresh = forceRefresh || (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > 20 * 60 * 1000);
         
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
