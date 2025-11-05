@@ -35,7 +35,8 @@
 </FilesMatch>
 
 # Deny access to test-local.php and diagnostics
-<FilesMatch "^(test-local\.php|test-local\.sh|diagnostics\.php|clear-cache\.php|metrics\.php|health\.php|ready\.php)$">
+# Note: health.php and ready.php are allowed for monitoring/health checks
+<FilesMatch "^(test-local\.php|test-local\.sh|diagnostics\.php|clear-cache\.php|metrics\.php)$">
     Order allow,deny
     Deny from all
 </FilesMatch>
