@@ -121,14 +121,14 @@ jobs:
           fi
           
           # Verify merge function exists and VRB wind direction handling
-          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php::testParseMETARResponse_VariableWindDirection --testdox --no-coverage || exit_code=$?
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_VariableWindDirection --testdox --no-coverage || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ VRB wind direction handling test failed"
             exit 1
           fi
           
-          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php::testParseMETARResponse_NonNumericWindSpeed --testdox --no-coverage || exit_code=$?
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_NonNumericWindSpeed --testdox --no-coverage || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ Non-numeric wind speed handling test failed"
