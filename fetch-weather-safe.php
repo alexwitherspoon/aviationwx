@@ -12,10 +12,20 @@ require_once __DIR__ . '/logger.php';
 // Try to detect from environment or use localhost with appropriate port
 $baseUrl = getenv('WEATHER_REFRESH_URL');
 if (!$baseUrl) {
-    // Default to localhost:8080 (consistent across development and production)
-    // Production should set WEATHER_REFRESH_URL environment variable for explicit control
-    $port = getenv('APP_PORT') ?: (getenv('PORT') ?: '8080');
-    $baseUrl = "http://localhost:{$port}";
+    // Detect if running inside Docker container (Apache runs on port 80)
+    // Check if we're in a container by looking for common indicators
+    $isDocker = file_exists('/.dockerenv') || 
+                (getenv('container') !== false) ||
+                (file_exists('/proc/self/cgroup') && strpos(@file_get_contents('/proc/self/cgroup'), 'docker') !== false);
+    
+    if ($isDocker) {
+        // Inside Docker: use localhost:80 (Apache default port)
+        $baseUrl = "http://localhost";
+    } else {
+        // Outside Docker: use localhost:8080 (development default)
+        $port = getenv('APP_PORT') ?: (getenv('PORT') ?: '8080');
+        $baseUrl = "http://localhost:{$port}";
+    }
 }
 // Remove trailing slash if present
 $baseUrl = rtrim($baseUrl, '/');

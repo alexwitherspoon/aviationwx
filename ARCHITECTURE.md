@@ -11,7 +11,7 @@ aviationwx.org/
 ├── homepage.php              # Homepage with airport list
 ├── weather.php               # Weather API endpoint
 ├── webcam.php                # Webcam image server endpoint
-├── fetch-webcam-safe.php     # Webcam fetcher (runs via cron)
+├── fetch-webcam-safe.php     # Webcam fetcher (runs via cron inside container)
 ├── config-utils.php          # Configuration loading and utilities
 ├── rate-limit.php            # Rate limiting utilities
 ├── logger.php                # Logging utilities
@@ -64,7 +64,7 @@ aviationwx.org/
 - **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
 
 **`fetch-webcam-safe.php`**: Fetches and caches webcam images
-- Runs via cron (recommended every minute)
+- Runs via cron inside Docker container (every minute, automatically configured)
 - Safe memory usage (stops after first frame)
 - Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg)
 - Generates multiple formats per image
@@ -133,7 +133,7 @@ Response (JSON) + Cache
 ### Webcam Data Flow
 
 ```
-Cron → fetch-webcam-safe.php
+Cron (inside container) → fetch-webcam-safe.php
   ↓
 For each webcam:
   ↓
@@ -204,7 +204,7 @@ See [SECURITY.md](SECURITY.md) for detailed security information.
 
 - **Configuration**: APCu memory cache (invalidates on file change)
 - **Weather Data**: File-based cache with stale-while-revalidate
-- **Webcam Images**: File-based cache with stale-while-revalidate (refreshed via cron + background refresh)
+- **Webcam Images**: File-based cache with stale-while-revalidate (refreshed via cron inside container + background refresh)
   - Atomic writes to prevent corruption (write to `.tmp` then atomic `rename()`)
   - File locking for concurrent access safety
 - **HTTP Headers**: Appropriate cache-control headers with stale-while-revalidate

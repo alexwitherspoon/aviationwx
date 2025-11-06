@@ -420,12 +420,14 @@ Each airport requires a subdomain DNS entry pointing to the same server:
 
 The `.htaccess` file automatically routes subdomains to `index.php` which loads the appropriate airport template.
 
-### Cron Job Setup
-Set up a cron job to refresh webcam images every 60 seconds:
+### Cron Jobs (Automatic)
 
-```bash
-* * * * * /usr/bin/php /path/to/fetch-webcam.php
-```
+Cron jobs are automatically configured inside the Docker container - no setup required!
+
+- **Webcam refresh**: Runs every minute via cron inside the container
+- **Weather refresh**: Runs every minute via cron inside the container
+
+Both jobs are configured in the `crontab` file that's built into the Docker image and start automatically when the container starts.
 
 ## Configuration Files
 
