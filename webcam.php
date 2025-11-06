@@ -1,7 +1,10 @@
 <?php
 /**
  * Webcam Image Fetcher
- * Fetches and caches webcam images from MJPEG streams
+ * Serves cached webcam images with background refresh support
+ * 
+ * When cache is stale, serves stale cache immediately and triggers background refresh
+ * Similar to weather.php's stale-while-revalidate pattern
  */
 
 // Start output buffering IMMEDIATELY to catch any output from included files
@@ -10,6 +13,9 @@ ob_start();
 require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/rate-limit.php';
 require_once __DIR__ . '/logger.php';
+
+// Include webcam fetch functions for background refresh
+require_once __DIR__ . '/fetch-webcam-safe.php';
 
 // Clear any output that may have been captured from included files
 ob_clean();
@@ -229,10 +235,132 @@ if ($ctype !== 'image/jpeg') {
     exit;
 }
 
+/**
+ * Fetch a single webcam image in background (for background refresh)
+ * @param string $airportId
+ * @param int $camIndex
+ * @param array $cam Camera config
+ * @param string $cacheFile Target cache file path
+ * @param string $cacheWebp Target WEBP cache file path
+ * @return bool Success status
+ */
+function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $cacheWebp) {
+    $url = $cam['url'];
+    $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
+    
+    // Check circuit breaker: skip if in backoff period
+    $circuit = checkCircuitBreaker($airportId, $camIndex);
+    if ($circuit['skip']) {
+        aviationwx_log('info', 'webcam background refresh skipped - circuit breaker open', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'failures' => $circuit['failures'] ?? 0,
+            'backoff_remaining' => $circuit['backoff_remaining']
+        ], 'app');
+        return false;
+    }
+    
+    // Determine source type
+    $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
+    
+    $fetchStartTime = microtime(true);
+    $success = false;
+    
+    switch ($sourceType) {
+        case 'rtsp':
+            $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: 10);
+            $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : 6;
+            $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, 2, $maxRuntime);
+            break;
+            
+        case 'static_jpeg':
+        case 'static_png':
+            $success = fetchStaticImage($url, $cacheFile);
+            break;
+            
+        case 'mjpeg':
+        default:
+            $success = fetchMJPEGStream($url, $cacheFile);
+            break;
+    }
+    
+    $fetchDuration = round((microtime(true) - $fetchStartTime) * 1000, 2);
+    
+    if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
+        // Success: reset circuit breaker
+        recordSuccess($airportId, $camIndex);
+        $size = filesize($cacheFile);
+        
+        aviationwx_log('info', 'webcam background refresh success', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'type' => $sourceType,
+            'bytes' => $size,
+            'fetch_duration_ms' => $fetchDuration
+        ], 'app');
+        
+        // Generate WEBP in background (non-blocking)
+        $DEFAULT_TRANSCODE_TIMEOUT = 8;
+        $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
+        $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s 2>&1", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
+        
+        // Run WEBP generation in background (non-blocking)
+        if (function_exists('exec')) {
+            // Use exec with background process
+            $cmd = $cmdWebp . ' > /dev/null 2>&1 &';
+            exec($cmd);
+        } else {
+            // Fallback: synchronous generation (should be fast)
+            $transcodeStartTime = microtime(true);
+            $processWebp = proc_open($cmdWebp, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w']
+            ], $pipesWebp);
+            
+            if (is_resource($processWebp)) {
+                fclose($pipesWebp[0]);
+                $startTs = microtime(true);
+                while (true) {
+                    $status = proc_get_status($processWebp);
+                    if (!$status['running']) {
+                        proc_close($processWebp);
+                        break;
+                    }
+                    if ((microtime(true) - $startTs) > $transcodeTimeout) {
+                        @proc_terminate($processWebp);
+                        break;
+                    }
+                    usleep(50000); // 50ms
+                }
+            }
+        }
+        
+        return true;
+    } else {
+        // Failure: record and update backoff
+        $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
+        $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
+        recordFailure($airportId, $camIndex, $sev);
+        
+        aviationwx_log('error', 'webcam background refresh failure', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'type' => $sourceType,
+            'severity' => $sev,
+            'fetch_duration_ms' => $fetchDuration,
+            'error_code' => $lastErr['code'] ?? null
+        ], 'app');
+        
+        return false;
+    }
+}
+
 // Cache expired or file not found - serve stale cache if available, otherwise placeholder
 if (file_exists($targetFile)) {
     $mtime = filemtime($targetFile);
     $etagVal = $etag($targetFile);
+    $cacheAge = time() - $mtime;
     
     // Conditional requests for stale file
     $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
@@ -244,25 +372,83 @@ if (file_exists($targetFile)) {
         http_response_code(304);
         exit;
     }
+    
     // Update Content-Type if serving WEBP (already set to image/jpeg earlier)
     if ($ctype !== 'image/jpeg') {
         header('Content-Type: ' . $ctype);
     }
     $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
-    $cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate' : 'public, max-age=0, must-revalidate';
+    $cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate, stale-while-revalidate=300' : 'public, max-age=0, must-revalidate, stale-while-revalidate=300';
     header('Cache-Control: ' . $cc); // Stale, revalidate
     if ($hasHash) {
-        header('Surrogate-Control: max-age=0');
-        header('CDN-Cache-Control: max-age=0');
+        header('Surrogate-Control: max-age=0, stale-while-revalidate=300');
+        header('CDN-Cache-Control: max-age=0, stale-while-revalidate=300');
     }
     header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     header('X-Cache-Status: STALE');
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
-    aviationwx_log('info', 'webcam serve stale', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt], 'user');
-    aviationwx_maybe_log_alert();
-    ob_end_clean(); // Clear any buffer before sending image (end and clean in one call)
+    
+    aviationwx_log('info', 'webcam serve stale', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'fmt' => $fmt,
+        'cache_age' => $cacheAge
+    ], 'user');
+    
+    // Serve stale cache immediately
+    ob_end_clean();
     readfile($targetFile);
+    
+    // Flush output to client immediately, then refresh in background
+    if (function_exists('fastcgi_finish_request')) {
+        // FastCGI - finish request but keep script running
+        fastcgi_finish_request();
+        // Set time limit for background refresh
+        set_time_limit(45);
+        aviationwx_log('info', 'webcam background refresh started', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'cache_age' => $cacheAge,
+            'refresh_interval' => $perCamRefresh
+        ], 'app');
+    } else {
+        // Regular PHP - flush output and continue in background
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+        flush();
+        
+        // Set time limit for background refresh
+        set_time_limit(45);
+        aviationwx_log('info', 'webcam background refresh started', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'cache_age' => $cacheAge,
+            'refresh_interval' => $perCamRefresh
+        ], 'app');
+    }
+    
+    // Continue to refresh in background (don't exit here)
+    // Fetch fresh image
+    $freshCacheFile = $cacheJpg; // Always fetch JPG first
+    $freshCacheWebp = $cacheWebp;
+    $success = fetchWebcamImageBackground($airportId, $camIndex, $cam, $freshCacheFile, $freshCacheWebp);
+    
+    if ($success) {
+        aviationwx_log('info', 'webcam background refresh completed successfully', [
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+    } else {
+        aviationwx_log('warning', 'webcam background refresh failed', [
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+    }
+    
+    // Exit silently after background refresh
+    exit;
 } else {
     aviationwx_log('error', 'webcam no cache, serving placeholder', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt], 'user');
     servePlaceholder();

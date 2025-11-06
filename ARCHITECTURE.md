@@ -61,12 +61,14 @@ aviationwx.org/
 - Handles image requests with cache headers
 - Returns placeholder if image missing
 - Supports multiple formats (WEBP, JPEG)
+- **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
 
 **`fetch-webcam-safe.php`**: Fetches and caches webcam images
 - Runs via cron (recommended every minute)
 - Safe memory usage (stops after first frame)
 - Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg)
 - Generates multiple formats per image
+- Can be included by `webcam.php` for background refresh functionality
 
 ### Configuration System (`config-utils.php`)
 
@@ -138,7 +140,13 @@ User Request → webcam.php
   ↓
 Check cache for requested image
   ↓
-Serve with cache headers
+[If fresh] Serve with cache headers (HIT)
+  ↓
+[If stale] Serve stale cache immediately + trigger background refresh
+  ↓
+Background: Fetch fresh image + update cache
+  ↓
+Next request gets fresh image
 ```
 
 ## Key Design Decisions
@@ -154,6 +162,7 @@ Serve with cache headers
 - **Why**: Fast responses while keeping data fresh
 - **Implementation**: Serve stale cache immediately, refresh in background
 - **Benefit**: Low latency with eventual consistency
+- **Applied to**: Weather data and webcam images (both use background refresh)
 
 ### 3. Daily Tracking Values Never Stale
 
@@ -187,8 +196,8 @@ See [SECURITY.md](SECURITY.md) for detailed security information.
 
 - **Configuration**: APCu memory cache (invalidates on file change)
 - **Weather Data**: File-based cache with stale-while-revalidate
-- **Webcam Images**: File-based cache (refreshed via cron)
-- **HTTP Headers**: Appropriate cache-control headers
+- **Webcam Images**: File-based cache with stale-while-revalidate (refreshed via cron + background refresh)
+- **HTTP Headers**: Appropriate cache-control headers with stale-while-revalidate
 
 ## Deployment
 
