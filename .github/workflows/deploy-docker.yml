@@ -288,30 +288,27 @@ jobs:
         run: |
           rsync -az --delete --exclude '.git' --exclude 'cache' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/
 
-      - name: Ensure cache directories exist
+      - name: Ensure cache directory exists
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
-          cd ~/aviationwx
-          # Create cache directories with permissions for www-data container user (UID 33)
-          sudo mkdir -p cache/webcams
-          # Use 777 for cache directory (acceptable for cache, no sensitive data)
-          # Or alternatively: sudo chown -R 33:33 cache (www-data user)
-          sudo chmod -R 777 cache
-          # Ensure parent cache directory also has correct permissions
-          sudo chmod 777 cache || true
+          # Create cache directory in /tmp (ephemeral, cleared on reboot)
+          # No sudo needed - /tmp is world-writable by default
+          mkdir -p /tmp/aviationwx-cache/webcams
+          # Ensure directory is writable (should already be, but be explicit)
+          chmod -R 777 /tmp/aviationwx-cache || true
+          echo "✓ Cache directory created at /tmp/aviationwx-cache"
           EOF
 
-      - name: Preserve daily tracking cache files
+      - name: Note cache location
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
-          cd ~/aviationwx
-          # Daily tracking files (peak_gusts.json, temp_extremes.json) are now preserved across deployments
-          # The application will automatically detect and handle invalid/corrupted JSON formats
-          # by deleting and recreating the files if needed. This preserves valid data across deployments.
-          echo "ℹ️  Daily tracking cache files are preserved across deployments"
-          echo "ℹ️  Application will automatically handle invalid formats if detected"
+          # Cache is now in /tmp/aviationwx-cache (ephemeral, cleared on reboot)
+          # Daily tracking files (peak_gusts.json, temp_extremes.json) will be recreated
+          # if missing. Cache is ephemeral by design - useful for resetting state if needed.
+          echo "ℹ️  Cache directory: /tmp/aviationwx-cache (ephemeral, cleared on reboot)"
+          echo "ℹ️  Application will automatically recreate cache files if missing"
           EOF
 
       - name: Ensure SSL certificates are in place

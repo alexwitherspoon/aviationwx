@@ -8,7 +8,7 @@ services:
     volumes:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
       - /home/aviationwx/airports.json:/var/www/html/airports.json:ro
-      - ./cache:/var/www/html/cache
+      - /tmp/aviationwx-cache:/var/www/html/cache
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
