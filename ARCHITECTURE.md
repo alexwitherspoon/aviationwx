@@ -69,6 +69,11 @@ aviationwx.org/
 - Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg)
 - Generates multiple formats per image
 - Can be included by `webcam.php` for background refresh functionality
+- **Reliability features**:
+  - File locking for backoff state (prevents race conditions)
+  - Atomic file writes (prevents cache corruption)
+  - Circuit breaker with exponential backoff
+  - Comprehensive error handling and logging
 
 ### Configuration System (`config-utils.php`)
 
@@ -197,7 +202,29 @@ See [SECURITY.md](SECURITY.md) for detailed security information.
 - **Configuration**: APCu memory cache (invalidates on file change)
 - **Weather Data**: File-based cache with stale-while-revalidate
 - **Webcam Images**: File-based cache with stale-while-revalidate (refreshed via cron + background refresh)
+  - Atomic writes to prevent corruption (write to `.tmp` then atomic `rename()`)
+  - File locking for concurrent access safety
 - **HTTP Headers**: Appropriate cache-control headers with stale-while-revalidate
+
+## Reliability Features
+
+### File Locking
+- Backoff state (`backoff.json`) uses file locking (`flock()`) to prevent race conditions
+- Read-modify-write operations are atomic when locking is available
+- Graceful fallback to `file_put_contents()` with `LOCK_EX` if file handles unavailable
+
+### Atomic File Writes
+- Cache files (webcam images) are written atomically:
+  1. Write to temporary file (`.tmp` suffix)
+  2. Atomic `rename()` to final location
+- Prevents serving corrupted images if process is interrupted
+- Applied to: JPEG cache files, PNG-to-JPEG conversions, MJPEG stream captures, RTSP frame captures
+
+### Circuit Breaker
+- Exponential backoff prevents hammering failing sources
+- Separate backoff state per camera
+- Severity-based scaling (permanent errors get longer backoff)
+- Automatic reset on successful fetch
 
 ## Deployment
 

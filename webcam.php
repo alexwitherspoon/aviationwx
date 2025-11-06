@@ -302,17 +302,22 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
         // Generate WEBP in background (non-blocking)
         $DEFAULT_TRANSCODE_TIMEOUT = 8;
         $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
-        $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s 2>&1", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
+        
+        // Build ffmpeg command without 2>&1 in the base command (we'll handle redirects separately)
+        $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
         
         // Run WEBP generation in background (non-blocking)
         if (function_exists('exec')) {
-            // Use exec with background process
+            // Use exec with background process via shell
+            // Redirect both stdout and stderr to /dev/null and run in background
             $cmd = $cmdWebp . ' > /dev/null 2>&1 &';
-            exec($cmd);
+            @exec($cmd);
+            // Note: exec() returns immediately when using &, so we can't check success here
+            // The background process will complete asynchronously
         } else {
-            // Fallback: synchronous generation (should be fast)
+            // Fallback: synchronous generation with timeout
             $transcodeStartTime = microtime(true);
-            $processWebp = proc_open($cmdWebp, [
+            $processWebp = @proc_open($cmdWebp . ' 2>&1', [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w']
@@ -321,18 +326,41 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
             if (is_resource($processWebp)) {
                 fclose($pipesWebp[0]);
                 $startTs = microtime(true);
+                $timedOut = false;
                 while (true) {
                     $status = proc_get_status($processWebp);
                     if (!$status['running']) {
+                        $exitCode = $status['exitcode'];
                         proc_close($processWebp);
+                        // Verify WEBP was created successfully
+                        if ($exitCode !== 0 || !file_exists($cacheWebp) || filesize($cacheWebp) === 0) {
+                            aviationwx_log('warning', 'webcam WEBP generation failed', [
+                                'airport' => $airportId,
+                                'cam' => $camIndex,
+                                'exit_code' => $exitCode,
+                                'file_exists' => file_exists($cacheWebp)
+                            ], 'app');
+                        }
                         break;
                     }
                     if ((microtime(true) - $startTs) > $transcodeTimeout) {
+                        $timedOut = true;
                         @proc_terminate($processWebp);
+                        @proc_close($processWebp);
+                        aviationwx_log('warning', 'webcam WEBP generation timed out', [
+                            'airport' => $airportId,
+                            'cam' => $camIndex,
+                            'timeout' => $transcodeTimeout
+                        ], 'app');
                         break;
                     }
                     usleep(50000); // 50ms
                 }
+            } else {
+                aviationwx_log('warning', 'webcam WEBP generation proc_open failed', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex
+                ], 'app');
             }
         }
         
@@ -397,8 +425,9 @@ if (file_exists($targetFile)) {
     ], 'user');
     
     // Serve stale cache immediately
-    ob_end_clean();
+    ob_end_flush(); // Flush buffer before sending file
     readfile($targetFile);
+    flush(); // Ensure file is sent
     
     // Flush output to client immediately, then refresh in background
     if (function_exists('fastcgi_finish_request')) {
@@ -413,12 +442,7 @@ if (file_exists($targetFile)) {
             'refresh_interval' => $perCamRefresh
         ], 'app');
     } else {
-        // Regular PHP - flush output and continue in background
-        if (ob_get_level() > 0) {
-            ob_end_flush();
-        }
-        flush();
-        
+        // Regular PHP - output already flushed above
         // Set time limit for background refresh
         set_time_limit(45);
         aviationwx_log('info', 'webcam background refresh started', [

@@ -34,6 +34,7 @@
     <source>
         <include>
             <file>weather.php</file>
+            <file>fetch-webcam-safe.php</file>
             <file>config-utils.php</file>
             <file>rate-limit.php</file>
             <file>logger.php</file>
