@@ -29,7 +29,7 @@ Downloads current images from webcam streams and caches them.
 - Safe memory usage (stops after first JPEG frame)
 - Timeout protection (10 second max)
 - Shows progress and results
-- Caches to `cache/webcams/` directory
+- Caches to `/tmp/aviationwx-cache/webcams/` directory (ephemeral, cleared on reboot)
 
 ### 3. Check Weather API
 ```bash
@@ -39,7 +39,8 @@ Tests the weather API and shows formatted JSON response.
 
 ### 4. View Cached Images
 ```bash
-ls -lh cache/webcams/
+# Cache is in /tmp/aviationwx-cache (ephemeral, cleared on reboot)
+ls -lh /tmp/aviationwx-cache/webcams/
 ```
 Lists cached webcam images with sizes and timestamps.
 
@@ -82,8 +83,8 @@ aviationwx.org/
 ├── fetch-webcam-safe.php        # Safe webcam fetcher (run this!)
 ├── airports.json                # Airport configuration
 ├── styles.css                   # Styling
-├── cache/
-│   └── webcams/                 # Cached webcam images
+# Cache is in /tmp/aviationwx-cache (ephemeral, cleared on reboot)
+# /tmp/aviationwx-cache/webcams/  # Cached webcam images
 │       ├── kspb_0.jpg          # Webcam 1
 │       └── kspb_1.jpg          # Webcam 2
 └── ...

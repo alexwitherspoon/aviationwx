@@ -432,7 +432,7 @@ Both jobs are configured in the `crontab` file that's built into the Docker imag
 ## Configuration Files
 
 - `airports.json` - Airport configuration
-- `cache/peak_gusts.json` - Daily peak gust tracking
-- `cache/temp_extremes.json` - Daily temperature extremes
-- `cache/webcams/` - Cached webcam images
+- `/tmp/aviationwx-cache/peak_gusts.json` - Daily peak gust tracking (ephemeral, cleared on reboot)
+- `/tmp/aviationwx-cache/temp_extremes.json` - Daily temperature extremes (ephemeral, cleared on reboot)
+- `/tmp/aviationwx-cache/webcams/` - Cached webcam images (ephemeral, cleared on reboot)
 

@@ -40,7 +40,7 @@ Quick reference for deployment options. For detailed guides, see the linked docu
 - **Weather Refresh**: Automatically runs every minute via cron inside the Docker container
 - **DNS**: Configure wildcard DNS (A records for `@` and `*`)
 - **SSL**: Nginx handles HTTPS redirects; certificates mounted into container
-- **Caching**: Weather data cached server-side; webcam images cached on disk
+- **Caching**: Weather data cached server-side; webcam images cached on disk (cache in `/tmp/aviationwx-cache`, ephemeral, cleared on reboot)
 
 For complete details, see [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md).
 

@@ -9,8 +9,8 @@ services:
     volumes:
       # Mount airports.json from host
       - ./airports.json:/var/www/html/airports.json:ro
-      # Mount cache directory so it persists
-      - ./cache:/var/www/html/cache
+      # Mount cache directory from /tmp (ephemeral, cleared on reboot)
+      - /tmp/aviationwx-cache:/var/www/html/cache
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
