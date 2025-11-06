@@ -296,12 +296,24 @@ function getGitSha() {
     }
     
     // Try git command as fallback (if git is available)
+    // Use --short=7 to force 7 characters (matching GitHub's short SHA display)
     if (function_exists('shell_exec')) {
-        $sha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse --short HEAD 2>/dev/null');
+        $sha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse --short=7 HEAD 2>/dev/null');
         if ($sha) {
             $sha = trim($sha);
+            // Always return exactly 7 characters to match GitHub's display
             if (strlen($sha) >= 7) {
                 return substr($sha, 0, 7);
+            } elseif (strlen($sha) > 0) {
+                // If we got a shorter SHA, pad it or use full SHA
+                // Fall back to full SHA and take first 7 characters
+                $fullSha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse HEAD 2>/dev/null');
+                if ($fullSha) {
+                    $fullSha = trim($fullSha);
+                    if (strlen($fullSha) >= 7) {
+                        return substr($fullSha, 0, 7);
+                    }
+                }
             }
         }
     }
