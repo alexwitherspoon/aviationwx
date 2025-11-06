@@ -439,17 +439,24 @@ docker compose -f docker-compose.prod.yml up -d --build
 ### Monitor Logs
 
 ```bash
-# Application logs
+# All logs are captured by Docker and can be viewed with docker compose logs
+# Docker automatically handles log rotation (10MB files, 10 files = 100MB total)
+
+# Application logs (PHP application logs)
 docker compose -f docker-compose.prod.yml logs -f web
 
-# Nginx logs
+# Nginx logs (access and error logs)
 docker compose -f docker-compose.prod.yml logs -f nginx
 
-# User activity logs (user requests, responses, rate limiting)
-tail -f /var/log/aviationwx/user.log
+# View all logs together
+docker compose -f docker-compose.prod.yml logs -f
 
-# Application/system logs (background operations, API errors, circuit breakers)
-tail -f /var/log/aviationwx/app.log
+# Filter logs by log type (log entries include 'log_type' field)
+docker compose -f docker-compose.prod.yml logs -f web | grep '"log_type":"user"'
+docker compose -f docker-compose.prod.yml logs -f web | grep '"log_type":"app"'
+
+# View only errors/warnings (these go to stderr)
+docker compose -f docker-compose.prod.yml logs -f web 2>&1 | grep -E '"level":"(error|warning)"'
 ```
 
 ### Backup Configuration
@@ -522,7 +529,7 @@ curl -I https://aviationwx.org
 - Set up automated backups
 - Add additional airports
 - Customize webcam refresh intervals
-- Configure log rotation (already set up via deployment script)
+- Logging handled automatically by Docker (stdout/stderr, 10MB files, 10 files = 100MB total)
 
 For local development, see [LOCAL_SETUP.md](LOCAL_SETUP.md).
 

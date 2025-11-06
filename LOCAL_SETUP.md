@@ -140,7 +140,10 @@ make shell
 cd /var/www/html
 php -v
 ls -la
-tail -f /var/log/apache2/error.log
+
+# View logs (from host, not inside container)
+# Logs are captured by Docker and can be viewed with:
+docker compose logs -f web
 
 # Exit shell
 exit

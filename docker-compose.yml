@@ -15,6 +15,7 @@ services:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
       - WEATHER_REFRESH_URL=http://localhost
+      - AVIATIONWX_LOG_TO_STDOUT=true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
