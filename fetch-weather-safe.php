@@ -9,8 +9,14 @@ require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/logger.php';
 
 // Determine base URL for weather endpoint
-// Try to detect from environment or use localhost
-$baseUrl = getenv('WEATHER_REFRESH_URL') ?: 'http://localhost';
+// Try to detect from environment or use localhost with appropriate port
+$baseUrl = getenv('WEATHER_REFRESH_URL');
+if (!$baseUrl) {
+    // Default to localhost:8000 for local development (PHP built-in server)
+    // Production should set WEATHER_REFRESH_URL environment variable
+    $port = getenv('APP_PORT') ?: (getenv('PORT') ?: '8000');
+    $baseUrl = "http://localhost:{$port}";
+}
 // Remove trailing slash if present
 $baseUrl = rtrim($baseUrl, '/');
 
