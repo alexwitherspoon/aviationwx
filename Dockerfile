@@ -51,7 +51,12 @@ RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "expose_php = Off" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "log_errors = On" >> /usr/local/etc/php/conf.d/security.ini \
-    && echo "error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT" >> /usr/local/etc/php/conf.d/security.ini
+    && echo "error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT" >> /usr/local/etc/php/conf.d/security.ini \
+    && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/security.ini
+
+# Configure Apache to write error log to stderr (for Docker logging)
+RUN echo "ErrorLog /proc/self/fd/2" >> /etc/apache2/apache2.conf \
+    && echo "CustomLog /proc/self/fd/1 combined" >> /etc/apache2/apache2.conf
 
 # Use custom entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

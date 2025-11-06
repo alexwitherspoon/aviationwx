@@ -149,7 +149,17 @@ function checkSystemHealth() {
     
     if ($logToStdout) {
         // Docker logging via stdout/stderr - check if we can write to stdout
-        $canWriteStdout = @fwrite(STDOUT, '') !== false || @is_resource(STDOUT);
+        // In CLI, STDOUT is defined; in web context, use php://stdout
+        if (php_sapi_name() === 'cli' && defined('STDOUT')) {
+            $canWriteStdout = @fwrite(STDOUT, '') !== false || @is_resource(STDOUT);
+        } else {
+            // Web context: try to open php://stdout
+            $testStream = @fopen('php://stdout', 'a');
+            $canWriteStdout = $testStream !== false;
+            if ($testStream !== false) {
+                @fclose($testStream);
+            }
+        }
         $loggingStatus = $canWriteStdout ? 'operational' : 'degraded';
         $loggingMessage = $canWriteStdout 
             ? 'Logging to Docker (stdout/stderr) - view with docker compose logs' 

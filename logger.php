@@ -120,9 +120,19 @@ function aviationwx_log(string $level, string $message, array $context = [], str
         // Write to stdout/stderr for Docker logging
         // Errors and warnings go to stderr, info/debug go to stdout
         $isError = in_array($entry['level'], ['warning','error','critical','alert','emergency'], true);
-        $stream = $isError ? STDERR : STDOUT;
-        @fwrite($stream, $jsonLine);
-        @fflush($stream);
+        
+        // In CLI, STDOUT/STDERR are defined and work directly
+        if (php_sapi_name() === 'cli' && defined('STDOUT') && defined('STDERR')) {
+            $stream = $isError ? STDERR : STDOUT;
+            @fwrite($stream, $jsonLine);
+            @fflush($stream);
+        } else {
+            // Web context (Apache/mod_php): use error_log() which writes to Apache error log
+            // Apache error log is captured by Docker as stderr
+            // Note: php://stdout goes to HTTP response body (not what we want)
+            // php://stderr might work but error_log() is more reliable for Apache
+            @error_log($jsonLine);
+        }
     } else {
         // File-based logging (backward compatibility)
         aviationwx_init_log_dir();
