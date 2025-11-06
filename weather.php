@@ -161,6 +161,59 @@ function parseAmbientResponse($response) {
 }
 
 /**
+ * Generate mock weather data for local testing
+ * Returns realistic static weather data for visualization
+ */
+function generateMockWeatherData($airportId, $airport) {
+    // Generate consistent but varied mock data based on airport ID
+    // This ensures each airport has different but stable weather
+    $seed = crc32($airportId);
+    mt_srand($seed);
+    
+    // Base values that vary by airport
+    $baseTemp = 15 + (mt_rand() % 20); // 15-35°C (59-95°F)
+    $baseWindSpeed = 5 + (mt_rand() % 15); // 5-20 knots
+    $baseWindDir = mt_rand() % 360; // 0-359 degrees
+    $basePressure = 29.8 + (mt_rand() % 10) / 10; // 29.8-30.7 inHg
+    $baseHumidity = 50 + (mt_rand() % 40); // 50-90%
+    $baseVisibility = 8 + (mt_rand() % 5); // 8-13 SM
+    
+    // Reset random seed for consistent values
+    mt_srand($seed);
+    
+    $now = time();
+    $tempC = $baseTemp;
+    $tempF = ($tempC * 9/5) + 32;
+    $dewpointC = $tempC - 5 - (mt_rand() % 10); // 5-15°C below temp
+    $dewpointF = ($dewpointC * 9/5) + 32;
+    
+    return [
+        'temperature' => $tempC,
+        'temperature_f' => $tempF,
+        'dewpoint' => $dewpointC,
+        'dewpoint_f' => $dewpointF,
+        'dewpoint_spread' => $tempC - $dewpointC,
+        'humidity' => $baseHumidity,
+        'wind_speed' => $baseWindSpeed,
+        'wind_direction' => $baseWindDir,
+        'gust_speed' => $baseWindSpeed + 3 + (mt_rand() % 5), // 3-8 knots above wind speed
+        'gust_factor' => 3 + (mt_rand() % 5),
+        'pressure' => $basePressure,
+        'visibility' => $baseVisibility,
+        'ceiling' => null, // VFR conditions
+        'cloud_cover' => 'SCT',
+        'precip_accum' => 0.0,
+        'flight_category' => 'VFR',
+        'flight_category_class' => 'status-vfr',
+        'last_updated' => $now,
+        'last_updated_iso' => date('c', $now),
+        'last_updated_primary' => $now,
+        'last_updated_metar' => $now,
+        'obs_time_primary' => $now,
+    ];
+}
+
+/**
  * Parse METAR response (for async use)
  */
 function parseMETARResponse($response, $airport) {
@@ -548,6 +601,59 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
 
     $airport = $config['airports'][$airportId];
+
+    // Check if we're using test config - if so, return mock weather data
+    $envConfigPath = getenv('CONFIG_PATH');
+    $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false) || 
+                    (strpos(__DIR__ . '/airports.json.test', $envConfigPath ?: '') !== false);
+    
+    if ($isTestConfig) {
+        // Generate mock weather data for local testing
+        $mockWeather = generateMockWeatherData($airportId, $airport);
+        
+        // Calculate additional aviation-specific metrics
+        $mockWeather['density_altitude'] = calculateDensityAltitude($mockWeather, $airport);
+        $mockWeather['pressure_altitude'] = calculatePressureAltitude($mockWeather, $airport);
+        $mockWeather['sunrise'] = getSunriseTime($airport);
+        $mockWeather['sunset'] = getSunsetTime($airport);
+        
+        // Track peak gust and temps for today
+        $obsTimestamp = time();
+        updatePeakGust($airportId, $mockWeather['gust_speed'] ?? 0, $airport, $obsTimestamp);
+        $peakGustInfo = getPeakGust($airportId, $mockWeather['gust_speed'] ?? 0, $airport);
+        if (is_array($peakGustInfo)) {
+            $mockWeather['peak_gust_today'] = $peakGustInfo['value'] ?? $mockWeather['gust_speed'] ?? 0;
+            $mockWeather['peak_gust_time'] = $peakGustInfo['ts'] ?? null;
+        } else {
+            $mockWeather['peak_gust_today'] = $peakGustInfo;
+            $mockWeather['peak_gust_time'] = null;
+        }
+        
+        if ($mockWeather['temperature'] !== null) {
+            $currentTemp = $mockWeather['temperature'];
+            updateTempExtremes($airportId, $currentTemp, $airport, $obsTimestamp);
+            $tempInfo = getTempExtremes($airportId, $currentTemp, $airport);
+            $mockWeather['temp_high_today'] = $tempInfo['high'] ?? $currentTemp;
+            $mockWeather['temp_low_today'] = $tempInfo['low'] ?? $currentTemp;
+            $mockWeather['temp_high_ts'] = $tempInfo['high_ts'] ?? null;
+            $mockWeather['temp_low_ts'] = $tempInfo['low_ts'] ?? null;
+        }
+        
+        // Build response
+        $payload = ['success' => true, 'weather' => $mockWeather];
+        $body = json_encode($payload);
+        $etag = 'W/"' . sha1($body) . '"';
+        
+        // Set cache headers
+        header('Cache-Control: public, max-age=60');
+        header('ETag: ' . $etag);
+        header('X-Cache-Status: MOCK');
+        
+        ob_clean();
+        aviationwx_log('info', 'weather mock data served', ['airport' => $airportId], 'user');
+        echo $body;
+        exit;
+    }
 
     // Weather refresh interval (per-airport, with env default)
     $defaultWeatherRefresh = getenv('WEATHER_REFRESH_DEFAULT') !== false ? intval(getenv('WEATHER_REFRESH_DEFAULT')) : 60;

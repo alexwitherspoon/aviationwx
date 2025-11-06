@@ -44,6 +44,14 @@ assignees: ''
   - Heading 1: 152
   - Heading 2: 332
 
+<!-- For parallel runways, include L/C/R designations: -->
+- **Runway Name**: 28L/10R
+  - Heading 1: 280
+  - Heading 2: 100
+- **Runway Name**: 28R/10L
+  - Heading 1: 280
+  - Heading 2: 100
+
 <!-- Add more runways as needed -->
 
 ## Frequencies (Optional)

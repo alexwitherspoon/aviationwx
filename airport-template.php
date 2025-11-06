@@ -1065,6 +1065,80 @@ let windAnimationFrame = null;
 let windDirection = 0;
 let windSpeed = 0;
 
+// Parse runway name to extract designations (e.g., "28L/10R" → {heading1: 280, designation1: "L", heading2: 100, designation2: "R"})
+function parseRunwayName(name) {
+    if (!name || typeof name !== 'string') {
+        return { designation1: '', designation2: '' };
+    }
+    
+    // Split by / to get both ends
+    const parts = name.split('/');
+    if (parts.length !== 2) {
+        return { designation1: '', designation2: '' };
+    }
+    
+    // Extract designation (L, C, or R) from each end
+    const extractDesignation = (str) => {
+        const match = str.match(/(\d+)([LCR])/i);
+        return match ? match[2].toUpperCase() : '';
+    };
+    
+    return {
+        designation1: extractDesignation(parts[0]),
+        designation2: extractDesignation(parts[1])
+    };
+}
+
+// Group parallel runways by similar heading_1 (within 5 degrees)
+function groupParallelRunways(runways) {
+    const groups = [];
+    const processed = new Set();
+    
+    runways.forEach((rw, i) => {
+        if (processed.has(i)) return;
+        
+        const group = [rw];
+        processed.add(i);
+        
+        // Find all runways with similar heading_1 (within 5 degrees)
+        runways.forEach((otherRw, j) => {
+            if (i === j || processed.has(j)) return;
+            
+            const headingDiff = Math.abs(rw.heading_1 - otherRw.heading_1);
+            const normalizedDiff = Math.min(headingDiff, 360 - headingDiff); // Handle wrap-around
+            
+            if (normalizedDiff <= 5) {
+                group.push(otherRw);
+                processed.add(j);
+            }
+        });
+        
+        groups.push(group);
+    });
+    
+    return groups;
+}
+
+// Calculate horizontal offset for parallel runways
+// Offset is perpendicular to the runway heading
+function calculateRunwayOffset(heading, groupIndex, groupSize, maxOffset) {
+    if (groupSize === 1) return { x: 0, y: 0 };
+    
+    // Calculate offset index (centered: -1, 0, 1 for 3 runways)
+    const offsetIndex = groupIndex - (groupSize - 1) / 2;
+    
+    // Calculate perpendicular angle (heading + 90 degrees)
+    const perpAngle = ((heading + 90) * Math.PI) / 180;
+    
+    // Calculate offset distance
+    const offsetDist = offsetIndex * maxOffset;
+    
+    return {
+        x: Math.sin(perpAngle) * offsetDist,
+        y: -Math.cos(perpAngle) * offsetDist
+    };
+}
+
 function updateWindVisual(weather) {
     const canvas = document.getElementById('windCanvas');
     const ctx = canvas.getContext('2d');
@@ -1075,40 +1149,78 @@ function updateWindVisual(weather) {
     // Draw outer circle
     ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
     
-    // Draw runways as full-length lines with labels
-    RUNWAYS.forEach(rw => {
-        const heading1 = rw.heading_1;
-        const heading2 = rw.heading_2;
-        const angle1 = (heading1 * Math.PI) / 180;
-        const angle2 = (heading2 * Math.PI) / 180;
-        const runwayLength = r * 0.9;
-        
-        // Draw runway 1
-        ctx.strokeStyle = '#0066cc'; ctx.lineWidth = 8; ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(cx - Math.sin(angle1) * runwayLength / 2, cy + Math.cos(angle1) * runwayLength / 2);
-        ctx.lineTo(cx + Math.sin(angle1) * runwayLength / 2, cy - Math.cos(angle1) * runwayLength / 2);
-        ctx.stroke();
-        
-        // Label runway ends (take first 2 digits, zero-padded)
-        // Place labels on the approach side (opposite from where we're looking at the runway)
-        ctx.fillStyle = '#0066cc'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const labelAngle1 = angle1;
-        const labelDist = runwayLength / 2 + 15;
-        const heading1Str = Math.floor(heading1 / 10).toString().padStart(2, '0');
-        // Invert to place on approach side (opposite direction)
-        ctx.fillText(heading1Str, cx - Math.sin(labelAngle1) * labelDist, cy + Math.cos(labelAngle1) * labelDist);
-        
-        // Draw runway 2 (opposite end)
-        ctx.strokeStyle = '#0066cc'; ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.moveTo(cx - Math.sin(angle2) * runwayLength / 2, cy + Math.cos(angle2) * runwayLength / 2);
-        ctx.lineTo(cx + Math.sin(angle2) * runwayLength / 2, cy - Math.cos(angle2) * runwayLength / 2);
-        ctx.stroke();
-        
-        const heading2Str = Math.floor(heading2 / 10).toString().padStart(2, '0');
-        // Invert to place on approach side (opposite direction)
-        ctx.fillText(heading2Str, cx - Math.sin(angle2) * labelDist, cy + Math.cos(angle2) * labelDist);
+    // Group parallel runways
+    const runwayGroups = groupParallelRunways(RUNWAYS);
+    const maxOffset = 20; // Maximum offset in pixels for parallel runways
+    
+    // Draw each runway group
+    runwayGroups.forEach(group => {
+        group.forEach((rw, groupIndex) => {
+            const heading1 = rw.heading_1;
+            const heading2 = rw.heading_2;
+            const angle1 = (heading1 * Math.PI) / 180;
+            const runwayLength = r * 0.9;
+            
+            // Parse runway name to get designations
+            const designations = parseRunwayName(rw.name);
+            
+            // Calculate offset for parallel runways
+            const offset = calculateRunwayOffset(heading1, groupIndex, group.length, maxOffset);
+            
+            // Draw runway as a single line (not twice!)
+            ctx.strokeStyle = '#0066cc';
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            
+            // Calculate runway endpoints with offset
+            const startX = cx - Math.sin(angle1) * runwayLength / 2 + offset.x;
+            const startY = cy + Math.cos(angle1) * runwayLength / 2 + offset.y;
+            const endX = cx + Math.sin(angle1) * runwayLength / 2 + offset.x;
+            const endY = cy - Math.cos(angle1) * runwayLength / 2 + offset.y;
+            
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            
+            // Label runway ends with designations
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Position labels closer to runway ends (small offset from runway end)
+            const labelOffset = 12; // Distance from runway end to label
+            
+            // Label for heading 1 (at start end)
+            const heading1Str = Math.floor(heading1 / 10).toString().padStart(2, '0');
+            const label1 = heading1Str + (designations.designation1 || '');
+            // Position label just beyond the start end of the runway
+            const label1X = (cx - Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
+            const label1Y = (cy + Math.cos(angle1) * (runwayLength / 2 + labelOffset)) + offset.y;
+            
+            // Draw white outline for label 1
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.strokeText(label1, label1X, label1Y);
+            // Draw label text
+            ctx.fillStyle = '#0066cc';
+            ctx.fillText(label1, label1X, label1Y);
+            
+            // Label for heading 2 (at end end)
+            const heading2Str = Math.floor(heading2 / 10).toString().padStart(2, '0');
+            const label2 = heading2Str + (designations.designation2 || '');
+            // Position label just beyond the end end of the runway
+            const label2X = (cx + Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
+            const label2Y = (cy - Math.cos(angle1) * (runwayLength / 2 + labelOffset)) + offset.y;
+            
+            // Draw white outline for label 2
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.strokeText(label2, label2X, label2Y);
+            // Draw label text
+            ctx.fillStyle = '#0066cc';
+            ctx.fillText(label2, label2X, label2Y);
+        });
     });
     
     // Draw wind only if speed > 0
