@@ -321,7 +321,8 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
 }
 
 /**
- * Fetch first JPEG frame from MJPEG stream (original implementation)
+ * Fetch first JPEG frame from MJPEG stream
+ * Handles both raw MJPEG streams and multipart MJPEG streams with boundaries
  */
 function fetchMJPEGStream($url, $cacheFile) {
     $ch = curl_init();
@@ -336,15 +337,18 @@ function fetchMJPEGStream($url, $cacheFile) {
         CURLOPT_HTTPHEADER => ['Connection: close'],
     ]);
     
-    // Set up to stop after we get one JPEG frame
+    // Set up to stop after we get one complete JPEG frame
     $startTime = time();
     $data = '';
-    $outputHandler = function($ch, $data_chunk) use (&$data, $startTime) {
+    $foundJpegEnd = false;
+    
+    $outputHandler = function($ch, $data_chunk) use (&$data, &$foundJpegEnd, $startTime) {
         $data .= $data_chunk;
         
-        // Look for JPEG end marker
+        // Look for JPEG end marker (0xFF 0xD9) - indicates complete JPEG frame
         if (strpos($data, "\xff\xd9") !== false) {
-            return 0; // Stop receiving data
+            $foundJpegEnd = true;
+            return 0; // Signal curl to stop receiving data
         }
         
         // Safety: stop if data gets too large (max 2MB)
@@ -352,7 +356,7 @@ function fetchMJPEGStream($url, $cacheFile) {
             return 0;
         }
         
-        // Safety: stop if taking too long
+        // Safety: stop if taking too long (8 seconds max)
         if (time() - $startTime > 8) {
             return 0;
         }
@@ -367,31 +371,53 @@ function fetchMJPEGStream($url, $cacheFile) {
     $error = curl_error($ch);
     curl_close($ch);
     
-    if ($error) {
-        // Log curl error
+    // Validate we got HTTP 200 and have data
+    if ($httpCode !== 200 || empty($data) || strlen($data) < 1000) {
         return false;
     }
     
-    if ($httpCode == 200 && $data && strlen($data) > 1000) {
-        // Extract JPEG from data (handle multipart MJPEG if needed)
-        $jpegStart = strpos($data, "\xff\xd8"); // JPEG start marker
-        $jpegEnd = strpos($data, "\xff\xd9"); // JPEG end marker
-        
-        if ($jpegStart !== false && $jpegEnd !== false) {
-            $jpegData = substr($data, $jpegStart, $jpegEnd - $jpegStart + 2);
-            // Write atomically to prevent corruption
-            $tmpFile = $cacheFile . '.tmp';
-            if (@file_put_contents($tmpFile, $jpegData) !== false) {
-                // Atomic rename
-                if (@rename($tmpFile, $cacheFile)) {
-                    return true;
-                } else {
-                    @unlink($tmpFile);
-                }
-            }
-        }
+    // Extract JPEG from data
+    // Handles both raw JPEG streams and multipart MJPEG (with boundaries like "--==STILLIMAGEBOUNDARY==")
+    $jpegStart = strpos($data, "\xff\xd8"); // JPEG start marker (0xFF 0xD8)
+    $jpegEnd = strpos($data, "\xff\xd9");   // JPEG end marker (0xFF 0xD9)
+    
+    if ($jpegStart === false || $jpegEnd === false || $jpegEnd <= $jpegStart) {
+        return false; // No valid JPEG found
     }
-    return false;
+    
+    // Extract complete JPEG (include end marker)
+    $jpegData = substr($data, $jpegStart, $jpegEnd - $jpegStart + 2);
+    
+    // Validate JPEG is reasonable size (at least 1KB, max 5MB)
+    $jpegSize = strlen($jpegData);
+    if ($jpegSize < 1024 || $jpegSize > 5242880) {
+        return false;
+    }
+    
+    // Validate JPEG is actually valid (quick check: verify it can be parsed)
+    if (!function_exists('imagecreatefromstring')) {
+        // GD library not available - skip validation
+    } else {
+        $testImg = @imagecreatefromstring($jpegData);
+        if ($testImg === false) {
+            return false; // Invalid JPEG data
+        }
+        imagedestroy($testImg);
+    }
+    
+    // Write atomically to prevent corruption (tmp file + rename is atomic)
+    $tmpFile = $cacheFile . '.tmp';
+    if (@file_put_contents($tmpFile, $jpegData) === false) {
+        return false;
+    }
+    
+    // Atomic rename (prevents partial reads)
+    if (@rename($tmpFile, $cacheFile)) {
+        return true;
+    } else {
+        @unlink($tmpFile); // Clean up on failure
+        return false;
+    }
 }
 
 require_once __DIR__ . '/config-utils.php';

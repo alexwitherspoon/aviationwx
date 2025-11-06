@@ -604,8 +604,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
 
     // Check if we're using test config - if so, return mock weather data
     $envConfigPath = getenv('CONFIG_PATH');
-    $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false) || 
-                    (strpos(__DIR__ . '/airports.json.test', $envConfigPath ?: '') !== false);
+    $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false);
     
     if ($isTestConfig) {
         // Generate mock weather data for local testing
@@ -1320,75 +1319,13 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $weatherData['dewpoint_spread'] = null;
     }
 
-    // Safety check: If weather data is older than 3 hours, null out only fields from stale sources
-    // This ensures pilots don't see dangerously out-of-date information while preserving valid data
-    $maxStaleHours = 3;
-    $maxStaleSeconds = $maxStaleHours * 3600;
-
-    // Fields that come from PRIMARY source (Tempest/Ambient)
-    // Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
-    // included here - they represent valid historical data for the day regardless of current measurement age
-    $primarySourceFields = [
-    'temperature', 'temperature_f',
-    'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
-    'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
-    'pressure', 'precip_accum',
-    'pressure_altitude', 'density_altitude' // Calculated from primary data
-    ];
-
-    // Fields that come from METAR source
-    $metarSourceFields = [
-    'visibility', 'ceiling', 'cloud_cover'
-    ];
-
-    // Check primary source staleness
-    $primaryStale = false;
-    if (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
-    $primaryAge = time() - $weatherData['last_updated_primary'];
-    $primaryStale = ($primaryAge >= $maxStaleSeconds); // >= means at threshold is stale
+    // NOTE: Staleness check for fresh data has been removed (Option 2 fix)
+    // Fresh data from API should never be nulled out - it's already current
+    // Staleness checks are only applied to cached data before serving (see lines 686, 705)
+    // This prevents the bug where fresh data was incorrectly nulled, causing merge to preserve old cache values
     
-    if ($primaryStale) {
-        aviationwx_log('warning', 'primary weather source stale - nulling primary fields', [
-            'airport' => $airportId,
-            'source' => 'primary',
-            'age_hours' => round($primaryAge / 3600, 2),
-            'max_age_hours' => $maxStaleHours
-        ], 'app');
-        
-        // Null out only primary source fields
-        foreach ($primarySourceFields as $field) {
-            if (isset($weatherData[$field])) {
-                $weatherData[$field] = null;
-            }
-        }
-    }
-    }
-
-    // Check METAR source staleness
-    $metarStale = false;
-    if (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
-    $metarAge = time() - $weatherData['last_updated_metar'];
-    $metarStale = ($metarAge >= $maxStaleSeconds); // >= means at threshold is stale
-    
-    if ($metarStale) {
-        aviationwx_log('warning', 'METAR source stale - nulling METAR fields', [
-            'airport' => $airportId,
-            'source' => 'metar',
-            'age_hours' => round($metarAge / 3600, 2),
-            'max_age_hours' => $maxStaleHours
-        ], 'app');
-        
-        // Null out only METAR source fields
-        foreach ($metarSourceFields as $field) {
-            if (isset($weatherData[$field])) {
-                $weatherData[$field] = null;
-            }
-        }
-    }
-    }
-
-    // If visibility or ceiling is stale, recalculate flight category (will be null if both are null)
-    if ($metarStale || ($weatherData['visibility'] === null && $weatherData['ceiling'] === null)) {
+    // Recalculate flight category if visibility/ceiling are missing
+    if ($weatherData['visibility'] === null && $weatherData['ceiling'] === null) {
     $weatherData['flight_category'] = calculateFlightCategory($weatherData);
     if ($weatherData['flight_category'] === null) {
         $weatherData['flight_category_class'] = '';
@@ -1407,7 +1344,9 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
     
     // If we have existing cache, merge it with new data to preserve good values
+    // Use 3-hour staleness threshold for merge (same as cached data staleness check)
     if (is_array($existingCache)) {
+        $maxStaleSeconds = 3 * 3600; // 3 hours
         $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds);
     }
     
