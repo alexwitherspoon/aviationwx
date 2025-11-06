@@ -461,12 +461,29 @@ function recordSuccess($airportId, $camIndex) {
     @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
 }
 
+// Guard: Only execute main code if not included by another script
+// When included, __FILE__ is the included file, when executed directly, it's the script
+// We check if this is the main script execution vs an include
+if (basename(__FILE__) === basename($_SERVER['SCRIPT_NAME'] ?? '')) {
 // Load config (support CONFIG_PATH env override, no cache for CLI script)
 $config = loadConfig(false);
 
 if ($config === null || !is_array($config)) {
     die("Error: Could not load configuration\n");
 }
+
+// Check if we're in a web context (add HTML) or CLI (plain text)
+$isWeb = !empty($_SERVER['REQUEST_METHOD']);
+
+// Start script timing
+$scriptStartTime = microtime(true);
+$scriptStartTimestamp = time();
+
+// Log script start
+aviationwx_log('info', 'webcam fetch script started', [
+    'trigger' => $isWeb ? 'web' : 'cron',
+    'airports_count' => count($config['airports'] ?? [])
+], 'app');
 
 $cacheDir = __DIR__ . '/cache/webcams';
 if (!is_dir($cacheDir)) {
@@ -479,9 +496,6 @@ $backoffDir = dirname($backoffFile);
 if (!is_dir($backoffDir)) {
     @mkdir($backoffDir, 0755, true);
 }
-
-// Check if we're in a web context (add HTML) or CLI (plain text)
-$isWeb = !empty($_SERVER['REQUEST_METHOD']);
 
 if ($isWeb) {
     header('Content-Type: text/html; charset=utf-8');
@@ -505,6 +519,8 @@ if ($isWeb) {
 }
 
 foreach ($config['airports'] as $airportId => $airport) {
+    $airportStartTime = microtime(true);
+    
     if (!isset($airport['webcams'])) {
         if ($isWeb) {
             echo "<div class='info'>No webcams configured for {$airportId}</div>\n";
@@ -514,6 +530,12 @@ foreach ($config['airports'] as $airportId => $airport) {
         continue;
     }
     
+    $webcamCount = count($airport['webcams']);
+    aviationwx_log('info', 'airport processing started', [
+        'airport' => $airportId,
+        'webcams_count' => $webcamCount
+    ], 'app');
+    
     if ($isWeb) {
         echo "<div class='airport'><h3>✈️ Airport: {$airportId} ({$airport['name']})</h3>\n";
     } else {
@@ -522,7 +544,15 @@ foreach ($config['airports'] as $airportId => $airport) {
     $defaultWebcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT') !== false ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 60;
     $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
     
+    $airportStats = [
+        'skipped_fresh' => 0,
+        'skipped_circuit' => 0,
+        'fetched' => 0,
+        'failed' => 0
+    ];
+    
     foreach ($airport['webcams'] as $index => $cam) {
+        $camStartTime = microtime(true);
         $cacheFileBase = $cacheDir . '/' . $airportId . '_' . $index;
         $cacheFile = $cacheFileBase . '.jpg';
         $cacheWebp = $cacheFileBase . '.webp';
@@ -541,19 +571,29 @@ foreach ($config['airports'] as $airportId => $airport) {
             echo "    URL: {$url}\n";
             echo "    Refresh threshold: {$perCamRefresh}s\n";
         }
-        aviationwx_log('info', 'fetch start', ['airport' => $airportId, 'cam' => $index, 'type' => $sourceType ?? 'unknown'], 'app');
+        
+        // Check cache age first
+        $cacheAge = null;
+        $cacheExists = file_exists($cacheFile);
+        if ($cacheExists) {
+            $cacheAge = time() - filemtime($cacheFile);
+        }
         
         // Skip fetch if cache is fresh
-        if (file_exists($cacheFile)) {
-            $age = time() - filemtime($cacheFile);
-            if ($age < $perCamRefresh) {
-                if ($isWeb) {
-                    echo "<span class='success'>✓ Skipped (fresh cache, age {$age}s)</span></div>\n";
-                } else {
-                    echo "    ✓ Skipped (fresh cache, age {$age}s)\n";
-                }
-                continue;
+        if ($cacheExists && $cacheAge < $perCamRefresh) {
+            $airportStats['skipped_fresh']++;
+            aviationwx_log('info', 'webcam skipped - fresh cache', [
+                'airport' => $airportId,
+                'cam' => $index,
+                'cache_age' => $cacheAge,
+                'refresh_threshold' => $perCamRefresh
+            ], 'app');
+            if ($isWeb) {
+                echo "<span class='success'>✓ Skipped (fresh cache, age {$cacheAge}s)</span></div>\n";
+            } else {
+                echo "    ✓ Skipped (fresh cache, age {$cacheAge}s)\n";
             }
+            continue;
         }
         
         // Check circuit breaker: skip if in backoff period
@@ -561,6 +601,13 @@ foreach ($config['airports'] as $airportId => $airport) {
         if ($circuit['skip']) {
             $remaining = $circuit['backoff_remaining'];
             $failures = $circuit['failures'] ?? 0;
+            $airportStats['skipped_circuit']++;
+            aviationwx_log('info', 'webcam skipped - circuit breaker open', [
+                'airport' => $airportId,
+                'cam' => $index,
+                'failures' => $failures,
+                'backoff_remaining' => $remaining
+            ], 'app');
             $mins = floor($remaining / 60);
             $secs = $remaining % 60;
             if ($isWeb) {
@@ -571,6 +618,14 @@ foreach ($config['airports'] as $airportId => $airport) {
             continue;
         }
         
+        // Log fetch attempt start
+        aviationwx_log('info', 'webcam fetch attempt', [
+            'airport' => $airportId,
+            'cam' => $index,
+            'cache_age' => $cacheAge,
+            'refresh_threshold' => $perCamRefresh
+        ], 'app');
+        
         // Determine source type and handle accordingly
         // Allow explicit type override per camera in config
         $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
@@ -580,6 +635,7 @@ foreach ($config['airports'] as $airportId => $airport) {
             echo "    Type: {$sourceType}\n";
         }
         
+        $fetchStartTime = microtime(true);
         $success = false;
         switch ($sourceType) {
             case 'rtsp':
@@ -601,13 +657,22 @@ foreach ($config['airports'] as $airportId => $airport) {
                 $success = fetchMJPEGStream($url, $cacheFile);
                 break;
         }
+        $fetchDuration = round((microtime(true) - $fetchStartTime) * 1000, 2); // milliseconds
         
         if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
             // Success: reset circuit breaker
             recordSuccess($airportId, $index);
-            aviationwx_log('info', 'fetch success', ['airport' => $airportId, 'cam' => $index, 'bytes' => $size], 'app');
-            
             $size = filesize($cacheFile);
+            $airportStats['fetched']++;
+            
+            aviationwx_log('info', 'webcam fetch success', [
+                'airport' => $airportId,
+                'cam' => $index,
+                'type' => $sourceType,
+                'bytes' => $size,
+                'fetch_duration_ms' => $fetchDuration
+            ], 'app');
+            
             if ($isWeb) {
                 echo "<span class='success'>✓ Saved " . number_format($size) . " bytes</span><br>\n";
             } else {
@@ -622,6 +687,7 @@ foreach ($config['airports'] as $airportId => $airport) {
             
             $DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds
             $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
+            $transcodeStartTime = microtime(true);
             $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
             
             // Start both processes in background
@@ -687,15 +753,46 @@ foreach ($config['airports'] as $airportId => $airport) {
                     usleep(50000); // 50ms
                 }
             }
+            
+            $transcodeDuration = round((microtime(true) - $transcodeStartTime) * 1000, 2);
+            $webpSuccess = isset($results['webp']) && $results['webp'];
+            aviationwx_log('info', 'webcam transcode completed', [
+                'airport' => $airportId,
+                'cam' => $index,
+                'webp_success' => $webpSuccess,
+                'transcode_duration_ms' => $transcodeDuration
+            ], 'app');
+            
+            $camDuration = round((microtime(true) - $camStartTime) * 1000, 2);
+            aviationwx_log('info', 'webcam processing completed', [
+                'airport' => $airportId,
+                'cam' => $index,
+                'total_duration_ms' => $camDuration,
+                'fetch_duration_ms' => $fetchDuration,
+                'transcode_duration_ms' => $transcodeDuration
+            ], 'app');
         } else {
             // Failure: record and update backoff with severity mapping
             // Try to read last RTSP error code for severity (if exists)
             $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
             $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
             recordFailure($airportId, $index, $sev);
-            aviationwx_log('error', 'fetch failure', ['airport' => $airportId, 'cam' => $index, 'severity' => $sev], 'app');
+            $airportStats['failed']++;
             $circuit = checkCircuitBreaker($airportId, $index);
             $backoffSecs = $circuit['backoff_remaining'];
+            $failures = $circuit['failures'] ?? 0;
+            
+            aviationwx_log('error', 'webcam fetch failure', [
+                'airport' => $airportId,
+                'cam' => $index,
+                'type' => $sourceType,
+                'severity' => $sev,
+                'fetch_duration_ms' => $fetchDuration,
+                'failures' => $failures,
+                'backoff_remaining' => $backoffSecs,
+                'error_code' => $lastErr['code'] ?? null
+            ], 'app');
+            
             $mins = floor($backoffSecs / 60);
             $secs = $backoffSecs % 60;
             
@@ -716,6 +813,13 @@ foreach ($config['airports'] as $airportId => $airport) {
     if ($isWeb) {
         echo "</div>"; // Close airport div
     }
+    
+    $airportDuration = round((microtime(true) - $airportStartTime) * 1000, 2);
+    aviationwx_log('info', 'airport processing completed', [
+        'airport' => $airportId,
+        'duration_ms' => $airportDuration,
+        'stats' => $airportStats
+    ], 'app');
 }
 
 if ($isWeb) {
@@ -724,6 +828,16 @@ if ($isWeb) {
 } else {
     echo "\n\nDone! Webcam images cached.\n";
 }
+
+// Log script completion
+$scriptDuration = round((microtime(true) - $scriptStartTime) * 1000, 2);
+$totalAirports = count($config['airports'] ?? []);
+
+aviationwx_log('info', 'webcam fetch script completed', [
+    'duration_ms' => $scriptDuration,
+    'airports_processed' => $totalAirports,
+    'trigger' => $isWeb ? 'web' : 'cron'
+], 'app');
 
 aviationwx_maybe_log_alert();
 
@@ -773,4 +887,6 @@ if (isset($config['airports']) && is_array($config['airports'])) {
 if ($isWeb) {
     echo "</div></body></html>";
 }
+
+} // End of guard: only execute if script is run directly (not included)
 
