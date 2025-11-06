@@ -282,5 +282,48 @@ class WeatherDataMergeTest extends TestCase
         // METAR field (not stale) should be preserved
         $this->assertEquals(10.0, $result['visibility'], 'Non-stale METAR field should be preserved');
     }
+    
+    /**
+     * Test mergeWeatherDataWithFallback - Fresh data should always override old cache
+     * This test ensures the bug where fresh data was incorrectly nulled doesn't happen
+     * Fresh values should be preserved even if old cache has different values
+     */
+    public function testMergeWeatherDataWithFallback_FreshDataOverridesOldCache()
+    {
+        // Fresh data just fetched from API
+        $freshData = [
+            'temperature' => 12.2,
+            'wind_speed' => 3,
+            'wind_direction' => 137,
+            'gust_speed' => 4,
+            'humidity' => 90,
+            'last_updated_primary' => time()  // Just fetched
+        ];
+        
+        // Old cache with different (wrong) values
+        $oldCache = [
+            'temperature' => 16,
+            'wind_speed' => 17,
+            'wind_direction' => 261,
+            'gust_speed' => 22,
+            'humidity' => 64,
+            'last_updated_primary' => time() - 3600
+        ];
+        
+        $maxStaleSeconds = 3 * 3600;
+        $result = mergeWeatherDataWithFallback($freshData, $oldCache, $maxStaleSeconds);
+        
+        // Fresh values should ALWAYS be used (not old cache values)
+        $this->assertEquals(12.2, $result['temperature'], 'Fresh temperature must override old cache');
+        $this->assertEquals(3, $result['wind_speed'], 'Fresh wind speed must override old cache');
+        $this->assertEquals(137, $result['wind_direction'], 'Fresh wind direction must override old cache');
+        $this->assertEquals(4, $result['gust_speed'], 'Fresh gust speed must override old cache');
+        $this->assertEquals(90, $result['humidity'], 'Fresh humidity must override old cache');
+        
+        // Should NOT use old cache values
+        $this->assertNotEquals(16, $result['temperature'], 'Should not use old cache temperature');
+        $this->assertNotEquals(17, $result['wind_speed'], 'Should not use old cache wind speed');
+        $this->assertNotEquals(261, $result['wind_direction'], 'Should not use old cache wind direction');
+    }
 }
 
