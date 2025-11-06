@@ -643,9 +643,17 @@ $isWeb = !empty($_SERVER['REQUEST_METHOD']);
 $scriptStartTime = microtime(true);
 $scriptStartTimestamp = time();
 
-// Log script start
+// Get invocation ID and trigger type for this run
+$invocationId = aviationwx_get_invocation_id();
+$triggerInfo = aviationwx_detect_trigger_type();
+$triggerType = $triggerInfo['trigger'];
+$triggerContext = $triggerInfo['context'];
+
+// Log script start with enhanced trigger information
 aviationwx_log('info', 'webcam fetch script started', [
-    'trigger' => $isWeb ? 'web' : 'cron',
+    'invocation_id' => $invocationId,
+    'trigger' => $triggerType,
+    'trigger_context' => $triggerContext,
     'airports_count' => count($config['airports'] ?? [])
 ], 'app');
 
@@ -696,6 +704,8 @@ foreach ($config['airports'] as $airportId => $airport) {
     
     $webcamCount = count($airport['webcams']);
     aviationwx_log('info', 'airport processing started', [
+        'invocation_id' => $invocationId,
+        'trigger' => $triggerType,
         'airport' => $airportId,
         'webcams_count' => $webcamCount
     ], 'app');
@@ -747,6 +757,8 @@ foreach ($config['airports'] as $airportId => $airport) {
         if ($cacheExists && $cacheAge < $perCamRefresh) {
             $airportStats['skipped_fresh']++;
             aviationwx_log('info', 'webcam skipped - fresh cache', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'cam' => $index,
                 'cache_age' => $cacheAge,
@@ -767,6 +779,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             $failures = $circuit['failures'] ?? 0;
             $airportStats['skipped_circuit']++;
             aviationwx_log('info', 'webcam skipped - circuit breaker open', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'cam' => $index,
                 'failures' => $failures,
@@ -784,6 +798,8 @@ foreach ($config['airports'] as $airportId => $airport) {
         
         // Log fetch attempt start
         aviationwx_log('info', 'webcam fetch attempt', [
+            'invocation_id' => $invocationId,
+            'trigger' => $triggerType,
             'airport' => $airportId,
             'cam' => $index,
             'cache_age' => $cacheAge,
@@ -830,6 +846,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             $airportStats['fetched']++;
             
             aviationwx_log('info', 'webcam fetch success', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'cam' => $index,
                 'type' => $sourceType,
@@ -921,6 +939,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             $transcodeDuration = round((microtime(true) - $transcodeStartTime) * 1000, 2);
             $webpSuccess = isset($results['webp']) && $results['webp'];
             aviationwx_log('info', 'webcam transcode completed', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'cam' => $index,
                 'webp_success' => $webpSuccess,
@@ -929,6 +949,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             
             $camDuration = round((microtime(true) - $camStartTime) * 1000, 2);
             aviationwx_log('info', 'webcam processing completed', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'cam' => $index,
                 'total_duration_ms' => $camDuration,
@@ -947,6 +969,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             $failures = $circuit['failures'] ?? 0;
             
             aviationwx_log('error', 'webcam fetch failure', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'cam' => $index,
                 'type' => $sourceType,
@@ -980,6 +1004,8 @@ foreach ($config['airports'] as $airportId => $airport) {
     
     $airportDuration = round((microtime(true) - $airportStartTime) * 1000, 2);
     aviationwx_log('info', 'airport processing completed', [
+        'invocation_id' => $invocationId,
+        'trigger' => $triggerType,
         'airport' => $airportId,
         'duration_ms' => $airportDuration,
         'stats' => $airportStats
@@ -998,9 +1024,11 @@ $scriptDuration = round((microtime(true) - $scriptStartTime) * 1000, 2);
 $totalAirports = count($config['airports'] ?? []);
 
 aviationwx_log('info', 'webcam fetch script completed', [
+    'invocation_id' => $invocationId,
+    'trigger' => $triggerType,
+    'trigger_context' => $triggerContext,
     'duration_ms' => $scriptDuration,
-    'airports_processed' => $totalAirports,
-    'trigger' => $isWeb ? 'web' : 'cron'
+    'airports_processed' => $totalAirports
 ], 'app');
 
 aviationwx_maybe_log_alert();

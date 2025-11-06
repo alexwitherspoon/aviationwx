@@ -34,6 +34,23 @@ if (!isset($config['airports']) || !is_array($config['airports'])) {
 // Check if we're in a web context (add HTML) or CLI (plain text)
 $isWeb = !empty($_SERVER['REQUEST_METHOD']);
 
+// Start script timing
+$scriptStartTime = microtime(true);
+
+// Get invocation ID and trigger type for this run
+$invocationId = aviationwx_get_invocation_id();
+$triggerInfo = aviationwx_detect_trigger_type();
+$triggerType = $triggerInfo['trigger'];
+$triggerContext = $triggerInfo['context'];
+
+// Log script start with enhanced trigger information
+aviationwx_log('info', 'weather fetch script started', [
+    'invocation_id' => $invocationId,
+    'trigger' => $triggerType,
+    'trigger_context' => $triggerContext,
+    'airports_count' => count($config['airports'] ?? [])
+], 'app');
+
 if ($isWeb) {
     header('Content-Type: text/html; charset=utf-8');
     echo "<!DOCTYPE html><html><head><title>AviationWX Weather Fetcher</title>";
@@ -89,6 +106,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             
             if ($stale) {
                 aviationwx_log('info', 'weather refresh triggered (stale cache)', [
+                    'invocation_id' => $invocationId,
+                    'trigger' => $triggerType,
                     'airport' => $airportId,
                     'last_updated' => $lastUpdated
                 ], 'app');
@@ -99,6 +118,8 @@ foreach ($config['airports'] as $airportId => $airport) {
                 }
             } else {
                 aviationwx_log('info', 'weather refresh triggered (fresh cache)', [
+                    'invocation_id' => $invocationId,
+                    'trigger' => $triggerType,
                     'airport' => $airportId,
                     'last_updated' => $lastUpdated
                 ], 'app');
@@ -110,6 +131,8 @@ foreach ($config['airports'] as $airportId => $airport) {
             }
         } else {
             aviationwx_log('warning', 'weather refresh returned invalid response', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
                 'airport' => $airportId,
                 'http_code' => $httpCode
             ], 'app');
@@ -121,6 +144,8 @@ foreach ($config['airports'] as $airportId => $airport) {
         }
     } else {
         aviationwx_log('error', 'weather refresh failed', [
+            'invocation_id' => $invocationId,
+            'trigger' => $triggerType,
             'airport' => $airportId,
             'http_code' => $httpCode,
             'error' => $error
@@ -144,5 +169,17 @@ if ($isWeb) {
 } else {
     echo "\n\nDone! Weather cache refreshed.\n";
 }
+
+// Log script completion
+$scriptDuration = round((microtime(true) - $scriptStartTime) * 1000, 2);
+$totalAirports = count($config['airports'] ?? []);
+
+aviationwx_log('info', 'weather fetch script completed', [
+    'invocation_id' => $invocationId,
+    'trigger' => $triggerType,
+    'trigger_context' => $triggerContext,
+    'duration_ms' => $scriptDuration,
+    'airports_processed' => $totalAirports
+], 'app');
 
 aviationwx_maybe_log_alert();

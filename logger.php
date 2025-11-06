@@ -138,3 +138,104 @@ function aviationwx_maybe_log_alert(): void {
     }
 }
 }
+
+if (!function_exists('aviationwx_get_invocation_id')) {
+/**
+ * Generate a unique invocation ID for tracking a single script execution
+ * This ID persists for the lifetime of the script and can be used to correlate all log entries
+ * from a single run of a fetcher script
+ * 
+ * @return string Unique invocation ID (16 hex characters)
+ */
+function aviationwx_get_invocation_id(): string {
+    static $invocationId = null;
+    if ($invocationId !== null) return $invocationId;
+    $invocationId = bin2hex(random_bytes(8));
+    return $invocationId;
+}
+}
+
+if (!function_exists('aviationwx_detect_trigger_type')) {
+/**
+ * Detect the trigger type for fetcher scripts with enhanced context
+ * Distinguishes between cron jobs, web requests, and manual CLI runs
+ * 
+ * @return array ['trigger' => string, 'context' => array]
+ *   - trigger: 'cron_job', 'web_request', or 'manual_cli'
+ *   - context: Additional context based on trigger type
+ */
+function aviationwx_detect_trigger_type(): array {
+    $isWeb = !empty($_SERVER['REQUEST_METHOD']);
+    
+    if ($isWeb) {
+        // Web request - gather HTTP context
+        $context = [
+            'http_method' => $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+            'referer' => $_SERVER['HTTP_REFERER'] ?? null,
+            'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'request_uri' => $_SERVER['REQUEST_URI'] ?? null,
+        ];
+        
+        // Remove null values to keep logs clean
+        $context = array_filter($context, fn($v) => $v !== null);
+        
+        return [
+            'trigger' => 'web_request',
+            'context' => $context
+        ];
+    } else {
+        // CLI context - check if it's a cron job or manual run
+        $isCron = false;
+        $context = [
+            'pid' => getmypid(),
+            'ppid' => function_exists('posix_getppid') ? @posix_getppid() : null,
+        ];
+        
+        // Try to detect cron by checking parent process or environment
+        // Cron jobs typically have specific environment variables or parent process names
+        if (function_exists('posix_getppid')) {
+            $ppid = @posix_getppid();
+            if ($ppid > 0) {
+                // Try to read parent process name from /proc (Linux) or ps (other systems)
+                if (is_readable("/proc/{$ppid}/comm")) {
+                    $parentName = trim(@file_get_contents("/proc/{$ppid}/comm"));
+                    if (stripos($parentName, 'cron') !== false || stripos($parentName, 'crond') !== false) {
+                        $isCron = true;
+                        $context['parent_process'] = $parentName;
+                    }
+                }
+            }
+        }
+        
+        // Check environment variables that cron typically sets
+        if (!$isCron) {
+            $cronEnvVars = ['CRON', 'CROND', 'RUNLEVEL'];
+            foreach ($cronEnvVars as $var) {
+                if (getenv($var) !== false) {
+                    $isCron = true;
+                    $context['cron_env_var'] = $var;
+                    break;
+                }
+            }
+        }
+        
+        // Check if running via cron by checking if stdin is not a TTY
+        if (!$isCron && function_exists('posix_isatty')) {
+            if (!@posix_isatty(STDIN)) {
+                // Non-interactive - likely cron
+                $isCron = true;
+                $context['non_interactive'] = true;
+            }
+        }
+        
+        // Remove null values
+        $context = array_filter($context, fn($v) => $v !== null);
+        
+        return [
+            'trigger' => $isCron ? 'cron_job' : 'manual_cli',
+            'context' => $context
+        ];
+    }
+}
+}
