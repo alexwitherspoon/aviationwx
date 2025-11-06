@@ -190,6 +190,36 @@ http_requests_total{endpoint="webcam"} 5678
 
 ---
 
+### Status Page
+
+#### `GET /status.php` or `GET /?status=1` or `status.aviationwx.org`
+
+Returns an HTML status page displaying system and airport health status.
+
+**Access:**
+- Direct: `/status.php`
+- Query parameter: `/?status=1`
+- Subdomain: `status.aviationwx.org` (production)
+
+**Response:** HTML status page with:
+- System status components (Configuration, Cache, APCu, Logging, Error Rate)
+- Per-airport status cards (Weather API, Webcams)
+- Status indicators (Green/Yellow/Red) for each component
+- Timestamps showing when each component status last changed
+
+**Status Levels:**
+- **Operational** (Green): Component is working correctly
+- **Degraded** (Yellow): Component has issues but is still functional
+- **Down** (Red): Component has critical failures
+
+**HTTP Status Codes:**
+- `200`: Status page loaded successfully
+- `503`: Configuration cannot be loaded
+
+**Caching:** No caching (always fresh status data)
+
+---
+
 ## Data Types
 
 ### Temperature

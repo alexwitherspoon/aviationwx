@@ -547,11 +547,20 @@ usort($airportHealth, function($a, $b) {
         
         .footer {
             text-align: center;
-            color: #999;
+            color: #666;
             font-size: 0.875rem;
             margin-top: 3rem;
             padding-top: 2rem;
             border-top: 1px solid #eee;
+        }
+        
+        .footer a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
         }
         
         @media (max-width: 768px) {
@@ -649,7 +658,15 @@ usort($airportHealth, function($a, $b) {
         <?php endif; ?>
         
         <div class="footer">
-            Last updated: <?php echo date('Y-m-d H:i:s T'); ?>
+            <p>
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source</a> | 
+                <a href="https://status.aviationwx.org">Status</a>
+            </p>
+            <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #999;">
+                Last updated: <?php echo date('Y-m-d H:i:s T'); ?>
+            </p>
         </div>
     </div>
 </body>

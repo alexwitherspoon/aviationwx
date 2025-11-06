@@ -24,6 +24,7 @@ Real-time aviation weather and conditions for participating airports.
 - 🤝 **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 🛠️ **Diagnostics**: visit `/diagnostics.php`
 - 🗑️ **Clear Cache**: visit `/clear-cache.php`
+- 📊 **Status Page**: visit `/status.php` or `status.aviationwx.org`
 
 ## Features
 
@@ -46,6 +47,7 @@ Real-time aviation weather and conditions for participating airports.
   - Input validation and sanitization
   - Rate limiting (60 req/min for weather, 100 req/min for webcams)
   - Sanitized error messages
+- **Status Page**: Real-time system and airport health monitoring with timestamps
 - **Mobile-First Responsive Design**
 - **Easy Configuration** via JSON config files
 
