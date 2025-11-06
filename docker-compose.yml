@@ -16,6 +16,7 @@ services:
       - DOMAIN=${DOMAIN:-aviationwx.org}
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
+      - GIT_SHA=${GIT_SHA:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
