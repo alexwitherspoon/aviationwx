@@ -1,7 +1,16 @@
 <?php
-// Lightweight JSONL logger with simple rotation and APCu-backed error counter
-// Supports dual logging: user.log for user activity, app.log for system messages
+// Lightweight JSONL logger that writes to stdout/stderr for Docker logging
+// Docker handles log rotation automatically via json-file driver
+// Supports dual logging: user activity and system messages (both go to Docker logs)
 
+// Logging configuration - can be overridden via environment variable
+if (!defined('AVIATIONWX_LOG_TO_STDOUT')) {
+    // Default to stdout/stderr logging (Docker-friendly)
+    // Set to false to use file-based logging (for backward compatibility)
+    define('AVIATIONWX_LOG_TO_STDOUT', getenv('AVIATIONWX_LOG_TO_STDOUT') !== 'false');
+}
+
+// File-based logging paths (only used if AVIATIONWX_LOG_TO_STDOUT is false)
 if (!defined('AVIATIONWX_LOG_DIR')) {
     define('AVIATIONWX_LOG_DIR', '/var/log/aviationwx');
 }
@@ -32,6 +41,9 @@ function aviationwx_get_log_file_path(string $logType = 'app'): string {
 
 if (!function_exists('aviationwx_init_log_dir')) {
 function aviationwx_init_log_dir(): void {
+    if (AVIATIONWX_LOG_TO_STDOUT) {
+        return; // No directory needed for stdout/stderr logging
+    }
     @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
     if (!file_exists(AVIATIONWX_USER_LOG_FILE)) {
         @touch(AVIATIONWX_USER_LOG_FILE);
@@ -44,6 +56,9 @@ function aviationwx_init_log_dir(): void {
 
 if (!function_exists('aviationwx_rotate_log_if_needed')) {
 function aviationwx_rotate_log_if_needed(string $logFile): void {
+    if (AVIATIONWX_LOG_TO_STDOUT) {
+        return; // Docker handles rotation for stdout/stderr
+    }
     clearstatcache(true, $logFile);
     $size = @filesize($logFile);
     if ($size !== false && $size > AVIATIONWX_LOG_MAX_BYTES) {
@@ -83,22 +98,38 @@ function aviationwx_get_request_id(): string {
 
 if (!function_exists('aviationwx_log')) {
 function aviationwx_log(string $level, string $message, array $context = [], string $logType = 'app'): void {
-    aviationwx_init_log_dir();
-    $logFile = aviationwx_get_log_file_path($logType);
-    aviationwx_rotate_log_if_needed($logFile);
     $now = (new DateTime('now', new DateTimeZone('UTC')))->format('c');
     $entry = [
         'ts' => $now,
         'level' => strtolower($level),
         'request_id' => aviationwx_get_request_id(),
         'message' => $message,
-        'context' => $context
+        'context' => $context,
+        'log_type' => $logType
     ];
+    
     // Error counter for alerting
     if (in_array($entry['level'], ['warning','error','critical','alert','emergency'], true)) {
         aviationwx_record_error_event();
     }
-    @file_put_contents($logFile, json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
+    
+    // Format as JSONL (one JSON object per line)
+    $jsonLine = json_encode($entry, JSON_UNESCAPED_SLASHES) . "\n";
+    
+    if (AVIATIONWX_LOG_TO_STDOUT) {
+        // Write to stdout/stderr for Docker logging
+        // Errors and warnings go to stderr, info/debug go to stdout
+        $isError = in_array($entry['level'], ['warning','error','critical','alert','emergency'], true);
+        $stream = $isError ? STDERR : STDOUT;
+        @fwrite($stream, $jsonLine);
+        @fflush($stream);
+    } else {
+        // File-based logging (backward compatibility)
+        aviationwx_init_log_dir();
+        $logFile = aviationwx_get_log_file_path($logType);
+        aviationwx_rotate_log_if_needed($logFile);
+        @file_put_contents($logFile, $jsonLine, FILE_APPEND | LOCK_EX);
+    }
 }
 }
 

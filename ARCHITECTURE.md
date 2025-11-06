@@ -280,10 +280,12 @@ See [LOCAL_SETUP.md](LOCAL_SETUP.md) for testing instructions.
 
 ## Monitoring
 
-- **Logging**: Comprehensive logging via `logger.php`
+- **Logging**: Comprehensive logging via `logger.php` (writes to stdout/stderr for Docker logging)
+- **Docker Logs**: All logs captured by Docker with automatic rotation (10MB files, 10 files = 100MB total)
 - **Metrics**: `/metrics.php` endpoint for monitoring
 - **Health Checks**: `/health.php` for uptime monitoring
 - **Diagnostics**: `/diagnostics.php` for system information
+- **Status Page**: `/status.php` for system health overview
 
 ## Future Improvements
 

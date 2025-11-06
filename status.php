@@ -144,42 +144,55 @@ function checkSystemHealth() {
         'lastChanged' => 0 // Static state, no meaningful timestamp
     ];
     
-    // Check recent log activity (within last hour)
-    $logFile = AVIATIONWX_APP_LOG_FILE;
-    $logDir = dirname($logFile);
-    $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
-    $hasRecentLogs = false;
-    if ($logMtime > 0) {
-        $hasRecentLogs = (time() - $logMtime) < 3600; // Within last hour
-    }
+    // Check logging system
+    $logToStdout = defined('AVIATIONWX_LOG_TO_STDOUT') && AVIATIONWX_LOG_TO_STDOUT;
     
-    // Check if log directory is writable (for local development)
-    $logDirWritable = is_dir($logDir) && is_writable($logDir);
-    
-    // If log directory is writable but no recent logs, show as operational (local dev is fine)
-    // If log file exists and has recent activity, show as operational
-    // If log directory not writable or log file doesn't exist and can't be created, show as degraded
-    $loggingStatus = 'operational';
-    $loggingMessage = 'Recent log activity detected';
-    if ($hasRecentLogs) {
+    if ($logToStdout) {
+        // Docker logging via stdout/stderr - check if we can write to stdout
+        $canWriteStdout = @fwrite(STDOUT, '') !== false || @is_resource(STDOUT);
+        $loggingStatus = $canWriteStdout ? 'operational' : 'degraded';
+        $loggingMessage = $canWriteStdout 
+            ? 'Logging to Docker (stdout/stderr) - view with docker compose logs' 
+            : 'Cannot write to stdout/stderr';
+        $logMtime = time(); // Use current time since we can't check file mtime
+    } else {
+        // File-based logging - check log file existence and activity
+        $logFile = AVIATIONWX_APP_LOG_FILE;
+        $logDir = dirname($logFile);
+        $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
+        $hasRecentLogs = false;
+        if ($logMtime > 0) {
+            $hasRecentLogs = (time() - $logMtime) < 3600; // Within last hour
+        }
+        
+        // Check if log directory is writable (for local development)
+        $logDirWritable = is_dir($logDir) && is_writable($logDir);
+        
+        // If log directory is writable but no recent logs, show as operational (local dev is fine)
+        // If log file exists and has recent activity, show as operational
+        // If log directory not writable or log file doesn't exist and can't be created, show as degraded
         $loggingStatus = 'operational';
         $loggingMessage = 'Recent log activity detected';
-    } elseif ($logDirWritable) {
-        $loggingStatus = 'operational';
-        $loggingMessage = 'Logging ready (no recent activity)';
-    } elseif (file_exists($logFile)) {
-        $loggingStatus = 'degraded';
-        $loggingMessage = 'No recent log activity';
-    } else {
-        $loggingStatus = 'degraded';
-        $loggingMessage = 'Log file not accessible';
+        if ($hasRecentLogs) {
+            $loggingStatus = 'operational';
+            $loggingMessage = 'Recent log activity detected';
+        } elseif ($logDirWritable) {
+            $loggingStatus = 'operational';
+            $loggingMessage = 'Logging ready (no recent activity)';
+        } elseif (file_exists($logFile)) {
+            $loggingStatus = 'degraded';
+            $loggingMessage = 'No recent log activity';
+        } else {
+            $loggingStatus = 'degraded';
+            $loggingMessage = 'Log file not accessible';
+        }
     }
     
     $health['components']['logging'] = [
         'name' => 'Logging',
         'status' => $loggingStatus,
         'message' => $loggingMessage,
-        'lastChanged' => $logMtime > 0 ? $logMtime : (is_dir($logDir) ? filemtime($logDir) : 0)
+        'lastChanged' => $logMtime > 0 ? $logMtime : (isset($logDir) && is_dir($logDir) ? filemtime($logDir) : 0)
     ];
     
     // Check error rate

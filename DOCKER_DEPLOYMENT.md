@@ -333,8 +333,9 @@ Diagnostics:
 ### J. Troubleshooting Tips
 
 - SSH alias resolution errors → run `git`/`ssh` as the `aviationwx` user where the SSH config is defined.
-- 403 on TLS or domain mismatch → check cert files in `~/aviationwx/ssl` and Nginx logs.
+- 403 on TLS or domain mismatch → check cert files in `~/aviationwx/ssl` and Nginx logs (`docker compose logs nginx`).
 - Missing webcam images → confirm cron is running inside container (`docker compose exec web ps aux | grep cron`) and `cache/webcams/` is writable.
+- View logs → use `docker compose logs -f web` for application logs or `docker compose logs -f nginx` for Nginx logs (all logs captured by Docker automatically).
 
 ### 7. Configure DNS in Cloudflare
 
