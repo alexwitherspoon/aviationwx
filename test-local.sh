@@ -7,11 +7,11 @@ echo "================================"
 echo ""
 
 # Check if server is running
-if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null ; then
-    echo "✓ PHP Server is running on localhost:8000"
+if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ; then
+    echo "✓ PHP Server is running on localhost:8080"
 else
     echo "⚠ PHP Server is NOT running"
-    echo "  Start it with: php -S localhost:8000"
+    echo "  Start it with: php -S localhost:8080"
     echo ""
 fi
 
@@ -22,16 +22,16 @@ echo "1. Test webcam fetching"
 echo "   php fetch-webcam-safe.php"
 echo ""
 echo "2. Check weather API"
-echo "   curl -s 'http://localhost:8000/weather.php?airport=kspb' | python3 -m json.tool"
+echo "   curl -s 'http://localhost:8080/weather.php?airport=kspb' | python3 -m json.tool"
 echo ""
 echo "3. View KSPB page"
-echo "   open http://localhost:8000/?airport=kspb"
+echo "   open http://localhost:8080/?airport=kspb"
 echo ""
 echo "4. Check cached webcam images"
 echo "   ls -lh cache/webcams/"
 echo ""
 echo "5. Start PHP server"
-echo "   php -S localhost:8000"
+echo "   php -S localhost:8080"
 echo ""
 
 read -p "Enter a command number (or 'q' to quit): " choice
@@ -43,11 +43,11 @@ case $choice in
         ;;
     2)
         echo "Testing weather API..."
-        curl -s 'http://localhost:8000/weather.php?airport=kspb' | python3 -m json.tool
+        curl -s 'http://localhost:8080/weather.php?airport=kspb' | python3 -m json.tool
         ;;
     3)
         echo "Opening KSPB page..."
-        open http://localhost:8000/?airport=kspb 2>/dev/null || xdg-open http://localhost:8000/?airport=kspb 2>/dev/null || echo "Visit: http://localhost:8000/?airport=kspb"
+        open http://localhost:8080/?airport=kspb 2>/dev/null || xdg-open http://localhost:8080/?airport=kspb 2>/dev/null || echo "Visit: http://localhost:8080/?airport=kspb"
         ;;
     4)
         echo "Cached webcam images:"
@@ -55,7 +55,7 @@ case $choice in
         ;;
     5)
         echo "Starting PHP server..."
-        php -S localhost:8000
+        php -S localhost:8080
         ;;
     q)
         exit 0

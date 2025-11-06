@@ -12,9 +12,9 @@ require_once __DIR__ . '/logger.php';
 // Try to detect from environment or use localhost with appropriate port
 $baseUrl = getenv('WEATHER_REFRESH_URL');
 if (!$baseUrl) {
-    // Default to localhost:8000 for local development (PHP built-in server)
-    // Production should set WEATHER_REFRESH_URL environment variable
-    $port = getenv('APP_PORT') ?: (getenv('PORT') ?: '8000');
+    // Default to localhost:8080 (consistent across development and production)
+    // Production should set WEATHER_REFRESH_URL environment variable for explicit control
+    $port = getenv('APP_PORT') ?: (getenv('PORT') ?: '8080');
     $baseUrl = "http://localhost:{$port}";
 }
 // Remove trailing slash if present

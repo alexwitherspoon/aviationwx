@@ -3,9 +3,9 @@
  * Local testing script
  * 
  * Usage:
- * php -S localhost:8000 test-local.php
+ * php -S localhost:8080 test-local.php
  * 
- * Then visit: http://kspb.localhost:8000 or http://localhost:8000/airports.json
+ * Then visit: http://kspb.localhost:8080 or http://localhost:8080/airports.json
  */
 
 // Simple routing for local testing

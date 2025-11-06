@@ -668,11 +668,23 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // nullStaleFieldsBySource is already defined at the top of the file (line 185)
     // No need to redefine it here - use the existing function
 
+    // Check if this is a cron job request (force refresh regardless of cache freshness)
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $isCronRequest = (strpos($userAgent, 'AviationWX Weather Cron Bot') !== false);
+    $forceRefresh = $isCronRequest || isset($_GET['force_refresh']);
+    
+    if ($isCronRequest) {
+        aviationwx_log('info', 'cron request detected - forcing weather refresh', [
+            'airport' => $airportId,
+            'user_agent' => $userAgent
+        ], 'app');
+    }
+
     // Stale-while-revalidate: Serve stale cache immediately, refresh in background
     $hasStaleCache = false;
     $staleData = null;
 
-    if (file_exists($weatherCacheFile)) {
+    if (file_exists($weatherCacheFile) && !$forceRefresh) {
     $age = time() - filemtime($weatherCacheFile);
     
     // If cache is fresh, serve it normally
@@ -694,8 +706,9 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             echo json_encode(['success' => true, 'weather' => $cached]);
             exit;
         }
-    } else {
+    } elseif (file_exists($weatherCacheFile) && !$forceRefresh) {
         // Cache is stale but exists - check per-source staleness
+        $age = time() - filemtime($weatherCacheFile);
         $staleData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($staleData)) {
             // Safety check: Check per-source staleness
@@ -744,6 +757,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             // Continue to refresh in background (don't exit here)
         }
     }
+    // If forceRefresh is true or no cache file exists, continue to fetch fresh weather
     }
 
     /**
