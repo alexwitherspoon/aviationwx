@@ -30,6 +30,8 @@ Real-time aviation weather and conditions for participating airports.
 
 - **Live Weather Data** from Tempest, Ambient, or METAR sources
 - **Live Webcams** with automatic caching (MJPEG streams, RTSP streams via ffmpeg, and static images)
+  - Reliable background refresh with atomic writes and file locking
+  - Circuit breaker with exponential backoff for failing sources
 - **Wind Visualization** with runway alignment
 - **Aviation-Specific Metrics**: Density altitude, VFR/IFR/MVFR status
 - **Weather Status Emojis**: Visual indicators for abnormal conditions (precipitation, high winds, low ceiling, extreme temps)

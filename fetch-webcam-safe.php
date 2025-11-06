@@ -46,19 +46,41 @@ function fetchStaticImage($url, $cacheFile) {
     $error = curl_error($ch);
     curl_close($ch);
     
+    if ($error) {
+        // Log curl error
+        return false;
+    }
+    
     if ($httpCode == 200 && $data && strlen($data) > 100) {
         // Verify it's actually an image
         if (strpos($data, "\xff\xd8") === 0) {
-            // JPEG
-            file_put_contents($cacheFile, $data);
-            return true;
+            // JPEG - write atomically to prevent corruption
+            $tmpFile = $cacheFile . '.tmp';
+            if (@file_put_contents($tmpFile, $data) !== false) {
+                // Atomic rename
+                if (@rename($tmpFile, $cacheFile)) {
+                    return true;
+                } else {
+                    @unlink($tmpFile);
+                }
+            }
+            return false;
         } elseif (strpos($data, "\x89PNG") === 0) {
             // PNG - convert to JPEG using GD library
             $img = imagecreatefromstring($data);
             if ($img) {
-                imagejpeg($img, $cacheFile, 85);
-                imagedestroy($img);
-                return true;
+                $tmpFile = $cacheFile . '.tmp';
+                if (@imagejpeg($img, $tmpFile, 85)) {
+                    imagedestroy($img);
+                    // Atomic rename
+                    if (@rename($tmpFile, $cacheFile)) {
+                        return true;
+                    } else {
+                        @unlink($tmpFile);
+                    }
+                } else {
+                    imagedestroy($img);
+                }
             }
         }
     }
@@ -214,13 +236,17 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         $errorOutput = implode("\n", $output);
         
         if ($code === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
-            rename($jpegTmp, $cacheFile);
-            if ($isWeb) {
-                echo "<span class='success'>✓ Captured frame via ffmpeg</span><br>\n";
+            // Atomic rename to prevent corruption
+            if (@rename($jpegTmp, $cacheFile)) {
+                if ($isWeb) {
+                    echo "<span class='success'>✓ Captured frame via ffmpeg</span><br>\n";
+                } else {
+                    echo "    ✓ Captured frame via ffmpeg\n";
+                }
+                return true;
             } else {
-                echo "    ✓ Captured frame via ffmpeg\n";
+                @unlink($jpegTmp);
             }
-            return true;
         }
         
         // Classify error for observability
@@ -341,6 +367,11 @@ function fetchMJPEGStream($url, $cacheFile) {
     $error = curl_error($ch);
     curl_close($ch);
     
+    if ($error) {
+        // Log curl error
+        return false;
+    }
+    
     if ($httpCode == 200 && $data && strlen($data) > 1000) {
         // Extract JPEG from data (handle multipart MJPEG if needed)
         $jpegStart = strpos($data, "\xff\xd8"); // JPEG start marker
@@ -348,8 +379,16 @@ function fetchMJPEGStream($url, $cacheFile) {
         
         if ($jpegStart !== false && $jpegEnd !== false) {
             $jpegData = substr($data, $jpegStart, $jpegEnd - $jpegStart + 2);
-            file_put_contents($cacheFile, $jpegData);
-            return true;
+            // Write atomically to prevent corruption
+            $tmpFile = $cacheFile . '.tmp';
+            if (@file_put_contents($tmpFile, $jpegData) !== false) {
+                // Atomic rename
+                if (@rename($tmpFile, $cacheFile)) {
+                    return true;
+                } else {
+                    @unlink($tmpFile);
+                }
+            }
         }
     }
     return false;
@@ -405,9 +444,53 @@ function recordFailure($airportId, $camIndex, $severity = 'transient') {
     $key = $airportId . '_' . $camIndex;
     $now = time();
     
-    $backoffData = [];
-    if (file_exists($backoffFile)) {
-        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    // Use file locking to prevent race conditions
+    $fp = @fopen($backoffFile, 'c+'); // c+ = read/write, create if not exists
+    if ($fp === false) {
+        // Can't open, fall back to non-locked write (non-critical)
+        $backoffData = [];
+        if (file_exists($backoffFile)) {
+            $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
+        }
+        
+        if (!isset($backoffData[$key])) {
+            $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
+        }
+        
+        $state = &$backoffData[$key];
+        $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
+        $state['last_attempt'] = $now;
+        $failures = $state['failures'];
+        $base = max(60, pow(2, min($failures - 1, 5)) * 60);
+        $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
+        $cap = ($severity === 'permanent') ? 7200 : 3600;
+        $backoffSeconds = min($cap, (int)round($base * $multiplier));
+        $state['backoff_seconds'] = $backoffSeconds;
+        $state['next_allowed_time'] = $now + $backoffSeconds;
+        
+        @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+        return;
+    }
+    
+    // Lock file for exclusive access
+    if (@flock($fp, LOCK_EX)) {
+        // Read with lock held
+        $content = @stream_get_contents($fp);
+        if ($content === false || $content === '') {
+            $backoffData = [];
+        } else {
+            rewind($fp);
+            $backoffData = @json_decode($content, true) ?: [];
+        }
+    } else {
+        // Lock failed, fall back to non-locked read
+        @fclose($fp);
+        $backoffData = [];
+        if (file_exists($backoffFile)) {
+            $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
+        }
+        @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+        return;
     }
     
     if (!isset($backoffData[$key])) {
@@ -428,7 +511,13 @@ function recordFailure($airportId, $camIndex, $severity = 'transient') {
     $state['backoff_seconds'] = $backoffSeconds;
     $state['next_allowed_time'] = $now + $backoffSeconds;
     
-    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+    // Write with lock held
+    @ftruncate($fp, 0);
+    @rewind($fp);
+    @fwrite($fp, json_encode($backoffData, JSON_PRETTY_PRINT));
+    @fflush($fp);
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
 }
 
 /**
@@ -441,12 +530,39 @@ function recordSuccess($airportId, $camIndex) {
     $key = $airportId . '_' . $camIndex;
     $now = time();
     
-    $backoffData = [];
-    if (file_exists($backoffFile)) {
-        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
+    // Use file locking to prevent race conditions
+    $fp = @fopen($backoffFile, 'c+'); // c+ = read/write, create if not exists
+    if ($fp === false) {
+        // Can't lock, but we can still try to write (non-critical)
+        $backoffData = [];
+        if (file_exists($backoffFile)) {
+            $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
+        }
+    } else {
+        // Lock file for exclusive access
+        if (@flock($fp, LOCK_EX)) {
+            // Read with lock held
+            $content = @stream_get_contents($fp);
+            if ($content === false || $content === '') {
+                $backoffData = [];
+            } else {
+                rewind($fp);
+                $backoffData = @json_decode($content, true) ?: [];
+            }
+        } else {
+            // Lock failed, fall back to non-locked read
+            $backoffData = [];
+            if (file_exists($backoffFile)) {
+                $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
+            }
+        }
     }
     
     if (!isset($backoffData[$key])) {
+        if (isset($fp) && $fp !== false) {
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+        }
         return; // No previous state to reset
     }
     
@@ -458,7 +574,24 @@ function recordSuccess($airportId, $camIndex) {
         'backoff_seconds' => 0
     ];
     
-    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+    if (isset($fp) && $fp !== false) {
+        if (@flock($fp, LOCK_EX)) {
+            // Write with lock held
+            @ftruncate($fp, 0);
+            @rewind($fp);
+            @fwrite($fp, json_encode($backoffData, JSON_PRETTY_PRINT));
+            @fflush($fp);
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+        } else {
+            // Lock failed, close and fall back
+            @fclose($fp);
+            @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+        }
+    } else {
+        // File handle not available, fall back to file_put_contents with lock
+        @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+    }
 }
 
 // Guard: Only execute main code if not included by another script

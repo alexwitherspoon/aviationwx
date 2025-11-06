@@ -172,6 +172,12 @@ For a complete list, see [PHP's timezone list](https://www.php.net/manual/en/tim
 
 ## Webcam Configuration
 
+The webcam fetcher includes reliability features:
+- **Atomic writes**: Cache files are written atomically to prevent corruption
+- **File locking**: Backoff state uses file locking to prevent race conditions
+- **Circuit breaker**: Automatic exponential backoff for failing sources
+- **Error handling**: Comprehensive error detection and logging
+
 ### Supported Formats
 AviationWX automatically detects and handles webcam source types:
 
