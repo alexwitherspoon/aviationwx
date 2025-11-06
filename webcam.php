@@ -446,6 +446,15 @@ if (file_exists($targetFile)) {
     
     // Use file-based locking to prevent concurrent refreshes
     $lockFile = $cacheDir . '/refresh_' . $airportId . '_' . $camIndex . '.lock';
+    
+    // Clean up stale locks (older than 5 minutes)
+    if (file_exists($lockFile)) {
+        $lockAge = time() - filemtime($lockFile);
+        if ($lockAge > 300) { // 5 minutes
+            @unlink($lockFile);
+        }
+    }
+    
     $lockFp = @fopen($lockFile, 'c+');
     $lockAcquired = false;
     
