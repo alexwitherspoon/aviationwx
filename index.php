@@ -6,6 +6,14 @@
 
 require_once __DIR__ . '/config-utils.php';
 
+// Check if this is a status page request
+$host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
+if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['status'] === '1')) {
+    // Route to status page
+    include 'status.php';
+    exit;
+}
+
 // Get airport ID from request
 $airportId = getAirportIdFromRequest();
 

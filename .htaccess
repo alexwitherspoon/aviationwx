@@ -8,8 +8,8 @@
     # Handle subdomain requests (Host header preserved by reverse proxy)
     # Match subdomain pattern like kspb.aviationwx.org
     RewriteCond %{HTTP_HOST} ^([^\.]+)\.aviationwx\.org$ [NC]
-    # Exclude www and bare domain
-    RewriteCond %1 !^(www|aviationwx)$ [NC]
+    # Exclude www, bare domain, and status subdomain
+    RewriteCond %1 !^(www|aviationwx|status)$ [NC]
     # Exclude existing PHP files (weather.php, webcam.php, etc.)
     RewriteCond %{REQUEST_FILENAME} !-f
     # Rewrite to index.php with airport parameter
