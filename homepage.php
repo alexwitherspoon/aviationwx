@@ -814,7 +814,7 @@ header('Expires: 0');
             <p>
                 &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source</a> | 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
                 <a href="https://status.aviationwx.org">Status</a>
             </p>
         </footer>
