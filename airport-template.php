@@ -139,7 +139,7 @@
                                  class="webcam-image"
                                  loading="lazy"
                                  decoding="async"
-                                 onerror="console.error('Webcam image failed to load:', this.src); document.getElementById('webcam-skeleton-<?= $index ?>').style.display='none'"
+                                 onerror="handleWebcamError(<?= $index ?>, this)"
                                  onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
                                  onclick="openLiveStream(this.src)">
                         </picture>
@@ -1489,9 +1489,9 @@ if (imgEl<?= $index ?>) {
         }, { once: false }); // Allow multiple calls as images refresh
     }
     
-    // Also listen for error events - don't check timestamp if image failed
-    imgEl<?= $index ?>.addEventListener('error', () => {
-        // Don't update timestamp if image failed to load
+    // Also listen for error events - show placeholder if image failed
+    imgEl<?= $index ?>.addEventListener('error', function() {
+        handleWebcamError(<?= $index ?>, this);
     });
 }
 
@@ -1526,6 +1526,19 @@ setInterval(batchRefreshAllTimestamps, 30000);
 fetchWeather();
 setInterval(fetchWeather, 60000);
 
+// Handle webcam image load errors - show placeholder image
+function handleWebcamError(camIndex, img) {
+    console.error('Webcam image failed to load:', img.src);
+    const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
+    if (skeleton) skeleton.style.display = 'none';
+    
+    // Show placeholder image instead of broken image
+    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+    const host = window.location.host;
+    img.src = `${protocol}//${host}/placeholder.jpg`;
+    img.onerror = null; // Prevent infinite loop if placeholder also fails
+}
+
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
 function safeSwapCameraImage(camIndex) {
     const timestampElem = document.getElementById(`update-${camIndex}`); // may be null
@@ -1538,15 +1551,46 @@ function safeSwapCameraImage(camIndex) {
     fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
         .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
         .then(json => {
-            if (!json || !json.success || !json.timestamp) return; // Nothing to do
-            const newTs = parseInt(json.timestamp);
-            if (isNaN(newTs) || newTs <= currentTs) return; // Not newer
+            if (!json) return; // Invalid response
+            
+            // Check if we have a valid timestamp (even if success is false, we might have a timestamp)
+            const newTs = parseInt(json.timestamp || 0);
+            if (isNaN(newTs) || newTs === 0) {
+                // No cache available - don't try to update
+                return;
+            }
+            
+            // Only update if timestamp is newer
+            if (newTs <= currentTs) return; // Not newer
 
             const ready = json.formatReady || {};
-            // Use immutable hash from mtime for CDN-friendly URLs (hash changes only when file updates)
-            const hash = json.timestamp ? String(json.timestamp).slice(-8) : Date.now().toString().slice(-8);
-            const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&v=${hash}`;
-            const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&v=${hash}`;
+            // Match server-side hash calculation: md5(airportId + '_' + camIndex + '_' + fmt + '_' + mtime + '_' + size)
+            // Server uses: substr(md5($airportId . '_' . $camIndex . '_' . $fmt . '_' . $fileMtime . '_' . $fileSize), 0, 8)
+            // For cache-busting, we use a simple hash that changes with timestamp and size
+            // Since MD5 isn't available in browser JS, use a simple hash for cache-busting
+            const hashInput = `${AIRPORT_ID}_${camIndex}_jpg_${newTs}_${json.size || 0}`;
+            // Simple hash function for cache-busting (doesn't need to match MD5 exactly)
+            let hash = 0;
+            for (let i = 0; i < hashInput.length; i++) {
+                const char = hashInput.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+            // Convert to hex string and take first 8 chars
+            const hashHex = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
+            
+            // For webp, use webp format in hash
+            const hashInputWebp = `${AIRPORT_ID}_${camIndex}_webp_${newTs}_${json.size || 0}`;
+            let hashWebp = 0;
+            for (let i = 0; i < hashInputWebp.length; i++) {
+                const char = hashInputWebp.charCodeAt(i);
+                hashWebp = ((hashWebp << 5) - hashWebp) + char;
+                hashWebp = hashWebp & hashWebp;
+            }
+            const hashHexWebp = Math.abs(hashWebp).toString(16).padStart(8, '0').substring(0, 8);
+            
+            const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&v=${hashHex}`;
+            const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&v=${hashHexWebp}`;
 
             // Show skeleton placeholder while loading
             const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
@@ -1570,9 +1614,14 @@ function safeSwapCameraImage(camIndex) {
                 }
                 CAM_TS[camIndex] = newTs;
                 updateWebcamTimestampOnLoad(camIndex);
-            }).catch(() => {
+            }).catch((error) => {
                 // Hide skeleton on failure
                 if (skeleton) skeleton.style.display = 'none';
+                // If image fails to load, show placeholder
+                const img = document.getElementById(`webcam-${camIndex}`);
+                if (img) {
+                    handleWebcamError(camIndex, img);
+                }
             });
 
             // Upgrade WEBP if available; do not block on it

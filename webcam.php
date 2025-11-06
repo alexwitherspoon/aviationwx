@@ -97,9 +97,11 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     // Rate limit headers (for observability; mtime endpoint is not limited)
     if (function_exists('getRateLimitRemaining')) {
         $rl = getRateLimitRemaining('webcam_api', 100, 60);
-        header('X-RateLimit-Limit: 100');
-        header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
-        header('X-RateLimit-Reset: ' . (int)$rl['reset']);
+        if (is_array($rl)) {
+            header('X-RateLimit-Limit: 100');
+            header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
+            header('X-RateLimit-Reset: ' . (int)$rl['reset']);
+        }
     }
     $existsJpg = file_exists($cacheJpg);
     $existsWebp = file_exists($cacheWebp);
