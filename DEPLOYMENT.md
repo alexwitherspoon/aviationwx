@@ -35,12 +35,14 @@ Quick reference for deployment options. For detailed guides, see the linked docu
 
 ## Quick Deployment Notes
 
-- **Configuration**: Mount `airports.json` on host, bind-mount into container (read-only)
+- **Configuration**: `airports.json` automatically deployed via GitHub Actions to `/home/aviationwx/airports.json`, bind-mount into container (read-only)
 - **Webcam Refresh**: Automatically runs every minute via cron inside the Docker container
 - **Weather Refresh**: Automatically runs every minute via cron inside the Docker container
 - **DNS**: Configure wildcard DNS (A records for `@` and `*`)
 - **SSL**: Nginx handles HTTPS redirects; certificates mounted into container
 - **Caching**: Weather data cached server-side; webcam images cached on disk (cache in `/tmp/aviationwx-cache`, ephemeral, cleared on reboot)
+- **Logging**: All logs go to Docker stdout/stderr (automatic rotation, no host setup needed)
+- **Minimal Host Setup**: No manual cache/log directory setup, no cron setup, no manual airports.json setup required
 
 For complete details, see [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md).
 

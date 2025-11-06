@@ -59,11 +59,15 @@ su - aviationwx
 git clone https://github.com/alexwitherspoon/aviationwx.git
 cd aviationwx
 
-# Note: airports.json will be deployed to /home/aviationwx/airports.json
-# by the secrets repo GitHub Actions workflow
+# Note: airports.json is automatically deployed to /home/aviationwx/airports.json
+# by the secrets repo GitHub Actions workflow - no manual setup needed
 
 # Create SSL certificate directory
 mkdir -p ssl
+
+# No cache or log directory setup needed:
+# - Cache: Automatically created in /tmp/aviationwx-cache (ephemeral)
+# - Logs: All logs go to Docker stdout/stderr (automatic rotation)
 ```
 
 ### 4. Set Up SSL with Certbot

@@ -5,9 +5,21 @@ This guide covers deploying AviationWX.org from scratch on a fresh Ubuntu LTS VP
 ## Prerequisites
 
 - Ubuntu 22.04 LTS (or 20.04 LTS) VPS
-- Root or sudo access
+- Root or sudo access (only for initial setup: Docker installation, SSL certificates)
 - Domain name with DNS control
 - GitHub repository access
+- Private secrets repository with GitHub Actions configured (for automated `airports.json` deployment)
+
+## Minimal Host Customization
+
+This deployment requires **minimal host customization**:
+- ✅ **No log directory setup** - All logs go to Docker stdout/stderr
+- ✅ **No cache directory setup** - Cache automatically created in `/tmp/aviationwx-cache`
+- ✅ **No cron job setup** - Cron jobs run automatically inside container
+- ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
+- ✅ **No sudo required for application** - Only needed for initial Docker/SSL setup
+
+**One-time setup only**: After initial configuration, the application runs with minimal host dependencies.
 
 ## Step-by-Step Deployment
 
@@ -38,7 +50,8 @@ apt install -y curl wget git nano ufw
 useradd -m -s /bin/bash aviationwx
 
 # Add user to docker group (will be created when Docker is installed)
-# Or add to sudo group if needed for specific operations
+# Note: sudo access only needed for initial setup (Docker installation, SSL certificates)
+# Application runs without sudo - minimal host customization required
 usermod -aG sudo aviationwx
 ```
 
@@ -206,41 +219,38 @@ ls -lh ssl/
 
 ### 5. Configure Application
 
-#### 5.1 Create Configuration Files
+#### 5.1 Clone Repository
 
 ```bash
-# Still as aviationwx user, in ~/aviationwx directory
-
-# Copy example environment file (if exists)
-cp env.example .env 2>/dev/null || true
-
-# Create airports.json from example
-cp airports.json.example airports.json
+# As aviationwx user
+cd ~
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
 ```
 
-#### 5.2 Edit airports.json
+#### 5.2 airports.json (Automated Deployment)
 
+**`airports.json` is automatically deployed via GitHub Actions** from a private secrets repository.
+
+- The file is deployed to `/home/aviationwx/airports.json` automatically
+- No manual setup required - the GitHub Actions workflow handles deployment
+- Updates are automatically deployed when the secrets repository is updated
+
+**Note**: If you need to manually create `airports.json` for initial setup, you can:
 ```bash
+# Copy from example (only if automated deployment not yet configured)
+cp airports.json.example /home/aviationwx/airports.json
 # Edit with your API keys and credentials
-nano airports.json
+nano /home/aviationwx/airports.json
 ```
-
-**Minimum required configuration**:
-- Add at least one airport with weather source API keys
-- Configure webcams (optional)
-- Set timezone for each airport (optional, defaults to `America/Los_Angeles`)
 
 See [CONFIGURATION.md](CONFIGURATION.md) for detailed configuration options.
 
-#### 5.3 Generate Docker Configuration
-
-If using generated configs:
+#### 5.3 Create SSL Directory
 
 ```bash
-# Generate nginx config from .env (if needed)
-make config  # If Makefile exists
-
-# Or manually create configs
+# Create SSL certificate directory
+mkdir -p ssl
 ```
 
 ### 6. Cron Jobs (Automatic)
@@ -272,7 +282,16 @@ docker compose -f docker-compose.prod.yml exec web ps aux | grep cron
 
 ### 7. Deploy Application
 
-#### 7.1 Start Application
+#### 7.1 Initial Setup (One-Time)
+
+**No manual cache or log directory setup required!**
+
+The application automatically handles:
+- **Cache directory**: Created in `/tmp/aviationwx-cache` (ephemeral, cleared on reboot)
+- **Logging**: All logs go to Docker stdout/stderr (automatic rotation)
+- **Cron jobs**: Run automatically inside container
+
+#### 7.2 Start Application
 
 ```bash
 # As aviationwx user, in ~/aviationwx directory
@@ -283,11 +302,11 @@ docker compose -f docker-compose.prod.yml up -d --build
 # Verify containers are running
 docker compose -f docker-compose.prod.yml ps
 
-# Check logs
+# Check logs (all logs captured by Docker automatically)
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
-#### 7.2 Verify Deployment
+#### 7.3 Verify Deployment
 
 ```bash
 # Test from server
@@ -520,7 +539,8 @@ curl -I https://aviationwx.org
 6. **Use strong passwords for API keys and webcam credentials**
 7. **Restrict file permissions**:
    ```bash
-   chmod 600 ~/aviationwx/airports.json
+   # airports.json permissions are managed by GitHub Actions deployment
+   # SSL private key permissions
    chmod 600 ~/aviationwx/ssl/privkey.pem
    ```
 
