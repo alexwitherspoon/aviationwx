@@ -303,12 +303,17 @@ ssh-keygen -t ed25519 -f aviationwx_actions -C "gha@aviationwx"
 - Can be run manually via workflow_dispatch
 - Post-deploy health checks: waits for containers, checks via `docker compose exec` inside the `web` container, then (optionally) host port
 
-### H. Cron for Webcam Refresh
+### H. Cron Jobs (Automatic)
 
-Already installed by bootstrap (host-side cron):
-```bash
-*/1 * * * * curl -s http://127.0.0.1:8080/fetch-webcam-safe.php > /dev/null 2>&1
-```
+**Cron jobs run automatically inside the Docker container** - no host-side configuration needed!
+
+The Docker image includes:
+- **Webcam refresh**: Runs every minute via cron inside the container
+- **Weather refresh**: Runs every minute via cron inside the container
+
+Both jobs are configured in the `crontab` file that's built into the Docker image and start automatically when the container starts.
+
+**Note**: If you previously had host-side cron jobs configured, you can remove them as they're no longer needed.
 
 ### I. Verification
 
@@ -329,7 +334,7 @@ Diagnostics:
 
 - SSH alias resolution errors → run `git`/`ssh` as the `aviationwx` user where the SSH config is defined.
 - 403 on TLS or domain mismatch → check cert files in `~/aviationwx/ssl` and Nginx logs.
-- Missing webcam images → confirm cron is running and `cache/webcams/` is writable.
+- Missing webcam images → confirm cron is running inside container (`docker compose exec web ps aux | grep cron`) and `cache/webcams/` is writable.
 
 ### 7. Configure DNS in Cloudflare
 

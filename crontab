@@ -1,0 +1,10 @@
+# AviationWX Cron Jobs
+# Runs inside Docker container
+# Format: minute hour day month weekday user command
+
+# Webcam refresh - every minute
+* * * * * www-data cd /var/www/html && /usr/local/bin/php fetch-webcam-safe.php > /dev/null 2>&1
+
+# Weather refresh - every minute
+* * * * * www-data cd /var/www/html && /usr/local/bin/php fetch-weather-safe.php > /dev/null 2>&1
+

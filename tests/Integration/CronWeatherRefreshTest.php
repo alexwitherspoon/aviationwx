@@ -1,6 +1,12 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
+/**
+ * Test that the weather refresh script executes correctly
+ * 
+ * Note: In production, this script runs via cron inside the Docker container.
+ * The cron job is automatically configured in the container's crontab file.
+ */
 class CronWeatherRefreshTest extends TestCase
 {
     public function testCronScriptExecutes()
@@ -9,6 +15,7 @@ class CronWeatherRefreshTest extends TestCase
             $this->markTestSkipped('cURL not available');
         }
 
+        // Test with explicit URL or let script auto-detect (Docker vs local)
         $baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
         $cmd = sprintf('WEATHER_REFRESH_URL=%s php %s 2>&1', escapeshellarg($baseUrl), escapeshellarg(__DIR__ . '/../../fetch-weather-safe.php'));
         $output = shell_exec($cmd);

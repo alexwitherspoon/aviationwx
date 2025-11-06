@@ -59,7 +59,6 @@ Real-time aviation weather and conditions for participating airports.
 
 - Docker and Docker Compose
 - A domain with wildcard DNS (A records for `@` and `*`)
-- Cron capability on the host for webcam refresh (recommended)
 
 ## Quick Start
 
@@ -92,9 +91,8 @@ See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for complete step-by-st
 2. Install Docker & Docker Compose
 3. Configure DNS (wildcard subdomain)
 4. Set up SSL certificates (Let's Encrypt)
-5. Deploy application
-6. Configure cron for webcam refresh
-7. Set up automatic deployments (GitHub Actions - optional)
+5. Deploy application (cron jobs run automatically inside container)
+6. Set up automatic deployments (GitHub Actions - optional)
 
 For detailed deployment guide with all steps, see [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md).
 

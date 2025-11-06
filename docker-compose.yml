@@ -14,6 +14,7 @@ services:
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
+      - WEATHER_REFRESH_URL=http://localhost
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]

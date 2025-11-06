@@ -16,6 +16,7 @@ services:
       - CONFIG_PATH=/var/www/html/airports.json
       - WEBCAM_REFRESH_DEFAULT=${WEBCAM_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_DEFAULT=${WEATHER_REFRESH_DEFAULT:-60}
+      - WEATHER_REFRESH_URL=http://localhost
     logging:
       driver: "json-file"
       options:

@@ -124,11 +124,11 @@ php -S localhost:8080
 
 ## 🎯 For Production (Docker Droplet)
 
-When deploying, set up this cron job:
-```bash
-# Run every minute to update webcam images
-* * * * * cd /path/to/aviationwx && php fetch-webcam-safe.php
-```
+**Cron jobs run automatically inside the Docker container** - no setup required!
 
-This will keep the webcam images fresh automatically.
+The Docker container includes cron jobs that run:
+- Webcam refresh every minute
+- Weather refresh every minute
+
+Both jobs are configured in the `crontab` file that's built into the Docker image and start automatically when the container starts.
 

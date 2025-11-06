@@ -243,46 +243,32 @@ make config  # If Makefile exists
 # Or manually create configs
 ```
 
-### 6. Set Up Cron Jobs
+### 6. Cron Jobs (Automatic)
 
-#### 6.1 Webcam Refresh Cron Job
+**Cron jobs are automatically configured inside the Docker container** - no host-side setup required!
 
+The Docker container includes:
+- **Webcam refresh**: Runs every minute via cron inside the container
+- **Weather refresh**: Runs every minute via cron inside the container
+
+Both jobs run as the `www-data` user inside the container and are configured in the `crontab` file that's built into the Docker image.
+
+**Benefits**:
+- No host-side cron configuration needed
+- Minimal host customization required
+- Cron jobs automatically start when the container starts
+- All jobs run in the same container environment
+
+**Verification**: To verify cron is running inside the container:
 ```bash
-# As aviationwx user, set up cron to refresh webcam images every minute
-crontab -e
-
-# Add this line:
-* * * * * cd ~/aviationwx && docker compose -f docker-compose.prod.yml exec -T web php fetch-webcam-safe.php > /dev/null 2>&1
-
-# Or if using host-based execution:
-* * * * * cd ~/aviationwx && php fetch-webcam-safe.php > /dev/null 2>&1
+docker compose -f docker-compose.prod.yml exec web ps aux | grep cron
 ```
 
-**Note**: The cron job runs `fetch-webcam-safe.php` to update webcam images every minute.
-
-#### 6.2 Weather Refresh Cron Job
-
-```bash
-# As aviationwx user, set up cron to refresh weather data periodically
-crontab -e
-
-# Add this line (every 1 minute):
-* * * * * cd ~/aviationwx && docker compose -f docker-compose.prod.yml exec -T web php fetch-weather-safe.php > /dev/null 2>&1
-
-# Or if using host-based execution:
-* * * * * cd ~/aviationwx && php fetch-weather-safe.php > /dev/null 2>&1
-```
-
-**Note**: The cron job runs `fetch-weather-safe.php` to refresh weather cache every 1 minute. This ensures:
+**Note**: The cron jobs ensure:
 - Weather data stays fresh even when no users are visiting
 - Daily tracking (min/max temperature, peak gust) initializes promptly after midnight
 - Prevents stale data issues after overnight periods with no traffic
-
-**Environment Variable**: If your weather endpoint requires a specific URL, set `WEATHER_REFRESH_URL`:
-```bash
-# In crontab or environment
-WEATHER_REFRESH_URL=http://localhost:8080
-```
+- Webcam images are refreshed regularly
 
 ### 7. Deploy Application
 
@@ -425,8 +411,8 @@ curl https://aviationwx.org/diagnostics.php
 #### 10.4 Verify Webcam Refresh
 
 ```bash
-# Check cron job is running
-crontab -l
+# Check cron is running inside container
+docker compose -f docker-compose.prod.yml exec web ps aux | grep cron
 
 # Manually test webcam fetcher
 cd ~/aviationwx

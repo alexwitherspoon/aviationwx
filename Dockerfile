@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     git \
     unzip \
     ffmpeg \
+    cron \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip \
     && pecl channel-update pecl.php.net \
@@ -31,6 +32,15 @@ COPY --chown=www-data:www-data . /var/www/html/
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache
 
+# Copy crontab file
+COPY crontab /etc/cron.d/aviationwx-cron
+RUN chmod 0644 /etc/cron.d/aviationwx-cron \
+    && chown root:root /etc/cron.d/aviationwx-cron
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # PHP configuration
 RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "upload_max_filesize = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
@@ -42,6 +52,9 @@ RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "log_errors = On" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT" >> /usr/local/etc/php/conf.d/security.ini
+
+# Use custom entrypoint
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Expose port
 EXPOSE 80
