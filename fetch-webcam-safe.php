@@ -431,6 +431,48 @@ function checkCircuitBreaker($airportId, $camIndex) {
         ];
     }
     
+    // Backoff expired - clean up the entry to prevent stale data
+    // Use file locking to prevent race conditions
+    $fp = @fopen($backoffFile, 'c+');
+    if ($fp !== false && @flock($fp, LOCK_EX)) {
+        // Re-read with lock held to ensure consistency
+        rewind($fp);
+        $content = @stream_get_contents($fp);
+        if ($content !== false && $content !== '') {
+            $lockedData = @json_decode($content, true) ?: [];
+            // Only remove if it's still expired (double-check)
+            if (isset($lockedData[$key])) {
+                $lockedState = $lockedData[$key];
+                $lockedNextAllowed = (int)($lockedState['next_allowed_time'] ?? 0);
+                if ($lockedNextAllowed <= $now) {
+                    unset($lockedData[$key]);
+                    // Write back if we removed something
+                    @ftruncate($fp, 0);
+                    @rewind($fp);
+                    @fwrite($fp, json_encode($lockedData, JSON_PRETTY_PRINT));
+                    @fflush($fp);
+                }
+            }
+        }
+        @flock($fp, LOCK_UN);
+        @fclose($fp);
+    } else {
+        // Fallback: non-locked cleanup (may have race conditions but better than nothing)
+        if ($fp !== false) {
+            @fclose($fp);
+        }
+        // Re-read file to avoid overwriting concurrent changes
+        $fallbackData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
+        if (isset($fallbackData[$key])) {
+            $fallbackState = $fallbackData[$key];
+            $fallbackNextAllowed = (int)($fallbackState['next_allowed_time'] ?? 0);
+            if ($fallbackNextAllowed <= $now) {
+                unset($fallbackData[$key]);
+                @file_put_contents($backoffFile, json_encode($fallbackData, JSON_PRETTY_PRINT), LOCK_EX);
+            }
+        }
+    }
+    
     return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
 }
 
