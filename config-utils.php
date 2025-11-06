@@ -22,9 +22,53 @@ function validateAirportId($id) {
 }
 
 /**
+ * Check if we're in a production environment
+ * @return bool True if production, false otherwise
+ */
+function isProduction() {
+    // Check APP_ENV environment variable
+    $appEnv = getenv('APP_ENV');
+    if ($appEnv === 'production') {
+        return true;
+    }
+    if ($appEnv === 'testing' || $appEnv === 'development' || $appEnv === 'local') {
+        return false;
+    }
+    
+    // Check ENVIRONMENT variable
+    $env = getenv('ENVIRONMENT');
+    if ($env === 'production' || $env === 'prod') {
+        return true;
+    }
+    
+    // Check domain - if not localhost/local domain, assume production
+    $host = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : '';
+    if (!empty($host)) {
+        // Production domains
+        if (strpos($host, 'aviationwx.org') !== false || 
+            strpos($host, '.com') !== false || 
+            strpos($host, '.net') !== false ||
+            strpos($host, '.io') !== false) {
+            // But exclude obvious test/staging domains
+            if (strpos($host, 'test') === false && 
+                strpos($host, 'staging') === false && 
+                strpos($host, 'dev') === false &&
+                strpos($host, 'localhost') === false &&
+                strpos($host, '127.0.0.1') === false) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
  * Load airport configuration with caching
  * Uses APCu cache if available, falls back to static variable for request lifetime
  * Automatically invalidates cache when file modification time changes
+ * 
+ * SECURITY: Prevents test data (airports.json.test) from being used in production
  */
 function loadConfig($useCache = true) {
     static $cachedConfig = null;
@@ -32,6 +76,30 @@ function loadConfig($useCache = true) {
     // Get config file path
     $envConfigPath = getenv('CONFIG_PATH');
     $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/airports.json');
+    
+    // SECURITY: Prevent test data from being used in production
+    $isProduction = isProduction();
+    if ($isProduction) {
+        // Check if config file path contains test file
+        if (strpos($configFile, 'airports.json.test') !== false || 
+            strpos($configFile, 'json.test') !== false ||
+            basename($configFile) === 'airports.json.test') {
+            aviationwx_log('error', 'test config file blocked in production', [
+                'path' => $configFile,
+                'env_config_path' => $envConfigPath
+            ], 'app');
+            error_log('SECURITY: Attempted to use test config file in production: ' . $configFile);
+            return null;
+        }
+        
+        // Ensure we're using the production airports.json, not test file
+        if (basename($configFile) !== 'airports.json') {
+            aviationwx_log('warning', 'non-standard config file in production', [
+                'path' => $configFile,
+                'basename' => basename($configFile)
+            ], 'app');
+        }
+    }
     
     // Validate file exists and is not a directory
     if (!file_exists($configFile)) {
