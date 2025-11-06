@@ -57,6 +57,16 @@ Add an entry to `airports.json` following this structure:
           "name": "15/33",
           "heading_1": 152,
           "heading_2": 332
+        },
+        {
+          "name": "28L/10R",
+          "heading_1": 280,
+          "heading_2": 100
+        },
+        {
+          "name": "28R/10L",
+          "heading_1": 280,
+          "heading_2": 100
         }
       ],
       "frequencies": {
@@ -90,6 +100,75 @@ Add an entry to `airports.json` following this structure:
       "nearby_metar_stations": ["KVUO", "KHIO"]
     }
   }
+}
+```
+
+## Runway Configuration
+
+### Runway Format
+
+Runways are specified with a name and two headings (one for each end):
+
+- **Single Runway**: Use numeric runway designations (e.g., "15/33")
+- **Parallel Runways**: Use L (Left), C (Center), or R (Right) designations in the runway name (e.g., "28L/10R", "28R/10L")
+
+The visualization automatically:
+- Detects parallel runways by grouping runways with similar headings (within 5 degrees)
+- Displays parallel runways side-by-side with horizontal offset
+- Shows L/C/R designations in runway labels (e.g., "28L", "10R", "04C")
+- Positions labels close to runway ends with white outlines for visibility
+
+**Example - Single Runway:**
+```json
+{
+  "runways": [
+    {
+      "name": "15/33",
+      "heading_1": 152,
+      "heading_2": 332
+    }
+  ]
+}
+```
+
+**Example - Parallel Runways (Two):**
+```json
+{
+  "runways": [
+    {
+      "name": "28L/10R",
+      "heading_1": 280,
+      "heading_2": 100
+    },
+    {
+      "name": "28R/10L",
+      "heading_1": 280,
+      "heading_2": 100
+    }
+  ]
+}
+```
+
+**Example - Parallel Runways (Three):**
+```json
+{
+  "runways": [
+    {
+      "name": "04L/22R",
+      "heading_1": 40,
+      "heading_2": 220
+    },
+    {
+      "name": "04C/22C",
+      "heading_1": 40,
+      "heading_2": 220
+    },
+    {
+      "name": "04R/22L",
+      "heading_1": 40,
+      "heading_2": 220
+    }
+  ]
 }
 ```
 

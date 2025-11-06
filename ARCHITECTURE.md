@@ -97,7 +97,10 @@ aviationwx.org/
 **Key JavaScript Functions**:
 - `fetchWeather()`: Fetches weather data
 - `displayWeather()`: Renders weather data
-- `updateWindVisual()`: Updates wind visualization
+- `updateWindVisual()`: Updates wind visualization with parallel runway support
+- `parseRunwayName()`: Extracts L/C/R designations from runway names
+- `groupParallelRunways()`: Groups parallel runways by similar headings
+- `calculateRunwayOffset()`: Calculates horizontal offset for parallel runways
 - Unit conversion functions
 - Timestamp formatting
 

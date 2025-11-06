@@ -424,10 +424,58 @@ if (file_exists($targetFile)) {
         'cache_age' => $cacheAge
     ], 'user');
     
+    // Check circuit breaker early before starting background refresh
+    $circuit = checkCircuitBreaker($airportId, $camIndex);
+    $shouldRefresh = !$circuit['skip'];
+    
     // Serve stale cache immediately
     ob_end_flush(); // Flush buffer before sending file
     readfile($targetFile);
     flush(); // Ensure file is sent
+    
+    // Only start background refresh if circuit breaker allows
+    if (!$shouldRefresh) {
+        aviationwx_log('info', 'webcam background refresh skipped - circuit breaker open', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'failures' => $circuit['failures'] ?? 0,
+            'backoff_remaining' => $circuit['backoff_remaining']
+        ], 'app');
+        exit; // Exit early if circuit breaker is open
+    }
+    
+    // Use file-based locking to prevent concurrent refreshes
+    $lockFile = $cacheDir . '/refresh_' . $airportId . '_' . $camIndex . '.lock';
+    $lockFp = @fopen($lockFile, 'c+');
+    $lockAcquired = false;
+    
+    if ($lockFp !== false) {
+        // Try to acquire exclusive lock (non-blocking)
+        if (@flock($lockFp, LOCK_EX | LOCK_NB)) {
+            $lockAcquired = true;
+            // Write PID and timestamp to lock file for debugging
+            @fwrite($lockFp, json_encode([
+                'pid' => getmypid(),
+                'started' => time(),
+                'request_id' => $reqId
+            ]));
+            @fflush($lockFp);
+        } else {
+            // Another refresh is already in progress
+            @fclose($lockFp);
+            aviationwx_log('info', 'webcam background refresh skipped - already in progress', [
+                'airport' => $airportId,
+                'cam' => $camIndex
+            ], 'app');
+            exit; // Exit silently - another process is handling the refresh
+        }
+    } else {
+        // Couldn't create lock file, but continue anyway (non-critical)
+        aviationwx_log('warning', 'webcam background refresh lock file creation failed', [
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+    }
     
     // Flush output to client immediately, then refresh in background
     if (function_exists('fastcgi_finish_request')) {
@@ -453,22 +501,32 @@ if (file_exists($targetFile)) {
         ], 'app');
     }
     
-    // Continue to refresh in background (don't exit here)
-    // Fetch fresh image
-    $freshCacheFile = $cacheJpg; // Always fetch JPG first
-    $freshCacheWebp = $cacheWebp;
-    $success = fetchWebcamImageBackground($airportId, $camIndex, $cam, $freshCacheFile, $freshCacheWebp);
-    
-    if ($success) {
-        aviationwx_log('info', 'webcam background refresh completed successfully', [
-            'airport' => $airportId,
-            'cam' => $camIndex
-        ], 'app');
-    } else {
-        aviationwx_log('warning', 'webcam background refresh failed', [
-            'airport' => $airportId,
-            'cam' => $camIndex
-        ], 'app');
+    try {
+        // Fetch fresh image
+        $freshCacheFile = $cacheJpg; // Always fetch JPG first
+        $freshCacheWebp = $cacheWebp;
+        $success = fetchWebcamImageBackground($airportId, $camIndex, $cam, $freshCacheFile, $freshCacheWebp);
+        
+        if ($success) {
+            aviationwx_log('info', 'webcam background refresh completed successfully', [
+                'airport' => $airportId,
+                'cam' => $camIndex
+            ], 'app');
+        } else {
+            // Only log as warning if it was an actual failure (not skipped due to circuit breaker)
+            // fetchWebcamImageBackground already logs circuit breaker skips
+            aviationwx_log('warning', 'webcam background refresh failed', [
+                'airport' => $airportId,
+                'cam' => $camIndex
+            ], 'app');
+        }
+    } finally {
+        // Always release lock
+        if ($lockAcquired && $lockFp !== false) {
+            @flock($lockFp, LOCK_UN);
+            @fclose($lockFp);
+            @unlink($lockFile); // Clean up lock file
+        }
     }
     
     // Exit silently after background refresh
