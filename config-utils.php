@@ -189,3 +189,55 @@ function getAirportIdFromRequest() {
     
     return $airportId;
 }
+
+/**
+ * Get the current Git commit SHA (short version)
+ * Tries multiple methods to get the SHA for display in footers
+ * 
+ * @return string Short SHA (7 characters) or empty string if unavailable
+ */
+function getGitSha() {
+    // Try environment variable first (set during deployment)
+    $sha = getenv('GIT_SHA');
+    if ($sha && strlen($sha) >= 7) {
+        return substr($sha, 0, 7);
+    }
+    
+    // Try reading from .git/HEAD (if in a git repository)
+    $gitHead = __DIR__ . '/.git/HEAD';
+    if (file_exists($gitHead)) {
+        $headContent = @file_get_contents($gitHead);
+        if ($headContent) {
+            // Handle ref: refs/heads/main format
+            if (preg_match('/^ref: (.+)$/', trim($headContent), $matches)) {
+                $refFile = __DIR__ . '/.git/' . trim($matches[1]);
+                if (file_exists($refFile)) {
+                    $sha = trim(@file_get_contents($refFile));
+                    if ($sha && strlen($sha) >= 7) {
+                        return substr($sha, 0, 7);
+                    }
+                }
+            } else {
+                // Direct SHA in HEAD (detached HEAD state)
+                $sha = trim($headContent);
+                if ($sha && strlen($sha) >= 7) {
+                    return substr($sha, 0, 7);
+                }
+            }
+        }
+    }
+    
+    // Try git command as fallback (if git is available)
+    if (function_exists('shell_exec')) {
+        $sha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse --short HEAD 2>/dev/null');
+        if ($sha) {
+            $sha = trim($sha);
+            if (strlen($sha) >= 7) {
+                return substr($sha, 0, 7);
+            }
+        }
+    }
+    
+    // Return empty string if SHA cannot be determined
+    return '';
+}
