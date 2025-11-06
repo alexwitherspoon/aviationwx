@@ -4,22 +4,22 @@
 
 ```bash
 # Start the PHP server
-php -S localhost:8000
+php -S localhost:8080
 
 # In another terminal, fetch webcam images
 php fetch-webcam-safe.php
 
 # Visit the page in your browser
-open http://localhost:8000/?airport=kspb
+open http://localhost:8080/?airport=kspb
 ```
 
 ## 📋 Available Commands
 
 ### 1. Start Server
 ```bash
-php -S localhost:8000
+php -S localhost:8080
 ```
-Starts local development server on port 8000.
+Starts local development server on port 8080.
 
 ### 2. Fetch Webcam Images
 ```bash
@@ -33,7 +33,7 @@ Downloads current images from webcam streams and caches them.
 
 ### 3. Check Weather API
 ```bash
-curl -s 'http://localhost:8000/weather.php?airport=kspb' | python3 -m json.tool
+curl -s 'http://localhost:8080/weather.php?airport=kspb' | python3 -m json.tool
 ```
 Tests the weather API and shows formatted JSON response.
 
@@ -44,7 +44,7 @@ ls -lh cache/webcams/
 Lists cached webcam images with sizes and timestamps.
 
 ### 5. Test Full Page
-Open in browser: http://localhost:8000/?airport=kspb
+Open in browser: http://localhost:8080/?airport=kspb
 
 Shows:
 - ✅ Airport information
@@ -109,17 +109,17 @@ php fetch-webcam-safe.php
 **Weather data not loading?**
 ```bash
 # Check the API response
-curl 'http://localhost:8000/weather.php?airport=kspb'
+curl 'http://localhost:8080/weather.php?airport=kspb'
 ```
 
 **Server not responding?**
 ```bash
 # Check if server is running
-lsof -i :8000
+lsof -i :8080
 
 # Restart if needed
 pkill -f "php -S"
-php -S localhost:8000
+php -S localhost:8080
 ```
 
 ## 🎯 For Production (Docker Droplet)

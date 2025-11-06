@@ -396,16 +396,16 @@ The homepage (`homepage.php`) automatically displays all airports from `airports
 
 ```bash
 # Start the server
-php -S localhost:8000
+php -S localhost:8080
 
 # Access homepage
-open http://localhost:8000/
+open http://localhost:8080/
 
 # Access specific airport
-open http://localhost:8000/?airport=kspb
+open http://localhost:8080/?airport=kspb
 
 # Test weather API
-curl http://localhost:8000/weather.php?airport=kspb
+curl http://localhost:8080/weather.php?airport=kspb
 
 # Cache webcam images
 php fetch-webcam.php
