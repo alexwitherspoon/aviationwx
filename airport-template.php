@@ -1,9 +1,32 @@
+<?php
+// Load SEO utilities
+require_once __DIR__ . '/seo-utils.php';
+
+// SEO variables - emphasize live webcams and runway conditions
+$webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
+$webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') . ' and ' : '';
+$pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($airport['icao']) . ') - Live Webcams & Runway Conditions';
+$pageDescription = 'Live webcams and real-time runway conditions for ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($airport['icao']) . '). ' . $webcamText . 'current weather, wind, visibility, and aviation metrics. Free for pilots.';
+$pageKeywords = htmlspecialchars($airport['icao']) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($airport['icao']) . ' weather, airport webcam, pilot weather, aviation weather';
+$airportUrl = 'https://' . $airportId . '.aviationwx.org';
+$canonicalUrl = $airportUrl; // Always use subdomain URL for canonical
+$ogImage = null; // Will be set to first webcam if available
+
+// Get first webcam image for Open Graph
+if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
+    $ogImage = $airportUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=0&fmt=jpg';
+} else {
+    $baseUrl = getBaseUrl();
+    $ogImage = $baseUrl . '/about-photo.jpg';
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($airport['name']) ?> - <?= htmlspecialchars($airport['icao']) ?></title>
+    <title><?= $pageTitle ?></title>
+    
     <!-- Resource hints for external APIs -->
     <link rel="preconnect" href="https://swd.weatherflow.com" crossorigin>
     <link rel="preconnect" href="https://api.ambientweather.net" crossorigin>
@@ -11,12 +34,29 @@
     <link rel="dns-prefetch" href="https://swd.weatherflow.com">
     <link rel="dns-prefetch" href="https://api.ambientweather.net">
     <link rel="dns-prefetch" href="https://aviationweather.gov">
+    
+    <?php
+    // Enhanced meta tags
+    echo generateEnhancedMetaTags($pageDescription, $pageKeywords);
+    echo "\n    ";
+    
+    // Canonical URL
+    echo generateCanonicalTag($airportUrl);
+    echo "\n    ";
+    
+    // Open Graph and Twitter Card tags
+    echo generateSocialMetaTags($pageTitle, $pageDescription, $airportUrl, $ogImage);
+    echo "\n    ";
+    
+    // Structured data (LocalBusiness schema for airport)
+    echo generateStructuredDataScript(generateAirportSchema($airport, $airportId));
+    ?>
+    
     <?php
     // Use minified CSS if available, fallback to regular CSS
     $cssFile = file_exists(__DIR__ . '/styles.min.css') ? 'styles.min.css' : 'styles.css';
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($cssFile) ?>">
-    <meta name="description" content="Real-time weather and conditions for <?= htmlspecialchars($airport['icao']) ?> - <?= htmlspecialchars($airport['name']) ?>">
     <script>
         // Register service worker for offline support with cache busting
         if ('serviceWorker' in navigator) {

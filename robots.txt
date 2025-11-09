@@ -23,6 +23,6 @@ Disallow: /.htaccess
 Disallow: /.git/
 Disallow: /.github/
 
-# Sitemap (if you create one later)
-# Sitemap: https://aviationwx.org/sitemap.xml
+# Sitemap
+Sitemap: https://aviationwx.org/sitemap.xml
 

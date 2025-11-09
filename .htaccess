@@ -15,6 +15,10 @@
     # Rewrite to index.php with airport parameter
     RewriteRule ^(.*)$ index.php?airport=%1 [QSA,L]
 
+    # Route sitemap.xml to sitemap.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
     # Default to index.php for routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

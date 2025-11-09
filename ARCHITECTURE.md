@@ -15,6 +15,8 @@ aviationwx.org/
 ├── config-utils.php          # Configuration loading and utilities
 ├── rate-limit.php            # Rate limiting utilities
 ├── logger.php                # Logging utilities
+├── seo-utils.php             # SEO utilities (structured data, meta tags)
+├── sitemap.php               # Dynamic XML sitemap generator
 ├── diagnostics.php           # System diagnostics endpoint
 ├── clear-cache.php           # Cache clearing endpoint
 ├── metrics.php               # Metrics endpoint
@@ -83,6 +85,19 @@ aviationwx.org/
   - Automatic cache invalidation on file change
   - Validation functions
   - Airport ID extraction from requests
+
+### SEO System (`seo-utils.php`, `sitemap.php`)
+
+- **Purpose**: Search engine optimization and indexing
+- **Features**:
+  - Dynamic XML sitemap generation (`/sitemap.xml`)
+  - Structured data (JSON-LD) for search engines
+    - Organization schema for homepage
+    - LocalBusiness schema for airport pages
+  - Open Graph and Twitter Card tags for social sharing
+  - Canonical URLs to prevent duplicate content
+  - Enhanced meta tags (keywords, author, description)
+- **Sitemap**: Automatically includes homepage, status page, and all airport subdomains
 
 ### Frontend (`airport-template.php`)
 

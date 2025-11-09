@@ -38,6 +38,7 @@
             <file>config-utils.php</file>
             <file>rate-limit.php</file>
             <file>logger.php</file>
+            <file>seo-utils.php</file>
         </include>
         <exclude>
             <directory>vendor</directory>
