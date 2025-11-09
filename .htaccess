@@ -111,6 +111,26 @@
     </IfModule>
 </FilesMatch>
 
+# Cache about-photo images for 1 month (30 days)
+<FilesMatch "^public/images/about-photo\.(jpg|webp)$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 month"
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </IfModule>
+</FilesMatch>
+<FilesMatch "^about-photo\.(jpg|webp)$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 month"
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </IfModule>
+</FilesMatch>
+
 # Cache webcam images for better performance (nginx handles this in production)
 # <FilesMatch "\.jpg$">
 #     ExpiresActive On
