@@ -41,7 +41,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         // Ensure mtime is now (fresh)
         @touch($this->cacheFile, time());
         
-        $response = $this->httpGet("webcam.php?id={$this->airport}&cam={$this->camIndex}");
+        $response = $this->httpGet("api/webcam.php?id={$this->airport}&cam={$this->camIndex}");
         if ($response['http_code'] == 0) {
             $this->markTestSkipped('Endpoint not available');
             return;
@@ -77,7 +77,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         // Set mtime 2 minutes ago to exceed typical refresh (60s)
         @touch($this->cacheFile, time() - 120);
         
-        $response = $this->httpGet("webcam.php?id={$this->airport}&cam={$this->camIndex}");
+        $response = $this->httpGet("api/webcam.php?id={$this->airport}&cam={$this->camIndex}");
         if ($response['http_code'] == 0) {
             $this->markTestSkipped('Endpoint not available');
             return;

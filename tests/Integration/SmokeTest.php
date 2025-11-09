@@ -77,7 +77,7 @@ class SmokeTest extends TestCase
      */
     public function testWeatherEndpoint_IsAccessible()
     {
-        $response = $this->makeRequest('weather.php?airport=kspb');
+        $response = $this->makeRequest('api/weather.php?airport=kspb');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Weather endpoint not available at {$this->baseUrl}");
@@ -142,7 +142,7 @@ class SmokeTest extends TestCase
      */
     public function testWebcamEndpoint_IsAccessible()
     {
-        $response = $this->makeRequest('webcam.php?airport=kspb&index=0');
+        $response = $this->makeRequest('api/webcam.php?airport=kspb&index=0');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -200,7 +200,7 @@ class SmokeTest extends TestCase
     {
         // Make a warmup request to account for cache warming
         // First request might be slower due to cache miss, cold start, etc.
-        $warmupResponse = $this->makeRequest('weather.php?airport=kspb');
+        $warmupResponse = $this->makeRequest('api/weather.php?airport=kspb');
         if ($warmupResponse['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
             return;
@@ -211,7 +211,7 @@ class SmokeTest extends TestCase
         
         // Now measure the actual response time (should be cached/faster)
         $start = microtime(true);
-        $response = $this->makeRequest('weather.php?airport=kspb');
+        $response = $this->makeRequest('api/weather.php?airport=kspb');
         $elapsed = microtime(true) - $start;
         
         if ($response['http_code'] == 0) {
