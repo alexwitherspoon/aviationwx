@@ -36,6 +36,7 @@ require_once __DIR__ . '/../config-utils.php';
 require_once __DIR__ . '/../rate-limit.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../weather.php'; // weather.php now has a conditional to prevent endpoint execution
+require_once __DIR__ . '/../seo-utils.php'; // SEO utilities for testing
 
 // Load test helpers (must be loaded before test files that use them)
 if (file_exists(__DIR__ . '/Helpers/TestHelper.php')) {

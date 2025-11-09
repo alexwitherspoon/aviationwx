@@ -50,6 +50,11 @@ Real-time aviation weather and conditions for participating airports.
   - Rate limiting (60 req/min for weather, 100 req/min for webcams)
   - Sanitized error messages
 - **Status Page**: Real-time system and airport health monitoring with timestamps
+- **SEO & Indexing**: 
+  - Dynamic XML sitemap (`/sitemap.xml`)
+  - Structured data (JSON-LD) for search engines
+  - Open Graph and Twitter Card tags for social sharing
+  - Canonical URLs to prevent duplicate content
 - **Mobile-First Responsive Design**
 - **Easy Configuration** via JSON config files
 

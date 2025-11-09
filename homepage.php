@@ -3,13 +3,58 @@
 header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Load SEO utilities
+require_once __DIR__ . '/seo-utils.php';
+
+// Get configuration for stats
+$configFile = __DIR__ . '/airports.json';
+$totalAirports = 0;
+$totalWebcams = 0;
+if (file_exists($configFile)) {
+    $config = json_decode(file_get_contents($configFile), true);
+    if (isset($config['airports'])) {
+        $totalAirports = count($config['airports']);
+        foreach ($config['airports'] as $airport) {
+            if (isset($airport['webcams'])) {
+                $totalWebcams += count($airport['webcams']);
+            }
+        }
+    }
+}
+
+// SEO variables
+$pageTitle = 'AviationWX.org - Live Airport Webcams & Real-time Aviation Weather';
+$pageDescription = 'Free live airport webcams and real-time runway conditions for pilots. View live weather, webcams, and aviation metrics at airports across the network. ' . $totalAirports . ' participating airports with ' . $totalWebcams . ' live webcams.';
+$pageKeywords = 'live airport webcams, runway conditions, aviation weather, airport webcams, live weather, pilot weather, airport conditions, aviation webcams, real-time weather, airport cameras';
+$canonicalUrl = getCanonicalUrl();
+$baseUrl = getBaseUrl();
+$ogImage = $baseUrl . '/about-photo.jpg';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AviationWX.org - Real-time Aviation Weather</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    
+    <?php
+    // Enhanced meta tags
+    echo generateEnhancedMetaTags($pageDescription, $pageKeywords);
+    echo "\n    ";
+    
+    // Canonical URL
+    echo generateCanonicalTag($canonicalUrl);
+    echo "\n    ";
+    
+    // Open Graph and Twitter Card tags
+    echo generateSocialMetaTags($pageTitle, $pageDescription, $canonicalUrl, $ogImage);
+    echo "\n    ";
+    
+    // Structured data (Organization schema)
+    echo generateStructuredDataScript(generateOrganizationSchema());
+    ?>
+    
     <link rel="stylesheet" href="styles.css">
     <style>
         /* Smooth scrolling for anchor links */
@@ -389,20 +434,7 @@ header('Expires: 0');
 
         <!-- Stats -->
         <?php
-        $configFile = __DIR__ . '/airports.json';
-        $totalAirports = 0;
-        $totalWebcams = 0;
-        if (file_exists($configFile)) {
-            $config = json_decode(file_get_contents($configFile), true);
-            if (isset($config['airports'])) {
-                $totalAirports = count($config['airports']);
-                foreach ($config['airports'] as $airport) {
-                    if (isset($airport['webcams'])) {
-                        $totalWebcams += count($airport['webcams']);
-                    }
-                }
-            }
-        }
+        // Stats already calculated in SEO section above
         ?>
         
         <div class="stats">
