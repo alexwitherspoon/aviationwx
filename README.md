@@ -13,6 +13,9 @@ Real-time aviation weather and conditions for participating airports.
 **Deploy to Production:**
 [![Deploy to Production](https://github.com/alexwitherspoon/aviationwx/actions/workflows/deploy-docker.yml/badge.svg)](https://github.com/alexwitherspoon/aviationwx/actions/workflows/deploy-docker.yml)
 
+**Deploy Secret airports.json to Production**
+[![Deploy airports.json to DigitalOcean](https://github.com/alexwitherspoon/aviationwx-secrets/actions/workflows/deploy.yml/badge.svg)](https://github.com/alexwitherspoon/aviationwx-secrets/actions/workflows/deploy.yml)
+
 ## Quick links:
 - 🚀 **Local Development**: [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) (Docker-based development)
 - 🖥️ **Production Deployment**: [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) (Ubuntu LTS VPS from scratch)
