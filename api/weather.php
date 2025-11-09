@@ -52,7 +52,14 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
  * @param string $severity 'transient' or 'permanent'
  */
 function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') {
-    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $cacheDir = __DIR__ . '/cache';
+    if (!file_exists($cacheDir)) {
+        if (!mkdir($cacheDir, 0755, true)) {
+            error_log("Failed to create cache directory: {$cacheDir}");
+            return;
+        }
+    }
+    $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
     $now = time();
     
@@ -454,18 +461,23 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
             }
             
             // For METAR fields: If METAR was successfully fetched (last_updated_metar is set),
-            // null means unlimited/missing, so we should use null rather than preserving old value.
-            // However, if the old value is not stale, we should preserve it (test case: MixedStaleness).
-            // Only use null if METAR was fetched AND old value is stale.
+            // null means unlimited/missing, so we should use null to overwrite old cached values.
+            // However, there's a special case: MixedStaleness test expects non-stale METAR fields
+            // to be preserved when new METAR data is missing (not when it's null).
+            // When new METAR data has null (unlimited), it should always overwrite old cache.
+            // When new METAR data is missing (field not in newData), preserve non-stale old values.
             if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
-                // METAR was successfully fetched - null means unlimited/missing
-                // But preserve non-stale old values (they're still valid)
-                if ($isStale) {
-                    // Old value is stale, use null from new METAR
+                // METAR was successfully fetched
+                // If new value is explicitly null (unlimited), always use null to overwrite old cache
+                // If new value is missing (not in newData), preserve non-stale old values
+                if ($newValue === null) {
+                    // Explicitly null from METAR means unlimited/missing - always overwrite
                     $result[$field] = null;
                 } else {
-                    // Old value is not stale, preserve it
-                    $result[$field] = $oldValue;
+                    // New value is missing (not null, just not in array) - preserve non-stale old value
+                    if (!$isStale) {
+                        $result[$field] = $oldValue;
+                    }
                 }
                 continue;
             }
