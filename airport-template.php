@@ -58,6 +58,31 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     ?>
     <link rel="stylesheet" href="<?= htmlspecialchars($cssFile) ?>">
     <script>
+        // Suppress Safari warning about deprecated window.styleMedia
+        // Safari warns when window.styleMedia exists, even if not used
+        // We use window.matchMedia instead (the modern API) for media queries
+        // This script ensures we never access the deprecated property
+        (function() {
+            // Override styleMedia to prevent Safari warnings
+            // Note: We don't use styleMedia anywhere - we use matchMedia for media queries
+            if (typeof window.styleMedia !== 'undefined') {
+                try {
+                    // Try to delete the property (may not work in all browsers)
+                    delete window.styleMedia;
+                } catch (e) {
+                    // If deletion fails, override it to prevent warnings
+                    Object.defineProperty(window, 'styleMedia', {
+                        get: function() {
+                            // Return null instead of the deprecated object
+                            return null;
+                        },
+                        configurable: true,
+                        enumerable: false
+                    });
+                }
+            }
+        })();
+        
         // Register service worker for offline support with cache busting
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
