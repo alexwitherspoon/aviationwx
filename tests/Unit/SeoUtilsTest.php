@@ -480,5 +480,203 @@ class SeoUtilsTest extends TestCase
             $this->assertStringContainsString('fmt=jpg', $imageUrl);
         }
     }
+
+    /**
+     * Test generateFaviconTags() - Basic Structure
+     */
+    public function testGenerateFaviconTags_BasicStructure()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        // Should contain standard favicon
+        $this->assertStringContainsString('rel="icon"', $tags);
+        $this->assertStringContainsString('favicon.ico', $tags);
+        
+        // Should contain manifest
+        $this->assertStringContainsString('rel="manifest"', $tags);
+        $this->assertStringContainsString('manifest.json', $tags);
+        
+        // Should contain theme color
+        $this->assertStringContainsString('theme-color', $tags);
+        $this->assertStringContainsString('#3b82f6', $tags);
+    }
+
+    /**
+     * Test generateFaviconTags() - All Favicon Sizes
+     */
+    public function testGenerateFaviconTags_AllFaviconSizes()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        $faviconSizes = [16, 32, 48, 64, 128, 256];
+        foreach ($faviconSizes as $size) {
+            $this->assertStringContainsString('favicon-' . $size . 'x' . $size . '.png', $tags);
+            $this->assertStringContainsString('sizes="' . $size . 'x' . $size . '"', $tags);
+        }
+    }
+
+    /**
+     * Test generateFaviconTags() - Apple Touch Icons
+     */
+    public function testGenerateFaviconTags_AppleTouchIcons()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        $appleSizes = [120, 152, 167, 180];
+        foreach ($appleSizes as $size) {
+            $this->assertStringContainsString('rel="apple-touch-icon"', $tags);
+            $this->assertStringContainsString('apple-touch-icon-' . $size . 'x' . $size . '.png', $tags);
+            $this->assertStringContainsString('sizes="' . $size . 'x' . $size . '"', $tags);
+        }
+    }
+
+    /**
+     * Test generateFaviconTags() - Correct Base URL
+     */
+    public function testGenerateFaviconTags_CorrectBaseUrl()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        // Should use correct base URL
+        $this->assertStringContainsString('https://aviationwx.org/aviationwx_favicons', $tags);
+    }
+
+    /**
+     * Test generateFaviconTags() - HTTP Base URL
+     */
+    public function testGenerateFaviconTags_HttpBaseUrl()
+    {
+        $_SERVER['HTTPS'] = 'off';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        // Should use HTTP for base URL
+        $this->assertStringContainsString('http://aviationwx.org/aviationwx_favicons', $tags);
+    }
+
+    /**
+     * Test getLogoUrl() - Falls Back to Favicon When No Logo
+     */
+    public function testGetLogoUrl_FallsBackToFavicon()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $logoUrl = getLogoUrl();
+        
+        // Should return a URL
+        $this->assertIsString($logoUrl);
+        $this->assertStringStartsWith('https://', $logoUrl);
+        
+        // Should contain aviationwx_favicons path
+        $this->assertStringContainsString('aviationwx_favicons', $logoUrl);
+        
+        // Should either be favicon-512x512.png or about-photo.jpg (depending on what exists)
+        $this->assertTrue(
+            strpos($logoUrl, 'favicon-512x512.png') !== false ||
+            strpos($logoUrl, 'about-photo.jpg') !== false
+        );
+    }
+
+    /**
+     * Test getLogoUrl() - Returns Correct Base URL
+     */
+    public function testGetLogoUrl_ReturnsCorrectBaseUrl()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $logoUrl = getLogoUrl();
+        
+        // Should use HTTPS base URL
+        $this->assertStringStartsWith('https://aviationwx.org', $logoUrl);
+    }
+
+    /**
+     * Test getLogoUrl() - HTTP Base URL
+     */
+    public function testGetLogoUrl_HttpBaseUrl()
+    {
+        $_SERVER['HTTPS'] = 'off';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $logoUrl = getLogoUrl();
+        
+        // Should use HTTP base URL
+        $this->assertStringStartsWith('http://aviationwx.org', $logoUrl);
+    }
+
+    /**
+     * Test generateOrganizationSchema() - Uses getLogoUrl()
+     */
+    public function testGenerateOrganizationSchema_UsesGetLogoUrl()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $schema = generateOrganizationSchema();
+        
+        // Should have logo key
+        $this->assertArrayHasKey('logo', $schema);
+        
+        // Logo should be a string URL
+        $this->assertIsString($schema['logo']);
+        
+        // Logo should contain base URL
+        $this->assertStringContainsString('aviationwx.org', $schema['logo']);
+    }
+
+    /**
+     * Test generateFaviconTags() - HTML Structure
+     */
+    public function testGenerateFaviconTags_HtmlStructure()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        // Should contain proper link tags
+        $this->assertStringContainsString('<link', $tags);
+        $this->assertStringContainsString('href=', $tags);
+        
+        // Should contain proper meta tag for theme color
+        $this->assertStringContainsString('<meta', $tags);
+        $this->assertStringContainsString('name="theme-color"', $tags);
+    }
+
+    /**
+     * Test generateFaviconTags() - All Required Elements
+     */
+    public function testGenerateFaviconTags_AllRequiredElements()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        
+        $tags = generateFaviconTags();
+        
+        // Count expected elements
+        // 1 favicon.ico + 6 favicon sizes + 4 apple touch icons + 1 manifest + 1 theme color = 13
+        $expectedCount = 13;
+        
+        // Count link and meta tags
+        $linkCount = substr_count($tags, '<link');
+        $metaCount = substr_count($tags, '<meta');
+        
+        $this->assertGreaterThanOrEqual($expectedCount, $linkCount + $metaCount);
+    }
 }
 

@@ -43,7 +43,7 @@ function generateOrganizationSchema() {
         '@type' => 'Organization',
         'name' => 'AviationWX.org',
         'url' => $baseUrl,
-        'logo' => $baseUrl . '/about-photo.jpg', // Using about-photo.jpg as logo placeholder
+        'logo' => getLogoUrl(),
         'description' => 'Free real-time aviation weather with live airport webcams and runway conditions for pilots',
         'sameAs' => [
             'https://github.com/alexwitherspoon/aviationwx.org'
@@ -192,5 +192,64 @@ function generateStructuredDataScript($data) {
     return '<script type="application/ld+json">' . "\n" . 
            json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n" . 
            '</script>';
+}
+
+/**
+ * Generate favicon and icon tags for HTML head
+ * Returns all necessary favicon, Apple touch icon, and manifest links
+ */
+function generateFaviconTags() {
+    $baseUrl = getBaseUrl();
+    $faviconPath = $baseUrl . '/aviationwx_favicons';
+    
+    $tags = [];
+    
+    // Standard favicon (for older browsers)
+    $tags[] = '<link rel="icon" type="image/x-icon" href="' . $faviconPath . '/favicon.ico">';
+    
+    // Modern favicons with sizes
+    $faviconSizes = [16, 32, 48, 64, 128, 256];
+    foreach ($faviconSizes as $size) {
+        $tags[] = '<link rel="icon" type="image/png" sizes="' . $size . 'x' . $size . '" href="' . $faviconPath . '/favicon-' . $size . 'x' . $size . '.png">';
+    }
+    
+    // Apple Touch Icons (for iOS home screen)
+    $appleSizes = [120, 152, 167, 180];
+    foreach ($appleSizes as $size) {
+        $tags[] = '<link rel="apple-touch-icon" sizes="' . $size . 'x' . $size . '" href="' . $faviconPath . '/apple-touch-icon-' . $size . 'x' . $size . '.png">';
+    }
+    
+    // Web App Manifest (PWA support)
+    $tags[] = '<link rel="manifest" href="' . $faviconPath . '/manifest.json">';
+    
+    // Theme color for mobile browsers
+    $tags[] = '<meta name="theme-color" content="#3b82f6">';
+    
+    return implode("\n    ", $tags);
+}
+
+/**
+ * Get logo URL for structured data
+ * Checks for logo file in favicon folder, falls back to largest favicon or about-photo.jpg
+ */
+function getLogoUrl() {
+    $baseUrl = getBaseUrl();
+    $faviconDir = __DIR__ . '/aviationwx_favicons';
+    
+    // Check for common logo file names
+    $logoFiles = ['logo.png', 'logo.jpg', 'logo.svg', 'logo.webp'];
+    foreach ($logoFiles as $logoFile) {
+        if (file_exists($faviconDir . '/' . $logoFile)) {
+            return $baseUrl . '/aviationwx_favicons/' . $logoFile;
+        }
+    }
+    
+    // Fallback to largest favicon (512x512) if no logo found
+    if (file_exists($faviconDir . '/favicon-512x512.png')) {
+        return $baseUrl . '/aviationwx_favicons/favicon-512x512.png';
+    }
+    
+    // Final fallback to about-photo.jpg
+    return $baseUrl . '/about-photo.jpg';
 }
 

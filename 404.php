@@ -1,9 +1,20 @@
+<?php
+// Load SEO utilities for favicon tags
+require_once __DIR__ . '/seo-utils.php';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Airport Not Found - AviationWX.org</title>
+    
+    <?php
+    // Favicon and icon tags
+    echo generateFaviconTags();
+    echo "\n    ";
+    ?>
+    
     <link rel="stylesheet" href="styles.css">
     <style>
         .error-container {
