@@ -88,8 +88,8 @@ class SeoUtilsTest extends TestCase
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
         $_SERVER['REQUEST_URI'] = '/?page=2&test=1';
         $url = getCanonicalUrl();
-        $this->assertEquals('https://aviationwx.org/?page=2&test=1', $url);
-        // Note: strtok only removes after first ?, so this is expected behavior
+        // Canonical URLs should not include query parameters
+        $this->assertEquals('https://aviationwx.org/', $url);
     }
 
     /**
@@ -279,7 +279,11 @@ class SeoUtilsTest extends TestCase
         $tags = generateSocialMetaTags('Test Title', 'Test Description', 'https://example.com');
         
         $this->assertStringContainsString('og:image', $tags);
-        $this->assertStringContainsString('about-photo.jpg', $tags);
+        // Function prefers WebP, falls back to JPG
+        $this->assertTrue(
+            strpos($tags, 'about-photo.webp') !== false || 
+            strpos($tags, 'about-photo.jpg') !== false
+        );
     }
 
     /**
@@ -371,7 +375,9 @@ class SeoUtilsTest extends TestCase
         
         $this->assertStringContainsString('<script type="application/ld+json">', $script);
         $this->assertStringContainsString('</script>', $script);
-        $this->assertStringContainsString('"@context":"https://schema.org"', $script);
+        // Function uses JSON_PRETTY_PRINT, so JSON has spaces
+        $this->assertStringContainsString('"@context"', $script);
+        $this->assertStringContainsString('https://schema.org', $script);
     }
 
     /**
