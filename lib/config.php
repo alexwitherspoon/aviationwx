@@ -75,7 +75,17 @@ function loadConfig($useCache = true) {
     
     // Get config file path
     $envConfigPath = getenv('CONFIG_PATH');
-    $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
+    // Check if CONFIG_PATH is set and is a file (not a directory)
+    if ($envConfigPath && file_exists($envConfigPath) && is_file($envConfigPath)) {
+        $configFile = $envConfigPath;
+    } else {
+        // Fall back to default path
+        $configFile = __DIR__ . '/../config/airports.json';
+        // If default path doesn't exist, try /var/www/html/airports.json (production mount point)
+        if (!file_exists($configFile) || is_dir($configFile)) {
+            $configFile = '/var/www/html/airports.json';
+        }
+    }
     
     // SECURITY: Prevent test data from being used in production
     $isProduction = isProduction();
