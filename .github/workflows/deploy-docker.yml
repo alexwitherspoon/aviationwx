@@ -275,11 +275,11 @@ jobs:
           DEPLOY_VERSION="$(git rev-parse --short HEAD)-$(date +%s)"
           echo "Updating cache version to: ${DEPLOY_VERSION}"
           
-          # Update the cache version in sw.js
+          # Update the cache version in public/js/service-worker.js
           # The script handles missing files and verification
           bash scripts/update-cache-version.sh "${DEPLOY_VERSION}"
           
-          # Note: We don't commit sw.js changes during deployment
+          # Note: We don't commit service-worker.js changes during deployment
           # The updated file will be synced to the server via rsync
           # This avoids creating unnecessary commits and deployment loops
           echo "✓ Cache version updated (will be synced to server)"
@@ -426,7 +426,7 @@ jobs:
           cd ~/aviationwx
           # Set GIT_SHA as environment variable for docker compose
           export GIT_SHA="$GIT_SHA"
-          docker compose -f docker-compose.prod.yml up -d --build
+          docker compose -f docker/docker-compose.prod.yml up -d --build
           docker system prune -f
           EOF
 
@@ -446,9 +446,9 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Force service worker update by updating sw.js timestamp
+          # Force service worker update by updating public/js/service-worker.js timestamp
           # This ensures clients will download new version
-          touch sw.js || true
+          touch public/js/service-worker.js || true
           echo "✓ Updated service worker file timestamp to force cache bust"
           
           # If using Nginx proxy_cache, we would purge here
@@ -463,10 +463,10 @@ jobs:
           cd ~/aviationwx
           # Restart Nginx container to ensure it picks up new nginx.conf
           # This is safer than reload since config file is mounted as volume
-          docker compose -f docker-compose.prod.yml restart nginx || docker compose -f docker-compose.prod.yml up -d nginx
+          docker compose -f docker/docker-compose.prod.yml restart nginx || docker compose -f docker/docker-compose.prod.yml up -d nginx
           # Verify Nginx container is running and config is valid
           sleep 2
-          if docker compose -f docker-compose.prod.yml exec -T nginx nginx -t 2>&1 | grep -q "syntax is ok\|test is successful"; then
+          if docker compose -f docker/docker-compose.prod.yml exec -T nginx nginx -t 2>&1 | grep -q "syntax is ok\|test is successful"; then
             echo "✓ Nginx configuration is valid"
           else
             echo "⚠ Nginx config test failed, but container is running"
@@ -486,19 +486,19 @@ jobs:
           sleep 8
           
           # Check if containers are running (check both services explicitly)
-          CONTAINER_STATUS=$(docker compose -f docker-compose.prod.yml ps --format json 2>/dev/null || docker compose -f docker-compose.prod.yml ps)
+          CONTAINER_STATUS=$(docker compose -f docker/docker-compose.prod.yml ps --format json 2>/dev/null || docker compose -f docker/docker-compose.prod.yml ps)
           
           # Count running containers (both web and nginx should be up)
-          RUNNING_COUNT=$(docker compose -f docker-compose.prod.yml ps --status running --format json 2>/dev/null | grep -c '"State":"running"' || docker compose -f docker-compose.prod.yml ps | grep -c "Up" || echo "0")
+          RUNNING_COUNT=$(docker compose -f docker/docker-compose.prod.yml ps --status running --format json 2>/dev/null | grep -c '"State":"running"' || docker compose -f docker/docker-compose.prod.yml ps | grep -c "Up" || echo "0")
           
           # Check that we have at least the web container (nginx is optional but should be running too)
           if [ "$RUNNING_COUNT" -lt "1" ]; then
             echo "❌ Containers are not running"
             echo "Container status:"
-            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker/docker-compose.prod.yml ps
             echo ""
             echo "Recent logs:"
-            docker compose -f docker-compose.prod.yml logs --tail=30
+            docker compose -f docker/docker-compose.prod.yml logs --tail=30
             exit 1
           fi
           
@@ -511,12 +511,12 @@ jobs:
           # Check if web container is responding (from inside container via exec)
           # This is more reliable than checking from host since Apache might have Host header issues
           echo "Testing web container from inside..."
-          if ! docker compose -f docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost/ > /dev/null 2>&1; then
+          if ! docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost/ > /dev/null 2>&1; then
             echo "❌ Web container is not responding (internal check failed)"
             echo "Checking container logs..."
-            docker compose -f docker-compose.prod.yml logs web | tail -50
+            docker compose -f docker/docker-compose.prod.yml logs web | tail -50
             echo "Checking container status..."
-            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker/docker-compose.prod.yml ps
             exit 1
           fi
           
@@ -540,7 +540,7 @@ jobs:
           fi
           
           # Check if config-utils.php exists
-          if ! docker compose -f docker-compose.prod.yml exec -T web test -f /var/www/html/config-utils.php; then
+          if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/lib/config.php; then
             echo "❌ config-utils.php not found in container"
             exit 1
           fi
@@ -548,7 +548,7 @@ jobs:
           echo "✓ config-utils.php present"
           
           # Check if rate-limit.php exists
-          if ! docker compose -f docker-compose.prod.yml exec -T web test -f /var/www/html/rate-limit.php; then
+          if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/lib/rate-limit.php; then
             echo "❌ rate-limit.php not found in container"
             exit 1
           fi
@@ -556,7 +556,7 @@ jobs:
           echo "✓ rate-limit.php present"
           
           # Check APCu extension
-          if ! docker compose -f docker-compose.prod.yml exec -T web php -m | grep -q apcu; then
+          if ! docker compose -f docker/docker-compose.prod.yml exec -T web php -m | grep -q apcu; then
             echo "⚠️  APCu extension not loaded (rate limiting will be disabled)"
           else
             echo "✓ APCu extension loaded"

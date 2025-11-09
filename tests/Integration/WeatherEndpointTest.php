@@ -9,8 +9,8 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
-require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/logger.php';
 require_once __DIR__ . '/../Helpers/TestHelper.php';
 
 class WeatherEndpointTest extends TestCase

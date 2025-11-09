@@ -1,7 +1,7 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
+require_once __DIR__ . '/../../lib/config.php';
 
 class WebcamBackgroundRefreshTest extends TestCase
 {
@@ -31,7 +31,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         }
         
         // Create a fresh cache file
-        $placeholder = __DIR__ . '/../../placeholder.jpg';
+        $placeholder = __DIR__ . '/../../public/images/placeholder.jpg';
         if (!file_exists($placeholder)) {
             $this->markTestSkipped('Placeholder image not found');
             return;
@@ -67,7 +67,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         }
         
         // Create a stale cache file
-        $placeholder = __DIR__ . '/../../placeholder.jpg';
+        $placeholder = __DIR__ . '/../../public/images/placeholder.jpg';
         if (!file_exists($placeholder)) {
             $this->markTestSkipped('Placeholder image not found');
             return;

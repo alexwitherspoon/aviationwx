@@ -7,10 +7,10 @@
     },
     "autoload": {
         "files": [
-            "config-utils.php",
-            "rate-limit.php",
-            "logger.php",
-            "weather.php"
+            "lib/config.php",
+            "lib/rate-limit.php",
+            "lib/logger.php",
+            "api/weather.php"
         ]
     },
     "autoload-dev": {

@@ -34,11 +34,11 @@
     <source>
         <include>
             <file>weather.php</file>
-            <file>fetch-webcam-safe.php</file>
-            <file>config-utils.php</file>
-            <file>rate-limit.php</file>
-            <file>logger.php</file>
-            <file>seo-utils.php</file>
+            <file>scripts/fetch-webcam.php</file>
+            <file>lib/config.php</file>
+            <file>lib/rate-limit.php</file>
+            <file>lib/logger.php</file>
+            <file>lib/seo.php</file>
         </include>
         <exclude>
             <directory>vendor</directory>

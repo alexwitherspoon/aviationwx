@@ -6,7 +6,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../seo-utils.php';
+require_once __DIR__ . '/../../lib/seo.php';
 
 class SeoUtilsTest extends TestCase
 {

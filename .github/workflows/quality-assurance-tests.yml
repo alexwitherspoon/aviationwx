@@ -72,17 +72,17 @@ jobs:
       - name: Create test airports.json
         run: |
           # Create airports.json from example for Docker
-          if [ ! -f airports.json ]; then
-            cp airports.json.example airports.json
-            echo "✓ Created airports.json from example"
+          if [ ! -f config/airports.json ]; then
+            cp config/airports.json.example config/airports.json
+            echo "✓ Created config/airports.json from example"
           fi
       
       - name: Start Docker containers
         run: |
           # Start local instance for testing
-          docker compose up -d
+          docker compose -f docker/docker-compose.yml up -d
           sleep 15  # Wait for containers to be ready
-          docker compose ps
+          docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for health check
         run: |
@@ -98,7 +98,7 @@ jobs:
             echo "Waiting for service... ${elapsed}s"
           done
           echo "⚠ Service did not become ready in time"
-          docker compose logs web
+          docker compose -f docker/docker-compose.yml logs web
       
       - name: Run E2E Tests
         run: |
@@ -111,7 +111,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker compose down
+          docker compose -f docker/docker-compose.yml down
       
       - name: Upload E2E Test Results
         if: always()
@@ -145,20 +145,20 @@ jobs:
       - name: Create test airports.json
         run: |
           # Create airports.json from example for Docker
-          if [ ! -f airports.json ]; then
-            cp airports.json.example airports.json
-            echo "✓ Created airports.json from example"
+          if [ ! -f config/airports.json ]; then
+            cp config/airports.json.example config/airports.json
+            echo "✓ Created config/airports.json from example"
           fi
       
       - name: Start Docker containers
         run: |
-          docker compose up -d
+          docker compose -f docker/docker-compose.yml up -d
           sleep 15
       
       - name: Run Smoke Tests (Local)
         run: |
           echo "Running smoke tests against local instance..."
-          echo "Note: Docker container uses airports.json (mounted from host)"
+          echo "Note: Docker container uses config/airports.json (mounted from host)"
           vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --no-coverage
         env:
           TEST_API_URL: http://localhost:8080
@@ -167,7 +167,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker compose down
+          docker compose -f docker/docker-compose.yml down
       
       - name: Upload Smoke Test Results
         if: always()
@@ -280,16 +280,16 @@ jobs:
       - name: Create test airports.json
         run: |
           # Create airports.json from example for Docker
-          if [ ! -f airports.json ]; then
-            cp airports.json.example airports.json
-            echo "✓ Created airports.json from example"
+          if [ ! -f config/airports.json ]; then
+            cp config/airports.json.example config/airports.json
+            echo "✓ Created config/airports.json from example"
           fi
       
       - name: Start Docker containers
         run: |
-          docker compose up -d
+          docker compose -f docker/docker-compose.yml up -d
           sleep 15
-          docker compose ps
+          docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for service to be ready
         run: |
@@ -304,7 +304,7 @@ jobs:
             elapsed=$((elapsed + 2))
           done
           echo "⚠ Service did not become ready"
-          docker compose logs web
+          docker compose -f docker/docker-compose.yml logs web
       
       - name: Run Browser Tests
         working-directory: tests/Browser
@@ -343,4 +343,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker compose down
+          docker compose -f docker/docker-compose.yml down
