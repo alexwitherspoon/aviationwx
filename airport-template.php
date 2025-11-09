@@ -27,6 +27,12 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?></title>
     
+    <?php
+    // Favicon and icon tags
+    echo generateFaviconTags();
+    echo "\n    ";
+    ?>
+    
     <!-- Resource hints for external APIs -->
     <link rel="preconnect" href="https://swd.weatherflow.com" crossorigin>
     <link rel="preconnect" href="https://api.ambientweather.net" crossorigin>

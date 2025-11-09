@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/config-utils.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/seo-utils.php';
 
 // Prevent caching
 header('Content-Type: text/html; charset=utf-8');
@@ -430,6 +431,13 @@ usort($airportHealth, function($a, $b) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AviationWX Status</title>
+    
+    <?php
+    // Favicon and icon tags
+    echo generateFaviconTags();
+    echo "\n    ";
+    ?>
+    
     <style>
         * {
             margin: 0;

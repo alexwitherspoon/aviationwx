@@ -39,6 +39,10 @@ $ogImage = $baseUrl . '/about-photo.jpg';
     <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php
+    // Favicon and icon tags
+    echo generateFaviconTags();
+    echo "\n    ";
+    
     // Enhanced meta tags
     echo generateEnhancedMetaTags($pageDescription, $pageKeywords);
     echo "\n    ";
