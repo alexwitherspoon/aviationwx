@@ -1,4 +1,4 @@
-version: '3.8'
+name: aviationwx
 
 services:
   web:
@@ -6,7 +6,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     image: aviationwx
-    container_name: aviationwx
+    container_name: aviationwx-web
     ports:
       - "${APP_PORT:-8080}:80"
     volumes:
