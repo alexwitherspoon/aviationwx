@@ -284,6 +284,21 @@ jobs:
           # This avoids creating unnecessary commits and deployment loops
           echo "✓ Cache version updated (will be synced to server)"
 
+      - name: Clean up old directory structure on server
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          # Clean up old docker/docker/ directory structure if it exists
+          if [ -d docker/docker ]; then
+            echo "Removing old docker/docker/ directory structure..."
+            rm -rf docker/docker || true
+          fi
+          # Clean up any other old nested docker directories
+          find docker -type d -name docker -mindepth 2 -exec rm -rf {} + 2>/dev/null || true
+          echo "✓ Cleanup complete"
+          EOF
+
       - name: Sync repository to server
         run: |
           rsync -az --delete --exclude '.git' --exclude 'cache' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/
