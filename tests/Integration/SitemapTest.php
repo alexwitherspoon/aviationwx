@@ -6,8 +6,8 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
-require_once __DIR__ . '/../../seo-utils.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/seo.php';
 
 class SitemapTest extends TestCase
 {

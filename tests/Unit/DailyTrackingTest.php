@@ -7,7 +7,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../weather.php';
+require_once __DIR__ . '/../../api/weather.php';
 
 class DailyTrackingTest extends TestCase
 {
@@ -26,6 +26,12 @@ class DailyTrackingTest extends TestCase
         $this->peakGustFile = __DIR__ . '/../../cache/peak_gusts.json';
         $this->tempExtremesFile = __DIR__ . '/../../cache/temp_extremes.json';
         
+        // Ensure cache directory exists
+        $cacheDir = dirname($this->peakGustFile);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        
         // Backup existing files if they exist
         if (file_exists($this->peakGustFile)) {
             rename($this->peakGustFile, $this->peakGustFile . '.backup');
@@ -33,6 +39,18 @@ class DailyTrackingTest extends TestCase
         if (file_exists($this->tempExtremesFile)) {
             rename($this->tempExtremesFile, $this->tempExtremesFile . '.backup');
         }
+        
+        // Ensure files are completely removed (not just renamed)
+        if (file_exists($this->peakGustFile)) {
+            @unlink($this->peakGustFile);
+        }
+        if (file_exists($this->tempExtremesFile)) {
+            @unlink($this->tempExtremesFile);
+        }
+        
+        // Clear any file stat cache
+        clearstatcache(true, $this->peakGustFile);
+        clearstatcache(true, $this->tempExtremesFile);
     }
     
     protected function tearDown(): void
@@ -59,11 +77,13 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdatePeakGust_FirstValueOfDay()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_first_value_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         $currentGust = 15;
         
         updatePeakGust($airportId, $currentGust, $airport);
+        clearstatcache();
         $result = getPeakGust($airportId, $currentGust, $airport);
         
         if (is_array($result)) {
@@ -80,26 +100,31 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdatePeakGust_HigherValueUpdates()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_higher_value_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
         // First value
         updatePeakGust($airportId, 10, $airport);
+        // Clear stat cache to ensure we read latest file contents
+        clearstatcache();
         $result1 = getPeakGust($airportId, 10, $airport);
         $value1 = is_array($result1) ? $result1['value'] : $result1;
-        $this->assertEquals(10, $value1);
+        $this->assertEquals(10, $value1, 'First value should be stored correctly');
         
         // Higher value
         updatePeakGust($airportId, 20, $airport);
+        clearstatcache();
         $result2 = getPeakGust($airportId, 15, $airport); // Current gust is lower
         $value2 = is_array($result2) ? $result2['value'] : $result2;
-        $this->assertEquals(20, $value2); // Should still show peak of 20
+        $this->assertEquals(20, $value2, 'Peak should be 20 after updating with higher value'); // Should still show peak of 20
         
         // Lower value doesn't change peak
         updatePeakGust($airportId, 8, $airport);
+        clearstatcache();
         $result3 = getPeakGust($airportId, 8, $airport);
         $value3 = is_array($result3) ? $result3['value'] : $result3;
-        $this->assertEquals(20, $value3); // Should still show peak of 20
+        $this->assertEquals(20, $value3, 'Peak should remain 20 after lower value'); // Should still show peak of 20
     }
     
     /**
@@ -107,33 +132,43 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdatePeakGust_TimestampUpdatesOnNewPeak()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_timestamp_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
-        // First value
-        updatePeakGust($airportId, 10, $airport);
+        // First value - use explicit timestamp to ensure it's different
+        $ts1 = time();
+        updatePeakGust($airportId, 10, $airport, $ts1);
+        clearstatcache();
         $result1 = getPeakGust($airportId, 10, $airport);
         
         if (is_array($result1)) {
-            $ts1 = $result1['ts'];
-            sleep(1); // Wait 1 second
+            $storedTs1 = $result1['ts'];
+            $this->assertEquals($ts1, $storedTs1, 'First timestamp should match');
             
-            // Lower value shouldn't update timestamp
-            updatePeakGust($airportId, 5, $airport);
+            // Wait to ensure different timestamp
+            sleep(2);
+            
+            // Lower value shouldn't update timestamp (5 < 10, so no update)
+            $ts2 = time();
+            updatePeakGust($airportId, 5, $airport, $ts2);
+            clearstatcache();
             $result2 = getPeakGust($airportId, 5, $airport);
-            $ts2 = $result2['ts'];
+            $storedTs2 = $result2['ts'];
             
-            // Timestamp should not change (or only slightly due to file write time)
-            $this->assertEquals($ts1, $ts2);
+            // Timestamp should not change (value didn't increase)
+            $this->assertEquals($storedTs1, $storedTs2, 'Timestamp should not change when value decreases');
             
             // Higher value should update timestamp
-            sleep(1);
-            updatePeakGust($airportId, 15, $airport);
+            sleep(2);
+            $ts3 = time();
+            updatePeakGust($airportId, 15, $airport, $ts3);
+            clearstatcache();
             $result3 = getPeakGust($airportId, 15, $airport);
-            $ts3 = $result3['ts'];
+            $storedTs3 = $result3['ts'];
             
             // Timestamp should be newer
-            $this->assertGreaterThan($ts1, $ts3);
+            $this->assertGreaterThan($storedTs1, $storedTs3, 'Timestamp should update when value increases');
         }
     }
     
@@ -186,11 +221,13 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdateTempExtremes_FirstValue()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_first_temp_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         $currentTemp = 20.0;
         
         updateTempExtremes($airportId, $currentTemp, $airport);
+        clearstatcache();
         $result = getTempExtremes($airportId, $currentTemp, $airport);
         
         $this->assertEquals($currentTemp, $result['high']);
@@ -204,20 +241,23 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdateTempExtremes_HigherTempUpdatesHigh()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_temp_high_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
         // Initial value
         updateTempExtremes($airportId, 15.0, $airport);
+        clearstatcache();
         $result1 = getTempExtremes($airportId, 15.0, $airport);
-        $this->assertEquals(15.0, $result1['high']);
-        $this->assertEquals(15.0, $result1['low']);
+        $this->assertEquals(15.0, $result1['high'], 'Initial high should be 15.0');
+        $this->assertEquals(15.0, $result1['low'], 'Initial low should be 15.0');
         
         // Higher value
         updateTempExtremes($airportId, 25.0, $airport);
+        clearstatcache();
         $result2 = getTempExtremes($airportId, 20.0, $airport);
-        $this->assertEquals(25.0, $result2['high']);
-        $this->assertEquals(15.0, $result2['low']); // Low should remain
+        $this->assertEquals(25.0, $result2['high'], 'High should be 25.0 after update');
+        $this->assertEquals(15.0, $result2['low'], 'Low should remain 15.0'); // Low should remain
     }
     
     /**
@@ -225,14 +265,17 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdateTempExtremes_LowerTempUpdatesLow()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_lower_temp_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
         // Initial value
         updateTempExtremes($airportId, 20.0, $airport);
+        clearstatcache();
         
         // Lower value
         updateTempExtremes($airportId, 10.0, $airport);
+        clearstatcache();
         $result = getTempExtremes($airportId, 15.0, $airport);
         $this->assertEquals(20.0, $result['high']); // High should remain
         $this->assertEquals(10.0, $result['low']);
@@ -243,38 +286,51 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdateTempExtremes_TimestampUpdatesOnNewRecords()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_temp_ts_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
-        // Initial value
-        updateTempExtremes($airportId, 20.0, $airport);
+        // Initial value - use explicit timestamp
+        $ts1 = time();
+        updateTempExtremes($airportId, 20.0, $airport, $ts1);
+        clearstatcache();
         $result1 = getTempExtremes($airportId, 20.0, $airport);
         $highTs1 = $result1['high_ts'];
         $lowTs1 = $result1['low_ts'];
+        $this->assertEquals($ts1, $highTs1, 'Initial high timestamp should match');
+        $this->assertEquals($ts1, $lowTs1, 'Initial low timestamp should match');
         
-        sleep(1);
+        sleep(2);
         
-        // Same value - timestamps shouldn't change significantly
-        updateTempExtremes($airportId, 20.0, $airport);
+        // Same value - timestamps shouldn't change (no update since value is same)
+        $ts2 = time();
+        updateTempExtremes($airportId, 20.0, $airport, $ts2);
+        clearstatcache();
         $result2 = getTempExtremes($airportId, 20.0, $airport);
-        // Timestamps might update slightly due to file operations, but shouldn't be dramatically different
+        // Timestamps should remain the same since value didn't change
+        $this->assertEquals($highTs1, $result2['high_ts'], 'High timestamp should not change when value is same');
+        $this->assertEquals($lowTs1, $result2['low_ts'], 'Low timestamp should not change when value is same');
         
-        sleep(1);
+        sleep(2);
         
         // New high - high_ts should update, low_ts should not
-        updateTempExtremes($airportId, 25.0, $airport);
+        $ts3 = time();
+        updateTempExtremes($airportId, 25.0, $airport, $ts3);
+        clearstatcache();
         $result3 = getTempExtremes($airportId, 25.0, $airport);
-        $this->assertGreaterThan($highTs1, $result3['high_ts']);
-        // Low timestamp should remain the same (approximately)
-        $this->assertEquals($lowTs1, $result3['low_ts']);
+        $this->assertGreaterThan($highTs1, $result3['high_ts'], 'High timestamp should update when value increases');
+        // Low timestamp should remain the same (value didn't decrease)
+        $this->assertEquals($lowTs1, $result3['low_ts'], 'Low timestamp should not change when value increases');
         
-        sleep(1);
+        sleep(2);
         
         // New low - low_ts should update, high_ts should not
-        updateTempExtremes($airportId, 15.0, $airport);
+        $ts4 = time();
+        updateTempExtremes($airportId, 15.0, $airport, $ts4);
+        clearstatcache();
         $result4 = getTempExtremes($airportId, 15.0, $airport);
-        $this->assertEquals($result3['high_ts'], $result4['high_ts']); // High timestamp unchanged
-        $this->assertGreaterThan($lowTs1, $result4['low_ts']); // Low timestamp updated
+        $this->assertEquals($result3['high_ts'], $result4['high_ts'], 'High timestamp should not change when value decreases'); // High timestamp unchanged
+        $this->assertGreaterThan($lowTs1, $result4['low_ts'], 'Low timestamp should update when value decreases'); // Low timestamp updated
     }
     
     /**

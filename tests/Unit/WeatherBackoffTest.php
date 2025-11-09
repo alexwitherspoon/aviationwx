@@ -8,7 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../weather.php';
+require_once __DIR__ . '/../../api/weather.php';
 
 class WeatherBackoffTest extends TestCase
 {
@@ -155,15 +155,23 @@ class WeatherBackoffTest extends TestCase
         // Record failure
         recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient');
         
-        // Manually expire the backoff
+        // Manually expire the backoff - set to a time well in the past
         $backoffData = json_decode(file_get_contents($this->backoffFile), true);
         $key = $this->testAirportId . '_weather_' . $this->testSourceType;
-        $backoffData[$key]['next_allowed_time'] = time() - 1; // Expired
+        $expiredTime = time() - 10; // Expired (10 seconds ago)
+        $backoffData[$key]['next_allowed_time'] = $expiredTime;
         file_put_contents($this->backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
+        
+        // Ensure file is flushed and stat cache is cleared
+        clearstatcache(true, $this->backoffFile);
+        
+        // Verify the file was written correctly
+        $verifyData = json_decode(file_get_contents($this->backoffFile), true);
+        $this->assertEquals($expiredTime, $verifyData[$key]['next_allowed_time'], 'Backoff should be expired in file');
         
         // Should not skip after expiration
         $result = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
-        $this->assertFalse($result['skip'], 'Should not skip after backoff expires');
+        $this->assertFalse($result['skip'], 'Should not skip after backoff expires. next_allowed=' . ($verifyData[$key]['next_allowed_time'] ?? 'missing') . ', now=' . time());
     }
 }
 

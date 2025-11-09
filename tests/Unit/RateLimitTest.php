@@ -5,7 +5,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../rate-limit.php';
+require_once __DIR__ . '/../../lib/rate-limit.php';
 
 class RateLimitTest extends TestCase
 {

@@ -30,7 +30,7 @@ class StatusPageTest extends TestCase
      */
     public function testStatusPage_IsAccessible()
     {
-        $response = $this->makeRequest('status.php');
+        $response = $this->makeRequest('?status=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available at {$this->baseUrl}");
@@ -84,7 +84,7 @@ class StatusPageTest extends TestCase
      */
     public function testStatusPage_ContainsExpectedElements()
     {
-        $response = $this->makeRequest('status.php');
+        $response = $this->makeRequest('?status=1');
         
         if ($response['http_code'] == 0 || $response['http_code'] != 200) {
             $this->markTestSkipped("Endpoint not available");
@@ -164,7 +164,7 @@ class StatusPageTest extends TestCase
      */
     public function testStatusPage_NoCacheHeaders()
     {
-        $response = $this->makeRequest('status.php');
+        $response = $this->makeRequest('?status=1');
         
         if ($response['http_code'] == 0 || $response['http_code'] != 200) {
             $this->markTestSkipped("Endpoint not available");
@@ -187,7 +187,7 @@ class StatusPageTest extends TestCase
      */
     public function testStatusPage_DisplaysAirportStatus()
     {
-        $response = $this->makeRequest('status.php');
+        $response = $this->makeRequest('?status=1');
         
         if ($response['http_code'] == 0 || $response['http_code'] != 200) {
             $this->markTestSkipped("Endpoint not available");
@@ -223,7 +223,7 @@ class StatusPageTest extends TestCase
      */
     public function testStatusPage_ValidStructure()
     {
-        $response = $this->makeRequest('status.php');
+        $response = $this->makeRequest('?status=1');
         
         if ($response['http_code'] == 0 || $response['http_code'] != 200) {
             $this->markTestSkipped("Endpoint not available");

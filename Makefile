@@ -10,8 +10,8 @@ help: ## Show this help message
 
 init: ## Initialize environment (copy env.example to .env)
 	@if [ ! -f .env ]; then \
-		echo "Creating .env from env.example..."; \
-		cp env.example .env; \
+		echo "Creating .env from config/env.example..."; \
+		cp config/env.example .env; \
 		echo "✓ Created .env - please edit with your settings"; \
 	else \
 		echo "✓ .env already exists"; \
@@ -22,22 +22,22 @@ config: ## Generate configuration from .env
 	@bash config/docker-config.sh
 
 build: ## Build Docker containers
-	@docker compose build
+	@docker compose -f docker/docker-compose.yml build
 
 up: build ## Start containers
-	@docker compose up -d
+	@docker compose -f docker/docker-compose.yml up -d
 
 down: ## Stop containers
-	@docker compose down
+	@docker compose -f docker/docker-compose.yml down
 
 restart: ## Restart containers
-	@docker compose restart
+	@docker compose -f docker/docker-compose.yml restart
 
 logs: ## View container logs
-	@docker compose logs -f
+	@docker compose -f docker/docker-compose.yml logs -f
 
 shell: ## Open shell in web container
-	@docker compose exec web bash
+	@docker compose -f docker/docker-compose.yml exec web bash
 
 test: ## Test the application
 	@echo "Testing AviationWX..."
@@ -48,19 +48,19 @@ smoke: ## Smoke test main endpoints (requires running containers)
 	@echo "Smoke testing..."
 	@echo "- Homepage" && curl -sf http://127.0.0.1:8080 >/dev/null && echo " ✓"
 	@echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:8080/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
-	@echo "- Webcam fetch script (PHP present)" && docker compose exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
+	@echo "- Webcam fetch script (PHP present)" && docker compose -f docker/docker-compose.yml exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
 
 clean: ## Remove containers and volumes
-	@docker compose down -v
+	@docker compose -f docker/docker-compose.yml down -v
 	@docker system prune -f
 
 # Production commands
 deploy-prod: ## Deploy to production
 	@echo "Deploying to production..."
-	@docker compose -f docker-compose.prod.yml up -d --build
+	@docker compose -f docker/docker-compose.prod.yml up -d --build
 
 logs-prod: ## View production logs
-	@docker compose -f docker-compose.prod.yml logs -f
+	@docker compose -f docker/docker-compose.prod.yml logs -f
 
 # Quick development workflow
 dev: init up logs ## Start development environment
@@ -68,16 +68,16 @@ dev: init up logs ## Start development environment
 # Minification (optional - CSS minification for production)
 minify: ## Minify CSS (requires perl or sed)
 	@echo "Minifying CSS..."
-	@perl -pe 's/\/\*.*?\*\///g; s/^\s*//; s/\s*$$//; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g' styles.css > styles.min.css 2>/dev/null || \
-	 sed 's|/\*.*\*/||g; s/^[[:space:]]*//; s/[[:space:]]*$$//; s/[[:space:]]\{1,\}/ /g' styles.css > styles.min.css 2>/dev/null || \
+	@perl -pe 's/\/\*.*?\*\///g; s/^\s*//; s/\s*$$//; s/\s+/ /g; s/\s*\{\s*/{/g; s/\s*\}\s*/}/g; s/\s*;\s*/;/g; s/\s*:\s*/:/g; s/\s*,\s*/,/g' public/css/styles.css > public/css/styles.min.css 2>/dev/null || \
+	 sed 's|/\*.*\*/||g; s/^[[:space:]]*//; s/[[:space:]]*$$//; s/[[:space:]]\{1,\}/ /g' public/css/styles.css > public/css/styles.min.css 2>/dev/null || \
 	 echo "Warning: minification failed (install perl or use online tool)"
-	@if [ -f styles.min.css ]; then \
-		echo "✓ Created styles.min.css"; \
-		ls -lh styles.css styles.min.css; \
+	@if [ -f public/css/styles.min.css ]; then \
+		echo "✓ Created public/css/styles.min.css"; \
+		ls -lh public/css/styles.css public/css/styles.min.css; \
 	fi
 
 # Configuration update
 update-config: ## Update configuration and restart
 	@bash config/docker-config.sh
-	@docker compose restart
+	@docker compose -f docker/docker-compose.yml restart
 

@@ -87,7 +87,7 @@ echo json_encode(['success' => true, 'weather' => $weatherData]);
  * Fetch mock weather data based on source type
  */
 function fetchMockWeather($sourceType) {
-    require_once __DIR__ . '/../weather.php';
+    require_once __DIR__ . '/../api/weather.php';
     
     // Parse mocked response based on source type
     $response = null;

@@ -1,7 +1,7 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
+require_once __DIR__ . '/../../lib/config.php';
 
 class WeatherStalenessTest extends TestCase
 {
@@ -44,7 +44,7 @@ class WeatherStalenessTest extends TestCase
         // Ensure mtime is now (fresh)
         @touch($this->cacheFile, time());
 
-        $response = $this->httpGet("weather.php?airport={$this->airport}");
+        $response = $this->httpGet("api/weather.php?airport={$this->airport}");
         if ($response['http_code'] == 0) {
             $this->markTestSkipped('Endpoint not available');
             return;
@@ -85,7 +85,7 @@ class WeatherStalenessTest extends TestCase
         // Set mtime 2 hours ago to exceed typical refresh
         @touch($this->cacheFile, time() - 7200);
 
-        $response = $this->httpGet("weather.php?airport={$this->airport}");
+        $response = $this->httpGet("api/weather.php?airport={$this->airport}");
         if ($response['http_code'] == 0) {
             $this->markTestSkipped('Endpoint not available');
             return;

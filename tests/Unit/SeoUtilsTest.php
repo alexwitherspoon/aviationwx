@@ -6,7 +6,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../seo-utils.php';
+require_once __DIR__ . '/../../lib/seo.php';
 
 class SeoUtilsTest extends TestCase
 {
@@ -88,8 +88,8 @@ class SeoUtilsTest extends TestCase
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
         $_SERVER['REQUEST_URI'] = '/?page=2&test=1';
         $url = getCanonicalUrl();
-        $this->assertEquals('https://aviationwx.org/?page=2&test=1', $url);
-        // Note: strtok only removes after first ?, so this is expected behavior
+        // Canonical URLs should not include query parameters
+        $this->assertEquals('https://aviationwx.org/', $url);
     }
 
     /**
@@ -279,7 +279,11 @@ class SeoUtilsTest extends TestCase
         $tags = generateSocialMetaTags('Test Title', 'Test Description', 'https://example.com');
         
         $this->assertStringContainsString('og:image', $tags);
-        $this->assertStringContainsString('about-photo.jpg', $tags);
+        // Function prefers WebP, falls back to JPG
+        $this->assertTrue(
+            strpos($tags, 'about-photo.webp') !== false || 
+            strpos($tags, 'about-photo.jpg') !== false
+        );
     }
 
     /**
@@ -371,7 +375,9 @@ class SeoUtilsTest extends TestCase
         
         $this->assertStringContainsString('<script type="application/ld+json">', $script);
         $this->assertStringContainsString('</script>', $script);
-        $this->assertStringContainsString('"@context":"https://schema.org"', $script);
+        // Function uses JSON_PRETTY_PRINT, so JSON has spaces
+        $this->assertStringContainsString('"@context"', $script);
+        $this->assertStringContainsString('https://schema.org', $script);
     }
 
     /**
@@ -495,9 +501,9 @@ class SeoUtilsTest extends TestCase
         $this->assertStringContainsString('rel="icon"', $tags);
         $this->assertStringContainsString('favicon.ico', $tags);
         
-        // Should contain manifest
+        // Should contain manifest (now site.webmanifest)
         $this->assertStringContainsString('rel="manifest"', $tags);
-        $this->assertStringContainsString('manifest.json', $tags);
+        $this->assertStringContainsString('site.webmanifest', $tags);
         
         // Should contain theme color
         $this->assertStringContainsString('theme-color', $tags);
@@ -514,11 +520,16 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        $faviconSizes = [16, 32, 48, 64, 128, 256];
+        // Standard favicon sizes (16x16, 32x32)
+        $faviconSizes = [16, 32];
         foreach ($faviconSizes as $size) {
             $this->assertStringContainsString('favicon-' . $size . 'x' . $size . '.png', $tags);
             $this->assertStringContainsString('sizes="' . $size . 'x' . $size . '"', $tags);
         }
+        
+        // Android Chrome icons (192x192, 512x512)
+        $this->assertStringContainsString('android-chrome-192x192.png', $tags);
+        $this->assertStringContainsString('android-chrome-512x512.png', $tags);
     }
 
     /**
@@ -531,12 +542,9 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        $appleSizes = [120, 152, 167, 180];
-        foreach ($appleSizes as $size) {
-            $this->assertStringContainsString('rel="apple-touch-icon"', $tags);
-            $this->assertStringContainsString('apple-touch-icon-' . $size . 'x' . $size . '.png', $tags);
-            $this->assertStringContainsString('sizes="' . $size . 'x' . $size . '"', $tags);
-        }
+        // Single apple-touch-icon.png file (no sizes attribute)
+        $this->assertStringContainsString('rel="apple-touch-icon"', $tags);
+        $this->assertStringContainsString('apple-touch-icon.png', $tags);
     }
 
     /**
@@ -549,8 +557,9 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        // Should use correct base URL
-        $this->assertStringContainsString('https://aviationwx.org/aviationwx_favicons', $tags);
+        // Should use correct base URL (no subdirectory after favicon update)
+        $this->assertStringContainsString('https://aviationwx.org/public/favicons', $tags);
+        $this->assertStringNotContainsString('aviationwx_favicons', $tags);
     }
 
     /**
@@ -563,8 +572,9 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        // Should use HTTP for base URL
-        $this->assertStringContainsString('http://aviationwx.org/aviationwx_favicons', $tags);
+        // Should use HTTP for base URL (no subdirectory after favicon update)
+        $this->assertStringContainsString('http://aviationwx.org/public/favicons', $tags);
+        $this->assertStringNotContainsString('aviationwx_favicons', $tags);
     }
 
     /**
@@ -581,13 +591,14 @@ class SeoUtilsTest extends TestCase
         $this->assertIsString($logoUrl);
         $this->assertStringStartsWith('https://', $logoUrl);
         
-        // Should contain aviationwx_favicons path
-        $this->assertStringContainsString('aviationwx_favicons', $logoUrl);
+        // Should contain favicons path (no subdirectory after favicon update)
+        $this->assertStringContainsString('/public/favicons', $logoUrl);
         
-        // Should either be favicon-512x512.png or about-photo.jpg (depending on what exists)
+        // Should either be android-chrome-512x512.png or about-photo.jpg (depending on what exists)
         $this->assertTrue(
-            strpos($logoUrl, 'favicon-512x512.png') !== false ||
-            strpos($logoUrl, 'about-photo.jpg') !== false
+            strpos($logoUrl, 'android-chrome-512x512.png') !== false ||
+            strpos($logoUrl, 'about-photo.jpg') !== false ||
+            strpos($logoUrl, 'about-photo.webp') !== false
         );
     }
 
@@ -669,8 +680,8 @@ class SeoUtilsTest extends TestCase
         $tags = generateFaviconTags();
         
         // Count expected elements
-        // 1 favicon.ico + 6 favicon sizes + 4 apple touch icons + 1 manifest + 1 theme color = 13
-        $expectedCount = 13;
+        // 1 favicon.ico + 2 favicon sizes (16, 32) + 2 android-chrome icons (192, 512) + 1 apple-touch-icon + 1 manifest + 1 theme color = 8
+        $expectedCount = 8;
         
         // Count link and meta tags
         $linkCount = substr_count($tags, '<link');

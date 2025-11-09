@@ -32,11 +32,11 @@ if (!AVIATIONWX_LOG_TO_STDOUT) {
 }
 
 // Include core application files for testing (only those that don't have endpoint logic)
-require_once __DIR__ . '/../config-utils.php';
-require_once __DIR__ . '/../rate-limit.php';
-require_once __DIR__ . '/../logger.php';
-require_once __DIR__ . '/../weather.php'; // weather.php now has a conditional to prevent endpoint execution
-require_once __DIR__ . '/../seo-utils.php'; // SEO utilities for testing
+require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/rate-limit.php';
+require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../api/weather.php'; // api/weather.php now has a conditional to prevent endpoint execution
+require_once __DIR__ . '/../lib/seo.php'; // SEO utilities for testing
 
 // Load test helpers (must be loaded before test files that use them)
 if (file_exists(__DIR__ . '/Helpers/TestHelper.php')) {
