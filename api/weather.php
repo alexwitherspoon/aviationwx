@@ -15,7 +15,14 @@ require_once __DIR__ . '/../lib/logger.php';
  * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
  */
 function checkWeatherCircuitBreaker($airportId, $sourceType) {
-    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $cacheDir = __DIR__ . '/cache';
+    if (!file_exists($cacheDir)) {
+        if (!mkdir($cacheDir, 0755, true)) {
+            error_log("Failed to create cache directory: {$cacheDir}");
+            return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+        }
+    }
+    $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
     $now = time();
     
@@ -23,6 +30,8 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
         return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
     }
     
+    // Clear stat cache to ensure we read the latest file contents
+    clearstatcache(true, $backoffFile);
     $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
     
     if (!isset($backoffData[$key])) {
