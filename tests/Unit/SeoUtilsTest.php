@@ -549,8 +549,8 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        // Should use correct base URL
-        $this->assertStringContainsString('https://aviationwx.org/aviationwx_favicons', $tags);
+        // Should use correct base URL (with /public/ prefix after refactoring)
+        $this->assertStringContainsString('https://aviationwx.org/public/favicons/aviationwx_favicons', $tags);
     }
 
     /**
@@ -563,8 +563,8 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        // Should use HTTP for base URL
-        $this->assertStringContainsString('http://aviationwx.org/aviationwx_favicons', $tags);
+        // Should use HTTP for base URL (with /public/ prefix after refactoring)
+        $this->assertStringContainsString('http://aviationwx.org/public/favicons/aviationwx_favicons', $tags);
     }
 
     /**
