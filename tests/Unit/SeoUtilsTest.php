@@ -495,9 +495,9 @@ class SeoUtilsTest extends TestCase
         $this->assertStringContainsString('rel="icon"', $tags);
         $this->assertStringContainsString('favicon.ico', $tags);
         
-        // Should contain manifest
+        // Should contain manifest (now site.webmanifest)
         $this->assertStringContainsString('rel="manifest"', $tags);
-        $this->assertStringContainsString('manifest.json', $tags);
+        $this->assertStringContainsString('site.webmanifest', $tags);
         
         // Should contain theme color
         $this->assertStringContainsString('theme-color', $tags);
@@ -514,11 +514,16 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        $faviconSizes = [16, 32, 48, 64, 128, 256];
+        // Standard favicon sizes (16x16, 32x32)
+        $faviconSizes = [16, 32];
         foreach ($faviconSizes as $size) {
             $this->assertStringContainsString('favicon-' . $size . 'x' . $size . '.png', $tags);
             $this->assertStringContainsString('sizes="' . $size . 'x' . $size . '"', $tags);
         }
+        
+        // Android Chrome icons (192x192, 512x512)
+        $this->assertStringContainsString('android-chrome-192x192.png', $tags);
+        $this->assertStringContainsString('android-chrome-512x512.png', $tags);
     }
 
     /**
@@ -531,12 +536,9 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        $appleSizes = [120, 152, 167, 180];
-        foreach ($appleSizes as $size) {
-            $this->assertStringContainsString('rel="apple-touch-icon"', $tags);
-            $this->assertStringContainsString('apple-touch-icon-' . $size . 'x' . $size . '.png', $tags);
-            $this->assertStringContainsString('sizes="' . $size . 'x' . $size . '"', $tags);
-        }
+        // Single apple-touch-icon.png file (no sizes attribute)
+        $this->assertStringContainsString('rel="apple-touch-icon"', $tags);
+        $this->assertStringContainsString('apple-touch-icon.png', $tags);
     }
 
     /**
@@ -549,8 +551,9 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        // Should use correct base URL (with /public/ prefix after refactoring)
-        $this->assertStringContainsString('https://aviationwx.org/public/favicons/aviationwx_favicons', $tags);
+        // Should use correct base URL (no subdirectory after favicon update)
+        $this->assertStringContainsString('https://aviationwx.org/public/favicons', $tags);
+        $this->assertStringNotContainsString('aviationwx_favicons', $tags);
     }
 
     /**
@@ -563,8 +566,9 @@ class SeoUtilsTest extends TestCase
         
         $tags = generateFaviconTags();
         
-        // Should use HTTP for base URL (with /public/ prefix after refactoring)
-        $this->assertStringContainsString('http://aviationwx.org/public/favicons/aviationwx_favicons', $tags);
+        // Should use HTTP for base URL (no subdirectory after favicon update)
+        $this->assertStringContainsString('http://aviationwx.org/public/favicons', $tags);
+        $this->assertStringNotContainsString('aviationwx_favicons', $tags);
     }
 
     /**
@@ -581,13 +585,14 @@ class SeoUtilsTest extends TestCase
         $this->assertIsString($logoUrl);
         $this->assertStringStartsWith('https://', $logoUrl);
         
-        // Should contain aviationwx_favicons path
-        $this->assertStringContainsString('aviationwx_favicons', $logoUrl);
+        // Should contain favicons path (no subdirectory after favicon update)
+        $this->assertStringContainsString('/public/favicons', $logoUrl);
         
-        // Should either be favicon-512x512.png or about-photo.jpg (depending on what exists)
+        // Should either be android-chrome-512x512.png or about-photo.jpg (depending on what exists)
         $this->assertTrue(
-            strpos($logoUrl, 'favicon-512x512.png') !== false ||
-            strpos($logoUrl, 'about-photo.jpg') !== false
+            strpos($logoUrl, 'android-chrome-512x512.png') !== false ||
+            strpos($logoUrl, 'about-photo.jpg') !== false ||
+            strpos($logoUrl, 'about-photo.webp') !== false
         );
     }
 
@@ -669,8 +674,8 @@ class SeoUtilsTest extends TestCase
         $tags = generateFaviconTags();
         
         // Count expected elements
-        // 1 favicon.ico + 6 favicon sizes + 4 apple touch icons + 1 manifest + 1 theme color = 13
-        $expectedCount = 13;
+        // 1 favicon.ico + 2 favicon sizes (16, 32) + 2 android-chrome icons (192, 512) + 1 apple-touch-icon + 1 manifest + 1 theme color = 8
+        $expectedCount = 8;
         
         // Count link and meta tags
         $linkCount = substr_count($tags, '<link');
