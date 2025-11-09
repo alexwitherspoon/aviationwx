@@ -438,7 +438,7 @@ $ogImage = file_exists($aboutPhotoWebp)
 <body>
     <div class="container">
         <div class="hero">
-            <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 32px; height: 32px; background: transparent;"> AviationWX.org</h1>
+            <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 76px; height: 76px; background: transparent;"> AviationWX.org</h1>
             <p>Get instant access to weather data, webcams, and aviation metrics at airports across the network.</p>
         </div>
 
