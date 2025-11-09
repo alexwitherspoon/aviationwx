@@ -438,7 +438,7 @@ $ogImage = file_exists($aboutPhotoWebp)
 <body>
     <div class="container">
         <div class="hero">
-            <h1>✈️ AviationWX.org</h1>
+            <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 32px; height: 32px; background: transparent;"> AviationWX.org</h1>
             <p>Get instant access to weather data, webcams, and aviation metrics at airports across the network.</p>
         </div>
 
@@ -483,7 +483,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 </div>
                 
                 <div class="feature-card">
-                    <h3>✈️ Aviation Metrics</h3>
+                    <h3><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> Aviation Metrics</h3>
                     <p>Density altitude, pressure altitude, VFR/IFR status, and other critical pilot information.</p>
                 </div>
                 
@@ -712,7 +712,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             
             <!-- For Pilots -->
             <div class="user-group-section">
-                <h3>✈️ For Pilots</h3>
+                <h3><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> For Pilots</h3>
                 <p>Use AviationWX to make better-informed flight decisions with real-time weather data and visual conditions.</p>
                 <p style="margin-top: 1rem; font-weight: 500;">Share this service with fellow pilots to help grow the aviation weather network!</p>
                 

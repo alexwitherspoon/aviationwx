@@ -205,27 +205,28 @@ function generateStructuredDataScript($data) {
  */
 function generateFaviconTags() {
     $baseUrl = getBaseUrl();
-    $faviconPath = $baseUrl . '/public/favicons/aviationwx_favicons';
+    $faviconPath = $baseUrl . '/public/favicons';
     
     $tags = [];
     
     // Standard favicon (for older browsers)
     $tags[] = '<link rel="icon" type="image/x-icon" href="' . $faviconPath . '/favicon.ico">';
     
-    // Modern favicons with sizes
-    $faviconSizes = [16, 32, 48, 64, 128, 256];
+    // Modern favicons with sizes (available: 16x16, 32x32)
+    $faviconSizes = [16, 32];
     foreach ($faviconSizes as $size) {
         $tags[] = '<link rel="icon" type="image/png" sizes="' . $size . 'x' . $size . '" href="' . $faviconPath . '/favicon-' . $size . 'x' . $size . '.png">';
     }
     
-    // Apple Touch Icons (for iOS home screen)
-    $appleSizes = [120, 152, 167, 180];
-    foreach ($appleSizes as $size) {
-        $tags[] = '<link rel="apple-touch-icon" sizes="' . $size . 'x' . $size . '" href="' . $faviconPath . '/apple-touch-icon-' . $size . 'x' . $size . '.png">';
-    }
+    // Android Chrome icons
+    $tags[] = '<link rel="icon" type="image/png" sizes="192x192" href="' . $faviconPath . '/android-chrome-192x192.png">';
+    $tags[] = '<link rel="icon" type="image/png" sizes="512x512" href="' . $faviconPath . '/android-chrome-512x512.png">';
     
-    // Web App Manifest (PWA support)
-    $tags[] = '<link rel="manifest" href="' . $faviconPath . '/manifest.json">';
+    // Apple Touch Icon (single file for all iOS devices)
+    $tags[] = '<link rel="apple-touch-icon" href="' . $faviconPath . '/apple-touch-icon.png">';
+    
+    // Web App Manifest (PWA support) - now site.webmanifest
+    $tags[] = '<link rel="manifest" href="' . $faviconPath . '/site.webmanifest">';
     
     // Theme color for mobile browsers
     $tags[] = '<meta name="theme-color" content="#3b82f6">';
@@ -239,19 +240,19 @@ function generateFaviconTags() {
  */
 function getLogoUrl() {
     $baseUrl = getBaseUrl();
-    $faviconDir = __DIR__ . '/../public/favicons/aviationwx_favicons';
+    $faviconDir = __DIR__ . '/../public/favicons';
     
     // Check for common logo file names
     $logoFiles = ['logo.png', 'logo.jpg', 'logo.svg', 'logo.webp'];
     foreach ($logoFiles as $logoFile) {
         if (file_exists($faviconDir . '/' . $logoFile)) {
-            return $baseUrl . '/public/favicons/aviationwx_favicons/' . $logoFile;
+            return $baseUrl . '/public/favicons/' . $logoFile;
         }
     }
     
-    // Fallback to largest favicon (512x512) if no logo found
-    if (file_exists($faviconDir . '/favicon-512x512.png')) {
-        return $baseUrl . '/public/favicons/aviationwx_favicons/favicon-512x512.png';
+    // Fallback to largest favicon (android-chrome-512x512) if no logo found
+    if (file_exists($faviconDir . '/android-chrome-512x512.png')) {
+        return $baseUrl . '/public/favicons/android-chrome-512x512.png';
     }
     
     // Final fallback to about-photo (prefer WebP, fallback to JPG)
