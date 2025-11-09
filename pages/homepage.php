@@ -530,7 +530,8 @@ $ogImage = file_exists($aboutPhotoWebp)
             // Function to fetch weather data for an airport
             // Always reads fresh from disk (no PHP-level caching) to ensure up-to-date data
             function getAirportWeather($airportId) {
-                $cacheFile = __DIR__ . '/cache/weather_' . $airportId . '.json';
+                // Cache is at root level, not in pages directory
+                $cacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
                 if (file_exists($cacheFile)) {
                     // Clear any PHP opcache for this file to ensure fresh read
                     if (function_exists('opcache_invalidate')) {
