@@ -341,7 +341,8 @@ class ApiParsingTest extends TestCase
      */
     public function testParseMETARResponse_CeilingCalculations()
     {
-        $response = json_encode([[
+        // Test BKN clouds - should set ceiling
+        $responseBkn = json_encode([[
             'icaoId' => 'KSPB',
             'temp' => 15.0,
             'dewp' => 10.0,
@@ -355,12 +356,30 @@ class ApiParsingTest extends TestCase
         ]]);
         
         $airport = createTestAirport(['metar_station' => 'KSPB', 'elevation_ft' => 100]);
-        $result = parseMETARResponse($response, $airport);
+        $resultBkn = parseMETARResponse($responseBkn, $airport);
         
-        // Ceiling should be calculated (base + elevation if base is AGL, or just base if MSL)
-        // This depends on implementation - verify it's set
-        $this->assertIsArray($result);
-        // Ceiling might be null or calculated depending on implementation
+        $this->assertIsArray($resultBkn);
+        $this->assertEquals(1200, $resultBkn['ceiling'], 'BKN clouds should set ceiling to base value');
+        $this->assertEquals('BKN', $resultBkn['cloud_cover'], 'Cloud cover should be BKN');
+        
+        // Test OVC clouds - should set ceiling
+        $responseOvc = json_encode([[
+            'icaoId' => 'KSPB',
+            'temp' => 15.0,
+            'dewp' => 10.0,
+            'altim' => 30.0,
+            'wdir' => 180,
+            'wspd' => 10,
+            'visib' => 10.0,
+            'clouds' => [
+                ['cover' => 'OVC', 'base' => 2000] // Overcast at 2000 ft
+            ]
+        ]]);
+        
+        $resultOvc = parseMETARResponse($responseOvc, $airport);
+        
+        $this->assertEquals(2000, $resultOvc['ceiling'], 'OVC clouds should set ceiling to base value');
+        $this->assertEquals('OVC', $resultOvc['cloud_cover'], 'Cloud cover should be OVC');
     }
     
     /**
@@ -369,10 +388,10 @@ class ApiParsingTest extends TestCase
     public function testParseMETARResponse_CloudCover()
     {
         $testCases = [
-            ['cover' => 'SCT', 'expected' => 'SCT'],
-            ['cover' => 'BKN', 'expected' => 'BKN'],
-            ['cover' => 'OVC', 'expected' => 'OVC'],
-            ['cover' => 'CLR', 'expected' => null], // Clear sky
+            ['cover' => 'SCT', 'expected_cover' => 'SCT', 'expected_ceiling' => null], // SCT should not set ceiling
+            ['cover' => 'BKN', 'expected_cover' => 'BKN', 'expected_ceiling' => 2000], // BKN should set ceiling
+            ['cover' => 'OVC', 'expected_cover' => 'OVC', 'expected_ceiling' => 2000], // OVC should set ceiling
+            ['cover' => 'CLR', 'expected_cover' => null, 'expected_ceiling' => null], // Clear sky
         ];
         
         foreach ($testCases as $testCase) {
@@ -387,10 +406,16 @@ class ApiParsingTest extends TestCase
             $airport = createTestAirport(['metar_station' => 'KSPB']);
             $result = parseMETARResponse($response, $airport);
             
-            if ($testCase['expected'] === null) {
-                $this->assertNull($result['cloud_cover']);
+            if ($testCase['expected_cover'] === null) {
+                $this->assertNull($result['cloud_cover'], "Cloud cover should be null for {$testCase['cover']}");
             } else {
-                $this->assertEquals($testCase['expected'], $result['cloud_cover']);
+                $this->assertEquals($testCase['expected_cover'], $result['cloud_cover'], "Cloud cover should be {$testCase['expected_cover']} for {$testCase['cover']}");
+            }
+            
+            if ($testCase['expected_ceiling'] === null) {
+                $this->assertNull($result['ceiling'], "Ceiling should be null (unlimited) for {$testCase['cover']}");
+            } else {
+                $this->assertEquals($testCase['expected_ceiling'], $result['ceiling'], "Ceiling should be {$testCase['expected_ceiling']} for {$testCase['cover']}");
             }
         }
     }
@@ -521,6 +546,51 @@ class ApiParsingTest extends TestCase
         $result = parseMETARResponse($response, $airport);
         
         $this->assertNull($result['ceiling']); // Unlimited ceiling
+    }
+    
+    /**
+     * Test parseMETARResponse - FEW/SCT clouds should not set ceiling (unlimited)
+     */
+    public function testParseMETARResponse_FewScatteredClouds_NoCeiling()
+    {
+        // Test FEW clouds - should not set ceiling
+        $responseFew = json_encode([[
+            'icaoId' => 'KSPB',
+            'temp' => 15.0,
+            'dewp' => 10.0,
+            'altim' => 30.0,
+            'wdir' => 180,
+            'wspd' => 10,
+            'visib' => 10.0,
+            'clouds' => [
+                ['cover' => 'FEW', 'base' => 200] // Few clouds at 200ft - should NOT set ceiling
+            ]
+        ]]);
+        
+        $airport = createTestAirport(['metar_station' => 'KSPB']);
+        $resultFew = parseMETARResponse($responseFew, $airport);
+        
+        $this->assertNull($resultFew['ceiling'], 'FEW clouds should not set ceiling (unlimited)');
+        $this->assertEquals('FEW', $resultFew['cloud_cover'], 'Cloud cover should still be set');
+        
+        // Test SCT clouds - should not set ceiling
+        $responseSct = json_encode([[
+            'icaoId' => 'KSPB',
+            'temp' => 15.0,
+            'dewp' => 10.0,
+            'altim' => 30.0,
+            'wdir' => 180,
+            'wspd' => 10,
+            'visib' => 10.0,
+            'clouds' => [
+                ['cover' => 'SCT', 'base' => 200] // Scattered clouds at 200ft - should NOT set ceiling
+            ]
+        ]]);
+        
+        $resultSct = parseMETARResponse($responseSct, $airport);
+        
+        $this->assertNull($resultSct['ceiling'], 'SCT clouds should not set ceiling (unlimited)');
+        $this->assertEquals('SCT', $resultSct['cloud_cover'], 'Cloud cover should still be set');
     }
 }
 

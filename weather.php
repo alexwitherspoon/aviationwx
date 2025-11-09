@@ -273,14 +273,11 @@ function parseMETARResponse($response, $airport) {
         }
     }
     
-    // If no ceiling found but clouds exist, use lowest base
-    // Note: CLR (clear) should not set cloud_cover - clear sky means no clouds
-    if ($ceiling === null && isset($cloudLayer) && $cloudLayer['base'] !== null) {
-        $ceiling = $cloudLayer['base'];
-        // Only set cloud_cover if it's not CLR (clear)
-        if ($cloudLayer['cover'] !== 'CLR' && $cloudLayer['cover'] !== 'SKC') {
-            $cloudCover = $cloudLayer['cover'];
-        }
+    // Set cloud_cover from first non-CLR/SKC layer if no ceiling was found
+    // Note: Ceiling only exists with BKN/OVC/OVX coverage. FEW/SCT clouds do not constitute a ceiling.
+    // If only FEW/SCT clouds exist, ceiling remains null (unlimited).
+    if ($ceiling === null && isset($cloudLayer) && $cloudLayer['cover'] !== 'CLR' && $cloudLayer['cover'] !== 'SKC') {
+        $cloudCover = $cloudLayer['cover'];
     }
     
     // Parse temperature (Celsius)
