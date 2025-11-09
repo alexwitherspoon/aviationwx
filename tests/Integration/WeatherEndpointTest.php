@@ -36,7 +36,7 @@ class WeatherEndpointTest extends TestCase
      */
     public function testWeatherEndpoint_ReturnsValidJson()
     {
-        $response = $this->makeRequest("weather.php?airport={$this->testAirport}");
+        $response = $this->makeRequest("api/weather.php?airport={$this->testAirport}");
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -61,7 +61,7 @@ class WeatherEndpointTest extends TestCase
      */
     public function testWeatherEndpoint_ResponseStructure()
     {
-        $response = $this->makeRequest("weather.php?airport={$this->testAirport}");
+        $response = $this->makeRequest("api/weather.php?airport={$this->testAirport}");
         
         if ($response['http_code'] == 0 || $response['http_code'] >= 500) {
             $this->markTestSkipped("Endpoint not available");
@@ -111,7 +111,7 @@ class WeatherEndpointTest extends TestCase
      */
     public function testWeatherEndpoint_InvalidAirportId()
     {
-        $response = $this->makeRequest("weather.php?airport=invalid123");
+        $response = $this->makeRequest("api/weather.php?airport=invalid123");
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -131,7 +131,7 @@ class WeatherEndpointTest extends TestCase
      */
     public function testWeatherEndpoint_MissingAirport()
     {
-        $response = $this->makeRequest("weather.php");
+        $response = $this->makeRequest("api/weather.php");
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -165,7 +165,7 @@ class WeatherEndpointTest extends TestCase
         $startTime = microtime(true);
         
         for ($i = 0; $i < 65; $i++) { // Slightly more than 60 requests/minute limit
-            $response = $this->makeRequest("weather.php?airport={$this->testAirport}", false);
+            $response = $this->makeRequest("api/weather.php?airport={$this->testAirport}", false);
             $requests[] = $response['http_code'];
             
             if ($response['http_code'] == 0) {
@@ -221,7 +221,7 @@ class WeatherEndpointTest extends TestCase
      */
     public function testWeatherEndpoint_ContentType()
     {
-        $response = $this->makeRequest("weather.php?airport={$this->testAirport}");
+        $response = $this->makeRequest("api/weather.php?airport={$this->testAirport}");
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
