@@ -240,7 +240,8 @@ function checkAirportHealth($airportId, $airport) {
     ];
     
     // Check weather cache
-    $weatherCacheFile = __DIR__ . '/cache/weather_' . $airportId . '.json';
+    // Cache is at root level, not in pages directory
+    $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
     $weatherCacheExists = file_exists($weatherCacheFile);
     
     if ($weatherCacheExists) {
@@ -284,7 +285,8 @@ function checkAirportHealth($airportId, $airport) {
     ];
     
     // Check webcam caches
-    $webcamCacheDir = __DIR__ . '/cache/webcams';
+    // Cache is at root level, not in pages directory
+    $webcamCacheDir = __DIR__ . '/../cache/webcams';
     $webcams = $airport['webcams'] ?? [];
     $webcamStatus = 'operational';
     $webcamIssues = [];
@@ -315,7 +317,8 @@ function checkAirportHealth($airportId, $airport) {
                 $hasError = file_exists($errorFile);
                 
                 // Check backoff state
-                $backoffFile = __DIR__ . '/cache/backoff.json';
+                // Cache is at root level, not in pages directory
+                $backoffFile = __DIR__ . '/../cache/backoff.json';
                 $inBackoff = false;
                 if (file_exists($backoffFile)) {
                     $backoffData = @json_decode(file_get_contents($backoffFile), true);
