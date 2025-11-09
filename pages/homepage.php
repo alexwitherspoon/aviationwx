@@ -9,7 +9,9 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 
 // Get configuration for stats
-$configFile = __DIR__ . '/../config/airports.json';
+// Use CONFIG_PATH environment variable if set (for production), otherwise use default path
+$envConfigPath = getenv('CONFIG_PATH');
+$configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
 $totalAirports = 0;
 $totalWebcams = 0;
 if (file_exists($configFile)) {
@@ -513,7 +515,10 @@ $ogImage = file_exists($aboutPhotoWebp)
             <h2>Participating Airports</h2>
             <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
             <?php
-            $config = json_decode(file_get_contents($configFile), true);
+            // Re-read config file (use same path resolution as above)
+            $envConfigPath = getenv('CONFIG_PATH');
+            $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
+            $config = json_decode(file_get_contents($configFileForList), true);
             $airports = isset($config['airports']) ? $config['airports'] : [];
             $airportsPerPage = 9;
             $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
