@@ -269,7 +269,7 @@ class WeatherDataMergeTest extends TestCase
         $newData = [
             'temperature' => 16.0,
             'wind_speed' => null,  // Missing
-            'visibility' => null,  // Missing
+            // visibility is missing (not in array) - should preserve non-stale old value
             'last_updated_primary' => time() - 1800,
             'last_updated_metar' => time() - 1800,
         ];
@@ -287,8 +287,8 @@ class WeatherDataMergeTest extends TestCase
         // Primary field (stale) should not be preserved
         $this->assertNull($result['wind_speed'], 'Stale primary field should not be preserved');
         
-        // METAR field (not stale) should be preserved
-        $this->assertEquals(10.0, $result['visibility'], 'Non-stale METAR field should be preserved');
+        // METAR field (not stale) should be preserved when missing from newData
+        $this->assertEquals(10.0, $result['visibility'], 'Non-stale METAR field should be preserved when missing from newData');
     }
     
     /**
@@ -346,8 +346,8 @@ class WeatherDataMergeTest extends TestCase
         // New METAR data with unlimited ceiling (FEW/SCT clouds)
         $newData = [
             'temperature' => 16.0,
-            'ceiling' => null,  // Unlimited ceiling (FEW/SCT clouds)
-            'visibility' => null,  // Missing visibility
+            'ceiling' => null,  // Unlimited ceiling (FEW/SCT clouds) - explicitly null
+            // visibility is missing (not in array) - should preserve non-stale old value
             'cloud_cover' => 'SCT',  // Scattered clouds
             'last_updated_primary' => time() - 1800,
             'last_updated_metar' => time() - 1800,  // METAR was successfully fetched
@@ -366,8 +366,8 @@ class WeatherDataMergeTest extends TestCase
         // Ceiling should be null (unlimited) - overwrites old cached value
         $this->assertNull($result['ceiling'], 'Unlimited ceiling should overwrite old cached value');
         
-        // Visibility should be preserved (not stale)
-        $this->assertEquals(10.0, $result['visibility'], 'Non-stale visibility should be preserved');
+        // Visibility should be preserved (not stale) when missing from newData
+        $this->assertEquals(10.0, $result['visibility'], 'Non-stale visibility should be preserved when missing from newData');
         
         // Cloud cover should be set
         $this->assertEquals('SCT', $result['cloud_cover'], 'Cloud cover should be set');

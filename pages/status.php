@@ -85,8 +85,8 @@ function checkSystemHealth() {
     ];
     
     // Check cache directories
-    $cacheDir = __DIR__ . '/cache';
-    $webcamCacheDir = __DIR__ . '/cache/webcams';
+    $cacheDir = __DIR__ . '/../cache';
+    $webcamCacheDir = __DIR__ . '/../cache/webcams';
     $cacheExists = is_dir($cacheDir);
     $cacheWritable = $cacheExists && is_writable($cacheDir);
     $webcamCacheExists = is_dir($webcamCacheDir);

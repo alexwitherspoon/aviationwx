@@ -15,7 +15,7 @@ require_once __DIR__ . '/../lib/logger.php';
  * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
  */
 function checkWeatherCircuitBreaker($airportId, $sourceType) {
-    $cacheDir = __DIR__ . '/cache';
+    $cacheDir = __DIR__ . '/../cache';
     if (!file_exists($cacheDir)) {
         if (!mkdir($cacheDir, 0755, true)) {
             error_log("Failed to create cache directory: {$cacheDir}");
@@ -41,6 +41,8 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
     $state = $backoffData[$key];
     $nextAllowed = (int)($state['next_allowed_time'] ?? 0);
     
+    // Note: This is a critical comparison - if nextAllowed <= now, backoff has expired
+    // We use > (not >=) so that if nextAllowed == now, we still allow the request
     if ($nextAllowed > $now) {
         $remaining = $nextAllowed - $now;
         return [
@@ -61,7 +63,7 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
  * @param string $severity 'transient' or 'permanent'
  */
 function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') {
-    $cacheDir = __DIR__ . '/cache';
+    $cacheDir = __DIR__ . '/../cache';
     if (!file_exists($cacheDir)) {
         if (!mkdir($cacheDir, 0755, true)) {
             error_log("Failed to create cache directory: {$cacheDir}");
@@ -104,7 +106,7 @@ function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') 
  * @param string $sourceType 'primary' or 'metar'
  */
 function recordWeatherSuccess($airportId, $sourceType) {
-    $backoffFile = __DIR__ . '/cache/backoff.json';
+    $backoffFile = __DIR__ . '/../cache/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
     $now = time();
     
@@ -470,20 +472,17 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
             }
             
             // For METAR fields: If METAR was successfully fetched (last_updated_metar is set),
-            // null means unlimited/missing, so we should use null to overwrite old cached values.
-            // However, there's a special case: MixedStaleness test expects non-stale METAR fields
-            // to be preserved when new METAR data is missing (not when it's null).
-            // When new METAR data has null (unlimited), it should always overwrite old cache.
-            // When new METAR data is missing (field not in newData), preserve non-stale old values.
+            // we need to distinguish between:
+            // 1. Field is explicitly set to null in newData (unlimited/missing) - always overwrite
+            // 2. Field is missing from newData (not in array) - preserve non-stale old values
             if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
                 // METAR was successfully fetched
-                // If new value is explicitly null (unlimited), always use null to overwrite old cache
-                // If new value is missing (not in newData), preserve non-stale old values
-                if ($newValue === null) {
+                // Check if field is explicitly set to null (array_key_exists) vs missing (not in array)
+                if (array_key_exists($field, $newData) && $newData[$field] === null) {
                     // Explicitly null from METAR means unlimited/missing - always overwrite
                     $result[$field] = null;
                 } else {
-                    // New value is missing (not null, just not in array) - preserve non-stale old value
+                    // Field is missing from newData (not in array) - preserve non-stale old value
                     if (!$isStale) {
                         $result[$field] = $oldValue;
                     }
@@ -694,7 +693,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) ? intval($airport['weather_refresh_seconds']) : $defaultWeatherRefresh;
 
     // Cached weather path
-    $weatherCacheDir = __DIR__ . '/cache';
+    $weatherCacheDir = __DIR__ . '/../cache';
     if (!file_exists($weatherCacheDir)) {
     @mkdir($weatherCacheDir, 0755, true);
     }
@@ -1784,7 +1783,7 @@ function getSunsetTime($airport) {
  */
 function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp = null) {
     try {
-        $cacheDir = __DIR__ . '/cache';
+        $cacheDir = __DIR__ . '/../cache';
         if (!file_exists($cacheDir)) {
             if (!mkdir($cacheDir, 0755, true)) {
                 error_log("Failed to create cache directory: {$cacheDir}");
@@ -1883,7 +1882,7 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
  * Still uses Y-m-d format for consistency, but calculated from local timezone
  */
 function getPeakGust($airportId, $currentGust, $airport = null) {
-    $file = __DIR__ . '/cache/peak_gusts.json';
+    $file = __DIR__ . '/../cache/peak_gusts.json';
     // Use airport's local timezone to determine "today" (midnight reset at local timezone)
     // Fallback to UTC if airport not provided (backward compatibility)
     $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
@@ -2040,7 +2039,7 @@ function calculateFlightCategory($weather) {
  */
 function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimestamp = null) {
     try {
-        $cacheDir = __DIR__ . '/cache';
+        $cacheDir = __DIR__ . '/../cache';
         if (!file_exists($cacheDir)) {
             if (!mkdir($cacheDir, 0755, true)) {
                 error_log("Failed to create cache directory: {$cacheDir}");
@@ -2136,7 +2135,7 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
  * Still uses Y-m-d format for consistency, but calculated from local timezone
  */
 function getTempExtremes($airportId, $currentTemp, $airport = null) {
-    $file = __DIR__ . '/cache/temp_extremes.json';
+    $file = __DIR__ . '/../cache/temp_extremes.json';
     // Use airport's local timezone to determine "today" (midnight reset at local timezone)
     // Fallback to UTC if airport not provided (backward compatibility)
     $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
