@@ -430,7 +430,7 @@ require_once __DIR__ . '/../lib/logger.php';
  * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
  */
 function checkCircuitBreaker($airportId, $camIndex) {
-    $cacheDir = __DIR__ . '/cache';
+    $cacheDir = __DIR__ . '/../cache';
     if (!file_exists($cacheDir)) {
         if (!mkdir($cacheDir, 0755, true)) {
             error_log("Failed to create cache directory: {$cacheDir}");
@@ -480,7 +480,7 @@ function checkCircuitBreaker($airportId, $camIndex) {
  * @param int $camIndex
  */
 function recordFailure($airportId, $camIndex, $severity = 'transient') {
-    $cacheDir = __DIR__ . '/cache';
+    $cacheDir = __DIR__ . '/../cache';
     if (!file_exists($cacheDir)) {
         if (!mkdir($cacheDir, 0755, true)) {
             error_log("Failed to create cache directory: {$cacheDir}");
@@ -573,7 +573,7 @@ function recordFailure($airportId, $camIndex, $severity = 'transient') {
  * @param int $camIndex
  */
 function recordSuccess($airportId, $camIndex) {
-    $cacheDir = __DIR__ . '/cache';
+    $cacheDir = __DIR__ . '/../cache';
     if (!file_exists($cacheDir)) {
         if (!mkdir($cacheDir, 0755, true)) {
             error_log("Failed to create cache directory: {$cacheDir}");

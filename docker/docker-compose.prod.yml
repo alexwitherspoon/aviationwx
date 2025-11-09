@@ -3,6 +3,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: aviationwx
     container_name: ${COMPOSE_PROJECT_NAME:-aviationwx}-web
     restart: always
     ports:

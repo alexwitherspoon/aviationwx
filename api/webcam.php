@@ -77,7 +77,7 @@ if ($config === null || !isset($config['airports'][$airportId]['webcams'][$camIn
 }
 
 $cam = $config['airports'][$airportId]['webcams'][$camIndex];
-$cacheDir = __DIR__ . '/cache/webcams';
+$cacheDir = __DIR__ . '/../cache/webcams';
 $base = $cacheDir . '/' . $airportId . '_' . $camIndex;
 $cacheJpg = $base . '.jpg';
 $cacheWebp = $base . '.webp';
@@ -208,6 +208,7 @@ if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefre
     header('Cache-Control: public, max-age=' . $remainingTime);
     header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+    header('X-Cache-Status: HIT'); // Include cache status in 304 responses
     http_response_code(304);
     exit;
 }
@@ -399,6 +400,7 @@ if (file_exists($targetFile)) {
         header('Cache-Control: public, max-age=0, must-revalidate');
         header('ETag: ' . $etagVal);
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+        header('X-Cache-Status: STALE'); // Include cache status in 304 responses
         http_response_code(304);
         exit;
     }
