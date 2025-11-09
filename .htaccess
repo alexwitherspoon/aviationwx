@@ -15,9 +15,29 @@
     # Rewrite to index.php with airport parameter
     RewriteRule ^(.*)$ index.php?airport=%1 [QSA,L]
 
-    # Route sitemap.xml to sitemap.php
+    # Route sitemap.xml to api/sitemap.php
     RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^sitemap\.xml$ sitemap.php [L]
+    RewriteRule ^sitemap\.xml$ api/sitemap.php [L]
+
+    # Route API endpoints to api/ directory
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^weather\.php$ api/weather.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^webcam\.php$ api/webcam.php [L]
+
+    # Route admin endpoints to admin/ directory
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^diagnostics\.php$ admin/diagnostics.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^clear-cache\.php$ admin/cache-clear.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^metrics\.php$ admin/metrics.php [L]
+
+    # Route health check endpoints to health/ directory
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^health\.php$ health/health.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ready\.php$ health/ready.php [L]
 
     # Default to index.php for routing
     RewriteCond %{REQUEST_FILENAME} !-f
@@ -26,7 +46,7 @@
 </IfModule>
 
 # Security - Protect sensitive files and directories
-# Deny access to configuration files
+# Deny access to configuration files (both root and config/ directory)
 <FilesMatch "^(airports\.json|airports\.json\.test|composer\.json|composer\.lock|phpunit\.xml|\.env|\.gitignore|SECURITY\.md|nginx\.conf|Dockerfile|docker-compose\.yml|docker-compose\.prod\.yml|Makefile)$">
     Order allow,deny
     Deny from all
@@ -38,14 +58,15 @@
     Deny from all
 </FilesMatch>
 
-# Deny access to test-local.php and diagnostics
-# Note: health.php and ready.php are allowed for monitoring/health checks
-<FilesMatch "^(test-local\.php|test-local\.sh|diagnostics\.php|clear-cache\.php|metrics\.php)$">
+# Deny access to dev tools
+# Note: health.php and ready.php are allowed for monitoring/health checks (routed to health/)
+# Admin endpoints are now in admin/ directory and protected separately
+<FilesMatch "^(dev/|test-local\.php|test-local\.sh)$">
     Order allow,deny
     Deny from all
 </FilesMatch>
 
-# Deny access to scripts directory
+# Deny access to scripts, config, tests, and admin directories
 <IfModule mod_rewrite.c>
     RewriteRule ^scripts/ - [F,L]
     RewriteRule ^config/ - [F,L]
@@ -53,6 +74,13 @@
     RewriteRule ^\.github/ - [F,L]
     RewriteRule ^vendor/ - [F,L]
     RewriteRule ^node_modules/ - [F,L]
+    RewriteRule ^admin/ - [F,L]
+    RewriteRule ^lib/ - [F,L]
+    RewriteRule ^dev/ - [F,L]
+    RewriteRule ^docs/ - [F,L]
+    RewriteRule ^docker/ - [F,L]
+    # Allow public/ directory for static assets
+    # RewriteRule ^public/ - [L]  # Allow public assets
 </IfModule>
 
 # Deny access to hidden files (starting with .)

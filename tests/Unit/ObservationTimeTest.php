@@ -9,7 +9,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../weather.php';
+require_once __DIR__ . '/../../api/weather.php';
 require_once __DIR__ . '/../Helpers/TestHelper.php';
 
 class ObservationTimeTest extends TestCase

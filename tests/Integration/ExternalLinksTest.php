@@ -15,7 +15,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
+require_once __DIR__ . '/../../lib/config.php';
 
 class ExternalLinksTest extends TestCase
 {

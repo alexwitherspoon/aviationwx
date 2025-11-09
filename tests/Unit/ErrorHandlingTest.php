@@ -6,8 +6,8 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../weather.php';
-require_once __DIR__ . '/../../config-utils.php';
+require_once __DIR__ . '/../../api/weather.php';
+require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../mock-weather-responses.php';
 
 class ErrorHandlingTest extends TestCase

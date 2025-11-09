@@ -14,14 +14,14 @@ Real-time aviation weather and conditions for participating airports.
 [![Deploy to Production](https://github.com/alexwitherspoon/aviationwx/actions/workflows/deploy-docker.yml/badge.svg)](https://github.com/alexwitherspoon/aviationwx/actions/workflows/deploy-docker.yml)
 
 ## Quick links:
-- 🚀 **Local Development**: [LOCAL_SETUP.md](LOCAL_SETUP.md) (Docker-based development)
-- 🖥️ **Production Deployment**: [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) (Ubuntu LTS VPS from scratch)
-- 📖 **Configuration Guide**: [CONFIGURATION.md](CONFIGURATION.md)
-- 🏗️ **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
-- 🔌 **API Documentation**: [API.md](API.md)
-- 🚢 **Deployment Details**: [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) (CI/CD, advanced config)
-- 🔒 **Security**: [SECURITY.md](SECURITY.md)
-- 🤝 **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 🚀 **Local Development**: [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) (Docker-based development)
+- 🖥️ **Production Deployment**: [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) (Ubuntu LTS VPS from scratch)
+- 📖 **Configuration Guide**: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- 🏗️ **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 🔌 **API Documentation**: [docs/API.md](docs/API.md)
+- 🚢 **Deployment Details**: [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) (CI/CD, advanced config)
+- 🔒 **Security**: [docs/SECURITY.md](docs/SECURITY.md)
+- 🤝 **Contributing**: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
 - 🛠️ **Diagnostics**: visit `/diagnostics.php`
 - 🗑️ **Clear Cache**: visit `/clear-cache.php`
 - 📊 **Status Page**: visit `/status.php` or `status.aviationwx.org`

@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DEPLOY_VERSION="${1:-$(date +%s)}"
-SW_FILE="sw.js"
+SW_FILE="public/js/service-worker.js"
 
 echo "Updating cache version to: ${DEPLOY_VERSION}"
 

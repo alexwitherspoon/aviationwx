@@ -8,7 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../fetch-webcam-safe.php';
+require_once __DIR__ . '/../../scripts/fetch-webcam.php';
 
 class WebcamFetchTest extends TestCase
 {

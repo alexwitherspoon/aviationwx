@@ -63,9 +63,9 @@ jobs:
             else
               # Check that critical files have tests
               critical_files=(
-                "weather.php"
-                "config-utils.php"
-                "rate-limit.php"
+                "api/weather.php"
+                "lib/config.php"
+                "lib/rate-limit.php"
               )
               
               for file in "${critical_files[@]}"; do
@@ -83,34 +83,34 @@ jobs:
           echo "🔒 Validating stale data safety implementation..."
           
           # Check that nullStaleFieldsBySource function exists
-          if ! grep -q "function nullStaleFieldsBySource" weather.php; then
+          if ! grep -q "function nullStaleFieldsBySource" api/weather.php; then
             echo "❌ CRITICAL: nullStaleFieldsBySource function missing!"
             exit 1
           fi
           
           # Check that mergeWeatherDataWithFallback function exists
-          if ! grep -q "function mergeWeatherDataWithFallback" weather.php; then
+          if ! grep -q "function mergeWeatherDataWithFallback" api/weather.php; then
             echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
             exit 1
           fi
           
           # Check that stale data threshold is set correctly (3 hours)
-          if ! grep -q "maxStaleHours = 3" weather.php; then
+          if ! grep -q "maxStaleHours = 3" api/weather.php; then
             echo "⚠️  Warning: Stale data threshold may not be set correctly"
           fi
           
           # Check that daily tracking values are preserved
-          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" weather.php; then
+          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" api/weather.php; then
             echo "⚠️  Warning: Daily tracking values preservation may be missing"
           fi
           
           # Check for VRB wind direction handling
-          if ! grep -q "wdir.*VRB\|'VRB'" weather.php; then
+          if ! grep -q "wdir.*VRB\|'VRB'" api/weather.php; then
             echo "⚠️  Warning: VRB (variable wind direction) handling may be missing"
           fi
           
           # Check for error handling around parsing
-          if ! grep -q "try.*catch.*Exception\|try.*catch.*Throwable" weather.php; then
+          if ! grep -q "try.*catch.*Exception\|try.*catch.*Throwable" api/weather.php; then
             echo "⚠️  Warning: Error handling around parsing may be missing"
           fi
           
@@ -121,7 +121,7 @@ jobs:
           echo "🔒 Validating flight category calculation logic..."
           
           # Check that calculateFlightCategory function exists
-          if ! grep -q "function calculateFlightCategory" weather.php; then
+          if ! grep -q "function calculateFlightCategory" api/weather.php; then
             echo "❌ CRITICAL: calculateFlightCategory function missing!"
             exit 1
           fi
@@ -129,7 +129,7 @@ jobs:
           # Check for all flight categories
           categories=("LIFR" "IFR" "MVFR" "VFR")
           for category in "${categories[@]}"; do
-            if ! grep -q "return '$category'" weather.php; then
+            if ! grep -q "return '$category'" api/weather.php; then
               echo "⚠️  Warning: Flight category $category may not be handled"
             fi
           done
@@ -152,7 +152,7 @@ jobs:
           )
           
           for func in "${critical_functions[@]}"; do
-            if ! grep -q "function $func" weather.php config-utils.php rate-limit.php 2>/dev/null; then
+            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
               exit 1
             fi
@@ -164,14 +164,14 @@ jobs:
         run: |
           echo "Validating API response structure..."
           
-          # Check that weather.php returns JSON
-          if ! grep -q "Content-Type: application/json" weather.php; then
+          # Check that api/weather.php returns JSON
+          if ! grep -q "Content-Type: application/json" api/weather.php; then
             echo "❌ CRITICAL: API response doesn't set JSON header!"
             exit 1
           fi
           
           # Check for error handling
-          if ! grep -q "success.*false" weather.php; then
+          if ! grep -q "success.*false" api/weather.php; then
             echo "⚠️  Warning: Error response structure may be missing"
           fi
           
@@ -193,8 +193,8 @@ jobs:
           fi
           
           # Check that rate limiting is enforced
-          if ! grep -q "checkRateLimit" weather.php; then
-            echo "❌ CRITICAL: Rate limiting not enforced in weather.php!"
+          if ! grep -q "checkRateLimit" api/weather.php; then
+            echo "❌ CRITICAL: Rate limiting not enforced in api/weather.php!"
             exit 1
           fi
           

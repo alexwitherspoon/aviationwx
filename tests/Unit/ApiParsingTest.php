@@ -7,7 +7,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../weather.php';
+require_once __DIR__ . '/../../api/weather.php';
 require_once __DIR__ . '/../mock-weather-responses.php';
 
 class ApiParsingTest extends TestCase

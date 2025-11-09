@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-aviationwx}
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      # Mount airports.json from host (relative to docker/ directory)
+      - ../config/airports.json:/var/www/html/config/airports.json:ro
+      # Mount cache directory from /tmp (ephemeral, cleared on reboot)
+      - /tmp/aviationwx-cache:/var/www/html/cache
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html
+      - DOMAIN=${DOMAIN:-aviationwx.org}
+      - WEATHER_REFRESH_URL=http://localhost
+      - AVIATIONWX_LOG_TO_STDOUT=true
+      - GIT_SHA=${GIT_SHA:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+

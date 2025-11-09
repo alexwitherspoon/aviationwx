@@ -152,23 +152,23 @@ jobs:
           echo "🔍 Validating merge functionality implementation..."
           
           # Check that mergeWeatherDataWithFallback function exists
-          if ! grep -q "function mergeWeatherDataWithFallback" weather.php; then
+          if ! grep -q "function mergeWeatherDataWithFallback" api/weather.php; then
             echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
             exit 1
           fi
           
           # Check that merge is called before cache write
-          if ! grep -q "mergeWeatherDataWithFallback.*existingCache" weather.php; then
+          if ! grep -q "mergeWeatherDataWithFallback.*existingCache" api/weather.php; then
             echo "⚠️  Warning: mergeWeatherDataWithFallback may not be called before cache write"
           fi
           
           # Check for VRB wind direction handling
-          if ! grep -q "wdir.*VRB\|'VRB'" weather.php; then
+          if ! grep -q "wdir.*VRB\|'VRB'" api/weather.php; then
             echo "⚠️  Warning: VRB wind direction handling may be missing"
           fi
           
           # Check for numeric checks on wind data
-          if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" weather.php; then
+          if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" api/weather.php; then
             echo "⚠️  Warning: Numeric validation for wind data may be missing"
           fi
           
@@ -176,7 +176,7 @@ jobs:
       
       - name: Check for required files
         run: |
-          required_files=("index.php" "weather.php" "webcam.php" "config-utils.php" "rate-limit.php")
+          required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php")
           for file in "${required_files[@]}"; do
             if [ ! -f "$file" ]; then
               echo "❌ Required file missing: $file"
@@ -187,15 +187,15 @@ jobs:
       
       - name: Validate JSON files
         run: |
-          if [ -f "airports.json.example" ]; then
-            php -r "json_decode(file_get_contents('airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
-            echo "✓ airports.json.example is valid JSON"
+          if [ -f "config/airports.json.example" ]; then
+            php -r "json_decode(file_get_contents('config/airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
+            echo "✓ config/airports.json.example is valid JSON"
           fi
       
       - name: Test config utilities
         run: |
           php -r "
-          require_once 'config-utils.php';
+          require_once 'lib/config.php';
           
           // Test validation
           \$tests = [
@@ -244,7 +244,7 @@ jobs:
       - name: Test rate limiting functions
         run: |
           php -r "
-          require_once 'rate-limit.php';
+          require_once 'lib/rate-limit.php';
           
           // Basic function existence test
           if (!function_exists('checkRateLimit')) {
@@ -262,20 +262,20 @@ jobs:
       
       - name: Check Dockerfile
         run: |
-          if [ ! -f "Dockerfile" ]; then
+          if [ ! -f "docker/Dockerfile" ]; then
             echo "❌ Dockerfile missing"
             exit 1
           fi
           
           # Check for required components
-          grep -q "FROM php:8.3-apache" Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
-          grep -q "ffmpeg" Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
+          grep -q "FROM php:8.3-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
+          grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
           
           echo "✓ Dockerfile checks passed"
       
       - name: Check docker-compose files
         run: |
-          if [ ! -f "docker-compose.yml" ] || [ ! -f "docker-compose.prod.yml" ]; then
+          if [ ! -f "docker/docker-compose.yml" ] || [ ! -f "docker/docker-compose.prod.yml" ]; then
             echo "❌ Docker Compose files missing"
             exit 1
           fi
