@@ -52,7 +52,8 @@ if (file_exists($configFile)) {
 }
 
 // Check cache directory with actual write test
-$cacheDir = __DIR__ . '/cache/webcams';
+// Cache is at root level, not in admin directory
+$cacheDir = __DIR__ . '/../cache/webcams';
 $cacheTestFile = $cacheDir . '/.writable_test';
 if (is_dir($cacheDir)) {
     $success[] = "✅ cache/webcams directory exists";
@@ -216,7 +217,8 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
 }
 
 // Check RTSP error statistics from cache
-$cacheDir = __DIR__ . '/cache/webcams';
+// Cache is at root level, not in admin directory
+$cacheDir = __DIR__ . '/../cache/webcams';
 $errorCounts = ['timeout' => 0, 'auth' => 0, 'tls' => 0, 'dns' => 0, 'connection' => 0, 'unknown' => 0];
 if (is_dir($cacheDir)) {
     foreach (glob($cacheDir . '/*.error.json') as $errorFile) {
@@ -327,7 +329,8 @@ if ($webcamResponse !== false && strlen($webcamResponse) > 10) {
 $success = array_merge($success, $apiTests);
 
 // Check cache directory for weather cache
-$weatherCacheDir = __DIR__ . '/cache';
+// Cache is at root level, not in admin directory
+$weatherCacheDir = __DIR__ . '/../cache';
 $weatherCacheFiles = glob($weatherCacheDir . '/weather_*.json');
 if (count($weatherCacheFiles) > 0) {
     $success[] = "📊 Weather cache: " . count($weatherCacheFiles) . " file(s)";

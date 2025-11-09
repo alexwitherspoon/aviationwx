@@ -195,7 +195,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         <picture style="position: relative; z-index: 2;">
                             <?php
                             // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
-                            $base = __DIR__ . '/cache/webcams/' . $airportId . '_' . $index;
+                            // Cache is at root level, not in pages directory
+                            $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
                             $mtimeJpg = 0;
                             $sizeJpg = 0;
                             foreach (['.jpg', '.webp'] as $ext) {

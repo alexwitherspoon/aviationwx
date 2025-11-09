@@ -31,7 +31,8 @@ metric('app_up', 1);
 metric('php_info', 1, ['version' => PHP_VERSION]);
 
 // Cache dir metrics
-$cacheDir = __DIR__ . '/cache/webcams';
+// Cache is at root level, not in admin directory
+$cacheDir = __DIR__ . '/../cache/webcams';
 metric('webcam_cache_exists', is_dir($cacheDir) ? 1 : 0);
 metric('webcam_cache_writable', (is_dir($cacheDir) && is_writable($cacheDir)) ? 1 : 0);
 
@@ -86,7 +87,8 @@ if (file_exists($airportsConfig)) {
                 }
 
                 // Circuit breaker/backoff state
-                $backoff = __DIR__ . '/cache/backoff.json';
+                // Cache is at root level, not in admin directory
+                $backoff = __DIR__ . '/../cache/backoff.json';
                 if (file_exists($backoff)) {
                     $bo = json_decode(@file_get_contents($backoff), true) ?: [];
                     $key = strtolower($airportId) . '_' . $idx;

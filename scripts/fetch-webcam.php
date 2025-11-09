@@ -680,13 +680,14 @@ aviationwx_log('info', 'webcam fetch script started', [
     'airports_count' => count($config['airports'] ?? [])
 ], 'app');
 
-$cacheDir = __DIR__ . '/cache/webcams';
+// Cache is at root level, not in scripts directory
+$cacheDir = __DIR__ . '/../cache/webcams';
 if (!is_dir($cacheDir)) {
     mkdir($cacheDir, 0755, true);
 }
 
 // Ensure backoff cache file directory exists
-$backoffFile = __DIR__ . '/cache/backoff.json';
+$backoffFile = __DIR__ . '/../cache/backoff.json';
 $backoffDir = dirname($backoffFile);
 if (!is_dir($backoffDir)) {
     @mkdir($backoffDir, 0755, true);
