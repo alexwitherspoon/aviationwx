@@ -289,50 +289,24 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          echo "Cleaning up old directory structure..."
-          # Remove docker/docker/nginx.conf if it's a directory (from old path issue)
-          if [ -d docker/docker/nginx.conf ]; then
-            echo "Removing docker/docker/nginx.conf directory..."
-            rm -rf docker/docker/nginx.conf || true
+          # Clean up leftover docker/docker directory from old path issue (now fixed)
+          # This is defensive cleanup - the directory should no longer be created
+          if [ -d docker/docker ] || [ -f docker/docker/nginx.conf ]; then
+            echo "Cleaning up old docker/docker directory structure..."
+            rm -rf docker/docker 2>/dev/null || true
+            echo "✓ Cleanup complete"
+          else
+            echo "✓ No cleanup needed (old directory structure not found)"
           fi
-          # Remove docker/docker directory if it exists
-          if [ -d docker/docker ]; then
-            echo "Removing docker/docker directory..."
-            rm -rf docker/docker || true
-          fi
-          # Clean up any other old nested docker directories
-          find docker -type d -name docker -mindepth 2 -exec rm -rf {} + 2>/dev/null || true
-          # Also try to remove docker/docker/nginx.conf as a file if it exists
-          if [ -f docker/docker/nginx.conf ]; then
-            echo "Removing docker/docker/nginx.conf file..."
-            rm -f docker/docker/nginx.conf || true
-          fi
-          echo "✓ Cleanup complete"
           EOF
 
       - name: Sync repository to server
         run: |
-          # Exclude problematic docker/docker directory from rsync to avoid permission errors
-          # We'll clean it up separately after rsync completes
+          # Exclude docker/docker from rsync (defensive - should not exist after path fix)
           rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/ || {
             echo "⚠️  Rsync had some errors, but continuing..."
             # Continue even if rsync fails on some deletions
           }
-          # Force clean up the problematic directory after rsync
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          cd ~/aviationwx
-          if [ -d docker/docker ]; then
-            echo "Force removing remaining docker/docker directory..."
-            rm -rf docker/docker 2>/dev/null || sudo rm -rf docker/docker 2>/dev/null || true
-          fi
-          # Verify cleanup
-          if [ ! -d docker/docker ]; then
-            echo "✓ docker/docker directory successfully removed"
-          else
-            echo "⚠️  docker/docker directory still exists (may need manual cleanup)"
-          fi
-          EOF
 
       - name: Ensure cache directory exists
         run: |
