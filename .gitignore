@@ -23,3 +23,7 @@ Thumbs.db
 # Placeholder image (if using a real one)
 placeholder.jpg
 
+# Composer dependencies
+vendor/
+composer.lock
+
