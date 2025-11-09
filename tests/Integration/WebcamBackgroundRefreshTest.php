@@ -1,7 +1,7 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
+require_once __DIR__ . '/../../lib/config.php';
 
 class WebcamBackgroundRefreshTest extends TestCase
 {
@@ -31,7 +31,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         }
         
         // Create a fresh cache file
-        $placeholder = __DIR__ . '/../../placeholder.jpg';
+        $placeholder = __DIR__ . '/../../public/images/placeholder.jpg';
         if (!file_exists($placeholder)) {
             $this->markTestSkipped('Placeholder image not found');
             return;
@@ -41,7 +41,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         // Ensure mtime is now (fresh)
         @touch($this->cacheFile, time());
         
-        $response = $this->httpGet("webcam.php?id={$this->airport}&cam={$this->camIndex}");
+        $response = $this->httpGet("api/webcam.php?id={$this->airport}&cam={$this->camIndex}");
         if ($response['http_code'] == 0) {
             $this->markTestSkipped('Endpoint not available');
             return;
@@ -67,7 +67,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         }
         
         // Create a stale cache file
-        $placeholder = __DIR__ . '/../../placeholder.jpg';
+        $placeholder = __DIR__ . '/../../public/images/placeholder.jpg';
         if (!file_exists($placeholder)) {
             $this->markTestSkipped('Placeholder image not found');
             return;
@@ -77,7 +77,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         // Set mtime 2 minutes ago to exceed typical refresh (60s)
         @touch($this->cacheFile, time() - 120);
         
-        $response = $this->httpGet("webcam.php?id={$this->airport}&cam={$this->camIndex}");
+        $response = $this->httpGet("api/webcam.php?id={$this->airport}&cam={$this->camIndex}");
         if ($response['http_code'] == 0) {
             $this->markTestSkipped('Endpoint not available');
             return;

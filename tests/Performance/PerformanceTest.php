@@ -8,8 +8,8 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../config-utils.php';
-require_once __DIR__ . '/../../rate-limit.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/rate-limit.php';
 require_once __DIR__ . '/../Helpers/TestHelper.php';
 
 class PerformanceTest extends TestCase
@@ -173,7 +173,7 @@ class PerformanceTest extends TestCase
         $start = microtime(true);
         
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, "$baseUrl/weather.php?airport=$airport");
+        curl_setopt($ch, CURLOPT_URL, "$baseUrl/api/weather.php?airport=$airport");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
@@ -337,7 +337,7 @@ class PerformanceTest extends TestCase
         
         for ($i = 0; $i < $concurrentRequests; $i++) {
             $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, "$baseUrl/weather.php?airport=kspb");
+            curl_setopt($ch, CURLOPT_URL, "$baseUrl/api/weather.php?airport=kspb");
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 5);
             curl_multi_add_handle($multiHandle, $ch);

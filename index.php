@@ -4,13 +4,13 @@
  * Routes requests based on airport parameter or subdomain to airport-specific pages
  */
 
-require_once __DIR__ . '/config-utils.php';
+require_once __DIR__ . '/lib/config.php';
 
 // Check if this is a status page request
 $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
 if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['status'] === '1')) {
     // Route to status page
-    include 'status.php';
+    include 'pages/status.php';
     exit;
 }
 
@@ -40,16 +40,16 @@ if (!empty($airportId)) {
         $airport['id'] = $airportId;
         
         // Include the airport template
-        include 'airport-template.php';
+        include 'pages/airport.php';
         exit;
     } else {
         // Airport not found - don't reveal which airports exist
         http_response_code(404);
-        include '404.php';
+        include 'pages/error-404.php';
         exit;
     }
 }
 
 // No airport specified, show homepage
-include 'homepage.php';
+include 'pages/homepage.php';
 

@@ -17,7 +17,7 @@ class CronWeatherRefreshTest extends TestCase
 
         // Test with explicit URL or let script auto-detect (Docker vs local)
         $baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
-        $cmd = sprintf('WEATHER_REFRESH_URL=%s php %s 2>&1', escapeshellarg($baseUrl), escapeshellarg(__DIR__ . '/../../fetch-weather-safe.php'));
+        $cmd = sprintf('WEATHER_REFRESH_URL=%s php %s 2>&1', escapeshellarg($baseUrl), escapeshellarg(__DIR__ . '/../../scripts/fetch-weather.php'));
         $output = shell_exec($cmd);
 
         // If shell_exec is disabled, skip
