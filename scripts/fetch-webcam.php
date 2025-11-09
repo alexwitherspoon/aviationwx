@@ -445,6 +445,8 @@ function checkCircuitBreaker($airportId, $camIndex) {
         return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
     }
     
+    // Clear stat cache to ensure we read the latest file contents
+    clearstatcache(true, $backoffFile);
     $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
     
     if (!isset($backoffData[$key])) {
