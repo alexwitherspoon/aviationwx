@@ -426,6 +426,9 @@ jobs:
           cd ~/aviationwx
           # Set GIT_SHA as environment variable for docker compose
           export GIT_SHA="$GIT_SHA"
+          # Stop and remove existing containers to avoid name conflicts
+          docker compose -f docker/docker-compose.prod.yml down || true
+          # Build and start containers
           docker compose -f docker/docker-compose.prod.yml up -d --build
           docker system prune -f
           EOF
