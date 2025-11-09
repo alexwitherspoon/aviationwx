@@ -38,8 +38,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # SSL certificates
+      - ${HOME}/aviationwx/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${HOME}/aviationwx/ssl:/etc/nginx/ssl:ro  # SSL certificates
     depends_on:
       - web
     logging:
