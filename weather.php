@@ -443,6 +443,16 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
             $isPrimaryField = in_array($field, $primarySourceFields);
             $isMetarField = in_array($field, $metarSourceFields);
             
+            // Special case: For METAR fields (ceiling, visibility, cloud_cover), if METAR data was
+            // successfully fetched (last_updated_metar is set), then null means unlimited/missing,
+            // not "data not available", so we should use null (unlimited) rather than preserving old value.
+            // This ensures unlimited ceiling (FEW/SCT clouds) overwrites old cached values.
+            if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
+                // METAR was successfully fetched - null means unlimited/missing, use null
+                $result[$field] = null;
+                continue;
+            }
+            
             // Check if old value is still fresh enough to use
             $isStale = false;
             if ($isPrimaryField && isset($existingData['last_updated_primary'])) {
@@ -1066,12 +1076,15 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             }
             
             // Safely merge METAR data - only update if new value is valid
-            // Use null coalescing to preserve existing values if new ones are null
+            // For ceiling: explicitly set null when METAR data indicates unlimited (no BKN/OVC clouds)
+            // This ensures unlimited ceiling overwrites old cached values
             if ($metarData['visibility'] !== null && $metarData['visibility'] !== false) {
                 $weatherData['visibility'] = $metarData['visibility'];
             }
-            if ($metarData['ceiling'] !== null && $metarData['ceiling'] !== false) {
-                $weatherData['ceiling'] = $metarData['ceiling'];
+            // Ceiling: explicitly set to null if METAR parsing returned null (unlimited ceiling)
+            // This ensures unlimited ceiling (FEW/SCT clouds) overwrites old cached values
+            if (isset($metarData['ceiling'])) {
+                $weatherData['ceiling'] = $metarData['ceiling']; // Can be null (unlimited) or a number
             }
             if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
                 $weatherData['cloud_cover'] = $metarData['cloud_cover'];

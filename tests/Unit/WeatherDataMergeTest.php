@@ -71,16 +71,19 @@ class WeatherDataMergeTest extends TestCase
     }
 
     /**
-     * Test mergeWeatherDataWithFallback - METAR fields should be preserved if not stale
+     * Test mergeWeatherDataWithFallback - METAR fields should NOT be preserved when METAR was fetched
+     * When METAR data is successfully fetched (last_updated_metar is set), null values mean
+     * unlimited/missing, so they should overwrite old cached values, not preserve them.
+     * This test verifies the new behavior where unlimited ceiling overwrites old cache.
      */
-    public function testMergeWeatherDataWithFallback_MetarFieldsPreserved()
+    public function testMergeWeatherDataWithFallback_MetarFieldsNotPreservedWhenFetched()
     {
         $newData = [
             'temperature' => 16.0,
-            'visibility' => null,  // Missing
-            'ceiling' => null,  // Missing
+            'visibility' => null,  // Unlimited/missing (METAR was fetched)
+            'ceiling' => null,  // Unlimited/missing (METAR was fetched)
             'last_updated_primary' => time() - 1800,
-            'last_updated_metar' => time() - 1800,
+            'last_updated_metar' => time() - 1800,  // METAR was successfully fetched
         ];
         
         $existingData = createTestWeatherData([
@@ -92,9 +95,10 @@ class WeatherDataMergeTest extends TestCase
         $maxStaleSeconds = 3 * 3600;  // 3 hours
         $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
         
-        // METAR fields should be preserved
-        $this->assertEquals(10.0, $result['visibility'], 'Visibility should be preserved from cache');
-        $this->assertEquals(5000, $result['ceiling'], 'Ceiling should be preserved from cache');
+        // METAR fields should NOT be preserved when METAR was fetched and values are null
+        // Null means unlimited/missing, so it should overwrite old cached values
+        $this->assertNull($result['visibility'], 'Visibility should be null (unlimited) when METAR fetched with null');
+        $this->assertNull($result['ceiling'], 'Ceiling should be null (unlimited) when METAR fetched with null');
     }
 
     /**
@@ -150,16 +154,18 @@ class WeatherDataMergeTest extends TestCase
     }
 
     /**
-     * Test mergeWeatherDataWithFallback - Both primary and METAR fields can be preserved
+     * Test mergeWeatherDataWithFallback - Primary fields preserved, METAR null overwrites
+     * Primary fields (wind_speed) should be preserved when missing.
+     * METAR fields (visibility) should be null when METAR was fetched and value is null.
      */
     public function testMergeWeatherDataWithFallback_BothSourcesPreserved()
     {
         $newData = [
             'temperature' => 16.0,
-            'wind_speed' => null,
-            'visibility' => null,
+            'wind_speed' => null,  // Missing from primary source
+            'visibility' => null,  // Unlimited/missing from METAR (METAR was fetched)
             'last_updated_primary' => time() - 1800,
-            'last_updated_metar' => time() - 1800,
+            'last_updated_metar' => time() - 1800,  // METAR was successfully fetched
         ];
         
         $existingData = createTestWeatherData([
@@ -172,9 +178,11 @@ class WeatherDataMergeTest extends TestCase
         $maxStaleSeconds = 3 * 3600;  // 3 hours
         $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
         
-        // Both primary and METAR fields should be preserved
+        // Primary field should be preserved (not fetched, so preserve old value)
         $this->assertEquals(10, $result['wind_speed'], 'Primary field should be preserved');
-        $this->assertEquals(10.0, $result['visibility'], 'METAR field should be preserved');
+        
+        // METAR field should be null (METAR was fetched, null means unlimited/missing)
+        $this->assertNull($result['visibility'], 'METAR field should be null when METAR fetched with null');
     }
 
     /**
@@ -324,6 +332,76 @@ class WeatherDataMergeTest extends TestCase
         $this->assertNotEquals(16, $result['temperature'], 'Should not use old cache temperature');
         $this->assertNotEquals(17, $result['wind_speed'], 'Should not use old cache wind speed');
         $this->assertNotEquals(261, $result['wind_direction'], 'Should not use old cache wind direction');
+    }
+
+    /**
+     * Test mergeWeatherDataWithFallback - METAR null values should overwrite old cache
+     * When METAR data is successfully fetched and ceiling/visibility is null (unlimited),
+     * it should overwrite old cached values, not preserve them.
+     * This fixes the bug where unlimited ceiling (FEW/SCT clouds) was incorrectly preserved
+     * from old cache with a specific ceiling value.
+     */
+    public function testMergeWeatherDataWithFallback_MetarNullOverwritesOldCache()
+    {
+        // New METAR data with unlimited ceiling (FEW/SCT clouds)
+        $newData = [
+            'temperature' => 16.0,
+            'ceiling' => null,  // Unlimited ceiling (FEW/SCT clouds)
+            'visibility' => null,  // Missing visibility
+            'cloud_cover' => 'SCT',  // Scattered clouds
+            'last_updated_primary' => time() - 1800,
+            'last_updated_metar' => time() - 1800,  // METAR was successfully fetched
+        ];
+        
+        // Old cache with incorrect ceiling value (from buggy code)
+        $existingData = createTestWeatherData([
+            'ceiling' => 200,  // Old incorrect value (should be overwritten with null)
+            'visibility' => 10.0,  // Old visibility (should be preserved if not stale)
+            'last_updated_metar' => time() - 3600,  // 1 hour ago (not stale)
+        ]);
+        
+        $maxStaleSeconds = 3 * 3600;  // 3 hours
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        
+        // Ceiling should be null (unlimited) - overwrites old cached value
+        $this->assertNull($result['ceiling'], 'Unlimited ceiling should overwrite old cached value');
+        
+        // Visibility should be preserved (not stale)
+        $this->assertEquals(10.0, $result['visibility'], 'Non-stale visibility should be preserved');
+        
+        // Cloud cover should be set
+        $this->assertEquals('SCT', $result['cloud_cover'], 'Cloud cover should be set');
+    }
+
+    /**
+     * Test mergeWeatherDataWithFallback - METAR null values when METAR not fetched
+     * When METAR data is NOT fetched (no last_updated_metar), null values should
+     * preserve old cached values (normal behavior).
+     */
+    public function testMergeWeatherDataWithFallback_MetarNullPreservesWhenNotFetched()
+    {
+        // New data without METAR fetch
+        $newData = [
+            'temperature' => 16.0,
+            'ceiling' => null,  // Missing (METAR not fetched)
+            'visibility' => null,  // Missing (METAR not fetched)
+            'last_updated_primary' => time() - 1800,
+            // No last_updated_metar - METAR was not fetched
+        ];
+        
+        // Old cache with values
+        $existingData = createTestWeatherData([
+            'ceiling' => 5000,
+            'visibility' => 10.0,
+            'last_updated_metar' => time() - 3600,  // 1 hour ago (not stale)
+        ]);
+        
+        $maxStaleSeconds = 3 * 3600;  // 3 hours
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        
+        // Should preserve old values when METAR was not fetched
+        $this->assertEquals(5000, $result['ceiling'], 'Should preserve old ceiling when METAR not fetched');
+        $this->assertEquals(10.0, $result['visibility'], 'Should preserve old visibility when METAR not fetched');
     }
 }
 
