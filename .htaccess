@@ -89,6 +89,28 @@
     Deny from all
 </FilesMatch>
 
+# Cache favicons for 1 month (30 days)
+# Match favicon files in public/favicons/ directory
+<FilesMatch "^public/favicons/.*\.(ico|png|webmanifest)$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 month"
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </IfModule>
+</FilesMatch>
+# Match root-level favicon files
+<FilesMatch "^(favicon\.ico|favicon\.png|favicon-.*\.png|android-chrome-.*\.png|apple-touch-icon\.png|site\.webmanifest)$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 month"
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </IfModule>
+</FilesMatch>
+
 # Cache webcam images for better performance (nginx handles this in production)
 # <FilesMatch "\.jpg$">
 #     ExpiresActive On
