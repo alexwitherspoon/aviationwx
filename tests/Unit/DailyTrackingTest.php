@@ -77,11 +77,13 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdatePeakGust_FirstValueOfDay()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_first_value_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         $currentGust = 15;
         
         updatePeakGust($airportId, $currentGust, $airport);
+        clearstatcache();
         $result = getPeakGust($airportId, $currentGust, $airport);
         
         if (is_array($result)) {
@@ -219,11 +221,13 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdateTempExtremes_FirstValue()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_first_temp_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         $currentTemp = 20.0;
         
         updateTempExtremes($airportId, $currentTemp, $airport);
+        clearstatcache();
         $result = getTempExtremes($airportId, $currentTemp, $airport);
         
         $this->assertEquals($currentTemp, $result['high']);
@@ -261,14 +265,17 @@ class DailyTrackingTest extends TestCase
      */
     public function testUpdateTempExtremes_LowerTempUpdatesLow()
     {
-        $airportId = 'test';
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_lower_temp_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
         // Initial value
         updateTempExtremes($airportId, 20.0, $airport);
+        clearstatcache();
         
         // Lower value
         updateTempExtremes($airportId, 10.0, $airport);
+        clearstatcache();
         $result = getTempExtremes($airportId, 15.0, $airport);
         $this->assertEquals(20.0, $result['high']); // High should remain
         $this->assertEquals(10.0, $result['low']);
