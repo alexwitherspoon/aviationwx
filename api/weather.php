@@ -443,16 +443,6 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
             $isPrimaryField = in_array($field, $primarySourceFields);
             $isMetarField = in_array($field, $metarSourceFields);
             
-            // Special case: For METAR fields (ceiling, visibility, cloud_cover), if METAR data was
-            // successfully fetched (last_updated_metar is set), then null means unlimited/missing,
-            // not "data not available", so we should use null (unlimited) rather than preserving old value.
-            // This ensures unlimited ceiling (FEW/SCT clouds) overwrites old cached values.
-            if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
-                // METAR was successfully fetched - null means unlimited/missing, use null
-                $result[$field] = null;
-                continue;
-            }
-            
             // Check if old value is still fresh enough to use
             $isStale = false;
             if ($isPrimaryField && isset($existingData['last_updated_primary'])) {
@@ -461,6 +451,23 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
             } elseif ($isMetarField && isset($existingData['last_updated_metar'])) {
                 $age = time() - $existingData['last_updated_metar'];
                 $isStale = ($age >= $maxStaleSeconds);
+            }
+            
+            // For METAR fields: If METAR was successfully fetched (last_updated_metar is set),
+            // null means unlimited/missing, so we should use null rather than preserving old value.
+            // However, if the old value is not stale, we should preserve it (test case: MixedStaleness).
+            // Only use null if METAR was fetched AND old value is stale.
+            if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
+                // METAR was successfully fetched - null means unlimited/missing
+                // But preserve non-stale old values (they're still valid)
+                if ($isStale) {
+                    // Old value is stale, use null from new METAR
+                    $result[$field] = null;
+                } else {
+                    // Old value is not stale, preserve it
+                    $result[$field] = $oldValue;
+                }
+                continue;
             }
             
             // Preserve old value if it's not too stale
@@ -1832,11 +1839,13 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
             ];
         } elseif ($currentGust > $existingValue) {
             // Update if current gust is higher (only for today's entry)
+            // Only update timestamp when value actually changes
             $peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGust,
                 'ts' => $timestamp, // Observation timestamp (when weather was actually observed)
             ];
         }
+        // If current gust is not higher, don't update (preserve existing value and timestamp)
         
         $jsonData = json_encode($peakGusts);
         if ($jsonData !== false) {
@@ -1896,14 +1905,13 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
     if (is_array($entry)) {
         $value = $entry['value'] ?? 0;
         $ts = $entry['ts'] ?? null;
-        // Ensure we return at least the current gust if it's higher
-        // Only use today's stored value, never yesterday's
-        $value = max($value, $currentGust);
+        // Return stored value (today's peak) - don't modify with current gust
+        // The stored value represents the peak for today, which may be higher than current
         return ['value' => $value, 'ts' => $ts];
     }
 
-    // Legacy scalar format - ensure we only use today's data
-    $value = max((float)$entry, $currentGust);
+    // Legacy scalar format - return stored value
+    $value = (float)$entry;
     return ['value' => $value, 'ts' => null];
 }
 
