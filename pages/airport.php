@@ -31,6 +31,38 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Remove deprecated window.styleMedia immediately to prevent Safari warnings
+        // Must run before any other scripts to catch Safari's early property check
+        (function() {
+            'use strict';
+            try {
+                if ('styleMedia' in window) {
+                    var descriptor = Object.getOwnPropertyDescriptor(window, 'styleMedia');
+                    if (descriptor && descriptor.configurable) {
+                        delete window.styleMedia;
+                    } else {
+                        try {
+                            Object.defineProperty(window, 'styleMedia', {
+                                value: undefined,
+                                writable: false,
+                                configurable: true,
+                                enumerable: false
+                            });
+                            delete window.styleMedia;
+                        } catch (e) {
+                            Object.defineProperty(window, 'styleMedia', {
+                                get: function() { return undefined; },
+                                set: function() {},
+                                configurable: false,
+                                enumerable: false
+                            });
+                        }
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
     <title><?= $pageTitle ?></title>
     
     <?php
@@ -81,31 +113,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     ?>
     <style><?= $cssContent ?></style>
     <script>
-        // Suppress Safari warning about deprecated window.styleMedia
-        // Safari warns when window.styleMedia exists, even if not used
-        // We use window.matchMedia instead (the modern API) for media queries
-        // This script ensures we never access the deprecated property
-        (function() {
-            // Override styleMedia to prevent Safari warnings
-            // Note: We don't use styleMedia anywhere - we use matchMedia for media queries
-            if (typeof window.styleMedia !== 'undefined') {
-                try {
-                    // Try to delete the property (may not work in all browsers)
-                    delete window.styleMedia;
-                } catch (e) {
-                    // If deletion fails, override it to prevent warnings
-                    Object.defineProperty(window, 'styleMedia', {
-                        get: function() {
-                            // Return null instead of the deprecated object
-                            return null;
-                        },
-                        configurable: true,
-                        enumerable: false
-                    });
-                }
-            }
-        })();
-        
         // Register service worker for offline support with cache busting
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
