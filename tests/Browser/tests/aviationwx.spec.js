@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const path = require('path');
+const fs = require('fs');
 
 test.describe('Aviation Weather Dashboard', () => {
   const baseUrl = process.env.TEST_BASE_URL || 'http://localhost:8080';

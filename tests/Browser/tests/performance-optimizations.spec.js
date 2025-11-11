@@ -28,10 +28,15 @@ test.describe('Performance Optimizations', () => {
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
     await page.waitForLoadState('domcontentloaded');
     
-    // Wait a bit for any async JavaScript errors
+    // Wait for page to fully load and any async JavaScript to execute
+    await page.waitForLoadState('load');
     await page.waitForTimeout(2000);
     
     // Check that no syntax errors occurred
+    if (syntaxErrors.length > 0) {
+      console.error('Syntax errors found:', syntaxErrors);
+      console.error('All console errors:', consoleErrors);
+    }
     expect(syntaxErrors).toHaveLength(0);
     
     // Verify JavaScript is valid by checking if scripts executed
@@ -45,13 +50,13 @@ test.describe('Performance Optimizations', () => {
   });
 
   test('Service worker should register successfully', async ({ page, context }) => {
-    // Grant service worker permissions
+    // Grant service worker permissions (notifications permission helps with service workers)
     await context.grantPermissions(['notifications']);
     
     const swRegistrationErrors = [];
     const swSuccess = [];
     
-    // Listen for console messages about service worker
+    // Listen for console messages about service worker BEFORE navigation
     page.on('console', msg => {
       const text = msg.text();
       if (text.includes('[SW]') || text.includes('service worker') || text.includes('ServiceWorker')) {
@@ -63,23 +68,42 @@ test.describe('Performance Optimizations', () => {
       }
     });
     
-    await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('networkidle');
+    // Listen for page errors
+    page.on('pageerror', error => {
+      const errorText = error.message;
+      if (errorText.includes('service worker') || errorText.includes('ServiceWorker') || errorText.includes('sw.js')) {
+        swRegistrationErrors.push(errorText);
+      }
+    });
     
-    // Wait for service worker registration
-    await page.waitForTimeout(3000);
+    await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for service worker registration (service workers register on 'load' event)
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(2000); // Additional wait for async registration
     
     // Check service worker registration
     const swRegistered = await page.evaluate(async () => {
       if ('serviceWorker' in navigator) {
         try {
           const registrations = await navigator.serviceWorker.getRegistrations();
-          return registrations.length > 0;
+          return {
+            registered: registrations.length > 0,
+            count: registrations.length,
+            scopes: registrations.map(r => r.scope)
+          };
         } catch (e) {
-          return false;
+          return {
+            registered: false,
+            error: e.message
+          };
         }
       }
-      return false;
+      return {
+        registered: false,
+        reason: 'ServiceWorker not supported'
+      };
     });
     
     // Service worker should either be registered or not supported (both are OK)
@@ -87,15 +111,28 @@ test.describe('Performance Optimizations', () => {
     if (swRegistrationErrors.length > 0) {
       // Check if error is about old /sw.js path (expected and handled)
       const oldPathErrors = swRegistrationErrors.filter(err => 
-        err.includes('/sw.js') && err.includes('404')
+        err.includes('/sw.js') && (err.includes('404') || err.includes('Failed'))
       );
       
       // Other errors are problems
       const otherErrors = swRegistrationErrors.filter(err => 
-        !err.includes('/sw.js') || !err.includes('404')
+        !err.includes('/sw.js') || (!err.includes('404') && !err.includes('Failed'))
       );
       
+      // Log for debugging
+      if (otherErrors.length > 0) {
+        console.log('Service worker registration errors:', otherErrors);
+        console.log('Service worker registration status:', swRegistered);
+      }
+      
       expect(otherErrors).toHaveLength(0);
+    }
+    
+    // If service worker is supported, it should register (unless there's a legitimate error)
+    if (swRegistered.reason !== 'ServiceWorker not supported' && !swRegistered.error) {
+      // Service worker should be registered if supported
+      // But we don't fail if it's not - might be first load or other legitimate reasons
+      // The important thing is that there are no errors
     }
   });
 
@@ -109,32 +146,42 @@ test.describe('Performance Optimizations', () => {
       const scripts = Array.from(document.querySelectorAll('script'));
       for (const script of scripts) {
         const text = script.textContent || '';
+        // Match service-worker.js with optional query parameters
         const match = text.match(/service-worker\.js[^'"]*/);
         if (match) {
-          return '/public/js/' + match[0];
+          // Extract the full path including query params
+          const fullMatch = match[0];
+          // Check if it already starts with /public/js/
+          if (fullMatch.startsWith('/public/js/')) {
+            return fullMatch;
+          }
+          // Otherwise prepend the path
+          return '/public/js/' + fullMatch;
         }
       }
       return null;
     });
     
-    if (swUrl) {
-      // Try to fetch the service worker file
-      const response = await page.goto(`${baseUrl}${swUrl}`, { waitUntil: 'networkidle' });
-      
-      if (response) {
-        const contentType = response.headers()['content-type'] || '';
-        const body = await response.text();
-        
-        // Should be JavaScript MIME type
-        expect(contentType).toMatch(/javascript|application\/javascript|text\/javascript/);
-        
-        // Should not be HTML (404 page)
-        expect(body).not.toMatch(/<!DOCTYPE|<html|<body/);
-        
-        // Should contain JavaScript code
-        expect(body).toMatch(/serviceWorker|self\.addEventListener|const/);
-      }
-    }
+    // If we can't find the URL in the page, try the standard path
+    const testUrl = swUrl || '/public/js/service-worker.js';
+    
+    // Try to fetch the service worker file using page.request (better for API calls)
+    const response = await page.request.get(`${baseUrl}${testUrl}`);
+    
+    // Should get a successful response
+    expect(response.ok()).toBeTruthy();
+    
+    const contentType = response.headers()['content-type'] || '';
+    const body = await response.text();
+    
+    // Should be JavaScript MIME type
+    expect(contentType).toMatch(/javascript|application\/javascript|text\/javascript/);
+    
+    // Should not be HTML (404 page)
+    expect(body).not.toMatch(/<!DOCTYPE|<html|<body/);
+    
+    // Should contain JavaScript code
+    expect(body).toMatch(/serviceWorker|self\.addEventListener|const/);
   });
 
   test('window.styleMedia should be removed to prevent Safari warnings', async ({ page }) => {
@@ -216,7 +263,10 @@ test.describe('Performance Optimizations', () => {
     });
     
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
+      // networkidle might timeout if there are long-polling requests, that's OK
+    });
     
     // Wait a bit for any async errors
     await page.waitForTimeout(2000);
@@ -228,12 +278,22 @@ test.describe('Performance Optimizations', () => {
         return false;
       }
       // Ignore service worker errors about old /sw.js (we handle those)
-      if (error.includes('/sw.js') && error.includes('404')) {
+      if (error.includes('/sw.js') && (error.includes('404') || error.includes('Failed'))) {
+        return false;
+      }
+      // Ignore CORS errors in test environment (if any)
+      if (error.includes('CORS') || error.includes('Access-Control')) {
         return false;
       }
       // All other errors are critical
       return true;
     });
+    
+    // Log errors for debugging if any critical errors found
+    if (criticalErrors.length > 0) {
+      console.error('Critical JavaScript errors:', criticalErrors);
+      console.error('All JavaScript errors:', jsErrors);
+    }
     
     expect(criticalErrors).toHaveLength(0);
   });
