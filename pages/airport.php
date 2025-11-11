@@ -439,6 +439,49 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         </footer>
     </div>
 
+    <?php
+    // Simple JavaScript minification function that preserves PHP code
+    function minifyJavaScript($js) {
+        // Protect PHP tags by replacing them with placeholders
+        $phpTags = [];
+        $placeholder = '___PHP_TAG_' . uniqid() . '___';
+        $pattern = '/<\?[=]?php?[^>]*\?>/';
+        preg_match_all($pattern, $js, $matches);
+        foreach ($matches[0] as $i => $tag) {
+            $js = str_replace($tag, $placeholder . $i, $js);
+            $phpTags[$i] = $tag;
+        }
+        
+        // Remove single-line comments (simple approach - may miss some edge cases)
+        $js = preg_replace('/\/\/[^\n\r]*/m', '', $js);
+        
+        // Remove multi-line comments
+        $js = preg_replace('/\/\*[\s\S]*?\*\//', '', $js);
+        
+        // Remove leading/trailing whitespace from lines
+        $js = preg_replace('/^\s+|\s+$/m', '', $js);
+        
+        // Collapse multiple spaces to single space
+        $js = preg_replace('/\s+/', ' ', $js);
+        
+        // Remove spaces around operators (but be careful)
+        $js = preg_replace('/\s*([{}();,=+\-*\/<>!&|?:])\s*/', '$1', $js);
+        
+        // Add space after keywords and operators where needed for readability
+        $js = preg_replace('/([{}();,=+\-*\/<>!&|?:])([a-zA-Z_$])/', '$1 $2', $js);
+        $js = preg_replace('/([a-zA-Z_$])([{}();,=+\-*\/<>!&|?:])/', '$1 $2', $js);
+        
+        // Restore PHP tags
+        foreach ($phpTags as $i => $tag) {
+            $js = str_replace($placeholder . $i, $tag, $js);
+        }
+        
+        return trim($js);
+    }
+    
+    // Start output buffering to capture JavaScript
+    ob_start();
+    ?>
     <script>
 // Airport page JavaScript
 const AIRPORT_ID = '<?= $airportId ?>';
@@ -1571,13 +1614,15 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
 const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
 if (imgEl<?= $index ?>) {
     // Check timestamp on initial load (images may already be cached)
+    // For first webcam (LCP element), delay timestamp check to avoid competing with LCP load
+    const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
     if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
-        // Image already loaded, check timestamp immediately
-        setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), 100);
+        // Image already loaded, check timestamp after delay
+        setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
     } else {
-        // Image not loaded yet, wait for load event
+        // Image not loaded yet, wait for load event, then delay timestamp check
         imgEl<?= $index ?>.addEventListener('load', () => {
-            updateWebcamTimestampOnLoad(<?= $index ?>);
+            setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
         }, { once: false }); // Allow multiple calls as images refresh
     }
     
@@ -1615,7 +1660,10 @@ function batchRefreshAllTimestamps() {
 setInterval(batchRefreshAllTimestamps, 30000);
 
 // Fetch weather data every minute
-fetchWeather();
+// Delay initial fetch to avoid competing with LCP image load
+setTimeout(() => {
+    fetchWeather();
+}, 500);
 setInterval(fetchWeather, 60000);
 
 // Handle webcam image load errors - show placeholder image
@@ -1728,7 +1776,18 @@ function safeSwapCameraImage(camIndex) {
             // Silently ignore; will retry on next interval
         });
 }
-</script>
+<?php
+    // Capture and minify JavaScript
+    $js = ob_get_clean();
+    // Extract the script tag content
+    if (preg_match('/<script>(.*?)<\/script>/s', $js, $matches)) {
+        $jsContent = $matches[1];
+        $minified = minifyJavaScript($jsContent);
+        echo '<script>' . $minified . '</script>';
+    } else {
+        echo $js; // Fallback if pattern doesn't match
+    }
+?>
 </body>
 </html>
 
