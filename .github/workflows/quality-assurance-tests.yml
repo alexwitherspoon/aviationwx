@@ -13,6 +13,35 @@ permissions:
   actions: read
 
 jobs:
+  # Setup Docker environment once - shared by E2E and browser tests
+  setup-docker:
+    name: Setup Docker Environment
+    runs-on: ubuntu-latest
+    # This job sets up Docker and makes it available to dependent jobs
+    # Note: We can't share containers across jobs, but we can optimize the setup
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Create test airports.json
+        run: |
+          if [ ! -f config/airports.json ]; then
+            cp config/airports.json.example config/airports.json
+            echo "✓ Created config/airports.json from example"
+          fi
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
   performance-tests:
     name: Performance Tests
     runs-on: ubuntu-latest
@@ -28,6 +57,14 @@ jobs:
           php-version: '8.3'
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
       
       - name: Install Composer dependencies
         run: |
@@ -65,13 +102,20 @@ jobs:
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
       - name: Install Composer dependencies
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
       - name: Create test airports.json
         run: |
-          # Create airports.json from example for Docker
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
             echo "✓ Created config/airports.json from example"
@@ -81,24 +125,29 @@ jobs:
         run: |
           # Start local instance for testing
           docker compose -f docker/docker-compose.yml up -d
-          sleep 15  # Wait for containers to be ready
+          # Reduced wait time - health check will verify readiness
+          sleep 10
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for health check
         run: |
-          timeout=60
+          timeout=50
           elapsed=0
+          # More aggressive polling - check every 1 second instead of 2
           while [ $elapsed -lt $timeout ]; do
             if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
-              echo "✓ Service is ready"
+              echo "✓ Service is ready after ${elapsed}s"
               exit 0
             fi
-            sleep 2
-            elapsed=$((elapsed + 2))
-            echo "Waiting for service... ${elapsed}s"
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ $((elapsed % 5)) -eq 0 ]; then
+              echo "Waiting for service... ${elapsed}s"
+            fi
           done
           echo "⚠ Service did not become ready in time"
           docker compose -f docker/docker-compose.yml logs web
+          exit 1
       
       - name: Run E2E Tests
         run: |
@@ -138,13 +187,20 @@ jobs:
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
       - name: Install Composer dependencies
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
       - name: Create test airports.json
         run: |
-          # Create airports.json from example for Docker
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
             echo "✓ Created config/airports.json from example"
@@ -153,7 +209,23 @@ jobs:
       - name: Start Docker containers
         run: |
           docker compose -f docker/docker-compose.yml up -d
-          sleep 15
+          sleep 10  # Reduced wait time
+      
+      - name: Wait for health check
+        run: |
+          timeout=50
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
+              echo "✓ Service is ready after ${elapsed}s"
+              exit 0
+            fi
+            sleep 1
+            elapsed=$((elapsed + 1))
+          done
+          echo "⚠ Service did not become ready"
+          docker compose -f docker/docker-compose.yml logs web
+          exit 1
       
       - name: Run Smoke Tests (Local)
         run: |
@@ -162,7 +234,6 @@ jobs:
           vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --no-coverage
         env:
           TEST_API_URL: http://localhost:8080
-          # Note: CONFIG_PATH not set here - Docker container should use /var/www/html/airports.json
       
       - name: Cleanup
         if: always()
@@ -193,6 +264,14 @@ jobs:
           php-version: '8.3'
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
       
       - name: Install Composer dependencies
         run: |
@@ -232,6 +311,14 @@ jobs:
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
       - name: Install Composer dependencies
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
@@ -253,10 +340,19 @@ jobs:
           path: external-links-results.xml
           retention-days: 7
   
+  # Split browser tests by file for parallelization
   browser-tests:
-    name: Browser Compatibility Tests
+    name: Browser Tests - ${{ matrix.test-file }}
     runs-on: ubuntu-latest
     continue-on-error: true  # Don't block PR if these fail
+    strategy:
+      fail-fast: false  # Continue running other matrix jobs even if one fails
+      matrix:
+        # Run each test file in parallel
+        test-file: 
+          - 'aviationwx.spec.js'
+          - 'cache-and-stale-data.spec.js'
+          - 'performance-optimizations.spec.js'
     
     steps:
       - name: Checkout code
@@ -279,7 +375,6 @@ jobs:
       
       - name: Create test airports.json
         run: |
-          # Create airports.json from example for Docker
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
             echo "✓ Created config/airports.json from example"
@@ -288,38 +383,45 @@ jobs:
       - name: Start Docker containers
         run: |
           docker compose -f docker/docker-compose.yml up -d
-          sleep 15
+          sleep 10  # Reduced wait time
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for service to be ready
         run: |
-          timeout=60
+          timeout=50
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
             if curl -f http://localhost:8080/ 2>/dev/null; then
-              echo "✓ Service is ready"
+              echo "✓ Service is ready after ${elapsed}s"
               exit 0
             fi
-            sleep 2
-            elapsed=$((elapsed + 2))
+            sleep 1
+            elapsed=$((elapsed + 1))
+            if [ $((elapsed % 5)) -eq 0 ]; then
+              echo "Waiting for service... ${elapsed}s"
+            fi
           done
           echo "⚠ Service did not become ready"
           docker compose -f docker/docker-compose.yml logs web
+          exit 1
       
       - name: Run Browser Tests
         working-directory: tests/Browser
         run: |
-          # Run browser tests - exit code handling for Playwright
-          npx playwright test || [ $? -eq 1 ]
+          # Run only the specific test file from matrix
+          # Use sharding to split tests within the file across workers
+          npx playwright test tests/${{ matrix.test-file }} || [ $? -eq 1 ]
         continue-on-error: true
         env:
           TEST_BASE_URL: http://localhost:8080
+          # Increase workers for faster execution (6 workers for better parallelization)
+          PLAYWRIGHT_WORKERS: 6
       
       - name: Upload Playwright Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.test-file }}
           path: tests/Browser/playwright-report/
           retention-days: 7
       
@@ -327,7 +429,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.test-file }}
           path: tests/Browser/playwright-results.json
           retention-days: 7
       
@@ -335,7 +437,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-screenshots
+          name: playwright-screenshots-${{ matrix.test-file }}
           path: tests/Browser/test-results/**/*.png
           if-no-files-found: ignore
           retention-days: 7
