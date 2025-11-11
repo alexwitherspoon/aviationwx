@@ -487,14 +487,15 @@ test.describe('Aviation Weather Dashboard', () => {
     // Verify time format (HH:MM:SS)
     expect(localTimeText).toMatch(/^\d{2}:\d{2}:\d{2}$/);
     
-    // Get the timezone abbreviation
+    // Get the timezone abbreviation (includes UTC offset, e.g., "PST (UTC-8)")
     const timezoneAbbr = await page.textContent('#localTimezone');
     expect(timezoneAbbr).toBeTruthy();
     expect(timezoneAbbr).not.toBe('--');
     
-    // Verify timezone abbreviation is valid (PST/PDT for America/Los_Angeles)
+    // Verify timezone format: abbreviation followed by UTC offset in parentheses
+    // Examples: "PST (UTC-8)", "PDT (UTC-7)", "EST (UTC-5)"
     // The test airport (kspb) uses America/Los_Angeles timezone
-    expect(timezoneAbbr).toMatch(/^[A-Z]{3,4}$/);
+    expect(timezoneAbbr).toMatch(/^[A-Z]{3,4}\s+\(UTC[+-]\d+\)$/);
     
     // Check that the time updates dynamically
     const initialTime = await page.textContent('#localTime');

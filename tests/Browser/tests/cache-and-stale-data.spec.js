@@ -137,14 +137,28 @@ test.describe('Cache and Stale Data Handling', () => {
     await page.waitForTimeout(3000);
     
     // The client should detect stale data and force a refresh
-    // This is verified by checking that another request was made
-    const finalTimestamp = await page.evaluate(() => {
-      const el = document.getElementById('weather-last-updated');
-      return el ? el.textContent : null;
+    // Check for console warning about stale cache detection
+    // OR check that a forced refresh was triggered (cache-busting parameter)
+    const requestsAfterStale = [];
+    page.on('request', request => {
+      if (request.url().includes('/weather.php') && request.url().includes('_cb=')) {
+        requestsAfterStale.push(request.url());
+      }
     });
     
-    // Should have detected stale data (either via console warning or timestamp update)
-    expect(consoleMessages.length > 0 || finalTimestamp !== initialTimestamp).toBeTruthy();
+    // Wait a bit more for the forced refresh to happen
+    await page.waitForTimeout(2000);
+    
+    // Should have detected stale data (either via console warning or forced refresh with cache-busting)
+    const hasStaleDetection = consoleMessages.length > 0 || requestsAfterStale.length > 0;
+    
+    // If no detection, log for debugging
+    if (!hasStaleDetection) {
+      console.log('Stale detection test - console messages:', consoleMessages);
+      console.log('Stale detection test - forced refresh requests:', requestsAfterStale);
+    }
+    
+    expect(hasStaleDetection).toBeTruthy();
   });
 
   test('should show visual indicators for stale data', async ({ page }) => {
@@ -154,11 +168,11 @@ test.describe('Cache and Stale Data Handling', () => {
       { timeout: 10000 }
     );
     
-    // Manually set weatherLastUpdated to be >5 minutes ago
+    // Manually set weatherLastUpdated to be >20 minutes ago (stale threshold is 20 minutes)
     await page.evaluate(() => {
       if (typeof weatherLastUpdated !== 'undefined') {
-        // Set to 6 minutes ago
-        weatherLastUpdated = new Date(Date.now() - 6 * 60 * 1000);
+        // Set to 25 minutes ago (exceeds 20-minute stale threshold)
+        weatherLastUpdated = new Date(Date.now() - 25 * 60 * 1000);
         // Update timestamp display
         if (typeof updateWeatherTimestamp === 'function') {
           updateWeatherTimestamp();
@@ -174,7 +188,8 @@ test.describe('Cache and Stale Data Handling', () => {
     const text = await timestampEl.textContent();
     const color = await timestampEl.evaluate(el => window.getComputedStyle(el).color);
     
-    // Should show warning indicator (⚠️) and orange/red color
+    // Should show warning indicator (⚠️) for data >= 20 minutes old
+    // The warning shows as "⚠️ X minutes ago - refreshing..." or "⚠️ Over an hour stale..."
     expect(text).toMatch(/⚠️|warning|stale/i);
     
     // Color should be orange (#f80) or red (#c00) for stale data
@@ -183,7 +198,7 @@ test.describe('Cache and Stale Data Handling', () => {
                           color.includes('rgb(255, 140, 0)') || // Orange variants
                           color.includes('rgb(220, 20, 60)');   // Red variants
     
-    expect(isWarningColor || text.includes('stale')).toBeTruthy();
+    expect(isWarningColor || text.includes('⚠️')).toBeTruthy();
   });
 
   test('should prevent concurrent fetches', async ({ page }) => {
