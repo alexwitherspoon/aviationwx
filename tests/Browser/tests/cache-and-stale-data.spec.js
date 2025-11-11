@@ -52,7 +52,8 @@ test.describe('Cache and Stale Data Handling', () => {
     const requests = [];
     const requestListener = request => {
       const url = request.url();
-      if (url.includes('/weather.php') || url.includes('weather.php')) {
+      // Match weather.php in various URL formats: /weather.php, weather.php, /api/weather.php
+      if (url.includes('weather.php')) {
         requests.push(url);
       }
     };
@@ -142,23 +143,30 @@ test.describe('Cache and Stale Data Handling', () => {
       }
     });
     
+    // Set up request listener BEFORE triggering fetch (to catch forced refresh)
+    const requestsAfterStale = [];
+    const requestListener = request => {
+      const url = request.url();
+      // Match weather.php and check for cache-busting parameter
+      if (url.includes('weather.php') && 
+          (url.includes('_cb=') || url.includes('&_cb=') || url.match(/[?&]_cb=/))) {
+        requestsAfterStale.push(url);
+      }
+    };
+    page.on('request', requestListener);
+    
+    // Wait for weatherLastUpdated to be set (needed for stale detection)
+    await page.waitForFunction(
+      () => typeof weatherLastUpdated !== 'undefined' && weatherLastUpdated !== null,
+      { timeout: 10000 }
+    );
+    
     // Trigger a fetch
     await page.evaluate(() => {
       if (typeof fetchWeather === 'function') {
         fetchWeather(false); // Normal fetch
       }
     });
-    
-    // Set up request listener BEFORE waiting (to catch forced refresh)
-    const requestsAfterStale = [];
-    const requestListener = request => {
-      const url = request.url();
-      if ((url.includes('/weather.php') || url.includes('weather.php')) && 
-          (url.includes('_cb=') || url.match(/[?&]_cb=/))) {
-        requestsAfterStale.push(url);
-      }
-    };
-    page.on('request', requestListener);
     
     // Wait for stale data detection and refresh
     await page.waitForTimeout(5000);
@@ -306,7 +314,8 @@ test.describe('Cache and Stale Data Handling', () => {
     const swRequests = [];
     const requestListener = request => {
       const url = request.url();
-      if (url.includes('/weather.php') || url.includes('weather.php')) {
+      // Match weather.php in various URL formats
+      if (url.includes('weather.php')) {
         const hasCacheBusting = url.includes('_cb=') || url.includes('&_cb=') || url.match(/[?&]_cb=/);
         swRequests.push({
           url,
