@@ -39,6 +39,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     echo "\n    ";
     ?>
     
+    <!-- Preconnect to same origin for faster CSS loading -->
+    <?php
+    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
+    $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
+    ?>
+    <link rel="preconnect" href="<?= $protocol ?>://<?= htmlspecialchars($host) ?>">
+    
     <!-- Resource hints for external APIs -->
     <link rel="preconnect" href="https://swd.weatherflow.com" crossorigin>
     <link rel="preconnect" href="https://api.ambientweather.net" crossorigin>
@@ -65,10 +72,14 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     ?>
     
     <?php
+    // Inline CSS to eliminate render-blocking request
     // Use minified CSS if available, fallback to regular CSS
-    $cssFile = file_exists(__DIR__ . '/../public/css/styles.min.css') ? 'public/css/styles.min.css' : 'public/css/styles.css';
+    $cssPath = file_exists(__DIR__ . '/../public/css/styles.min.css') 
+        ? __DIR__ . '/../public/css/styles.min.css' 
+        : __DIR__ . '/../public/css/styles.css';
+    $cssContent = file_get_contents($cssPath);
     ?>
-    <link rel="stylesheet" href="<?= htmlspecialchars($cssFile) ?>">
+    <style><?= $cssContent ?></style>
     <script>
         // Suppress Safari warning about deprecated window.styleMedia
         // Safari warns when window.styleMedia exists, even if not used
@@ -215,7 +226,10 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                  src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
-                                 loading="lazy"
+                                 width="800"
+                                 height="600"
+                                 style="aspect-ratio: 4/3; width: 100%; height: auto;"
+                                 fetchpriority="high"
                                  decoding="async"
                                  onerror="handleWebcamError(<?= $index ?>, this)"
                                  onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
@@ -241,7 +255,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 </div>
                 <p style="font-size: 0.85rem; color: #666; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
             </div>
-            <div id="weather-data" class="weather-grid">
+            <div id="weather-data" class="weather-grid" style="min-height: 400px;">
                 <div class="weather-item loading">
                     <span class="label">Loading...</span>
                 </div>
