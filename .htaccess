@@ -19,6 +19,10 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^sitemap\.xml$ api/sitemap.php [L]
 
+    # Route robots.txt to public/robots.txt
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^robots\.txt$ public/robots.txt [L]
+
     # Route API endpoints to api/ directory
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^weather\.php$ api/weather.php [L]
