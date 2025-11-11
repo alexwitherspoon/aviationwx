@@ -460,8 +460,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     </main>
 
     <?php
+    // Load JavaScript minification utility
+    require_once __DIR__ . '/../lib/js-minify.php';
+    
     // Simple JavaScript minification function that preserves PHP code and template literals
-    function minifyJavaScript($js) {
+    // (Function is now in lib/js-minify.php, but kept here for backward compatibility)
+    if (!function_exists('minifyJavaScript')) {
+        function minifyJavaScript($js) {
         // Protect PHP tags by replacing them with placeholders
         $phpTags = [];
         $placeholder = '___PHP_TAG_' . uniqid() . '___';
@@ -521,7 +526,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             $js = str_replace($placeholder . $i, $tag, $js);
         }
         
-        return trim($js);
+            return trim($js);
+        }
     }
     
     // Start output buffering to capture JavaScript
