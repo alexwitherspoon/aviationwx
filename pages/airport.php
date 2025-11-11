@@ -453,7 +453,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     </main>
 
     <?php
-    // Simple JavaScript minification function that preserves PHP code
+    // Simple JavaScript minification function that preserves PHP code and template literals
     function minifyJavaScript($js) {
         // Protect PHP tags by replacing them with placeholders
         $phpTags = [];
@@ -465,7 +465,28 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             $phpTags[$i] = $tag;
         }
         
-        // Remove single-line comments (simple approach - may miss some edge cases)
+        // Protect template literals (backtick strings) - they can contain any characters
+        $templateLiterals = [];
+        $templatePlaceholder = '___TEMPLATE_' . uniqid() . '___';
+        $templatePattern = '/`(?:[^`\\\\]|\\\\.|`)*`/s';
+        preg_match_all($templatePattern, $js, $templateMatches);
+        foreach ($templateMatches[0] as $i => $template) {
+            $js = str_replace($template, $templatePlaceholder . $i, $js);
+            $templateLiterals[$i] = $template;
+        }
+        
+        // Protect string literals (single and double quotes) to avoid breaking them
+        $stringLiterals = [];
+        $stringPlaceholder = '___STRING_' . uniqid() . '___';
+        // Match strings, handling escaped quotes
+        $stringPattern = '/(["\'])(?:[^\\\\\1]|\\\\.)*?\1/s';
+        preg_match_all($stringPattern, $js, $stringMatches);
+        foreach ($stringMatches[0] as $i => $string) {
+            $js = str_replace($string, $stringPlaceholder . $i, $js);
+            $stringLiterals[$i] = $string;
+        }
+        
+        // Remove single-line comments (but not inside protected strings)
         $js = preg_replace('/\/\/[^\n\r]*/m', '', $js);
         
         // Remove multi-line comments
@@ -474,15 +495,19 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         // Remove leading/trailing whitespace from lines
         $js = preg_replace('/^\s+|\s+$/m', '', $js);
         
-        // Collapse multiple spaces to single space
-        $js = preg_replace('/\s+/', ' ', $js);
+        // Collapse multiple spaces/newlines to single space (but preserve newlines in some contexts)
+        $js = preg_replace('/[ \t]+/', ' ', $js);
+        $js = preg_replace('/\n\s*\n+/', "\n", $js);
         
-        // Remove spaces around operators (but be careful)
-        $js = preg_replace('/\s*([{}();,=+\-*\/<>!&|?:])\s*/', '$1', $js);
+        // Restore string literals
+        foreach ($stringLiterals as $i => $string) {
+            $js = str_replace($stringPlaceholder . $i, $string, $js);
+        }
         
-        // Add space after keywords and operators where needed for readability
-        $js = preg_replace('/([{}();,=+\-*\/<>!&|?:])([a-zA-Z_$])/', '$1 $2', $js);
-        $js = preg_replace('/([a-zA-Z_$])([{}();,=+\-*\/<>!&|?:])/', '$1 $2', $js);
+        // Restore template literals
+        foreach ($templateLiterals as $i => $template) {
+            $js = str_replace($templatePlaceholder . $i, $template, $js);
+        }
         
         // Restore PHP tags
         foreach ($phpTags as $i => $tag) {
@@ -1792,13 +1817,25 @@ function safeSwapCameraImage(camIndex) {
 <?php
     // Capture and minify JavaScript
     $js = ob_get_clean();
-    // Extract the script tag content
-    if (preg_match('/<script>(.*?)<\/script>/s', $js, $matches)) {
+    // Extract the script tag content - use a more robust pattern
+    // Match from <script> to </script>, handling potential </script> in strings
+    if (preg_match('/<script[^>]*>(.*?)<\/script>/s', $js, $matches)) {
         $jsContent = $matches[1];
-        $minified = minifyJavaScript($jsContent);
-        echo '<script>' . $minified . '</script>';
+        // Only minify if content is not empty
+        if (trim($jsContent) !== '') {
+            try {
+                $minified = minifyJavaScript($jsContent);
+                echo '<script>' . $minified . '</script>';
+            } catch (Exception $e) {
+                // If minification fails, output original JavaScript
+                echo $js;
+            }
+        } else {
+            echo $js;
+        }
     } else {
-        echo $js; // Fallback if pattern doesn't match
+        // Fallback if pattern doesn't match - output as-is
+        echo $js;
     }
 ?>
 </body>
