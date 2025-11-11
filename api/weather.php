@@ -1287,6 +1287,16 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
 
     if ($weatherError !== null) {
+    // If we already served stale cache, don't send another response (background refresh failed)
+    if ($hasStaleCache) {
+        // Request already finished with stale cache response, just log the error
+        aviationwx_log('warning', 'weather api background refresh error, stale cache was served', [
+            'airport' => $airportId,
+            'err' => $weatherError
+        ], 'app');
+        exit; // Don't send another response, request already finished
+    }
+    
     http_response_code(503);
     aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError], 'app');
     ob_clean();

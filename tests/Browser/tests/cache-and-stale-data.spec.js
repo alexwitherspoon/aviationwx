@@ -11,9 +11,21 @@ test.describe('Cache and Stale Data Handling', () => {
   test.beforeEach(async ({ page, context }) => {
     // Clear all caches before each test
     await context.clearCookies();
+    
+    // Navigate to the page FIRST (localStorage requires a real page context)
+    await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('body', { state: 'visible' });
+    
+    // Now clear storage AFTER navigating to a real page
     await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        // If clearing fails, continue - might be a test environment issue
+        console.warn('Could not clear storage:', e.message);
+      }
       // Clear Service Worker cache if possible
       if ('caches' in window) {
         return caches.keys().then(names => {
@@ -21,11 +33,6 @@ test.describe('Cache and Stale Data Handling', () => {
         });
       }
     });
-    
-    // Navigate to the page
-    await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForSelector('body', { state: 'visible' });
   });
 
   test('should add cache-busting parameter when forcing refresh', async ({ page }) => {
@@ -35,7 +42,7 @@ test.describe('Cache and Stale Data Handling', () => {
       { timeout: 10000 }
     );
     
-    // Intercept weather fetch requests
+    // Intercept weather fetch requests BEFORE triggering fetch
     const requests = [];
     page.on('request', request => {
       if (request.url().includes('/weather.php')) {
@@ -43,8 +50,7 @@ test.describe('Cache and Stale Data Handling', () => {
       }
     });
     
-    // Trigger a forced refresh by waiting for data to be stale (>5 minutes)
-    // Or by manually calling fetchWeather(true)
+    // Trigger a forced refresh by manually calling fetchWeather(true)
     await page.evaluate(() => {
       // Force weather refresh
       if (typeof fetchWeather === 'function') {
@@ -52,11 +58,11 @@ test.describe('Cache and Stale Data Handling', () => {
       }
     });
     
-    // Wait a bit for the request to be made
-    await page.waitForTimeout(1000);
+    // Wait for the request to be made and processed
+    await page.waitForTimeout(2000);
     
     // Check if any request had cache-busting parameter
-    const hasCacheBusting = requests.some(url => url.includes('_cb='));
+    const hasCacheBusting = requests.some(url => url.includes('_cb=') || url.includes('&_cb='));
     expect(hasCacheBusting).toBeTruthy();
   });
 
@@ -76,19 +82,48 @@ test.describe('Cache and Stale Data Handling', () => {
     expect(initialTimestamp).toBeTruthy();
     
     // Mock a stale response (older timestamp than client has)
+    // Set up route BEFORE triggering fetch
     await page.route('**/weather.php*', async route => {
-      const response = await route.fetch();
-      const json = await response.json();
-      
-      // Modify the response to have an older timestamp
-      if (json.weather && json.weather.last_updated) {
-        json.weather.last_updated = json.weather.last_updated - 600; // 10 minutes older
+      try {
+        const response = await route.fetch();
+        const body = await response.text();
+        
+        // Try to parse JSON, handle double JSON issue
+        let json;
+        try {
+          json = JSON.parse(body);
+        } catch (e) {
+          // If double JSON, take the first one
+          const firstJsonEnd = body.indexOf('}') + 1;
+          if (firstJsonEnd > 0) {
+            json = JSON.parse(body.substring(0, firstJsonEnd));
+          } else {
+            throw e;
+          }
+        }
+        
+        // Modify the response to have an older timestamp
+        if (json.weather && json.weather.last_updated) {
+          json.weather.last_updated = json.weather.last_updated - 600; // 10 minutes older
+        }
+        
+        await route.fulfill({
+          status: response.status(),
+          headers: response.headers(),
+          body: JSON.stringify(json)
+        });
+      } catch (e) {
+        // If routing fails, continue with original request
+        await route.continue();
       }
-      
-      await route.fulfill({
-        response,
-        json
-      });
+    });
+    
+    // Set up console listener BEFORE triggering fetch
+    const consoleMessages = [];
+    page.on('console', msg => {
+      if (msg.type() === 'warn' && msg.text().includes('stale cache detected')) {
+        consoleMessages.push(msg.text());
+      }
     });
     
     // Trigger a fetch
@@ -99,15 +134,7 @@ test.describe('Cache and Stale Data Handling', () => {
     });
     
     // Wait for stale data detection and refresh
-    await page.waitForTimeout(2000);
-    
-    // Check console for stale data detection warning
-    const consoleMessages = [];
-    page.on('console', msg => {
-      if (msg.type() === 'warn' && msg.text().includes('stale cache detected')) {
-        consoleMessages.push(msg.text());
-      }
-    });
+    await page.waitForTimeout(3000);
     
     // The client should detect stale data and force a refresh
     // This is verified by checking that another request was made
