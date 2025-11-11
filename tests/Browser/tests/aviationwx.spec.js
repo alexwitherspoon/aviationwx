@@ -117,27 +117,47 @@ test.describe('Aviation Weather Dashboard', () => {
       return;
     }
     
-    // Wait for toggle to be visible and get initial state
+    // Wait for toggle to be visible and initialized
     await toggle.waitFor({ state: 'visible', timeout: 5000 });
-    const initialText = await toggle.textContent();
+    
+    // Wait for JavaScript to initialize the toggle (check if display element exists and has content)
+    await page.waitForFunction(
+      () => {
+        const display = document.getElementById('temp-unit-display');
+        return display && display.textContent && display.textContent.trim().length > 0;
+      },
+      { timeout: 5000 }
+    );
+    
+    // Get initial state from the display element (more reliable than toggle textContent)
+    const initialText = await page.evaluate(() => {
+      const display = document.getElementById('temp-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
     expect(initialText).toBeTruthy();
+    expect(['°F', '°C']).toContain(initialText);
     
     // Click toggle
     await toggle.click();
     
-    // Wait for toggle text to actually change (not just fixed timeout)
+    // Wait for toggle display text to actually change
     await page.waitForFunction(
-      ({ toggleSelector, initialText }) => {
-        const toggle = document.querySelector(toggleSelector);
-        return toggle && toggle.textContent !== initialText;
+      ({ initialText }) => {
+        const display = document.getElementById('temp-unit-display');
+        return display && display.textContent.trim() !== initialText;
       },
-      { toggleSelector: '#temp-unit-toggle', initialText },
+      { initialText },
       { timeout: 5000 }
     );
     
     // Verify toggle text changed
-    const newText = await toggle.textContent();
+    const newText = await page.evaluate(() => {
+      const display = document.getElementById('temp-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
+    expect(newText).toBeTruthy();
     expect(newText).not.toBe(initialText);
+    expect(['°F', '°C']).toContain(newText);
     
     // Verify temperature displays changed - wait for temperature to actually update
     // Wait for body to contain temperature with unit (should change after toggle)
@@ -154,25 +174,47 @@ test.describe('Aviation Weather Dashboard', () => {
       return;
     }
     
-    // Wait for toggle to be visible and get initial state
+    // Wait for toggle to be visible and initialized
     await toggle.waitFor({ state: 'visible', timeout: 5000 });
-    const initialText = await toggle.textContent();
-    expect(initialText).toBeTruthy();
     
-    await toggle.click();
-    
-    // Wait for toggle text to actually change
+    // Wait for JavaScript to initialize the toggle (check if display element exists and has content)
     await page.waitForFunction(
-      ({ toggleSelector, initialText }) => {
-        const toggle = document.querySelector(toggleSelector);
-        return toggle && toggle.textContent !== initialText;
+      () => {
+        const display = document.getElementById('wind-speed-unit-display');
+        return display && display.textContent && display.textContent.trim().length > 0;
       },
-      { toggleSelector: '#wind-speed-unit-toggle', initialText },
       { timeout: 5000 }
     );
     
-    const newText = await toggle.textContent();
+    // Get initial state from the display element (more reliable than toggle textContent)
+    const initialText = await page.evaluate(() => {
+      const display = document.getElementById('wind-speed-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
+    expect(initialText).toBeTruthy();
+    expect(['kts', 'mph', 'km/h']).toContain(initialText);
+    
+    // Click toggle
+    await toggle.click();
+    
+    // Wait for toggle display text to actually change
+    await page.waitForFunction(
+      ({ initialText }) => {
+        const display = document.getElementById('wind-speed-unit-display');
+        return display && display.textContent.trim() !== initialText;
+      },
+      { initialText },
+      { timeout: 5000 }
+    );
+    
+    // Verify toggle text changed
+    const newText = await page.evaluate(() => {
+      const display = document.getElementById('wind-speed-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
+    expect(newText).toBeTruthy();
     expect(newText).not.toBe(initialText);
+    expect(['kts', 'mph', 'km/h']).toContain(newText);
     
     // Verify wind speed unit changed - check page content
     const pageContent = await page.textContent('body');
@@ -425,22 +467,40 @@ test.describe('Aviation Weather Dashboard', () => {
     
     // Wait for toggle and get initial state
     await toggle.waitFor({ state: 'visible', timeout: 5000 });
-    const initialText = await toggle.textContent();
+    
+    // Wait for JavaScript to initialize the toggle
+    await page.waitForFunction(
+      () => {
+        const display = document.getElementById('temp-unit-display');
+        return display && display.textContent && display.textContent.trim().length > 0;
+      },
+      { timeout: 5000 }
+    );
+    
+    const initialText = await page.evaluate(() => {
+      const display = document.getElementById('temp-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
+    expect(initialText).toBeTruthy();
     
     // Click toggle to change unit
     await toggle.click();
     
-    // Wait for toggle text to actually change
+    // Wait for toggle display text to actually change
     await page.waitForFunction(
-      ({ toggleSelector, initialText }) => {
-        const toggle = document.querySelector(toggleSelector);
-        return toggle && toggle.textContent !== initialText;
+      ({ initialText }) => {
+        const display = document.getElementById('temp-unit-display');
+        return display && display.textContent.trim() !== initialText;
       },
-      { toggleSelector: '#temp-unit-toggle', initialText },
+      { initialText },
       { timeout: 5000 }
     );
     
-    const newState = await toggle.textContent();
+    const newState = await page.evaluate(() => {
+      const display = document.getElementById('temp-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
+    expect(newState).toBeTruthy();
     expect(newState).not.toBe(initialText);
     
     // Verify localStorage was written before reload (using correct key)
@@ -457,18 +517,21 @@ test.describe('Aviation Weather Dashboard', () => {
     await page.waitForSelector('body', { state: 'visible' });
     await page.waitForSelector('#temp-unit-toggle', { state: 'visible', timeout: 5000 });
     
-    // Wait for toggle to have the expected state (may take time for JavaScript to read localStorage)
+    // Wait for JavaScript to initialize and read from localStorage
     await page.waitForFunction(
-      ({ toggleSelector, expectedText }) => {
-        const toggle = document.querySelector(toggleSelector);
-        return toggle && toggle.textContent === expectedText;
+      ({ expectedText }) => {
+        const display = document.getElementById('temp-unit-display');
+        return display && display.textContent.trim() === expectedText;
       },
-      { toggleSelector: '#temp-unit-toggle', expectedText: newState },
+      { expectedText: newState },
       { timeout: 5000 }
     );
     
     // Unit should be preserved (stored in localStorage)
-    const preservedState = await toggle.textContent();
+    const preservedState = await page.evaluate(() => {
+      const display = document.getElementById('temp-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
     expect(preservedState).toBe(newState);
   });
 
@@ -476,26 +539,32 @@ test.describe('Aviation Weather Dashboard', () => {
     // Wait for local time element to be present
     await page.waitForSelector('#localTime', { state: 'visible', timeout: 5000 });
     
-    // Wait for time to update (give it a moment to format)
-    await page.waitForTimeout(1000);
+    // Wait for clock function to run and update the time (check that it's not "--:--:--")
+    await page.waitForFunction(
+      () => {
+        const timeEl = document.getElementById('localTime');
+        return timeEl && timeEl.textContent && timeEl.textContent.trim() !== '--:--:--';
+      },
+      { timeout: 10000 }
+    );
     
     // Get the displayed local time
     const localTimeText = await page.textContent('#localTime');
     expect(localTimeText).toBeTruthy();
-    expect(localTimeText).not.toBe('--:--:--');
+    expect(localTimeText.trim()).not.toBe('--:--:--');
     
     // Verify time format (HH:MM:SS)
-    expect(localTimeText).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    expect(localTimeText.trim()).toMatch(/^\d{2}:\d{2}:\d{2}$/);
     
     // Get the timezone abbreviation (includes UTC offset, e.g., "PST (UTC-8)")
     const timezoneAbbr = await page.textContent('#localTimezone');
     expect(timezoneAbbr).toBeTruthy();
-    expect(timezoneAbbr).not.toBe('--');
+    expect(timezoneAbbr.trim()).not.toBe('--');
     
     // Verify timezone format: abbreviation followed by UTC offset in parentheses
     // Examples: "PST (UTC-8)", "PDT (UTC-7)", "EST (UTC-5)"
     // The test airport (kspb) uses America/Los_Angeles timezone
-    expect(timezoneAbbr).toMatch(/^[A-Z]{3,4}\s+\(UTC[+-]\d+\)$/);
+    expect(timezoneAbbr.trim()).toMatch(/^[A-Z]{3,4}\s+\(UTC[+-]\d+\)$/);
     
     // Check that the time updates dynamically
     const initialTime = await page.textContent('#localTime');
@@ -504,7 +573,7 @@ test.describe('Aviation Weather Dashboard', () => {
     
     // Time should have updated (may be same second if we caught it at the start, but should be different after 1.5s)
     // At minimum, the element should exist and be formatted correctly
-    expect(updatedTime).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    expect(updatedTime.trim()).toMatch(/^\d{2}:\d{2}:\d{2}$/);
     
     // Verify the time is actually in the airport's timezone, not browser's timezone
     // We'll check by comparing what the time should be in the airport's timezone
