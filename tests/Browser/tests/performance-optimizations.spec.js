@@ -227,15 +227,21 @@ test.describe('Performance Optimizations', () => {
         const scripts = Array.from(document.querySelectorAll('script'));
         for (const script of scripts) {
           const text = script.textContent || '';
-          // Look for template literal patterns
-          if (text.includes('`${') && text.includes('}`)) {
+          // Look for template literal patterns - use character codes to avoid backtick issues
+          const backtick = String.fromCharCode(96); // backtick character
+          const templateStart = backtick + '${';
+          const templateEnd = '}' + backtick;
+          
+          if (text.includes(templateStart) && text.includes(templateEnd)) {
             // Check if it's properly formatted (not broken)
-            const matches = text.match(/`[^`]*\$\{[^}]+\}[^`]*`/g);
+            // Match template literals: backtick, content with ${...}, backtick
+            const templateRegex = new RegExp(backtick + '[^' + backtick + ']*\\$\\{[^}]+\\}[^' + backtick + ']*' + backtick, 'g');
+            const matches = text.match(templateRegex);
             if (matches) {
               // All matches should be valid template literal syntax
               return matches.every(match => {
                 // Should start and end with backticks
-                return match.startsWith('`') && match.endsWith('`');
+                return match.startsWith(backtick) && match.endsWith(backtick);
               });
             }
           }
