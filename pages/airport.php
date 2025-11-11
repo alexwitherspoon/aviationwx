@@ -109,6 +109,17 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         // Register service worker for offline support with cache busting
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
+                // Unregister any old service workers at incorrect paths (e.g., /sw.js)
+                navigator.serviceWorker.getRegistrations().then((registrations) => {
+                    for (let registration of registrations) {
+                        // Check if this is an old registration at wrong path
+                        if (registration.scope && (registration.active?.scriptURL?.includes('/sw.js') || registration.waiting?.scriptURL?.includes('/sw.js') || registration.installing?.scriptURL?.includes('/sw.js'))) {
+                            console.log('[SW] Unregistering old service worker:', registration.scope);
+                            registration.unregister();
+                        }
+                    }
+                });
+                
                 // Add cache-busting query parameter based on service worker file modification time
                 // This ensures the service worker is re-fetched when the file changes on deploy
                 const swMtime = <?= file_exists(__DIR__ . '/../public/js/service-worker.js') ? filemtime(__DIR__ . '/../public/js/service-worker.js') : time() ?>;

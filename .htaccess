@@ -39,6 +39,9 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ready\.php$ health/ready.php [L]
 
+    # Return 404 for old service worker path (sw.js) - no longer used
+    RewriteRule ^sw\.js$ - [R=404,L]
+
     # Default to index.php for routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
