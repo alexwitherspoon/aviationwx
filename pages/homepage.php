@@ -175,7 +175,7 @@ $ogImage = file_exists($aboutPhotoWebp)
         }
         .airport-location {
             font-size: 0.85rem;
-            color: #666;
+            color: #555;
             margin-bottom: 0.75rem;
             line-height: 1.4;
         }
@@ -195,7 +195,7 @@ $ogImage = file_exists($aboutPhotoWebp)
         }
         .metric-label {
             font-size: 0.75rem;
-            color: #666;
+            color: #555;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 0.25rem;
@@ -267,7 +267,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             border-color: #0066cc;
         }
         .pagination-info {
-            color: #666;
+            color: #555;
             font-size: 0.9rem;
             margin: 0 1rem;
         }
@@ -336,7 +336,7 @@ $ogImage = file_exists($aboutPhotoWebp)
         }
         .stat-label {
             font-size: 0.9rem;
-            color: #666;
+            color: #555;
             margin-top: 0.5rem;
         }
         .highlight-box {
@@ -415,7 +415,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             padding-top: 2rem;
             border-top: 1px solid #ddd;
             text-align: center;
-            color: #666;
+            color: #555;
             font-size: 0.9rem;
         }
         footer a {
@@ -438,6 +438,7 @@ $ogImage = file_exists($aboutPhotoWebp)
     </style>
 </head>
 <body>
+    <main>
     <div class="container">
         <div class="hero">
             <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 76px; height: 76px; background: transparent;"> AviationWX.org</h1>
@@ -654,7 +655,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                             <?php if ($newestTimestamp): ?>
                             <div class="metric" style="flex-basis: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e9ecef;">
                                 <div class="metric-label" style="font-size: 0.7rem;">Last Updated</div>
-                                <div class="metric-value" style="font-size: 0.8rem; color: #666; font-weight: 500;">
+                                <div class="metric-value" style="font-size: 0.8rem; color: #555; font-weight: 500;">
                                     <?= htmlspecialchars(formatRelativeTime($newestTimestamp)) ?>
                                 </div>
                             </div>
@@ -700,7 +701,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             <?php endif; ?>
             
             <?php else: ?>
-            <p style="text-align: center; color: #666; padding: 2rem;">No airports currently configured.</p>
+            <p style="text-align: center; color: #555; padding: 2rem;">No airports currently configured.</p>
             <?php endif; ?>
         </section>
         
@@ -805,20 +806,20 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <div class="feature-card">
                     <h3>MJPEG Streams</h3>
                     <p>Motion JPEG streams that automatically extract frames. Works with most IP cameras and webcam servers.</p>
-                    <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Example: <code>https://camera.example.com/video.mjpg</code></p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">Example: <code>https://camera.example.com/video.mjpg</code></p>
                 </div>
                 <div class="feature-card">
                     <h3>Static Images</h3>
                     <p>JPEG or PNG images that are automatically downloaded and cached. PNG images are converted to JPEG for consistency.</p>
-                    <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Example: <code>https://camera.example.com/webcam.jpg</code></p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">Example: <code>https://camera.example.com/webcam.jpg</code></p>
                 </div>
                 <div class="feature-card">
                     <h3>RTSP/RTSPS Streams</h3>
                     <p>Real Time Streaming Protocol streams (including secure RTSPS over TLS) captured via ffmpeg. Supports TCP and UDP transport.</p>
-                    <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Example: <code>rtsp://camera.example.com:554/stream</code></p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">Example: <code>rtsp://camera.example.com:554/stream</code></p>
                 </div>
             </div>
-            <p style="text-align: center; color: #666; margin-top: 1rem; font-size: 0.9rem;">
+            <p style="text-align: center; color: #555; margin-top: 1rem; font-size: 0.9rem;">
                 The system automatically detects the source type from the URL format. All formats are cached and optimized for fast loading.
             </p>
         </section>
@@ -875,5 +876,6 @@ $ogImage = file_exists($aboutPhotoWebp)
             </p>
         </footer>
     </div>
+    </main>
 </body>
 </html>
