@@ -477,7 +477,7 @@ usort($airportHealth, function($a, $b) {
         }
         
         .header .subtitle {
-            color: #666;
+            color: #555;
             font-size: 0.9rem;
         }
         
@@ -559,7 +559,7 @@ usort($airportHealth, function($a, $b) {
         
         .component-message {
             font-size: 0.875rem;
-            color: #666;
+            color: #555;
             margin-bottom: 0.25rem;
         }
         
@@ -581,7 +581,7 @@ usort($airportHealth, function($a, $b) {
         
         .footer {
             text-align: center;
-            color: #666;
+            color: #555;
             font-size: 0.875rem;
             margin-top: 3rem;
             padding-top: 2rem;
