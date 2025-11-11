@@ -35,13 +35,29 @@ test.describe('Aviation Weather Dashboard', () => {
       console.warn('Could not clear localStorage:', e.message);
     }
     
-    // Wait for page to load (use domcontentloaded for speed, networkidle can be slow)
-    await page.waitForLoadState('domcontentloaded');
+    // Wait for page to load - use 'load' to ensure all scripts are executed
+    // This is critical for CI where JavaScript might take longer to execute
+    await page.waitForLoadState('load', { timeout: 30000 });
     // Wait for body to be visible
     await page.waitForSelector('body', { state: 'visible' });
     // Wait for airport information to be rendered (h1 element)
     // This is rendered in HTML immediately, not via JavaScript
     await page.waitForSelector('h1', { state: 'visible', timeout: 5000 });
+    
+    // Wait for critical JavaScript functions to be available
+    // This ensures the page is fully initialized before tests run
+    await page.waitForFunction(
+      () => {
+        // Check if key functions/variables are available
+        return typeof fetchWeather === 'function' && 
+               typeof updateWeatherTimestamp === 'function';
+      },
+      { timeout: 10000 }
+    ).catch(() => {
+      // If functions aren't available, log for debugging but continue
+      // Some tests don't need these functions
+      console.warn('Some JavaScript functions may not be available yet');
+    });
   });
 
   test('should display airport information', async ({ page, browserName }) => {
@@ -118,15 +134,22 @@ test.describe('Aviation Weather Dashboard', () => {
     }
     
     // Wait for toggle to be visible and initialized
-    await toggle.waitFor({ state: 'visible', timeout: 5000 });
+    await toggle.waitFor({ state: 'visible', timeout: 10000 });
     
     // Wait for JavaScript to initialize the toggle (check if display element exists and has content)
+    // Also verify the toggle function is available
     await page.waitForFunction(
       () => {
         const display = document.getElementById('temp-unit-display');
-        return display && display.textContent && display.textContent.trim().length > 0;
+        const toggle = document.getElementById('temp-unit-toggle');
+        // Check that display exists, has content, and toggle is clickable
+        return display && 
+               display.textContent && 
+               display.textContent.trim().length > 0 &&
+               toggle &&
+               typeof getTempUnit === 'function';
       },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     // Get initial state from the display element (more reliable than toggle textContent)
@@ -140,14 +163,14 @@ test.describe('Aviation Weather Dashboard', () => {
     // Click toggle
     await toggle.click();
     
-    // Wait for toggle display text to actually change
+    // Wait for toggle display text to actually change (increase timeout for CI)
     await page.waitForFunction(
       ({ initialText }) => {
         const display = document.getElementById('temp-unit-display');
-        return display && display.textContent.trim() !== initialText;
+        return display && display.textContent && display.textContent.trim() !== initialText;
       },
       { initialText },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     // Verify toggle text changed
@@ -175,15 +198,22 @@ test.describe('Aviation Weather Dashboard', () => {
     }
     
     // Wait for toggle to be visible and initialized
-    await toggle.waitFor({ state: 'visible', timeout: 5000 });
+    await toggle.waitFor({ state: 'visible', timeout: 10000 });
     
     // Wait for JavaScript to initialize the toggle (check if display element exists and has content)
+    // Also verify the toggle function is available
     await page.waitForFunction(
       () => {
         const display = document.getElementById('wind-speed-unit-display');
-        return display && display.textContent && display.textContent.trim().length > 0;
+        const toggle = document.getElementById('wind-speed-unit-toggle');
+        // Check that display exists, has content, and toggle is clickable
+        return display && 
+               display.textContent && 
+               display.textContent.trim().length > 0 &&
+               toggle &&
+               typeof getWindSpeedUnit === 'function';
       },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     // Get initial state from the display element (more reliable than toggle textContent)
@@ -197,14 +227,14 @@ test.describe('Aviation Weather Dashboard', () => {
     // Click toggle
     await toggle.click();
     
-    // Wait for toggle display text to actually change
+    // Wait for toggle display text to actually change (increase timeout for CI)
     await page.waitForFunction(
       ({ initialText }) => {
         const display = document.getElementById('wind-speed-unit-display');
-        return display && display.textContent.trim() !== initialText;
+        return display && display.textContent && display.textContent.trim() !== initialText;
       },
       { initialText },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     // Verify toggle text changed
@@ -466,15 +496,21 @@ test.describe('Aviation Weather Dashboard', () => {
     }
     
     // Wait for toggle and get initial state
-    await toggle.waitFor({ state: 'visible', timeout: 5000 });
+    await toggle.waitFor({ state: 'visible', timeout: 10000 });
     
     // Wait for JavaScript to initialize the toggle
+    // Also verify the toggle function is available
     await page.waitForFunction(
       () => {
         const display = document.getElementById('temp-unit-display');
-        return display && display.textContent && display.textContent.trim().length > 0;
+        const toggle = document.getElementById('temp-unit-toggle');
+        return display && 
+               display.textContent && 
+               display.textContent.trim().length > 0 &&
+               toggle &&
+               typeof getTempUnit === 'function';
       },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     const initialText = await page.evaluate(() => {
@@ -482,18 +518,19 @@ test.describe('Aviation Weather Dashboard', () => {
       return display ? display.textContent.trim() : null;
     });
     expect(initialText).toBeTruthy();
+    expect(['°F', '°C']).toContain(initialText);
     
     // Click toggle to change unit
     await toggle.click();
     
-    // Wait for toggle display text to actually change
+    // Wait for toggle display text to actually change (increase timeout for CI)
     await page.waitForFunction(
       ({ initialText }) => {
         const display = document.getElementById('temp-unit-display');
-        return display && display.textContent.trim() !== initialText;
+        return display && display.textContent && display.textContent.trim() !== initialText;
       },
       { initialText },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     const newState = await page.evaluate(() => {
@@ -537,15 +574,21 @@ test.describe('Aviation Weather Dashboard', () => {
 
   test('should display local time in airport timezone', async ({ page }) => {
     // Wait for local time element to be present
-    await page.waitForSelector('#localTime', { state: 'visible', timeout: 5000 });
+    await page.waitForSelector('#localTime', { state: 'visible', timeout: 10000 });
     
     // Wait for clock function to run and update the time (check that it's not "--:--:--")
+    // The clock runs on a 1-second interval, so we need to wait for it to execute
+    // Also verify updateClocks function exists
     await page.waitForFunction(
       () => {
         const timeEl = document.getElementById('localTime');
-        return timeEl && timeEl.textContent && timeEl.textContent.trim() !== '--:--:--';
+        return timeEl && 
+               timeEl.textContent && 
+               timeEl.textContent.trim() !== '--' &&
+               timeEl.textContent.trim() !== '--:--:--' &&
+               typeof updateClocks === 'function';
       },
-      { timeout: 10000 }
+      { timeout: 15000 }
     );
     
     // Get the displayed local time

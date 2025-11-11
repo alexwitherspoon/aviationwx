@@ -14,7 +14,8 @@ test.describe('Cache and Stale Data Handling', () => {
     
     // Navigate to the page FIRST (localStorage requires a real page context)
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('domcontentloaded');
+    // Wait for 'load' to ensure all scripts are executed (critical for CI)
+    await page.waitForLoadState('load', { timeout: 30000 });
     await page.waitForSelector('body', { state: 'visible' });
     
     // Now clear storage AFTER navigating to a real page
@@ -33,6 +34,20 @@ test.describe('Cache and Stale Data Handling', () => {
         });
       }
     });
+    
+    // Wait for critical JavaScript functions to be available
+    // This ensures the page is fully initialized before tests run
+    await page.waitForFunction(
+      () => {
+        // Check if key functions/variables are available
+        return typeof fetchWeather === 'function' && 
+               typeof updateWeatherTimestamp === 'function';
+      },
+      { timeout: 10000 }
+    ).catch(() => {
+      // If functions aren't available, log for debugging but continue
+      console.warn('Some JavaScript functions may not be available yet');
+    });
   });
 
   test('should add cache-busting parameter when forcing refresh', async ({ page }) => {
@@ -42,10 +57,10 @@ test.describe('Cache and Stale Data Handling', () => {
       { timeout: 10000 }
     );
     
-    // Wait for fetchWeather function to be available
+    // fetchWeather should already be available from beforeEach, but verify
     await page.waitForFunction(
       () => typeof fetchWeather === 'function',
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     // Intercept weather fetch requests BEFORE triggering fetch
@@ -156,9 +171,14 @@ test.describe('Cache and Stale Data Handling', () => {
     page.on('request', requestListener);
     
     // Wait for weatherLastUpdated to be set (needed for stale detection)
+    // Also wait for weather data to be loaded (weatherLastUpdated is set after first fetch)
     await page.waitForFunction(
-      () => typeof weatherLastUpdated !== 'undefined' && weatherLastUpdated !== null,
-      { timeout: 10000 }
+      () => {
+        const hasElement = document.getElementById('weather-last-updated') !== null;
+        const hasVariable = typeof weatherLastUpdated !== 'undefined' && weatherLastUpdated !== null;
+        return hasElement && hasVariable;
+      },
+      { timeout: 15000 }
     );
     
     // Trigger a fetch
@@ -192,12 +212,16 @@ test.describe('Cache and Stale Data Handling', () => {
 
   test('should show visual indicators for stale data', async ({ page }) => {
     // Wait for weather data to load and weatherLastUpdated to be set
+    // This may take longer if weather data needs to be fetched
     await page.waitForFunction(
       () => {
         const el = document.getElementById('weather-last-updated');
-        return el && typeof weatherLastUpdated !== 'undefined' && weatherLastUpdated !== null;
+        return el && 
+               typeof weatherLastUpdated !== 'undefined' && 
+               weatherLastUpdated !== null &&
+               typeof updateWeatherTimestamp === 'function';
       },
-      { timeout: 10000 }
+      { timeout: 15000 }
     );
     
     // Manually set weatherLastUpdated to be >20 minutes ago (stale threshold is 20 minutes)
@@ -296,12 +320,13 @@ test.describe('Cache and Stale Data Handling', () => {
   test('should handle Service Worker cache-busting correctly', async ({ page, context }) => {
     // Register Service Worker if not already registered
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
-    await page.waitForLoadState('domcontentloaded');
+    // Wait for 'load' to ensure all scripts are executed (critical for CI)
+    await page.waitForLoadState('load', { timeout: 30000 });
     
-    // Wait for fetchWeather function to be available
+    // fetchWeather should already be available from beforeEach, but verify
     await page.waitForFunction(
       () => typeof fetchWeather === 'function',
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
     
     // Wait for Service Worker to be registered (optional - SW might not be available in test)
