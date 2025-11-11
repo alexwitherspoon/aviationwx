@@ -11,8 +11,8 @@ module.exports = defineConfig({
   // Output directory for test results
   outputDir: './test-results',
   
-  // Test timeout (reduced from 30s to 10s for faster failure detection)
-  timeout: 10000,
+  // Test timeout (increased to 30s for CI stability - network requests can be slow)
+  timeout: 30000,
   
   // Run tests in parallel
   fullyParallel: true,
