@@ -23,9 +23,10 @@ module.exports = defineConfig({
   // Retry on CI only (disabled for speed - failures are caught by other test suites)
   retries: 0,
   
-  // Run tests in parallel in CI (increased from 1 to 4 workers for speed)
-  // Use 4 workers in CI - Ubuntu runners have enough resources
-  workers: process.env.CI ? 4 : undefined,
+  // Run tests in parallel in CI (increased to 6 workers for better speed)
+  // Use 6 workers in CI - Ubuntu runners have enough resources
+  // Can be overridden with PLAYWRIGHT_WORKERS environment variable
+  workers: process.env.PLAYWRIGHT_WORKERS ? parseInt(process.env.PLAYWRIGHT_WORKERS) : (process.env.CI ? 6 : undefined),
   
   // Reporter configuration
   reporter: [
