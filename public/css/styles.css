@@ -365,7 +365,7 @@ h3 {
 
 /* Status Colors - Standard Aviation Weather Colors */
 .status-vfr {
-    color: #28a745; /* Green - VFR: Visibility > 5 miles, Ceiling > 3,000 feet */
+    color: #1e7e34; /* Green - VFR: Visibility > 5 miles, Ceiling > 3,000 feet */
 }
 
 .status-mvfr {

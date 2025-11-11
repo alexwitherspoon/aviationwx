@@ -187,12 +187,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     </style>
 </head>
 <body>
+    <main>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($airport['icao']) ?>)</h1>
-            <h2 style="font-size: 1.2rem; color: #666; margin-top: 0.25rem; font-weight: normal;"><?= htmlspecialchars($airport['address']) ?></h2>
-            <p style="font-style: italic; font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Data is for advisory use only. Consult official weather sources for flight planning purposes.</p>
+            <h2 style="font-size: 1.2rem; color: #ddd; margin-top: 0.25rem; font-weight: normal;"><?= htmlspecialchars($airport['address']) ?></h2>
+            <p style="font-style: italic; font-size: 0.85rem; color: #ddd; margin-top: 0.5rem;">Data is for advisory use only. Consult official weather sources for flight planning purposes.</p>
         </header>
 
         <!-- Webcams -->
@@ -253,7 +254,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         <span id="distance-unit-display">ft</span>
                     </button>
                 </div>
-                <p style="font-size: 0.85rem; color: #666; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
+                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
             </div>
             <div id="weather-data" class="weather-grid" style="min-height: 400px;">
                 <div class="weather-item loading">
@@ -271,7 +272,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         <span id="wind-speed-unit-display">kts</span>
                     </button>
                 </div>
-                <p style="font-size: 0.85rem; color: #666; margin: 0;">Last updated: <span id="wind-last-updated">--</span></p>
+                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-last-updated">--</span></p>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: center;">
                 <div id="wind-visual" class="wind-visual-container">
@@ -370,11 +371,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             <div class="time-grid">
                 <div class="time-item">
                     <span class="label">Local Time:</span>
-                    <span class="value" id="localTime">--:--:--</span> <span id="localTimezone" style="font-size: 0.85rem; color: #666;">--</span>
+                    <span class="value" id="localTime">--:--:--</span> <span id="localTimezone" style="font-size: 0.85rem; color: #555;">--</span>
                 </div>
                 <div class="time-item">
                     <span class="label">Zulu Time:</span>
-                    <span class="value" id="zuluTime">--:--:--</span> <span style="font-size: 0.85rem; color: #666;">UTC</span>
+                    <span class="value" id="zuluTime">--:--:--</span> <span style="font-size: 0.85rem; color: #555;">UTC</span>
                 </div>
             </div>
         </section>
@@ -438,6 +439,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             </p>
         </footer>
     </div>
+    </main>
 
     <?php
     // Simple JavaScript minification function that preserves PHP code
@@ -644,7 +646,7 @@ function formatTempTimestamp(timestamp) {
         const formatted = date.toLocaleTimeString('en-US', options);
         
         // Return formatted time with "at" prefix and same styling as weather-unit
-        return ` <span style="font-size: 0.9rem; color: #666;">at ${formatted}</span>`;
+        return ` <span style="font-size: 0.9rem; color: #555;">at ${formatted}</span>`;
     } catch (error) {
         console.error('[TempTimestamp] Error formatting timestamp:', error);
         return '';
@@ -1150,14 +1152,14 @@ function displayWeather(weather) {
                     <span style="font-size: 1.2rem;">🌅</span>
                     <span class="label">Sunrise</span>
                 </span>
-                <span class="weather-value">${weather.sunrise || '--'} <span style="font-size: 0.75rem; color: #666;">PDT</span></span>
+                <span class="weather-value">${weather.sunrise || '--'} <span style="font-size: 0.75rem; color: #555;">PDT</span></span>
             </div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌇</span>
                     <span class="label">Sunset</span>
                 </span>
-                <span class="weather-value">${weather.sunset || '--'} <span style="font-size: 0.75rem; color: #666;">PDT</span></span>
+                <span class="weather-value">${weather.sunset || '--'} <span style="font-size: 0.75rem; color: #555;">PDT</span></span>
             </div>
         </div>
         
@@ -1374,23 +1376,23 @@ function updateWindVisual(weather) {
     const windUnitLabel = getWindSpeedUnitLabel();
     windDetails.innerHTML = `
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
-            <span style="color: #666;">Wind Speed:</span>
+            <span style="color: #555;">Wind Speed:</span>
             <span style="font-weight: bold;">${ws > 0 ? formatWindSpeed(ws) + ' ' + windUnitLabel : 'Calm'}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
-            <span style="color: #666;">Wind Direction:</span>
+            <span style="color: #555;">Wind Direction:</span>
             <span style="font-weight: bold;">${isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '--')}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
-            <span style="color: #666;">Gust Factor:</span>
+            <span style="color: #555;">Gust Factor:</span>
             <span style="font-weight: bold;">${gustFactor > 0 ? formatWindSpeed(gustFactor) + ' ' + windUnitLabel : '0'}</span>
         </div>
         <div style="padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                <span style="color: #666;">Today's Peak Gust:</span>
+                <span style="color: #555;">Today's Peak Gust:</span>
                 <span style="font-weight: bold;">${todaysPeakGust > 0 ? formatWindSpeed(todaysPeakGust) + ' ' + windUnitLabel : '--'}</span>
             </div>
-            ${weather.peak_gust_time ? `<div style="text-align: right; font-size: 0.9rem; color: #666; padding-left: 0.5rem;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</div>` : ''}
+            ${weather.peak_gust_time ? `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</div>` : ''}
         </div>
     `;
     
