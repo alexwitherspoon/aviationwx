@@ -1824,25 +1824,42 @@ function safeSwapCameraImage(camIndex) {
 <?php
     // Capture and minify JavaScript
     $js = ob_get_clean();
-    // Extract the script tag content - use a more robust pattern
-    // Match from <script> to </script>, handling potential </script> in strings
-    if (preg_match('/<script[^>]*>(.*?)<\/script>/s', $js, $matches)) {
-        $jsContent = $matches[1];
-        // Only minify if content is not empty
-        if (trim($jsContent) !== '') {
-            try {
-                $minified = minifyJavaScript($jsContent);
-                echo '<script>' . $minified . '</script>';
-            } catch (Exception $e) {
-                // If minification fails, output original JavaScript
+    
+    // Check if output buffer contains any PHP errors (HTML output)
+    if (strpos($js, '<!DOCTYPE') !== false || strpos($js, '<html') !== false || strpos($js, 'Fatal error') !== false || strpos($js, 'Parse error') !== false) {
+        // PHP error detected - output original without minification to avoid breaking page
+        error_log('PHP error detected in JavaScript output buffer');
+        echo $js;
+    } else {
+        // Extract the script tag content - use a more robust pattern
+        // Match from <script> to </script>, handling potential </script> in strings
+        if (preg_match('/<script[^>]*>(.*?)<\/script>/s', $js, $matches)) {
+            $jsContent = $matches[1];
+            // Only minify if content is not empty and doesn't contain HTML
+            if (trim($jsContent) !== '' && strpos($jsContent, '<') === false) {
+                try {
+                    $minified = minifyJavaScript($jsContent);
+                    // Verify minified output doesn't contain HTML
+                    if (strpos($minified, '<') === false) {
+                        echo '<script>' . $minified . '</script>';
+                    } else {
+                        // Minification produced HTML - use original
+                        error_log('Minification produced HTML output, using original');
+                        echo $js;
+                    }
+                } catch (Exception $e) {
+                    // If minification fails, output original JavaScript
+                    error_log('JavaScript minification error: ' . $e->getMessage());
+                    echo $js;
+                }
+            } else {
+                // Content is empty or contains HTML - output as-is
                 echo $js;
             }
         } else {
+            // Fallback if pattern doesn't match - output as-is
             echo $js;
         }
-    } else {
-        // Fallback if pattern doesn't match - output as-is
-        echo $js;
     }
 ?>
 </body>

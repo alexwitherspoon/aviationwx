@@ -41,6 +41,11 @@
 
     # Return 404 for old service worker path (sw.js) - no longer used
     RewriteRule ^sw\.js$ - [R=404,L]
+    
+    # Ensure service worker is served correctly (must come before catch-all)
+    # Allow service worker file to be served as-is (don't route to index.php)
+    RewriteCond %{REQUEST_URI} ^/public/js/service-worker\.js
+    RewriteRule ^(.*)$ - [L]
 
     # Default to index.php for routing
     RewriteCond %{REQUEST_FILENAME} !-f
