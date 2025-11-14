@@ -395,6 +395,20 @@ test.describe('Aviation Weather Dashboard', () => {
       ).catch(() => {});
     }
     
+    // CRITICAL: Check for "Unexpected token" errors - these indicate unclosed script tags or HTML injection
+    const syntaxErrors = consoleErrors.filter(err => 
+      err.includes('Unexpected token') ||
+      err.includes('SyntaxError') ||
+      err.includes('Unexpected token \'<\'') ||
+      err.includes('Unexpected token "<"')
+    );
+    
+    if (syntaxErrors.length > 0) {
+      console.error('CRITICAL: Syntax errors found (likely unclosed script tags or HTML injection):', syntaxErrors);
+      // This is a critical error - fail the test
+      expect(syntaxErrors).toHaveLength(0);
+    }
+    
     // Filter out known acceptable errors (like API fetch failures in test)
     // HTTP 503 (Service Unavailable) is expected when weather API is unavailable in CI
     const criticalErrors = consoleErrors.filter(err => 
@@ -406,7 +420,9 @@ test.describe('Aviation Weather Dashboard', () => {
       !err.includes('Unable to fetch weather data') &&  // Error message when service unavailable
       !err.includes('ChunkLoadError') && // Webpack chunk loading errors are sometimes transient
       !err.includes('JSON parse error') && // JSON parse errors from weather API (handled gracefully)
-      !err.includes('Invalid JSON response') // Invalid JSON from weather API (handled gracefully)
+      !err.includes('Invalid JSON response') && // Invalid JSON from weather API (handled gracefully)
+      !err.includes('Unexpected token') &&  // Already checked above
+      !err.includes('SyntaxError')  // Already checked above
     );
     
     if (criticalErrors.length > 0) {
@@ -660,6 +676,54 @@ test.describe('Aviation Weather Dashboard', () => {
       (parseInt(currentUTC.split(':')[0]) * 3600 + parseInt(currentUTC.split(':')[1]) * 60 + parseInt(currentUTC.split(':')[2]))
     );
     expect(zuluTimeDiff).toBeLessThanOrEqual(2); // Allow 2 seconds difference
+  });
+
+  test('should have all script tags properly closed', async ({ page }) => {
+    // Get the page HTML source
+    const html = await page.content();
+    
+    // Count opening and closing script tags
+    const openingScriptTags = (html.match(/<script[^>]*>/gi) || []).length;
+    const closingScriptTags = (html.match(/<\/script>/gi) || []).length;
+    
+    // All opening script tags must have closing tags
+    expect(openingScriptTags).toBe(closingScriptTags);
+    
+    // Verify each script tag is properly closed
+    // Extract all script tags and verify they have closing tags
+    const scriptTagRegex = /<script[^>]*>(.*?)<\/script>/gis;
+    const matches = [];
+    let match;
+    while ((match = scriptTagRegex.exec(html)) !== null) {
+      matches.push(match[0]);
+    }
+    
+    // Count total script tags found with regex (which requires closing tags)
+    const properlyClosedScripts = matches.length;
+    
+    // All opening tags should have been matched (meaning they're all closed)
+    expect(properlyClosedScripts).toBe(openingScriptTags);
+    
+    // Additional check: verify no script tag content contains unclosed HTML
+    matches.forEach((scriptTag, index) => {
+      // Extract content between <script> and </script>
+      const contentMatch = scriptTag.match(/<script[^>]*>(.*?)<\/script>/is);
+      if (contentMatch && contentMatch[1]) {
+        const content = contentMatch[1];
+        // Check for HTML tags that aren't in strings/template literals
+        // This is a simplified check - we're looking for < followed by a letter
+        // that's not inside quotes or backticks
+        const hasUnescapedHtml = /<[a-z][\s>]/i.test(content);
+        if (hasUnescapedHtml) {
+          // Check if it's in a string or template literal
+          // Simple heuristic: if it's not in quotes, it's suspicious
+          const inString = /['"`].*<[a-z].*['"`]/i.test(content);
+          if (!inString) {
+            console.warn(`Script tag #${index} may contain HTML:`, content.substring(0, 200));
+          }
+        }
+      }
+    });
   });
 });
 
