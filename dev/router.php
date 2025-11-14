@@ -17,19 +17,20 @@ $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $parts = explode('.', $host);
 $subdomain = isset($parts[0]) ? $parts[0] : '';
 
-// Serve static files
-if (file_exists(__DIR__ . $path) && is_file(__DIR__ . $path)) {
+// Serve static files from project root (document root when running php -S)
+$projectRoot = dirname(__DIR__);
+if (file_exists($projectRoot . $path) && is_file($projectRoot . $path)) {
     return false; // Let PHP's built-in server handle it
 }
 
 // If no subdomain or subdomain is 'localhost' or '127.0.0.1', serve homepage
 if ($subdomain === 'localhost' || $subdomain === '127' || $subdomain === '' || 
     $host === 'localhost' || $host === '127.0.0.1') {
-    include __DIR__ . '/pages/homepage.php';
+    include __DIR__ . '/../pages/homepage.php';
     exit;
 }
 
 // For subdomains, use the main index.php logic
 $_SERVER['HTTP_HOST'] = $host;
-include __DIR__ . '/index.php';
+include __DIR__ . '/../index.php';
 
