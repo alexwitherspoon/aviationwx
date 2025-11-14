@@ -7,10 +7,10 @@ const STATIC_CACHE = `${CACHE_NAME}-static`;
 const WEATHER_CACHE = `${CACHE_NAME}-weather`;
 
 // Assets to cache on install
+// Only include files that exist - styles.min.css may not exist
 const STATIC_ASSETS = [
     '/',
     '/public/css/styles.css',
-    '/public/css/styles.min.css',
     '/index.php'
 ];
 
@@ -34,10 +34,26 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(STATIC_CACHE).then((cache) => {
             console.log('[SW] Caching static assets');
-            return cache.addAll(STATIC_ASSETS.map(url => new Request(url, { credentials: 'same-origin' }))).catch((err) => {
-                console.warn('[SW] Failed to cache some assets:', err);
-                // Continue even if some assets fail to cache
-            });
+            // Only cache successful responses (2xx) to prevent caching 404 pages
+            return Promise.all(
+                STATIC_ASSETS.map(url => {
+                    return fetch(new Request(url, { credentials: 'same-origin' }))
+                        .then(response => {
+                            // Only cache if response is successful (2xx)
+                            if (response.ok) {
+                                return cache.put(url, response);
+                            } else {
+                                console.warn(`[SW] Skipping cache for ${url} - status ${response.status}`);
+                                return Promise.resolve();
+                            }
+                        })
+                        .catch(err => {
+                            console.warn(`[SW] Failed to cache ${url}:`, err);
+                            // Continue even if some assets fail to cache
+                            return Promise.resolve();
+                        });
+                })
+            );
         })
     );
     
@@ -224,12 +240,20 @@ self.addEventListener('fetch', (event) => {
     if (STATIC_ASSETS.some(asset => url.pathname === asset) || url.pathname.startsWith('/styles')) {
         event.respondWith(
             caches.match(event.request).then((cachedResponse) => {
-                if (cachedResponse) {
+                // Only serve cached response if it's successful (2xx)
+                // This prevents serving cached 404 HTML pages
+                if (cachedResponse && cachedResponse.ok) {
                     return cachedResponse;
+                }
+                
+                // If cached response exists but is not OK (e.g., 404), delete it and fetch fresh
+                if (cachedResponse && !cachedResponse.ok) {
+                    caches.open(STATIC_CACHE).then(cache => cache.delete(event.request));
                 }
                 
                 // Fetch from network and cache
                 return fetch(event.request).then((response) => {
+                    // Only cache successful responses (2xx)
                     if (response.ok) {
                         const cache = caches.open(STATIC_CACHE);
                         cache.then((c) => c.put(event.request, response.clone()));
