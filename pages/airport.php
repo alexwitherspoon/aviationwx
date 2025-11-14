@@ -109,7 +109,18 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     $cssPath = file_exists(__DIR__ . '/../public/css/styles.min.css') 
         ? __DIR__ . '/../public/css/styles.min.css' 
         : __DIR__ . '/../public/css/styles.css';
-    $cssContent = file_get_contents($cssPath);
+    
+    // Defensive error handling: prevent file read failures from outputting warnings
+    $cssContent = '';
+    if (file_exists($cssPath) && is_readable($cssPath)) {
+        $cssContent = @file_get_contents($cssPath);
+        if ($cssContent === false) {
+            error_log('Failed to read CSS file: ' . $cssPath);
+            $cssContent = ''; // Fallback to empty CSS
+        }
+    } else {
+        error_log('CSS file not found or not readable: ' . $cssPath);
+    }
     ?>
     <style><?= $cssContent ?></style>
     <script>
@@ -531,13 +542,40 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     }
     
     // Start output buffering to capture JavaScript
+    // Check for existing output buffers to prevent nesting issues
+    $obLevel = ob_get_level();
+    if ($obLevel > 0) {
+        error_log('Warning: Output buffer already active (level: ' . $obLevel . ') before JavaScript buffer start');
+        // Clean any existing output that might have leaked
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
     ob_start();
     ?>
     <script>
 // Airport page JavaScript
 const AIRPORT_ID = '<?= $airportId ?>';
-const AIRPORT_DATA = <?= json_encode($airport) ?>;
-const RUNWAYS = <?= json_encode($airport['runways']) ?>;
+const AIRPORT_DATA = <?php
+    // Defensive JSON encoding with error handling
+    $airportJson = json_encode($airport, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    if ($airportJson === false) {
+        error_log('JSON encode failed for airport data: ' . json_last_error_msg());
+        echo '{}'; // Fallback to empty object
+    } else {
+        echo $airportJson;
+    }
+?>;
+const RUNWAYS = <?php
+    // Defensive JSON encoding with error handling
+    $runwaysJson = json_encode($airport['runways'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    if ($runwaysJson === false) {
+        error_log('JSON encode failed for runways data: ' . json_last_error_msg());
+        echo '[]'; // Fallback to empty array
+    } else {
+        echo $runwaysJson;
+    }
+?>;
 
 // Production logging removed - only log errors in console
 
@@ -1831,6 +1869,11 @@ function safeSwapCameraImage(camIndex) {
     // Capture and minify JavaScript
     $js = ob_get_clean();
     
+    // CRITICAL FIX: Ensure script tag is properly closed
+    // The output buffer contains <script> but may not have closing </script>
+    // Check if script tag is opened but not closed
+    $needsClosingTag = preg_match('/<script[^>]*>/', $js) && !preg_match('/<\/script>/', $js);
+    
     // Enhanced error detection: Check for any HTML tags or PHP errors
     $hasHtmlError = false;
     $errorType = '';
@@ -1872,8 +1915,12 @@ function safeSwapCameraImage(camIndex) {
             addcslashes($last500, "\0..\37")
         ));
         
-        // Output original - don't minify if there's HTML
-        echo $js;
+        // Output original - ensure closing tag is present
+        if ($needsClosingTag) {
+            echo $js . '</script>';
+        } else {
+            echo $js;
+        }
     } else {
         // Extract the script tag content - use a more robust pattern
         // Match from <script> to </script>, handling potential </script> in strings
@@ -1898,24 +1945,40 @@ function safeSwapCameraImage(camIndex) {
                     } else {
                         // Minification produced HTML - use original
                         error_log('Minification produced HTML output, using original. Minified length: ' . strlen($minified));
-                        echo $js;
+                        if ($needsClosingTag) {
+                            echo $js . '</script>';
+                        } else {
+                            echo $js;
+                        }
                     }
                 } catch (Exception $e) {
                     // If minification fails, output original JavaScript
                     error_log('JavaScript minification error: ' . $e->getMessage());
-                    echo $js;
+                    if ($needsClosingTag) {
+                        echo $js . '</script>';
+                    } else {
+                        echo $js;
+                    }
                 }
             } else {
                 // Content is empty or contains HTML - log and output as-is
                 if ($htmlInJs || strpos($jsContent, '<') !== false) {
                     error_log('JavaScript content contains HTML - skipping minification. Content length: ' . strlen($jsContent));
                 }
-                echo $js;
+                if ($needsClosingTag) {
+                    echo $js . '</script>';
+                } else {
+                    echo $js;
+                }
             }
         } else {
-            // Fallback if pattern doesn't match - log and output as-is
+            // Fallback if pattern doesn't match - script tag may not be closed
             error_log('Could not extract script tag content from output buffer. Buffer length: ' . strlen($js));
-            echo $js;
+            if ($needsClosingTag) {
+                echo $js . '</script>';
+            } else {
+                echo $js;
+            }
         }
     }
 ?>
