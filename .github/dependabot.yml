@@ -1,0 +1,77 @@
+version: 2
+# Note: Dependabot security updates are enabled by default on GitHub repositories
+# and work automatically - they create PRs immediately when vulnerabilities are detected.
+# Security updates bypass the schedule and PR limits configured below.
+# They are automatically labeled with "security" and "dependencies".
+
+updates:
+  # PHP dependencies via Composer
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "alexwitherspoon"
+    labels:
+      - "dependencies"
+      - "php"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # JavaScript dependencies via npm (browser tests)
+  - package-ecosystem: "npm"
+    directory: "/tests/Browser"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "alexwitherspoon"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "tests"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Docker base image updates
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "alexwitherspoon"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # GitHub Actions (workflow dependencies)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "alexwitherspoon"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
