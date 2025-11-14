@@ -67,15 +67,59 @@ self.addEventListener('activate', (event) => {
     
     event.waitUntil(
         caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    // Delete old caches that don't match current version
-                    if (cacheName.startsWith('aviationwx-') && cacheName !== STATIC_CACHE && cacheName !== WEATHER_CACHE) {
-                        console.log('[SW] Deleting old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
+            // Delete ALL old caches that don't match current version
+            // This is more aggressive to prevent serving bad cached responses
+            const deletePromises = cacheNames.map((cacheName) => {
+                if (cacheName.startsWith('aviationwx-') && cacheName !== STATIC_CACHE && cacheName !== WEATHER_CACHE) {
+                    console.log('[SW] Deleting old cache:', cacheName);
+                    return caches.delete(cacheName);
+                }
+                return Promise.resolve();
+            });
+            
+            // Also check for and delete any bad cached responses (404s, HTML in JS/CSS)
+            return Promise.all(deletePromises).then(() => {
+                // Clean up any bad responses in current caches
+                return Promise.all([
+                    caches.open(STATIC_CACHE).then(cache => {
+                        return cache.keys().then(requests => {
+                            return Promise.all(requests.map(request => {
+                                return cache.match(request).then(response => {
+                                    // If response is not OK (404, etc.), delete it
+                                    if (response && !response.ok) {
+                                        console.log('[SW] Deleting bad cached response:', request.url);
+                                        return cache.delete(request);
+                                    }
+                                    // Check if response is HTML but should be JS/CSS
+                                    if (response && request.url.match(/\.(js|css)$/)) {
+                                        return response.clone().text().then(text => {
+                                            // If it starts with HTML tags, it's a bad cache
+                                            if (text.trim().match(/^<(!DOCTYPE|html|body|div|span|p)/i)) {
+                                                console.log('[SW] Deleting HTML cached as JS/CSS:', request.url);
+                                                return cache.delete(request);
+                                            }
+                                        }).catch(() => Promise.resolve());
+                                    }
+                                    return Promise.resolve();
+                                }).catch(() => Promise.resolve());
+                            }));
+                        });
+                    }),
+                    caches.open(WEATHER_CACHE).then(cache => {
+                        return cache.keys().then(requests => {
+                            return Promise.all(requests.map(request => {
+                                return cache.match(request).then(response => {
+                                    if (response && !response.ok) {
+                                        console.log('[SW] Deleting bad weather cache:', request.url);
+                                        return cache.delete(request);
+                                    }
+                                    return Promise.resolve();
+                                }).catch(() => Promise.resolve());
+                            }));
+                        });
+                    })
+                ]);
+            });
         })
     );
     

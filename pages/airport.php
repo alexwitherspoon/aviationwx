@@ -1831,26 +1831,73 @@ function safeSwapCameraImage(camIndex) {
     // Capture and minify JavaScript
     $js = ob_get_clean();
     
-    // Check if output buffer contains any PHP errors (HTML output)
-    if (strpos($js, '<!DOCTYPE') !== false || strpos($js, '<html') !== false || strpos($js, 'Fatal error') !== false || strpos($js, 'Parse error') !== false) {
-        // PHP error detected - output original without minification to avoid breaking page
-        error_log('PHP error detected in JavaScript output buffer');
+    // Enhanced error detection: Check for any HTML tags or PHP errors
+    $hasHtmlError = false;
+    $errorType = '';
+    
+    // Check for common HTML patterns that indicate errors
+    $htmlPatterns = [
+        '<!DOCTYPE' => 'DOCTYPE declaration',
+        '<html' => 'HTML tag',
+        '<body' => 'Body tag',
+        '<div' => 'Div tag',
+        '<span' => 'Span tag',
+        '<p>' => 'Paragraph tag',
+        'Fatal error' => 'PHP fatal error',
+        'Parse error' => 'PHP parse error',
+        'Warning:' => 'PHP warning',
+        'Notice:' => 'PHP notice',
+        'Deprecated:' => 'PHP deprecated warning',
+    ];
+    
+    foreach ($htmlPatterns as $pattern => $description) {
+        if (stripos($js, $pattern) !== false) {
+            $hasHtmlError = true;
+            $errorType = $description;
+            break;
+        }
+    }
+    
+    if ($hasHtmlError) {
+        // PHP error detected - log details and output original without minification
+        $jsLength = strlen($js);
+        $first500 = substr($js, 0, 500);
+        $last500 = $jsLength > 500 ? substr($js, -500) : '';
+        
+        error_log(sprintf(
+            'PHP error detected in JavaScript output buffer: %s (length: %d). First 500 chars: %s. Last 500 chars: %s',
+            $errorType,
+            $jsLength,
+            addcslashes($first500, "\0..\37"),
+            addcslashes($last500, "\0..\37")
+        ));
+        
+        // Output original - don't minify if there's HTML
         echo $js;
     } else {
         // Extract the script tag content - use a more robust pattern
         // Match from <script> to </script>, handling potential </script> in strings
         if (preg_match('/<script[^>]*>(.*?)<\/script>/s', $js, $matches)) {
             $jsContent = $matches[1];
+            
+            // Enhanced validation: Check for HTML tags in JavaScript content
+            // This catches cases where HTML might be injected before the script closes
+            $htmlInJs = false;
+            if (preg_match('/<[a-z][\s>]/i', $jsContent)) {
+                $htmlInJs = true;
+                error_log('HTML tags detected in JavaScript content. First 200 chars: ' . substr($jsContent, 0, 200));
+            }
+            
             // Only minify if content is not empty and doesn't contain HTML
-            if (trim($jsContent) !== '' && strpos($jsContent, '<') === false) {
+            if (trim($jsContent) !== '' && !$htmlInJs && strpos($jsContent, '<') === false) {
                 try {
                     $minified = minifyJavaScript($jsContent);
                     // Verify minified output doesn't contain HTML
-                    if (strpos($minified, '<') === false) {
+                    if (strpos($minified, '<') === false && !preg_match('/<[a-z][\s>]/i', $minified)) {
                         echo '<script>' . $minified . '</script>';
                     } else {
                         // Minification produced HTML - use original
-                        error_log('Minification produced HTML output, using original');
+                        error_log('Minification produced HTML output, using original. Minified length: ' . strlen($minified));
                         echo $js;
                     }
                 } catch (Exception $e) {
@@ -1859,11 +1906,15 @@ function safeSwapCameraImage(camIndex) {
                     echo $js;
                 }
             } else {
-                // Content is empty or contains HTML - output as-is
+                // Content is empty or contains HTML - log and output as-is
+                if ($htmlInJs || strpos($jsContent, '<') !== false) {
+                    error_log('JavaScript content contains HTML - skipping minification. Content length: ' . strlen($jsContent));
+                }
                 echo $js;
             }
         } else {
-            // Fallback if pattern doesn't match - output as-is
+            // Fallback if pattern doesn't match - log and output as-is
+            error_log('Could not extract script tag content from output buffer. Buffer length: ' . strlen($js));
             echo $js;
         }
     }
