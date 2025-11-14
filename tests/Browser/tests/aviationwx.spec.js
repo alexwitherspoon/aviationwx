@@ -691,7 +691,8 @@ test.describe('Aviation Weather Dashboard', () => {
     
     // Verify each script tag is properly closed
     // Extract all script tags and verify they have closing tags
-    const scriptTagRegex = /<script[^>]*>(.*?)<\/script>/gis;
+    // Enhanced regex to match script tags with attributes and tolerant closing
+    const scriptTagRegex = /<script\b[^>]*>(.*?)<\/script\b[^>]*>/gis;
     const matches = [];
     let match;
     while ((match = scriptTagRegex.exec(html)) !== null) {
@@ -707,7 +708,7 @@ test.describe('Aviation Weather Dashboard', () => {
     // Additional check: verify no script tag content contains unclosed HTML
     matches.forEach((scriptTag, index) => {
       // Extract content between <script> and </script>
-      const contentMatch = scriptTag.match(/<script[^>]*>(.*?)<\/script>/is);
+      const contentMatch = scriptTag.match(/<script\b[^>]*>(.*?)<\/script\b[^>]*>/is);
       if (contentMatch && contentMatch[1]) {
         const content = contentMatch[1];
         // Check for HTML tags that aren't in strings/template literals
