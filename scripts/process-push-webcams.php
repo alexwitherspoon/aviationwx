@@ -164,8 +164,13 @@ function updateLastProcessedTime($airportId, $camIndex) {
 
 /**
  * Find newest valid image in upload directory
+ * 
+ * @param string $uploadDir Upload directory path
+ * @param int $maxWaitSeconds Maximum wait time for file to be fully written
+ * @param array|null $pushConfig Optional push_config for per-camera validation
+ * @return string|null Path to valid image file or null
  */
-function findNewestValidImage($uploadDir, $maxWaitSeconds) {
+function findNewestValidImage($uploadDir, $maxWaitSeconds, $pushConfig = null) {
     if (!is_dir($uploadDir)) {
         return null;
     }
@@ -184,8 +189,8 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds) {
     foreach ($files as $file) {
         // Check if file is fully written
         if (isFileFullyWritten($file, $maxWaitSeconds, $startTime)) {
-            // Validate image
-            if (validateImageFile($file)) {
+            // Validate image (with per-camera limits if provided)
+            if (validateImageFile($file, $pushConfig)) {
                 return $file;
             }
         }
@@ -230,16 +235,39 @@ function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
 
 /**
  * Validate image file
+ * 
+ * @param string $file File path
+ * @param array|null $pushConfig Optional push_config for per-camera limits
+ * @return bool
  */
-function validateImageFile($file) {
+function validateImageFile($file, $pushConfig = null) {
     if (!file_exists($file) || !is_readable($file)) {
         return false;
     }
     
-    // Check file size (max 10MB default, but will be checked per camera)
     $size = filesize($file);
-    if ($size < 100) { // Too small to be a valid image
+    
+    // Check minimum size (too small to be a valid image)
+    if ($size < 100) {
         return false;
+    }
+    
+    // Check maximum size (per-camera limit if provided, otherwise default 10MB)
+    $maxSizeBytes = 10 * 1024 * 1024; // Default 10MB
+    if ($pushConfig && isset($pushConfig['max_file_size_mb'])) {
+        $maxSizeBytes = intval($pushConfig['max_file_size_mb']) * 1024 * 1024;
+    }
+    if ($size > $maxSizeBytes) {
+        return false;
+    }
+    
+    // Check file extension if allowed_extensions specified
+    if ($pushConfig && isset($pushConfig['allowed_extensions']) && is_array($pushConfig['allowed_extensions'])) {
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $allowed = array_map('strtolower', $pushConfig['allowed_extensions']);
+        if (!in_array($ext, $allowed)) {
+            return false;
+        }
     }
     
     // Check MIME type
@@ -400,8 +428,11 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     
     $maxWaitSeconds = intval($refreshSeconds / 2);
     
-    // Find newest valid image
-    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds);
+    // Get push_config for per-camera validation limits
+    $pushConfig = $cam['push_config'] ?? null;
+    
+    // Find newest valid image (with per-camera limits)
+    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $pushConfig);
     
     if (!$newestFile) {
         aviationwx_log('info', 'no valid image found', [
