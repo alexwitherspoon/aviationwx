@@ -568,6 +568,8 @@ function processPushWebcams() {
     }
 }
 
-// Run processor
-processPushWebcams();
+// Run processor (only when executed directly, not when included)
+if (php_sapi_name() === 'cli' && basename($_SERVER['PHP_SELF'] ?? '') === basename(__FILE__)) {
+    processPushWebcams();
+}
 

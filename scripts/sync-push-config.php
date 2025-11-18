@@ -535,6 +535,8 @@ function syncPushConfig() {
     aviationwx_log('info', 'push-config sync completed', [], 'app');
 }
 
-// Run sync
-syncPushConfig();
+// Run sync (only when executed directly, not when included)
+if (php_sapi_name() === 'cli' && basename($_SERVER['PHP_SELF'] ?? '') === basename(__FILE__)) {
+    syncPushConfig();
+}
 
