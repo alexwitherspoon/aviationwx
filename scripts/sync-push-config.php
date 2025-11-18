@@ -536,7 +536,10 @@ function syncPushConfig() {
 }
 
 // Run sync (only when executed directly, not when included)
-if (php_sapi_name() === 'cli' && basename($_SERVER['PHP_SELF'] ?? '') === basename(__FILE__)) {
-    syncPushConfig();
+if (php_sapi_name() === 'cli') {
+    $scriptName = $_SERVER['PHP_SELF'] ?? $_SERVER['SCRIPT_NAME'] ?? '';
+    if (basename($scriptName) === basename(__FILE__) || $scriptName === __FILE__) {
+        syncPushConfig();
+    }
 }
 
