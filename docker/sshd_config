@@ -9,6 +9,10 @@ X11Forwarding no
 AllowTcpForwarding no
 PermitTunnel no
 
+# Logging (must be before Match blocks)
+SyslogFacility AUTH
+LogLevel INFO
+
 # SFTP subsystem
 Subsystem sftp internal-sftp
 
@@ -22,8 +26,4 @@ Match Group webcam_users
     MaxAuthTries 3
     PasswordAuthentication yes
     PubkeyAuthentication no
-
-# Logging
-SyslogFacility AUTH
-LogLevel INFO
 
