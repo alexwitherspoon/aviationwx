@@ -52,18 +52,26 @@ echo "Starting fail2ban..."
 touch /var/log/vsftpd.log /var/log/auth.log
 chmod 644 /var/log/vsftpd.log /var/log/auth.log
 
-# Start fail2ban in foreground initially to check for errors, then background it
-fail2ban-server -f -x start &
+# Start fail2ban server in background
+# Use systemd service if available, otherwise start directly
+if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
+    systemctl start fail2ban || fail2ban-server -x &
+else
+    # Start fail2ban server directly in background
+    fail2ban-server -x &
+fi
 FAIL2BAN_PID=$!
 
 # Wait a moment for fail2ban to start
-sleep 2
+sleep 3
 
 # Verify fail2ban is running
-if pgrep -x fail2ban-server > /dev/null; then
+if pgrep -x fail2ban-server > /dev/null || pgrep -f "fail2ban-server" > /dev/null; then
     echo "✓ fail2ban started successfully"
+    # Wait a bit more for jails to initialize
+    sleep 2
     # Show active jails
-    fail2ban-client status 2>/dev/null | grep -A 10 "Jail list" || true
+    fail2ban-client status 2>/dev/null | grep -A 10 "Jail list" || echo "  (jails initializing...)"
 else
     echo "⚠️  Warning: fail2ban may not have started properly"
     echo "This is non-fatal - services will continue without fail2ban protection"
