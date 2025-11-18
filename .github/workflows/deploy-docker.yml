@@ -531,6 +531,98 @@ jobs:
             echo "⚠ Nginx config test failed, but container is running"
           fi
           EOF
+
+      - name: Configure fail2ban for FTP/SFTP protection
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          echo "Configuring fail2ban for FTP/SFTP protection..."
+          
+          # Check if fail2ban is installed
+          if ! command -v fail2ban-client &> /dev/null; then
+            echo "Installing fail2ban..."
+            sudo apt-get update -qq
+            sudo apt-get install -y fail2ban
+          fi
+          
+          # Create fail2ban jail for vsftpd (FTP/FTPS)
+          if [ ! -f /etc/fail2ban/jail.d/vsftpd.conf ]; then
+            echo "Creating vsftpd jail configuration..."
+            sudo tee /etc/fail2ban/jail.d/vsftpd.conf > /dev/null << 'JAIL_EOF'
+          [vsftpd]
+          enabled = true
+          port = 2121,2122
+          filter = vsftpd
+          logpath = /var/log/vsftpd.log
+          maxretry = 3
+          findtime = 600
+          bantime = 2592000
+          action = iptables[name=VSFTPD, port=2121,2122, protocol=tcp]
+          JAIL_EOF
+            echo "✓ vsftpd jail created"
+          else
+            echo "✓ vsftpd jail already exists"
+          fi
+          
+          # Create fail2ban filter for vsftpd
+          if [ ! -f /etc/fail2ban/filter.d/vsftpd.conf ]; then
+            echo "Creating vsftpd filter..."
+            sudo tee /etc/fail2ban/filter.d/vsftpd.conf > /dev/null << 'FILTER_EOF'
+          [Definition]
+          failregex = ^.*\[.*\].*FAIL LOGIN.*Client "<HOST>".*$
+          ignoreregex =
+          FILTER_EOF
+            echo "✓ vsftpd filter created"
+          else
+            echo "✓ vsftpd filter already exists"
+          fi
+          
+          # Create fail2ban jail for sshd on port 2222 (SFTP)
+          if [ ! -f /etc/fail2ban/jail.d/sshd-sftp.conf ]; then
+            echo "Creating sshd-sftp jail configuration..."
+            sudo tee /etc/fail2ban/jail.d/sshd-sftp.conf > /dev/null << 'JAIL_EOF'
+          [sshd-sftp]
+          enabled = true
+          port = 2222
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+          findtime = 600
+          bantime = 2592000
+          action = iptables[name=SSHD-SFTP, port=2222, protocol=tcp]
+          JAIL_EOF
+            echo "✓ sshd-sftp jail created"
+          else
+            echo "✓ sshd-sftp jail already exists"
+          fi
+          
+          # Ensure Docker container logs are accessible to fail2ban
+          # vsftpd logs go to /var/log/vsftpd.log inside container
+          # We need to ensure this log file is accessible from host
+          # For now, fail2ban will monitor host-level logs if services run on host
+          # For containerized services, we may need log forwarding (future enhancement)
+          
+          # Reload fail2ban configuration
+          echo "Reloading fail2ban configuration..."
+          sudo fail2ban-client reload || sudo systemctl restart fail2ban || true
+          
+          # Verify fail2ban is running
+          if sudo fail2ban-client status > /dev/null 2>&1; then
+            echo "✓ fail2ban is running"
+            echo "Active jails:"
+            sudo fail2ban-client status | grep -A 10 "Jail list" || true
+          else
+            echo "⚠️  Warning: fail2ban may not be running properly"
+            echo "You may need to start it manually: sudo systemctl start fail2ban"
+          fi
+          
+          echo "✓ fail2ban configuration complete"
+          echo ""
+          echo "Note: fail2ban monitors host-level logs. For containerized services,"
+          echo "ensure log files are accessible or configure log forwarding."
+          EOF
       
       - name: Post-deployment health check
         run: |
