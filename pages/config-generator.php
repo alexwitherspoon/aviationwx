@@ -208,7 +208,7 @@ function generateConfigSnippet($formData) {
                     'password' => $cam['push_password'] ?? generateRandomCredential(),
                     'protocol' => strtolower($cam['protocol'] ?? 'sftp'),
                     'port' => intval($cam['port'] ?? ($cam['protocol'] === 'sftp' ? 2222 : ($cam['protocol'] === 'ftps' ? 2122 : 2121))),
-                    'max_file_size_mb' => intval($cam['max_file_size_mb'] ?? 10),
+                    'max_file_size_mb' => intval($cam['max_file_size_mb'] ?? 100),
                     'allowed_extensions' => ['jpg', 'jpeg', 'png']
                 ];
             } else {
@@ -868,7 +868,7 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     <div class="form-group">
                         <label>Max File Size (MB)</label>
                         <input type="number" name="webcams[${idx}][max_file_size_mb]" 
-                               value="${cam.max_file_size_mb || 10}" min="1" max="100">
+                               value="${cam.max_file_size_mb || 100}" min="1" max="100">
                     </div>
                     
                     <div class="form-group">
@@ -1100,7 +1100,7 @@ function renderWebcamForm($idx, $cam) {
             <div class="form-group">
                 <label>Max File Size (MB)</label>
                 <input type="number" name="webcams[<?= $idx ?>][max_file_size_mb]" 
-                       value="<?= htmlspecialchars($cam['max_file_size_mb'] ?? 10) ?>" min="1" max="100">
+                       value="<?= htmlspecialchars($cam['max_file_size_mb'] ?? 100) ?>" min="1" max="100">
             </div>
             
             <div class="form-group">
