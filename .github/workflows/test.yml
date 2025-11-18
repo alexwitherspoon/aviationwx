@@ -249,12 +249,11 @@ jobs:
             'refresh_seconds' => 300
           ];
           
-          \$errors = [];
-          validatePushWebcamConfig(\$validConfig, 'test', 0, \$errors);
+          \$result = validatePushWebcamConfig(\$validConfig, 'test', 0);
           
-          if (!empty(\$errors)) {
+          if (!\$result['valid']) {
             echo 'FAIL: Valid push webcam config was rejected' . PHP_EOL;
-            echo 'Errors: ' . implode(', ', \$errors) . PHP_EOL;
+            echo 'Errors: ' . implode(', ', \$result['errors']) . PHP_EOL;
             exit(1);
           }
           
