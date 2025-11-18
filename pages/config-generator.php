@@ -24,7 +24,7 @@ $generatedConfig = null;
 $airportId = '';
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $formData = $_POST;
     
     // Validate and generate config
