@@ -5,6 +5,16 @@ set -e
 echo "Starting cron daemon..."
 cron
 
+# Check if SSL certificates exist and enable SSL in vsftpd if available
+if [ -f "/etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem" ] && \
+   [ -f "/etc/letsencrypt/live/upload.aviationwx.org/privkey.pem" ] && \
+   [ -f "/usr/local/bin/enable-vsftpd-ssl.sh" ]; then
+    echo "SSL certificates found, enabling SSL in vsftpd..."
+    /usr/local/bin/enable-vsftpd-ssl.sh || {
+        echo "Warning: Failed to enable SSL in vsftpd, starting without SSL"
+    }
+fi
+
 # Start vsftpd
 echo "Starting vsftpd..."
 # Try to start vsftpd, if it fails, try to get error details

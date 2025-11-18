@@ -57,6 +57,10 @@ RUN chmod +x /usr/local/bin/service-watchdog.sh
 COPY scripts/setup-letsencrypt.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/setup-letsencrypt.sh
 
+# Copy vsftpd SSL enablement script
+COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/enable-vsftpd-ssl.sh
+
 # Create directories for FTP/SFTP
 RUN mkdir -p /var/www/html/uploads/webcams \
     && mkdir -p /etc/vsftpd/users \

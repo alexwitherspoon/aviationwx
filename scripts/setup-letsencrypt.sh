@@ -62,6 +62,15 @@ if [ $? -eq 0 ]; then
     chmod 600 "$CERT_DIR/privkey.pem"
     
     log_message "Certificate setup complete"
+    
+    # Enable SSL in vsftpd if the script exists
+    if [ -f "/usr/local/bin/enable-vsftpd-ssl.sh" ]; then
+        log_message "Enabling SSL in vsftpd..."
+        /usr/local/bin/enable-vsftpd-ssl.sh || {
+            log_message "Warning: Failed to enable SSL in vsftpd, but certificate is installed"
+            log_message "You can manually enable SSL by running: /usr/local/bin/enable-vsftpd-ssl.sh"
+        }
+    fi
 else
     log_message "ERROR: Failed to obtain certificate"
     exit 1
