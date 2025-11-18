@@ -750,6 +750,13 @@ foreach ($config['airports'] as $airportId => $airport) {
     ];
     
     foreach ($airport['webcams'] as $index => $cam) {
+        // Skip push cameras (they are handled by process-push-webcams.php)
+        $isPush = (isset($cam['type']) && $cam['type'] === 'push') 
+               || isset($cam['push_config']);
+        if ($isPush) {
+            continue;
+        }
+        
         $camStartTime = microtime(true);
         $cacheFileBase = $cacheDir . '/' . $airportId . '_' . $index;
         $cacheFile = $cacheFileBase . '.jpg';

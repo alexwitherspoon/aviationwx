@@ -57,7 +57,7 @@ function getLastSyncTimestamp() {
  */
 function updateLastSyncTimestamp() {
     $trackDir = __DIR__ . '/../cache/push_webcams';
-    $trackFile = $trackDir . '/last_processed.json';
+    $trackFile = $trackDir . '/last_sync.json';
     
     if (!is_dir($trackDir)) {
         @mkdir($trackDir, 0755, true);
