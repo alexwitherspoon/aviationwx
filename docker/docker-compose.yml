@@ -14,6 +14,9 @@ services:
       - ../config/airports.json:/var/www/html/config/airports.json:ro
       # Mount cache directory from /tmp (ephemeral, cleared on reboot)
       - /tmp/aviationwx-cache:/var/www/html/cache
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
