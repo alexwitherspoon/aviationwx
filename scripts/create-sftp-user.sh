@@ -33,7 +33,7 @@ if id "$USERNAME" &>/dev/null; then
     echo "Updated password for user: $USERNAME"
 else
     # Create new user
-    useradd -r -s /bin/false -d "$UPLOAD_DIR" -m "$USERNAME"
+    useradd -r -s /usr/sbin/nologin -d "$UPLOAD_DIR" -G webcam_users -m "$USERNAME"
     echo "$USERNAME:$PASSWORD" | chpasswd
     echo "Created user: $USERNAME"
 fi

@@ -288,7 +288,67 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     
     // Atomic move
     if (@rename($sourceFile, $cacheFile)) {
+        // Generate WEBP in background (non-blocking)
+        generateWebp($cacheFile, $airportId, $camIndex);
         return $cacheFile;
+    }
+    
+    return false;
+}
+
+/**
+ * Generate WEBP version of image (non-blocking)
+ */
+function generateWebp($cacheFile, $airportId, $camIndex) {
+    if (!file_exists($cacheFile)) {
+        return false;
+    }
+    
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    $cacheWebp = $cacheDir . '/' . $airportId . '_' . $camIndex . '.webp';
+    
+    // Build ffmpeg command
+    $cmdWebp = sprintf(
+        "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
+        escapeshellarg($cacheFile),
+        escapeshellarg($cacheWebp)
+    );
+    
+    // Run in background (non-blocking)
+    if (function_exists('exec')) {
+        $cmd = $cmdWebp . ' > /dev/null 2>&1 &';
+        @exec($cmd);
+        return true;
+    }
+    
+    // Fallback: synchronous with timeout
+    $processWebp = @proc_open($cmdWebp . ' 2>&1', [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w']
+    ], $pipesWebp);
+    
+    if (is_resource($processWebp)) {
+        fclose($pipesWebp[0]);
+        $startTime = microtime(true);
+        $timeout = 8; // 8 second timeout
+        
+        while (true) {
+            $status = proc_get_status($processWebp);
+            if (!$status['running']) {
+                proc_close($processWebp);
+                if (file_exists($cacheWebp) && filesize($cacheWebp) > 0) {
+                    return true;
+                }
+                return false;
+            }
+            if ((microtime(true) - $startTime) > $timeout) {
+                @proc_terminate($processWebp);
+                @proc_close($processWebp);
+                return false;
+            }
+            usleep(50000); // 50ms
+        }
     }
     
     return false;
