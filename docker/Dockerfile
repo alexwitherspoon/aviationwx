@@ -101,8 +101,8 @@ RUN mkdir -p /etc/vsftpd && touch /etc/vsftpd/virtual_users.txt /etc/vsftpd/virt
 
 # PHP configuration
 RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "upload_max_filesize = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "post_max_size = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "upload_max_filesize = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "max_execution_time = 60" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "apc.enabled = 1" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "apc.shm_size = 64M" >> /usr/local/etc/php/conf.d/custom.ini \
