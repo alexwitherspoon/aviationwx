@@ -5,6 +5,47 @@ set -e
 echo "Starting cron daemon..."
 cron
 
+# Start vsftpd
+echo "Starting vsftpd..."
+service vsftpd start || {
+    echo "Error: vsftpd failed to start"
+    exit 1
+}
+
+# Start sshd (if not already running)
+echo "Starting sshd..."
+service ssh start || {
+    echo "Error: sshd failed to start"
+    exit 1
+}
+
+# Verify services are running
+if ! pgrep -x vsftpd > /dev/null; then
+    echo "Error: vsftpd is not running"
+    exit 1
+fi
+
+if ! pgrep -x sshd > /dev/null; then
+    echo "Error: sshd is not running"
+    exit 1
+fi
+
+# Verify ports are listening (give services a moment to bind)
+sleep 2
+if ! netstat -tuln 2>/dev/null | grep -q ':2121\|:2122\|:2222'; then
+    echo "Warning: FTP/SFTP ports may not be listening yet"
+fi
+
+echo "All services started successfully"
+
+# Start service watchdog in background
+echo "Starting service watchdog..."
+/usr/local/bin/service-watchdog.sh &
+WATCHDOG_PID=$!
+
+# Trap signals to clean up watchdog on exit
+trap "kill $WATCHDOG_PID 2>/dev/null || true" EXIT
+
 # Execute Apache entrypoint (starts Apache in foreground)
 # Use docker-php-entrypoint if available, otherwise call apache2-foreground directly
 if command -v docker-php-entrypoint >/dev/null 2>&1; then

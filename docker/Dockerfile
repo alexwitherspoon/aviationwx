@@ -12,6 +12,12 @@ RUN apt-get update && apt-get install -y \
     unzip \
     ffmpeg \
     cron \
+    vsftpd \
+    openssh-server \
+    certbot \
+    logrotate \
+    db-util \
+    net-tools \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip \
     && pecl channel-update pecl.php.net \
@@ -40,6 +46,41 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
 # Copy entrypoint script (build context is parent directory)
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Copy service watchdog script
+COPY scripts/service-watchdog.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/service-watchdog.sh
+
+# Copy Let's Encrypt setup script
+COPY scripts/setup-letsencrypt.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/setup-letsencrypt.sh
+
+# Create directories for FTP/SFTP
+RUN mkdir -p /var/www/html/uploads/webcams \
+    && mkdir -p /etc/vsftpd/users \
+    && mkdir -p /var/run/vsftpd/empty \
+    && mkdir -p /var/backups/aviationwx \
+    && chown -R www-data:www-data /var/www/html/uploads \
+    && chmod 755 /var/www/html/uploads/webcams
+
+# Create webcam_users group
+RUN groupadd -f webcam_users
+
+# Copy vsftpd configuration
+COPY docker/vsftpd.conf /etc/vsftpd.conf
+RUN chmod 644 /etc/vsftpd.conf
+
+# Copy sshd configuration
+COPY docker/sshd_config /etc/ssh/sshd_config
+RUN chmod 644 /etc/ssh/sshd_config
+
+# Copy logrotate configurations
+COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
+COPY docker/logrotate-sshd /etc/logrotate.d/sshd
+RUN chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd
+
+# Create vsftpd virtual users database directory
+RUN mkdir -p /etc/vsftpd && touch /etc/vsftpd/virtual_users.txt /etc/vsftpd/virtual_users.db
 
 # PHP configuration
 RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
