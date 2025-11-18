@@ -46,6 +46,32 @@ WATCHDOG_PID=$!
 # Trap signals to clean up watchdog on exit
 trap "kill $WATCHDOG_PID 2>/dev/null || true" EXIT
 
+# Start fail2ban
+echo "Starting fail2ban..."
+# Ensure log files exist
+touch /var/log/vsftpd.log /var/log/auth.log
+chmod 644 /var/log/vsftpd.log /var/log/auth.log
+
+# Start fail2ban in foreground initially to check for errors, then background it
+fail2ban-server -f -x start &
+FAIL2BAN_PID=$!
+
+# Wait a moment for fail2ban to start
+sleep 2
+
+# Verify fail2ban is running
+if pgrep -x fail2ban-server > /dev/null; then
+    echo "✓ fail2ban started successfully"
+    # Show active jails
+    fail2ban-client status 2>/dev/null | grep -A 10 "Jail list" || true
+else
+    echo "⚠️  Warning: fail2ban may not have started properly"
+    echo "This is non-fatal - services will continue without fail2ban protection"
+fi
+
+# Trap signals to clean up fail2ban on exit
+trap "kill $WATCHDOG_PID $FAIL2BAN_PID 2>/dev/null || true" EXIT
+
 # Execute Apache entrypoint (starts Apache in foreground)
 # Use docker-php-entrypoint if available, otherwise call apache2-foreground directly
 if command -v docker-php-entrypoint >/dev/null 2>&1; then

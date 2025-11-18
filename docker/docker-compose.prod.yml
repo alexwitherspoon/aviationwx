@@ -19,6 +19,9 @@ services:
       - /tmp/aviationwx-cache:/var/www/html/cache
       - /var/www/html/uploads:/var/www/html/uploads  # Upload directories
       - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
