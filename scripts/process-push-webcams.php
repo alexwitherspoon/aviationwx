@@ -252,8 +252,8 @@ function validateImageFile($file, $pushConfig = null) {
         return false;
     }
     
-    // Check maximum size (per-camera limit if provided, otherwise default 10MB)
-    $maxSizeBytes = 10 * 1024 * 1024; // Default 10MB
+    // Check maximum size (per-camera limit if provided, otherwise default 100MB)
+    $maxSizeBytes = 100 * 1024 * 1024; // Default 100MB
     if ($pushConfig && isset($pushConfig['max_file_size_mb'])) {
         $maxSizeBytes = intval($pushConfig['max_file_size_mb']) * 1024 * 1024;
     }
