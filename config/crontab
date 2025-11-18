@@ -8,3 +8,13 @@
 # Weather refresh - every minute
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-weather.php > /dev/null 2>&1
 
+# Push webcam file processor - every minute
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php > /dev/null 2>&1
+
+# Push webcam config sync - every minute
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/sync-push-config.php > /dev/null 2>&1
+
+# Let's Encrypt certificate renewal - weekly (Sunday at 3 AM)
+# After renewal, enable SSL in vsftpd if not already enabled
+0 3 * * 0 root certbot renew --quiet --no-self-upgrade && /usr/local/bin/enable-vsftpd-ssl.sh > /dev/null 2>&1 || true
+
