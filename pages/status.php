@@ -226,7 +226,71 @@ function checkSystemHealth() {
         'lastChanged' => $lastErrorTime > 0 ? $lastErrorTime : ($errorRate === 0 ? time() : 0)
     ];
     
+    // Check FTP/SFTP services
+    $ftpSftpHealth = checkFtpSftpServices();
+    $health['components']['ftp_sftp'] = $ftpSftpHealth;
+    
     return $health;
+}
+
+/**
+ * Check FTP/SFTP service health
+ */
+function checkFtpSftpServices() {
+    $services = [
+        'vsftpd' => [
+            'name' => 'FTP/FTPS Server',
+            'running' => false,
+            'ports' => [2121, 2122]
+        ],
+        'sshd' => [
+            'name' => 'SFTP Server',
+            'running' => false,
+            'ports' => [2222]
+        ]
+    ];
+    
+    // Check vsftpd process
+    $vsftpdRunning = false;
+    if (function_exists('exec')) {
+        @exec('pgrep -x vsftpd 2>/dev/null', $output, $code);
+        $vsftpdRunning = ($code === 0 && !empty($output));
+    }
+    $services['vsftpd']['running'] = $vsftpdRunning;
+    
+    // Check sshd process
+    $sshdRunning = false;
+    if (function_exists('exec')) {
+        @exec('pgrep -x sshd 2>/dev/null', $output, $code);
+        $sshdRunning = ($code === 0 && !empty($output));
+    }
+    $services['sshd']['running'] = $sshdRunning;
+    
+    // Determine overall status
+    $allRunning = $vsftpdRunning && $sshdRunning;
+    $noneRunning = !$vsftpdRunning && !$sshdRunning;
+    
+    if ($allRunning) {
+        $status = 'operational';
+        $message = 'FTP/FTPS and SFTP servers running';
+    } elseif ($noneRunning) {
+        $status = 'down';
+        $message = 'FTP/FTPS and SFTP servers not running';
+    } else {
+        $status = 'degraded';
+        $runningServices = [];
+        if ($vsftpdRunning) $runningServices[] = 'FTP/FTPS';
+        if ($sshdRunning) $runningServices[] = 'SFTP';
+        $message = implode(' and ', $runningServices) . ' running';
+    }
+    
+    return [
+        'name' => 'FTP/SFTP Services',
+        'status' => $status,
+        'message' => $message,
+        'lastChanged' => 0, // Static state, no meaningful timestamp
+        'services' => $services
+    ];
 }
 
 /**
