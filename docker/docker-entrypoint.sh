@@ -7,10 +7,17 @@ cron
 
 # Start vsftpd
 echo "Starting vsftpd..."
-service vsftpd start || {
+# Try to start vsftpd, if it fails, try to get error details
+if ! service vsftpd start 2>&1; then
+    echo "Error: vsftpd failed to start, checking configuration..."
+    # Test configuration
+    vsftpd -olisten=NO /etc/vsftpd.conf 2>&1 || true
     echo "Error: vsftpd failed to start"
     exit 1
-}
+fi
+
+# Give vsftpd a moment to start
+sleep 1
 
 # Start sshd (if not already running)
 echo "Starting sshd..."
