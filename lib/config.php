@@ -176,6 +176,15 @@ function loadConfig($useCache = true) {
     if (!isset($config['airports']) || !is_array($config['airports'])) {
         $errors[] = 'Root.airports must be an object';
     } else {
+        // Validate push_webcam_settings if present
+        if (isset($config['push_webcam_settings'])) {
+            require_once __DIR__ . '/push-webcam-validator.php';
+            $settingsValidation = validatePushWebcamSettings($config['push_webcam_settings']);
+            if (!$settingsValidation['valid']) {
+                $errors = array_merge($errors, $settingsValidation['errors']);
+            }
+        }
+        
         foreach ($config['airports'] as $aid => $ap) {
             if (!validateAirportId($aid)) {
                 $errors[] = "Airport key '{$aid}' is invalid (3-4 lowercase alphanumerics)";
@@ -185,17 +194,38 @@ function loadConfig($useCache = true) {
                 continue;
             }
             foreach ($ap['webcams'] as $idx => $cam) {
-                if (!isset($cam['name']) || !isset($cam['url'])) {
-                    $errors[] = "Airport '{$aid}' webcam index {$idx} missing required fields (name,url)";
-                    continue;
-                }
-                if (isset($cam['type']) && !in_array($cam['type'], ['rtsp','mjpeg','static_jpeg','static_png'])) {
-                    $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid type '{$cam['type']}'";
-                }
-                if (isset($cam['rtsp_transport']) && !in_array(strtolower($cam['rtsp_transport']), ['tcp','udp'])) {
-                    $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid rtsp_transport";
+                // Check if push camera
+                $isPush = (isset($cam['type']) && $cam['type'] === 'push') 
+                       || isset($cam['push_config']);
+                
+                if ($isPush) {
+                    // Validate push camera configuration
+                    require_once __DIR__ . '/push-webcam-validator.php';
+                    $pushValidation = validatePushWebcamConfig($cam, $aid, $idx);
+                    if (!$pushValidation['valid']) {
+                        $errors = array_merge($errors, $pushValidation['errors']);
+                    }
+                } else {
+                    // Validate pull camera (existing logic)
+                    if (!isset($cam['name']) || !isset($cam['url'])) {
+                        $errors[] = "Airport '{$aid}' webcam index {$idx} missing required fields (name,url)";
+                        continue;
+                    }
+                    if (isset($cam['type']) && !in_array($cam['type'], ['rtsp','mjpeg','static_jpeg','static_png','push'])) {
+                        $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid type '{$cam['type']}'";
+                    }
+                    if (isset($cam['rtsp_transport']) && !in_array(strtolower($cam['rtsp_transport']), ['tcp','udp'])) {
+                        $errors[] = "Airport '{$aid}' webcam index {$idx} has invalid rtsp_transport";
+                    }
                 }
             }
+        }
+        
+        // Check for duplicate push usernames
+        require_once __DIR__ . '/push-webcam-validator.php';
+        $usernameValidation = validateUniquePushUsernames($config);
+        if (!$usernameValidation['valid']) {
+            $errors = array_merge($errors, $usernameValidation['errors']);
         }
     }
     if (!empty($errors)) {

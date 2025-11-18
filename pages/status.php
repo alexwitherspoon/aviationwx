@@ -284,12 +284,13 @@ function checkAirportHealth($airportId, $airport) {
         'lastChanged' => $weatherLastChanged
     ];
     
-    // Check webcam caches
+    // Check webcam caches - per-camera status
     // Cache is at root level, not in pages directory
     $webcamCacheDir = __DIR__ . '/../cache/webcams';
     $webcams = $airport['webcams'] ?? [];
     $webcamStatus = 'operational';
     $webcamIssues = [];
+    $webcamComponents = [];
     
     if (empty($webcams)) {
         $webcamStatus = 'degraded';
@@ -299,60 +300,115 @@ function checkAirportHealth($airportId, $airport) {
         $totalCams = count($webcams);
         
         foreach ($webcams as $idx => $cam) {
+            // Determine camera type (Push or Pull)
+            $isPush = (isset($cam['type']) && $cam['type'] === 'push') 
+                   || isset($cam['push_config']);
+            $cameraType = $isPush ? 'Push' : 'Pull';
+            $camName = $cam['name'] ?? "Webcam {$idx}";
+            
             $cacheJpg = $webcamCacheDir . '/' . $airportId . '_' . $idx . '.jpg';
             $cacheWebp = $webcamCacheDir . '/' . $airportId . '_' . $idx . '.webp';
             $cacheExists = file_exists($cacheJpg) || file_exists($cacheWebp);
             
+            // Get refresh seconds (min 60)
+            $webcamRefresh = isset($cam['refresh_seconds']) 
+                ? max(60, intval($cam['refresh_seconds'])) 
+                : (isset($airport['webcam_refresh_seconds']) 
+                    ? max(60, intval($airport['webcam_refresh_seconds'])) 
+                    : max(60, (getenv('WEBCAM_REFRESH_DEFAULT') ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 300)));
+            
+            $camStatus = 'operational';
+            $camMessage = '';
+            $camLastChanged = 0;
+            
             if ($cacheExists) {
                 $cacheFile = file_exists($cacheJpg) ? $cacheJpg : $cacheWebp;
                 $cacheAge = time() - filemtime($cacheFile);
-                $webcamRefresh = isset($cam['refresh_seconds']) 
-                    ? intval($cam['refresh_seconds']) 
-                    : (isset($airport['webcam_refresh_seconds']) 
-                        ? intval($airport['webcam_refresh_seconds']) 
-                        : (getenv('WEBCAM_REFRESH_DEFAULT') ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 60));
+                $camLastChanged = filemtime($cacheFile);
                 
-                // Check for error files
+                // Unified staleness logic: 5x for warning, 10x for error
+                $warningThreshold = $webcamRefresh * 5;
+                $errorThreshold = $webcamRefresh * 10;
+                
+                // Check for error files (pull cameras only)
                 $errorFile = $cacheJpg . '.error.json';
-                $hasError = file_exists($errorFile);
+                $hasError = !$isPush && file_exists($errorFile);
                 
-                // Check backoff state
-                // Cache is at root level, not in pages directory
-                $backoffFile = __DIR__ . '/../cache/backoff.json';
+                // Check backoff state (pull cameras only)
                 $inBackoff = false;
-                if (file_exists($backoffFile)) {
-                    $backoffData = @json_decode(file_get_contents($backoffFile), true);
-                    if (is_array($backoffData)) {
-                        $key = $airportId . '_' . $idx;
-                        if (isset($backoffData[$key])) {
-                            $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
-                            $inBackoff = $backoffUntil > time();
+                if (!$isPush) {
+                    $backoffFile = __DIR__ . '/../cache/backoff.json';
+                    if (file_exists($backoffFile)) {
+                        $backoffData = @json_decode(file_get_contents($backoffFile), true);
+                        if (is_array($backoffData)) {
+                            $key = $airportId . '_' . $idx;
+                            if (isset($backoffData[$key])) {
+                                $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
+                                $inBackoff = $backoffUntil > time();
+                            }
                         }
                     }
                 }
                 
                 if ($hasError || $inBackoff) {
-                    // Webcam has issues but not necessarily down
-                    if ($healthyCams === 0) {
-                        $webcamIssues[] = "Webcam {$idx}: Has errors or in backoff";
-                    }
+                    $camStatus = 'degraded';
+                    $camMessage = $hasError ? 'Has errors' : 'In backoff';
                 } elseif ($cacheAge < $webcamRefresh) {
+                    $camStatus = 'operational';
+                    $camMessage = 'Fresh';
                     $healthyCams++;
-                } elseif ($cacheAge < 3600) {
-                    // Stale but recent (within hour)
+                } elseif ($cacheAge < $warningThreshold) {
+                    $camStatus = 'operational';
+                    $camMessage = 'Stale but usable';
                     $healthyCams++;
+                } elseif ($cacheAge < $errorThreshold) {
+                    $camStatus = 'degraded';
+                    $camMessage = 'Stale (warning)';
+                } else {
+                    $camStatus = 'down';
+                    $camMessage = 'Stale (error)';
                 }
             } else {
+                $camStatus = 'down';
+                $camMessage = 'No cache available';
+            }
+            
+            // Add per-camera component
+            $webcamComponents[] = [
+                'name' => "{$camName} ({$cameraType})",
+                'status' => $camStatus,
+                'message' => $camMessage,
+                'lastChanged' => $camLastChanged
+            ];
+            
+            // Track issues for aggregate message
+            if ($camStatus === 'down') {
+                $webcamIssues[] = "{$camName}: {$camMessage}";
+            } elseif ($camStatus === 'degraded') {
                 if (empty($webcamIssues)) {
-                    $webcamIssues[] = "Webcam {$idx}: No cache available";
+                    $webcamIssues[] = "{$camName}: {$camMessage}";
                 }
             }
         }
         
-        if ($healthyCams === 0 && $totalCams > 0) {
+        // Determine aggregate status
+        $hasDown = false;
+        $hasDegraded = false;
+        foreach ($webcamComponents as $comp) {
+            if ($comp['status'] === 'down') {
+                $hasDown = true;
+                break;
+            } elseif ($comp['status'] === 'degraded') {
+                $hasDegraded = true;
+            }
+        }
+        
+        if ($hasDown) {
             $webcamStatus = 'down';
-        } elseif ($healthyCams < $totalCams) {
+        } elseif ($hasDegraded) {
             $webcamStatus = 'degraded';
+        } else {
+            $webcamStatus = 'operational';
         }
     }
     
@@ -362,20 +418,9 @@ function checkAirportHealth($airportId, $airport) {
     
     // Find most recent webcam cache file modification time
     $webcamLastChanged = 0;
-    foreach ($webcams as $idx => $cam) {
-        $cacheJpg = $webcamCacheDir . '/' . $airportId . '_' . $idx . '.jpg';
-        $cacheWebp = $webcamCacheDir . '/' . $airportId . '_' . $idx . '.webp';
-        if (file_exists($cacheJpg)) {
-            $mtime = filemtime($cacheJpg);
-            if ($mtime > $webcamLastChanged) {
-                $webcamLastChanged = $mtime;
-            }
-        }
-        if (file_exists($cacheWebp)) {
-            $mtime = filemtime($cacheWebp);
-            if ($mtime > $webcamLastChanged) {
-                $webcamLastChanged = $mtime;
-            }
+    foreach ($webcamComponents as $comp) {
+        if ($comp['lastChanged'] > $webcamLastChanged) {
+            $webcamLastChanged = $comp['lastChanged'];
         }
     }
     
@@ -383,7 +428,8 @@ function checkAirportHealth($airportId, $airport) {
         'name' => 'Webcams',
         'status' => $webcamStatus,
         'message' => $webcamMessage,
-        'lastChanged' => $webcamLastChanged
+        'lastChanged' => $webcamLastChanged,
+        'cameras' => $webcamComponents // Per-camera details
     ];
     
     // Determine overall airport status
@@ -676,6 +722,34 @@ usort($airportHealth, function($a, $b) {
                                 <?php echo formatAbsoluteTime($component['lastChanged']); ?>
                             </div>
                             <?php endif; ?>
+                            <?php if (isset($component['cameras']) && is_array($component['cameras']) && !empty($component['cameras'])): ?>
+                            <div style="margin-top: 0.75rem; padding-left: 1rem; border-left: 2px solid #eee;">
+                                <div style="font-size: 0.875rem; font-weight: 600; color: #666; margin-bottom: 0.5rem;">Individual Cameras:</div>
+                                <ul style="list-style: none; padding: 0; margin: 0;">
+                                    <?php foreach ($component['cameras'] as $camera): ?>
+                                    <li style="padding: 0.5rem 0; border-bottom: 1px solid #f5f5f5;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                                            <div style="flex: 1;">
+                                                <div style="font-weight: 500; color: #333;"><?php echo htmlspecialchars($camera['name']); ?></div>
+                                                <div style="font-size: 0.75rem; color: #666; margin-top: 0.25rem;"><?php echo htmlspecialchars($camera['message']); ?></div>
+                                                <?php if (isset($camera['lastChanged']) && $camera['lastChanged'] > 0): ?>
+                                                <div style="font-size: 0.7rem; color: #999; margin-top: 0.25rem; font-style: italic;">
+                                                    <?php echo formatRelativeTime($camera['lastChanged']); ?>
+                                                </div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-transform: capitalize; margin-left: 1rem;">
+                                                <span class="status-indicator <?php echo getStatusColor($camera['status']); ?>">
+                                                    <?php echo getStatusIcon($camera['status']); ?>
+                                                </span>
+                                                <?php echo ucfirst($camera['status']); ?>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                            <?php endif; ?>
                         </div>
                         <div class="component-status">
                             <span class="status-indicator <?php echo getStatusColor($component['status']); ?>">
@@ -705,4 +779,5 @@ usort($airportHealth, function($a, $b) {
     </div>
 </body>
 </html>
+
 
