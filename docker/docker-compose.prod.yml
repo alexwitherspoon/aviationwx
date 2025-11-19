@@ -10,10 +10,18 @@ services:
     restart: always
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:80"  # Bind to localhost only, Nginx handles external
+      - "2121:2121"  # FTP
+      - "2122:2122"  # FTPS
+      - "2222:2222"  # SFTP
     volumes:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
       - /home/aviationwx/airports.json:/var/www/html/airports.json:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
+      - /var/www/html/uploads:/var/www/html/uploads  # Upload directories
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}

@@ -116,6 +116,49 @@ jobs:
           
           echo "✓ Stale data safety validation complete"
       
+      - name: Validate Push Webcam Implementation
+        run: |
+          echo "🔒 Validating push webcam implementation..."
+          
+          # Check that push webcam validator exists
+          if ! grep -q "function validatePushWebcamConfig" lib/push-webcam-validator.php; then
+            echo "❌ CRITICAL: validatePushWebcamConfig function missing!"
+            exit 1
+          fi
+          
+          # Check that process script exists
+          if ! grep -q "function processPushWebcams" scripts/process-push-webcams.php; then
+            echo "❌ CRITICAL: processPushWebcams function missing!"
+            exit 1
+          fi
+          
+          # Check that sync script exists
+          if ! grep -q "function syncPushConfig" scripts/sync-push-config.php; then
+            echo "❌ CRITICAL: syncPushConfig function missing!"
+            exit 1
+          fi
+          
+          # Check that staleness thresholds are correct (5x and 10x refresh_seconds)
+          if ! grep -q "refresh_seconds.*5\|5.*refresh_seconds" pages/status.php scripts/process-push-webcams.php; then
+            echo "⚠️  Warning: Staleness warning threshold (5x) may not be implemented"
+          fi
+          
+          if ! grep -q "refresh_seconds.*10\|10.*refresh_seconds" pages/status.php scripts/process-push-webcams.php; then
+            echo "⚠️  Warning: Staleness error threshold (10x) may not be implemented"
+          fi
+          
+          # Check that minimum refresh_seconds is enforced (60 seconds)
+          if ! grep -q "60\|min.*60" scripts/process-push-webcams.php lib/push-webcam-validator.php; then
+            echo "⚠️  Warning: Minimum refresh_seconds (60s) enforcement may be missing"
+          fi
+          
+          # Check that file validation is implemented
+          if ! grep -q "validateImageFile\|mime_content_type\|getimagesize" scripts/process-push-webcams.php; then
+            echo "⚠️  Warning: Image file validation may be missing"
+          fi
+          
+          echo "✓ Push webcam implementation validation complete"
+      
       - name: Validate Flight Category Logic
         run: |
           echo "🔒 Validating flight category calculation logic..."
@@ -149,10 +192,13 @@ jobs:
             "mergeWeatherDataWithFallback"
             "validateAirportId"
             "checkRateLimit"
+            "validatePushWebcamConfig"
+            "processPushWebcams"
+            "syncPushConfig"
           )
           
           for func in "${critical_functions[@]}"; do
-            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php 2>/dev/null; then
+            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
               exit 1
             fi
@@ -196,6 +242,23 @@ jobs:
           if ! grep -q "checkRateLimit" api/weather.php; then
             echo "❌ CRITICAL: Rate limiting not enforced in api/weather.php!"
             exit 1
+          fi
+          
+          # Check that config generator has rate limiting
+          if ! grep -q "checkRateLimit" pages/config-generator.php; then
+            echo "❌ CRITICAL: Rate limiting not enforced in pages/config-generator.php!"
+            exit 1
+          fi
+          
+          # Check that push webcam credentials are properly validated
+          if ! grep -q "validatePushWebcamConfig" lib/push-webcam-validator.php; then
+            echo "❌ CRITICAL: Push webcam validation function missing!"
+            exit 1
+          fi
+          
+          # Check that file uploads are validated (file size, extension, MIME type)
+          if ! grep -q "max_file_size_mb\|allowed_extensions\|validateImageFile" scripts/process-push-webcams.php; then
+            echo "⚠️  Warning: File upload validation may be missing in process-push-webcams.php"
           fi
           
           echo "✓ Security checks complete"

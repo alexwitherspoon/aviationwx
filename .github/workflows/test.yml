@@ -176,7 +176,18 @@ jobs:
       
       - name: Check for required files
         run: |
-          required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php")
+          required_files=(
+            "index.php"
+            "api/weather.php"
+            "api/webcam.php"
+            "lib/config.php"
+            "lib/rate-limit.php"
+            "scripts/process-push-webcams.php"
+            "scripts/sync-push-config.php"
+            "lib/push-webcam-validator.php"
+            "pages/config-generator.php"
+            "pages/status.php"
+          )
           for file in "${required_files[@]}"; do
             if [ ! -f "$file" ]; then
               echo "❌ Required file missing: $file"
@@ -217,6 +228,36 @@ jobs:
           }
           
           echo '✓ Airport ID validation tests passed' . PHP_EOL;
+          "
+      
+      - name: Test push webcam configuration validation
+        run: |
+          php -r "
+          require_once 'lib/push-webcam-validator.php';
+          
+          // Test push webcam config validation
+          \$validConfig = [
+            'name' => 'Test Camera',
+            'push_config' => [
+              'username' => 'aB3xK9mP2qR7vN',
+              'password' => 'mK8pL3nQ6rT9vW',
+              'protocol' => 'sftp',
+              'port' => 2222,
+              'max_file_size_mb' => 10,
+              'allowed_extensions' => ['jpg', 'jpeg']
+            ],
+            'refresh_seconds' => 300
+          ];
+          
+          \$result = validatePushWebcamConfig(\$validConfig, 'test', 0);
+          
+          if (!\$result['valid']) {
+            echo 'FAIL: Valid push webcam config was rejected' . PHP_EOL;
+            echo 'Errors: ' . implode(', ', \$result['errors']) . PHP_EOL;
+            exit(1);
+          }
+          
+          echo '✓ Push webcam configuration validation working' . PHP_EOL;
           "
       
       - name: Check for security issues
@@ -260,6 +301,33 @@ jobs:
           echo '✓ Rate limiting functions exist' . PHP_EOL;
           "
       
+      - name: Validate push webcam functions
+        run: |
+          php -r "
+          // Check that push webcam functions exist
+          require_once 'lib/push-webcam-validator.php';
+          require_once 'scripts/process-push-webcams.php';
+          require_once 'scripts/sync-push-config.php';
+          
+          \$functions = [
+            'validatePushWebcamConfig',
+            'processPushWebcams',
+            'syncPushConfig',
+            'getCameraRefreshSeconds',
+            'findNewestValidImage',
+            'validateImageFile'
+          ];
+          
+          foreach (\$functions as \$func) {
+            if (!function_exists(\$func)) {
+              echo 'FAIL: Function ' . \$func . ' not found' . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Push webcam functions exist' . PHP_EOL;
+          "
+      
       - name: Check Dockerfile
         run: |
           if [ ! -f "docker/Dockerfile" ]; then
@@ -270,6 +338,12 @@ jobs:
           # Check for required components
           grep -q "FROM php:8.3-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
           grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
+          
+          # Check for push webcam dependencies
+          grep -q "vsftpd" docker/Dockerfile || (echo "❌ vsftpd not found in Dockerfile (required for push webcams)" && exit 1)
+          grep -q "openssh-server" docker/Dockerfile || (echo "❌ openssh-server not found in Dockerfile (required for SFTP)" && exit 1)
+          grep -q "certbot" docker/Dockerfile || (echo "⚠️  certbot not found in Dockerfile (required for FTPS)" || true)
+          grep -q "logrotate" docker/Dockerfile || (echo "⚠️  logrotate not found in Dockerfile (recommended for FTP/SFTP logs)" || true)
           
           echo "✓ Dockerfile checks passed"
       
