@@ -1,0 +1,29 @@
+# OpenSSH Server Configuration for SFTP
+# Base configuration
+Port 2222
+Protocol 2
+PermitRootLogin no
+PasswordAuthentication yes
+PubkeyAuthentication no
+X11Forwarding no
+AllowTcpForwarding no
+PermitTunnel no
+
+# Logging (must be before Match blocks)
+SyslogFacility AUTH
+LogLevel INFO
+
+# SFTP subsystem
+Subsystem sftp internal-sftp
+
+# Match block for webcam users (chroot jails)
+Match Group webcam_users
+    ChrootDirectory %h
+    ForceCommand internal-sftp
+    AllowTcpForwarding no
+    X11Forwarding no
+    PermitTunnel no
+    MaxAuthTries 3
+    PasswordAuthentication yes
+    PubkeyAuthentication no
+

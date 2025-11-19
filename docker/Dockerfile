@@ -12,6 +12,14 @@ RUN apt-get update && apt-get install -y \
     unzip \
     ffmpeg \
     cron \
+    vsftpd \
+    openssh-server \
+    certbot \
+    logrotate \
+    db-util \
+    net-tools \
+    fail2ban \
+    iptables \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip \
     && pecl channel-update pecl.php.net \
@@ -41,10 +49,64 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Copy service watchdog script
+COPY scripts/service-watchdog.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/service-watchdog.sh
+
+# Copy Let's Encrypt setup script
+COPY scripts/setup-letsencrypt.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/setup-letsencrypt.sh
+
+# Copy vsftpd SSL enablement script
+COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/enable-vsftpd-ssl.sh
+
+# Create directories for FTP/SFTP
+RUN mkdir -p /var/www/html/uploads/webcams \
+    && mkdir -p /etc/vsftpd/users \
+    && mkdir -p /var/run/vsftpd/empty \
+    && mkdir -p /var/backups/aviationwx \
+    && chown -R www-data:www-data /var/www/html/uploads \
+    && chmod 755 /var/www/html/uploads/webcams
+
+# Create webcam_users group
+RUN groupadd -f webcam_users
+
+# Copy vsftpd configuration
+COPY docker/vsftpd.conf /etc/vsftpd.conf
+RUN chmod 644 /etc/vsftpd.conf
+
+# Copy sshd configuration
+COPY docker/sshd_config /etc/ssh/sshd_config
+RUN chmod 644 /etc/ssh/sshd_config
+
+# Copy logrotate configurations
+COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
+COPY docker/logrotate-sshd /etc/logrotate.d/sshd
+RUN chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd
+
+# Create fail2ban configuration directories
+RUN mkdir -p /etc/fail2ban/jail.d \
+    && mkdir -p /var/log/fail2ban \
+    && mkdir -p /var/run/fail2ban
+
+# Copy fail2ban configurations
+COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
+COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
+COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
+RUN chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
+    && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
+    && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf \
+    && touch /var/log/vsftpd.log /var/log/auth.log \
+    && chmod 644 /var/log/vsftpd.log /var/log/auth.log
+
+# Create vsftpd virtual users database directory
+RUN mkdir -p /etc/vsftpd && touch /etc/vsftpd/virtual_users.txt /etc/vsftpd/virtual_users.db
+
 # PHP configuration
 RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "upload_max_filesize = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
-    && echo "post_max_size = 10M" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "upload_max_filesize = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "max_execution_time = 60" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "apc.enabled = 1" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "apc.shm_size = 64M" >> /usr/local/etc/php/conf.d/custom.ini \
