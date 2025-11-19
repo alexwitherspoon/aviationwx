@@ -592,5 +592,235 @@ class ApiParsingTest extends TestCase
         $this->assertNull($resultSct['ceiling'], 'SCT clouds should not set ceiling (unlimited)');
         $this->assertEquals('SCT', $resultSct['cloud_cover'], 'Cloud cover should still be set');
     }
+    
+    /**
+     * Test parseWeatherLinkResponse - Valid response with all fields
+     */
+    public function testParseWeatherLinkResponse_ValidCompleteResponse()
+    {
+        $response = getMockWeatherLinkResponse();
+        $result = parseWeatherLinkResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('temperature', $result);
+        $this->assertArrayHasKey('humidity', $result);
+        $this->assertArrayHasKey('pressure', $result);
+        $this->assertArrayHasKey('wind_speed', $result);
+        $this->assertArrayHasKey('wind_direction', $result);
+        $this->assertArrayHasKey('gust_speed', $result);
+        $this->assertArrayHasKey('precip_accum', $result);
+        $this->assertArrayHasKey('dewpoint', $result);
+        $this->assertArrayHasKey('obs_time', $result);
+        
+        // Verify values are reasonable
+        $this->assertIsFloat($result['temperature']);
+        $this->assertIsNumeric($result['humidity']);
+        $this->assertIsFloat($result['pressure']);
+        $this->assertIsInt($result['wind_speed']);
+        $this->assertIsInt($result['wind_direction']);
+        $this->assertNotNull($result['obs_time']);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Temperature conversion (F to C)
+     */
+    public function testParseWeatherLinkResponse_TemperatureConversion()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'station_id' => 12345,
+            'sensors' => [[
+                'lsid' => 12345,
+                'data' => [[
+                    'ts' => $timestamp,
+                    'data' => [
+                        'temp' => 32.0, // Freezing point in Fahrenheit
+                        'hum' => 70.0,
+                        'bar_sea_level' => 30.0,
+                        'wind_speed_last' => 0,
+                        'wind_dir_last' => 0,
+                        'wind_speed_hi_last_2_min' => 0,
+                        'rainfall_daily_in' => 0
+                    ]
+                ]]
+            ]]
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        
+        // 32°F = 0°C
+        $this->assertEqualsWithDelta(0.0, $result['temperature'], 0.1);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Wind speed conversion (mph to knots)
+     */
+    public function testParseWeatherLinkResponse_WindSpeedConversion()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'station_id' => 12345,
+            'sensors' => [[
+                'lsid' => 12345,
+                'data' => [[
+                    'ts' => $timestamp,
+                    'data' => [
+                        'temp' => 70.0,
+                        'hum' => 50.0,
+                        'bar_sea_level' => 30.0,
+                        'wind_speed_last' => 10.0, // 10 mph
+                        'wind_dir_last' => 180,
+                        'wind_speed_hi_last_2_min' => 15.0, // 15 mph
+                        'rainfall_daily_in' => 0
+                    ]
+                ]]
+            ]]
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        
+        // 10 mph ≈ 8.69 knots
+        $this->assertEqualsWithDelta(9, $result['wind_speed'], 1);
+        // 15 mph ≈ 13.03 knots
+        $this->assertEqualsWithDelta(13, $result['gust_speed'], 1);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Missing optional fields
+     */
+    public function testParseWeatherLinkResponse_MissingOptionalFields()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'station_id' => 12345,
+            'sensors' => [[
+                'lsid' => 12345,
+                'data' => [[
+                    'ts' => $timestamp,
+                    'data' => [
+                        'temp' => 70.0,
+                        'hum' => 50.0,
+                        'bar_sea_level' => 30.0,
+                        // Missing wind, precip fields
+                    ]
+                ]]
+            ]]
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertNotNull($result['temperature']);
+        // Missing fields should have null values
+        $this->assertNull($result['wind_speed']);
+        $this->assertNull($result['precip_accum']);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Empty sensors array
+     */
+    public function testParseWeatherLinkResponse_EmptySensorsArray()
+    {
+        $response = json_encode([
+            'station_id' => 12345,
+            'sensors' => []
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        $this->assertIsArray($result);
+        $this->assertNull($result['temperature']);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Missing sensors key
+     */
+    public function testParseWeatherLinkResponse_MissingSensorsKey()
+    {
+        $response = json_encode([
+            'station_id' => 12345
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Invalid JSON
+     */
+    public function testParseWeatherLinkResponse_InvalidJson()
+    {
+        $response = 'invalid json';
+        $result = parseWeatherLinkResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Null response
+     */
+    public function testParseWeatherLinkResponse_NullResponse()
+    {
+        $result = parseWeatherLinkResponse(null);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Pressure in inHg (no conversion needed)
+     */
+    public function testParseWeatherLinkResponse_PressureInInHg()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'station_id' => 12345,
+            'sensors' => [[
+                'lsid' => 12345,
+                'data' => [[
+                    'ts' => $timestamp,
+                    'data' => [
+                        'temp' => 70.0,
+                        'hum' => 50.0,
+                        'bar_sea_level' => 30.12, // inHg
+                        'wind_speed_last' => 5.0,
+                        'wind_dir_last' => 180,
+                        'rainfall_daily_in' => 0
+                    ]
+                ]]
+            ]]
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        
+        // Pressure should be in inHg (no conversion)
+        $this->assertEqualsWithDelta(30.12, $result['pressure'], 0.01);
+    }
+    
+    /**
+     * Test parseWeatherLinkResponse - Rainfall in inches
+     */
+    public function testParseWeatherLinkResponse_RainfallInInches()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'station_id' => 12345,
+            'sensors' => [[
+                'lsid' => 12345,
+                'data' => [[
+                    'ts' => $timestamp,
+                    'data' => [
+                        'temp' => 70.0,
+                        'hum' => 50.0,
+                        'bar_sea_level' => 30.0,
+                        'wind_speed_last' => 5.0,
+                        'wind_dir_last' => 180,
+                        'rainfall_daily_in' => 0.5 // 0.5 inches
+                    ]
+                ]]
+            ]]
+        ]);
+        
+        $result = parseWeatherLinkResponse($response);
+        
+        // Rainfall should be in inches (no conversion)
+        $this->assertEqualsWithDelta(0.5, $result['precip_accum'], 0.01);
+    }
 }
 

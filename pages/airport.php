@@ -81,9 +81,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     <!-- Resource hints for external APIs -->
     <link rel="preconnect" href="https://swd.weatherflow.com" crossorigin>
     <link rel="preconnect" href="https://api.ambientweather.net" crossorigin>
+    <link rel="preconnect" href="https://api.weatherlink.com" crossorigin>
     <link rel="preconnect" href="https://aviationweather.gov" crossorigin>
     <link rel="dns-prefetch" href="https://swd.weatherflow.com">
     <link rel="dns-prefetch" href="https://api.ambientweather.net">
+    <link rel="dns-prefetch" href="https://api.weatherlink.com">
     <link rel="dns-prefetch" href="https://aviationweather.gov">
     
     <?php
@@ -430,14 +432,17 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     case 'ambient':
                         $weatherSourcesNames['Ambient Weather'] = '<a href="https://ambientweather.net" target="_blank" rel="noopener">Ambient Weather</a>';
                         break;
+                    case 'weatherlink':
+                        $weatherSourcesNames['Davis WeatherLink'] = '<a href="https://weatherlink.com" target="_blank" rel="noopener">Davis WeatherLink</a>';
+                        break;
                     case 'metar':
                         $weatherSourcesNames['Aviation Weather'] = '<a href="https://aviationweather.gov" target="_blank" rel="noopener">Aviation Weather</a>';
                         break;
                 }
                 
-                // Add METAR source if using Tempest or Ambient (since we supplement with METAR)
+                // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
                 // Only add if not already using METAR as primary source
-                if (!isset($weatherSourcesNames['Aviation Weather']) && in_array($airport['weather_source']['type'], ['tempest', 'ambient'])) {
+                if (!isset($weatherSourcesNames['Aviation Weather']) && in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink'])) {
                     $weatherSourcesNames['Aviation Weather'] = '<a href="https://aviationweather.gov" target="_blank" rel="noopener">Aviation Weather</a>';
                 }
                 
