@@ -58,6 +58,7 @@ class WeatherApiTest extends TestCase
         // Verify that parse functions are available (they're moved outside the conditional)
         $this->assertTrue(function_exists('parseTempestResponse'), 'parseTempestResponse should be available');
         $this->assertTrue(function_exists('parseAmbientResponse'), 'parseAmbientResponse should be available');
+        $this->assertTrue(function_exists('parseWeatherLinkResponse'), 'parseWeatherLinkResponse should be available');
         $this->assertTrue(function_exists('parseMETARResponse'), 'parseMETARResponse should be available');
         
         // For full integration testing, weather.php would need to be called via HTTP

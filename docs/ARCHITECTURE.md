@@ -43,8 +43,8 @@ aviationwx.org/
 
 - **Purpose**: Fetches and serves weather data as JSON API
 - **Key Features**:
-  - Supports multiple weather sources (Tempest, Ambient, METAR)
-  - Parallel fetching via `curl_multi`
+  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, METAR)
+  - Parallel fetching via `curl_multi` (when supported by source)
   - Per-source staleness checking (3-hour threshold)
   - Caching with stale-while-revalidate
   - Rate limiting
@@ -133,7 +133,7 @@ Cache Check (fresh/stale/expired)
   ↓
 [If stale] Serve stale + trigger background refresh
   ↓
-Fetch Primary Source (Tempest/Ambient) + METAR (parallel)
+Fetch Primary Source (Tempest/Ambient/WeatherLink) + METAR (parallel when possible)
   ↓
 Parse and merge data
   ↓
