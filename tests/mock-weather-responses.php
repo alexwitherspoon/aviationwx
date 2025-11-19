@@ -66,3 +66,52 @@ function getMockMETARResponse() {
     ]]);
 }
 
+/**
+ * Get a mock WeatherLink v2 API response
+ * Based on actual API structure from documentation and sample responses
+ * WeatherLink uses: { "station_id": ..., "sensors": [ { "lsid": ..., "data": [ { "ts": ..., "data": { ... } } ] } ] }
+ * Units: Temperature (F), Wind Speed (mph), Pressure (inHg), Rainfall (inches)
+ */
+function getMockWeatherLinkResponse() {
+    $timestamp = time();
+    return json_encode([
+        'station_id' => 374964,
+        'sensors' => [
+            [
+                'lsid' => 5271270,
+                'data' => [
+                    [
+                        'ts' => $timestamp,
+                        'data' => [
+                            'temp' => 42.8,  // Fahrenheit
+                            'hum' => 93,  // Percentage
+                            'dew_point' => 40.3,  // Fahrenheit
+                            'wind_chill' => 42.0,  // Fahrenheit (calculated)
+                            'thw_index' => 42.5,  // Temperature-Humidity-Wind index
+                            'thsw_index' => 43.0,  // Temperature-Humidity-Solar-Wind index
+                            'wet_bulb' => 41.5,  // Fahrenheit
+                            'heat_index' => 43.2,  // Fahrenheit
+                            'wind_speed_last' => 5.0,  // mph
+                            'wind_dir_last' => 89,  // degrees
+                            'wind_speed_avg_last_1_min' => 4.8,  // mph
+                            'wind_dir_scalar_avg_last_1_min' => 90,  // degrees
+                            'wind_speed_avg_last_10_min' => 4.5,  // mph
+                            'wind_dir_scalar_avg_last_10_min' => 88,  // degrees
+                            'wind_speed_hi_last_2_min' => 7.0,  // mph (gust)
+                            'wind_dir_at_hi_speed_last_2_min' => 88,  // degrees
+                            'wind_speed_hi_last_10_min' => 6.5,  // mph
+                            'rainfall_daily_in' => 0.47,  // inches
+                            'rainfall_daily_mm' => 11.9,  // millimeters
+                            'rainfall_last_60_min_in' => 0.0,  // inches
+                            'rainfall_last_60_min_mm' => 0.0,  // millimeters
+                            'bar_sea_level' => 30.08,  // inHg
+                            'bar_trend' => 0.02,  // inHg
+                            'bar_absolute' => 30.05  // inHg
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ]);
+}
+

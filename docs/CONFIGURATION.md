@@ -28,7 +28,21 @@ AviationWX supports dynamic configuration of airports via `airports.json`. Each 
 }
 ```
 
-### 3. METAR (Fallback/Primary)
+### 3. Davis WeatherLink
+**Requires:** `api_key`, `api_secret`, and `station_id`
+
+Get your API credentials from [WeatherLink.com](https://weatherlink.com) and add to config:
+
+```json
+"weather_source": {
+    "type": "weatherlink",
+    "api_key": "your-api-key-here",
+    "api_secret": "your-api-secret-here",
+    "station_id": "your-station-id-here"
+}
+```
+
+### 4. METAR (Fallback/Primary)
 **No API key required** - Uses public METAR data
 
 ```json
@@ -388,7 +402,7 @@ The homepage (`homepage.php`) automatically displays all airports from `airports
 - Responsive layout adjusts to number of webcams
 
 ### Weather Source Fallback
-- If Tempest/Ambient lacks visibility/ceiling, METAR data automatically supplements
+- If Tempest/Ambient/WeatherLink lacks visibility/ceiling, METAR data automatically supplements
 - Flight category (VFR/IFR/MVFR) calculated from ceiling and visibility
 - All aviation metrics computed regardless of source
 

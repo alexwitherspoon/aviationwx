@@ -472,7 +472,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             <div class="features">
                 <div class="feature-card">
                     <h3>🌡️ Real-Time Weather</h3>
-                    <p>Live data from on-site weather stations including Tempest, Ambient Weather, or METAR observations.</p>
+                    <p>Live data from on-site weather stations including Tempest, Ambient Weather, WeatherLink, or METAR observations.</p>
                 </div>
                 
                 <div class="feature-card">
@@ -734,7 +734,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <p><strong>Add Your Airport - It's Easy!</strong></p>
                 <p>Getting your airport on AviationWX is straightforward and free. Here's what you need:</p>
                 <ul style="margin: 1rem 0 0 2rem;">
-                    <li>A local weather station (Tempest or Ambient Weather) - we'll help you set it up</li>
+                    <li>A local weather station (Tempest, Ambient Weather, or WeatherLink) - we'll help you set it up</li>
                     <li>Optional webcam feeds (MJPEG streams or static images)</li>
                     <li>Basic airport metadata (runways, frequencies, services)</li>
                 </ul>
@@ -792,6 +792,10 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <div class="feature-card">
                     <h3>Ambient Weather</h3>
                     <p>Integration with Ambient Weather stations for reliable local weather data.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Davis WeatherLink</h3>
+                    <p>Support for Davis Instruments WeatherLink stations via the WeatherLink v2 API.</p>
                 </div>
                 <div class="feature-card">
                     <h3>METAR Data</h3>
