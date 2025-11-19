@@ -35,6 +35,12 @@
         "station_id": "YOUR_STATION_ID",
         "api_key": "YOUR_TEMPEST_API_KEY"
       },
+      "_weather_source_weatherlink_example": {
+        "type": "weatherlink",
+        "station_id": "YOUR_STATION_ID",
+        "api_key": "YOUR_WEATHERLINK_API_KEY",
+        "api_secret": "YOUR_WEATHERLINK_API_SECRET"
+      },
       "webcams": [
         {
           "name": "North Runway Camera (MJPEG Example)",

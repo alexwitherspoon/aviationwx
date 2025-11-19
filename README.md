@@ -255,7 +255,7 @@ To prevent pilots from using dangerously outdated weather information, the syste
 - Prevents pilots from making flight decisions based on old information
 
 **Per-Source Checking:**
-- The system tracks separate timestamps for primary source (Tempest/Ambient) and METAR data
+- The system tracks separate timestamps for primary source (Tempest/Ambient/WeatherLink) and METAR data
 - Only fields from stale sources are nulled out - valid data from fresh sources is preserved
 - Example: If primary source is stale but METAR is fresh, visibility/ceiling still display
 - Example: If METAR is stale but primary source is fresh, temperature/wind still display
@@ -304,6 +304,19 @@ Get your API credentials from [Ambient Weather](https://ambientweather.net) and 
 }
 ```
 
+### Davis WeatherLink
+
+Get your API credentials from [WeatherLink.com](https://weatherlink.com) and add to config:
+
+```json
+"weather_source": {
+  "type": "weatherlink",
+  "api_key": "YOUR_API_KEY",
+  "api_secret": "YOUR_API_SECRET",
+  "station_id": "YOUR_STATION_ID"
+}
+```
+
 ### METAR
 
 METAR data is pulled automatically from [Aviation Weather](https://aviationweather.gov) API. No API key required:
@@ -314,7 +327,7 @@ METAR data is pulled automatically from [Aviation Weather](https://aviationweath
 }
 ```
 
-METAR can also be used as a supplement to Tempest/Ambient data when visibility or ceiling information is missing.
+METAR can also be used as a supplement to Tempest/Ambient/WeatherLink data when visibility or ceiling information is missing.
 
 ## License
 
