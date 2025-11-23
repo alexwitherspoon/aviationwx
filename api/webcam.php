@@ -146,8 +146,42 @@ $cacheJpg = $base . '.jpg';
 $cacheWebp = $base . '.webp';
 
 // Create cache directory if it doesn't exist
+// Check parent directory first, then create with proper error handling
+$parentDir = dirname($cacheDir);
+if (!is_dir($parentDir)) {
+    // Try to create parent directory first
+    if (!@mkdir($parentDir, 0755, true)) {
+        aviationwx_log('error', 'webcam cache parent directory creation failed', [
+            'parent_dir' => $parentDir,
+            'cache_dir' => $cacheDir,
+            'error' => error_get_last()['message'] ?? 'unknown'
+        ], 'app');
+    }
+}
+
 if (!is_dir($cacheDir)) {
-    @mkdir($cacheDir, 0755, true);
+    $created = @mkdir($cacheDir, 0755, true);
+    if (!$created) {
+        $error = error_get_last();
+        aviationwx_log('error', 'webcam cache directory creation failed', [
+            'cache_dir' => $cacheDir,
+            'parent_dir' => $parentDir,
+            'parent_exists' => is_dir($parentDir),
+            'parent_writable' => is_dir($parentDir) ? is_writable($parentDir) : false,
+            'error' => $error['message'] ?? 'unknown',
+            'error_file' => $error['file'] ?? null,
+            'error_line' => $error['line'] ?? null
+        ], 'app');
+        // Continue anyway - servePlaceholder will handle missing cache
+    } else {
+        // Verify directory was created and is writable
+        if (!is_writable($cacheDir)) {
+            aviationwx_log('warning', 'webcam cache directory created but not writable', [
+                'cache_dir' => $cacheDir,
+                'perms' => substr(sprintf('%o', @fileperms($cacheDir)), -4)
+            ], 'app');
+        }
+    }
 }
 
 // Check if requesting timestamp only (for frontend to get latest mtime)
@@ -282,17 +316,34 @@ function findLatestValidImage($cacheJpg, $cacheWebp) {
 }
 
 // Find latest valid image (even if old)
-$validImage = findLatestValidImage($cacheJpg, $cacheWebp);
+// Only try to find images if cache directory exists and is accessible
+$validImage = null;
+if (is_dir($cacheDir) && is_readable($cacheDir)) {
+    $validImage = findLatestValidImage($cacheJpg, $cacheWebp);
+} else {
+    // Cache directory doesn't exist or isn't accessible
+    aviationwx_log('warning', 'webcam cache directory not accessible', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'cache_dir' => $cacheDir,
+        'exists' => is_dir($cacheDir),
+        'readable' => is_dir($cacheDir) ? is_readable($cacheDir) : false,
+        'writable' => is_dir($cacheDir) ? is_writable($cacheDir) : false
+    ], 'app');
+}
 
 // If no valid image exists, clean up empty/invalid files and serve placeholder
 if ($validImage === null) {
-    // Clean up empty or invalid files
-    if (file_exists($cacheJpg) && @filesize($cacheJpg) === 0) {
-        @unlink($cacheJpg);
-        aviationwx_log('warning', 'webcam cache file is empty, deleted', ['airport' => $airportId, 'cam' => $camIndex], 'app');
-    }
-    if (file_exists($cacheWebp) && @filesize($cacheWebp) === 0) {
-        @unlink($cacheWebp);
+    // Only try to clean up if directory is accessible
+    if (is_dir($cacheDir) && is_writable($cacheDir)) {
+        // Clean up empty or invalid files
+        if (file_exists($cacheJpg) && @filesize($cacheJpg) === 0) {
+            @unlink($cacheJpg);
+            aviationwx_log('warning', 'webcam cache file is empty, deleted', ['airport' => $airportId, 'cam' => $camIndex], 'app');
+        }
+        if (file_exists($cacheWebp) && @filesize($cacheWebp) === 0) {
+            @unlink($cacheWebp);
+        }
     }
     servePlaceholder();
 }

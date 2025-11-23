@@ -336,10 +336,23 @@ jobs:
           set -euo pipefail
           # Create cache directory in /tmp (ephemeral, cleared on reboot)
           # No sudo needed - /tmp is world-writable by default
+          # Create parent directory first, then subdirectories
           mkdir -p /tmp/aviationwx-cache/webcams
           # Ensure directory is writable (should already be, but be explicit)
-          chmod -R 777 /tmp/aviationwx-cache || true
-          echo "✓ Cache directory created at /tmp/aviationwx-cache"
+          # Use 755 for directories (more secure than 777)
+          chmod 755 /tmp/aviationwx-cache || true
+          chmod 755 /tmp/aviationwx-cache/webcams || true
+          # Verify directory was created and is writable
+          if [ ! -d /tmp/aviationwx-cache/webcams ]; then
+            echo "❌ Failed to create cache directory"
+            exit 1
+          fi
+          if [ ! -w /tmp/aviationwx-cache/webcams ]; then
+            echo "❌ Cache directory is not writable"
+            exit 1
+          fi
+          echo "✓ Cache directory created at /tmp/aviationwx-cache/webcams"
+          echo "✓ Permissions verified (writable)"
           EOF
 
       - name: Ensure uploads directory exists for push webcams
