@@ -10,6 +10,11 @@ on:
     branches: [ "main" ]
   workflow_dispatch: {} # Allow manual trigger
 
+# Ensure only one deployment runs at a time
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 # Permissions for deployment
 permissions:
   contents: read
