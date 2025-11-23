@@ -7,7 +7,10 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
-require_once __DIR__ . '/../lib/vpn-routing.php';
+
+// VPN routing is optional - only required if VPN features are used
+// The checkVpnStatus function below doesn't actually use any functions from vpn-routing.php
+// It just reads the cache file directly, so we don't need to require it
 
 // Prevent caching
 header('Content-Type: text/html; charset=utf-8');
