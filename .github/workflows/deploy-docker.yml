@@ -335,24 +335,58 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           # Create cache directory in /tmp (ephemeral, cleared on reboot)
-          # No sudo needed - /tmp is world-writable by default
           # Create parent directory first, then subdirectories
           mkdir -p /tmp/aviationwx-cache/webcams
-          # Ensure directory is writable (should already be, but be explicit)
-          # Use 755 for directories (more secure than 777)
+          
+          # Get www-data UID/GID from container (typically 33:33)
+          # If container is running, get actual UID/GID from it
+          WWW_DATA_UID=33
+          WWW_DATA_GID=33
+          if docker ps --format '{{.Names}}' | grep -q '^aviationwx-web$'; then
+            # Container is running - get actual UID/GID
+            CONTAINER_UID=$(docker exec aviationwx-web id -u www-data 2>/dev/null || echo "33")
+            CONTAINER_GID=$(docker exec aviationwx-web id -g www-data 2>/dev/null || echo "33")
+            WWW_DATA_UID=${CONTAINER_UID}
+            WWW_DATA_GID=${CONTAINER_GID}
+            echo "Detected www-data UID/GID from container: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          else
+            echo "Container not running, using default www-data UID/GID: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          fi
+          
+          # Set ownership to match container's www-data user
+          # This allows the PHP process in the container to write to the cache
+          chown -R ${WWW_DATA_UID}:${WWW_DATA_GID} /tmp/aviationwx-cache || {
+            echo "⚠️  Failed to change ownership (may need sudo or container not running)"
+            # Fallback: make world-writable (less secure but works)
+            chmod -R 777 /tmp/aviationwx-cache || true
+          }
+          
+          # Ensure directory permissions allow www-data to write
           chmod 755 /tmp/aviationwx-cache || true
-          chmod 755 /tmp/aviationwx-cache/webcams || true
+          chmod 775 /tmp/aviationwx-cache/webcams || true
+          
           # Verify directory was created and is writable
           if [ ! -d /tmp/aviationwx-cache/webcams ]; then
             echo "❌ Failed to create cache directory"
             exit 1
           fi
+          
+          # Check if directory is writable by www-data (or world-writable as fallback)
           if [ ! -w /tmp/aviationwx-cache/webcams ]; then
-            echo "❌ Cache directory is not writable"
+            echo "⚠️  Cache directory may not be writable by container user"
+            echo "   Attempting to make world-writable as fallback..."
+            chmod 777 /tmp/aviationwx-cache/webcams || true
+          fi
+          
+          # Final verification
+          if [ -w /tmp/aviationwx-cache/webcams ]; then
+            echo "✓ Cache directory created at /tmp/aviationwx-cache/webcams"
+            echo "✓ Permissions verified (writable)"
+            ls -ld /tmp/aviationwx-cache/webcams
+          else
+            echo "❌ Cache directory is still not writable after fixes"
             exit 1
           fi
-          echo "✓ Cache directory created at /tmp/aviationwx-cache/webcams"
-          echo "✓ Permissions verified (writable)"
           EOF
 
       - name: Ensure uploads directory exists for push webcams

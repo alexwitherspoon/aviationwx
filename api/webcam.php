@@ -150,13 +150,24 @@ $cacheWebp = $base . '.webp';
 // Create cache directory if it doesn't exist
 // Check parent directory first, then create with proper error handling
 $parentDir = dirname($cacheDir);
+$currentUser = function_exists('posix_geteuid') ? posix_geteuid() : null;
+$currentUserInfo = $currentUser !== null && function_exists('posix_getpwuid') ? posix_getpwuid($currentUser) : null;
+
 if (!is_dir($parentDir)) {
     // Try to create parent directory first
-    if (!@mkdir($parentDir, 0755, true)) {
+    $parentCreated = @mkdir($parentDir, 0755, true);
+    if (!$parentCreated) {
+        $error = error_get_last();
         aviationwx_log('error', 'webcam cache parent directory creation failed', [
             'parent_dir' => $parentDir,
             'cache_dir' => $cacheDir,
-            'error' => error_get_last()['message'] ?? 'unknown'
+            'current_user' => $currentUserInfo['name'] ?? 'unknown',
+            'current_uid' => $currentUser,
+            'parent_exists' => is_dir($parentDir),
+            'parent_writable' => is_dir($parentDir) ? is_writable($parentDir) : false,
+            'error' => $error['message'] ?? 'unknown',
+            'error_file' => $error['file'] ?? null,
+            'error_line' => $error['line'] ?? null
         ], 'app');
     }
 }
@@ -165,22 +176,36 @@ if (!is_dir($cacheDir)) {
     $created = @mkdir($cacheDir, 0755, true);
     if (!$created) {
         $error = error_get_last();
+        $parentExists = is_dir($parentDir);
+        $parentWritable = $parentExists ? is_writable($parentDir) : false;
+        $parentPerms = $parentExists ? substr(sprintf('%o', @fileperms($parentDir)), -4) : 'N/A';
+        
         aviationwx_log('error', 'webcam cache directory creation failed', [
             'cache_dir' => $cacheDir,
             'parent_dir' => $parentDir,
-            'parent_exists' => is_dir($parentDir),
-            'parent_writable' => is_dir($parentDir) ? is_writable($parentDir) : false,
+            'parent_exists' => $parentExists,
+            'parent_writable' => $parentWritable,
+            'parent_perms' => $parentPerms,
+            'current_user' => $currentUserInfo['name'] ?? 'unknown',
+            'current_uid' => $currentUser,
+            'current_gid' => function_exists('posix_getegid') ? posix_getegid() : null,
             'error' => $error['message'] ?? 'unknown',
             'error_file' => $error['file'] ?? null,
-            'error_line' => $error['line'] ?? null
+            'error_line' => $error['line'] ?? null,
+            'tmp_writable' => strpos($cacheDir, '/tmp') === 0 ? is_writable('/tmp') : null
         ], 'app');
         // Continue anyway - servePlaceholder will handle missing cache
     } else {
         // Verify directory was created and is writable
         if (!is_writable($cacheDir)) {
+            $dirPerms = substr(sprintf('%o', @fileperms($cacheDir)), -4);
+            $dirOwner = function_exists('posix_getpwuid') ? posix_getpwuid(@fileowner($cacheDir)) : null;
             aviationwx_log('warning', 'webcam cache directory created but not writable', [
                 'cache_dir' => $cacheDir,
-                'perms' => substr(sprintf('%o', @fileperms($cacheDir)), -4)
+                'perms' => $dirPerms,
+                'owner' => $dirOwner['name'] ?? 'unknown',
+                'owner_uid' => @fileowner($cacheDir),
+                'current_uid' => $currentUser
             ], 'app');
         }
     }
