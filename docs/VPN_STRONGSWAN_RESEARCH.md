@@ -1,0 +1,196 @@
+# strongSwan Routing Research & Recommendations
+
+## Research Summary
+
+### strongSwan's Automatic Routing Capabilities
+
+**Default Behavior:**
+- strongSwan uses **policy-based routing** by default
+- Automatically installs routes into **routing table 220**
+- Uses XFRM (IPsec) policies to determine packet routing
+- Only traffic matching IPsec policies is encrypted and tunneled
+- Does NOT modify the main routing table by default
+
+**Key Settings:**
+- `charon.install_routes` - Controls automatic route installation (default: yes)
+- `charon.routing_table` - Routing table for installed routes (default: 220)
+- `charon.routing_table_prio` - Priority of routing table
+
+**How It Works:**
+1. strongSwan creates IPsec Security Associations (SAs) for each connection
+2. Kernel XFRM policies match traffic based on source/destination
+3. Matching traffic is automatically routed through the VPN tunnel
+4. Non-matching traffic uses default routing
+
+### Policy-Based Routing Options
+
+**Option 1: Use strongSwan's Automatic Routing (Recommended)**
+- **Pros:**
+  - Fully automated - no manual routing rules needed
+  - Traffic automatically routed based on IPsec policies
+  - Works with `leftsubnet`/`rightsubnet` configuration
+  - Handles multiple connections automatically
+  - No IP conflict risk (uses separate routing table 220)
+  
+- **How It Works:**
+  - Configure `rightsubnet` in ipsec.conf for each connection
+  - strongSwan automatically routes traffic to that subnet through the tunnel
+  - Example: `rightsubnet=192.168.1.0/24` routes all traffic to that subnet through VPN
+  
+- **Configuration:**
+  ```conf
+  conn kspb_vpn
+      rightsubnet=192.168.1.0/24  # Traffic to this subnet uses VPN
+      leftsubnet=0.0.0.0/0         # Accept traffic from any source
+  ```
+
+**Option 2: Manual Policy Routing (More Control)**
+- **Pros:**
+  - More granular control
+  - Can route specific IPs, not just subnets
+  - Can use custom routing tables
+  
+- **Cons:**
+  - More complex to manage
+  - Requires manual `ip route` and `ip rule` commands
+  - Higher risk of IP conflicts
+  - More maintenance overhead
+  
+- **When to Use:**
+  - Need to route individual IPs (not subnets)
+  - Need complex routing logic
+  - strongSwan's automatic routing doesn't meet requirements
+
+**Option 3: Virtual Tunnel Interfaces (VTI)**
+- **Pros:**
+  - Treat VPN like a physical interface
+  - Can use standard routing tools
+  - Good for dynamic routing protocols
+  
+- **Cons:**
+  - More complex setup
+  - Requires kernel VTI support
+  - Overkill for our use case
+
+## Recommendations
+
+### ✅ Recommended Approach: Use strongSwan's Automatic Routing
+
+**Rationale:**
+1. **Highly Automated**: No manual routing rules needed
+2. **IP Conflict Minimization**: Uses separate routing table (220), doesn't interfere with main routing
+3. **Simple Configuration**: Just specify `rightsubnet` in ipsec.conf
+4. **Automatic Management**: strongSwan handles route installation/removal
+5. **Multiple Connections**: Each connection's routes are managed independently
+
+**Implementation Strategy:**
+
+1. **Configure rightsubnet per connection:**
+   ```conf
+   conn kspb_vpn
+       rightsubnet=192.168.1.0/24  # All cameras in this subnet
+   ```
+
+2. **Map camera IPs to VPN connections:**
+   - From `airports.json`, we know:
+     - Airport ID → VPN connection name
+     - VPN connection → remote_subnet
+     - Camera URLs → IP addresses
+   - If camera IP is in remote_subnet, it uses that VPN connection
+   - strongSwan automatically routes it
+
+3. **No manual routing needed:**
+   - strongSwan handles everything automatically
+   - Routes installed when connection establishes
+   - Routes removed when connection drops
+
+### IP Conflict Risk Minimization
+
+**Strategy:**
+1. **Separate Routing Table**: strongSwan uses table 220 (isolated from main routing)
+2. **Subnet-Based Routing**: Route entire subnets, not individual IPs (simpler, less conflicts)
+3. **Connection Isolation**: Each VPN connection has its own subnet
+4. **No Overlap**: Ensure remote_subnets don't overlap between airports
+5. **Validation**: Wizard validates no subnet conflicts before deployment
+
+**Conflict Detection:**
+- Wizard should check for overlapping remote_subnets
+- Validate that camera IPs fall within their airport's remote_subnet
+- Warn if multiple airports use same subnet
+
+### Implementation Details
+
+**VPN Manager Responsibilities:**
+1. Read `airports.json` and extract VPN configs
+2. Generate `ipsec.conf` with `rightsubnet` for each connection
+3. Monitor connection status
+4. Update status file
+5. **No manual routing commands needed** - strongSwan handles it
+
+**Web Container:**
+1. Check if camera URL requires VPN (IP in remote_subnet)
+2. Verify VPN connection is up (via status file)
+3. Make request normally - strongSwan routes it automatically
+4. No special routing code needed in web container
+
+**Configuration Example:**
+```conf
+# Generated by VPN Manager from airports.json
+conn kspb_vpn
+    type=tunnel
+    auto=start
+    keyexchange=ikev2
+    left=%defaultroute
+    leftid=@vpn.aviationwx.org
+    right=%any
+    rightsubnet=192.168.1.0/24  # Automatic routing for this subnet
+    rightauth=psk
+    # ... other settings ...
+```
+
+### Docker Network Mode: Host Considerations
+
+**Research Findings:**
+- `network_mode: host` is required for IPsec (needs direct kernel access)
+- Routing table 220 is on the host kernel
+- All containers using host network share the same routing tables
+- This is fine - strongSwan manages routes in table 220
+
+**Compatibility:**
+- Existing web container uses bridge network - no conflict
+- VPN containers use host network - separate from web container
+- Web container can still access VPN-routed traffic via host routing
+
+**Port Conflicts:**
+- IPsec uses UDP 500 (IKE) and UDP 4500 (NAT-T)
+- Check these ports aren't in use on host
+- Can verify with: `netstat -ulnp | grep -E ':(500|4500)'`
+
+## Questions Resolved
+
+✅ **Q: Does strongSwan handle routing automatically?**
+A: Yes, via policy-based routing in routing table 220
+
+✅ **Q: Do we need manual routing rules?**
+A: No, strongSwan's automatic routing is sufficient
+
+✅ **Q: How to minimize IP conflicts?**
+A: Use separate routing table (220), subnet-based routing, validate no overlaps
+
+✅ **Q: How does web container access VPN-routed traffic?**
+A: Traffic automatically routed by strongSwan, web container makes normal requests
+
+## Next Steps
+
+1. ✅ Use strongSwan's automatic routing (no manual rules)
+2. Configure `rightsubnet` per connection in ipsec.conf
+3. Validate no subnet overlaps in wizard
+4. Test locally with mock VPN client
+5. Verify routing works automatically
+
+## References
+
+- [strongSwan Routing Documentation](https://docs.strongswan.org/docs/latest/howtos/introduction.html)
+- [strongSwan Policy Routing](https://docs.strongswan.org/docs/5.9/features/routeBasedVpn.html)
+- [Cloudflare Magic WAN strongSwan Guide](https://developers.cloudflare.com/magic-wan/configuration/manually/third-party/strongswan/)
+
