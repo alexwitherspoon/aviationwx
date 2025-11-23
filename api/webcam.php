@@ -117,8 +117,10 @@ $reqId = aviationwx_get_request_id();
 // Set request ID after Content-Type to ensure it's not overridden
 header('X-Request-ID: ' . $reqId);
 
-$rawAirportId = $_GET['id'] ?? '';
-$camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
+// Support both 'id' and 'airport' parameters for backward compatibility
+$rawAirportId = $_GET['id'] ?? $_GET['airport'] ?? '';
+// Support both 'cam' and 'index' parameters for backward compatibility
+$camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : (isset($_GET['index']) ? intval($_GET['index']) : 0);
 
 if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
     aviationwx_log('error', 'webcam invalid airport id', ['id' => $rawAirportId], 'user');
@@ -367,7 +369,11 @@ $immutableHash = substr(md5($airportId . '_' . $camIndex . '_' . $actualFmt . '_
 // If rate limited, prefer to serve an existing cached image (even if stale) with 200
 if ($isRateLimited) {
     // Use findLatestValidImage to ensure we serve a valid image
-    $rateLimitImage = findLatestValidImage($cacheJpg, $cacheWebp);
+    // Only check if cache directory is accessible
+    $rateLimitImage = null;
+    if (is_dir($cacheDir) && is_readable($cacheDir)) {
+        $rateLimitImage = findLatestValidImage($cacheJpg, $cacheWebp);
+    }
     
     if ($rateLimitImage !== null) {
         aviationwx_log('warning', 'webcam rate-limited, serving cached', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt], 'app');
