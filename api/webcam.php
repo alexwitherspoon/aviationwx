@@ -656,8 +656,4 @@ $shouldRefresh = !$circuit['skip'];
     
     // Exit silently after background refresh
     exit;
-} else {
-    aviationwx_log('error', 'webcam no cache, serving placeholder', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt], 'user');
-    servePlaceholder();
-}
 
