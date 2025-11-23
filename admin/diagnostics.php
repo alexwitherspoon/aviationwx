@@ -336,6 +336,66 @@ if (count($weatherCacheFiles) > 0) {
     $success[] = "📊 Weather cache: " . count($weatherCacheFiles) . " file(s)";
 }
 
+// Check webcam cache files for each configured airport
+if (isset($config) && isset($config['airports']) && is_dir($cacheDir)) {
+    $webcamCacheIssues = [];
+    $webcamCacheSuccess = [];
+    
+    foreach ($config['airports'] as $airportId => $airport) {
+        if (isset($airport['webcams']) && is_array($airport['webcams'])) {
+            $airportCacheFiles = [];
+            $airportMissingFiles = [];
+            
+            foreach ($airport['webcams'] as $idx => $cam) {
+                $camName = $cam['name'] ?? "Camera {$idx}";
+                $cacheJpg = $cacheDir . '/' . $airportId . '_' . $idx . '.jpg';
+                $cacheWebp = $cacheDir . '/' . $airportId . '_' . $idx . '.webp';
+                
+                // Check if cache files exist and are readable
+                $cacheJpgResolved = @realpath($cacheJpg) ?: $cacheJpg;
+                $cacheWebpResolved = @realpath($cacheWebp) ?: $cacheWebp;
+                $hasJpg = @file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved);
+                $hasWebp = @file_exists($cacheWebpResolved) && @is_readable($cacheWebpResolved);
+                
+                if ($hasJpg || $hasWebp) {
+                    $cacheFile = $hasJpg ? $cacheJpgResolved : $cacheWebpResolved;
+                    $mtime = @filemtime($cacheFile);
+                    $size = @filesize($cacheFile);
+                    $age = $mtime ? time() - $mtime : 0;
+                    $ageMinutes = round($age / 60, 1);
+                    $sizeKB = round($size / 1024, 1);
+                    
+                    $formats = [];
+                    if ($hasJpg) $formats[] = 'JPG';
+                    if ($hasWebp) $formats[] = 'WEBP';
+                    
+                    $airportCacheFiles[] = "  {$camName}: " . implode('+', $formats) . " ({$sizeKB}KB, {$ageMinutes}min old)";
+                } else {
+                    $airportMissingFiles[] = "  {$camName}: No cache files";
+                }
+            }
+            
+            if (!empty($airportCacheFiles)) {
+                $webcamCacheSuccess[] = "📷 {$airportId} webcam cache:";
+                $webcamCacheSuccess = array_merge($webcamCacheSuccess, $airportCacheFiles);
+            }
+            
+            if (!empty($airportMissingFiles)) {
+                $webcamCacheIssues[] = "⚠️ {$airportId} missing cache:";
+                $webcamCacheIssues = array_merge($webcamCacheIssues, $airportMissingFiles);
+            }
+        }
+    }
+    
+    if (!empty($webcamCacheSuccess)) {
+        $success = array_merge($success, $webcamCacheSuccess);
+    }
+    
+    if (!empty($webcamCacheIssues)) {
+        $issues = array_merge($issues, $webcamCacheIssues);
+    }
+}
+
 // Check cache directory permissions detail
 if (is_dir($cacheDir)) {
     $cachePerms = substr(sprintf('%o', fileperms($cacheDir)), -4);
