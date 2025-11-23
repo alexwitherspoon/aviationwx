@@ -13,7 +13,20 @@ ob_start();
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
-require_once __DIR__ . '/../lib/vpn-routing.php';
+
+// VPN routing is optional - only required if VPN features are used
+$vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
+if (file_exists($vpnRoutingFile)) {
+    require_once $vpnRoutingFile;
+} else {
+    // Define stub function if VPN routing file doesn't exist
+    if (!function_exists('verifyVpnForCamera')) {
+        function verifyVpnForCamera($airportId, $cam) {
+            // VPN routing not available - assume VPN not required
+            return true;
+        }
+    }
+}
 
 // Include webcam fetch functions for background refresh
 require_once __DIR__ . '/../scripts/fetch-webcam.php';

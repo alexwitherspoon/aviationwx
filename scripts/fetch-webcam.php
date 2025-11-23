@@ -422,6 +422,19 @@ function fetchMJPEGStream($url, $cacheFile) {
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
+// VPN routing is optional - only required if VPN features are used
+$vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
+if (file_exists($vpnRoutingFile)) {
+    require_once $vpnRoutingFile;
+} else {
+    // Define stub function if VPN routing file doesn't exist
+    if (!function_exists('verifyVpnForCamera')) {
+        function verifyVpnForCamera($airportId, $cam) {
+            // VPN routing not available - assume VPN not required
+            return true;
+        }
+    }
+}
 
 /**
  * Circuit breaker: check if camera should be skipped due to backoff
@@ -799,6 +812,23 @@ foreach ($config['airports'] as $airportId => $airport) {
                 echo "<span class='success'>✓ Skipped (fresh cache, age {$cacheAge}s)</span></div>\n";
             } else {
                 echo "    ✓ Skipped (fresh cache, age {$cacheAge}s)\n";
+            }
+            continue;
+        }
+        
+        // Check VPN connection if required
+        if (function_exists('verifyVpnForCamera') && !verifyVpnForCamera($airportId, $cam)) {
+            $airportStats['skipped_vpn']++;
+            aviationwx_log('warning', 'webcam fetch skipped - VPN connection down', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
+                'airport' => $airportId,
+                'cam' => $index
+            ], 'app');
+            if ($isWeb) {
+                echo "<span class='info'>⏸️ Skipped (VPN connection down)</span></div>\n";
+            } else {
+                echo "    ⏸️ Skipped (VPN connection down)\n";
             }
             continue;
         }
