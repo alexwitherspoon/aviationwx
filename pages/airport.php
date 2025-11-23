@@ -1884,17 +1884,20 @@ function safeSwapCameraImage(camIndex) {
     $hasHtmlError = false;
     $errorType = '';
     
+    // Extract content before <script> tag to check for PHP errors
+    // PHP errors would appear before the script tag, not inside JavaScript code
+    $beforeScript = '';
+    if (preg_match('/^(.*?)<script[^>]*>/is', $js, $beforeMatches)) {
+        $beforeScript = $beforeMatches[1];
+    }
+    
     // Check for actual HTML document structure (not HTML in JavaScript strings)
     // These patterns indicate actual HTML output, not JavaScript containing HTML strings
+    // Only check BEFORE the script tag to avoid false positives from JavaScript code
     $htmlDocumentPatterns = [
         '<!DOCTYPE' => 'DOCTYPE declaration',
         '<html' => 'HTML tag',
         '<body' => 'Body tag',
-        'Fatal error' => 'PHP fatal error',
-        'Parse error' => 'PHP parse error',
-        'Warning:' => 'PHP warning',
-        'Notice:' => 'PHP notice',
-        'Deprecated:' => 'PHP deprecated warning',
     ];
     
     // Check for HTML document structure first (most reliable indicators)
@@ -1903,6 +1906,27 @@ function safeSwapCameraImage(camIndex) {
             $hasHtmlError = true;
             $errorType = $description;
             break;
+        }
+    }
+    
+    // Check for PHP errors ONLY in content before script tag (to avoid false positives)
+    // PHP errors would appear before JavaScript, not inside it
+    if (!$hasHtmlError && $beforeScript !== '') {
+        $phpErrorPatterns = [
+            '/PHP\s+(Fatal|Parse)\s+error/i' => 'PHP fatal/parse error',
+            '/Fatal\s+error:\s+/i' => 'PHP fatal error',
+            '/Parse\s+error:\s+/i' => 'PHP parse error',
+            '/Warning:\s+/i' => 'PHP warning',
+            '/Notice:\s+/i' => 'PHP notice',
+            '/Deprecated:\s+/i' => 'PHP deprecated warning',
+        ];
+        
+        foreach ($phpErrorPatterns as $pattern => $description) {
+            if (preg_match($pattern, $beforeScript)) {
+                $hasHtmlError = true;
+                $errorType = $description;
+                break;
+            }
         }
     }
     
