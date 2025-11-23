@@ -282,6 +282,25 @@ jobs:
           
           echo "✓ Security check complete"
       
+      - name: Run VPN Manager Security Tests
+        run: |
+          echo "Running VPN Manager security tests..."
+          if [ ! -f "scripts/test-vpn-manager-security.py" ]; then
+            echo "❌ VPN Manager security test file not found"
+            exit 1
+          fi
+          
+          # Python 3 is available by default on ubuntu-latest
+          python3 scripts/test-vpn-manager-security.py
+          exit_code=$?
+          
+          if [ $exit_code -eq 0 ]; then
+            echo "✓ VPN Manager security tests passed"
+          else
+            echo "❌ VPN Manager security tests failed"
+            exit 1
+          fi
+      
       - name: Test rate limiting functions
         run: |
           php -r "
