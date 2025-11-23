@@ -174,22 +174,43 @@ class VPNManager:
         return '\n'.join(secret_lines)
     
     def write_config_files(self, ipsec_conf: str, ipsec_secrets: str):
-        """Write generated configuration files"""
+        """Write generated configuration files
+        
+        Note: PSKs are written in plain text to ipsec.secrets because strongSwan
+        requires them in this format. The file is protected with 0o600 permissions
+        (read/write for owner only) and written atomically to prevent race conditions.
+        """
         try:
             # Write ipsec.conf
             with open(IPSEC_CONF, 'w') as f:
                 f.write(ipsec_conf)
             
-            # Write ipsec.secrets
-            with open(IPSEC_SECRETS, 'w') as f:
-                f.write(ipsec_secrets)
-            
-            # Set proper permissions
-            os.chmod(IPSEC_SECRETS, 0o600)
+            # Write ipsec.secrets atomically with secure permissions
+            # Use temporary file to ensure atomic write and prevent race conditions
+            tmp_secrets = IPSEC_SECRETS + ".tmp"
+            try:
+                # Write to temporary file first
+                with open(tmp_secrets, 'w') as f:
+                    f.write(ipsec_secrets)
+                
+                # Set restrictive permissions before moving (owner read/write only)
+                os.chmod(tmp_secrets, 0o600)
+                
+                # Atomic rename - ensures file is never in inconsistent state
+                os.rename(tmp_secrets, IPSEC_SECRETS)
+            except Exception as e:
+                # Clean up temp file on error
+                if os.path.exists(tmp_secrets):
+                    try:
+                        os.remove(tmp_secrets)
+                    except OSError:
+                        pass
+                raise
             
             logger.info("Configuration files written successfully")
         except Exception as e:
-            logger.error(f"Failed to write config files: {e}")
+            # Never log the actual error content if it might contain secrets
+            logger.error("Failed to write config files")
             raise
     
     def reload_ipsec_config(self):
