@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/vpn-routing.php';
 
 // Prevent caching
 header('Content-Type: text/html; charset=utf-8');
@@ -294,6 +295,57 @@ function checkFtpSftpServices() {
 }
 
 /**
+ * Check VPN status for airport
+ */
+function checkVpnStatus($airportId, $airport) {
+    $vpn = $airport['vpn'] ?? null;
+    
+    if (!$vpn || !($vpn['enabled'] ?? false)) {
+        return null; // No VPN, don't show status
+    }
+    
+    $statusFile = __DIR__ . '/../cache/vpn-status.json';
+    if (!file_exists($statusFile)) {
+        return [
+            'name' => 'VPN Connection',
+            'status' => 'down',
+            'message' => 'VPN status unavailable',
+            'lastChanged' => 0
+        ];
+    }
+    
+    $statusData = @json_decode(file_get_contents($statusFile), true);
+    $connectionName = $vpn['connection_name'] ?? "{$airportId}_vpn";
+    $connStatus = $statusData['connections'][$connectionName] ?? null;
+    
+    if (!$connStatus) {
+        return [
+            'name' => 'VPN Connection',
+            'status' => 'down',
+            'message' => 'VPN connection not found',
+            'lastChanged' => 0
+        ];
+    }
+    
+    $status = $connStatus['status'] === 'up' ? 'operational' : 'down';
+    $lastConnected = $connStatus['last_connected'] ?? 0;
+    $message = $status === 'operational' 
+        ? 'VPN connected' 
+        : 'VPN disconnected';
+    
+    if ($lastConnected > 0) {
+        $message .= ' (last connected: ' . formatRelativeTime($lastConnected) . ')';
+    }
+    
+    return [
+        'name' => 'VPN Connection',
+        'status' => $status,
+        'message' => $message,
+        'lastChanged' => $lastConnected
+    ];
+}
+
+/**
  * Check airport health
  */
 function checkAirportHealth($airportId, $airport) {
@@ -350,11 +402,17 @@ function checkAirportHealth($airportId, $airport) {
     
     // Check webcam caches - per-camera status
     // Cache is at root level, not in pages directory
+    // Use same path resolution as webcam API
     $webcamCacheDir = __DIR__ . '/../cache/webcams';
+    $webcamCacheDirResolved = @realpath($webcamCacheDir) ?: $webcamCacheDir;
     $webcams = $airport['webcams'] ?? [];
     $webcamStatus = 'operational';
     $webcamIssues = [];
     $webcamComponents = [];
+    
+    // Check if cache directory exists and is readable
+    $webcamCacheDirExists = is_dir($webcamCacheDirResolved);
+    $webcamCacheDirReadable = $webcamCacheDirExists && is_readable($webcamCacheDirResolved);
     
     if (empty($webcams)) {
         $webcamStatus = 'degraded';
@@ -370,9 +428,16 @@ function checkAirportHealth($airportId, $airport) {
             $cameraType = $isPush ? 'Push' : 'Pull';
             $camName = $cam['name'] ?? "Webcam {$idx}";
             
-            $cacheJpg = $webcamCacheDir . '/' . $airportId . '_' . $idx . '.jpg';
-            $cacheWebp = $webcamCacheDir . '/' . $airportId . '_' . $idx . '.webp';
-            $cacheExists = file_exists($cacheJpg) || file_exists($cacheWebp);
+            // Use resolved cache directory path for file checks
+            $cacheJpg = $webcamCacheDirResolved . '/' . $airportId . '_' . $idx . '.jpg';
+            $cacheWebp = $webcamCacheDirResolved . '/' . $airportId . '_' . $idx . '.webp';
+            
+            // Check if cache files exist and are readable
+            // Use same path resolution as webcam API (normalize path to handle symlinks)
+            $cacheJpgResolved = @realpath($cacheJpg) ?: $cacheJpg;
+            $cacheWebpResolved = @realpath($cacheWebp) ?: $cacheWebp;
+            $cacheExists = (@file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved)) 
+                        || (@file_exists($cacheWebpResolved) && @is_readable($cacheWebpResolved));
             
             // Get refresh seconds (min 60)
             $webcamRefresh = isset($cam['refresh_seconds']) 
@@ -386,9 +451,12 @@ function checkAirportHealth($airportId, $airport) {
             $camLastChanged = 0;
             
             if ($cacheExists) {
-                $cacheFile = file_exists($cacheJpg) ? $cacheJpg : $cacheWebp;
-                $cacheAge = time() - filemtime($cacheFile);
-                $camLastChanged = filemtime($cacheFile);
+                // Determine which file to use (prefer JPG, fallback to WEBP)
+                $cacheFile = (@file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved)) 
+                           ? $cacheJpgResolved 
+                           : $cacheWebpResolved;
+                $cacheAge = time() - @filemtime($cacheFile);
+                $camLastChanged = @filemtime($cacheFile) ?: 0;
                 
                 // Unified staleness logic: 5x for warning, 10x for error
                 $warningThreshold = $webcamRefresh * 5;
@@ -434,7 +502,13 @@ function checkAirportHealth($airportId, $airport) {
                 }
             } else {
                 $camStatus = 'down';
-                $camMessage = 'No cache available';
+                if (!$webcamCacheDirExists) {
+                    $camMessage = 'Cache directory does not exist';
+                } elseif (!$webcamCacheDirReadable) {
+                    $camMessage = 'Cache directory not readable';
+                } else {
+                    $camMessage = 'No cache available';
+                }
             }
             
             // Add per-camera component
@@ -495,6 +569,12 @@ function checkAirportHealth($airportId, $airport) {
         'lastChanged' => $webcamLastChanged,
         'cameras' => $webcamComponents // Per-camera details
     ];
+    
+    // Check VPN status if VPN is enabled
+    $vpnStatus = checkVpnStatus($airportId, $airport);
+    if ($vpnStatus !== null) {
+        $health['components']['vpn'] = $vpnStatus;
+    }
     
     // Determine overall airport status
     $hasDown = false;

@@ -1879,18 +1879,17 @@ function safeSwapCameraImage(camIndex) {
     // Check if script tag is opened but not closed
     $needsClosingTag = preg_match('/<script[^>]*>/', $js) && !preg_match('/<\/script>/', $js);
     
-    // Enhanced error detection: Check for any HTML tags or PHP errors
+    // Enhanced error detection: Check for actual HTML output or PHP errors
+    // Only flag if content looks like actual HTML document structure, not HTML in JavaScript strings
     $hasHtmlError = false;
     $errorType = '';
     
-    // Check for common HTML patterns that indicate errors
-    $htmlPatterns = [
+    // Check for actual HTML document structure (not HTML in JavaScript strings)
+    // These patterns indicate actual HTML output, not JavaScript containing HTML strings
+    $htmlDocumentPatterns = [
         '<!DOCTYPE' => 'DOCTYPE declaration',
         '<html' => 'HTML tag',
         '<body' => 'Body tag',
-        '<div' => 'Div tag',
-        '<span' => 'Span tag',
-        '<p>' => 'Paragraph tag',
         'Fatal error' => 'PHP fatal error',
         'Parse error' => 'PHP parse error',
         'Warning:' => 'PHP warning',
@@ -1898,11 +1897,32 @@ function safeSwapCameraImage(camIndex) {
         'Deprecated:' => 'PHP deprecated warning',
     ];
     
-    foreach ($htmlPatterns as $pattern => $description) {
+    // Check for HTML document structure first (most reliable indicators)
+    foreach ($htmlDocumentPatterns as $pattern => $description) {
         if (stripos($js, $pattern) !== false) {
             $hasHtmlError = true;
             $errorType = $description;
             break;
+        }
+    }
+    
+    // Only check for individual HTML tags if they appear at the start of the buffer
+    // (indicating HTML output before script tag, not HTML in JavaScript strings)
+    if (!$hasHtmlError) {
+        // Check if content starts with HTML tags (not inside script tag)
+        $jsTrimmed = ltrim($js);
+        $htmlTagPatterns = [
+            '/^<div[^>]*>/i' => 'Div tag at start',
+            '/^<span[^>]*>/i' => 'Span tag at start',
+            '/^<p[^>]*>/i' => 'Paragraph tag at start',
+        ];
+        
+        foreach ($htmlTagPatterns as $pattern => $description) {
+            if (preg_match($pattern, $jsTrimmed)) {
+                $hasHtmlError = true;
+                $errorType = $description;
+                break;
+            }
         }
     }
     

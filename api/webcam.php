@@ -13,6 +13,7 @@ ob_start();
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/vpn-routing.php';
 
 // Include webcam fetch functions for background refresh
 require_once __DIR__ . '/../scripts/fetch-webcam.php';
@@ -153,20 +154,98 @@ if (!file_exists($targetFile)) {
 // Determine content type
 $ctype = (substr($targetFile, -5) === '.webp') ? 'image/webp' : 'image/jpeg';
 
-// If no cache exists, serve placeholder
-if (!file_exists($cacheJpg)) {
+/**
+ * Find the latest valid image file (JPG or WEBP)
+ * Returns array with 'file' => path, 'mtime' => timestamp, 'size' => bytes, or null if none found
+ */
+function findLatestValidImage($cacheJpg, $cacheWebp) {
+    $candidates = [];
+    
+    // Check JPG file
+    if (file_exists($cacheJpg) && @filesize($cacheJpg) > 0) {
+        $fp = @fopen($cacheJpg, 'rb');
+        if ($fp) {
+            $header = @fread($fp, 3);
+            @fclose($fp);
+            // Validate JPEG header (FF D8 FF)
+            if (substr($header, 0, 3) === "\xFF\xD8\xFF") {
+                $candidates[] = [
+                    'file' => $cacheJpg,
+                    'mtime' => @filemtime($cacheJpg),
+                    'size' => @filesize($cacheJpg),
+                    'type' => 'image/jpeg'
+                ];
+            }
+        }
+    }
+    
+    // Check WEBP file
+    if (file_exists($cacheWebp) && @filesize($cacheWebp) > 0) {
+        $fp = @fopen($cacheWebp, 'rb');
+        if ($fp) {
+            $header = @fread($fp, 12);
+            @fclose($fp);
+            // Validate WEBP header (RIFF...WEBP)
+            if (substr($header, 0, 4) === 'RIFF' && strpos($header, 'WEBP') !== false) {
+                $candidates[] = [
+                    'file' => $cacheWebp,
+                    'mtime' => @filemtime($cacheWebp),
+                    'size' => @filesize($cacheWebp),
+                    'type' => 'image/webp'
+                ];
+            }
+        }
+    }
+    
+    // Return the most recent valid image
+    if (!empty($candidates)) {
+        usort($candidates, function($a, $b) {
+            return $b['mtime'] - $a['mtime']; // Most recent first
+        });
+        return $candidates[0];
+    }
+    
+    return null;
+}
+
+// Find latest valid image (even if old)
+$validImage = findLatestValidImage($cacheJpg, $cacheWebp);
+
+// If no valid image exists, clean up empty/invalid files and serve placeholder
+if ($validImage === null) {
+    // Clean up empty or invalid files
+    if (file_exists($cacheJpg) && @filesize($cacheJpg) === 0) {
+        @unlink($cacheJpg);
+        aviationwx_log('warning', 'webcam cache file is empty, deleted', ['airport' => $airportId, 'cam' => $camIndex], 'app');
+    }
+    if (file_exists($cacheWebp) && @filesize($cacheWebp) === 0) {
+        @unlink($cacheWebp);
+    }
     servePlaceholder();
 }
 
+// Update targetFile and ctype based on the valid image found
+$targetFile = $validImage['file'];
+$ctype = $validImage['type'];
+
 // Generate immutable cache-friendly hash (for CDN compatibility)
 // Use file mtime + size to create stable hash that changes only when file updates
-$fileMtime = file_exists($targetFile) ? filemtime($targetFile) : 0;
-$fileSize = file_exists($targetFile) ? filesize($targetFile) : 0;
-$immutableHash = substr(md5($airportId . '_' . $camIndex . '_' . $fmt . '_' . $fileMtime . '_' . $fileSize), 0, 8);
+$fileMtime = $validImage['mtime'];
+$fileSize = $validImage['size'];
+// Determine format for hash based on actual file type
+$actualFmt = (substr($targetFile, -5) === '.webp') ? 'webp' : 'jpg';
+$immutableHash = substr(md5($airportId . '_' . $camIndex . '_' . $actualFmt . '_' . $fileMtime . '_' . $fileSize), 0, 8);
 
 // If rate limited, prefer to serve an existing cached image (even if stale) with 200
 if ($isRateLimited) {
-    $fallback = file_exists($targetFile) ? $targetFile : (file_exists($cacheJpg) ? $cacheJpg : null);
+    $fallback = null;
+    // Check target file first, then JPG, but only if they exist and have content
+    if (file_exists($targetFile) && @filesize($targetFile) > 0) {
+        $fallback = $targetFile;
+    } elseif (file_exists($cacheJpg) && @filesize($cacheJpg) > 0) {
+        $fallback = $cacheJpg;
+    }
+    
     if ($fallback !== null) {
         aviationwx_log('warning', 'webcam rate-limited, serving cached', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt], 'app');
         $mtime = @filemtime($fallback) ?: time();
@@ -194,11 +273,12 @@ $etag = function(string $file): string {
     return 'W/"' . sha1($file . '|' . $mt . '|' . $sz) . '"';
 };
 
-// Serve cached file if fresh
-if (file_exists($targetFile) && (time() - filemtime($targetFile)) < $perCamRefresh) {
-    $age = time() - filemtime($targetFile);
+// Serve cached file if fresh (we already validated it's a valid image above)
+if ((time() - $fileMtime) < $perCamRefresh) {
+    $age = time() - $fileMtime;
     $remainingTime = $perCamRefresh - $age;
-    $mtime = filemtime($targetFile);
+    $mtime = $fileMtime;
+    
     $etagVal = $etag($targetFile);
     
     // Conditional requests
@@ -231,6 +311,29 @@ if ($ctype !== 'image/jpeg') {
     header('X-Cache-Status: HIT');
     header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
     
+    // Quick validation: ensure file starts with valid image header
+    $isValidImage = false;
+    $fp = @fopen($targetFile, 'rb');
+    if ($fp) {
+        $header = @fread($fp, 12);
+        @fclose($fp);
+        // Check for JPEG (FF D8 FF) or WEBP (RIFF...WEBP)
+        if ($fmt === 'webp') {
+            $isValidImage = (substr($header, 0, 4) === 'RIFF' && strpos($header, 'WEBP') !== false);
+        } else {
+            $isValidImage = (substr($header, 0, 3) === "\xFF\xD8\xFF");
+        }
+    }
+    
+    if (!$isValidImage) {
+        // Invalid image file - delete and serve placeholder
+        @unlink($targetFile);
+        @unlink($cacheJpg);
+        @unlink($cacheWebp);
+        aviationwx_log('warning', 'webcam cache file is invalid image, deleted', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt, 'size' => $fileSize], 'app');
+        servePlaceholder();
+    }
+    
     aviationwx_log('info', 'webcam serve fresh', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt, 'age' => $age], 'user');
     aviationwx_maybe_log_alert();
     ob_end_clean(); // Clear any buffer before sending image (end and clean in one call)
@@ -250,6 +353,15 @@ if ($ctype !== 'image/jpeg') {
 function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $cacheWebp) {
     $url = $cam['url'];
     $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
+    
+    // Check VPN connection if required
+    if (!verifyVpnForCamera($airportId, $cam)) {
+        aviationwx_log('warning', 'webcam fetch skipped - VPN connection down', [
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+        return false; // VPN required but not up, skip fetch
+    }
     
     // Check circuit breaker: skip if in backoff period
     $circuit = checkCircuitBreaker($airportId, $camIndex);
@@ -387,52 +499,52 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
     }
 }
 
-// Cache expired or file not found - serve stale cache if available, otherwise placeholder
-if (file_exists($targetFile)) {
-    $mtime = filemtime($targetFile);
-    $etagVal = $etag($targetFile);
-    $cacheAge = time() - $mtime;
-    
-    // Conditional requests for stale file
-    $ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
-    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-    if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)$mtime) {
-        header('Cache-Control: public, max-age=0, must-revalidate');
-        header('ETag: ' . $etagVal);
-        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
-        header('X-Cache-Status: STALE'); // Include cache status in 304 responses
-        http_response_code(304);
-        exit;
-    }
-    
-    // Update Content-Type if serving WEBP (already set to image/jpeg earlier)
-    if ($ctype !== 'image/jpeg') {
-        header('Content-Type: ' . $ctype);
-    }
-    $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
-    $cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate, stale-while-revalidate=300' : 'public, max-age=0, must-revalidate, stale-while-revalidate=300';
-    header('Cache-Control: ' . $cc); // Stale, revalidate
-    if ($hasHash) {
-        header('Surrogate-Control: max-age=0, stale-while-revalidate=300');
-        header('CDN-Cache-Control: max-age=0, stale-while-revalidate=300');
-    }
+// Cache expired - serve stale cache (we already validated it's a valid image above)
+// Always serve the latest valid image, even if it's old
+$mtime = $fileMtime;
+$cacheAge = time() - $mtime;
+$etagVal = $etag($targetFile);
+
+// Conditional requests for stale file
+$ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+$ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)$mtime) {
+    header('Cache-Control: public, max-age=0, must-revalidate');
     header('ETag: ' . $etagVal);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
-    header('X-Cache-Status: STALE');
-    header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
-    
-    aviationwx_log('info', 'webcam serve stale', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'fmt' => $fmt,
-        'cache_age' => $cacheAge
-    ], 'user');
-    
-    // Check circuit breaker early before starting background refresh
-    $circuit = checkCircuitBreaker($airportId, $camIndex);
-    $shouldRefresh = !$circuit['skip'];
-    
-    // Serve stale cache immediately
+    header('X-Cache-Status: STALE'); // Include cache status in 304 responses
+    http_response_code(304);
+    exit;
+}
+
+// Update Content-Type if serving WEBP (already set to image/jpeg earlier)
+if ($ctype !== 'image/jpeg') {
+    header('Content-Type: ' . $ctype);
+}
+$hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
+$cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate, stale-while-revalidate=300' : 'public, max-age=0, must-revalidate, stale-while-revalidate=300';
+header('Cache-Control: ' . $cc); // Stale, revalidate
+if ($hasHash) {
+    header('Surrogate-Control: max-age=0, stale-while-revalidate=300');
+    header('CDN-Cache-Control: max-age=0, stale-while-revalidate=300');
+}
+header('ETag: ' . $etagVal);
+header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+header('X-Cache-Status: STALE');
+header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
+
+aviationwx_log('info', 'webcam serve stale', [
+    'airport' => $airportId,
+    'cam' => $camIndex,
+    'fmt' => $fmt,
+    'cache_age' => $cacheAge
+], 'user');
+
+// Check circuit breaker early before starting background refresh
+$circuit = checkCircuitBreaker($airportId, $camIndex);
+$shouldRefresh = !$circuit['skip'];
+
+// Serve stale cache immediately (already validated as valid image above)
     ob_end_flush(); // Flush buffer before sending file
     readfile($targetFile);
     flush(); // Ensure file is sent
