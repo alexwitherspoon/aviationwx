@@ -41,6 +41,16 @@
         "api_key": "YOUR_WEATHERLINK_API_KEY",
         "api_secret": "YOUR_WEATHERLINK_API_SECRET"
       },
+      "_vpn_example": {
+        "enabled": true,
+        "type": "ipsec",
+        "connection_name": "kspb_vpn",
+        "remote_subnet": "192.168.1.0/24",
+        "psk": "your-pre-shared-key-here",
+        "ike_version": "2",
+        "encryption": "aes256gcm128",
+        "dh_group": "14"
+      },
       "webcams": [
         {
           "name": "North Runway Camera (MJPEG Example)",
@@ -73,8 +83,8 @@
           "partner_link": "https://partner-website.com"
         },
         {
-          "name": "VPN Camera (Tailscale/WireGuard Example)",
-          "url": "rtsp://100.64.0.10:554/stream1",
+          "name": "VPN Camera (Private IP via VPN)",
+          "url": "rtsp://192.168.1.100:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
           "refresh_seconds": 60,
@@ -89,6 +99,22 @@
           "partner_name": "Partner Name",
           "partner_link": "https://partner-website.com",
           "refresh_seconds": 120
+        },
+        {
+          "name": "Push Camera (SFTP/FTP/FTPS Example)",
+          "type": "push",
+          "position": "north-west",
+          "partner_name": "Partner Name",
+          "partner_link": "https://partner-website.com",
+          "refresh_seconds": 60,
+          "push_config": {
+            "protocol": "sftp",
+            "port": 2222,
+            "username": "kspbCam0Push01",
+            "password": "SecurePass1234",
+            "max_file_size_mb": 10,
+            "allowed_extensions": ["jpg", "jpeg"]
+          }
         }
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",

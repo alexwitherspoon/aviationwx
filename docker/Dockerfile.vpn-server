@@ -1,0 +1,24 @@
+# VPN Server Container - strongSwan IPsec Server
+FROM alpine:latest
+
+# Install strongSwan and required tools from Alpine official repositories
+RUN apk add --no-cache \
+    strongswan \
+    iptables \
+    iproute2 \
+    curl
+
+# Create configuration directories
+RUN mkdir -p /etc/ipsec.d /etc/ipsec.secrets.d /etc/ipsec-shared
+
+# Copy entrypoint script
+COPY docker/docker-entrypoint-vpn-server.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Start strongSwan via entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
+    CMD ipsec status > /dev/null 2>&1 || exit 1
+

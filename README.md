@@ -28,9 +28,10 @@ Real-time aviation weather and conditions for participating airports.
 ## Features
 
 - **Live Weather Data** from Tempest, Ambient, or METAR sources
-- **Live Webcams** with automatic caching (MJPEG streams, RTSP streams via ffmpeg, and static images)
+- **Live Webcams** with automatic caching (MJPEG streams, RTSP streams via ffmpeg, static images, and push uploads via SFTP/FTP/FTPS)
   - Reliable background refresh with atomic writes and file locking
   - Circuit breaker with exponential backoff for failing sources
+  - Push webcam support: cameras can upload directly via SFTP, FTP, or FTPS
 - **Wind Visualization** with runway alignment and parallel runway support (L/C/R designations)
 - **Aviation-Specific Metrics**: Density altitude, VFR/IFR/MVFR status
 - **Weather Status Emojis**: Visual indicators for abnormal conditions (precipitation, high winds, low ceiling, extreme temps)
@@ -151,17 +152,21 @@ Then set up wildcard DNS as described in deployment docs.
 
 ### Webcam Sources and Formats
 
-- **Supported webcam sources**: Static JPEG/PNG, MJPEG streams, RTSP streams, and RTSPS (secure RTSP over TLS) via ffmpeg snapshot
+- **Supported webcam sources**: Static JPEG/PNG, MJPEG streams, RTSP streams, RTSPS (secure RTSP over TLS) via ffmpeg snapshot, and push uploads via SFTP/FTP/FTPS
 - **RTSP/RTSPS options per camera**:
   - `type`: `rtsp` (explicit type, recommended for RTSPS URLs)
   - `rtsp_transport`: `tcp` (default, recommended) or `udp`
   - `refresh_seconds`: Override refresh interval per camera
+- **Push webcams (SFTP/FTP/FTPS)**: Cameras can upload images directly to the server
+  - Supports SFTP (port 2222), FTPS (port 2122), and FTP (port 2121)
+  - Automatic user creation and chrooted directories for security
+  - Image validation and automatic processing
 - ffmpeg 5.0+ uses the `-timeout` option (the old `-stimeout` is no longer supported)
 - **Image format generation**: The fetcher automatically generates multiple formats per image:
   - `WEBP` and `JPEG` for broad compatibility
 - **Frontend**: Uses `<picture>` element with WEBP sources and JPEG fallback
 
-See [CONFIGURATION.md](CONFIGURATION.md) for detailed webcam configuration examples including RTSP/RTSPS setup.
+See [CONFIGURATION.md](CONFIGURATION.md) for detailed webcam configuration examples including RTSP/RTSPS and push webcam setup.
 
 ### Dashboard Features
 

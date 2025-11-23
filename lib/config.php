@@ -189,6 +189,28 @@ function loadConfig($useCache = true) {
             if (!validateAirportId($aid)) {
                 $errors[] = "Airport key '{$aid}' is invalid (3-4 lowercase alphanumerics)";
             }
+            
+            // Validate VPN configuration if present
+            if (isset($ap['vpn']) && is_array($ap['vpn'])) {
+                $vpn = $ap['vpn'];
+                if (isset($vpn['enabled']) && $vpn['enabled']) {
+                    if (empty($vpn['connection_name'])) {
+                        $errors[] = "Airport '{$aid}' VPN missing connection_name";
+                    }
+                    if (empty($vpn['remote_subnet'])) {
+                        $errors[] = "Airport '{$aid}' VPN missing remote_subnet";
+                    } elseif (!preg_match('/^\d+\.\d+\.\d+\.\d+\/\d+$/', $vpn['remote_subnet'])) {
+                        $errors[] = "Airport '{$aid}' VPN remote_subnet invalid format (expected CIDR)";
+                    }
+                    if (empty($vpn['psk'])) {
+                        $errors[] = "Airport '{$aid}' VPN missing psk";
+                    }
+                    if (isset($vpn['type']) && !in_array($vpn['type'], ['ipsec', 'wireguard', 'openvpn'])) {
+                        $errors[] = "Airport '{$aid}' VPN has invalid type '{$vpn['type']}'";
+                    }
+                }
+            }
+            
             if (!isset($ap['webcams']) || !is_array($ap['webcams'])) {
                 // Allow no webcams
                 continue;

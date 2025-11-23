@@ -387,6 +387,141 @@ The system automatically detects the source type from the URL:
 }
 ```
 
+### Push Webcams (SFTP/FTP/FTPS)
+
+Push webcams allow cameras to upload images directly to the server via SFTP, FTP, or FTPS. This is ideal for cameras that:
+- Are behind firewalls and cannot be accessed directly
+- Are on private networks without public IP addresses
+- Need to push images on their own schedule
+- Require secure, authenticated uploads
+
+#### How It Works
+
+1. **Camera Uploads**: The camera uploads images to a dedicated directory via SFTP/FTP/FTPS
+2. **Automatic Processing**: A background process (runs every minute) checks for new uploads
+3. **Image Validation**: Uploaded images are validated for format, size, and integrity
+4. **Cache Generation**: Valid images are moved to the cache and WEBP versions are generated
+5. **Website Display**: Images appear on the airport dashboard automatically
+
+#### Configuration
+
+To configure a push webcam, set `"type": "push"` and include a `push_config` object:
+
+**Required Fields:**
+- `username`: Exactly 14 alphanumeric characters (used for SFTP/FTP authentication)
+- `password`: Exactly 14 alphanumeric characters (used for SFTP/FTP authentication)
+- `protocol`: One of `"sftp"`, `"ftp"`, or `"ftps"`
+
+**Optional Fields:**
+- `port`: Port number (defaults: SFTP=2222, FTPS=2122, FTP=2121)
+- `max_file_size_mb`: Maximum file size in MB (default: 100MB, max: 100MB)
+- `allowed_extensions`: Array of allowed file extensions (default: `["jpg", "jpeg", "png"]`)
+
+**Push Webcam Example (SFTP):**
+```json
+{
+  "name": "Runway Camera (Push)",
+  "type": "push",
+  "position": "north",
+  "partner_name": "Partner Name",
+  "partner_link": "https://partner.com",
+  "refresh_seconds": 60,
+  "push_config": {
+    "protocol": "sftp",
+    "port": 2222,
+    "username": "kspbCam0Push01",
+    "password": "SecurePass1234",
+    "max_file_size_mb": 10,
+    "allowed_extensions": ["jpg", "jpeg"]
+  }
+}
+```
+
+**Push Webcam Example (FTPS - Secure FTP):**
+```json
+{
+  "name": "Secure Camera (Push)",
+  "type": "push",
+  "position": "south",
+  "partner_name": "Partner Name",
+  "partner_link": "https://partner.com",
+  "refresh_seconds": 120,
+  "push_config": {
+    "protocol": "ftps",
+    "port": 2122,
+    "username": "kspbCam1Push02",
+    "password": "AnotherPass5678",
+    "max_file_size_mb": 20
+  }
+}
+```
+
+**Push Webcam Example (FTP - Plain):**
+```json
+{
+  "name": "Legacy Camera (Push)",
+  "type": "push",
+  "position": "east",
+  "partner_name": "Partner Name",
+  "partner_link": "https://partner.com",
+  "push_config": {
+    "protocol": "ftp",
+    "port": 2121,
+    "username": "kspbCam2Push03",
+    "password": "LegacyPass9012"
+  }
+}
+```
+
+#### Connection Details
+
+After configuration, the system automatically creates SFTP/FTP users. Cameras should connect using:
+
+- **SFTP**: 
+  - Host: Your server hostname (e.g., `aviationwx.org`)
+  - Port: 2222 (or custom port from `push_config.port`)
+  - Username: From `push_config.username`
+  - Password: From `push_config.password`
+  - Directory: Automatically chrooted to the camera's upload directory
+
+- **FTPS (Secure FTP)**:
+  - Host: Your server hostname (e.g., `aviationwx.org`)
+  - Port: 2122 (or custom port from `push_config.port`)
+  - Username: From `push_config.username`
+  - Password: From `push_config.password`
+  - Encryption: TLS/SSL required
+  - Directory: Automatically chrooted to the camera's upload directory
+
+- **FTP (Plain)**:
+  - Host: Your server hostname (e.g., `aviationwx.org`)
+  - Port: 2121 (or custom port from `push_config.port`)
+  - Username: From `push_config.username`
+  - Password: From `push_config.password`
+  - Directory: Automatically chrooted to the camera's upload directory
+
+#### Security Features
+
+- **Chrooted Directories**: Each camera is restricted to its own upload directory
+- **Unique Credentials**: Each camera gets its own username/password
+- **File Validation**: Uploaded files are validated for format, size, and integrity
+- **Automatic Cleanup**: Old files are automatically removed after processing
+- **IP Allowlisting**: Optional IP-based access control (see global settings)
+
+#### Processing Behavior
+
+- **Refresh Interval**: Controlled by `refresh_seconds` (minimum 60 seconds)
+- **File Detection**: System checks for new files every minute
+- **File Stability**: Waits for files to be fully written before processing
+- **Format Support**: JPEG and PNG images are supported
+- **Automatic WEBP**: WEBP versions are generated automatically for faster loading
+
+#### Troubleshooting
+
+- **Images not appearing**: Check that the camera is uploading to the correct directory and that files are valid JPEG/PNG images
+- **Connection issues**: Verify credentials, port numbers, and firewall rules
+- **File size errors**: Ensure uploaded files are within the `max_file_size_mb` limit
+- **Processing delays**: The system processes uploads every minute; allow up to 60 seconds for images to appear
+
 ## Dynamic Features
 ### Configuration Cache (Automatic)
 - The configuration (`airports.json`) is cached in APCu for performance.

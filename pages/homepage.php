@@ -115,11 +115,25 @@ $ogImage = file_exists($aboutPhotoWebp)
             gap: 2rem;
             margin: 2rem 0;
         }
+        .features-webcam {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+        @media (min-width: 900px) {
+            .features-webcam {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
         .feature-card {
             background: #f8f9fa;
             padding: 2rem;
             border-radius: 8px;
             border-left: 4px solid #0066cc;
+            min-width: 0;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
         }
         .feature-card h3 {
             margin-top: 0;
@@ -216,19 +230,19 @@ $ogImage = file_exists($aboutPhotoWebp)
         }
         .flight-condition.vfr {
             background: #d4edda;
-            color: #155724;
+            color: #1e7e34; /* Green - VFR: Visibility > 5 miles, Ceiling > 3,000 feet */
         }
         .flight-condition.mvfr {
-            background: #fff3cd;
-            color: #856404;
+            background: #cce5ff;
+            color: #0066cc; /* Blue - MVFR: Visibility 3-5 miles, Ceiling 1,000-3,000 feet */
         }
         .flight-condition.ifr {
             background: #f8d7da;
-            color: #721c24;
+            color: #dc3545; /* Red - IFR: Visibility 1-3 miles, Ceiling 500-1,000 feet */
         }
         .flight-condition.lifr {
-            background: #d1ecf1;
-            color: #0c5460;
+            background: #ffccff;
+            color: #ff00ff; /* Magenta - LIFR: Visibility < 1 mile, Ceiling < 500 feet */
         }
         .flight-condition.unknown {
             background: #e9ecef;
@@ -434,6 +448,43 @@ $ogImage = file_exists($aboutPhotoWebp)
             border-radius: 3px;
             font-family: monospace;
             font-size: 0.9em;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            display: inline-block;
+            max-width: 100%;
+        }
+        .feature-card p {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+        }
+        .feature-card p:last-child {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.6;
+        }
+        .feature-card code {
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            white-space: normal;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .feature-card p code {
+            display: inline;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+        }
+        /* Make example paragraphs wrap URLs better */
+        .feature-card p {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+        /* Ensure code in paragraphs can shrink */
+        .feature-card p code {
+            max-width: calc(100% - 0.8rem);
+            min-width: 0;
         }
     </style>
 </head>
@@ -735,7 +786,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <p>Getting your airport on AviationWX is straightforward and free. Here's what you need:</p>
                 <ul style="margin: 1rem 0 0 2rem;">
                     <li>A local weather station (Tempest, Ambient Weather, or WeatherLink) - we'll help you set it up</li>
-                    <li>Optional webcam feeds (MJPEG streams or static images)</li>
+                    <li>Optional webcam feeds (MJPEG streams, RTSP streams, static images, or push uploads via SFTP/FTP/FTPS)</li>
                     <li>Basic airport metadata (runways, frequencies, services)</li>
                 </ul>
                 <p style="margin-top: 1.5rem; font-weight: 500;">We handle all the technical setup and provide you with a dedicated subdomain using your ICAO airport code: <code>ICAO.aviationwx.org</code> (e.g., <code>KSPB.aviationwx.org</code>)</p>
@@ -806,25 +857,30 @@ $ogImage = file_exists($aboutPhotoWebp)
 
         <section>
             <h2>Supported Webcam Sources & Formats</h2>
-            <div class="features">
+            <div class="features features-webcam">
                 <div class="feature-card">
                     <h3>MJPEG Streams</h3>
                     <p>Motion JPEG streams that automatically extract frames. Works with most IP cameras and webcam servers.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">Example: <code>https://camera.example.com/video.mjpg</code></p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem; word-break: break-word; overflow-wrap: break-word;">Example: <code style="word-break: break-all; overflow-wrap: anywhere; display: inline-block; max-width: 100%;">https://camera.example.com/video.mjpg</code></p>
                 </div>
                 <div class="feature-card">
                     <h3>Static Images</h3>
                     <p>JPEG or PNG images that are automatically downloaded and cached. PNG images are converted to JPEG for consistency.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">Example: <code>https://camera.example.com/webcam.jpg</code></p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem; word-break: break-word; overflow-wrap: break-word;">Example: <code style="word-break: break-all; overflow-wrap: anywhere; display: inline-block; max-width: 100%;">https://camera.example.com/webcam.jpg</code></p>
                 </div>
                 <div class="feature-card">
                     <h3>RTSP/RTSPS Streams</h3>
                     <p>Real Time Streaming Protocol streams (including secure RTSPS over TLS) captured via ffmpeg. Supports TCP and UDP transport.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">Example: <code>rtsp://camera.example.com:554/stream</code></p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem; word-break: break-word; overflow-wrap: break-word;">Example: <code style="word-break: break-all; overflow-wrap: anywhere; display: inline-block; max-width: 100%;">rtsp://camera.example.com:554/stream</code></p>
+                </div>
+                <div class="feature-card">
+                    <h3>Push Uploads (SFTP/FTP/FTPS)</h3>
+                    <p>Cameras can push images directly to the server via SFTP, FTP, or FTPS. Perfect for cameras behind firewalls or on private networks that can't be accessed directly.</p>
+                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">The system automatically processes uploaded images and makes them available on the website. Each camera gets dedicated credentials and upload directory.</p>
                 </div>
             </div>
             <p style="text-align: center; color: #555; margin-top: 1rem; font-size: 0.9rem;">
-                The system automatically detects the source type from the URL format. All formats are cached and optimized for fast loading.
+                The system automatically detects the source type from the URL format (for pull-based webcams). Push webcams upload directly via SFTP/FTP/FTPS. All formats are cached and optimized for fast loading.
             </p>
         </section>
 
