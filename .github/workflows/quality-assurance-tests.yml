@@ -34,13 +34,10 @@ jobs:
             echo "✓ Created config/airports.json from example"
           fi
       
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+      # Note: Docker layer caching removed from setup-docker job
+      # This job only sets up the environment and doesn't build images,
+      # so caching would create a path that doesn't exist, causing warnings.
+      # If Docker builds are needed in the future, add caching to the job that actually builds.
 
   performance-tests:
     name: Performance Tests
