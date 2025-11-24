@@ -135,14 +135,18 @@ if ($envConfigPath) {
     $success[] = "ℹ️ CONFIG_PATH not set (using default)";
 }
 
-$webcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT');
-$weatherRefresh = getenv('WEATHER_REFRESH_DEFAULT');
-if ($webcamRefresh !== false) {
-    $success[] = "✅ WEBCAM_REFRESH_DEFAULT: {$webcamRefresh}s";
-}
-if ($weatherRefresh !== false) {
-    $success[] = "✅ WEATHER_REFRESH_DEFAULT: {$weatherRefresh}s";
-}
+// Show global config values (from airports.json config section)
+$webcamRefresh = getDefaultWebcamRefresh();
+$weatherRefresh = getDefaultWeatherRefresh();
+$defaultTimezone = getDefaultTimezone();
+$baseDomain = getBaseDomain();
+$maxStaleHours = getMaxStaleHours();
+
+$success[] = "✅ Global Config - Webcam Refresh Default: {$webcamRefresh}s";
+$success[] = "✅ Global Config - Weather Refresh Default: {$weatherRefresh}s";
+$success[] = "✅ Global Config - Default Timezone: {$defaultTimezone}";
+$success[] = "✅ Global Config - Base Domain: {$baseDomain}";
+$success[] = "✅ Global Config - Max Stale Hours: {$maxStaleHours}";
 
 // Check ffmpeg availability and RTSP support
 $ffmpegCheck = @shell_exec('ffmpeg -version 2>&1');

@@ -64,6 +64,65 @@ function isProduction() {
 }
 
 /**
+ * Get global configuration value with fallback to default
+ * @param string $key Configuration key
+ * @param mixed $default Default value if not set
+ * @return mixed Configuration value or default
+ */
+function getGlobalConfig($key, $default = null) {
+    $config = loadConfig();
+    if ($config === null) {
+        return $default;
+    }
+    
+    if (isset($config['config']) && is_array($config['config']) && isset($config['config'][$key])) {
+        return $config['config'][$key];
+    }
+    
+    return $default;
+}
+
+/**
+ * Get default timezone from global config
+ * @return string Timezone identifier (default: UTC)
+ */
+function getDefaultTimezone() {
+    return getGlobalConfig('default_timezone', 'UTC');
+}
+
+/**
+ * Get base domain from global config
+ * @return string Base domain (default: aviationwx.org)
+ */
+function getBaseDomain() {
+    return getGlobalConfig('base_domain', 'aviationwx.org');
+}
+
+/**
+ * Get maximum stale hours from global config
+ * @return int Maximum stale hours (default: 3)
+ */
+function getMaxStaleHours() {
+    return (int)getGlobalConfig('max_stale_hours', 3);
+}
+
+/**
+ * Get default webcam refresh interval from global config
+ * @return int Default webcam refresh in seconds (default: 60)
+ */
+function getDefaultWebcamRefresh() {
+    return (int)getGlobalConfig('webcam_refresh_default', 60);
+}
+
+/**
+ * Get default weather refresh interval from global config
+ * @return int Default weather refresh in seconds (default: 60)
+ */
+function getDefaultWeatherRefresh() {
+    return (int)getGlobalConfig('weather_refresh_default', 60);
+}
+
+/**
  * Load airport configuration with caching
  * Uses APCu cache if available, falls back to static variable for request lifetime
  * Automatically invalidates cache when file modification time changes
@@ -173,6 +232,12 @@ function loadConfig($useCache = true) {
 
     // Basic schema validation (lightweight)
     $errors = [];
+    
+    // Validate global config section if present (optional)
+    if (isset($config['config']) && !is_array($config['config'])) {
+        $errors[] = 'Root.config must be an object';
+    }
+    
     if (!isset($config['airports']) || !is_array($config['airports'])) {
         $errors[] = 'Root.airports must be an object';
     } else {

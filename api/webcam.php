@@ -287,7 +287,7 @@ if (!in_array($fmt, ['jpg', 'jpeg', 'webp'])) {
 }
 
 // Determine refresh threshold
-$defaultWebcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT') !== false ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 60;
+$defaultWebcamRefresh = getDefaultWebcamRefresh();
 $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_seconds']) ? intval($config['airports'][$airportId]['webcam_refresh_seconds']) : $defaultWebcamRefresh;
 $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 

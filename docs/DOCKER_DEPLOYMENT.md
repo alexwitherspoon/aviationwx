@@ -109,12 +109,23 @@ curl http://localhost:8080
 ### 6.1 Configure App Settings
 
 - `airports.json` is automatically mounted from `/home/aviationwx/airports.json` (deployed by secrets repo)
-- Control refresh cadences via environment variables (defaults are 60s):
-  ```bash
-  export WEBCAM_REFRESH_DEFAULT=60
-  export WEATHER_REFRESH_DEFAULT=60
+- Control refresh cadences via the `config` section in `airports.json` (defaults are 60s):
+  ```json
+  {
+    "config": {
+      "webcam_refresh_default": 60,
+      "weather_refresh_default": 60
+    },
+    "airports": {
+      "kspb": {
+        "webcam_refresh_seconds": 30,
+        "weather_refresh_seconds": 30,
+        ...
+      }
+    }
+  }
   ```
-  You can also set per-airport values in `airports.json` with `webcam_refresh_seconds` and `weather_refresh_seconds`.
+  You can set per-airport values with `webcam_refresh_seconds` and `weather_refresh_seconds` in each airport's configuration.
 
 ### 6.2 RTSP/RTSPS Snapshot Support
 
