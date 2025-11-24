@@ -584,6 +584,33 @@ const RUNWAYS = <?php
 
 // Production logging removed - only log errors in console
 
+/**
+ * Get timezone abbreviation for the airport's timezone
+ * Uses Intl.DateTimeFormat to get the correct abbreviation (e.g., PST, PDT, EST, EDT)
+ * Automatically handles DST transitions based on the current date
+ * @param {Date} date - Optional date to use for timezone calculation (defaults to now)
+ * @returns {string} Timezone abbreviation (e.g., "PST", "PDT", "EST", "EDT") or "--" on error
+ */
+function getTimezoneAbbreviation(date = null) {
+    const now = date || new Date();
+    
+    // Get airport timezone, default to 'America/Los_Angeles' if not available
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || 'America/Los_Angeles';
+    
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            timeZoneName: 'short'
+        });
+        const parts = formatter.formatToParts(now);
+        const timezonePart = parts.find(part => part.type === 'timeZoneName');
+        return timezonePart ? timezonePart.value : '--';
+    } catch (error) {
+        console.error('[Timezone] Error getting timezone abbreviation:', error);
+        return '--';
+    }
+}
+
 // Update clocks
 function updateClocks() {
     const now = new Date();
@@ -603,15 +630,9 @@ function updateClocks() {
     document.getElementById('localTime').textContent = localTime;
     
     // Get timezone abbreviation and UTC offset (e.g., PST, PDT, EST, EDT)
-    // Use Intl.DateTimeFormat for reliable timezone abbreviation
+    // Use the reusable function
     try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            timeZoneName: 'short'
-        });
-        const parts = formatter.formatToParts(now);
-        const timezonePart = parts.find(part => part.type === 'timeZoneName');
-        const timezoneAbbr = timezonePart ? timezonePart.value : '--';
+        const timezoneAbbr = getTimezoneAbbreviation(now);
         
         // Calculate UTC offset in hours
         // Use a simple approach: format the same moment in both UTC and local timezone
@@ -1244,14 +1265,14 @@ function displayWeather(weather) {
                     <span style="font-size: 1.2rem;">🌅</span>
                     <span class="label">Sunrise</span>
                 </span>
-                <span class="weather-value">${weather.sunrise || '--'} <span style="font-size: 0.75rem; color: #555;">PDT</span></span>
+                <span class="weather-value">${weather.sunrise || '--'} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
             </div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌇</span>
                     <span class="label">Sunset</span>
                 </span>
-                <span class="weather-value">${weather.sunset || '--'} <span style="font-size: 0.75rem; color: #555;">PDT</span></span>
+                <span class="weather-value">${weather.sunset || '--'} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
             </div>
         </div>
         

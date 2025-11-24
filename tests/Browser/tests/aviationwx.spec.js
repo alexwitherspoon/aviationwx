@@ -678,6 +678,90 @@ test.describe('Aviation Weather Dashboard', () => {
     expect(zuluTimeDiff).toBeLessThanOrEqual(2); // Allow 2 seconds difference
   });
 
+  test('should display sunrise and sunset times with correct timezone abbreviation', async ({ page }) => {
+    // Wait for weather data to load
+    await page.waitForSelector('#weather-data', { state: 'visible', timeout: 10000 });
+    
+    // Wait for weather data to be populated (not just the loading state)
+    await page.waitForFunction(
+      () => {
+        const weatherData = document.getElementById('weather-data');
+        if (!weatherData) return false;
+        
+        // Check if sunrise/sunset elements exist
+        const sunriseElement = weatherData.querySelector('.sunrise-sunset');
+        if (!sunriseElement) return false;
+        
+        // Check that sunrise time is displayed (not just "--")
+        const sunriseText = sunriseElement.textContent || '';
+        return sunriseText.includes('Sunrise') && !sunriseText.includes('-- --');
+      },
+      { timeout: 15000 }
+    );
+    
+    // Get the sunrise and sunset elements
+    const sunriseSunsetElements = await page.$$('.sunrise-sunset');
+    expect(sunriseSunsetElements.length).toBeGreaterThanOrEqual(2);
+    
+    // Get sunrise element text
+    const sunriseText = await page.textContent('.sunrise-sunset:first-of-type');
+    expect(sunriseText).toBeTruthy();
+    expect(sunriseText).toContain('Sunrise');
+    
+    // Get sunset element text
+    const sunsetText = await page.textContent('.sunrise-sunset:last-of-type');
+    expect(sunsetText).toBeTruthy();
+    expect(sunsetText).toContain('Sunset');
+    
+    // Extract timezone abbreviation from sunrise/sunset display
+    // The format should be: "HH:MM TZ" where TZ is the timezone abbreviation
+    const sunriseMatch = sunriseText.match(/(\d{2}:\d{2})\s+([A-Z]{3,4})/);
+    const sunsetMatch = sunsetText.match(/(\d{2}:\d{2})\s+([A-Z]{3,4})/);
+    
+    expect(sunriseMatch).toBeTruthy();
+    expect(sunsetMatch).toBeTruthy();
+    
+    const sunriseTimezone = sunriseMatch[2];
+    const sunsetTimezone = sunsetMatch[2];
+    
+    // Both should have the same timezone abbreviation
+    expect(sunriseTimezone).toBe(sunsetTimezone);
+    
+    // Verify the timezone abbreviation matches the airport's timezone
+    // The test airport (kspb) uses America/Los_Angeles timezone
+    // It should be either PST (Pacific Standard Time) or PDT (Pacific Daylight Time)
+    // depending on the current date (DST)
+    const validTimezones = ['PST', 'PDT'];
+    expect(validTimezones).toContain(sunriseTimezone);
+    
+    // Verify the timezone abbreviation matches what's displayed in the clock
+    const clockTimezoneText = await page.textContent('#localTimezone');
+    expect(clockTimezoneText).toBeTruthy();
+    
+    // Extract timezone abbreviation from clock (format: "PST (UTC-8)" or "PDT (UTC-7)")
+    const clockTimezoneMatch = clockTimezoneText.match(/^([A-Z]{3,4})/);
+    expect(clockTimezoneMatch).toBeTruthy();
+    const clockTimezone = clockTimezoneMatch[1];
+    
+    // The sunrise/sunset timezone should match the clock timezone
+    expect(sunriseTimezone).toBe(clockTimezone);
+    
+    // Verify the timezone is not hardcoded to "PDT"
+    // It should dynamically change based on DST
+    expect(sunriseTimezone).toMatch(/^[A-Z]{3,4}$/);
+    
+    // Verify getTimezoneAbbreviation function exists and works
+    const timezoneAbbr = await page.evaluate(() => {
+      if (typeof getTimezoneAbbreviation === 'function') {
+        return getTimezoneAbbreviation();
+      }
+      return null;
+    });
+    
+    expect(timezoneAbbr).toBeTruthy();
+    expect(timezoneAbbr).toBe(sunriseTimezone);
+  });
+
   test('should have all script tags properly closed', async ({ page }) => {
     // Get the page HTML source
     const html = await page.content();
