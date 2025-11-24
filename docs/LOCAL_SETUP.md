@@ -297,10 +297,16 @@ Once local setup is complete, verify:
 
 ## Environment Variables Explained
 
-See `env.example` for full list. Key variables:
+The `.env` file is **only for Docker/infrastructure configuration**, not application settings.
+
+See `config/env.example` for full list. Key Docker/infrastructure variables:
 
 - `DOMAIN`: Your domain name (aviationwx.org)
 - `APP_PORT`: Local port to use (default: 8080)
 - `PHP_MEMORY_LIMIT`: PHP memory (default: 256M)
+- `COMPOSE_PROJECT_NAME`: Docker Compose project name
+- `SSL_ENABLED`: Enable SSL for local dev (default: false)
+
+**Note:** Application defaults (timezone, refresh intervals, etc.) are configured in the `config` section of `airports.json`, not in `.env`. See [CONFIGURATION.md](CONFIGURATION.md) for details.
 - `CACHE_ENABLED`: Enable caching (default: true)
 

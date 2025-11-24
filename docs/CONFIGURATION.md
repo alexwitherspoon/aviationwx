@@ -2,7 +2,42 @@
 
 ## Overview
 
-AviationWX supports dynamic configuration of airports via `airports.json`. Each airport can be configured with its own weather source, webcams, and metadata.
+AviationWX supports dynamic configuration via a single `airports.json` file. This file contains:
+- **Global Configuration** - Application-wide settings (timezone defaults, domain, refresh intervals)
+- **Airport Configuration** - Individual airport settings (weather sources, webcams, metadata)
+
+All configuration lives in this single read-only file, making deployment and management simple.
+
+## Configuration File Structure
+
+The `airports.json` file has two main sections:
+
+```json
+{
+  "config": {
+    "default_timezone": "UTC",
+    "base_domain": "aviationwx.org",
+    "max_stale_hours": 3,
+    "webcam_refresh_default": 60,
+    "weather_refresh_default": 60
+  },
+  "airports": {
+    "airportid": { ... }
+  }
+}
+```
+
+### Global Configuration Section
+
+The `config` section (optional) contains application-wide defaults:
+
+- **`default_timezone`** - Default timezone for airports without timezone specified (default: `UTC`)
+- **`base_domain`** - Base domain for airport subdomains (default: `aviationwx.org`)
+- **`max_stale_hours`** - Maximum stale data threshold in hours (default: `3`)
+- **`webcam_refresh_default`** - Default webcam refresh interval in seconds (default: `60`)
+- **`weather_refresh_default`** - Default weather refresh interval in seconds (default: `60`)
+
+If the `config` section is omitted, sensible defaults are used.
 
 ## Supported Weather Sources
 
@@ -195,7 +230,7 @@ The `timezone` field in each airport configuration determines:
 
 ### Default Behavior
 
-If not specified, defaults to `America/Los_Angeles`. The timezone setting ensures that:
+If not specified, defaults to `UTC` (configurable via `DEFAULT_TIMEZONE` environment variable). The timezone setting ensures that:
 - Daily statistics (high/low temps, peak gust) reset at local midnight
 - Sunrise/sunset times are displayed in the airport's local time
 - "Today's" values reflect the local calendar day
@@ -212,6 +247,21 @@ Use standard PHP timezone identifiers. Common examples:
 - `UTC` (Coordinated Universal Time)
 
 For a complete list, see [PHP's timezone list](https://www.php.net/manual/en/timezones.php).
+
+### Global Configuration
+
+The default timezone is set in the global `config` section of `airports.json`:
+
+```json
+{
+  "config": {
+    "default_timezone": "UTC"
+  },
+  "airports": { ... }
+}
+```
+
+This allows all configuration to live in a single file, making deployment and management simpler.
 
 ### Configuration Examples
 
@@ -522,6 +572,25 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
 - **File size errors**: Ensure uploaded files are within the `max_file_size_mb` limit
 - **Processing delays**: The system processes uploads every minute; allow up to 60 seconds for images to appear
 
+## Refresh Intervals
+
+Both `webcam_refresh_seconds` and `weather_refresh_seconds` can be configured per airport in `airports.json`. If not specified, the following defaults are used:
+
+- **Webcam Refresh:** 60 seconds (from `config.webcam_refresh_default`)
+- **Weather Refresh:** 60 seconds (from `config.weather_refresh_default`)
+
+These defaults are set in the global `config` section:
+
+```json
+{
+  "config": {
+    "webcam_refresh_default": 60,
+    "weather_refresh_default": 60
+  },
+  "airports": { ... }
+}
+```
+
 ## Dynamic Features
 ### Configuration Cache (Automatic)
 - The configuration (`airports.json`) is cached in APCu for performance.
@@ -540,6 +609,35 @@ The homepage (`homepage.php`) automatically displays all airports from `airports
 - If Tempest/Ambient/WeatherLink lacks visibility/ceiling, METAR data automatically supplements
 - Flight category (VFR/IFR/MVFR) calculated from ceiling and visibility
 - All aviation metrics computed regardless of source
+
+## Global Configuration Reference
+
+All application defaults are configured in the `config` section of `airports.json`. This consolidates all configuration into a single file, making deployment and management simpler.
+
+### Configuration Options
+
+- **`default_timezone`** - Default timezone for airports without timezone specified (default: `UTC`)
+- **`base_domain`** - Base domain for airport subdomains (default: `aviationwx.org`)
+- **`max_stale_hours`** - Maximum stale data threshold in hours (default: `3`)
+- **`webcam_refresh_default`** - Default webcam refresh interval in seconds (default: `60`)
+- **`weather_refresh_default`** - Default weather refresh interval in seconds (default: `60`)
+
+### Example Global Configuration
+
+```json
+{
+  "config": {
+    "default_timezone": "UTC",
+    "base_domain": "aviationwx.org",
+    "max_stale_hours": 3,
+    "webcam_refresh_default": 60,
+    "weather_refresh_default": 60
+  },
+  "airports": { ... }
+}
+```
+
+**Note:** The `config` section is optional. If omitted, sensible defaults are used.
 
 ## Testing Locally
 
