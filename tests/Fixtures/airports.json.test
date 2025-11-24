@@ -1,4 +1,11 @@
 {
+  "config": {
+    "default_timezone": "UTC",
+    "base_domain": "aviationwx.org",
+    "max_stale_hours": 3,
+    "webcam_refresh_default": 60,
+    "weather_refresh_default": 60
+  },
   "airports": {
     "kspb": {
       "name": "Scappoose Airport",

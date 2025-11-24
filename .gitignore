@@ -36,6 +36,9 @@ coverage/
 .env.local
 .env.*.local
 
+# Auto-generated configuration files
+config/nginx.conf
+
 # Node.js (for Playwright tests)
 node_modules/
 npm-debug.log*
