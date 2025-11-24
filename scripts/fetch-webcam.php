@@ -752,7 +752,7 @@ foreach ($config['airports'] as $airportId => $airport) {
     } else {
         echo "Airport: {$airportId} ({$airport['name']})\n";
     }
-    $defaultWebcamRefresh = getenv('WEBCAM_REFRESH_DEFAULT') !== false ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 60;
+    $defaultWebcamRefresh = getDefaultWebcamRefresh();
     $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
     
     $airportStats = [

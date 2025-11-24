@@ -688,8 +688,8 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         exit;
     }
 
-    // Weather refresh interval (per-airport, with env default)
-    $defaultWeatherRefresh = getenv('WEATHER_REFRESH_DEFAULT') !== false ? intval(getenv('WEATHER_REFRESH_DEFAULT')) : 60;
+    // Weather refresh interval (per-airport, with global config default)
+    $defaultWeatherRefresh = getDefaultWeatherRefresh();
     $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) ? intval($airport['weather_refresh_seconds']) : $defaultWeatherRefresh;
 
     // Cached weather path
@@ -1921,7 +1921,7 @@ function calculateDensityAltitude($weather, $airport) {
 }
 
 /**
- * Get airport timezone from config, with fallback to America/Los_Angeles
+ * Get airport timezone from config, with fallback to global default
  */
 function getAirportTimezone($airport) {
     // Check if timezone is specified in airport config
@@ -1929,8 +1929,8 @@ function getAirportTimezone($airport) {
         return $airport['timezone'];
     }
     
-    // Default fallback (can be overridden per airport)
-    return 'America/Los_Angeles';
+    // Default fallback: use global config default
+    return getDefaultTimezone();
 }
 
 /**

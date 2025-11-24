@@ -9,7 +9,10 @@ $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount >
 $pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($airport['icao']) . ') - Live Webcams & Runway Conditions';
 $pageDescription = 'Live webcams and real-time runway conditions for ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($airport['icao']) . '). ' . $webcamText . 'current weather, wind, visibility, and aviation metrics. Free for pilots.';
 $pageKeywords = htmlspecialchars($airport['icao']) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($airport['icao']) . ' weather, airport webcam, pilot weather, aviation weather';
-$airportUrl = 'https://' . $airportId . '.aviationwx.org';
+// Get base domain from global config
+require_once __DIR__ . '/../lib/config.php';
+$baseDomain = getBaseDomain();
+$airportUrl = 'https://' . $airportId . '.' . $baseDomain;
 $canonicalUrl = $airportUrl; // Always use subdomain URL for canonical
 $ogImage = null; // Will be set to first webcam if available
 
@@ -74,7 +77,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     <!-- Preconnect to same origin for faster CSS loading -->
     <?php
     $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
-    $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
+    // Get base domain from global config
+    $baseDomain = getBaseDomain();
+    $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : $baseDomain;
     ?>
     <link rel="preconnect" href="<?= $protocol ?>://<?= htmlspecialchars($host) ?>">
     
@@ -571,6 +576,11 @@ const AIRPORT_DATA = <?php
         echo $airportJson;
     }
 ?>;
+// Default timezone (from global config)
+const DEFAULT_TIMEZONE = <?php
+    $defaultTz = getDefaultTimezone();
+    echo json_encode($defaultTz, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>;
 const RUNWAYS = <?php
     // Defensive JSON encoding with error handling
     $runwaysJson = json_encode($airport['runways'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -594,8 +604,9 @@ const RUNWAYS = <?php
 function getTimezoneAbbreviation(date = null) {
     const now = date || new Date();
     
-    // Get airport timezone, default to 'America/Los_Angeles' if not available
-    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || 'America/Los_Angeles';
+    // Get airport timezone, default to UTC if not available (configurable via DEFAULT_TIMEZONE)
+    const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
     
     try {
         const formatter = new Intl.DateTimeFormat('en-US', {
@@ -615,8 +626,9 @@ function getTimezoneAbbreviation(date = null) {
 function updateClocks() {
     const now = new Date();
     
-    // Get airport timezone, default to 'America/Los_Angeles' if not available
-    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || 'America/Los_Angeles';
+    // Get airport timezone, default to UTC if not available (configurable via DEFAULT_TIMEZONE)
+    const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
     
     // Format local time in airport's timezone
     const localTimeOptions = {
@@ -1085,9 +1097,14 @@ async function fetchWeather(forceRefresh = false) {
     try {
         isFetchingWeather = true;
         
-        // Check if existing data is stale (>20 minutes old)
-        // If so, force a refresh to bypass cache
-        const shouldForceRefresh = forceRefresh || (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > 20 * 60 * 1000);
+        // Check if existing data is stale (older than 2x refresh interval)
+        // Calculate force refresh threshold based on weather refresh interval
+        const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+            ? AIRPORT_DATA.weather_refresh_seconds * 1000 
+            : 60000; // Default 60 seconds
+        // Force refresh if data is older than 2x the refresh interval
+        const forceRefreshThreshold = weatherRefreshMs * 2;
+        const shouldForceRefresh = forceRefresh || (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > forceRefreshThreshold);
         
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
@@ -1162,10 +1179,15 @@ async function fetchWeather(forceRefresh = false) {
                 if (window.staleRefreshTimer) {
                     clearTimeout(window.staleRefreshTimer);
                 }
-                // Schedule a refresh with cache bypass in 30 seconds
+                // Schedule a refresh with cache bypass
+                // Use half of weather refresh interval, minimum 30 seconds
+                const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+                    ? AIRPORT_DATA.weather_refresh_seconds * 1000 
+                    : 60000; // Default 60 seconds
+                const staleRefreshDelay = Math.max(30000, weatherRefreshMs / 2);
                 window.staleRefreshTimer = setTimeout(() => {
                     fetchWeather(true); // Force refresh
-                }, 30000);
+                }, staleRefreshDelay);
             } else {
                 // Clear stale refresh timer if we got fresh data
                 if (window.staleRefreshTimer) {
@@ -1720,7 +1742,8 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
 
 // Reload webcam images using per-camera intervals
 <?php foreach ($airport['webcams'] as $index => $cam): 
-    $defaultWebcamRefresh = 60;
+    // Get webcam refresh from config with global config fallback
+    $defaultWebcamRefresh = getDefaultWebcamRefresh();
     $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
     $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 ?>
@@ -1774,12 +1797,17 @@ function batchRefreshAllTimestamps() {
 // Refresh all timestamps every 30 seconds (batched)
 setInterval(batchRefreshAllTimestamps, 30000);
 
-// Fetch weather data every minute
+// Fetch weather data using airport's configured refresh interval
+// Calculate weather refresh interval from airport config
+const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+    ? AIRPORT_DATA.weather_refresh_seconds * 1000 
+    : 60000; // Default 60 seconds
+
 // Delay initial fetch to avoid competing with LCP image load
 setTimeout(() => {
     fetchWeather();
 }, 500);
-setInterval(fetchWeather, 60000);
+setInterval(fetchWeather, weatherRefreshMs);
 
 // Handle webcam image load errors - show placeholder image
 function handleWebcamError(camIndex, img) {

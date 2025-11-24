@@ -28,7 +28,7 @@ function getCameraRefreshSeconds($cam, $airport) {
     if (isset($airport['webcam_refresh_seconds'])) {
         return max(60, intval($airport['webcam_refresh_seconds']));
     }
-    $default = getenv('WEBCAM_REFRESH_DEFAULT') ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 300;
+    $default = getDefaultWebcamRefresh();
     return max(60, $default);
 }
 

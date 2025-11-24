@@ -367,10 +367,11 @@ function checkAirportHealth($airportId, $airport) {
         $weatherAge = time() - filemtime($weatherCacheFile);
         $weatherRefresh = isset($airport['weather_refresh_seconds']) 
             ? intval($airport['weather_refresh_seconds']) 
-            : (getenv('WEATHER_REFRESH_DEFAULT') ? intval(getenv('WEATHER_REFRESH_DEFAULT')) : 60);
+            : getDefaultWeatherRefresh();
         
         // Check if data is fresh, stale, or expired
-        $maxStaleHours = 3;
+        // Get stale threshold from global config
+        $maxStaleHours = getMaxStaleHours();
         $maxStaleSeconds = $maxStaleHours * 3600;
         
         if ($weatherAge < $weatherRefresh) {
@@ -447,7 +448,7 @@ function checkAirportHealth($airportId, $airport) {
                 ? max(60, intval($cam['refresh_seconds'])) 
                 : (isset($airport['webcam_refresh_seconds']) 
                     ? max(60, intval($airport['webcam_refresh_seconds'])) 
-                    : max(60, (getenv('WEBCAM_REFRESH_DEFAULT') ? intval(getenv('WEBCAM_REFRESH_DEFAULT')) : 300)));
+                    : max(60, getDefaultWebcamRefresh()));
             
             $camStatus = 'operational';
             $camMessage = '';

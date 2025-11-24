@@ -908,8 +908,8 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     <div class="form-group">
                         <label>Refresh Seconds</label>
                         <input type="number" name="webcams[${idx}][refresh_seconds]" 
-                               value="${cam.refresh_seconds || ''}" min="60" placeholder="300">
-                        <div class="help-text">Minimum 60 seconds (default: 300)</div>
+                               value="${cam.refresh_seconds || ''}" min="60" placeholder="60">
+                        <div class="help-text">Minimum 60 seconds (default: 60)</div>
                     </div>
                 </div>
                 
@@ -1141,8 +1141,8 @@ function renderWebcamForm($idx, $cam) {
             <div class="form-group">
                 <label>Refresh Seconds</label>
                 <input type="number" name="webcams[<?= $idx ?>][refresh_seconds]" 
-                       value="<?= htmlspecialchars($cam['refresh_seconds'] ?? '') ?>" min="60" placeholder="300">
-                <div class="help-text">Minimum 60 seconds (default: 300)</div>
+                       value="<?= htmlspecialchars($cam['refresh_seconds'] ?? '') ?>" min="60" placeholder="60">
+                <div class="help-text">Minimum 60 seconds (default: 60)</div>
             </div>
         </div>
         
