@@ -292,7 +292,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 </div>
                 <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
             </div>
-            <div id="weather-data" class="weather-grid" style="min-height: 400px;">
+            <div id="weather-data" class="weather-grid">
                 <div class="weather-item loading">
                     <span class="label">Loading...</span>
                 </div>
