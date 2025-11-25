@@ -714,9 +714,9 @@ test.describe('Aviation Weather Dashboard', () => {
     expect(sunsetText).toContain('Sunset');
     
     // Extract timezone abbreviation from sunrise/sunset display
-    // The format should be: "HH:MM TZ" where TZ is the timezone abbreviation
-    const sunriseMatch = sunriseText.match(/(\d{2}:\d{2})\s+([A-Z]{3,4})/);
-    const sunsetMatch = sunsetText.match(/(\d{2}:\d{2})\s+([A-Z]{3,4})/);
+    // The format should be: "H:MM AM/PM TZ" where TZ is the timezone abbreviation
+    const sunriseMatch = sunriseText.match(/(\d{1,2}:\d{2}\s+[AP]M)\s+([A-Z]{3,4})/);
+    const sunsetMatch = sunsetText.match(/(\d{1,2}:\d{2}\s+[AP]M)\s+([A-Z]{3,4})/);
     
     expect(sunriseMatch).toBeTruthy();
     expect(sunsetMatch).toBeTruthy();
