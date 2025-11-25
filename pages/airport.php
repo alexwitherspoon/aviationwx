@@ -283,6 +283,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <h2 style="margin: 0;">Current Conditions</h2>
+                    <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                        <span id="time-format-display">12hr</span>
+                    </button>
                     <button id="temp-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle temperature unit (F/C)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                         <span id="temp-unit-display">°F</span>
                     </button>
@@ -630,10 +633,11 @@ function updateClocks() {
     const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
     const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
     
-    // Format local time in airport's timezone
+    // Format local time in airport's timezone based on user preference
+    const timeFormat = getTimeFormat();
     const localTimeOptions = {
         timeZone: timezone,
-        hour12: false,
+        hour12: timeFormat === '12hr',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
@@ -709,6 +713,46 @@ let weatherLastUpdated = null;
 // Store current weather data globally for toggle re-rendering
 let currentWeatherData = null;
 
+// Time format preference (default to 12hr)
+function getTimeFormat() {
+    const format = localStorage.getItem('aviationwx_time_format');
+    return format || '12hr'; // Default to 12-hour format
+}
+
+function setTimeFormat(format) {
+    localStorage.setItem('aviationwx_time_format', format);
+}
+
+// Format time string (HH:MM or HH:MM:SS) based on preference
+// Input: "07:15" or "07:15:30" (24-hour format)
+// Output: "7:15 AM" or "07:15" based on preference
+function formatTime(timeStr) {
+    if (!timeStr || timeStr === '--') return timeStr;
+    
+    const format = getTimeFormat();
+    if (format === '24hr') {
+        return timeStr; // Already in 24-hour format
+    }
+    
+    // Convert 24-hour to 12-hour format
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1];
+    const seconds = parts[2] || '';
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours === 0 ? 12 : hours; // 0 should be 12
+    
+    if (seconds) {
+        return `${hours}:${minutes}:${seconds} ${ampm}`;
+    } else {
+        return `${hours}:${minutes} ${ampm}`;
+    }
+}
+
 // Temperature unit preference (default to F)
 function getTempUnit() {
     const unit = localStorage.getItem('aviationwx_temp_unit');
@@ -748,7 +792,7 @@ function formatTempSpread(spreadC) {
     }
 }
 
-// Format timestamp as "at h:m:am/pm" using airport's timezone
+// Format timestamp as "at h:m:am/pm" or "at HH:MM" using airport's timezone
 // Returns HTML with styling matching weather-unit class
 function formatTempTimestamp(timestamp) {
     if (timestamp === null || timestamp === undefined) return '';
@@ -760,12 +804,13 @@ function formatTempTimestamp(timestamp) {
         // Create date from timestamp (assumes UTC seconds)
         const date = new Date(timestamp * 1000);
         
-        // Format in airport's local timezone
+        // Format in airport's local timezone based on user preference
+        const timeFormat = getTimeFormat();
         const options = {
             timeZone: timezone,
             hour: 'numeric',
             minute: '2-digit',
-            hour12: true
+            hour12: timeFormat === '12hr'
         };
         
         const formatted = date.toLocaleTimeString('en-US', options);
@@ -941,6 +986,33 @@ function initDistanceUnitToggle() {
     updateToggle();
 }
 
+// Time format toggle handler
+function initTimeFormatToggle() {
+    const toggle = document.getElementById('time-format-toggle');
+    const display = document.getElementById('time-format-display');
+    
+    function updateToggle() {
+        const format = getTimeFormat();
+        display.textContent = format === '24hr' ? '24hr' : '12hr';
+        toggle.title = `Switch to ${format === '24hr' ? '12-hour' : '24-hour'} format`;
+    }
+    
+    toggle.addEventListener('click', () => {
+        const currentFormat = getTimeFormat();
+        const newFormat = currentFormat === '12hr' ? '24hr' : '12hr';
+        setTimeFormat(newFormat);
+        updateToggle();
+        // Update clocks immediately
+        updateClocks();
+        // Re-render weather data with new format if we have weather data
+        if (currentWeatherData) {
+            displayWeather(currentWeatherData);
+        }
+    });
+    
+    updateToggle();
+}
+
 // Initialize temperature unit toggle
 // Try multiple initialization methods to ensure it works
 function initTempToggle() {
@@ -971,6 +1043,20 @@ if (document.getElementById('distance-unit-toggle')) {
         }
     }
     initDistToggle();
+}
+
+// Initialize time format toggle
+if (document.getElementById('time-format-toggle')) {
+    initTimeFormatToggle();
+} else {
+    function initTimeFormatToggleWrapper() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initTimeFormatToggle);
+        } else {
+            initTimeFormatToggle();
+        }
+    }
+    initTimeFormatToggleWrapper();
 }
 
 // Wind speed unit toggle handler
@@ -1287,14 +1373,14 @@ function displayWeather(weather) {
                     <span style="font-size: 1.2rem;">🌅</span>
                     <span class="label">Sunrise</span>
                 </span>
-                <span class="weather-value">${weather.sunrise || '--'} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+                <span class="weather-value">${formatTime(weather.sunrise || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
             </div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌇</span>
                     <span class="label">Sunset</span>
                 </span>
-                <span class="weather-value">${weather.sunset || '--'} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+                <span class="weather-value">${formatTime(weather.sunset || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
             </div>
         </div>
         
@@ -1527,7 +1613,18 @@ function updateWindVisual(weather) {
                 <span style="color: #555;">Today's Peak Gust:</span>
                 <span style="font-weight: bold;">${todaysPeakGust > 0 ? formatWindSpeed(todaysPeakGust) + ' ' + windUnitLabel : '--'}</span>
             </div>
-            ${weather.peak_gust_time ? `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${new Date(weather.peak_gust_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</div>` : ''}
+            ${weather.peak_gust_time ? (() => {
+                const timeFormat = getTimeFormat();
+                const date = new Date(weather.peak_gust_time * 1000);
+                const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || 'America/Los_Angeles';
+                const formatted = date.toLocaleTimeString('en-US', {
+                    timeZone: timezone,
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: timeFormat === '12hr'
+                });
+                return `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${formatted}</div>`;
+            })() : ''}
         </div>
     `;
     
