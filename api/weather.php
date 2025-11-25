@@ -1963,7 +1963,7 @@ function getSunriseTime($airport) {
     $datetime = new DateTime('@' . $sunInfo['sunrise']);
     $datetime->setTimezone(new DateTimeZone($timezone));
     
-    return $datetime->format('H:i');
+    return $datetime->format('g:i A');
 }
 
 /**
@@ -1985,7 +1985,7 @@ function getSunsetTime($airport) {
     $datetime = new DateTime('@' . $sunInfo['sunset']);
     $datetime->setTimezone(new DateTimeZone($timezone));
     
-    return $datetime->format('H:i');
+    return $datetime->format('g:i A');
 }
 
 /**
