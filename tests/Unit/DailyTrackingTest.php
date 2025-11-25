@@ -445,9 +445,9 @@ class DailyTrackingTest extends TestCase
         ]);
         
         $result = getSunriseTime($airport);
-        // Should return time string in HH:MM format or null if no sunrise (polar regions)
+        // Should return time string in H:MM AM/PM format or null if no sunrise (polar regions)
         if ($result !== null) {
-            $this->assertMatchesRegularExpression('/^\d{2}:\d{2}$/', $result);
+            $this->assertMatchesRegularExpression('/^\d{1,2}:\d{2}\s+[AP]M$/', $result);
         }
     }
     
@@ -463,9 +463,9 @@ class DailyTrackingTest extends TestCase
         ]);
         
         $result = getSunsetTime($airport);
-        // Should return time string in HH:MM format or null if no sunset (polar regions)
+        // Should return time string in H:MM AM/PM format or null if no sunset (polar regions)
         if ($result !== null) {
-            $this->assertMatchesRegularExpression('/^\d{2}:\d{2}$/', $result);
+            $this->assertMatchesRegularExpression('/^\d{1,2}:\d{2}\s+[AP]M$/', $result);
         }
     }
     
