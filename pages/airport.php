@@ -260,7 +260,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                             ?>
                             <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp&v=<?= $imgHash ?>">
                             <img id="webcam-<?= $index ?>" 
-                                 src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>" 
+                                 src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>"
+                                 data-initial-timestamp="<?= $mtimeJpg ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
                                  width="1600"
@@ -1718,6 +1719,21 @@ const timestampCheckPending = {};
 const timestampCheckRetries = {}; // Track retry attempts
 const CAM_TS = {}; // In-memory timestamps per camera (no UI field)
 
+// Initialize CAM_TS with server-side timestamps from initial image load
+<?php foreach ($airport['webcams'] as $index => $cam): 
+    $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
+    $initialMtime = 0;
+    foreach (['.jpg', '.webp'] as $ext) {
+        $filePath = $base . $ext;
+        if (file_exists($filePath)) {
+            $initialMtime = filemtime($filePath);
+            break;
+        }
+    }
+?>
+CAM_TS[<?= $index ?>] = <?= $initialMtime ?>;
+<?php endforeach; ?>
+
 // Helper to format relative time
 function formatRelativeTime(seconds) {
     // Handle edge cases
@@ -1921,8 +1937,10 @@ function handleWebcamError(camIndex, img) {
 
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
 function safeSwapCameraImage(camIndex) {
-    const timestampElem = document.getElementById(`update-${camIndex}`); // may be null
-    const currentTs = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : (timestampElem ? parseInt(timestampElem.dataset.timestamp || '0') : 0);
+    // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
+    const imgEl = document.getElementById(`webcam-${camIndex}`);
+    const initialTs = imgEl ? parseInt(imgEl.dataset.initialTimestamp || '0') : 0;
+    const currentTs = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : initialTs;
 
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
@@ -1940,8 +1958,11 @@ function safeSwapCameraImage(camIndex) {
                 return;
             }
             
-            // Only update if timestamp is newer
-            if (newTs <= currentTs) return; // Not newer
+            // Only update if timestamp is newer (strictly greater)
+            if (newTs <= currentTs) {
+                // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
+                return;
+            }
 
             const ready = json.formatReady || {};
             // Match server-side hash calculation: md5(airportId + '_' + camIndex + '_' + fmt + '_' + mtime + '_' + size)
@@ -1990,6 +2011,8 @@ function safeSwapCameraImage(camIndex) {
                 const img = document.getElementById(`webcam-${camIndex}`);
                 if (img) {
                     img.src = jpgUrl;
+                    // Update data attribute to keep it in sync with CAM_TS
+                    img.dataset.initialTimestamp = newTs.toString();
                     if (skeleton) skeleton.style.display = 'none';
                 }
                 CAM_TS[camIndex] = newTs;
