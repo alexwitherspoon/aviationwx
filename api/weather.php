@@ -1358,18 +1358,28 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
 
     // Track and update today's high and low temperatures
-    if ($weatherData['temperature'] !== null) {
-    $currentTemp = $weatherData['temperature'];
-    // Use explicit observation time from primary source (when weather was actually observed)
-    // This is critical for pilot safety - must show accurate observation times
-    // Prefer obs_time_primary (explicit observation time from API), fall back to last_updated_primary (fetch time), then current time
-    $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
-    updateTempExtremes($airportId, $currentTemp, $airport, $obsTimestamp);
-    $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
+    // Always retrieve today's extremes from cache (even if current temp is null)
+    // This prevents the merge function from preserving yesterday's values
+    $currentTemp = $weatherData['temperature'] ?? null;
+    $tempExtremes = getTempExtremes($airportId, $currentTemp ?? 0, $airport);
     $weatherData['temp_high_today'] = $tempExtremes['high'];
     $weatherData['temp_low_today'] = $tempExtremes['low'];
     $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
     $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
+    
+    // Update the cache with current temperature if available
+    if ($currentTemp !== null) {
+        // Use explicit observation time from primary source (when weather was actually observed)
+        // This is critical for pilot safety - must show accurate observation times
+        // Prefer obs_time_primary (explicit observation time from API), fall back to last_updated_primary (fetch time), then current time
+        $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
+        updateTempExtremes($airportId, $currentTemp, $airport, $obsTimestamp);
+        // Re-fetch after update to get the latest values
+        $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
+        $weatherData['temp_high_today'] = $tempExtremes['high'];
+        $weatherData['temp_low_today'] = $tempExtremes['low'];
+        $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
+        $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
     }
 
     // Calculate VFR/IFR/MVFR status
