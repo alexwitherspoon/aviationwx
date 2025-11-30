@@ -334,6 +334,37 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
+     * Test updateTempExtremes - Same low temperature observed at earlier time updates timestamp
+     */
+    public function testUpdateTempExtremes_SameLowAtEarlierTime()
+    {
+        // Use unique airport ID to avoid conflicts with other tests
+        $airportId = 'test_same_low_earlier_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        // First, set a low temperature at a later time
+        $ts1 = time();
+        updateTempExtremes($airportId, 10.0, $airport, $ts1);
+        clearstatcache();
+        $result1 = getTempExtremes($airportId, 10.0, $airport);
+        $this->assertEquals(10.0, $result1['low'], 'Low should be 10.0');
+        $this->assertEquals($ts1, $result1['low_ts'], 'Low timestamp should be ts1');
+        
+        // Now observe the same low temperature at an earlier time
+        // This simulates the case where we process observations out of order
+        $ts2 = $ts1 - 3600; // 1 hour earlier
+        updateTempExtremes($airportId, 10.0, $airport, $ts2);
+        clearstatcache();
+        $result2 = getTempExtremes($airportId, 10.0, $airport);
+        
+        // Low value should remain the same
+        $this->assertEquals(10.0, $result2['low'], 'Low should still be 10.0');
+        // But timestamp should update to the earlier time
+        $this->assertEquals($ts2, $result2['low_ts'], 'Low timestamp should update to earlier time when same value observed earlier');
+        $this->assertLessThan($result1['low_ts'], $result2['low_ts'], 'New timestamp should be earlier than original');
+    }
+    
+    /**
      * Test updateTempExtremes - Multiple airports don't interfere
      */
     public function testUpdateTempExtremes_MultipleAirports()
