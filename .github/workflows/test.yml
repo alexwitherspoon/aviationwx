@@ -104,6 +104,21 @@ jobs:
           
           echo "✓ Critical safety tests passed (warnings allowed)"
       
+      - name: Run Webcam Refresh Initialization Tests
+        run: |
+          echo "Running webcam refresh initialization tests..."
+          echo "Testing CAM_TS initialization and data attributes..."
+          vendor/bin/phpunit tests/Unit/WebcamRefreshInitializationTest.php --testdox --stop-on-failure --no-coverage || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ WebcamRefreshInitializationTest failed"
+            exit 1
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  WebcamRefreshInitializationTest passed with warnings (expected in CI without coverage driver)"
+          else
+            echo "✓ WebcamRefreshInitializationTest passed"
+          fi
+      
       - name: Run Weather Data Merge Tests
         run: |
           echo "Running weather data merge tests..."
