@@ -1,0 +1,27 @@
+# OpenVPN Mock Client Container - For testing OpenVPN server
+FROM alpine:latest
+
+# Install OpenVPN and required tools
+RUN apk add --no-cache \
+    openvpn \
+    iptables \
+    iproute2 \
+    curl \
+    bash
+
+# Create configuration directory
+RUN mkdir -p /etc/openvpn
+
+# Copy entrypoint script
+COPY docker/docker-entrypoint-vpn-client-openvpn.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# OpenVPN uses /dev/net/tun
+# Requires --cap-add=NET_ADMIN and --device=/dev/net/tun
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+
+
+
+

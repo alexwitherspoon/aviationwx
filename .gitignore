@@ -7,6 +7,9 @@ airports.json
 # Keep airports.json.test for CI/CD testing
 !airports.json.test
 
+# VPN client configurations (contain private keys)
+config/vpn-clients/
+
 # IDE files
 .vscode/
 .idea/

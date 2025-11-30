@@ -267,11 +267,32 @@ function loadConfig($useCache = true) {
                     } elseif (!preg_match('/^\d+\.\d+\.\d+\.\d+\/\d+$/', $vpn['remote_subnet'])) {
                         $errors[] = "Airport '{$aid}' VPN remote_subnet invalid format (expected CIDR)";
                     }
-                    if (empty($vpn['psk'])) {
-                        $errors[] = "Airport '{$aid}' VPN missing psk";
+                    $vpn_type = isset($vpn['type']) ? strtolower($vpn['type']) : 'ipsec';
+                    if (!in_array($vpn_type, ['ipsec', 'wireguard', 'openvpn'])) {
+                        $errors[] = "Airport '{$aid}' VPN has invalid type '{$vpn_type}' (must be ipsec, wireguard, or openvpn)";
                     }
-                    if (isset($vpn['type']) && !in_array($vpn['type'], ['ipsec', 'wireguard', 'openvpn'])) {
-                        $errors[] = "Airport '{$aid}' VPN has invalid type '{$vpn['type']}'";
+                    
+                    // Protocol-specific validation
+                    if ($vpn_type === 'ipsec') {
+                        if (empty($vpn['psk'])) {
+                            $errors[] = "Airport '{$aid}' IPsec VPN missing psk";
+                        }
+                    } elseif ($vpn_type === 'wireguard') {
+                        $wg = $vpn['wireguard'] ?? [];
+                        // Keys can be auto-generated, so we don't require them here
+                        // But if present, validate format
+                        if (isset($wg['server_port']) && (!is_numeric($wg['server_port']) || $wg['server_port'] < 1 || $wg['server_port'] > 65535)) {
+                            $errors[] = "Airport '{$aid}' WireGuard server_port must be 1-65535";
+                        }
+                    } elseif ($vpn_type === 'openvpn') {
+                        $ovpn = $vpn['openvpn'] ?? [];
+                        // PSK can be auto-generated
+                        if (isset($ovpn['server_port']) && (!is_numeric($ovpn['server_port']) || $ovpn['server_port'] < 1 || $ovpn['server_port'] > 65535)) {
+                            $errors[] = "Airport '{$aid}' OpenVPN server_port must be 1-65535";
+                        }
+                        if (isset($ovpn['protocol']) && !in_array(strtolower($ovpn['protocol']), ['udp', 'tcp'])) {
+                            $errors[] = "Airport '{$aid}' OpenVPN protocol must be udp or tcp";
+                        }
                     }
                 }
             }

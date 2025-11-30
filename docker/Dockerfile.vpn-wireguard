@@ -1,0 +1,32 @@
+# WireGuard VPN Server Container
+FROM alpine:latest
+
+# Install WireGuard and required tools
+RUN apk add --no-cache \
+    wireguard-tools \
+    iptables \
+    iproute2 \
+    curl \
+    bash
+
+# Create configuration directories
+RUN mkdir -p /etc/wireguard /etc/wireguard-shared
+
+# Copy entrypoint script
+COPY docker/docker-entrypoint-vpn-wireguard.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# WireGuard uses /dev/net/tun
+# This is typically available via --cap-add=NET_ADMIN and --device=/dev/net/tun
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
+    CMD wg show wg0 > /dev/null 2>&1 || exit 1
+
+# Start WireGuard via entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+
+
+
+

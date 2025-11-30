@@ -1,0 +1,102 @@
+# Docker Compose for Multi-Protocol VPN Testing
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test-multi-protocol.yml up
+# 
+# This tests all three VPN protocols (IPsec, WireGuard, OpenVPN) simultaneously
+# Uses host networking for full VPN functionality (works best on Linux)
+
+services:
+  # Mock IPsec Client - For testing IPsec server
+  vpn-client-ipsec:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-client-mock
+    image: aviationwx-vpn-client-ipsec
+    container_name: aviationwx-vpn-client-ipsec
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - VPN_SERVER_IP=127.0.0.1
+      - VPN_CLIENT_LEFT_IP=127.0.0.1
+      - CONNECTION_NAME=test_ipsec
+      - REMOTE_SUBNET=192.168.1.0/24
+      - PSK=test-psk-ipsec-local-testing
+      - IKE_VERSION=2
+      - ENCRYPTION=aes256gcm128
+      - DH_GROUP=14
+    restart: unless-stopped
+    depends_on:
+      - vpn-server
+      - vpn-manager
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  # Mock WireGuard Client - For testing WireGuard server
+  vpn-client-wireguard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-client-wireguard
+    image: aviationwx-vpn-client-wireguard
+    container_name: aviationwx-vpn-client-wireguard
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    environment:
+      # These should be set from generated client configs
+      # For testing, use test values
+      - CLIENT_PRIVATE_KEY=test-client-private-key
+      - SERVER_PUBLIC_KEY=test-server-public-key
+      - SERVER_ENDPOINT=127.0.0.1:51820
+      - CLIENT_IP=10.0.0.2/32
+      - ALLOWED_IPS=192.168.1.0/24
+    restart: unless-stopped
+    depends_on:
+      - vpn-wireguard
+      - vpn-manager
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  # Mock OpenVPN Client - For testing OpenVPN server
+  vpn-client-openvpn:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-client-openvpn
+    image: aviationwx-vpn-client-openvpn
+    container_name: aviationwx-vpn-client-openvpn
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun
+    environment:
+      # These should be set from generated client configs
+      # For testing, use test values
+      - PSK=test-openvpn-psk-hex-string-64-characters-long-for-testing-purposes-only
+      - SERVER_ENDPOINT=127.0.0.1:1194
+      - PROTOCOL=udp
+    restart: unless-stopped
+    depends_on:
+      - vpn-openvpn
+      - vpn-manager
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+
+
+
+

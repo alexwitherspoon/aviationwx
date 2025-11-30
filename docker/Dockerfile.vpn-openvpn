@@ -1,0 +1,32 @@
+# OpenVPN VPN Server Container
+FROM alpine:latest
+
+# Install OpenVPN and required tools
+RUN apk add --no-cache \
+    openvpn \
+    iptables \
+    iproute2 \
+    curl \
+    bash
+
+# Create configuration directories
+RUN mkdir -p /etc/openvpn /etc/openvpn-shared
+
+# Copy entrypoint script
+COPY docker/docker-entrypoint-vpn-openvpn.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# OpenVPN uses /dev/net/tun
+# This is typically available via --cap-add=NET_ADMIN and --device=/dev/net/tun
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
+    CMD pgrep -f "openvpn.*server.conf" > /dev/null || exit 1
+
+# Start OpenVPN via entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+
+
+
+

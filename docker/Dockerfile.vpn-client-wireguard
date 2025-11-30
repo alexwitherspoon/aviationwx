@@ -1,0 +1,27 @@
+# WireGuard Mock Client Container - For testing WireGuard server
+FROM alpine:latest
+
+# Install WireGuard and required tools
+RUN apk add --no-cache \
+    wireguard-tools \
+    iptables \
+    iproute2 \
+    curl \
+    bash
+
+# Create configuration directory
+RUN mkdir -p /etc/wireguard
+
+# Copy entrypoint script
+COPY docker/docker-entrypoint-vpn-client-wireguard.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# WireGuard uses /dev/net/tun
+# Requires --cap-add=NET_ADMIN and --device=/dev/net/tun
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+
+
+
+
