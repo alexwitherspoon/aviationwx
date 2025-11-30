@@ -403,5 +403,60 @@ class WeatherDataMergeTest extends TestCase
         $this->assertEquals(5000, $result['ceiling'], 'Should preserve old ceiling when METAR not fetched');
         $this->assertEquals(10.0, $result['visibility'], 'Should preserve old visibility when METAR not fetched');
     }
+
+    /**
+     * Test mergeWeatherDataWithFallback - Precipitation should not be preserved from cache
+     * Precipitation is a daily value that should reset each day. If missing from new data,
+     * it should be set to 0.0 (no precipitation today) rather than preserving yesterday's value.
+     */
+    public function testMergeWeatherDataWithFallback_PrecipitationNotPreserved()
+    {
+        // New data without precipitation (missing or null)
+        $newData = [
+            'temperature' => 16.0,
+            'precip_accum' => null,  // Missing from new data
+            'last_updated_primary' => time() - 1800,
+        ];
+        
+        // Old cache with yesterday's precipitation value
+        $existingData = createTestWeatherData([
+            'precip_accum' => 0.5,  // Yesterday's precipitation (should NOT be preserved)
+            'last_updated_primary' => time() - 3600,  // 1 hour ago (not stale)
+        ]);
+        
+        $maxStaleSeconds = 3 * 3600;  // 3 hours
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        
+        // Precipitation should be 0.0 (no precipitation today), NOT preserved from cache
+        $this->assertEquals(0.0, $result['precip_accum'], 'Precipitation should be 0.0 when missing, not preserved from cache');
+        $this->assertNotEquals(0.5, $result['precip_accum'], 'Should not preserve yesterday\'s precipitation value');
+    }
+
+    /**
+     * Test mergeWeatherDataWithFallback - Precipitation should use new value when provided
+     * When new data includes precipitation, it should be used (not overwritten with 0.0).
+     */
+    public function testMergeWeatherDataWithFallback_PrecipitationUsesNewValue()
+    {
+        // New data with precipitation
+        $newData = [
+            'temperature' => 16.0,
+            'precip_accum' => 0.25,  // Today's precipitation
+            'last_updated_primary' => time() - 1800,
+        ];
+        
+        // Old cache with different precipitation value
+        $existingData = createTestWeatherData([
+            'precip_accum' => 0.5,  // Old value (should be overridden)
+            'last_updated_primary' => time() - 3600,
+        ]);
+        
+        $maxStaleSeconds = 3 * 3600;
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        
+        // New precipitation value should be used
+        $this->assertEquals(0.25, $result['precip_accum'], 'New precipitation value should be used');
+        $this->assertNotEquals(0.5, $result['precip_accum'], 'Should not use old cache precipitation value');
+    }
 }
 

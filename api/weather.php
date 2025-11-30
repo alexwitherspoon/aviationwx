@@ -426,16 +426,19 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
     }
     
     // Fields that should be preserved from cache if new data is missing/invalid
+    // Note: precip_accum is a daily value and should NOT be preserved from cache
+    // (it should reset each day, so if missing from new data, it should be 0, not yesterday's value)
     $preservableFields = [
         'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
         'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
-        'pressure', 'precip_accum',
+        'pressure',
         'pressure_altitude', 'density_altitude',
         'visibility', 'ceiling', 'cloud_cover'
     ];
     
     // Track which source each field comes from for staleness checking
+    // Note: precip_accum is a daily value and should NOT be preserved from cache
     $primarySourceFields = [
         'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
@@ -495,6 +498,12 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
                 $result[$field] = $oldValue;
             }
         }
+    }
+    
+    // Handle precip_accum specially - it's a daily value that should reset each day
+    // If missing from new data, set to 0 (no precipitation today) rather than preserving yesterday's value
+    if (!isset($newData['precip_accum']) || $newData['precip_accum'] === null) {
+        $result['precip_accum'] = 0.0;
     }
     
     // Preserve daily tracking values (always valid)
@@ -2343,6 +2352,14 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
             if ($currentTemp < $tempExtremes[$dateKey][$airportId]['low']) {
                 $tempExtremes[$dateKey][$airportId]['low'] = $currentTemp;
                 $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs; // Observation timestamp (when weather was actually observed)
+            }
+            // If same low temperature is observed at an earlier time, update timestamp to earliest observation
+            // This ensures we track when the low temperature was first observed
+            elseif ($currentTemp == $tempExtremes[$dateKey][$airportId]['low']) {
+                $existingLowTs = $tempExtremes[$dateKey][$airportId]['low_ts'] ?? $obsTs;
+                if ($obsTs < $existingLowTs) {
+                    $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs; // Update to earlier observation timestamp
+                }
             }
         }
         
