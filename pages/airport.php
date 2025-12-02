@@ -223,6 +223,15 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     </style>
 </head>
 <body>
+    <noscript>
+        <style>
+            html { scroll-behavior: auto; }
+            body { margin: 0; padding: 0; }
+        </style>
+        <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 0; padding: 1rem; margin: 0 0 1.5rem 0; text-align: center; color: #856404; font-size: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.2); width: 100%; box-sizing: border-box;">
+            <strong>⚠️ JavaScript is required</strong> for this site to function properly. Please enable JavaScript in your browser to view weather data and interactive features.
+        </div>
+    </noscript>
     <main>
     <div class="container">
         <!-- Header -->
