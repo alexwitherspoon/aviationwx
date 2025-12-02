@@ -556,12 +556,20 @@ test.describe('Aviation Weather Dashboard', () => {
     expect(newState).toBeTruthy();
     expect(newState).not.toBe(initialText);
     
-    // Verify localStorage was written before reload (using correct key)
+    // Verify cookie was written (source of truth for cross-subdomain sharing)
+    const cookies = await context.cookies();
+    const tempUnitCookie = cookies.find(c => c.name === 'aviationwx_temp_unit');
+    expect(tempUnitCookie).toBeTruthy();
+    expect(tempUnitCookie.value).toBeTruthy();
+    expect(['F', 'C']).toContain(tempUnitCookie.value);
+    
+    // Verify localStorage was also written (cache)
     const localStorageValue = await page.evaluate(() => {
       return localStorage.getItem('aviationwx_temp_unit');
     });
     expect(localStorageValue).toBeTruthy();
     expect(['F', 'C']).toContain(localStorageValue);
+    expect(localStorageValue).toBe(tempUnitCookie.value); // Should match cookie
     
     // Reload page
     await page.reload();
@@ -570,7 +578,7 @@ test.describe('Aviation Weather Dashboard', () => {
     await page.waitForSelector('body', { state: 'visible' });
     await page.waitForSelector('#temp-unit-toggle', { state: 'visible', timeout: 5000 });
     
-    // Wait for JavaScript to initialize and read from localStorage
+    // Wait for JavaScript to initialize and read from cookie/localStorage
     await page.waitForFunction(
       ({ expectedText }) => {
         const display = document.getElementById('temp-unit-display');
@@ -580,12 +588,116 @@ test.describe('Aviation Weather Dashboard', () => {
       { timeout: 5000 }
     );
     
-    // Unit should be preserved (stored in localStorage)
+    // Unit should be preserved (stored in cookie, synced to localStorage)
     const preservedState = await page.evaluate(() => {
       const display = document.getElementById('temp-unit-display');
       return display ? display.textContent.trim() : null;
     });
     expect(preservedState).toBe(newState);
+    
+    // Verify cookie still exists after reload
+    const cookiesAfterReload = await context.cookies();
+    const tempUnitCookieAfterReload = cookiesAfterReload.find(c => c.name === 'aviationwx_temp_unit');
+    expect(tempUnitCookieAfterReload).toBeTruthy();
+    expect(tempUnitCookieAfterReload.value).toBe(tempUnitCookie.value);
+  });
+
+  test('should store preferences in cookies for cross-subdomain sharing', async ({ page, context }) => {
+    // Clear cookies and localStorage before test
+    await context.clearCookies();
+    await page.evaluate(() => {
+      localStorage.clear();
+    });
+    
+    await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    await page.waitForLoadState('networkidle');
+    
+    const toggle = page.locator('#temp-unit-toggle');
+    const toggleExists = await toggle.count();
+    if (toggleExists === 0) {
+      test.skip();
+      return;
+    }
+    
+    await toggle.waitFor({ state: 'visible', timeout: 10000 });
+    
+    // Wait for JavaScript functions to be available
+    await page.waitForFunction(
+      () => typeof getTempUnit === 'function' && typeof setCookie === 'function',
+      { timeout: 10000 }
+    );
+    
+    // Get initial state
+    const initialText = await page.evaluate(() => {
+      const display = document.getElementById('temp-unit-display');
+      return display ? display.textContent.trim() : null;
+    });
+    
+    // Change preference
+    await toggle.click();
+    await page.waitForTimeout(500);
+    
+    // Verify cookie was set with correct attributes
+    const cookies = await context.cookies();
+    const tempUnitCookie = cookies.find(c => c.name === 'aviationwx_temp_unit');
+    
+    expect(tempUnitCookie).toBeTruthy();
+    expect(['F', 'C']).toContain(tempUnitCookie.value);
+    expect(tempUnitCookie.path).toBe('/');
+    expect(tempUnitCookie.expires).toBeGreaterThan(Date.now() / 1000); // Should have expiration
+    // Note: domain attribute may not be visible in Playwright cookies for localhost
+    // In production, it should be set to .aviationwx.org for cross-subdomain sharing
+    
+    // Verify localStorage was also updated (cache)
+    const localStorageValue = await page.evaluate(() => {
+      return localStorage.getItem('aviationwx_temp_unit');
+    });
+    expect(localStorageValue).toBe(tempUnitCookie.value);
+  });
+
+  test('should migrate localStorage preferences to cookies on page load', async ({ page, context }) => {
+    // Clear cookies but set localStorage (simulating old behavior)
+    await context.clearCookies();
+    await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    await page.waitForLoadState('networkidle');
+    
+    // Set localStorage directly (simulating old preference storage)
+    await page.evaluate(() => {
+      localStorage.setItem('aviationwx_temp_unit', 'C');
+      localStorage.setItem('aviationwx_distance_unit', 'm');
+      localStorage.setItem('aviationwx_wind_speed_unit', 'mph');
+      localStorage.setItem('aviationwx_time_format', '24hr');
+    });
+    
+    // Reload page to trigger migration
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    
+    // Wait for sync function to run
+    await page.waitForFunction(
+      () => typeof syncPreferencesFromCookies === 'function' || 
+            typeof getCookie === 'function',
+      { timeout: 10000 }
+    );
+    
+    // Wait a bit for sync to complete
+    await page.waitForTimeout(1000);
+    
+    // Verify cookies were created from localStorage
+    const cookies = await context.cookies();
+    const tempCookie = cookies.find(c => c.name === 'aviationwx_temp_unit');
+    const distanceCookie = cookies.find(c => c.name === 'aviationwx_distance_unit');
+    const windCookie = cookies.find(c => c.name === 'aviationwx_wind_speed_unit');
+    const timeCookie = cookies.find(c => c.name === 'aviationwx_time_format');
+    
+    expect(tempCookie).toBeTruthy();
+    expect(tempCookie.value).toBe('C');
+    expect(distanceCookie).toBeTruthy();
+    expect(distanceCookie.value).toBe('m');
+    expect(windCookie).toBeTruthy();
+    expect(windCookie.value).toBe('mph');
+    expect(timeCookie).toBeTruthy();
+    expect(timeCookie.value).toBe('24hr');
   });
 
   test('should display local time in airport timezone', async ({ page }) => {

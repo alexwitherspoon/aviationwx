@@ -178,7 +178,7 @@ The dashboard includes three unit toggle buttons that allow users to switch betw
    - Located next to "Current Conditions" heading
    - Affects: Temperature, Today's High/Low, Dewpoint, Dewpoint Spread
    - Default: Fahrenheit (°F)
-   - Preference stored in localStorage
+   - Preference stored in cookies (cross-subdomain) and localStorage (cache)
 
 2. **Distance Unit Toggle** (ft ↔ m, in ↔ cm, SM ↔ km)
    - Located next to Temperature toggle
@@ -190,7 +190,7 @@ The dashboard includes three unit toggle buttons that allow users to switch betw
      - Visibility (statute miles ↔ kilometers)
    - Pressure remains in inHg regardless of toggle
    - Default: Imperial (ft/in/SM)
-   - Preference stored in localStorage
+   - Preference stored in cookies (cross-subdomain) and localStorage (cache)
 
 3. **Wind Speed Unit Toggle** (kts ↔ mph ↔ km/h)
    - Located in "Runway Wind" section header
@@ -198,9 +198,9 @@ The dashboard includes three unit toggle buttons that allow users to switch betw
    - Affects: Wind Speed, Gust Factor, Today's Peak Gust
    - Pressure remains in inHg regardless of toggle
    - Default: Knots (kts)
-   - Preference stored in localStorage
+   - Preference stored in cookies (cross-subdomain) and localStorage (cache)
 
-All unit preferences persist across page refreshes using browser localStorage.
+All unit preferences persist across page refreshes and are shared across all airport dashboards (e.g., kspb.aviationwx.org, other-airport.aviationwx.org) using a hybrid approach: cookies for cross-subdomain sharing and localStorage for fast local access. Preferences set on one dashboard automatically apply to all other dashboards.
 
 #### Weather Status Emojis
 
