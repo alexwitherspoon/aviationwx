@@ -489,6 +489,11 @@ $ogImage = file_exists($aboutPhotoWebp)
     </style>
 </head>
 <body>
+    <noscript>
+        <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 0.75rem 1rem; margin: 1rem; text-align: center; color: #856404; font-size: 0.9rem;">
+            <strong>JavaScript is required</strong> for this site to function properly. Please enable JavaScript in your browser to view weather data and interactive features.
+        </div>
+    </noscript>
     <main>
     <div class="container">
         <div class="hero">
