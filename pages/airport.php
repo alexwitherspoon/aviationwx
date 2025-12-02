@@ -714,14 +714,117 @@ let weatherLastUpdated = null;
 // Store current weather data globally for toggle re-rendering
 let currentWeatherData = null;
 
+// Cookie helper functions for cross-subdomain preference sharing
+// Hybrid approach: cookies (source of truth, cross-subdomain) + localStorage (fast cache)
+
+/**
+ * Get cookie value by name
+ * @param {string} name - Cookie name
+ * @returns {string|null} Cookie value or null if not found
+ */
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+        return decodeURIComponent(parts.pop().split(';').shift());
+    }
+    return null;
+}
+
+/**
+ * Set cookie with cross-subdomain support
+ * @param {string} name - Cookie name
+ * @param {string} value - Cookie value
+ * @param {number} days - Expiration in days (default: 365)
+ */
+function setCookie(name, value, days = 365) {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    
+    // Extract base domain (e.g., "aviationwx.org" from "kspb.aviationwx.org")
+    const hostname = window.location.hostname;
+    const domain = hostname.includes('.') 
+        ? '.' + hostname.split('.').slice(-2).join('.')  // .aviationwx.org
+        : hostname;  // localhost fallback
+    
+    // Build cookie string with cross-subdomain support
+    let cookieString = `${name}=${encodeURIComponent(value)}; expires=${expires.toUTCString()}; path=/`;
+    
+    // Only set domain if not localhost (cookies don't work with localhost domain)
+    if (!hostname.includes('localhost') && !hostname.includes('127.0.0.1')) {
+        cookieString += `; domain=${domain}`;
+    }
+    
+    // Add Secure flag in production (HTTPS only)
+    if (window.location.protocol === 'https:') {
+        cookieString += '; Secure';
+    }
+    
+    // SameSite=Lax for CSRF protection while allowing cross-site navigation
+    cookieString += '; SameSite=Lax';
+    
+    document.cookie = cookieString;
+    
+    // Also update localStorage as cache
+    try {
+        localStorage.setItem(name, value);
+    } catch (e) {
+        // localStorage may be disabled or full - continue without cache
+        console.warn('[Preferences] Could not update localStorage cache:', e);
+    }
+}
+
+/**
+ * Sync preferences from cookies to localStorage on page load
+ * Also migrates existing localStorage to cookies for backward compatibility
+ */
+function syncPreferencesFromCookies() {
+    const preferences = [
+        'aviationwx_time_format',
+        'aviationwx_temp_unit',
+        'aviationwx_distance_unit',
+        'aviationwx_wind_speed_unit'
+    ];
+    
+    preferences.forEach(pref => {
+        const cookieValue = getCookie(pref);
+        const localValue = localStorage.getItem(pref);
+        
+        if (cookieValue) {
+            // Cookie exists - use it as source of truth, sync to localStorage
+            try {
+                localStorage.setItem(pref, cookieValue);
+            } catch (e) {
+                // localStorage may be disabled - continue
+            }
+        } else if (localValue) {
+            // No cookie but localStorage exists - migrate to cookie
+            setCookie(pref, localValue);
+        }
+    });
+}
+
+// Sync preferences on page load
+syncPreferencesFromCookies();
+
 // Time format preference (default to 12hr)
 function getTimeFormat() {
-    const format = localStorage.getItem('aviationwx_time_format');
-    return format || '12hr'; // Default to 12-hour format
+    // Try cookie first (source of truth), then localStorage (cache), then default
+    const format = getCookie('aviationwx_time_format') 
+        || localStorage.getItem('aviationwx_time_format')
+        || '12hr';
+    return format;
 }
 
 function setTimeFormat(format) {
-    localStorage.setItem('aviationwx_time_format', format);
+    // Set cookie (source of truth, cross-subdomain)
+    setCookie('aviationwx_time_format', format);
+    // localStorage is updated by setCookie, but ensure it's set
+    try {
+        localStorage.setItem('aviationwx_time_format', format);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
 }
 
 // Format time string (HH:MM or HH:MM:SS) based on preference
@@ -756,12 +859,22 @@ function formatTime(timeStr) {
 
 // Temperature unit preference (default to F)
 function getTempUnit() {
-    const unit = localStorage.getItem('aviationwx_temp_unit');
-    return unit || 'F'; // Default to Fahrenheit
+    // Try cookie first (source of truth), then localStorage (cache), then default
+    const unit = getCookie('aviationwx_temp_unit')
+        || localStorage.getItem('aviationwx_temp_unit')
+        || 'F';
+    return unit;
 }
 
 function setTempUnit(unit) {
-    localStorage.setItem('aviationwx_temp_unit', unit);
+    // Set cookie (source of truth, cross-subdomain)
+    setCookie('aviationwx_temp_unit', unit);
+    // localStorage is updated by setCookie, but ensure it's set
+    try {
+        localStorage.setItem('aviationwx_temp_unit', unit);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
 }
 
 // Convert Celsius to Fahrenheit
@@ -826,12 +939,22 @@ function formatTempTimestamp(timestamp) {
 
 // Distance/altitude unit preference (default to imperial/feet)
 function getDistanceUnit() {
-    const unit = localStorage.getItem('aviationwx_distance_unit');
-    return unit || 'ft'; // Default to feet
+    // Try cookie first (source of truth), then localStorage (cache), then default
+    const unit = getCookie('aviationwx_distance_unit')
+        || localStorage.getItem('aviationwx_distance_unit')
+        || 'ft';
+    return unit;
 }
 
 function setDistanceUnit(unit) {
-    localStorage.setItem('aviationwx_distance_unit', unit);
+    // Set cookie (source of truth, cross-subdomain)
+    setCookie('aviationwx_distance_unit', unit);
+    // localStorage is updated by setCookie, but ensure it's set
+    try {
+        localStorage.setItem('aviationwx_distance_unit', unit);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
 }
 
 // Convert feet to meters
@@ -892,12 +1015,22 @@ function formatCeiling(ft) {
 
 // Wind speed unit preference (default to knots)
 function getWindSpeedUnit() {
-    const unit = localStorage.getItem('aviationwx_wind_speed_unit');
-    return unit || 'kts'; // Default to knots
+    // Try cookie first (source of truth), then localStorage (cache), then default
+    const unit = getCookie('aviationwx_wind_speed_unit')
+        || localStorage.getItem('aviationwx_wind_speed_unit')
+        || 'kts';
+    return unit;
 }
 
 function setWindSpeedUnit(unit) {
-    localStorage.setItem('aviationwx_wind_speed_unit', unit);
+    // Set cookie (source of truth, cross-subdomain)
+    setCookie('aviationwx_wind_speed_unit', unit);
+    // localStorage is updated by setCookie, but ensure it's set
+    try {
+        localStorage.setItem('aviationwx_wind_speed_unit', unit);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
 }
 
 // Convert knots to miles per hour

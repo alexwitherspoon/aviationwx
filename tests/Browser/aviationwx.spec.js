@@ -174,7 +174,7 @@ test.describe('Aviation Weather Dashboard', () => {
     await expect(body).toBeVisible();
   });
 
-  test('should preserve unit toggle preferences', async ({ page }) => {
+  test('should preserve unit toggle preferences', async ({ page, context }) => {
     const toggle = page.locator('#temp-unit-toggle');
     
     const toggleExists = await toggle.count();
@@ -189,13 +189,25 @@ test.describe('Aviation Weather Dashboard', () => {
     
     const newState = await toggle.textContent();
     
+    // Verify cookie was set (source of truth for cross-subdomain sharing)
+    const cookies = await context.cookies();
+    const tempUnitCookie = cookies.find(c => c.name === 'aviationwx_temp_unit');
+    expect(tempUnitCookie).toBeTruthy();
+    expect(tempUnitCookie.value).toBeTruthy();
+    
     // Reload page
     await page.reload();
     await page.waitForTimeout(1000);
     
-    // Unit should be preserved (stored in localStorage)
+    // Unit should be preserved (stored in cookie, synced to localStorage)
     const preservedState = await toggle.textContent();
     expect(preservedState).toBe(newState);
+    
+    // Verify cookie persists after reload
+    const cookiesAfterReload = await context.cookies();
+    const tempUnitCookieAfterReload = cookiesAfterReload.find(c => c.name === 'aviationwx_temp_unit');
+    expect(tempUnitCookieAfterReload).toBeTruthy();
+    expect(tempUnitCookieAfterReload.value).toBe(tempUnitCookie.value);
   });
 });
 
