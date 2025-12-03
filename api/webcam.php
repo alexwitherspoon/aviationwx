@@ -13,6 +13,7 @@ ob_start();
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/constants.php';
 
 // VPN routing is optional - only required if VPN features are used
 $vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
@@ -28,6 +29,8 @@ if (file_exists($vpnRoutingFile)) {
     }
 }
 
+// Include circuit breaker functions
+require_once __DIR__ . '/../lib/circuit-breaker.php';
 // Include webcam fetch functions for background refresh
 require_once __DIR__ . '/../scripts/fetch-webcam.php';
 
@@ -52,7 +55,7 @@ function servePlaceholder() {
     ob_end_clean(); // Ensure no output before headers (end and clean in one call)
     if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
         header('Content-Type: image/jpeg');
-        header('Cache-Control: public, max-age=3600'); // Cache placeholder for 1 hour
+        header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
         $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
         $size = @filesize($placeholderPath);
         if ($size > 0) {
@@ -67,7 +70,7 @@ function servePlaceholder() {
         }
     } else {
         header('Content-Type: image/png');
-        header('Cache-Control: public, max-age=3600');
+        header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
         header('Content-Length: 95');
         echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
     }
@@ -233,9 +236,9 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     header('Expires: 0');
     // Rate limit headers (for observability; mtime endpoint is not limited)
     if (function_exists('getRateLimitRemaining')) {
-        $rl = getRateLimitRemaining('webcam_api', 100, 60);
+        $rl = getRateLimitRemaining('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
         if (is_array($rl)) {
-            header('X-RateLimit-Limit: 100');
+            header('X-RateLimit-Limit: ' . RATE_LIMIT_WEBCAM_MAX);
             header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
             header('X-RateLimit-Reset: ' . (int)$rl['reset']);
         }
@@ -269,7 +272,7 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
 }
 
 // Defer rate limiting decision until after we know what we can serve
-$isRateLimited = !checkRateLimit('webcam_api', 100, 60);
+$isRateLimited = !checkRateLimit('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
 // Rate limit headers for image responses
 if (function_exists('getRateLimitRemaining')) {
     $rl = getRateLimitRemaining('webcam_api', 100, 60);
@@ -472,8 +475,8 @@ if ((time() - $fileMtime) < $perCamRefresh) {
     $cc = $hasHash ? 'public, max-age=' . $remainingTime . ', s-maxage=' . $remainingTime . ', immutable' : 'public, max-age=' . $remainingTime;
     header('Cache-Control: ' . $cc);
     if ($hasHash) {
-        header('Surrogate-Control: max-age=' . $remainingTime . ', stale-while-revalidate=60');
-        header('CDN-Cache-Control: max-age=' . $remainingTime . ', stale-while-revalidate=60');
+        header('Surrogate-Control: max-age=' . $remainingTime . ', stale-while-revalidate=' . (STALE_WHILE_REVALIDATE_SECONDS / 5));
+        header('CDN-Cache-Control: max-age=' . $remainingTime . ', stale-while-revalidate=' . (STALE_WHILE_REVALIDATE_SECONDS / 5));
     }
     header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
     header('ETag: ' . $etagVal);
@@ -535,7 +538,7 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
     
     switch ($sourceType) {
         case 'rtsp':
-            $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: 10);
+            $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: RTSP_DEFAULT_TIMEOUT);
             $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : 6;
             $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, 2, $maxRuntime);
             break;
@@ -567,8 +570,8 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
         ], 'app');
         
         // Generate WEBP in background (non-blocking)
-        $DEFAULT_TRANSCODE_TIMEOUT = 8;
-        $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
+        // Use constant for transcode timeout
+        $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : DEFAULT_TRANSCODE_TIMEOUT;
         
         // Build ffmpeg command without 2>&1 in the base command (we'll handle redirects separately)
         $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
@@ -674,11 +677,11 @@ if ($ctype !== 'image/jpeg') {
     header('Content-Type: ' . $ctype, true);
 }
 $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
-$cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate, stale-while-revalidate=300' : 'public, max-age=0, must-revalidate, stale-while-revalidate=300';
+$cc = $hasHash ? 'public, max-age=0, s-maxage=0, must-revalidate, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS : 'public, max-age=0, must-revalidate, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS;
 header('Cache-Control: ' . $cc); // Stale, revalidate
 if ($hasHash) {
-    header('Surrogate-Control: max-age=0, stale-while-revalidate=300');
-    header('CDN-Cache-Control: max-age=0, stale-while-revalidate=300');
+    header('Surrogate-Control: max-age=0, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
+    header('CDN-Cache-Control: max-age=0, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
 }
 header('ETag: ' . $etagVal);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
@@ -722,10 +725,10 @@ $lockFile = $cacheDir . '/refresh_' . $airportId . '_' . $camIndex . '.lock';
 // Clean up stale locks (older than 5 minutes) - use atomic check-and-delete
 if (file_exists($lockFile)) {
     $lockMtime = @filemtime($lockFile);
-    if ($lockMtime !== false && (time() - $lockMtime) > 300) { // 5 minutes
+    if ($lockMtime !== false && (time() - $lockMtime) > FILE_LOCK_STALE_SECONDS) {
         // Try to delete only if still old (race condition protection)
         $currentMtime = @filemtime($lockFile);
-        if ($currentMtime !== false && (time() - $currentMtime) > 300) {
+        if ($currentMtime !== false && (time() - $currentMtime) > FILE_LOCK_STALE_SECONDS) {
             @unlink($lockFile);
         }
     }
@@ -800,7 +803,7 @@ if (function_exists('fastcgi_finish_request')) {
 try {
     // Check connection status periodically during background refresh
     $refreshStartTime = time();
-    $maxRefreshTime = 40; // Leave 5 seconds buffer before script timeout
+    $maxRefreshTime = BACKGROUND_REFRESH_MAX_TIME;
     
     // Fetch fresh image
     $freshCacheFile = $cacheJpg; // Always fetch JPG first

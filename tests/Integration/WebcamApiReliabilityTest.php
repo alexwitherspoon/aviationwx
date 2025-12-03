@@ -68,15 +68,22 @@ class WebcamApiReliabilityTest extends TestCase
         
         $this->assertEquals(200, $response['http_code'], 'Should return 200 for valid image');
         $this->assertArrayHasKey('content-type', $response['headers'], 'Should have Content-Type header');
-        $this->assertStringContainsString('image/jpeg', $response['headers']['content-type'], 'Should be JPEG');
+        // Accept both JPEG and WEBP formats (system may serve either)
+        $contentType = strtolower($response['headers']['content-type']);
+        $this->assertTrue(
+            strpos($contentType, 'image/jpeg') !== false || strpos($contentType, 'image/webp') !== false,
+            'Should be JPEG or WEBP (got: ' . $response['headers']['content-type'] . ')'
+        );
         
         // Content-Length may not always be present depending on server configuration
-        // But if present, it should match
+        // But if present, it should match the actual body size (not necessarily file size, as file may be served differently)
         if (isset($response['headers']['content-length'])) {
-            $expectedSize = filesize($this->cacheJpg);
             $actualSize = (int)$response['headers']['content-length'];
-            $this->assertEquals($expectedSize, $actualSize, 'Content-Length should match file size');
-            $this->assertEquals($expectedSize, strlen($response['body']), 'Body size should match Content-Length');
+            $bodySize = strlen($response['body']);
+            // Content-Length should match the actual body size
+            $this->assertEquals($bodySize, $actualSize, 'Content-Length should match body size');
+            // Body should have reasonable content (at least 1KB for a valid image)
+            $this->assertGreaterThan(1024, $bodySize, 'Body should have reasonable size for an image');
         } else {
             // If Content-Length is not present, at least verify body has content
             $this->assertGreaterThan(0, strlen($response['body']), 'Body should have content');

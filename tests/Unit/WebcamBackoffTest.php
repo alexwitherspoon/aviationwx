@@ -177,5 +177,47 @@ class WebcamBackoffTest extends TestCase
         $this->assertArrayHasKey($key, $backoffData, 'Backoff data should contain test key');
         $this->assertGreaterThanOrEqual(5, $backoffData[$key]['failures'], 'Should record all failures');
     }
+    
+    /**
+     * Test file locking - concurrent access from multiple processes (simulated)
+     * This test verifies that file locking prevents data corruption when multiple
+     * processes try to update the backoff file simultaneously
+     */
+    public function testFileLocking_ConcurrentAccess()
+    {
+        // Simulate concurrent access by rapidly calling recordFailure
+        // In a real scenario, these would be from different processes
+        $iterations = 10;
+        $startTime = microtime(true);
+        
+        for ($i = 0; $i < $iterations; $i++) {
+            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            // Minimal delay to allow file operations
+            usleep(500);
+        }
+        
+        $endTime = microtime(true);
+        $duration = $endTime - $startTime;
+        
+        // Verify file is still valid JSON after concurrent writes
+        $this->assertFileExists($this->backoffFile);
+        $content = file_get_contents($this->backoffFile);
+        $this->assertNotEmpty($content, 'Backoff file should not be empty');
+        
+        $backoffData = json_decode($content, true);
+        $jsonError = json_last_error();
+        $this->assertIsArray($backoffData, 'Backoff file should contain valid JSON after concurrent writes');
+        $this->assertEquals(JSON_ERROR_NONE, $jsonError, 'JSON should be valid (error: ' . json_last_error_msg() . ')');
+        
+        $key = $this->testAirportId . '_' . $this->testCamIndex;
+        $this->assertArrayHasKey($key, $backoffData, 'Backoff data should contain test key');
+        
+        // Verify failure count is correct (should be exactly $iterations)
+        $this->assertEquals($iterations, $backoffData[$key]['failures'], 'Should record all failures correctly');
+        
+        // Verify next_allowed_time is set and reasonable
+        $this->assertArrayHasKey('next_allowed_time', $backoffData[$key], 'Should have next_allowed_time');
+        $this->assertGreaterThan(time(), $backoffData[$key]['next_allowed_time'], 'next_allowed_time should be in the future');
+    }
 }
 

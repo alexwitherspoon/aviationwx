@@ -7,128 +7,8 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
-
-/**
- * Circuit breaker: check if weather API should be skipped due to backoff
- * @param string $airportId
- * @param string $sourceType 'primary' or 'metar'
- * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
- */
-function checkWeatherCircuitBreaker($airportId, $sourceType) {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-        }
-    }
-    $backoffFile = $cacheDir . '/backoff.json';
-    $key = $airportId . '_weather_' . $sourceType;
-    $now = time();
-    
-    if (!file_exists($backoffFile)) {
-        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-    }
-    
-    // Clear stat cache to ensure we read the latest file contents
-    clearstatcache(true, $backoffFile);
-    $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
-    
-    if (!isset($backoffData[$key])) {
-        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-    }
-    
-    $state = $backoffData[$key];
-    $nextAllowed = (int)($state['next_allowed_time'] ?? 0);
-    
-    // Note: This is a critical comparison - if nextAllowed <= now, backoff has expired
-    // We use > (not >=) so that if nextAllowed == now, we still allow the request
-    if ($nextAllowed > $now) {
-        $remaining = $nextAllowed - $now;
-        return [
-            'skip' => true,
-            'reason' => 'circuit_open',
-            'backoff_remaining' => $remaining,
-            'failures' => (int)($state['failures'] ?? 0)
-        ];
-    }
-    
-    return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-}
-
-/**
- * Record a weather API failure and update backoff state
- * @param string $airportId
- * @param string $sourceType 'primary' or 'metar'
- * @param string $severity 'transient' or 'permanent'
- */
-function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return;
-        }
-    }
-    $backoffFile = $cacheDir . '/backoff.json';
-    $key = $airportId . '_weather_' . $sourceType;
-    $now = time();
-    
-    $backoffData = [];
-    if (file_exists($backoffFile)) {
-        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
-    }
-    
-    if (!isset($backoffData[$key])) {
-        $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
-    }
-    
-    $state = &$backoffData[$key];
-    $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
-    $state['last_attempt'] = $now;
-    
-    // Exponential backoff with severity scaling
-    // Base: min(60, 2^failures * 60) seconds, capped at 3600s (1 hour)
-    $failures = $state['failures'];
-    $base = max(60, pow(2, min($failures - 1, 5)) * 60);
-    $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
-    $cap = ($severity === 'permanent') ? 7200 : 3600; // cap 2h for permanent
-    $backoffSeconds = min($cap, (int)round($base * $multiplier));
-    $state['backoff_seconds'] = $backoffSeconds;
-    $state['next_allowed_time'] = $now + $backoffSeconds;
-    
-    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
-}
-
-/**
- * Record a weather API success and reset backoff state
- * @param string $airportId
- * @param string $sourceType 'primary' or 'metar'
- */
-function recordWeatherSuccess($airportId, $sourceType) {
-    $backoffFile = __DIR__ . '/../cache/backoff.json';
-    $key = $airportId . '_weather_' . $sourceType;
-    $now = time();
-    
-    $backoffData = [];
-    if (file_exists($backoffFile)) {
-        $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
-    }
-    
-    if (!isset($backoffData[$key])) {
-        return; // No previous state to reset
-    }
-    
-    // Reset on success
-    $backoffData[$key] = [
-        'failures' => 0,
-        'next_allowed_time' => 0,
-        'last_attempt' => $now,
-        'backoff_seconds' => 0
-    ];
-    
-    @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
-}
+require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/circuit-breaker.php';
 
 /**
  * Parse Ambient Weather API response (for async use)
@@ -603,10 +483,10 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     'ua' => $_SERVER['HTTP_USER_AGENT'] ?? null
     ], 'user');
 
-    // Rate limiting (60 requests per minute per IP)
-    if (!checkRateLimit('weather_api', 60, 60)) {
+    // Rate limiting
+    if (!checkRateLimit('weather_api', RATE_LIMIT_WEATHER_MAX, RATE_LIMIT_WEATHER_WINDOW)) {
     http_response_code(429);
-    header('Retry-After: 60');
+        header('Retry-After: ' . RATE_LIMIT_WEATHER_WINDOW);
     ob_clean();
     aviationwx_log('warning', 'weather rate limited', [], 'app');
     echo json_encode(['success' => false, 'error' => 'Too many requests. Please try again later.']);
@@ -686,8 +566,9 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         $body = json_encode($payload);
         $etag = 'W/"' . sha1($body) . '"';
         
-        // Set cache headers
-        header('Cache-Control: public, max-age=60');
+        // Set cache headers (use config default for consistency)
+        $defaultWeatherRefresh = getDefaultWeatherRefresh();
+        header('Cache-Control: public, max-age=' . $defaultWeatherRefresh);
         header('ETag: ' . $etag);
         header('X-Cache-Status: MOCK');
         
@@ -762,7 +643,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             $hasStaleCache = true;
             
             // Set stale-while-revalidate headers (serve stale, but allow background refresh)
-            header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', stale-while-revalidate=300');
+            header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
             header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
             header('X-Cache-Status: STALE');
             
@@ -896,8 +777,8 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         }
         curl_setopt_array($ch1, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 10,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
             CURLOPT_USERAGENT => 'AviationWX/1.0',
             CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
         ]);
@@ -919,8 +800,8 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         }
         curl_setopt_array($ch2, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 10,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
             CURLOPT_USERAGENT => 'AviationWX/1.0',
             CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
         ]);
@@ -930,7 +811,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Execute both requests in parallel with overall timeout protection
     $running = null;
     $startTime = microtime(true);
-    $maxOverallTimeout = 15; // Overall timeout of 15 seconds (5s buffer over individual timeouts)
+    $maxOverallTimeout = CURL_MULTI_OVERALL_TIMEOUT;
     
     do {
         $status = curl_multi_exec($mh, $running);
@@ -1435,9 +1316,9 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
     
     // If we have existing cache, merge it with new data to preserve good values
-    // Use 3-hour staleness threshold for merge (same as cached data staleness check)
+    // Use MAX_STALE_HOURS threshold for merge (same as cached data staleness check)
     if (is_array($existingCache)) {
-        $maxStaleSeconds = 3 * 3600; // 3 hours
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
         $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds);
     }
     
@@ -1529,6 +1410,9 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
  * Parse Tempest API response (for async use)
  */
 function parseTempestResponse($response) {
+    if ($response === null) {
+        return null;
+    }
     $data = json_decode($response, true);
     if (!isset($data['obs'][0])) {
         return null;
@@ -1598,10 +1482,10 @@ function fetchTempestWeather($source) {
     // Fetch current observation
     $url = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
     
-    // Create context with explicit timeout (10 seconds)
+    // Create context with explicit timeout
     $context = stream_context_create([
         'http' => [
-            'timeout' => 10,
+            'timeout' => CURL_TIMEOUT,
             'ignore_errors' => true,
         ],
     ]);
@@ -1668,8 +1552,8 @@ function fetchWeatherLinkWeather($source) {
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => CURL_TIMEOUT,
+        CURLOPT_CONNECTTIMEOUT => CURL_TIMEOUT,
         CURLOPT_HTTPHEADER => [
             'x-api-secret: ' . $apiSecret,
             'Accept: application/json',
@@ -1702,6 +1586,9 @@ function fetchWeatherLinkWeather($source) {
  * - Field units: Temperature (F), Wind Speed (mph), Pressure (inHg), Rainfall (inches)
  */
 function parseWeatherLinkResponse($response) {
+    if ($response === null) {
+        return null;
+    }
     $data = json_decode($response, true);
     
     if ($data === null || !is_array($data)) {
@@ -1850,10 +1737,10 @@ function fetchMETAR($airport) {
     // Fetch METAR from aviationweather.gov (new API format)
     $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
     
-    // Create context with explicit timeout (10 seconds)
+    // Create context with explicit timeout
     $context = stream_context_create([
         'http' => [
-            'timeout' => 10,
+            'timeout' => CURL_TIMEOUT,
             'ignore_errors' => true,
         ],
     ]);
