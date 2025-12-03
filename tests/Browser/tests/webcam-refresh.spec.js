@@ -16,7 +16,8 @@ test.describe('Webcam Refresh Logic', () => {
     // Navigate to the page FIRST (localStorage requires a real page context)
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
     // Wait for 'load' to ensure all scripts are executed (critical for CI)
-    await page.waitForLoadState('load', { timeout: 30000 });
+    // Use shorter timeout to prevent beforeEach from exceeding test timeout
+    await page.waitForLoadState('load', { timeout: 15000 }); // Reduced from 30s to 15s
     await page.waitForSelector('body', { state: 'visible' });
     
     // Now clear storage AFTER navigating to a real page
@@ -45,7 +46,7 @@ test.describe('Webcam Refresh Logic', () => {
     }
     
     // Only wait for webcam JS if webcams are present
-    // Use a shorter timeout and don't fail if it times out
+    // Use a very short timeout to prevent beforeEach from exceeding test timeout
     // Individual tests will check availability and skip if needed
     try {
       await page.waitForFunction(
@@ -57,7 +58,7 @@ test.describe('Webcam Refresh Logic', () => {
                              typeof safeSwapCameraImage === 'function';
           return hasCamTs && hasFunction;
         },
-        { timeout: 10000 } // Reduced to 10s - don't wait too long
+        { timeout: 5000 } // Very short timeout - 5s max
       );
     } catch (error) {
       // If webcam JS doesn't initialize, set flag and continue
