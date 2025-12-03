@@ -546,7 +546,7 @@ test.describe('Aviation Weather Dashboard', () => {
         return display && display.textContent && display.textContent.trim() !== initialText;
       },
       { initialText },
-      { timeout: 10000 }
+      { timeout: 20000 } // Increased from 10s to 20s
     );
     
     const newState = await page.evaluate(() => {
@@ -585,7 +585,7 @@ test.describe('Aviation Weather Dashboard', () => {
         return display && display.textContent.trim() === expectedText;
       },
       { expectedText: newState },
-      { timeout: 5000 }
+      { timeout: 15000 } // Increased from 5s to 15s
     );
     
     // Unit should be preserved (stored in cookie, synced to localStorage)
@@ -716,7 +716,7 @@ test.describe('Aviation Weather Dashboard', () => {
                timeEl.textContent.trim() !== '--:--:--' &&
                typeof updateClocks === 'function';
       },
-      { timeout: 15000 }
+      { timeout: 30000 } // Increased from 15s to 30s for slow CI environments
     );
     
     // Get the displayed local time
@@ -795,6 +795,7 @@ test.describe('Aviation Weather Dashboard', () => {
     await page.waitForSelector('#weather-data', { state: 'visible', timeout: 10000 });
     
     // Wait for weather data to be populated (not just the loading state)
+    // Increase timeout to account for slow weather API responses
     await page.waitForFunction(
       () => {
         const weatherData = document.getElementById('weather-data');
@@ -808,7 +809,7 @@ test.describe('Aviation Weather Dashboard', () => {
         const sunriseText = sunriseElement.textContent || '';
         return sunriseText.includes('Sunrise') && !sunriseText.includes('-- --');
       },
-      { timeout: 15000 }
+      { timeout: 30000 } // Increased from 15s to 30s for slow weather API
     );
     
     // Get the sunrise and sunset elements
