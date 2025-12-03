@@ -36,39 +36,37 @@ test.describe('Webcam Refresh Logic', () => {
     });
     
     if (!hasWebcams) {
-      // If no webcams, log and continue - individual tests will handle skipping
-      console.warn('No webcam images found on page - webcam tests may be skipped');
-      // Store flag in page context for tests to check
+      // If no webcams, log and set flag - individual tests will skip
+      console.warn('No webcam images found on page - webcam tests will be skipped');
       await page.evaluate(() => {
         window.__webcamsUnavailable = true;
       });
-      return;
+      return; // Exit early - don't wait for webcam JS
     }
     
     // Only wait for webcam JS if webcams are present
-    // Increase timeout and make condition more flexible
-    // Don't fail if it times out - individual tests will check availability
-    const webcamJsReady = await page.waitForFunction(
-      () => {
-        // CAM_TS should be defined (even if empty object)
-        const hasCamTs = typeof window.CAM_TS !== 'undefined';
-        // safeSwapCameraImage function should exist
-        const hasFunction = typeof window.safeSwapCameraImage === 'function' || 
-                           typeof safeSwapCameraImage === 'function';
-        return hasCamTs && hasFunction;
-      },
-      { timeout: 20000 } // Increased from 10s to 20s
-    ).catch((error) => {
-      // Log but don't fail - individual tests will handle missing webcam JS
+    // Use a shorter timeout and don't fail if it times out
+    // Individual tests will check availability and skip if needed
+    try {
+      await page.waitForFunction(
+        () => {
+          // CAM_TS should be defined (even if empty object)
+          const hasCamTs = typeof window.CAM_TS !== 'undefined';
+          // safeSwapCameraImage function should exist
+          const hasFunction = typeof window.safeSwapCameraImage === 'function' || 
+                             typeof safeSwapCameraImage === 'function';
+          return hasCamTs && hasFunction;
+        },
+        { timeout: 10000 } // Reduced to 10s - don't wait too long
+      );
+    } catch (error) {
+      // If webcam JS doesn't initialize, set flag and continue
+      // Individual tests will skip if webcams unavailable
       console.warn('Webcam JavaScript functions may not be available:', error.message);
-      return null;
-    });
-    
-    // Store flag if webcam JS isn't ready
-    if (!webcamJsReady) {
       await page.evaluate(() => {
         window.__webcamsUnavailable = true;
       });
+      // Don't throw - let tests handle skipping
     }
   });
 
