@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/constants.php';
 
 /**
  * Shared Configuration Utilities
@@ -329,8 +330,8 @@ function loadConfig($useCache = true) {
     
     // Cache in APCu if available (1 hour TTL, but invalidated on file change)
     if ($useCache && function_exists('apcu_store')) {
-        apcu_store($cacheKey, $config, 3600);
-        apcu_store($cacheTimeKey, $fileMtime, 3600);
+        apcu_store($cacheKey, $config, CONFIG_CACHE_TTL);
+        apcu_store($cacheTimeKey, $fileMtime, CONFIG_CACHE_TTL);
     }
     
     return $config;
