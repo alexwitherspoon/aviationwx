@@ -34,10 +34,8 @@ jobs:
             echo "✓ Created config/airports.json from example"
           fi
       
-      # Note: Docker layer caching removed from setup-docker job
-      # This job only sets up the environment and doesn't build images,
-      # so caching would create a path that doesn't exist, causing warnings.
-      # If Docker builds are needed in the future, add caching to the job that actually builds.
+      # Note: Docker builds are handled in individual test jobs with layer caching
+      # This job only sets up the environment and doesn't build images
 
   performance-tests:
     name: Performance Tests
@@ -58,7 +56,9 @@ jobs:
       - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: |
+            vendor
+            ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
@@ -102,7 +102,9 @@ jobs:
       - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: |
+            vendor
+            ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
@@ -118,8 +120,24 @@ jobs:
             echo "✓ Created config/airports.json from example"
           fi
       
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image with cache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          tags: aviationwx:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+      
       - name: Start Docker containers
         run: |
+          # Tag the pre-built image for docker-compose
+          docker tag aviationwx:test aviationwx:latest || true
           # Start local instance for testing
           docker compose -f docker/docker-compose.yml up -d
           # Reduced wait time - health check will verify readiness
@@ -187,7 +205,9 @@ jobs:
       - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: |
+            vendor
+            ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
@@ -203,8 +223,24 @@ jobs:
             echo "✓ Created config/airports.json from example"
           fi
       
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image with cache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          tags: aviationwx:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+      
       - name: Start Docker containers
         run: |
+          # Tag the pre-built image for docker-compose
+          docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
           sleep 10  # Reduced wait time
       
@@ -265,7 +301,9 @@ jobs:
       - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: |
+            vendor
+            ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
@@ -311,7 +349,9 @@ jobs:
       - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: |
+            vendor
+            ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
@@ -378,8 +418,24 @@ jobs:
             echo "✓ Created config/airports.json from example"
           fi
       
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image with cache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          tags: aviationwx:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+      
       - name: Start Docker containers
         run: |
+          # Tag the pre-built image for docker-compose
+          docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
           sleep 10  # Reduced wait time
           docker compose -f docker/docker-compose.yml ps

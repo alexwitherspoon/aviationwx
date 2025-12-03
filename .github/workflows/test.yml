@@ -29,6 +29,16 @@ jobs:
           extensions: apcu, gd, zip, curl
           coverage: none
       
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
       - name: Install Composer dependencies
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
@@ -197,6 +207,8 @@ jobs:
             "api/webcam.php"
             "lib/config.php"
             "lib/rate-limit.php"
+            "lib/constants.php"
+            "lib/circuit-breaker.php"
             "scripts/process-push-webcams.php"
             "scripts/sync-push-config.php"
             "lib/push-webcam-validator.php"
@@ -332,7 +344,80 @@ jobs:
             exit(1);
           }
           
+          if (!function_exists('checkRateLimitFileBased')) {
+            echo 'FAIL: checkRateLimitFileBased function not found (file-based fallback)' . PHP_EOL;
+            exit(1);
+          }
+          
           echo '✓ Rate limiting functions exist' . PHP_EOL;
+          "
+      
+      - name: Test circuit breaker functions
+        run: |
+          php -r "
+          require_once 'lib/circuit-breaker.php';
+          
+          // Check weather-specific wrappers
+          if (!function_exists('checkWeatherCircuitBreaker')) {
+            echo 'FAIL: checkWeatherCircuitBreaker function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWeatherFailure')) {
+            echo 'FAIL: recordWeatherFailure function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWeatherSuccess')) {
+            echo 'FAIL: recordWeatherSuccess function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          // Check webcam-specific wrappers
+          if (!function_exists('checkWebcamCircuitBreaker')) {
+            echo 'FAIL: checkWebcamCircuitBreaker function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWebcamFailure')) {
+            echo 'FAIL: recordWebcamFailure function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWebcamSuccess')) {
+            echo 'FAIL: recordWebcamSuccess function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          echo '✓ Circuit breaker functions exist' . PHP_EOL;
+          "
+      
+      - name: Test constants file
+        run: |
+          php -r "
+          require_once 'lib/constants.php';
+          
+          // Check that key constants are defined
+          \$required_constants = [
+            'DEFAULT_WEBCAM_REFRESH',
+            'DEFAULT_WEATHER_REFRESH',
+            'RATE_LIMIT_WEATHER_MAX',
+            'RATE_LIMIT_WEATHER_WINDOW',
+            'BACKOFF_BASE_SECONDS',
+            'CACHE_FILE_MAX_SIZE',
+            'CURL_TIMEOUT',
+            'CONFIG_CACHE_TTL',
+            'MAX_STALE_HOURS'
+          ];
+          
+          foreach (\$required_constants as \$const) {
+            if (!defined(\$const)) {
+              echo 'FAIL: Constant ' . \$const . ' not defined' . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Required constants defined' . PHP_EOL;
           "
       
       - name: Validate push webcam functions
