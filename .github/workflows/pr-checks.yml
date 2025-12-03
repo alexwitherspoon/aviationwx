@@ -29,6 +29,16 @@ jobs:
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
       - name: Install Composer dependencies
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
@@ -66,6 +76,8 @@ jobs:
                 "api/weather.php"
                 "lib/config.php"
                 "lib/rate-limit.php"
+                "lib/circuit-breaker.php"
+                "lib/constants.php"
               )
               
               for file in "${critical_files[@]}"; do
@@ -94,8 +106,8 @@ jobs:
             exit 1
           fi
           
-          # Check that stale data threshold is set correctly (3 hours)
-          if ! grep -q "maxStaleHours = 3" api/weather.php; then
+          # Check that stale data threshold uses constant (MAX_STALE_HOURS)
+          if ! grep -q "MAX_STALE_HOURS\|maxStaleHours.*3" api/weather.php; then
             echo "⚠️  Warning: Stale data threshold may not be set correctly"
           fi
           
@@ -192,13 +204,20 @@ jobs:
             "mergeWeatherDataWithFallback"
             "validateAirportId"
             "checkRateLimit"
+            "checkRateLimitFileBased"
+            "checkWeatherCircuitBreaker"
+            "recordWeatherFailure"
+            "recordWeatherSuccess"
+            "checkWebcamCircuitBreaker"
+            "recordWebcamFailure"
+            "recordWebcamSuccess"
             "validatePushWebcamConfig"
             "processPushWebcams"
             "syncPushConfig"
           )
           
           for func in "${critical_functions[@]}"; do
-            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php 2>/dev/null; then
+            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
               exit 1
             fi
