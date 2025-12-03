@@ -1,8 +1,13 @@
 # AviationWX - Docker Container
+# Syntax: dockerfile:1.4 (for BuildKit cache mounts)
+#syntax=docker/dockerfile:1.4
 FROM php:8.3-apache
 
 # Install dependencies and PHP extensions
-RUN apt-get update && apt-get install -y \
+# Use BuildKit cache mounts to speed up apt package installation
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
@@ -33,33 +38,47 @@ RUN a2enmod rewrite
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy application files
+# Copy composer files first (for better layer caching)
+# These change less frequently than application code
+COPY composer.json composer.lock ./
+
+# Copy configuration files (rarely change)
+COPY config/crontab /etc/cron.d/aviationwx-cron
+COPY docker/docker-entrypoint.sh /usr/local/bin/
+COPY docker/vsftpd.conf /etc/vsftpd.conf
+COPY docker/sshd_config /etc/ssh/sshd_config
+COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
+COPY docker/logrotate-sshd /etc/logrotate.d/sshd
+COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
+COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
+COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
+
+# Copy scripts (change less frequently than application code)
+COPY scripts/service-watchdog.sh /usr/local/bin/
+COPY scripts/setup-letsencrypt.sh /usr/local/bin/
+COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
+
+# Set permissions for copied files
+RUN chmod 0644 /etc/cron.d/aviationwx-cron \
+    && chown root:root /etc/cron.d/aviationwx-cron \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/service-watchdog.sh \
+    && chmod +x /usr/local/bin/setup-letsencrypt.sh \
+    && chmod +x /usr/local/bin/enable-vsftpd-ssl.sh \
+    && chmod 644 /etc/vsftpd.conf \
+    && chmod 644 /etc/ssh/sshd_config \
+    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd \
+    && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
+    && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
+    && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
+
+# Copy application files LAST (changes most frequently)
+# This ensures code changes don't invalidate earlier layers
 COPY --chown=www-data:www-data . /var/www/html/
 
 # Create cache directory
 RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache
-
-# Copy crontab file (build context is parent directory)
-COPY config/crontab /etc/cron.d/aviationwx-cron
-RUN chmod 0644 /etc/cron.d/aviationwx-cron \
-    && chown root:root /etc/cron.d/aviationwx-cron
-
-# Copy entrypoint script (build context is parent directory)
-COPY docker/docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Copy service watchdog script
-COPY scripts/service-watchdog.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/service-watchdog.sh
-
-# Copy Let's Encrypt setup script
-COPY scripts/setup-letsencrypt.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/setup-letsencrypt.sh
-
-# Copy vsftpd SSL enablement script
-COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/enable-vsftpd-ssl.sh
 
 # Create directories for FTP/SFTP
 RUN mkdir -p /var/www/html/uploads/webcams \
@@ -72,32 +91,12 @@ RUN mkdir -p /var/www/html/uploads/webcams \
 # Create webcam_users group
 RUN groupadd -f webcam_users
 
-# Copy vsftpd configuration
-COPY docker/vsftpd.conf /etc/vsftpd.conf
-RUN chmod 644 /etc/vsftpd.conf
-
-# Copy sshd configuration
-COPY docker/sshd_config /etc/ssh/sshd_config
-RUN chmod 644 /etc/ssh/sshd_config
-
-# Copy logrotate configurations
-COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
-COPY docker/logrotate-sshd /etc/logrotate.d/sshd
-RUN chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd
-
 # Create fail2ban configuration directories
 RUN mkdir -p /etc/fail2ban/jail.d \
     && mkdir -p /var/log/fail2ban \
     && mkdir -p /var/run/fail2ban
 
-# Copy fail2ban configurations
-COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
-COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
-COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
-RUN chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
-    && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
-    && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf \
-    && touch /var/log/vsftpd.log /var/log/auth.log \
+RUN touch /var/log/vsftpd.log /var/log/auth.log \
     && chmod 644 /var/log/vsftpd.log /var/log/auth.log
 
 # Create vsftpd virtual users database directory
