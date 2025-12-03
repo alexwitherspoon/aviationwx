@@ -10,10 +10,11 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/push-webcam-validator.php';
+require_once __DIR__ . '/../lib/constants.php';
 
-// Rate limiting: 10 submissions per hour per IP
+// Rate limiting
 $rateLimitKey = 'config_generator';
-if (!checkRateLimit($rateLimitKey, 10, 3600)) {
+if (!checkRateLimit($rateLimitKey, RATE_LIMIT_CONFIG_GENERATOR_MAX, RATE_LIMIT_CONFIG_GENERATOR_WINDOW)) {
     http_response_code(429);
     die('Rate limit exceeded. Please try again later.');
 }
