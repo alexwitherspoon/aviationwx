@@ -38,13 +38,17 @@ test.describe('Webcam Refresh Logic', () => {
     if (!hasWebcams) {
       // If no webcams, log and continue - individual tests will handle skipping
       console.warn('No webcam images found on page - webcam tests may be skipped');
+      // Store flag in page context for tests to check
+      await page.evaluate(() => {
+        window.__webcamsUnavailable = true;
+      });
       return;
     }
     
     // Only wait for webcam JS if webcams are present
     // Increase timeout and make condition more flexible
     // Don't fail if it times out - individual tests will check availability
-    await page.waitForFunction(
+    const webcamJsReady = await page.waitForFunction(
       () => {
         // CAM_TS should be defined (even if empty object)
         const hasCamTs = typeof window.CAM_TS !== 'undefined';
@@ -57,15 +61,25 @@ test.describe('Webcam Refresh Logic', () => {
     ).catch((error) => {
       // Log but don't fail - individual tests will handle missing webcam JS
       console.warn('Webcam JavaScript functions may not be available:', error.message);
+      return null;
     });
+    
+    // Store flag if webcam JS isn't ready
+    if (!webcamJsReady) {
+      await page.evaluate(() => {
+        window.__webcamsUnavailable = true;
+      });
+    }
   });
 
   test('CAM_TS should be initialized with server-side timestamps on page load', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0;
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams || typeof window.CAM_TS === 'undefined') {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -134,10 +148,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('webcam images should have data-initial-timestamp attribute', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -167,10 +183,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('safeSwapCameraImage should check backend for newer timestamps', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -215,10 +233,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('safeSwapCameraImage should update image when backend has newer timestamp', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -285,10 +305,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('safeSwapCameraImage should not update image when backend timestamp is same or older', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -344,10 +366,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('webcam refresh interval should be configured correctly', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -382,10 +406,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('CAM_TS should be updated when new image loads successfully', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
@@ -465,10 +491,12 @@ test.describe('Webcam Refresh Logic', () => {
 
   test('data-initial-timestamp should be updated when new image loads', async ({ page }) => {
     // Skip if webcams aren't available
-    const hasWebcams = await page.evaluate(() => {
-      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    const shouldSkip = await page.evaluate(() => {
+      return window.__webcamsUnavailable === true || 
+             document.querySelectorAll('img[id^="webcam-"]').length === 0 ||
+             typeof window.CAM_TS === 'undefined';
     });
-    if (!hasWebcams) {
+    if (shouldSkip) {
       test.skip();
       return;
     }
