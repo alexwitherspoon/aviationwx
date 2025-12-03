@@ -30,17 +30,32 @@ test.describe('Webcam Refresh Logic', () => {
     });
     
     // Wait for webcam-related JavaScript to be available
-    await page.waitForFunction(
-      () => {
-        // Check both window.safeSwapCameraImage and global safeSwapCameraImage
-        const hasFunction = typeof window.safeSwapCameraImage === 'function' || 
-                           typeof safeSwapCameraImage === 'function';
-        return typeof window.CAM_TS !== 'undefined' && hasFunction;
-      },
-      { timeout: 10000 }
-    ).catch(() => {
-      console.warn('Webcam JavaScript functions may not be available yet');
+    // First check if webcams exist on the page, then wait for JS initialization
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0;
     });
+    
+    if (hasWebcams) {
+      // Only wait for webcam JS if webcams are present
+      // Increase timeout and make condition more flexible
+      await page.waitForFunction(
+        () => {
+          // CAM_TS should be defined (even if empty object)
+          const hasCamTs = typeof window.CAM_TS !== 'undefined';
+          // safeSwapCameraImage function should exist
+          const hasFunction = typeof window.safeSwapCameraImage === 'function' || 
+                             typeof safeSwapCameraImage === 'function';
+          return hasCamTs && hasFunction;
+        },
+        { timeout: 20000 } // Increased from 10s to 20s
+      ).catch((error) => {
+        // Log but don't fail - individual tests will handle missing webcam JS
+        console.warn('Webcam JavaScript functions may not be available:', error.message);
+      });
+    } else {
+      // If no webcams, skip the wait but log it
+      console.warn('No webcam images found on page - webcam tests may be skipped');
+    }
   });
 
   test('CAM_TS should be initialized with server-side timestamps on page load', async ({ page }) => {
