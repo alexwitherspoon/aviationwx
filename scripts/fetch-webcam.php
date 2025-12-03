@@ -33,12 +33,12 @@ function fetchStaticImage($url, $cacheFile) {
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => CURL_TIMEOUT,
+        CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 3,
         CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
-        CURLOPT_MAXFILESIZE => 5242880, // Max 5MB
+        CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
     ]);
     
     $data = curl_exec($ch);
@@ -166,7 +166,30 @@ function mapErrorSeverity($code) {
     }
 }
 
-function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 10, $retries = 2, $maxRuntime = 6) {
+/**
+ * Check if ffmpeg is available
+ * @return bool True if ffmpeg is available
+ */
+function isFfmpegAvailable() {
+    static $available = null;
+    if ($available === null) {
+        $output = [];
+        $return = 0;
+        @exec('ffmpeg -version 2>&1', $output, $return);
+        $available = ($return === 0);
+    }
+    return $available;
+}
+
+function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = RTSP_DEFAULT_TIMEOUT, $retries = RTSP_DEFAULT_RETRIES, $maxRuntime = RTSP_MAX_RUNTIME) {
+    // Check if ffmpeg is available
+    if (!isFfmpegAvailable()) {
+        aviationwx_log('error', 'ffmpeg not available for RTSP capture', [
+            'url' => preg_replace('/:[^:@]*@/', ':****@', $url) // Sanitize URL
+        ], 'app');
+        return false;
+    }
+    
     $transport = strtolower($transport) === 'udp' ? 'udp' : 'tcp';
     $timeoutUs = max(1, intval($timeoutSeconds)) * 1000000; // microseconds (for -timeout option in ffmpeg 5.0+)
     $attempt = 0;
@@ -329,8 +352,8 @@ function fetchMJPEGStream($url, $cacheFile) {
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => CURL_TIMEOUT,
+        CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 3,
         CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
@@ -351,13 +374,13 @@ function fetchMJPEGStream($url, $cacheFile) {
             return 0; // Signal curl to stop receiving data
         }
         
-        // Safety: stop if data gets too large (max 2MB)
-        if (strlen($data) > 2097152) {
+        // Safety: stop if data gets too large
+        if (strlen($data) > MJPEG_MAX_SIZE) {
             return 0;
         }
         
-        // Safety: stop if taking too long (8 seconds max)
-        if (time() - $startTime > 8) {
+        // Safety: stop if taking too long
+        if (time() - $startTime > MJPEG_MAX_TIME) {
             return 0;
         }
         
@@ -388,9 +411,9 @@ function fetchMJPEGStream($url, $cacheFile) {
     // Extract complete JPEG (include end marker)
     $jpegData = substr($data, $jpegStart, $jpegEnd - $jpegStart + 2);
     
-    // Validate JPEG is reasonable size (at least 1KB, max 5MB)
+    // Validate JPEG is reasonable size (at least 1KB, max CACHE_FILE_MAX_SIZE)
     $jpegSize = strlen($jpegData);
-    if ($jpegSize < 1024 || $jpegSize > 5242880) {
+    if ($jpegSize < 1024 || $jpegSize > CACHE_FILE_MAX_SIZE) {
         return false;
     }
     
@@ -422,6 +445,8 @@ function fetchMJPEGStream($url, $cacheFile) {
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/circuit-breaker.php';
 // VPN routing is optional - only required if VPN features are used
 $vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
 if (file_exists($vpnRoutingFile)) {
@@ -436,229 +461,17 @@ if (file_exists($vpnRoutingFile)) {
     }
 }
 
-/**
- * Circuit breaker: check if camera should be skipped due to backoff
- * @param string $airportId
- * @param int $camIndex
- * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int]
- */
+// Circuit breaker wrapper functions for backward compatibility
 function checkCircuitBreaker($airportId, $camIndex) {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-        }
-    }
-    $backoffFile = $cacheDir . '/backoff.json';
-    $key = $airportId . '_' . $camIndex;
-    $now = time();
-    
-    if (!file_exists($backoffFile)) {
-        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-    }
-    
-    // Clear stat cache to ensure we read the latest file contents
-    clearstatcache(true, $backoffFile);
-    $backoffData = @json_decode(file_get_contents($backoffFile), true) ?: [];
-    
-    if (!isset($backoffData[$key])) {
-        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
-    }
-    
-    $state = $backoffData[$key];
-    $nextAllowed = (int)($state['next_allowed_time'] ?? 0);
-    
-    if ($nextAllowed > $now) {
-        $remaining = $nextAllowed - $now;
-        return [
-            'skip' => true,
-            'reason' => 'circuit_open',
-            'backoff_remaining' => $remaining,
-            'failures' => (int)($state['failures'] ?? 0)
-        ];
-    }
-    
-    // Backoff expired - entry will be cleaned up lazily on next write
-    // Don't clean up here to avoid blocking or file corruption issues
-    // The entry being present but expired won't cause issues - it will be overwritten
-    // on the next recordFailure or recordSuccess call
-    
-    return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0];
+    return checkWebcamCircuitBreaker($airportId, $camIndex);
 }
 
-/**
- * Record a failure and update backoff state
- * @param string $airportId
- * @param int $camIndex
- */
 function recordFailure($airportId, $camIndex, $severity = 'transient') {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return;
-        }
-    }
-    $backoffFile = $cacheDir . '/backoff.json';
-    $key = $airportId . '_' . $camIndex;
-    $now = time();
-    
-    // Use file locking to prevent race conditions
-    $fp = @fopen($backoffFile, 'c+'); // c+ = read/write, create if not exists
-    if ($fp === false) {
-        // Can't open, fall back to non-locked write (non-critical)
-        $backoffData = [];
-        if (file_exists($backoffFile)) {
-            $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
-        }
-        
-        if (!isset($backoffData[$key])) {
-            $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
-        }
-        
-        $state = &$backoffData[$key];
-        $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
-        $state['last_attempt'] = $now;
-        $failures = $state['failures'];
-        $base = max(60, pow(2, min($failures - 1, 5)) * 60);
-        $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
-        $cap = ($severity === 'permanent') ? 7200 : 3600;
-        $backoffSeconds = min($cap, (int)round($base * $multiplier));
-        $state['backoff_seconds'] = $backoffSeconds;
-        $state['next_allowed_time'] = $now + $backoffSeconds;
-        
-        @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
-        return;
-    }
-    
-    // Lock file for exclusive access
-    if (@flock($fp, LOCK_EX)) {
-        // Read with lock held
-        $content = @stream_get_contents($fp);
-        if ($content === false || $content === '') {
-            $backoffData = [];
-        } else {
-            rewind($fp);
-            $backoffData = @json_decode($content, true) ?: [];
-        }
-    } else {
-        // Lock failed, fall back to non-locked read
-        @fclose($fp);
-        $backoffData = [];
-        if (file_exists($backoffFile)) {
-            $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
-        }
-        @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
-        return;
-    }
-    
-    if (!isset($backoffData[$key])) {
-        $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
-    }
-    
-    $state = &$backoffData[$key];
-    $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
-    $state['last_attempt'] = $now;
-    
-    // Exponential backoff with severity scaling
-    // Base: min(60, 2^failures * 60) seconds, capped at 3600s (1 hour)
-    $failures = $state['failures'];
-    $base = max(60, pow(2, min($failures - 1, 5)) * 60);
-    $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
-    $cap = ($severity === 'permanent') ? 7200 : 3600; // cap 2h for permanent
-    $backoffSeconds = min($cap, (int)round($base * $multiplier));
-    $state['backoff_seconds'] = $backoffSeconds;
-    $state['next_allowed_time'] = $now + $backoffSeconds;
-    
-    // Write with lock held
-    @ftruncate($fp, 0);
-    @rewind($fp);
-    @fwrite($fp, json_encode($backoffData, JSON_PRETTY_PRINT));
-    @fflush($fp);
-    @flock($fp, LOCK_UN);
-    @fclose($fp);
+    recordWebcamFailure($airportId, $camIndex, $severity);
 }
 
-/**
- * Record a success and reset backoff state
- * @param string $airportId
- * @param int $camIndex
- */
 function recordSuccess($airportId, $camIndex) {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return;
-        }
-    }
-    $backoffFile = $cacheDir . '/backoff.json';
-    $key = $airportId . '_' . $camIndex;
-    $now = time();
-    
-    // Use file locking to prevent race conditions
-    $fp = @fopen($backoffFile, 'c+'); // c+ = read/write, create if not exists
-    if ($fp === false) {
-        // Can't lock, but we can still try to write (non-critical)
-        $backoffData = [];
-        if (file_exists($backoffFile)) {
-            $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
-        }
-    } else {
-        // Lock file for exclusive access
-        if (@flock($fp, LOCK_EX)) {
-            // Read with lock held
-            $content = @stream_get_contents($fp);
-            if ($content === false || $content === '') {
-                $backoffData = [];
-            } else {
-                rewind($fp);
-                $backoffData = @json_decode($content, true) ?: [];
-            }
-        } else {
-            // Lock failed, fall back to non-locked read
-            $backoffData = [];
-            if (file_exists($backoffFile)) {
-                $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
-            }
-        }
-    }
-    
-    if (!isset($backoffData[$key])) {
-        if (isset($fp) && $fp !== false) {
-            @flock($fp, LOCK_UN);
-            @fclose($fp);
-        }
-        return; // No previous state to reset
-    }
-    
-    // Reset on success
-    $backoffData[$key] = [
-        'failures' => 0,
-        'next_allowed_time' => 0,
-        'last_attempt' => $now,
-        'backoff_seconds' => 0
-    ];
-    
-    if (isset($fp) && $fp !== false) {
-        if (@flock($fp, LOCK_EX)) {
-            // Write with lock held
-            @ftruncate($fp, 0);
-            @rewind($fp);
-            @fwrite($fp, json_encode($backoffData, JSON_PRETTY_PRINT));
-            @fflush($fp);
-            @flock($fp, LOCK_UN);
-            @fclose($fp);
-        } else {
-            // Lock failed, close and fall back
-            @fclose($fp);
-            @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
-        }
-    } else {
-        // File handle not available, fall back to file_put_contents with lock
-        @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
-    }
+    recordWebcamSuccess($airportId, $camIndex);
 }
 
 // Guard: Only execute main code if not included by another script
@@ -881,9 +694,9 @@ foreach ($config['airports'] as $airportId => $airport) {
         switch ($sourceType) {
             case 'rtsp':
                 // RTSP stream - use ffmpeg to capture a frame with per-camera settings
-                $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: 10);
-                $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : 6;
-                $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, 2, $maxRuntime);
+                $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: RTSP_DEFAULT_TIMEOUT);
+                $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : RTSP_MAX_RUNTIME;
+                $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, RTSP_DEFAULT_RETRIES, $maxRuntime);
                 break;
                 
             case 'static_jpeg':
@@ -928,8 +741,7 @@ foreach ($config['airports'] as $airportId => $airport) {
                 echo "    Generating WEBP in background...\n";
             }
             
-            $DEFAULT_TRANSCODE_TIMEOUT = 8; // seconds
-            $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : $DEFAULT_TRANSCODE_TIMEOUT;
+            $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : DEFAULT_TRANSCODE_TIMEOUT;
             $transcodeStartTime = microtime(true);
             $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
             
