@@ -40,7 +40,8 @@ WORKDIR /var/www/html
 
 # Copy composer files first (for better layer caching)
 # These change less frequently than application code
-COPY composer.json composer.lock ./
+# Note: composer.lock is optional (may not be in repo if .gitignored)
+COPY composer.json ./
 
 # Copy configuration files (rarely change)
 COPY config/crontab /etc/cron.d/aviationwx-cron
