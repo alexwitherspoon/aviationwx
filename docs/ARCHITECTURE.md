@@ -7,25 +7,34 @@ This document provides an overview of the AviationWX.org codebase structure and 
 ```
 aviationwx.org/
 ├── index.php                 # Main router - handles subdomain/query routing
-├── airport-template.php      # Airport page template with weather display
-├── homepage.php              # Homepage with airport list
-├── weather.php               # Weather API endpoint
-├── webcam.php                # Webcam image server endpoint
-├── fetch-webcam-safe.php     # Webcam fetcher (runs via cron inside container)
-├── config-utils.php          # Configuration loading and utilities
-├── rate-limit.php            # Rate limiting utilities
-├── logger.php                # Logging utilities
-├── seo-utils.php             # SEO utilities (structured data, meta tags)
+├── pages/
+│   ├── airport.php           # Airport page template with weather display
+│   ├── homepage.php         # Homepage with airport list
+│   ├── status.php           # Status page
+│   └── config-generator.php # Configuration generator
 ├── api/
-│   └── sitemap.php           # Dynamic XML sitemap generator
-├── diagnostics.php           # System diagnostics endpoint
-├── clear-cache.php           # Cache clearing endpoint
-├── metrics.php               # Metrics endpoint
-├── health.php                # Health check endpoint
-├── airports.json.example     # Configuration template
-├── styles.css                # Application styles
-├── sw.js                     # Service worker for offline support
-└── tests/                    # Test files
+│   ├── weather.php          # Weather API endpoint
+│   ├── webcam.php          # Webcam image server endpoint
+│   └── sitemap.php         # Dynamic XML sitemap generator
+├── lib/
+│   ├── config.php          # Configuration loading and utilities
+│   ├── rate-limit.php      # Rate limiting utilities
+│   ├── logger.php          # Logging utilities
+│   ├── seo.php            # SEO utilities (structured data, meta tags)
+│   ├── constants.php      # Application constants
+│   └── circuit-breaker.php # Circuit breaker for API failures
+├── scripts/
+│   ├── fetch-webcam.php    # Webcam fetcher (runs via cron inside container)
+│   ├── fetch-weather.php   # Weather fetcher (runs via cron)
+│   └── process-push-webcams.php # Push webcam processor
+├── diagnostics.php         # System diagnostics endpoint
+├── clear-cache.php        # Cache clearing endpoint
+├── health.php            # Health check endpoint
+├── config/
+│   └── airports.json.example # Configuration template
+├── styles.css            # Application styles
+├── sw.js                # Service worker for offline support
+└── tests/               # Test files
 ```
 
 ## Core Components
@@ -39,7 +48,7 @@ aviationwx.org/
   - Loads airport-specific template
   - Shows homepage if no airport specified
 
-### Weather System (`weather.php`)
+### Weather System (`api/weather.php`)
 
 - **Purpose**: Fetches and serves weather data as JSON API
 - **Key Features**:
@@ -60,25 +69,25 @@ aviationwx.org/
 
 ### Webcam System
 
-**`webcam.php`**: Serves cached webcam images
+**`api/webcam.php`**: Serves cached webcam images
 - Handles image requests with cache headers
 - Returns placeholder if image missing
 - Supports multiple formats (WEBP, JPEG)
 - **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
 
-**`fetch-webcam-safe.php`**: Fetches and caches webcam images
+**`scripts/fetch-webcam.php`**: Fetches and caches webcam images
 - Runs via cron inside Docker container (every minute, automatically configured)
 - Safe memory usage (stops after first frame)
-- Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg)
+- Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), push uploads (SFTP/FTP/FTPS)
 - Generates multiple formats per image
-- Can be included by `webcam.php` for background refresh functionality
+- Can be included by `api/webcam.php` for background refresh functionality
 - **Reliability features**:
   - File locking for backoff state (prevents race conditions)
   - Atomic file writes (prevents cache corruption)
   - Circuit breaker with exponential backoff
   - Comprehensive error handling and logging
 
-### Configuration System (`config-utils.php`)
+### Configuration System (`lib/config.php`)
 
 - **Purpose**: Loads and validates airport configuration
 - **Features**:
@@ -87,7 +96,7 @@ aviationwx.org/
   - Validation functions
   - Airport ID extraction from requests
 
-### SEO System (`seo-utils.php`, `api/sitemap.php`)
+### SEO System (`lib/seo.php`, `api/sitemap.php`)
 
 - **Purpose**: Search engine optimization and indexing
 - **Features**:
@@ -149,7 +158,7 @@ Response (JSON) + Cache
 ### Webcam Data Flow
 
 ```
-Cron (inside container) → fetch-webcam-safe.php
+Cron (inside container) → scripts/fetch-webcam.php
   ↓
 For each webcam:
   ↓
@@ -296,7 +305,7 @@ See [LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for testing instructions.
 
 ## Monitoring
 
-- **Logging**: Comprehensive logging via `logger.php` (writes to stdout/stderr for Docker logging)
+- **Logging**: Comprehensive logging via `lib/logger.php` (writes to stdout/stderr for Docker logging)
 - **Docker Logs**: All logs captured by Docker with automatic rotation (10MB files, 10 files = 100MB total)
 - **Metrics**: `/metrics.php` endpoint for monitoring
 - **Health Checks**: `/health.php` for uptime monitoring
