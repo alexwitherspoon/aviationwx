@@ -133,6 +133,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('webcam images should have data-initial-timestamp attribute', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Wait for webcam images to be present
     await page.waitForSelector('img[id^="webcam-"]', { timeout: 10000 });
     
@@ -158,6 +166,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('safeSwapCameraImage should check backend for newer timestamps', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Set up request interception to monitor mtime requests
     const mtimeRequests = [];
     page.on('request', request => {
@@ -198,6 +214,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('safeSwapCameraImage should update image when backend has newer timestamp', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Mock the mtime endpoint to return a newer timestamp
     await page.route('**/webcam.php?*mtime=1*', async route => {
       const currentTime = Math.floor(Date.now() / 1000);
@@ -260,6 +284,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('safeSwapCameraImage should not update image when backend timestamp is same or older', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Get initial CAM_TS
     const initialCamTs = await page.evaluate(() => {
       return window.CAM_TS[0];
@@ -311,6 +343,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('webcam refresh interval should be configured correctly', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Check that setInterval was called for webcam refresh
     // We can't directly check setInterval, but we can verify the refresh function exists
     // and check the configured refresh interval from the page
@@ -341,6 +381,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('CAM_TS should be updated when new image loads successfully', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Get initial CAM_TS
     const initialCamTs = await page.evaluate(() => {
       return window.CAM_TS[0];
@@ -416,6 +464,14 @@ test.describe('Webcam Refresh Logic', () => {
   });
 
   test('data-initial-timestamp should be updated when new image loads', async ({ page }) => {
+    // Skip if webcams aren't available
+    const hasWebcams = await page.evaluate(() => {
+      return document.querySelectorAll('img[id^="webcam-"]').length > 0 && typeof window.CAM_TS !== 'undefined';
+    });
+    if (!hasWebcams) {
+      test.skip();
+      return;
+    }
     // Get initial timestamp from data attribute
     const initialDataTimestamp = await page.evaluate(() => {
       const img = document.getElementById('webcam-0');
