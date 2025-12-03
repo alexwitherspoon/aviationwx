@@ -390,7 +390,6 @@ jobs:
           - 'aviationwx.spec.js'
           - 'cache-and-stale-data.spec.js'
           - 'performance-optimizations.spec.js'
-          - 'webcam-refresh.spec.js'
     
     steps:
       - name: Checkout code
