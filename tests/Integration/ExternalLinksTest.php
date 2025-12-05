@@ -157,6 +157,59 @@ class ExternalLinksTest extends TestCase
     }
     
     /**
+     * Test custom links are valid and properly formatted
+     */
+    public function testCustomLinks_AreValid()
+    {
+        foreach ($this->testAirports as $airportId => $airport) {
+            if (empty($airport['links']) || !is_array($airport['links'])) {
+                // Custom links are optional, so skip if not configured
+                continue;
+            }
+            
+            foreach ($airport['links'] as $index => $link) {
+                // Validate structure
+                $this->assertArrayHasKey(
+                    'label',
+                    $link,
+                    "Custom link #{$index} for airport {$airportId} must have a 'label' field"
+                );
+                
+                $this->assertArrayHasKey(
+                    'url',
+                    $link,
+                    "Custom link #{$index} for airport {$airportId} must have a 'url' field"
+                );
+                
+                // Validate label is non-empty
+                $this->assertNotEmpty(
+                    $link['label'],
+                    "Custom link #{$index} for airport {$airportId} must have a non-empty label"
+                );
+                
+                // Validate URL is non-empty
+                $this->assertNotEmpty(
+                    $link['url'],
+                    "Custom link #{$index} for airport {$airportId} must have a non-empty URL"
+                );
+                
+                // Validate URL format
+                $this->assertTrue(
+                    filter_var($link['url'], FILTER_VALIDATE_URL) !== false,
+                    "Custom link #{$index} for airport {$airportId} must have a valid URL format: {$link['url']}"
+                );
+                
+                // Validate URL uses HTTPS
+                $this->assertStringStartsWith(
+                    'https://',
+                    $link['url'],
+                    "Custom link #{$index} for airport {$airportId} must use HTTPS: {$link['url']}"
+                );
+            }
+        }
+    }
+    
+    /**
      * Test that URL formats match expected patterns
      */
     public function testUrlFormats_MatchExpectedPatterns()
