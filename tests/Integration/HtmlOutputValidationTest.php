@@ -228,6 +228,82 @@ class HtmlOutputValidationTest extends TestCase
     }
     
     /**
+     * Test that custom links are rendered correctly in HTML output
+     */
+    public function testAirportPage_CustomLinksAreRendered()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Load test config to check if links are configured
+        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        if (!file_exists($configPath)) {
+            $this->markTestSkipped("Test configuration not found");
+            return;
+        }
+        
+        $config = json_decode(file_get_contents($configPath), true);
+        if (empty($config['airports']['kspb']['links'])) {
+            // Links are optional, so skip if not configured
+            $this->markTestSkipped("Custom links not configured in test fixture");
+            return;
+        }
+        
+        $links = $config['airports']['kspb']['links'];
+        
+        // Verify each link is rendered in the HTML
+        foreach ($links as $link) {
+            if (empty($link['label']) || empty($link['url'])) {
+                continue; // Skip invalid links
+            }
+            
+            // Check that the link URL is present in the HTML (properly escaped)
+            $escapedUrl = htmlspecialchars($link['url'], ENT_QUOTES, 'UTF-8');
+            $this->assertStringContainsString(
+                $escapedUrl,
+                $html,
+                "Custom link URL should be present in HTML output: {$link['url']}"
+            );
+            
+            // Check that the link label is present in the HTML (properly escaped)
+            $escapedLabel = htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8');
+            $this->assertStringContainsString(
+                $escapedLabel,
+                $html,
+                "Custom link label should be present in HTML output: {$link['label']}"
+            );
+            
+            // Check that the link has proper security attributes
+            $this->assertStringContainsString(
+                'target="_blank"',
+                $html,
+                "Custom links should have target=\"_blank\" attribute"
+            );
+            
+            $this->assertStringContainsString(
+                'rel="noopener"',
+                $html,
+                "Custom links should have rel=\"noopener\" attribute"
+            );
+            
+            // Verify the link is in a button element (has class="btn")
+            // Find the link by looking for the URL and checking it has the btn class nearby
+            $linkPattern = '/<a[^>]*href=["\']' . preg_quote($escapedUrl, '/') . '["\'][^>]*class=["\'][^"\']*btn[^"\']*["\']/i';
+            $this->assertMatchesRegularExpression(
+                $linkPattern,
+                $html,
+                "Custom link should have class=\"btn\" attribute: {$link['url']}"
+            );
+        }
+    }
+    
+    /**
      * Test that there are no PHP errors in the output
      */
     public function testAirportPage_NoPhpErrorsInOutput()
