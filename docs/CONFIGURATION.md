@@ -146,10 +146,89 @@ Add an entry to `airports.json` following this structure:
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
       "metar_station": "KSPB",
-      "nearby_metar_stations": ["KVUO", "KHIO"]
+      "nearby_metar_stations": ["KVUO", "KHIO"],
+      "links": [
+        {
+          "label": "Airport Website",
+          "url": "https://example-airport.com"
+        },
+        {
+          "label": "Supporting Organization",
+          "url": "https://example-org.com"
+        }
+      ]
     }
   }
 }
+```
+
+## Custom Links Configuration
+
+You can add custom links to any airport that will appear in the links section alongside the standard links (AirNav, SkyVector, AOPA, FAA Weather). This is useful for linking to:
+- Airport websites
+- Supporting organizations
+- FBO websites
+- Local aviation groups
+- Any other relevant resources
+
+### Configuration Format
+
+Add a `links` array to your airport configuration:
+
+```json
+"links": [
+  {
+    "label": "Airport Website",
+    "url": "https://example-airport.com"
+  },
+  {
+    "label": "Supporting Organization",
+    "url": "https://example-org.com"
+  }
+]
+```
+
+### Fields
+
+- **`label`** (required): The display text for the link button
+- **`url`** (required): The full URL (must be HTTPS)
+
+### Behavior
+
+- Links are **optional** - only airports with a `links` array will display custom links
+- Links appear in the links section after the standard links (AirNav, SkyVector, AOPA, FAA Weather)
+- Each link is rendered as a button with proper security attributes (`target="_blank" rel="noopener"`)
+- Links are only displayed if both `label` and `url` are present and non-empty
+- All user input is properly escaped to prevent XSS attacks
+
+### Examples
+
+**Airport with Website:**
+```json
+"links": [
+  {
+    "label": "Airport Website",
+    "url": "https://scappooseairport.com"
+  }
+]
+```
+
+**Airport with Multiple Links:**
+```json
+"links": [
+  {
+    "label": "Airport Website",
+    "url": "https://example-airport.com"
+  },
+  {
+    "label": "Friends of the Airport",
+    "url": "https://friendsoftheairport.org"
+  },
+  {
+    "label": "FBO",
+    "url": "https://fbo.example.com"
+  }
+]
 ```
 
 ## Runway Configuration
