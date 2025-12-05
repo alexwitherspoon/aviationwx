@@ -65,8 +65,67 @@ services:
         max-size: "10m"
         max-file: "10"
 
-  # VPN Manager - Manages VPN connections and configuration
-  # Uses host networking to access VPN server and manage connections
+  # VPN Server - OpenVPN server
+  # Uses host networking for full VPN functionality
+  vpn-openvpn:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-openvpn
+    image: aviationwx-vpn-openvpn
+    container_name: aviationwx-vpn-openvpn
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun
+    volumes:
+      - openvpn-config:/etc/openvpn-shared:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "openvpn.*server.conf"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  # VPN Server - WireGuard server
+  # Uses host networking for full VPN functionality
+  vpn-wireguard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-wireguard
+    image: aviationwx-vpn-wireguard
+    container_name: aviationwx-vpn-wireguard
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    volumes:
+      - wireguard-config:/etc/wireguard-shared:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wg", "show", "wg0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+
+  # VPN Manager - Manages VPN connections and configuration for all protocols
+  # Uses host networking to access VPN servers and manage connections
   vpn-manager:
     build:
       context: ..
@@ -80,15 +139,21 @@ services:
     volumes:
       - ../config/airports.json:/var/www/html/config/airports.json:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
+      - ../config/vpn-clients:/var/www/html/config/vpn-clients
       - vpn-config:/etc/ipsec-shared
+      - wireguard-config:/etc/wireguard-shared
+      - openvpn-config:/etc/openvpn-shared
     environment:
       - CONFIG_PATH=/var/www/html/config/airports.json
       - STATUS_FILE=/var/www/html/cache/vpn-status.json
+      - CLIENT_CONFIG_DIR=/var/www/html/config/vpn-clients
       - VPN_TEST_MODE=true
       - VPN_TEST_CLIENT_IP=127.0.0.1
     restart: unless-stopped
     depends_on:
       - vpn-server
+      - vpn-wireguard
+      - vpn-openvpn
     logging:
       driver: "json-file"
       options:
@@ -156,4 +221,6 @@ services:
 
 volumes:
   vpn-config:
+  wireguard-config:
+  openvpn-config:
 

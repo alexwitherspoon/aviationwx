@@ -2,19 +2,25 @@
 
 ## Overview
 
-VPN feature enables secure access to private camera URLs at remote airport sites via IPsec site-to-site VPN connections.
+VPN feature enables secure access to private camera URLs at remote airport sites. Supports WireGuard, OpenVPN, and IPsec protocols.
+
+## Supported Protocols
+
+- **WireGuard** - Modern, fast, recommended for new setups
+- **OpenVPN** - Widely compatible, good for older equipment  
+- **IPsec** - Standard protocol, works with most enterprise gear
 
 ## Key Concepts
 
-- **VPN Server**: Runs in Docker container (strongSwan), accepts connections from remote sites
+- **VPN Servers**: Separate Docker containers for each protocol
 - **Remote Sites**: Connect TO production server (they're clients, we're server)
-- **Per-Airport**: Each airport has its own VPN connection (never shared)
-- **Policy Routing**: Only specific camera IPs route through VPN
-- **Auto-Recovery**: Persistent connections with auto-reconnect
+- **Per-Airport**: Each airport has its own VPN connection
+- **Auto Key Generation**: Server generates keys automatically (WireGuard/OpenVPN)
+- **Client Configs**: Generated configs ready to import at remote sites
 
 ## Configuration
 
-### airports.json Example
+### airports.json Example (WireGuard)
 
 ```json
 {
@@ -22,15 +28,17 @@ VPN feature enables secure access to private camera URLs at remote airport sites
     "kspb": {
       "vpn": {
         "enabled": true,
-        "type": "ipsec",
+        "type": "wireguard",
         "connection_name": "kspb_vpn",
         "remote_subnet": "192.168.1.0/24",
-        "psk": "${VPN_PSK_KSPB}"
+        "wireguard": {
+          "server_port": 51820
+        }
       },
       "webcams": [
         {
           "name": "North Camera",
-          "url": "rtsp://192.168.1.100:554/stream1",  // Private IP via VPN
+          "url": "rtsp://192.168.1.100:554/stream1",
           "type": "rtsp"
         }
       ]
@@ -42,95 +50,76 @@ VPN feature enables secure access to private camera URLs at remote airport sites
 ### Environment Variables
 
 ```bash
-# One PSK per airport with VPN
-VPN_PSK_KSPB=your-secure-psk-here
-VPN_PSK_KABC=another-secure-psk-here
+VPN_SERVER_IP=your.public.ip.address
+VPN_SUBNET=10.0.0.0/16
 ```
-
-## Architecture
-
-```
-Production Server (Static IP)
-├── VPN Server Container (strongSwan)
-│   └── Accepts connections from remote sites
-├── VPN Manager Service
-│   ├── Reads airports.json
-│   ├── Generates strongSwan config
-│   ├── Monitors connections
-│   └── Handles reconnection
-└── Web App Container
-    ├── Checks VPN requirement
-    ├── Routes camera requests through VPN
-    └── Handles VPN failures gracefully
-```
-
-## Remote Site Setup
-
-1. **Enable Dynamic DNS** (if dynamic IP)
-2. **Configure Site-to-Site IPsec VPN**:
-   - Peer IP: Production server static IP
-   - Pre-Shared Key: (shared with production)
-   - Remote Subnet: (if needed)
-   - IKE Version: 2
-   - Encryption: AES-256-GCM
-   - Hash: SHA-256
-   - DH Group: 14
 
 ## Docker Services
 
+### vpn-wireguard
+- WireGuard server
+- Port: UDP 51820
+- Network mode: host
+
+### vpn-openvpn
+- OpenVPN server
+- Port: UDP 1194
+- Network mode: host
+
 ### vpn-server
 - strongSwan IPsec server
-- Accepts multiple connections
-- Network mode: host (for IPsec)
+- Ports: UDP 500, 4500
+- Network mode: host
 
 ### vpn-manager
-- Manages VPN connections
-- Generates configuration
+- Manages all VPN protocols
+- Generates server and client configs
 - Health monitoring
-- Auto-reconnection
+- Auto key generation
+
+## Quick Start
+
+1. Add VPN config to `airports.json`
+2. Restart containers: `docker-compose restart vpn-manager vpn-wireguard`
+3. Generate client config: `./scripts/generate-client-config.sh kspb wireguard`
+4. Import config at remote site
+5. Update webcam URLs to use private IPs
 
 ## Monitoring
 
 ### Check VPN Status
 ```bash
-docker exec aviationwx-vpn ipsec status
-docker logs -f aviationwx-vpn-manager
-```
+# WireGuard
+docker exec vpn-wireguard wg show
 
-### Health Checks
-- Interface status (every 30s)
-- IPsec connection state (every 60s)
-- Ping remote gateway (every 5min)
+# OpenVPN
+docker logs vpn-openvpn
+
+# IPsec
+docker exec vpn-server ipsec status
+
+# Manager logs
+docker logs -f vpn-manager
+```
 
 ## Troubleshooting
 
 ### Connection Won't Establish
-1. Check PSK matches on both sides
-2. Verify firewall allows UDP 500, 4500
-3. Check IPsec logs: `docker logs aviationwx-vpn`
-4. Verify remote site configuration
-
-### Connection Drops Frequently
-1. Check network stability
-2. Review IPsec logs for errors
-3. Verify NAT traversal settings
-4. Check bandwidth/latency
+1. Check keys/PSK match on both sides
+2. Verify firewall allows required ports:
+   - WireGuard: UDP 51820
+   - OpenVPN: UDP 1194
+   - IPsec: UDP 500, 4500
+3. Check logs: `docker logs vpn-wireguard` (or vpn-openvpn/vpn-server)
+4. Verify `VPN_SERVER_IP` is correct
 
 ### Camera Not Accessible
 1. Verify VPN connection is up
-2. Check routing rules
-3. Verify camera IP is in remote_subnet
-4. Test ping to camera IP
+2. Verify camera IP is in `remote_subnet` range
+3. Test: `docker exec vpn-manager ping -c 3 192.168.1.100`
 
 ## Files
 
-- `docs/VPN_DESIGN.md` - Full design document
-- `docs/VPN_IMPLEMENTATION_EXAMPLES.md` - Code examples
-- `docs/VPN_OPEN_QUESTIONS.md` - Decisions and recommendations
-- `docs/VPN_REMOTE_SITE_SETUP.md` - Remote site guide (to be created)
-
-## Status
-
-**Current State**: Design phase
-**Next Steps**: Prototype and testing with KSPB site
+- `docs/VPN_USAGE.md` - Complete usage guide
+- `config/vpn-clients/` - Generated client configs (git-ignored)
 
