@@ -129,6 +129,16 @@
       "nearby_metar_stations": [
         "KABC",
         "KDEF"
+      ],
+      "links": [
+        {
+          "label": "Airport Website",
+          "url": "https://example-airport.com"
+        },
+        {
+          "label": "Supporting Organization",
+          "url": "https://example-org.com"
+        }
       ]
     }
   }
