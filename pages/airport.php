@@ -412,6 +412,21 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <a href="<?= htmlspecialchars($faa_weather_url) ?>" target="_blank" rel="noopener" class="btn">
                     FAA Weather
                 </a>
+                <?php
+                // Render custom links if configured
+                if (!empty($airport['links']) && is_array($airport['links'])) {
+                    foreach ($airport['links'] as $link) {
+                        // Validate that both label and url are present
+                        if (!empty($link['label']) && !empty($link['url'])) {
+                            ?>
+                            <a href="<?= htmlspecialchars($link['url']) ?>" target="_blank" rel="noopener" class="btn">
+                                <?= htmlspecialchars($link['label']) ?>
+                            </a>
+                            <?php
+                        }
+                    }
+                }
+                ?>
             </div>
         </section>
 
