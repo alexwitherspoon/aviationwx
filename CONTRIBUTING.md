@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to AviationWX.org! This document provides guidelines and instructions for contributing.
 
+## Code of Conduct
+
+This project adheres to a Code of Conduct that all contributors are expected to follow. Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before participating.
+
 ## Getting Started
 
 1. **Fork the repository** on GitHub
@@ -10,15 +14,15 @@ Thank you for your interest in contributing to AviationWX.org! This document pro
    git clone https://github.com/YOUR_USERNAME/aviationwx.org.git
    cd aviationwx.org
    ```
-3. **Set up local development** - See [LOCAL_SETUP.md](LOCAL_SETUP.md) for detailed instructions
+3. **Set up local development** - See [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for detailed instructions
 
 ## Development Setup
 
-See [LOCAL_SETUP.md](LOCAL_SETUP.md) for complete local development instructions. Quick start:
+See [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for complete local development instructions. Quick start:
 
 ```bash
 # Copy configuration template
-cp airports.json.example airports.json
+cp config/airports.json.example config/airports.json
 
 # Edit with test credentials (never commit real credentials)
 # Then start Docker
@@ -107,9 +111,9 @@ make up
 ### Security Guidelines
 
 - **Never commit sensitive data** (API keys, passwords, credentials)
-- Use `airports.json.example` as a template
+- Use `config/airports.json.example` as a template
 - Validate and sanitize all user input
-- Follow security best practices in [SECURITY.md](SECURITY.md)
+- Follow security best practices in [docs/SECURITY.md](docs/SECURITY.md)
 
 ### Documentation
 
@@ -162,13 +166,6 @@ make up
 - Open an issue for questions or discussions
 - Check existing documentation first
 - Be respectful and constructive in all communications
-
-## Code of Conduct
-
-- Be respectful and inclusive
-- Welcome newcomers and help them learn
-- Focus on constructive feedback
-- Keep discussions professional
 
 Thank you for contributing to AviationWX.org! 🛩️
 

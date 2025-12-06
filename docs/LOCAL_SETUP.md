@@ -287,11 +287,10 @@ Once local setup is complete, verify:
    - Push to GitHub
 
 2. **Ready for Production?**
-   - See [PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for Ubuntu LTS VPS deployment from scratch
-   - Or see [DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) for detailed deployment guide
+   - See [DEPLOYMENT.md](DEPLOYMENT.md) for complete production deployment guide
 
 3. **Contributing**:
-   - See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for contribution guidelines
+   - See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines
    - Follow coding standards
    - Submit Pull Requests
 

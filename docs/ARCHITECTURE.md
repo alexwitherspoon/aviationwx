@@ -261,7 +261,7 @@ See [SECURITY.md](docs/SECURITY.md) for detailed security information.
 - **Production**: Docker Compose on DigitalOcean Droplet
 - **DNS**: Wildcard subdomain support
 
-See [DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md) for deployment details.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
 
 ## Extending the System
 

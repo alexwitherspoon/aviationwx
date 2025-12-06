@@ -33,7 +33,7 @@ The `airports.json` file contains:
 - `README.md`
 - `SECURITY.md`
 - `.gitignore`
-- `SETUP.md`
+- `LOCAL_SETUP.md`
 - `LOCAL_COMMANDS.md`
 - All documentation files
 
