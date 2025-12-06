@@ -15,6 +15,9 @@ services:
       - "2121:2121"  # FTP
       - "2122:2122"  # FTPS
       - "2222:2222"  # SFTP
+      # FTP passive mode ports (50000-50100) - Docker Compose doesn't support ranges directly
+      # These ports are opened via firewall script, and Docker's default iptables rules allow them
+      # when using published ports. The vsftpd service binds to these ports inside the container.
     volumes:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
       - /home/aviationwx/airports.json:/var/www/html/airports.json:ro

@@ -562,12 +562,16 @@ jobs:
             ./scripts/configure-firewall.sh
           else
             echo "⚠️  Firewall script not found, configuring ports manually..."
-            # Fallback: configure ports directly
+            # Fallback: configure ports directly (should match configure-firewall.sh)
             sudo ufw allow 80/tcp comment 'HTTP (Nginx)' || true
             sudo ufw allow 443/tcp comment 'HTTPS (Nginx)' || true
             sudo ufw allow 2121/tcp comment 'FTP (Push webcams)' || true
             sudo ufw allow 2122/tcp comment 'FTPS (Push webcams)' || true
             sudo ufw allow 2222/tcp comment 'SFTP (Push webcams)' || true
+            sudo ufw allow 50000:50100/tcp comment 'FTP passive mode (Push webcams)' || true
+            sudo ufw allow 22/tcp comment 'SSH (System access)' || true
+            sudo ufw allow 500/udp comment 'IPsec IKE (VPN)' || true
+            sudo ufw allow 4500/udp comment 'IPsec NAT-T (VPN)' || true
             sudo ufw status numbered
           fi
           EOF

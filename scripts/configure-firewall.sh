@@ -13,6 +13,7 @@ PORTS=(
     "2121:tcp:FTP (Push webcams)"
     "2122:tcp:FTPS (Push webcams)"
     "2222:tcp:SFTP (Push webcams)"
+    "50000:50100:tcp:FTP passive mode (Push webcams)"
     "22:tcp:SSH (System access)"
     "500:udp:IPsec IKE (VPN)"
     "4500:udp:IPsec NAT-T (VPN)"
@@ -44,15 +45,38 @@ fi
 
 # Configure each port
 for port_config in "${PORTS[@]}"; do
-    IFS=':' read -r port protocol description <<< "$port_config"
+    # Split by colon - handle both single ports and port ranges
+    IFS=':' read -ra parts <<< "$port_config"
     
-    # Check if rule already exists
-    if $SUDO ufw status | grep -q "^${port}/${protocol}"; then
-        echo "✓ Port ${port}/${protocol} (${description}) already configured"
+    # Check if second part is a number (indicating port range like 50000:50100:tcp:desc)
+    if [[ "${parts[1]}" =~ ^[0-9]+$ ]]; then
+        # Port range format: PORT_START:PORT_END:PROTOCOL:DESCRIPTION
+        port_start="${parts[0]}"
+        port_end="${parts[1]}"
+        protocol="${parts[2]}"
+        description="${parts[3]}"
+        port_range="${port_start}:${port_end}"
+        
+        if $SUDO ufw status | grep -q "${port_range}/${protocol}"; then
+            echo "✓ Port range ${port_range}/${protocol} (${description}) already configured"
+        else
+            echo "Adding port range ${port_range}/${protocol} (${description})..."
+            $SUDO ufw allow ${port_range}/${protocol} comment "${description}"
+            echo "✓ Port range ${port_range}/${protocol} added"
+        fi
     else
-        echo "Adding port ${port}/${protocol} (${description})..."
-        $SUDO ufw allow ${port}/${protocol} comment "${description}"
-        echo "✓ Port ${port}/${protocol} added"
+        # Single port format: PORT:PROTOCOL:DESCRIPTION
+        port="${parts[0]}"
+        protocol="${parts[1]}"
+        description="${parts[2]}"
+        
+        if $SUDO ufw status | grep -q "^${port}/${protocol}"; then
+            echo "✓ Port ${port}/${protocol} (${description}) already configured"
+        else
+            echo "Adding port ${port}/${protocol} (${description})..."
+            $SUDO ufw allow ${port}/${protocol} comment "${description}"
+            echo "✓ Port ${port}/${protocol} added"
+        fi
     fi
 done
 
