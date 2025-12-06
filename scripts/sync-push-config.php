@@ -118,24 +118,68 @@ function validateConfigBeforeApply($configFile) {
 
 /**
  * Create upload directory for camera
+ * Creates both parent directory and incoming subdirectory with correct permissions
  */
-function createCameraDirectory($airportId, $camIndex) {
-    $uploadDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex . '/incoming/';
+function createCameraDirectory($airportId, $camIndex, $protocol = null) {
+    $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
+    $baseDir = $webcamsBaseDir . '/' . $airportId . '_' . $camIndex;
+    $incomingDir = $baseDir . '/incoming';
     
-    if (!is_dir($uploadDir)) {
-        @mkdir($uploadDir, 0755, true);
+    // Ensure parent directories exist and are root-owned (required for SFTP chroot)
+    if (!is_dir($webcamsBaseDir)) {
+        @mkdir($webcamsBaseDir, 0755, true);
+    }
+    // Ensure webcams directory is root:root (critical for SFTP chroot)
+    if (function_exists('chown') && is_dir($webcamsBaseDir)) {
+        @chown($webcamsBaseDir, 0); // root UID
+        $rootGroup = @posix_getgrnam('root');
+        if ($rootGroup !== false) {
+            @chgrp($webcamsBaseDir, $rootGroup['gid']);
+        }
+        @chmod($webcamsBaseDir, 0755);
     }
     
-    // Set permissions
-    @chmod($uploadDir, 0755);
-    
-    // Set ownership (if possible)
-    $wwwDataUid = @fileowner(__DIR__ . '/../cache');
-    if ($wwwDataUid !== false && function_exists('chown')) {
-        @chown($uploadDir, $wwwDataUid);
+    // Create parent directory if it doesn't exist
+    if (!is_dir($baseDir)) {
+        @mkdir($baseDir, 0755, true);
     }
     
-    return $uploadDir;
+    // Create incoming directory if it doesn't exist
+    if (!is_dir($incomingDir)) {
+        @mkdir($incomingDir, 0755, true);
+    }
+    
+    // Set permissions on parent directory (must be root:root for chroot)
+    @chmod($baseDir, 0755);
+    if (function_exists('chown')) {
+        // Try to set to root, but don't fail if we can't
+        @chown($baseDir, 0); // 0 = root UID
+        $groupInfo = @posix_getgrnam('root');
+        if ($groupInfo !== false) {
+            @chgrp($baseDir, $groupInfo['gid']);
+        }
+    }
+    
+    // Set permissions on incoming directory based on protocol
+    @chmod($incomingDir, 0755);
+    if (function_exists('chown')) {
+        if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
+            // For FTP/FTPS: incoming must be owned by www-data (guest user)
+            $wwwDataInfo = @posix_getpwnam('www-data');
+            if ($wwwDataInfo !== false) {
+                @chown($incomingDir, $wwwDataInfo['uid']);
+                $wwwDataGroup = @posix_getgrnam('www-data');
+                if ($wwwDataGroup !== false) {
+                    @chgrp($incomingDir, $wwwDataGroup['gid']);
+                }
+            }
+        } else {
+            // For SFTP: incoming will be owned by the user (set by create-sftp-user.sh)
+            // We'll let the SFTP user creation script handle it
+        }
+    }
+    
+    return $incomingDir;
 }
 
 /**
@@ -187,6 +231,76 @@ function getExistingPushCameras() {
     }
     
     return $cameras;
+}
+
+/**
+ * Get username tracking file path
+ */
+function getUsernameTrackingFile() {
+    $trackDir = __DIR__ . '/../cache/push_webcams';
+    if (!is_dir($trackDir)) {
+        @mkdir($trackDir, 0755, true);
+    }
+    return $trackDir . '/username_mapping.json';
+}
+
+/**
+ * Load username-to-camera mapping
+ */
+function loadUsernameMapping() {
+    $trackFile = getUsernameTrackingFile();
+    if (!file_exists($trackFile)) {
+        return [];
+    }
+    
+    $data = @json_decode(@file_get_contents($trackFile), true);
+    if (!is_array($data)) {
+        return [];
+    }
+    
+    return $data;
+}
+
+/**
+ * Save username-to-camera mapping
+ */
+function saveUsernameMapping($mapping) {
+    $trackFile = getUsernameTrackingFile();
+    $fp = @fopen($trackFile, 'c+');
+    if (!$fp) {
+        return false;
+    }
+    
+    if (@flock($fp, LOCK_EX)) {
+        @ftruncate($fp, 0);
+        @rewind($fp);
+        @fwrite($fp, json_encode($mapping, JSON_PRETTY_PRINT));
+        @fflush($fp);
+        @flock($fp, LOCK_UN);
+    }
+    
+    @fclose($fp);
+    return true;
+}
+
+/**
+ * Validate username format (14 alphanumeric characters)
+ */
+function validateUsername($username) {
+    if (strlen($username) !== 14) {
+        return false;
+    }
+    return preg_match('/^[a-zA-Z0-9]{14}$/', $username) === 1;
+}
+
+/**
+ * Validate password format (14 alphanumeric characters)
+ */
+function validatePassword($password) {
+    if (strlen($password) !== 14) {
+        return false;
+    }
+    return preg_match('/^[a-zA-Z0-9]{14}$/', $password) === 1;
 }
 
 /**
@@ -291,7 +405,55 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         @mkdir($userConfigDir, 0755, true);
     }
     
-    $chrootDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}";
+    $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
+    $chrootDir = $webcamsBaseDir . '/' . $airportId . '_' . $camIndex;
+    $incomingDir = $chrootDir . '/incoming';
+    
+    // Ensure parent directories exist and are root-owned (required for chroot)
+    if (!is_dir($webcamsBaseDir)) {
+        @mkdir($webcamsBaseDir, 0755, true);
+    }
+    // Ensure webcams directory is root:root (critical for SFTP chroot, also good for FTP)
+    if (function_exists('chown') && is_dir($webcamsBaseDir)) {
+        @chown($webcamsBaseDir, 0); // root UID
+        $rootGroup = @posix_getgrnam('root');
+        if ($rootGroup !== false) {
+            @chgrp($webcamsBaseDir, $rootGroup['gid']);
+        }
+        @chmod($webcamsBaseDir, 0755);
+    }
+    
+    // Ensure directories exist with correct permissions
+    if (!is_dir($chrootDir)) {
+        @mkdir($chrootDir, 0755, true);
+    }
+    if (!is_dir($incomingDir)) {
+        @mkdir($incomingDir, 0755, true);
+    }
+    
+    // Set parent directory to root:root (required for chroot)
+    if (function_exists('chown')) {
+        @chown($chrootDir, 0); // root UID
+        $rootGroup = @posix_getgrnam('root');
+        if ($rootGroup !== false) {
+            @chgrp($chrootDir, $rootGroup['gid']);
+        }
+        @chmod($chrootDir, 0755);
+    }
+    
+    // Set incoming directory to www-data:www-data (guest user for vsftpd)
+    if (function_exists('chown')) {
+        $wwwDataInfo = @posix_getpwnam('www-data');
+        if ($wwwDataInfo !== false) {
+            @chown($incomingDir, $wwwDataInfo['uid']);
+            $wwwDataGroup = @posix_getgrnam('www-data');
+            if ($wwwDataGroup !== false) {
+                @chgrp($incomingDir, $wwwDataGroup['gid']);
+            }
+            @chmod($incomingDir, 0755);
+        }
+    }
+    
     $userConfigFile = $userConfigDir . '/' . $username;
     $config = "local_root={$chrootDir}\n";
     
@@ -338,18 +500,35 @@ function removeFtpUser($username) {
         $content .= $user . "\n" . $pass . "\n";
     }
     
-    @file_put_contents($vsftpdUserFile, $content);
+    if (@file_put_contents($vsftpdUserFile, $content) === false) {
+        aviationwx_log('warning', 'sync-push-config: Cannot write vsftpd users file during removal', [
+            'file' => $vsftpdUserFile,
+            'username' => $username
+        ], 'app');
+    }
     
     // Rebuild database
     if (count($users) > 0) {
         exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
+        if ($code !== 0) {
+            aviationwx_log('warning', 'sync-push-config: db_load failed during user removal', [
+                'output' => implode("\n", $output),
+                'username' => $username
+            ], 'app');
+        }
     } else {
         // No users left, remove database
         @unlink($vsftpdDbFile);
     }
     
     // Remove user config
-    @unlink($userConfigFile);
+    if (file_exists($userConfigFile)) {
+        @unlink($userConfigFile);
+    }
+    
+    aviationwx_log('info', 'sync-push-config: FTP user removed', [
+        'username' => $username
+    ], 'app');
 }
 
 /**
@@ -358,13 +537,25 @@ function removeFtpUser($username) {
 function removeSftpUser($username) {
     // Remove system user
     exec('userdel ' . escapeshellarg($username) . ' 2>&1', $output, $code);
-    // Ignore errors (user might not exist)
+    
+    if ($code === 0) {
+        aviationwx_log('info', 'sync-push-config: SFTP user removed', [
+            'username' => $username
+        ], 'app');
+    } else {
+        // User might not exist, which is OK
+        aviationwx_log('debug', 'sync-push-config: SFTP user removal attempted', [
+            'username' => $username,
+            'output' => implode("\n", $output),
+            'code' => $code
+        ], 'app');
+    }
 }
 
 /**
  * Sync camera user
  */
-function syncCameraUser($airportId, $camIndex, $pushConfig) {
+function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
     $username = $pushConfig['username'] ?? null;
     $password = $pushConfig['password'] ?? null;
     $protocol = strtolower($pushConfig['protocol'] ?? 'sftp');
@@ -377,10 +568,61 @@ function syncCameraUser($airportId, $camIndex, $pushConfig) {
         return false;
     }
     
+    // Validate username and password format
+    if (!validateUsername($username)) {
+        aviationwx_log('error', 'sync-push-config: invalid username format', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'username' => $username,
+            'expected' => '14 alphanumeric characters'
+        ], 'app');
+        return false;
+    }
+    
+    if (!validatePassword($password)) {
+        aviationwx_log('error', 'sync-push-config: invalid password format', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'expected' => '14 alphanumeric characters'
+        ], 'app');
+        return false;
+    }
+    
+    $cameraKey = $airportId . '_' . $camIndex;
+    
+    // Check if username is already assigned to a different camera
+    if (isset($usernameMapping[$username])) {
+        $existingKey = $usernameMapping[$username]['camera'];
+        if ($existingKey !== $cameraKey) {
+            aviationwx_log('error', 'sync-push-config: username already assigned to different camera', [
+                'username' => $username,
+                'existing_camera' => $existingKey,
+                'new_camera' => $cameraKey
+            ], 'app');
+            return false;
+        }
+        
+        // Check if protocol changed
+        $existingProtocol = $usernameMapping[$username]['protocol'];
+        if ($existingProtocol !== $protocol) {
+            aviationwx_log('info', 'sync-push-config: protocol changed, removing old user', [
+                'username' => $username,
+                'old_protocol' => $existingProtocol,
+                'new_protocol' => $protocol,
+                'camera' => $cameraKey
+            ], 'app');
+            
+            // Remove old user
+            removeCameraUser($username, $existingProtocol);
+        }
+    }
+    
+    // Create/update user
+    $success = false;
     if ($protocol === 'sftp') {
-        return createSftpUser($airportId, $camIndex, $username, $password);
+        $success = createSftpUser($airportId, $camIndex, $username, $password);
     } elseif (in_array($protocol, ['ftp', 'ftps'])) {
-        return createFtpUser($airportId, $camIndex, $username, $password);
+        $success = createFtpUser($airportId, $camIndex, $username, $password);
     } else {
         aviationwx_log('error', 'sync-push-config: invalid protocol', [
             'protocol' => $protocol,
@@ -389,6 +631,18 @@ function syncCameraUser($airportId, $camIndex, $pushConfig) {
         ], 'app');
         return false;
     }
+    
+    if ($success) {
+        // Update username mapping
+        $usernameMapping[$username] = [
+            'camera' => $cameraKey,
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'protocol' => $protocol
+        ];
+    }
+    
+    return $success;
 }
 
 /**
@@ -410,7 +664,8 @@ function removeCameraUser($username, $protocol) {
 function syncAllPushCameras($config) {
     $existing = getExistingPushCameras();
     $configured = [];
-    $cameraUsers = []; // Track username -> protocol mapping
+    $usernameMapping = loadUsernameMapping();
+    $newUsernameMapping = [];
     
     // Build list of configured cameras
     foreach ($config['airports'] ?? [] as $airportId => $airport) {
@@ -423,20 +678,26 @@ function syncAllPushCameras($config) {
                    || isset($cam['push_config']);
             
             if ($isPush && isset($cam['push_config'])) {
+                $cameraKey = $airportId . '_' . $camIndex;
+                $username = $cam['push_config']['username'] ?? null;
+                $protocol = $cam['push_config']['protocol'] ?? 'sftp';
+                
                 $configured[] = [
                     'airport' => $airportId,
                     'cam' => $camIndex,
-                    'username' => $cam['push_config']['username'] ?? null,
-                    'protocol' => $cam['push_config']['protocol'] ?? 'sftp'
+                    'username' => $username,
+                    'protocol' => $protocol,
+                    'key' => $cameraKey
                 ];
                 
-                // Create directory
-                createCameraDirectory($airportId, $camIndex);
+                // Create directory with protocol-specific permissions
+                createCameraDirectory($airportId, $camIndex, $protocol);
                 
                 // Create/update FTP/SFTP user
-                if (isset($cam['push_config']['username']) && isset($cam['push_config']['password'])) {
-                    syncCameraUser($airportId, $camIndex, $cam['push_config']);
-                    $cameraUsers[$cam['push_config']['username']] = $cam['push_config']['protocol'] ?? 'sftp';
+                if ($username && isset($cam['push_config']['password'])) {
+                    if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
+                        // Success - mapping already updated in syncCameraUser
+                    }
                 }
             }
         }
@@ -445,8 +706,7 @@ function syncAllPushCameras($config) {
     // Remove orphaned directories and users
     foreach ($existing as $existingCam) {
         $found = false;
-        $username = null;
-        $protocol = null;
+        $cameraKey = $existingCam['airport'] . '_' . $existingCam['cam'];
         
         foreach ($configured as $configCam) {
             if ($existingCam['airport'] === $configCam['airport'] && 
@@ -457,14 +717,14 @@ function syncAllPushCameras($config) {
         }
         
         if (!$found) {
-            // Find username for this camera (from config before removal)
-            // We need to check the config one more time to get username
-            foreach ($config['airports'] ?? [] as $airportId => $airport) {
-                if ($airportId === $existingCam['airport'] && 
-                    isset($airport['webcams'][$existingCam['cam']]['push_config'])) {
-                    $pushConfig = $airport['webcams'][$existingCam['cam']]['push_config'];
-                    $username = $pushConfig['username'] ?? null;
-                    $protocol = $pushConfig['protocol'] ?? 'sftp';
+            // Find username from tracking file (not from config, since camera was removed)
+            $username = null;
+            $protocol = null;
+            
+            foreach ($usernameMapping as $user => $info) {
+                if ($info['camera'] === $cameraKey) {
+                    $username = $user;
+                    $protocol = $info['protocol'] ?? 'sftp';
                     break;
                 }
             }
@@ -472,11 +732,12 @@ function syncAllPushCameras($config) {
             aviationwx_log('info', 'removing orphaned camera', [
                 'airport' => $existingCam['airport'],
                 'cam' => $existingCam['cam'],
-                'username' => $username
+                'username' => $username,
+                'protocol' => $protocol
             ], 'app');
             
             // Remove user
-            if ($username) {
+            if ($username && $protocol) {
                 removeCameraUser($username, $protocol);
             }
             
@@ -484,6 +745,26 @@ function syncAllPushCameras($config) {
             removeCameraDirectory($existingCam['airport'], $existingCam['cam']);
         }
     }
+    
+    // Clean up username mapping - remove entries for cameras that no longer exist
+    foreach ($usernameMapping as $user => $info) {
+        $found = false;
+        foreach ($configured as $configCam) {
+            if ($info['camera'] === $configCam['key']) {
+                $found = true;
+                break;
+            }
+        }
+        if ($found) {
+            // Keep this entry (will be updated in newUsernameMapping if user was synced)
+            if (!isset($newUsernameMapping[$user])) {
+                $newUsernameMapping[$user] = $info;
+            }
+        }
+    }
+    
+    // Save updated username mapping
+    saveUsernameMapping($newUsernameMapping);
 }
 
 /**
