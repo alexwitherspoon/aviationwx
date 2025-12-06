@@ -25,6 +25,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     net-tools \
     fail2ban \
     iptables \
+    jq \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip \
     && pecl channel-update pecl.php.net \
@@ -123,7 +124,9 @@ RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/security.ini
 
 # Configure Apache to write error log to stderr (for Docker logging)
-RUN echo "ErrorLog /proc/self/fd/2" >> /etc/apache2/apache2.conf \
+# Add log format prefix to identify Apache access logs
+RUN echo "LogFormat \"[apache_access] %h %l %u %t \\\"%r\\\" %>s %O \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\"\" combined" >> /etc/apache2/apache2.conf \
+    && echo "ErrorLog /proc/self/fd/2" >> /etc/apache2/apache2.conf \
     && echo "CustomLog /proc/self/fd/1 combined" >> /etc/apache2/apache2.conf
 
 # Use custom entrypoint

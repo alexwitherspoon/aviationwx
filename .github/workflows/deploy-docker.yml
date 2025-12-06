@@ -576,6 +576,14 @@ jobs:
           # Docker automatically captures logs and handles rotation
           # No host-side log directory setup needed
           echo "✓ Docker logging configured (no host setup required)"
+          
+          # Verify jq is available for log filtering (optional but recommended)
+          if command -v jq &> /dev/null; then
+            echo "✓ jq is installed (version: $(jq --version))"
+          else
+            echo "⚠️  jq is not installed - install with: apt install -y jq"
+            echo "   jq is useful for filtering JSON-formatted logs"
+          fi
           EOF
 
       - name: Purge browser and service worker caches on server

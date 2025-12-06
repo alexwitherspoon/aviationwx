@@ -40,7 +40,7 @@ ssh root@YOUR_SERVER_IP
 apt update && apt upgrade -y
 
 # Install essential tools
-apt install -y curl wget git nano ufw
+apt install -y curl wget git nano ufw jq
 ```
 
 #### 1.3 Create Application User
