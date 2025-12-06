@@ -1,7 +1,7 @@
-# Cache directories
-cache/
-cache-local/
-*.cache/
+# Cache directories (root level only, not in subdirectories)
+/cache/
+/cache-local/
+/*.cache/
 
 # Sensitive configuration files (DO NOT COMMIT)
 airports.json
