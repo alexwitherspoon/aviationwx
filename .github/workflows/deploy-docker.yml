@@ -560,11 +560,34 @@ jobs:
           cd ~/aviationwx
           # Set GIT_SHA as environment variable for docker compose
           export GIT_SHA="$GIT_SHA"
+          # Enable BuildKit for better caching (if not already enabled)
+          export DOCKER_BUILDKIT=1
+          export COMPOSE_DOCKER_CLI_BUILD=1
+          
           # Stop and remove existing containers to avoid name conflicts
           docker compose -f docker/docker-compose.prod.yml down || true
-          # Build and start containers
-          docker compose -f docker/docker-compose.prod.yml up -d --build
-          docker system prune -f
+          
+          # Build using local build cache (BuildKit automatically caches layers)
+          # This significantly speeds up builds by reusing cached layers from previous builds
+          docker compose -f docker/docker-compose.prod.yml build --pull || \
+            docker compose -f docker/docker-compose.prod.yml build
+          
+          # Start containers
+          docker compose -f docker/docker-compose.prod.yml up -d
+          
+          # Clean up Docker resources using the dedicated cleanup script
+          # This modularizes cleanup logic and keeps the workflow concise
+          if [ -f scripts/docker-cleanup.sh ]; then
+            echo "Running Docker cleanup script..."
+            chmod +x scripts/docker-cleanup.sh
+            ./scripts/docker-cleanup.sh
+          else
+            echo "⚠️  Cleanup script not found, running basic cleanup..."
+            docker builder prune -f --filter "until=24h" || true
+            docker image prune -f || true
+            docker system prune -f --filter "until=168h" || true
+            docker system df
+          fi
           EOF
 
       - name: Verify Docker logging configuration

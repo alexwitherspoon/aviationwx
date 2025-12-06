@@ -5,6 +5,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      # BuildKit automatically uses local build cache from previous builds
+      # No registry cache configured - all caching is local-only
     image: aviationwx
     container_name: aviationwx-web
     restart: always
