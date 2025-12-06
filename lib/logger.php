@@ -99,13 +99,28 @@ function aviationwx_get_request_id(): string {
 if (!function_exists('aviationwx_log')) {
 function aviationwx_log(string $level, string $message, array $context = [], string $logType = 'app'): void {
     $now = (new DateTime('now', new DateTimeZone('UTC')))->format('c');
+    
+    // Determine log source based on context
+    $source = 'app';
+    if (php_sapi_name() === 'cli') {
+        $source = 'cli';
+    } elseif (!empty($_SERVER['REQUEST_METHOD'])) {
+        $source = 'web';
+    }
+    
+    // Add source to context if not already present
+    if (!isset($context['source'])) {
+        $context['source'] = $source;
+    }
+    
     $entry = [
         'ts' => $now,
         'level' => strtolower($level),
         'request_id' => aviationwx_get_request_id(),
         'message' => $message,
         'context' => $context,
-        'log_type' => $logType
+        'log_type' => $logType,
+        'source' => $source
     ];
     
     // Error counter for alerting

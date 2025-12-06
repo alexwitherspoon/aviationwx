@@ -36,6 +36,7 @@ services:
       options:
         max-size: "10m"
         max-file: "10"
+        tag: "{{.Name}}/{{.ID}}"
 
   # VPN Server - strongSwan IPsec server
   # Uses host networking for full VPN functionality (requires Linux or proper host networking support)
@@ -64,6 +65,7 @@ services:
       options:
         max-size: "10m"
         max-file: "10"
+        tag: "{{.Name}}/{{.ID}}"
 
   # VPN Manager - Manages VPN connections and configuration
   # Uses host networking to access VPN server and manage connections
@@ -94,6 +96,7 @@ services:
       options:
         max-size: "10m"
         max-file: "10"
+        tag: "{{.Name}}/{{.ID}}"
 
   # Mock VPN Client - For testing VPN server (optional, uncomment to enable)
   # vpn-client-mock:
