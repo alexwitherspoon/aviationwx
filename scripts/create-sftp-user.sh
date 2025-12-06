@@ -39,20 +39,23 @@ else
 fi
 
 # Ensure upload directory exists and has correct permissions
+# IMPORTANT: The chroot directory must be owned by root for SFTP chroot to work
 if [ ! -d "$UPLOAD_DIR" ]; then
     mkdir -p "$UPLOAD_DIR"
 fi
 
-chown "$USERNAME:$USERNAME" "$UPLOAD_DIR"
+# Chroot directory must be owned by root (SSH requirement)
+chown root:root "$UPLOAD_DIR"
 chmod 755 "$UPLOAD_DIR"
 
 # Create incoming subdirectory
 INCOMING_DIR="$UPLOAD_DIR/incoming"
 if [ ! -d "$INCOMING_DIR" ]; then
     mkdir -p "$INCOMING_DIR"
-    chown "$USERNAME:$USERNAME" "$INCOMING_DIR"
-    chmod 755 "$INCOMING_DIR"
 fi
+# Always ensure correct ownership and permissions (even if directory exists)
+chown "$USERNAME:$USERNAME" "$INCOMING_DIR"
+chmod 755 "$INCOMING_DIR"
 
 echo "SFTP user setup complete: $USERNAME -> $UPLOAD_DIR"
 

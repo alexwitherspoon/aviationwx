@@ -52,6 +52,33 @@ else
     echo "⚠️  Warning: Cache directory does not exist and could not be created"
 fi
 
+# Initialize uploads directory (ephemeral, inside container only)
+# Parent directories must be owned by root for SFTP chroot to work
+echo "Initializing uploads directory..."
+UPLOADS_DIR="/var/www/html/uploads"
+UPLOADS_WEBCAMS_DIR="${UPLOADS_DIR}/webcams"
+
+# Create uploads directories if they don't exist
+if [ ! -d "${UPLOADS_DIR}" ]; then
+    echo "Creating uploads directory: ${UPLOADS_DIR}"
+    mkdir -p "${UPLOADS_DIR}"
+fi
+
+if [ ! -d "${UPLOADS_WEBCAMS_DIR}" ]; then
+    echo "Creating webcams upload directory: ${UPLOADS_WEBCAMS_DIR}"
+    mkdir -p "${UPLOADS_WEBCAMS_DIR}"
+fi
+
+# Set ownership to root:root for chroot requirements
+# All parent directories must be root-owned for SSH chroot to work
+chown root:root "${UPLOADS_DIR}" 2>/dev/null || true
+chmod 755 "${UPLOADS_DIR}" 2>/dev/null || true
+
+chown root:root "${UPLOADS_WEBCAMS_DIR}" 2>/dev/null || true
+chmod 755 "${UPLOADS_WEBCAMS_DIR}" 2>/dev/null || true
+
+echo "✓ Uploads directory initialized"
+
 # Check if SSL certificates exist and enable SSL in vsftpd if available
 if [ -f "/etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem" ] && \
    [ -f "/etc/letsencrypt/live/upload.aviationwx.org/privkey.pem" ] && \

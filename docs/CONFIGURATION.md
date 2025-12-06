@@ -86,6 +86,18 @@ Get your API credentials from [WeatherLink.com](https://weatherlink.com) and add
 }
 ```
 
+**METAR Station Configuration:**
+- `metar_station`: Primary METAR station ID (e.g., `"KSPB"`)
+- `nearby_metar_stations`: Array of alternate METAR station IDs for fallback (e.g., `["KVUO", "KHIO"]`)
+
+**Fallback Behavior:**
+- The system attempts to fetch METAR data from the primary `metar_station` first
+- If the primary station fails (network error, station unavailable, etc.), the system automatically tries each station in `nearby_metar_stations` in order
+- The first successful fetch is used; remaining stations are not attempted
+- If all stations fail, the system logs a warning and continues without METAR data
+- This fallback only occurs when `metar_station` is explicitly configured
+- Empty or invalid station IDs in `nearby_metar_stations` are automatically skipped
+
 ## Adding a New Airport
 
 Add an entry to `airports.json` following this structure:
@@ -643,6 +655,7 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
 - **File Stability**: Waits for files to be fully written before processing
 - **Format Support**: JPEG and PNG images are supported
 - **Automatic WEBP**: WEBP versions are generated automatically for faster loading
+- **Ephemeral Storage**: Upload directories are ephemeral (inside container only). Files are automatically processed and moved to cache, then removed from the upload directory. No persistent storage required for uploads.
 
 #### Troubleshooting
 
@@ -688,6 +701,12 @@ The homepage (`homepage.php`) automatically displays all airports from `airports
 - If Tempest/Ambient/WeatherLink lacks visibility/ceiling, METAR data automatically supplements
 - Flight category (VFR/IFR/MVFR) calculated from ceiling and visibility
 - All aviation metrics computed regardless of source
+
+**METAR Station Fallback:**
+- When `metar_station` is configured, the system attempts to fetch from the primary station
+- If the primary station fails, nearby stations (from `nearby_metar_stations`) are tried sequentially
+- This provides resilience when a primary METAR station is temporarily unavailable
+- The system logs which station was successfully used for debugging and monitoring
 
 ## Global Configuration Reference
 
