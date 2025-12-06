@@ -548,6 +548,30 @@ jobs:
           fi
           EOF
 
+      - name: Configure firewall ports
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          echo "Configuring firewall ports for all services..."
+          
+          # Run firewall configuration script
+          if [ -f scripts/configure-firewall.sh ]; then
+            chmod +x scripts/configure-firewall.sh
+            ./scripts/configure-firewall.sh
+          else
+            echo "⚠️  Firewall script not found, configuring ports manually..."
+            # Fallback: configure ports directly
+            sudo ufw allow 80/tcp comment 'HTTP (Nginx)' || true
+            sudo ufw allow 443/tcp comment 'HTTPS (Nginx)' || true
+            sudo ufw allow 2121/tcp comment 'FTP (Push webcams)' || true
+            sudo ufw allow 2122/tcp comment 'FTPS (Push webcams)' || true
+            sudo ufw allow 2222/tcp comment 'SFTP (Push webcams)' || true
+            sudo ufw status numbered
+          fi
+          EOF
+
       - name: Deploy via Docker Compose
         run: |
           # Get commit SHA from GitHub Actions context (7 characters to match GitHub's short SHA display)
