@@ -1,7 +1,8 @@
 # PAM configuration for vsftpd virtual users
 # Uses Berkeley DB for authentication
+# crypt=off means passwords are stored in plain text (not encrypted)
 
-auth       required     pam_userdb.so db=/etc/vsftpd/virtual_users
+auth       required     pam_userdb.so db=/etc/vsftpd/virtual_users crypt=off
 account    required     pam_userdb.so db=/etc/vsftpd/virtual_users
 session    required     pam_loginuid.so
 

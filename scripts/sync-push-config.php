@@ -389,6 +389,11 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         return false;
     }
     
+    // Remove old database if it exists (in case it's corrupted)
+    if (file_exists($vsftpdDbFile)) {
+        @unlink($vsftpdDbFile);
+    }
+    
     // Rebuild database
     exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
     
@@ -509,6 +514,11 @@ function removeFtpUser($username) {
     
     // Rebuild database
     if (count($users) > 0) {
+        // Remove old database if it exists (in case it's corrupted)
+        if (file_exists($vsftpdDbFile)) {
+            @unlink($vsftpdDbFile);
+        }
+        
         exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
         if ($code !== 0) {
             aviationwx_log('warning', 'sync-push-config: db_load failed during user removal', [
