@@ -11,7 +11,7 @@ Real-time aviation weather and conditions for participating airports. A modern, 
 AviationWX.org provides real-time, localized weather data specifically designed for pilots making flight decisions. Each airport dashboard includes live weather conditions, webcam feeds, wind visualization, and aviation-specific metrics like density altitude and VFR/IFR status.
 
 **Perfect for:**
-- Airport operators wanting to provide weather services to pilots
+- Airport operators wanting to provide free webcam and weather services to pilots to promote safety
 - Pilots needing real-time conditions for flight planning
 - Developers contributing to open-source aviation tools
 
@@ -77,6 +77,16 @@ make up          # Start Docker containers
 See [Local Development Setup](docs/LOCAL_SETUP.md) for complete instructions.
 
 ### For Airport Operators
+
+#### Participate in AviationWX.org for free!
+
+1. **Get API Keys**: Obtain credentials from your weather station provider (Tempest, Ambient, or WeatherLink)
+2. **Gather your Webcam information**: RSTP, FTP(s), or the make and model of what you have.
+3. **Email alex@alexwitherspoon.com** to participate in AviationWX.org and we'll get it added.
+
+P.S. - Do you need help sponsoring a local airport with equipment? Reach out, I'd like to talk to you about options!
+
+#### Hosting Your Own Instance
 
 1. **Get API Keys**: Obtain credentials from your weather station provider (Tempest, Ambient, or WeatherLink)
 2. **Configure Airport**: Add your airport to `config/airports.json` (see [Configuration Guide](docs/CONFIGURATION.md))
