@@ -17,7 +17,8 @@ services:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
       - /home/aviationwx/airports.json:/var/www/html/airports.json:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
-      - /var/www/html/uploads:/var/www/html/uploads  # Upload directories
+      # Note: /var/www/html/uploads is ephemeral (inside container only)
+      # Files are uploaded via SFTP/FTP/FTPS, then processed and moved to cache
       - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates
     cap_add:
       - NET_ADMIN

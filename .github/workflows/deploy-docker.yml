@@ -329,8 +329,8 @@ jobs:
       - name: Sync repository to server
         run: |
           # Exclude docker/docker from rsync (defensive - should not exist after path fix)
-          # Exclude uploads/webcams/*/incoming/* to avoid syncing uploaded camera files
-          rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads/webcams/*/incoming/*' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/ || {
+          # Exclude uploads directory (ephemeral, created inside container)
+          rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/ || {
             echo "⚠️  Rsync had some errors, but continuing..."
             # Continue even if rsync fails on some deletions
           }
@@ -417,18 +417,21 @@ jobs:
           echo "✓ Ownership set to ${WWW_DATA_UID}:${WWW_DATA_GID} (www-data)"
           EOF
 
-      - name: Ensure uploads directory exists for push webcams
+      - name: Note uploads directory is ephemeral
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
-          cd ~/aviationwx
-          # Create uploads directory structure for push webcams
-          # Directories will be created per-camera by sync-push-config.php, but base structure should exist
-          mkdir -p uploads/webcams
-          # Ensure directory is writable (permissions will be set by sync script)
-          chmod -R 755 uploads/webcams || true
-          echo "✓ Uploads directory created at uploads/webcams"
-          echo "ℹ️  Camera-specific directories will be created automatically by sync-push-config.php"
+          # Uploads directory is now ephemeral (inside container only)
+          # Files are uploaded via SFTP/FTP/FTPS, processed, and moved to cache
+          # No host-side directory setup needed
+          echo "ℹ️  Uploads directory is ephemeral (inside container only)"
+          echo "ℹ️  Camera-specific directories are created automatically by sync-push-config.php"
+          echo "ℹ️  Files are processed and moved to cache, then removed from uploads"
+          # Optional: Clean up old host directory if it exists (harmless if left)
+          if [ -d ~/aviationwx/uploads ] || [ -d /var/www/html/uploads ]; then
+            echo "ℹ️  Old uploads directory found on host (will be ignored, safe to remove)"
+            echo "   To remove: rm -rf ~/aviationwx/uploads /var/www/html/uploads"
+          fi
           EOF
 
       - name: Note cache location

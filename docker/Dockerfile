@@ -58,6 +58,7 @@ COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
 COPY scripts/service-watchdog.sh /usr/local/bin/
 COPY scripts/setup-letsencrypt.sh /usr/local/bin/
 COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
+COPY scripts/create-sftp-user.sh /usr/local/bin/
 
 # Set permissions for copied files
 RUN chmod 0644 /etc/cron.d/aviationwx-cron \
@@ -66,6 +67,7 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/service-watchdog.sh \
     && chmod +x /usr/local/bin/setup-letsencrypt.sh \
     && chmod +x /usr/local/bin/enable-vsftpd-ssl.sh \
+    && chmod +x /usr/local/bin/create-sftp-user.sh \
     && chmod 644 /etc/vsftpd.conf \
     && chmod 644 /etc/ssh/sshd_config \
     && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd \
@@ -82,11 +84,15 @@ RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache
 
 # Create directories for FTP/SFTP
+# Note: Parent directories must be root-owned for SFTP chroot to work
+# The entrypoint script will ensure correct permissions on startup
 RUN mkdir -p /var/www/html/uploads/webcams \
     && mkdir -p /etc/vsftpd/users \
     && mkdir -p /var/run/vsftpd/empty \
     && mkdir -p /var/backups/aviationwx \
-    && chown -R www-data:www-data /var/www/html/uploads \
+    && chown root:root /var/www/html/uploads \
+    && chmod 755 /var/www/html/uploads \
+    && chown root:root /var/www/html/uploads/webcams \
     && chmod 755 /var/www/html/uploads/webcams
 
 # Create webcam_users group

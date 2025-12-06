@@ -161,6 +161,17 @@ Then set up wildcard DNS as described in deployment docs.
   - Supports SFTP (port 2222), FTPS (port 2122), and FTP (port 2121)
   - Automatic user creation and chrooted directories for security
   - Image validation and automatic processing
+  - **Camera Upload Connection Details**:
+    - **Host**: Your server hostname (e.g., `aviationwx.org`)
+    - **Port**: 
+      - SFTP: `2222` (or custom port from `push_config.port`)
+      - FTPS: `2122` (or custom port from `push_config.port`)
+      - FTP: `2121` (or custom port from `push_config.port`)
+    - **Username**: From `push_config.username` in your `airports.json`
+    - **Password**: From `push_config.password` in your `airports.json`
+    - **Directory**: Upload files to the root directory (automatically chrooted to `/uploads/webcams/{airportId}_{camIndex}/incoming/`)
+    - **File Format**: JPEG or PNG images (validated automatically)
+    - **Processing**: Files are processed every minute and appear on the website automatically
 - ffmpeg 5.0+ uses the `-timeout` option (the old `-stimeout` is no longer supported)
 - **Image format generation**: The fetcher automatically generates multiple formats per image:
   - `WEBP` and `JPEG` for broad compatibility
