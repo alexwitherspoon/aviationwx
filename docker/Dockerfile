@@ -47,6 +47,7 @@ COPY composer.json composer.lock* ./
 COPY config/crontab /etc/cron.d/aviationwx-cron
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 COPY docker/vsftpd.conf /etc/vsftpd.conf
+COPY docker/pam-vsftpd /etc/pam.d/vsftpd
 COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
 COPY docker/logrotate-sshd /etc/logrotate.d/sshd
