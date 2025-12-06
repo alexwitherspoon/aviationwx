@@ -619,14 +619,14 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 After configuration, the system automatically creates SFTP/FTP users. Cameras should connect using:
 
 - **SFTP**: 
-  - Host: Your server hostname (e.g., `aviationwx.org`)
+  - Host: `upload.aviationwx.org` (or your server's upload subdomain)
   - Port: 2222 (or custom port from `push_config.port`)
   - Username: From `push_config.username`
   - Password: From `push_config.password`
   - Directory: Automatically chrooted to the camera's upload directory
 
 - **FTPS (Secure FTP)**:
-  - Host: Your server hostname (e.g., `aviationwx.org`)
+  - Host: `upload.aviationwx.org` (or your server's upload subdomain)
   - Port: 2122 (or custom port from `push_config.port`)
   - Username: From `push_config.username`
   - Password: From `push_config.password`
@@ -634,7 +634,7 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
   - Directory: Automatically chrooted to the camera's upload directory
 
 - **FTP (Plain)**:
-  - Host: Your server hostname (e.g., `aviationwx.org`)
+  - Host: `upload.aviationwx.org` (or your server's upload subdomain)
   - Port: 2121 (or custom port from `push_config.port`)
   - Username: From `push_config.username`
   - Password: From `push_config.password`

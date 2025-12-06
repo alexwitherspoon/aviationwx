@@ -162,7 +162,7 @@ Then set up wildcard DNS as described in deployment docs.
   - Automatic user creation and chrooted directories for security
   - Image validation and automatic processing
   - **Camera Upload Connection Details**:
-    - **Host**: Your server hostname (e.g., `aviationwx.org`)
+    - **Host**: `upload.aviationwx.org` (or your server's upload subdomain)
     - **Port**: 
       - SFTP: `2222` (or custom port from `push_config.port`)
       - FTPS: `2122` (or custom port from `push_config.port`)
