@@ -237,7 +237,28 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <!-- Header -->
         <header class="header">
             <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($airport['icao']) ?>)</h1>
-            <h2 style="font-size: 1.2rem; color: #ddd; margin-top: 0.25rem; font-weight: normal;"><?= htmlspecialchars($airport['address']) ?></h2>
+            <h2 style="font-size: 1.2rem; color: #ddd; margin-top: 0.25rem; font-weight: normal;">
+                <address style="font-style: normal; margin: 0;">
+                    <?php
+                    // Build Google Maps URL - prefer coordinates for accuracy, fallback to address text
+                    $mapsUrl = '';
+                    if (isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon'])) {
+                        // Use coordinates for precise location
+                        $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['lat'] . ',' . $airport['lon']);
+                    } else {
+                        // Fallback to address text
+                        $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['address']);
+                    }
+                    ?>
+                    <a href="<?= htmlspecialchars($mapsUrl) ?>" 
+                       style="text-decoration: none; color: inherit;"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       title="Open in Google Maps">
+                        <?= htmlspecialchars($airport['address']) ?>
+                    </a>
+                </address>
+            </h2>
             <p style="font-style: italic; font-size: 0.85rem; color: #ddd; margin-top: 0.5rem;">Data is for advisory use only. Consult official weather sources for flight planning purposes.</p>
         </header>
 
@@ -474,8 +495,10 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 }
                 
                 // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
-                // Only add if not already using METAR as primary source
-                if (!isset($weatherSourcesNames['Aviation Weather']) && in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink'])) {
+                // Only add if not already using METAR as primary source AND metar_station is configured
+                if (!isset($weatherSourcesNames['Aviation Weather']) && 
+                    in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink']) &&
+                    isset($airport['metar_station']) && !empty($airport['metar_station'])) {
                     $weatherSourcesNames['Aviation Weather'] = '<a href="https://aviationweather.gov" target="_blank" rel="noopener">Aviation Weather</a>';
                 }
                 
@@ -1556,11 +1579,13 @@ function displayWeather(weather) {
             <div class="weather-item"><span class="label">Humidity</span><span class="weather-value">${weather.humidity !== null && weather.humidity !== undefined ? Math.round(weather.humidity) : '--'}</span><span class="weather-unit">${weather.humidity !== null && weather.humidity !== undefined ? '%' : ''}</span></div>
         </div>
         
-        <!-- Visibility & Ceiling -->
+        <!-- Visibility & Ceiling (only shown if METAR station is configured) -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
+            ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
             <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
             <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? formatCeiling(weather.ceiling) : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
+            ` : ''}
         </div>
         
         <!-- Pressure & Altitude -->
