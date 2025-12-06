@@ -9,13 +9,13 @@ services:
     container_name: aviationwx-web-local
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8081:80"
       - "2121:2121"  # FTP
       - "2122:2122"  # FTPS
       - "2222:2222"  # SFTP
     volumes:
-      # Use local config file for testing
-      - ../config/airports.json.example:/var/www/html/airports.json:ro
+      # Use local test config file
+      - ../config/airports.test.json:/var/www/html/airports.json:ro
       - ../cache-local:/var/www/html/cache
       # Note: /var/www/html/uploads is ephemeral (inside container only)
       - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates (if available)

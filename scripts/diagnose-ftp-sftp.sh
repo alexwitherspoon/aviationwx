@@ -18,19 +18,17 @@ NC='\033[0m' # No Color
 # Check if running in Docker or on host
 if [ -f /.dockerenv ] || [ -n "$DOCKER_CONTAINER" ]; then
     echo "Running inside Docker container"
-    DOCKER_PREFIX=""
     RUN_CMD=""
 else
     echo "Running on host - will use docker compose exec"
     # Check which compose file exists
     if [ -f "docker/docker-compose.prod.yml" ]; then
-        DOCKER_PREFIX="docker compose -f docker/docker-compose.prod.yml exec web"
+        RUN_CMD="docker compose -f docker/docker-compose.prod.yml exec web"
     elif [ -f "docker/docker-compose.local.yml" ]; then
-        DOCKER_PREFIX="docker compose -f docker/docker-compose.local.yml exec web"
+        RUN_CMD="docker compose -f docker/docker-compose.local.yml exec web"
     else
-        DOCKER_PREFIX="docker compose exec web"
+        RUN_CMD="docker compose exec web"
     fi
-    RUN_CMD="$DOCKER_PREFIX"
 fi
 
 echo ""

@@ -1,0 +1,7 @@
+# PAM configuration for vsftpd virtual users
+# Uses Berkeley DB for authentication
+
+auth       required     pam_userdb.so db=/etc/vsftpd/virtual_users
+account    required     pam_userdb.so db=/etc/vsftpd/virtual_users
+session    required     pam_loginuid.so
+
