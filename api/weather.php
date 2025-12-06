@@ -747,8 +747,16 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     // Build METAR URL
     $metarUrl = null;
     if (!$metarCircuit['skip']) {
-        $stationId = $airport['metar_station'] ?? $airport['icao'];
-        $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+        // Only fetch METAR if metar_station is explicitly configured
+        if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
+            $stationId = $airport['metar_station'];
+            $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+        } else {
+            aviationwx_log('info', 'METAR station not configured - skipping METAR fetch', [
+                'airport' => $airportId,
+                'icao' => $airport['icao'] ?? 'unknown'
+            ], 'app');
+        }
     }
     
     // If both are skipped, return null
@@ -964,6 +972,8 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     
     // Parse and merge METAR data (non-blocking: use what we got)
     $metarTimestamp = null;
+    $metarData = null;
+    
     if ($metarResponse !== false && $metarCode == 200) {
         try {
             $metarData = parseMETARResponse($metarResponse, $airport);
@@ -984,8 +994,39 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
             ], 'app');
             $metarData = null;
         }
+    }
+    
+    // If primary METAR request failed, try nearby stations as fallback
+    if ($metarData === null && isset($airport['nearby_metar_stations']) && 
+        is_array($airport['nearby_metar_stations']) && 
+        !empty($airport['nearby_metar_stations'])) {
         
-        if ($metarData !== null) {
+        aviationwx_log('info', 'Primary METAR request failed in async path, attempting nearby stations', [
+            'airport' => $airportId,
+            'primary_station' => $stationId,
+            'nearby_stations' => $airport['nearby_metar_stations']
+        ], 'app');
+        
+        // Try nearby stations sequentially (synchronous fallback)
+        foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
+            if (empty($nearbyStation) || !is_string($nearbyStation)) {
+                continue;
+            }
+            
+            $fallbackResult = fetchMETARFromStation($nearbyStation, $airport);
+            if ($fallbackResult !== null) {
+                $metarData = $fallbackResult;
+                aviationwx_log('info', 'METAR fetch successful from nearby station (async fallback)', [
+                    'airport' => $airportId,
+                    'primary_station' => $stationId,
+                    'used_station' => $nearbyStation
+                ], 'app');
+                break; // Stop on first success
+            }
+        }
+    }
+    
+    if ($metarData !== null) {
             // Use observation time if available, otherwise fall back to fetch time
             $metarTimestamp = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
                 ? $metarData['obs_time'] 
@@ -1015,16 +1056,18 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
                 $weatherData['cloud_cover'] = $metarData['cloud_cover'];
             }
         } else {
-            aviationwx_log('warning', 'METAR response parse failed', [
-                'airport' => $airportId,
-                'station' => $stationId,
-                'response_length' => strlen($metarResponse)
-            ], 'app');
+            // Log if METAR fetch failed (after trying all stations)
+            if ($metarResponse !== false && $metarCode == 200) {
+                aviationwx_log('warning', 'METAR response parse failed', [
+                    'airport' => $airportId,
+                    'station' => $stationId,
+                    'response_length' => strlen($metarResponse)
+                ], 'app');
+            }
         }
-    }
     
     return $weatherData;
-    }
+}
 
     // parseAmbientResponse and parseMETARResponse are already defined at the top of the file (lines 14, 53)
     // No need to redefine them here - they're available globally
@@ -1113,7 +1156,8 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
         }
         
         // Try to fetch METAR for visibility/ceiling if not already present
-        if (!$metarCircuit['skip']) {
+        // Only fetch if metar_station is explicitly configured
+        if (!$metarCircuit['skip'] && isset($airport['metar_station']) && !empty($airport['metar_station'])) {
             $metarData = fetchMETAR($airport);
             // Record success/failure for METAR source
             if ($metarData !== null) {
@@ -1151,7 +1195,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
     
     return $weatherData;
-    }
+}
 
     // Fetch weather based on source
     $weatherData = null;
@@ -1729,11 +1773,13 @@ function parseWeatherLinkResponse($response) {
 }
 
 /**
- * Fetch METAR data from aviationweather.gov (synchronous, for fallback)
+ * Fetch METAR data from a single station ID
+ * 
+ * @param string $stationId The METAR station ID to fetch
+ * @param array $airport Airport configuration (for logging context)
+ * @return array|null Parsed METAR data or null on failure
  */
-function fetchMETAR($airport) {
-    $stationId = $airport['metar_station'] ?? $airport['icao'];
-    
+function fetchMETARFromStation($stationId, $airport) {
     // Fetch METAR from aviationweather.gov (new API format)
     $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
     
@@ -1751,7 +1797,108 @@ function fetchMETAR($airport) {
         return null;
     }
     
-    return parseMETARResponse($response, $airport);
+    $parsed = parseMETARResponse($response, $airport);
+    
+    // If parsing succeeded, add metadata about which station was used
+    if ($parsed !== null) {
+        $parsed['_metar_station_used'] = $stationId;
+    }
+    
+    return $parsed;
+}
+
+/**
+ * Fetch METAR data from aviationweather.gov (synchronous, for fallback)
+ * 
+ * Attempts to fetch from primary metar_station first, then falls back to
+ * nearby_metar_stations if configured and primary fails.
+ * 
+ * @param array $airport Airport configuration
+ * @return array|null Parsed METAR data or null on failure
+ */
+function fetchMETAR($airport) {
+    // Only fetch if metar_station is explicitly configured
+    if (!isset($airport['metar_station']) || empty($airport['metar_station'])) {
+        aviationwx_log('info', 'METAR station not configured - skipping METAR fetch', [
+            'airport' => $airport['icao'] ?? 'unknown'
+        ], 'app');
+        return null;
+    }
+    
+    $primaryStation = $airport['metar_station'];
+    $airportId = $airport['icao'] ?? 'unknown';
+    
+    // Try primary station first
+    aviationwx_log('debug', 'Attempting METAR fetch from primary station', [
+        'airport' => $airportId,
+        'station' => $primaryStation
+    ], 'app');
+    
+    $result = fetchMETARFromStation($primaryStation, $airport);
+    
+    if ($result !== null) {
+        aviationwx_log('info', 'METAR fetch successful from primary station', [
+            'airport' => $airportId,
+            'station' => $primaryStation
+        ], 'app');
+        return $result;
+    }
+    
+    // Primary failed - try nearby stations if configured
+    if (isset($airport['nearby_metar_stations']) && 
+        is_array($airport['nearby_metar_stations']) && 
+        !empty($airport['nearby_metar_stations'])) {
+        
+        aviationwx_log('info', 'Primary METAR station failed, attempting nearby stations', [
+            'airport' => $airportId,
+            'primary_station' => $primaryStation,
+            'nearby_stations' => $airport['nearby_metar_stations']
+        ], 'app');
+        
+        foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
+            // Skip empty or invalid station IDs
+            if (empty($nearbyStation) || !is_string($nearbyStation)) {
+                continue;
+            }
+            
+            aviationwx_log('debug', 'Attempting METAR fetch from nearby station', [
+                'airport' => $airportId,
+                'station' => $nearbyStation
+            ], 'app');
+            
+            $result = fetchMETARFromStation($nearbyStation, $airport);
+            
+            if ($result !== null) {
+                aviationwx_log('info', 'METAR fetch successful from nearby station', [
+                    'airport' => $airportId,
+                    'primary_station' => $primaryStation,
+                    'used_station' => $nearbyStation
+                ], 'app');
+                return $result;
+            }
+            
+            // Log failure but continue to next station
+            aviationwx_log('debug', 'METAR fetch failed from nearby station, trying next', [
+                'airport' => $airportId,
+                'station' => $nearbyStation
+            ], 'app');
+        }
+        
+        // All stations failed
+        aviationwx_log('warning', 'METAR fetch failed from all stations (primary and nearby)', [
+            'airport' => $airportId,
+            'primary_station' => $primaryStation,
+            'nearby_stations' => $airport['nearby_metar_stations']
+        ], 'app');
+    } else {
+        // Primary failed and no nearby stations configured
+        aviationwx_log('warning', 'METAR fetch failed from primary station, no nearby stations configured', [
+            'airport' => $airportId,
+            'station' => $primaryStation
+        ], 'app');
+    }
+    
+    return null;
 }
 
 

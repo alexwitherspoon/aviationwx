@@ -1,0 +1,39 @@
+name: aviationwx-local
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aviationwx-local
+    container_name: aviationwx-web-local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+      - "2121:2121"  # FTP
+      - "2122:2122"  # FTPS
+      - "2222:2222"  # SFTP
+    volumes:
+      # Use local config file for testing
+      - ../config/airports.json.example:/var/www/html/airports.json:ro
+      - ../cache-local:/var/www/html/cache
+      # Note: /var/www/html/uploads is ephemeral (inside container only)
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates (if available)
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html
+      - DOMAIN=localhost
+      - CONFIG_PATH=/var/www/html/airports.json
+      - WEBCAM_REFRESH_DEFAULT=60
+      - WEATHER_REFRESH_DEFAULT=60
+      - WEATHER_REFRESH_URL=http://localhost
+      - AVIATIONWX_LOG_TO_STDOUT=true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+        tag: "{{.Name}}/{{.ID}}"
+

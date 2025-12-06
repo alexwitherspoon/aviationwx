@@ -822,7 +822,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <a href="https://github.com/alexwitherspoon/aviationwx.org" class="btn-primary" target="_blank" rel="noopener">
                         View on GitHub
                     </a>
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/docs/CONTRIBUTING.md" class="btn-secondary" target="_blank" rel="noopener">
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" class="btn-secondary" target="_blank" rel="noopener">
                         Contributing Guidelines
                     </a>
                 </div>
