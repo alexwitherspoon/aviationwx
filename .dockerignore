@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README.md
+LICENSE
+
+# CI/CD
+.github/
+
+# Tests
+tests/
+phpunit.xml
+coverage/
+.phpunit.result.cache
+
+# Development files
+dev/
+Makefile
+*.test
+*.test.php
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache (will be created in container)
+cache/
+api/cache/
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+
+# Environment files (use secrets/volumes instead)
+.env
+.env.*
+config/env.example
+
+# Docker compose files (not needed in build context, but Dockerfile is)
+docker/docker-compose*.yml
+# Note: docker/*.conf, docker/*.sh, etc. are needed by Dockerfile, so don't exclude them
+
+# Build artifacts
+vendor/
+node_modules/
+
+# Uploads (ephemeral, created in container)
+uploads/
+
+# SSL certificates (mounted as volume)
+ssl/
+
+# Local development
+docker/docker/
+
