@@ -14,6 +14,10 @@ sudo ufw allow 2121/tcp comment 'FTP for push webcams'
 echo "Allowing port 2122 (FTPS)..."
 sudo ufw allow 2122/tcp comment 'FTPS for push webcams'
 
+# Allow FTP passive mode ports (50000-50019)
+echo "Allowing ports 50000-50019 (FTP passive mode)..."
+sudo ufw allow 50000:50019/tcp comment 'FTP passive mode for push webcams'
+
 # Allow SFTP (port 2222)
 echo "Allowing port 2222 (SFTP)..."
 sudo ufw allow 2222/tcp comment 'SFTP for push webcams'
