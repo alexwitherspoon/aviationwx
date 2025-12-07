@@ -117,23 +117,57 @@ function isVsftpdDatabaseCorrupted() {
             return true;
         }
         
-        // Try to verify database format using file command or db_dump
-        // Berkeley DB files should have a specific header
-        $header = @file_get_contents($vsftpdDbFile, false, null, 0, 20);
-        if ($header === false || strlen($header) < 20) {
+        // Check Berkeley DB magic number (first 12 bytes should be specific values)
+        // Berkeley DB hash files start with specific magic bytes
+        $header = @file_get_contents($vsftpdDbFile, false, null, 0, 12);
+        if ($header === false || strlen($header) < 12) {
             return true;
         }
         
-        // Check if we can read from the database using db_dump (if available)
-        // This is a more thorough check but requires db_util package
+        // Check for Berkeley DB hash magic number
+        // Hash databases typically start with specific bytes
+        // If header doesn't look like a valid Berkeley DB file, it's corrupted
+        $magicBytes = unpack('C*', substr($header, 0, 4));
+        // Basic sanity check - Berkeley DB files have non-zero magic bytes
+        if (isset($magicBytes[1]) && $magicBytes[1] === 0 && 
+            isset($magicBytes[2]) && $magicBytes[2] === 0 &&
+            isset($magicBytes[3]) && $magicBytes[3] === 0 &&
+            isset($magicBytes[4]) && $magicBytes[4] === 0) {
+            // All zeros in first 4 bytes suggests corruption or empty file
+            return true;
+        }
+        
+        // Try to verify database using db_verify (most reliable check)
+        if (function_exists('exec')) {
+            $output = [];
+            $returnCode = 0;
+            @exec("db_verify " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
+            if ($returnCode !== 0) {
+                // db_verify failed - database is corrupted
+                aviationwx_log('warning', 'sync-push-config: db_verify failed, database corrupted', [
+                    'db_file' => $vsftpdDbFile,
+                    'output' => implode("\n", $output),
+                    'return_code' => $returnCode
+                ], 'app');
+                return true;
+            }
+        }
+        
+        // Also try db_dump as a secondary check (tests readability)
         if (function_exists('exec')) {
             $output = [];
             $returnCode = 0;
             @exec("db_dump -p " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
-            // If db_dump fails and we have a users file, database is likely corrupted
-            if ($returnCode !== 0 && file_exists($vsftpdUserFile)) {
-                $userContent = @file_get_contents($vsftpdUserFile);
-                if ($userContent && trim($userContent) !== '') {
+            // If db_dump fails, database might be corrupted (even if db_verify passed)
+            if ($returnCode !== 0) {
+                $errorOutput = implode("\n", $output);
+                // Check for specific corruption errors
+                if (preg_match('/BDB\d+|unexpected file type|corrupt|invalid/i', $errorOutput)) {
+                    aviationwx_log('warning', 'sync-push-config: db_dump failed with corruption error', [
+                        'db_file' => $vsftpdDbFile,
+                        'output' => $errorOutput,
+                        'return_code' => $returnCode
+                    ], 'app');
                     return true;
                 }
             }
@@ -434,6 +468,81 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
         'username' => $username,
         'airport' => $airportId,
         'cam' => $camIndex
+    ], 'app');
+    
+    return true;
+}
+
+/**
+ * Rebuild vsftpd database from users file
+ * Called when database corruption is detected
+ */
+function rebuildVsftpdDatabase() {
+    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
+    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
+    
+    if (!file_exists($vsftpdUserFile)) {
+        aviationwx_log('warning', 'sync-push-config: Cannot rebuild database, users file does not exist', [
+            'user_file' => $vsftpdUserFile
+        ], 'app');
+        return false;
+    }
+    
+    $userContent = @file_get_contents($vsftpdUserFile);
+    if (!$userContent || trim($userContent) === '') {
+        aviationwx_log('warning', 'sync-push-config: Cannot rebuild database, users file is empty', [
+            'user_file' => $vsftpdUserFile
+        ], 'app');
+        // If users file is empty and database exists, remove database
+        if (file_exists($vsftpdDbFile)) {
+            @unlink($vsftpdDbFile);
+        }
+        return true; // Not an error, just no users
+    }
+    
+    // Remove corrupted database
+    if (file_exists($vsftpdDbFile)) {
+        @unlink($vsftpdDbFile);
+    }
+    
+    // Rebuild database
+    $output = [];
+    $returnCode = 0;
+    exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $returnCode);
+    
+    if ($returnCode !== 0) {
+        aviationwx_log('error', 'sync-push-config: db_load failed during database rebuild', [
+            'output' => implode("\n", $output),
+            'return_code' => $returnCode
+        ], 'app');
+        return false;
+    }
+    
+    // Verify database was created and is not empty
+    if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
+        aviationwx_log('error', 'sync-push-config: database file not created or is empty after rebuild', [
+            'db_file' => $vsftpdDbFile,
+            'exists' => file_exists($vsftpdDbFile),
+            'size' => file_exists($vsftpdDbFile) ? filesize($vsftpdDbFile) : 0
+        ], 'app');
+        return false;
+    }
+    
+    // Verify database is not corrupted
+    $output = [];
+    $returnCode = 0;
+    @exec("db_verify " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
+    if ($returnCode !== 0) {
+        aviationwx_log('error', 'sync-push-config: database verification failed after rebuild', [
+            'output' => implode("\n", $output),
+            'return_code' => $returnCode
+        ], 'app');
+        return false;
+    }
+    
+    aviationwx_log('info', 'sync-push-config: vsftpd database rebuilt successfully', [
+        'db_file' => $vsftpdDbFile,
+        'size' => filesize($vsftpdDbFile)
     ], 'app');
     
     return true;
@@ -937,11 +1046,19 @@ function syncPushConfig() {
     // Check if vsftpd database is corrupted (check before early return)
     $databaseCorrupted = isVsftpdDatabaseCorrupted();
     if ($databaseCorrupted) {
-        aviationwx_log('warning', 'sync-push-config: vsftpd database appears corrupted, forcing rebuild', [
+        aviationwx_log('warning', 'sync-push-config: vsftpd database appears corrupted, attempting rebuild', [
             'db_file' => '/etc/vsftpd/virtual_users.db',
             'user_file' => '/etc/vsftpd/virtual_users.txt'
         ], 'app');
-        // Force sync by continuing (don't return early)
+        
+        // Try to rebuild database from users file first (faster than full sync)
+        if (rebuildVsftpdDatabase()) {
+            aviationwx_log('info', 'sync-push-config: Database rebuilt successfully, continuing with sync', [], 'app');
+        } else {
+            aviationwx_log('warning', 'sync-push-config: Database rebuild failed, will rebuild during full sync', [], 'app');
+        }
+        
+        // Force sync by continuing (don't return early) to ensure all users are recreated
     } else {
         // Check if config changed
         if ($configMtime <= $lastSync) {
