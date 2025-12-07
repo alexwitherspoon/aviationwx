@@ -42,7 +42,7 @@ class RateLimitTest extends TestCase
     }
 
     /**
-     * Test getRateLimitRemaining - Should return valid count
+     * Test getRateLimitRemaining - Should return valid array
      */
     public function testGetRateLimitRemaining_ValidKey()
     {
@@ -50,10 +50,15 @@ class RateLimitTest extends TestCase
         // First request
         checkRateLimit($key, 60, 60);
         
-        $remaining = getRateLimitRemaining($key, 60, 60);
-        $this->assertIsInt($remaining);
-        $this->assertGreaterThanOrEqual(0, $remaining, 'Remaining should be >= 0');
-        $this->assertLessThanOrEqual(60, $remaining, 'Remaining should be <= maxRequests');
+        $result = getRateLimitRemaining($key, 60, 60);
+        $this->assertIsArray($result, 'Should return array');
+        $this->assertArrayHasKey('remaining', $result, 'Should have remaining key');
+        $this->assertArrayHasKey('reset', $result, 'Should have reset key');
+        $this->assertIsInt($result['remaining'], 'Remaining should be integer');
+        $this->assertIsInt($result['reset'], 'Reset should be integer');
+        $this->assertGreaterThanOrEqual(0, $result['remaining'], 'Remaining should be >= 0');
+        $this->assertLessThanOrEqual(60, $result['remaining'], 'Remaining should be <= maxRequests');
+        $this->assertGreaterThan(time(), $result['reset'], 'Reset should be in the future');
     }
 
     /**
@@ -61,10 +66,13 @@ class RateLimitTest extends TestCase
      */
     public function testGetRateLimitRemaining_NonExistentKey()
     {
-        $remaining = getRateLimitRemaining('nonexistent_' . uniqid(), 60, 60);
-        $this->assertIsInt($remaining);
+        $result = getRateLimitRemaining('nonexistent_' . uniqid(), 60, 60);
+        $this->assertIsArray($result, 'Should return array');
+        $this->assertArrayHasKey('remaining', $result, 'Should have remaining key');
+        $this->assertArrayHasKey('reset', $result, 'Should have reset key');
         // Should return max requests if key doesn't exist
-        $this->assertEquals(60, $remaining);
+        $this->assertEquals(60, $result['remaining']);
+        $this->assertGreaterThan(time(), $result['reset'], 'Reset should be in the future');
     }
     
     /**
@@ -161,8 +169,9 @@ class RateLimitTest extends TestCase
         }
         
         // Check remaining
-        $remaining = getRateLimitRemaining($key, $maxRequests, $windowSeconds);
-        $this->assertLessThanOrEqual($maxRequests, $remaining, 'Remaining should be <= max');
+        $result = getRateLimitRemaining($key, $maxRequests, $windowSeconds);
+        $this->assertIsArray($result, 'Should return array');
+        $this->assertLessThanOrEqual($maxRequests, $result['remaining'], 'Remaining should be <= max');
         
         // Note: Actual blocking depends on APCu availability
         // If APCu is not available, it falls back to file-based which may not block immediately
@@ -184,11 +193,13 @@ class RateLimitTest extends TestCase
         $this->assertTrue($result2, 'Should work with limit 100');
         
         // Check remaining reflects different limits
-        $remaining1 = getRateLimitRemaining($key1, 10, 60);
-        $remaining2 = getRateLimitRemaining($key2, 100, 300);
+        $result1 = getRateLimitRemaining($key1, 10, 60);
+        $result2 = getRateLimitRemaining($key2, 100, 300);
         
-        $this->assertLessThanOrEqual(10, $remaining1, 'Remaining1 should reflect limit 10');
-        $this->assertLessThanOrEqual(100, $remaining2, 'Remaining2 should reflect limit 100');
+        $this->assertIsArray($result1, 'Result1 should be array');
+        $this->assertIsArray($result2, 'Result2 should be array');
+        $this->assertLessThanOrEqual(10, $result1['remaining'], 'Remaining1 should reflect limit 10');
+        $this->assertLessThanOrEqual(100, $result2['remaining'], 'Remaining2 should reflect limit 100');
     }
 }
 

@@ -129,12 +129,22 @@ function parseMETARResponse($response, $airport) {
         $visStr = str_replace('+', '', $metarData['visib']);
         // Handle "1 1/2" format
         if (preg_match('/(\d+)\s+(\d+\/\d+)/', $visStr, $matches)) {
-            $visibility = floatval($matches[1]) + floatval($matches[2]);
+            $num1 = is_numeric($matches[1]) ? floatval($matches[1]) : 0;
+            $fraction = $matches[2];
+            if (preg_match('/(\d+)\/(\d+)/', $fraction, $fracMatches)) {
+                $numerator = is_numeric($fracMatches[1]) ? floatval($fracMatches[1]) : 0;
+                $denominator = is_numeric($fracMatches[2]) && $fracMatches[2] != 0 ? floatval($fracMatches[2]) : 1;
+                $visibility = $num1 + ($numerator / $denominator);
+            } else {
+                $visibility = $num1;
+            }
         } elseif (strpos($visStr, '/') !== false) {
             $parts = explode('/', $visStr);
-            $visibility = floatval($parts[0]) / floatval($parts[1]);
-        } else {
-            $visibility = floatval($visStr);
+            if (count($parts) === 2 && is_numeric($parts[0]) && is_numeric($parts[1]) && $parts[1] != 0) {
+                $visibility = floatval($parts[0]) / floatval($parts[1]);
+            }
+        } elseif (is_numeric($visStr) || $visStr === '') {
+            $visibility = $visStr !== '' ? floatval($visStr) : null;
         }
     }
     
@@ -150,17 +160,21 @@ function parseMETARResponse($response, $airport) {
                 
                 // Record the first cloud layer for reference
                 if ($cloudLayer === null) {
+                    $base = null;
+                    if (isset($cloud['base']) && is_numeric($cloud['base'])) {
+                        $base = (int)round((float)$cloud['base']);
+                    }
                     $cloudLayer = [
                         'cover' => $cover,
-                        'base' => isset($cloud['base']) ? intval($cloud['base']) : null
+                        'base' => $base
                     ];
                 }
                 
                 // Ceiling exists when BKN or OVC (broken or overcast)
                 // Note: CLR/SKC (clear) should not set cloud_cover
                 if (in_array($cover, ['BKN', 'OVC', 'OVX'])) {
-                    if (isset($cloud['base'])) {
-                        $ceiling = intval($cloud['base']);
+                    if (isset($cloud['base']) && is_numeric($cloud['base'])) {
+                        $ceiling = (int)round((float)$cloud['base']);
                         if ($cover !== 'CLR' && $cover !== 'SKC') {
                             $cloudCover = $cover;
                         }
@@ -238,16 +252,21 @@ function parseMETARResponse($response, $airport) {
         // METAR observation time format is DDHHMMZ (e.g., "012353Z" = day 01, time 23:53 UTC)
         // Pattern: day (2 digits), hour (2 digits), minute (2 digits), 'Z'
         if (preg_match('/\b(\d{2})(\d{4})Z\b/', $rawOb, $matches)) {
-            $day = intval($matches[1]);
-            $hour = intval(substr($matches[2], 0, 2));
-            $minute = intval(substr($matches[2], 2, 2));
-            
-            // Validate ranges
-            if ($day >= 1 && $day <= 31 && $hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
-                // Get current UTC time to determine year and month
-                $now = new DateTime('now', new DateTimeZone('UTC'));
-                $year = intval($now->format('Y'));
-                $month = intval($now->format('m'));
+            $dayStr = $matches[1];
+            $timeStr = $matches[2];
+            if (!is_numeric($dayStr) || !is_numeric($timeStr) || strlen($timeStr) !== 4) {
+                // Invalid format, skip parsing
+            } else {
+                $day = (int)$dayStr;
+                $hour = (int)substr($timeStr, 0, 2);
+                $minute = (int)substr($timeStr, 2, 2);
+                
+                // Validate ranges
+                if ($day >= 1 && $day <= 31 && $hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
+                    // Get current UTC time to determine year and month
+                    $now = new DateTime('now', new DateTimeZone('UTC'));
+                    $year = (int)$now->format('Y');
+                    $month = (int)$now->format('m');
                 
                 // Try to create the observation time
                 // Note: We need to handle month rollovers - if day is greater than current day,
@@ -272,6 +291,7 @@ function parseMETARResponse($response, $airport) {
                 } catch (Exception $e) {
                     // Invalid date, leave obsTime as null
                     error_log("Failed to parse METAR observation time from rawOb: " . $e->getMessage());
+                }
                 }
             }
         }
