@@ -488,11 +488,7 @@ jobs:
             deployment_error \
               "Pre-Deployment Validation" \
               "The following issues were found:\n${REASONS_TEXT}" \
-              "1. Review the validation errors above
-2. Fix syntax errors, missing files, or configuration issues
-3. Ensure all required functions exist in their respective files
-4. Verify Docker configuration files are present and valid
-5. This validation prevents silent failures from reaching production"
+              "1. Review the validation errors above\n2. Fix syntax errors, missing files, or configuration issues\n3. Ensure all required functions exist in their respective files\n4. Verify Docker configuration files are present and valid\n5. This validation prevents silent failures from reaching production"
           fi
           
           echo ""
@@ -824,12 +820,7 @@ jobs:
             deployment_error \
               "File Synchronization (Rsync)" \
               "Rsync failed - files may not be synced correctly. This is critical - deployment cannot proceed without files being synced." \
-              "1. Check network connectivity: ping ${{ secrets.HOST }}
-2. Verify SSH connection: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'echo Connection OK'
-3. Check server disk space: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'df -h'
-4. Verify permissions on server: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'ls -la ~/aviationwx'
-5. Check rsync logs for specific errors
-6. Retry deployment after resolving issues"
+              "1. Check network connectivity: ping ${{ secrets.HOST }}\n2. Verify SSH connection: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'echo Connection OK'\n3. Check server disk space: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'df -h'\n4. Verify permissions on server: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'ls -la ~/aviationwx'\n5. Check rsync logs for specific errors\n6. Retry deployment after resolving issues"
           fi
           echo "✓ Repository synced successfully"
 
@@ -865,10 +856,7 @@ jobs:
                 deployment_error \
                   "SSL Certificate Restoration" \
                   "restore-ssl-certificates.sh script not found. This should not happen - script should be synced via rsync." \
-                  "1. Verify script exists: ls -la scripts/restore-ssl-certificates.sh
-2. Check if rsync excluded the scripts directory
-3. Verify file permissions
-4. Manually restore certificates if needed: sudo cp /etc/letsencrypt/live/aviationwx.org/*.pem ssl/"
+                  "1. Verify script exists: ls -la scripts/restore-ssl-certificates.sh\n2. Check if rsync excluded the scripts directory\n3. Verify file permissions\n4. Manually restore certificates if needed: sudo cp /etc/letsencrypt/live/aviationwx.org/*.pem ssl/"
               else
                 echo "❌ ERROR: restore-ssl-certificates.sh script not found"
                 echo "This should not happen - script should be synced via rsync"
@@ -1022,11 +1010,7 @@ jobs:
               deployment_error \
                 "Docker Build (No Cache)" \
                 "Docker build failed when forcing rebuild without cache" \
-                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config
-2. Check disk space: df -h
-3. Check Docker daemon: systemctl status docker
-4. Review build logs above for specific errors
-5. Try manual build: docker compose -f docker/docker-compose.prod.yml build --no-cache web"
+                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Check disk space: df -h\n3. Check Docker daemon: systemctl status docker\n4. Review build logs above for specific errors\n5. Try manual build: docker compose -f docker/docker-compose.prod.yml build --no-cache web"
             fi
             # Start containers with the newly built image
             if ! docker compose -f docker/docker-compose.prod.yml up -d --pull; then
@@ -1035,11 +1019,7 @@ jobs:
                 deployment_error \
                   "Container Startup" \
                   "Failed to start containers after build" \
-                  "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs
-2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps
-3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'
-4. Review docker-compose.prod.yml configuration
-5. Check Docker daemon logs: journalctl -u docker"
+                  "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs\n2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps\n3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'\n4. Review docker-compose.prod.yml configuration\n5. Check Docker daemon logs: journalctl -u docker"
               fi
             fi
             echo "✓ Containers rebuilt and started successfully (no cache)"
@@ -1049,13 +1029,7 @@ jobs:
               deployment_error \
                 "Docker Build/Start" \
                 "Both build attempts (with --pull and without) failed" \
-                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config
-2. Verify all required files are present (check Dockerfile COPY commands)
-3. Check network connectivity for pulling base images: ping registry-1.docker.io
-4. Check disk space: df -h
-5. Check Docker daemon: systemctl status docker
-6. Review Docker logs: journalctl -u docker
-7. Try manual build: docker compose -f docker/docker-compose.prod.yml build web"
+                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config\n2. Verify all required files are present (check Dockerfile COPY commands)\n3. Check network connectivity for pulling base images: ping registry-1.docker.io\n4. Check disk space: df -h\n5. Check Docker daemon: systemctl status docker\n6. Review Docker logs: journalctl -u docker\n7. Try manual build: docker compose -f docker/docker-compose.prod.yml build web"
             fi
           fi
           
@@ -1180,12 +1154,7 @@ jobs:
                 deployment_error \
                   "Nginx Container Startup" \
                   "Failed to start Nginx container after restart attempt" \
-                  "1. Check Nginx container logs:
-   ${NGINX_LOGS}
-2. Verify Nginx configuration: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t
-3. Check for port conflicts: netstat -tuln | grep -E ':(80|443)'
-4. Verify docker-compose.prod.yml nginx service configuration
-5. Check container status: docker compose -f docker/docker-compose.prod.yml ps nginx"
+                  "1. Check Nginx container logs:\n   ${NGINX_LOGS}\n2. Verify Nginx configuration: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t\n3. Check for port conflicts: netstat -tuln | grep -E ':(80|443)'\n4. Verify docker-compose.prod.yml nginx service configuration\n5. Check container status: docker compose -f docker/docker-compose.prod.yml ps nginx"
               else
                 echo ""
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1214,15 +1183,7 @@ jobs:
               deployment_error \
                 "Nginx Configuration Validation" \
                 "Nginx configuration test failed - configuration is invalid" \
-                "1. Review Nginx config test output:
-   ${CONFIG_TEST_OUTPUT}
-2. Check container logs:
-   ${NGINX_LOGS}
-3. Check nginx.conf syntax: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t
-4. Verify all referenced files exist
-5. Check for missing semicolons, brackets, or typos
-6. Review docker/nginx.conf and docker/nginx-main.conf
-7. Fix configuration errors and retry deployment"
+                "1. Review Nginx config test output:\n   ${CONFIG_TEST_OUTPUT}\n2. Check container logs:\n   ${NGINX_LOGS}\n3. Check nginx.conf syntax: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t\n4. Verify all referenced files exist\n5. Check for missing semicolons, brackets, or typos\n6. Review docker/nginx.conf and docker/nginx-main.conf\n7. Fix configuration errors and retry deployment"
             else
               echo ""
               echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1260,14 +1221,7 @@ jobs:
               deployment_error \
                 "SSL Certificate Accessibility" \
                 "SSL certificates not accessible in nginx container. This indicates a volume mount problem." \
-                "1. Check host-side certificates:
-   ${HOST_SSL}
-2. Check container volume mounts:
-   ${CONTAINER_MOUNTS}
-3. Verify ssl/ directory exists on host: ls -la ~/aviationwx/ssl/
-4. Check docker-compose.prod.yml volume configuration
-5. Ensure certificates were copied correctly in earlier steps
-6. Verify file permissions: chmod 644 ssl/fullchain.pem && chmod 600 ssl/privkey.pem"
+                "1. Check host-side certificates:\n   ${HOST_SSL}\n2. Check container volume mounts:\n   ${CONTAINER_MOUNTS}\n3. Verify ssl/ directory exists on host: ls -la ~/aviationwx/ssl/\n4. Check docker-compose.prod.yml volume configuration\n5. Ensure certificates were copied correctly in earlier steps\n6. Verify file permissions: chmod 644 ssl/fullchain.pem && chmod 600 ssl/privkey.pem"
             else
               echo ""
               echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1339,12 +1293,7 @@ jobs:
                 deployment_error \
                   "Commit SHA Verification" \
                   "Deployed commit SHA does not match expected SHA. Expected: ${EXPECTED_SHA_SHORT}, Actual: ${ACTUAL_SHA_SHORT}" \
-                  "1. This indicates a partial deployment or deployment of wrong code
-2. Check if rsync completed successfully
-3. Verify GIT_SHA environment variable was set correctly
-4. Check container logs: docker compose -f docker/docker-compose.prod.yml logs web
-5. Verify deployment completed all steps
-6. Consider rolling back if system is in inconsistent state"
+                  "1. This indicates a partial deployment or deployment of wrong code\n2. Check if rsync completed successfully\n3. Verify GIT_SHA environment variable was set correctly\n4. Check container logs: docker compose -f docker/docker-compose.prod.yml logs web\n5. Verify deployment completed all steps\n6. Consider rolling back if system is in inconsistent state"
               else
                 echo ""
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1459,17 +1408,7 @@ jobs:
             deployment_error \
               "fail2ban Verification" \
               "fail2ban verification failed after $MAX_RETRIES attempts. This is a CRITICAL security feature - deployment cannot proceed without fail2ban." \
-              "1. Check container logs (fail2ban related):
-   ${FAIL2BAN_LOGS}
-2. Check container processes:
-   ${FAIL2BAN_PROCESSES}
-3. Verify fail2ban configuration:
-   ${FAIL2BAN_CONFIG}
-4. Check fail2ban service status:
-   ${FAIL2BAN_STATUS}
-5. Review Dockerfile for fail2ban installation
-6. Check entrypoint script for fail2ban startup
-7. Verify fail2ban configuration files are copied correctly"
+              "1. Check container logs (fail2ban related):\n   ${FAIL2BAN_LOGS}\n2. Check container processes:\n   ${FAIL2BAN_PROCESSES}\n3. Verify fail2ban configuration:\n   ${FAIL2BAN_CONFIG}\n4. Check fail2ban service status:\n   ${FAIL2BAN_STATUS}\n5. Review Dockerfile for fail2ban installation\n6. Check entrypoint script for fail2ban startup\n7. Verify fail2ban configuration files are copied correctly"
           fi
           
           echo ""
@@ -1660,10 +1599,7 @@ jobs:
               deployment_error \
                 "File Verification" \
                 "config.php not found in container" \
-                "1. Verify file was synced via rsync
-2. Check Dockerfile COPY commands
-3. Verify file exists in repository
-4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
+                "1. Verify file was synced via rsync\n2. Check Dockerfile COPY commands\n3. Verify file exists in repository\n4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
             else
               echo "❌ config.php not found in container"
               exit 1
@@ -1678,10 +1614,7 @@ jobs:
               deployment_error \
                 "File Verification" \
                 "rate-limit.php not found in container" \
-                "1. Verify file was synced via rsync
-2. Check Dockerfile COPY commands
-3. Verify file exists in repository
-4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
+                "1. Verify file was synced via rsync\n2. Check Dockerfile COPY commands\n3. Verify file exists in repository\n4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
             else
               echo "❌ rate-limit.php not found in container"
               exit 1
@@ -1703,10 +1636,7 @@ jobs:
               deployment_error \
                 "File Verification" \
                 "process-push-webcams.php not found in container" \
-                "1. Verify file was synced via rsync
-2. Check Dockerfile COPY commands
-3. Verify file exists in repository
-4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
+                "1. Verify file was synced via rsync\n2. Check Dockerfile COPY commands\n3. Verify file exists in repository\n4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
             else
               echo "❌ process-push-webcams.php not found in container"
               exit 1
@@ -1719,10 +1649,7 @@ jobs:
               deployment_error \
                 "File Verification" \
                 "sync-push-config.php not found in container" \
-                "1. Verify file was synced via rsync
-2. Check Dockerfile COPY commands
-3. Verify file exists in repository
-4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
+                "1. Verify file was synced via rsync\n2. Check Dockerfile COPY commands\n3. Verify file exists in repository\n4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
             else
               echo "❌ sync-push-config.php not found in container"
               exit 1
@@ -1735,10 +1662,7 @@ jobs:
               deployment_error \
                 "File Verification" \
                 "push-webcam-validator.php not found in container" \
-                "1. Verify file was synced via rsync
-2. Check Dockerfile COPY commands
-3. Verify file exists in repository
-4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
+                "1. Verify file was synced via rsync\n2. Check Dockerfile COPY commands\n3. Verify file exists in repository\n4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
             else
               echo "❌ push-webcam-validator.php not found in container"
               exit 1
