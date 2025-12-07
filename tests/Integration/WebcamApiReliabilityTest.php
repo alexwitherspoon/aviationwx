@@ -164,6 +164,24 @@ class WebcamApiReliabilityTest extends TestCase
             $this->markTestSkipped('Placeholder image not found');
         }
         
+        // Check if API endpoint is reachable
+        $testUrl = rtrim($this->baseUrl, '/') . '/api/webcam.php?id=' . $this->airport . '&cam=' . $this->camIndex;
+        $ch = curl_init($testUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_NOBODY, true); // HEAD request
+        curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+        
+        // Skip test if web server is not available (common in CI without test server)
+        if ($httpCode === 0 || ($httpCode >= 500 && !empty($curlError))) {
+            $this->markTestSkipped('Web server not available (required for integration test). ' . 
+                ($curlError ? "Error: {$curlError}" : "HTTP code: {$httpCode}"));
+        }
+        
         // Create a valid JPEG cache file
         copy($this->placeholderPath, $this->cacheJpg);
         @touch($this->cacheJpg, time());
