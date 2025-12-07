@@ -835,10 +835,19 @@ function syncAllPushCameras($config) {
                     if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
                         // Success - mapping already updated in syncCameraUser
                         // Ensure permissions are correct after user creation (createFtpUser sets 775, but verify)
+                        // CRITICAL: Force set 775 permissions for FTP/FTPS directories
                         if (in_array(strtolower($protocol), ['ftp', 'ftps'])) {
                             $incomingDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}/incoming";
                             if (is_dir($incomingDir)) {
+                                // Force set permissions multiple times to ensure it sticks
                                 @chmod($incomingDir, 0775);
+                                @chmod($incomingDir, 0775);
+                                // Verify permissions were set
+                                $actualPerms = @substr(sprintf('%o', @fileperms($incomingDir)), -4);
+                                if ($actualPerms !== '0775' && $actualPerms !== '775') {
+                                    // Retry with explicit octal
+                                    @chmod($incomingDir, 0775);
+                                }
                             }
                         }
                     }
