@@ -626,10 +626,12 @@ jobs:
                 echo "✓ SSL certificates copied successfully"
               else
                 echo "⚠️  Failed to copy privkey.pem"
+                echo "This may indicate permission issues or missing source file"
                 exit 1
               fi
             else
               echo "⚠️  Failed to copy fullchain.pem"
+              echo "This may indicate permission issues or missing source file"
               exit 1
             fi
           elif [ -f ssl/fullchain.pem ] && [ -f ssl/privkey.pem ]; then
@@ -783,11 +785,13 @@ jobs:
           # Ensure directory permissions allow www-data to write
           # Use 775 for webcams (group writable) and 755 for parent
           sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
-          sudo chmod 775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 775 /tmp/aviationwx-cache/webcams || true
+            sudo chmod 775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 775 /tmp/aviationwx-cache/webcams || true
           
           # Verify directory was created and is writable
           if [ ! -d /tmp/aviationwx-cache/webcams ]; then
             echo "❌ Failed to create cache directory"
+            echo "This is critical - webcam caching will not work without this directory"
+            echo "Check permissions and disk space, then retry deployment"
             exit 1
           fi
           
@@ -1160,6 +1164,10 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
+          # Source deployment helper functions for consistent error handling
+          if [ -f scripts/deploy-helpers.sh ]; then
+            source scripts/deploy-helpers.sh
+          fi
           
           echo "Restarting Nginx container..."
           # Restart Nginx container to ensure it picks up new nginx.conf
@@ -1167,14 +1175,27 @@ jobs:
           if ! docker compose -f docker/docker-compose.prod.yml restart nginx; then
             echo "Restart failed, trying up -d..."
             if ! docker compose -f docker/docker-compose.prod.yml up -d nginx; then
-              echo ""
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "❌ ERROR: Failed to start Nginx container"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo ""
-              echo "Container logs:"
-              docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50
-              exit 1
+              if [ "$(type -t deployment_error)" = "function" ]; then
+                NGINX_LOGS=$(docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50 || echo "Could not retrieve logs")
+                deployment_error \
+                  "Nginx Container Startup" \
+                  "Failed to start Nginx container after restart attempt" \
+                  "1. Check Nginx container logs:
+   ${NGINX_LOGS}
+2. Verify Nginx configuration: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t
+3. Check for port conflicts: netstat -tuln | grep -E ':(80|443)'
+4. Verify docker-compose.prod.yml nginx service configuration
+5. Check container status: docker compose -f docker/docker-compose.prod.yml ps nginx"
+              else
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "❌ ERROR: Failed to start Nginx container"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo ""
+                echo "Container logs:"
+                docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50
+                exit 1
+              fi
             fi
           fi
           
@@ -1188,22 +1209,35 @@ jobs:
           if echo "$CONFIG_TEST_OUTPUT" | grep -qE "syntax is ok|test is successful"; then
             echo "✓ Nginx configuration is valid"
           else
-            deployment_error \
-              "Nginx Configuration Validation" \
-              "Nginx configuration test failed - configuration is invalid" \
-              "1. Review Nginx config test output above
-2. Check nginx.conf syntax: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t
-3. Verify all referenced files exist
-4. Check for missing semicolons, brackets, or typos
-5. Review docker/nginx.conf and docker/nginx-main.conf
-6. Fix configuration errors and retry deployment"
-            echo "$CONFIG_TEST_OUTPUT"
-            echo ""
-            echo "Container logs:"
-            docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50
-            echo ""
-            echo "Fix the Nginx configuration and retry deployment."
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              NGINX_LOGS=$(docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50 || echo "Could not retrieve logs")
+              deployment_error \
+                "Nginx Configuration Validation" \
+                "Nginx configuration test failed - configuration is invalid" \
+                "1. Review Nginx config test output:
+   ${CONFIG_TEST_OUTPUT}
+2. Check container logs:
+   ${NGINX_LOGS}
+3. Check nginx.conf syntax: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t
+4. Verify all referenced files exist
+5. Check for missing semicolons, brackets, or typos
+6. Review docker/nginx.conf and docker/nginx-main.conf
+7. Fix configuration errors and retry deployment"
+            else
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "❌ ERROR: Nginx configuration is invalid"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo ""
+              echo "Nginx config test output:"
+              echo "$CONFIG_TEST_OUTPUT"
+              echo ""
+              echo "Container logs:"
+              docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50
+              echo ""
+              echo "Fix the Nginx configuration and retry deployment."
+              exit 1
+            fi
           fi
           
           # Verify Nginx is responding (optional check)
@@ -1220,20 +1254,36 @@ jobs:
              docker compose -f docker/docker-compose.prod.yml exec -T nginx test -f /etc/nginx/ssl/privkey.pem; then
             echo "✓ SSL certificates are accessible in nginx container"
           else
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "❌ ERROR: SSL certificates not accessible in nginx container"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "This indicates a volume mount problem."
-            echo "Checking host-side certificates..."
-            ls -la ssl/ || echo "ssl/ directory not found on host"
-            echo ""
-            echo "Container volume mounts:"
-            docker inspect aviationwx-nginx | grep -A 20 Mounts || echo "Could not inspect container"
-            echo ""
-            echo "Fix: Ensure ssl/ directory exists on host and contains certificates."
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              HOST_SSL=$(ls -la ssl/ 2>/dev/null || echo "ssl/ directory not found on host")
+              CONTAINER_MOUNTS=$(docker inspect aviationwx-nginx 2>/dev/null | grep -A 20 Mounts || echo "Could not inspect container")
+              deployment_error \
+                "SSL Certificate Accessibility" \
+                "SSL certificates not accessible in nginx container. This indicates a volume mount problem." \
+                "1. Check host-side certificates:
+   ${HOST_SSL}
+2. Check container volume mounts:
+   ${CONTAINER_MOUNTS}
+3. Verify ssl/ directory exists on host: ls -la ~/aviationwx/ssl/
+4. Check docker-compose.prod.yml volume configuration
+5. Ensure certificates were copied correctly in earlier steps
+6. Verify file permissions: chmod 644 ssl/fullchain.pem && chmod 600 ssl/privkey.pem"
+            else
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "❌ ERROR: SSL certificates not accessible in nginx container"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo ""
+              echo "This indicates a volume mount problem."
+              echo "Checking host-side certificates..."
+              ls -la ssl/ || echo "ssl/ directory not found on host"
+              echo ""
+              echo "Container volume mounts:"
+              docker inspect aviationwx-nginx | grep -A 20 Mounts || echo "Could not inspect container"
+              echo ""
+              echo "Fix: Ensure ssl/ directory exists on host and contains certificates."
+              exit 1
+            fi
           fi
           EOF
 
@@ -1258,6 +1308,10 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
+          # Source deployment helper functions for consistent error handling
+          if [ -f scripts/deploy-helpers.sh ]; then
+            source scripts/deploy-helpers.sh
+          fi
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Post-Deployment Verification (Quick Check)"
@@ -1281,15 +1335,27 @@ jobs:
             echo "Actual: ${ACTUAL_SHA_SHORT}"
             
             if [ "$EXPECTED_SHA_SHORT" != "$ACTUAL_SHA_SHORT" ]; then
-              echo ""
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "❌ ERROR: Deployed commit SHA does not match expected SHA"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "Expected: ${EXPECTED_SHA_SHORT}"
-              echo "Actual: ${ACTUAL_SHA_SHORT}"
-              echo ""
-              echo "This indicates a partial deployment or deployment of wrong code."
-              exit 1
+              if [ "$(type -t deployment_error)" = "function" ]; then
+                deployment_error \
+                  "Commit SHA Verification" \
+                  "Deployed commit SHA does not match expected SHA. Expected: ${EXPECTED_SHA_SHORT}, Actual: ${ACTUAL_SHA_SHORT}" \
+                  "1. This indicates a partial deployment or deployment of wrong code
+2. Check if rsync completed successfully
+3. Verify GIT_SHA environment variable was set correctly
+4. Check container logs: docker compose -f docker/docker-compose.prod.yml logs web
+5. Verify deployment completed all steps
+6. Consider rolling back if system is in inconsistent state"
+              else
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "❌ ERROR: Deployed commit SHA does not match expected SHA"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "Expected: ${EXPECTED_SHA_SHORT}"
+                echo "Actual: ${ACTUAL_SHA_SHORT}"
+                echo ""
+                echo "This indicates a partial deployment or deployment of wrong code."
+                exit 1
+              fi
             fi
             
             echo "✓ Deployed commit SHA matches expected SHA"
@@ -1420,6 +1486,10 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
+          # Source deployment helper functions for consistent error handling
+          if [ -f scripts/deploy-helpers.sh ]; then
+            source scripts/deploy-helpers.sh
+          fi
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Post-Deployment Health Checks"
@@ -1586,16 +1656,36 @@ jobs:
           
           # Check if config-utils.php exists
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/lib/config.php; then
-            echo "❌ config-utils.php not found in container"
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              deployment_error \
+                "File Verification" \
+                "config.php not found in container" \
+                "1. Verify file was synced via rsync
+2. Check Dockerfile COPY commands
+3. Verify file exists in repository
+4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
+            else
+              echo "❌ config.php not found in container"
+              exit 1
+            fi
           fi
           
-          echo "✓ config-utils.php present"
+          echo "✓ config.php present"
           
           # Check if rate-limit.php exists
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/lib/rate-limit.php; then
-            echo "❌ rate-limit.php not found in container"
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              deployment_error \
+                "File Verification" \
+                "rate-limit.php not found in container" \
+                "1. Verify file was synced via rsync
+2. Check Dockerfile COPY commands
+3. Verify file exists in repository
+4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
+            else
+              echo "❌ rate-limit.php not found in container"
+              exit 1
+            fi
           fi
           
           echo "✓ rate-limit.php present"
@@ -1609,20 +1699,50 @@ jobs:
           
           # Check push webcam scripts exist
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/scripts/process-push-webcams.php; then
-            echo "❌ process-push-webcams.php not found in container"
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              deployment_error \
+                "File Verification" \
+                "process-push-webcams.php not found in container" \
+                "1. Verify file was synced via rsync
+2. Check Dockerfile COPY commands
+3. Verify file exists in repository
+4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
+            else
+              echo "❌ process-push-webcams.php not found in container"
+              exit 1
+            fi
           fi
           echo "✓ process-push-webcams.php present"
           
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/scripts/sync-push-config.php; then
-            echo "❌ sync-push-config.php not found in container"
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              deployment_error \
+                "File Verification" \
+                "sync-push-config.php not found in container" \
+                "1. Verify file was synced via rsync
+2. Check Dockerfile COPY commands
+3. Verify file exists in repository
+4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
+            else
+              echo "❌ sync-push-config.php not found in container"
+              exit 1
+            fi
           fi
           echo "✓ sync-push-config.php present"
           
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/lib/push-webcam-validator.php; then
-            echo "❌ push-webcam-validator.php not found in container"
-            exit 1
+            if [ "$(type -t deployment_error)" = "function" ]; then
+              deployment_error \
+                "File Verification" \
+                "push-webcam-validator.php not found in container" \
+                "1. Verify file was synced via rsync
+2. Check Dockerfile COPY commands
+3. Verify file exists in repository
+4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/lib/"
+            else
+              echo "❌ push-webcam-validator.php not found in container"
+              exit 1
+            fi
           fi
           echo "✓ push-webcam-validator.php present"
           
