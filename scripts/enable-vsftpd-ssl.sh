@@ -42,10 +42,35 @@ sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=NO/' "$VSFTPD_CONF"
 sed -i 's/^force_local_data_ssl=YES/force_local_data_ssl=NO/' "$VSFTPD_CONF"
 sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$VSFTPD_CONF"
 sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$VSFTPD_CONF"
+
+# Enable multiple TLS versions for broad camera compatibility
+# TLSv1.2: Modern and secure (preferred)
+# TLSv1.1: Good compatibility with older cameras
+# TLSv1.0: Maximum compatibility with legacy cameras
+# This protects credentials while maintaining compatibility
 sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$VSFTPD_CONF"
+sed -i 's/^ssl_tlsv1=NO/ssl_tlsv1=YES/' "$VSFTPD_CONF"
+
+# Enable TLSv1.1 and TLSv1.2 for broad camera compatibility
+# vsftpd 3.0+ supports these; older versions will ignore unknown options
+if ! grep -q "^ssl_tlsv1_1=" "$VSFTPD_CONF" 2>/dev/null; then
+    echo "ssl_tlsv1_1=YES" >> "$VSFTPD_CONF"
+fi
+if ! grep -q "^ssl_tlsv1_2=" "$VSFTPD_CONF" 2>/dev/null; then
+    echo "ssl_tlsv1_2=YES" >> "$VSFTPD_CONF"
+fi
+sed -i 's/^ssl_tlsv1_1=NO/ssl_tlsv1_1=YES/' "$VSFTPD_CONF" 2>/dev/null || true
+sed -i 's/^ssl_tlsv1_2=NO/ssl_tlsv1_2=YES/' "$VSFTPD_CONF" 2>/dev/null || true
+
+# Disable insecure SSL versions
 sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$VSFTPD_CONF"
+sed -i 's/^ssl_sslv2=YES/ssl_sslv2=NO/' "$VSFTPD_CONF"
 sed -i 's/^# ssl_sslv3=NO/ssl_sslv3=NO/' "$VSFTPD_CONF"
+sed -i 's/^ssl_sslv3=YES/ssl_sslv3=NO/' "$VSFTPD_CONF"
+
+# SSL/TLS settings for compatibility
 sed -i 's/^# require_ssl_reuse=NO/require_ssl_reuse=NO/' "$VSFTPD_CONF"
+sed -i 's/^require_ssl_reuse=YES/require_ssl_reuse=NO/' "$VSFTPD_CONF"
 sed -i 's/^# ssl_ciphers=HIGH/ssl_ciphers=HIGH/' "$VSFTPD_CONF"
 sed -i 's|^# rsa_cert_file=.*|rsa_cert_file='"$CERT_DIR"'/fullchain.pem|' "$VSFTPD_CONF"
 sed -i 's|^# rsa_private_key_file=.*|rsa_private_key_file='"$CERT_DIR"'/privkey.pem|' "$VSFTPD_CONF"
@@ -55,6 +80,8 @@ sed -i '/^# ssl_enable=YES/d' "$VSFTPD_CONF"
 sed -i '/^# force_local_data_ssl=/d' "$VSFTPD_CONF"
 sed -i '/^# force_local_logins_ssl=/d' "$VSFTPD_CONF"
 sed -i '/^# ssl_tlsv1=YES/d' "$VSFTPD_CONF"
+sed -i '/^# ssl_tlsv1_1=/d' "$VSFTPD_CONF"
+sed -i '/^# ssl_tlsv1_2=/d' "$VSFTPD_CONF"
 sed -i '/^# ssl_sslv2=NO/d' "$VSFTPD_CONF"
 sed -i '/^# ssl_sslv3=NO/d' "$VSFTPD_CONF"
 sed -i '/^# require_ssl_reuse=NO/d' "$VSFTPD_CONF"
