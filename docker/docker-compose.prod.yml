@@ -14,9 +14,27 @@ services:
       - "127.0.0.1:${APP_PORT:-8080}:80"  # Bind to localhost only, Nginx handles external
       - "2121:2121"  # FTP/FTPS (both protocols on same port)
       - "2222:2222"  # SFTP
-      # FTP passive mode ports (50000-50100) - Docker Compose doesn't support ranges directly
-      # These ports are opened via firewall script, and Docker's default iptables rules allow them
-      # when using published ports. The vsftpd service binds to these ports inside the container.
+      # FTP passive mode ports (50000-50019) - Published individually since Docker Compose doesn't support ranges
+      - "50000:50000"  # FTP passive mode
+      - "50001:50001"  # FTP passive mode
+      - "50002:50002"  # FTP passive mode
+      - "50003:50003"  # FTP passive mode
+      - "50004:50004"  # FTP passive mode
+      - "50005:50005"  # FTP passive mode
+      - "50006:50006"  # FTP passive mode
+      - "50007:50007"  # FTP passive mode
+      - "50008:50008"  # FTP passive mode
+      - "50009:50009"  # FTP passive mode
+      - "50010:50010"  # FTP passive mode
+      - "50011:50011"  # FTP passive mode
+      - "50012:50012"  # FTP passive mode
+      - "50013:50013"  # FTP passive mode
+      - "50014:50014"  # FTP passive mode
+      - "50015:50015"  # FTP passive mode
+      - "50016:50016"  # FTP passive mode
+      - "50017:50017"  # FTP passive mode
+      - "50018:50018"  # FTP passive mode
+      - "50019:50019"  # FTP passive mode
     volumes:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
       - /home/aviationwx/airports.json:/var/www/html/airports.json:ro

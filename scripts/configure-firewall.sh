@@ -12,7 +12,7 @@ PORTS=(
     "443:tcp:HTTPS (Nginx)"
     "2121:tcp:FTP/FTPS (Push webcams - both protocols on same port)"
     "2222:tcp:SFTP (Push webcams)"
-    "50000:50100:tcp:FTP passive mode (Push webcams)"
+    "50000:50019:tcp:FTP passive mode (Push webcams)"
     "22:tcp:SSH (System access)"
     "500:udp:IPsec IKE (VPN)"
     "4500:udp:IPsec NAT-T (VPN)"
