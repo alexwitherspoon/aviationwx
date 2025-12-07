@@ -36,6 +36,14 @@ services:
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
+    healthcheck:
+      # Override Dockerfile healthcheck with longer start_period
+      # Dockerfile has 5s which is too short for all services (cron, vsftpd, sshd, fail2ban, Apache)
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s  # Give services time to start before healthcheck begins
     logging:
       driver: "json-file"
       options:

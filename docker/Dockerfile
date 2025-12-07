@@ -136,6 +136,9 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 EXPOSE 80
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Note: start-period is 15s to allow time for all services to initialize
+# (cron, vsftpd, sshd, fail2ban, then Apache)
+# Production docker-compose.prod.yml overrides this to 20s for extra safety
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
     CMD curl -f http://localhost/ || exit 1
 
