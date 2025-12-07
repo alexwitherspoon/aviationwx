@@ -90,8 +90,13 @@ function serveFile($filePath, $contentType) {
         return false;
     }
     
-    // Get file size while handle is open
-    $size = @filesize($filePath);
+    // Get file size from open handle (atomic operation)
+    $stat = @fstat($fp);
+    $size = ($stat !== false && isset($stat['size'])) ? $stat['size'] : false;
+    if ($size === false) {
+        // Fallback to filesize if fstat fails
+        $size = @filesize($filePath);
+    }
     if ($size === false || $size === 0) {
         @fclose($fp);
         return false;
@@ -145,15 +150,29 @@ if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
 
 $airportId = strtolower(trim($rawAirportId));
 
-// Validate cam index is non-negative
+// Validate cam index is non-negative and within bounds
 if ($camIndex < 0) {
     $camIndex = 0;
 }
+// Upper bound will be validated after config is loaded
 
 // Load config (with caching)
 $config = loadConfig();
-if ($config === null || !isset($config['airports'][$airportId]['webcams'][$camIndex])) {
-    aviationwx_log('error', 'webcam config missing or cam index invalid', ['airport' => $airportId, 'cam' => $camIndex], 'app');
+if ($config === null || !isset($config['airports'][$airportId])) {
+    aviationwx_log('error', 'webcam config missing', ['airport' => $airportId], 'app');
+    servePlaceholder();
+}
+
+// Validate cam index is within bounds
+$maxCamIndex = isset($config['airports'][$airportId]['webcams']) 
+    ? max(0, count($config['airports'][$airportId]['webcams']) - 1) 
+    : -1;
+if ($camIndex > $maxCamIndex || !isset($config['airports'][$airportId]['webcams'][$camIndex])) {
+    aviationwx_log('warning', 'webcam cam index out of bounds', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'max' => $maxCamIndex
+    ], 'user');
     servePlaceholder();
 }
 
@@ -235,13 +254,11 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     header('Pragma: no-cache');
     header('Expires: 0');
     // Rate limit headers (for observability; mtime endpoint is not limited)
-    if (function_exists('getRateLimitRemaining')) {
-        $rl = getRateLimitRemaining('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
-        if (is_array($rl)) {
-            header('X-RateLimit-Limit: ' . RATE_LIMIT_WEBCAM_MAX);
-            header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
-            header('X-RateLimit-Reset: ' . (int)$rl['reset']);
-        }
+    $rl = getRateLimitRemaining('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
+    if ($rl !== null) {
+        header('X-RateLimit-Limit: ' . RATE_LIMIT_WEBCAM_MAX);
+        header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
+        header('X-RateLimit-Reset: ' . (int)$rl['reset']);
     }
     $existsJpg = file_exists($cacheJpg);
     $existsWebp = file_exists($cacheWebp);
@@ -274,13 +291,11 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
 // Defer rate limiting decision until after we know what we can serve
 $isRateLimited = !checkRateLimit('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
 // Rate limit headers for image responses
-if (function_exists('getRateLimitRemaining')) {
-    $rl = getRateLimitRemaining('webcam_api', 100, 60);
-    if (is_array($rl)) {
-        header('X-RateLimit-Limit: 100');
-        header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
-        header('X-RateLimit-Reset: ' . (int)$rl['reset']);
-    }
+$rl = getRateLimitRemaining('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
+if ($rl !== null) {
+    header('X-RateLimit-Limit: ' . RATE_LIMIT_WEBCAM_MAX);
+    header('X-RateLimit-Remaining: ' . (int)$rl['remaining']);
+    header('X-RateLimit-Reset: ' . (int)$rl['reset']);
 }
 
 // Optional format parameter: jpg (default), webp
@@ -736,6 +751,7 @@ if (file_exists($lockFile)) {
 
 $lockFp = @fopen($lockFile, 'c+');
 $lockAcquired = false;
+$lockCleanedUp = false; // Track if lock has been cleaned up to prevent double cleanup
 
 if ($lockFp !== false) {
     // Try to acquire exclusive lock (non-blocking)
@@ -750,7 +766,10 @@ if ($lockFp !== false) {
         @fflush($lockFp);
         
         // Register shutdown function to clean up lock on script exit
-        register_shutdown_function(function() use ($lockFp, $lockFile) {
+        register_shutdown_function(function() use ($lockFp, $lockFile, &$lockCleanedUp) {
+            if ($lockCleanedUp) {
+                return; // Already cleaned up
+            }
             if (is_resource($lockFp)) {
                 @flock($lockFp, LOCK_UN);
                 @fclose($lockFp);
@@ -758,6 +777,7 @@ if ($lockFp !== false) {
             if (file_exists($lockFile)) {
                 @unlink($lockFile);
             }
+            $lockCleanedUp = true;
         });
     } else {
         // Another refresh is already in progress
@@ -847,13 +867,14 @@ try {
         ], 'app');
     }
 } finally {
-    // Always release lock (shutdown function will also clean up, but do it here too for immediate cleanup)
-    if ($lockAcquired && $lockFp !== false) {
+    // Always release lock (prefer explicit cleanup over shutdown function)
+    if ($lockAcquired && $lockFp !== false && !$lockCleanedUp) {
         @flock($lockFp, LOCK_UN);
         @fclose($lockFp);
         if (file_exists($lockFile)) {
             @unlink($lockFile);
         }
+        $lockCleanedUp = true;
     }
 }
 

@@ -351,20 +351,69 @@ function validateImageFile($file, $pushConfig = null) {
 
 /**
  * Move image to cache
+ * Validates source file before moving to prevent errors
  */
 function moveToCache($sourceFile, $airportId, $camIndex) {
+    // Validate source file exists and is readable
+    if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
+        aviationwx_log('error', 'moveToCache: source file invalid', [
+            'source' => $sourceFile,
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+        return false;
+    }
+    
+    // Validate file size is reasonable
+    $fileSize = filesize($sourceFile);
+    if ($fileSize === false || $fileSize === 0) {
+        aviationwx_log('error', 'moveToCache: source file has invalid size', [
+            'source' => $sourceFile,
+            'size' => $fileSize
+        ], 'app');
+        return false;
+    }
+    
     $cacheDir = __DIR__ . '/../cache/webcams';
     if (!is_dir($cacheDir)) {
-        @mkdir($cacheDir, 0755, true);
+        if (!@mkdir($cacheDir, 0755, true)) {
+            aviationwx_log('error', 'moveToCache: cache directory creation failed', [
+                'dir' => $cacheDir
+            ], 'app');
+            return false;
+        }
+    }
+    
+    // Validate cache directory is writable
+    if (!is_writable($cacheDir)) {
+        aviationwx_log('error', 'moveToCache: cache directory not writable', [
+            'dir' => $cacheDir
+        ], 'app');
+        return false;
     }
     
     $cacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
     
     // Atomic move
     if (@rename($sourceFile, $cacheFile)) {
-        // Generate WEBP in background (non-blocking)
-        generateWebp($cacheFile, $airportId, $camIndex);
-        return $cacheFile;
+        // Verify move succeeded
+        if (file_exists($cacheFile) && filesize($cacheFile) > 0) {
+            // Generate WEBP in background (non-blocking)
+            generateWebp($cacheFile, $airportId, $camIndex);
+            return $cacheFile;
+        } else {
+            aviationwx_log('error', 'moveToCache: move appeared to succeed but file invalid', [
+                'cache_file' => $cacheFile
+            ], 'app');
+            return false;
+        }
+    } else {
+        $error = error_get_last();
+        aviationwx_log('error', 'moveToCache: rename failed', [
+            'source' => $sourceFile,
+            'dest' => $cacheFile,
+            'error' => $error['message'] ?? 'unknown'
+        ], 'app');
     }
     
     return false;
@@ -374,11 +423,16 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
  * Generate WEBP version of image (non-blocking)
  */
 function generateWebp($cacheFile, $airportId, $camIndex) {
-    if (!file_exists($cacheFile)) {
+    // Validate source file exists and is readable
+    if (!file_exists($cacheFile) || !is_readable($cacheFile)) {
         return false;
     }
     
     $cacheDir = __DIR__ . '/../cache/webcams';
+    if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
+        return false;
+    }
+    
     $cacheWebp = $cacheDir . '/' . $airportId . '_' . $camIndex . '.webp';
     
     // Build ffmpeg command
@@ -430,19 +484,52 @@ function generateWebp($cacheFile, $airportId, $camIndex) {
 
 /**
  * Clean up upload directory
+ * Validates directory and files before deletion
  */
 function cleanupUploadDirectory($uploadDir, $keepFile = null) {
+    // Validate directory exists and is writable
+    if (!is_dir($uploadDir)) {
+        aviationwx_log('warning', 'cleanupUploadDirectory: directory does not exist', [
+            'dir' => $uploadDir
+        ], 'app');
+        return;
+    }
+    
+    if (!is_writable($uploadDir)) {
+        aviationwx_log('warning', 'cleanupUploadDirectory: directory not writable', [
+            'dir' => $uploadDir
+        ], 'app');
+        return;
+    }
+    
     $files = glob($uploadDir . '*');
+    if ($files === false) {
+        aviationwx_log('warning', 'cleanupUploadDirectory: glob failed', [
+            'dir' => $uploadDir
+        ], 'app');
+        return;
+    }
+    
+    $keepBasename = $keepFile ? basename($keepFile) : null;
     
     foreach ($files as $file) {
-        if (is_file($file)) {
-            $basename = basename($file);
-            // Keep the processed file if specified
-            if ($keepFile && $basename === basename($keepFile)) {
-                continue;
-            }
-            // Delete all other files
-            @unlink($file);
+        if (!is_file($file)) {
+            continue; // Skip directories and symlinks
+        }
+        
+        $basename = basename($file);
+        // Keep the processed file if specified
+        if ($keepBasename && $basename === $keepBasename) {
+            continue;
+        }
+        
+        // Delete file with error handling
+        if (!@unlink($file)) {
+            $error = error_get_last();
+            aviationwx_log('warning', 'cleanupUploadDirectory: failed to delete file', [
+                'file' => $file,
+                'error' => $error['message'] ?? 'unknown'
+            ], 'app');
         }
     }
 }
