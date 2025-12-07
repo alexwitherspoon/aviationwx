@@ -186,10 +186,17 @@ class SmokeTest extends TestCase
         }
         
         // HTTPS should work without certificate errors
-        $this->assertNotEquals(
-            'CURLE_SSL_CONNECT_ERROR',
-            curl_error($ch ?? null),
-            "HTTPS should work without SSL errors"
+        // Check if there was a curl error in the response
+        $this->assertEmpty(
+            $response['error'],
+            "HTTPS should work without SSL errors (error: " . ($response['error'] ?: 'none') . ")"
+        );
+        
+        // Verify we got a valid HTTP response (not a connection error)
+        $this->assertGreaterThan(
+            0,
+            $response['http_code'],
+            "HTTPS should return a valid HTTP status code"
         );
     }
     

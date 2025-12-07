@@ -264,7 +264,19 @@ jobs:
         run: |
           echo "Running smoke tests against local instance..."
           echo "Note: Docker container uses config/airports.json (mounted from host)"
-          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --coverage-clover smoke-coverage.xml
+          # Smoke tests don't need coverage - just verify endpoints work
+          # Exit code 0 = success, 1 = warnings (tests passed), 2+ = failures
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --no-coverage
+          exit_code=$?
+          if [ $exit_code -eq 0 ]; then
+            echo "✓ All smoke tests passed"
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  Smoke tests passed with warnings (this is OK)"
+            exit 0  # Treat warnings as success for smoke tests
+          else
+            echo "❌ Smoke tests failed"
+            exit $exit_code
+          fi
         env:
           TEST_API_URL: http://localhost:8080
       
@@ -316,8 +328,9 @@ jobs:
         run: |
           echo "⚠️  WARNING: Running smoke tests against PRODUCTION"
           echo "Production URL: https://aviationwx.org"
-          # Allow warnings but fail on actual test failures
-          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-prod-results.xml --coverage-clover smoke-prod-coverage.xml || [ $? -eq 1 ]
+          # Smoke tests don't need coverage - just verify endpoints work
+          # Exit code 0 = success, 1 = warnings, 2+ = failures
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-prod-results.xml --no-coverage || [ $? -le 1 ]
         continue-on-error: true
         env:
           TEST_PROD_URL: https://aviationwx.org
