@@ -64,13 +64,9 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
         }
     }
     
-    // Validate port
-    if (isset($pushConfig['port'])) {
-        $port = intval($pushConfig['port']);
-        if ($port < 1 || $port > 65535) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: port must be between 1 and 65535";
-        }
-    }
+    // Port is deprecated - not used by server, only for client reference
+    // Ports are fixed: SFTP=2222, FTP/FTPS=2121
+    // We don't validate it since it's informational only
     
     // Validate max_file_size_mb
     if (isset($pushConfig['max_file_size_mb'])) {

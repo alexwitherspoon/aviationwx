@@ -116,7 +116,6 @@
           "refresh_seconds": 60,
           "push_config": {
             "protocol": "sftp",
-            "port": 2222,
             "username": "kspbCam0Push01",
             "password": "SecurePass1234",
             "max_file_size_mb": 10,
