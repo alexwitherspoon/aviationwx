@@ -864,6 +864,64 @@ jobs:
           fi
           EOF
 
+      - name: Check for Docker config changes
+        id: docker-config-changed
+        run: |
+          echo "Checking for Docker configuration file changes..."
+          
+          # Get the previous commit SHA (if available)
+          PREV_SHA="${{ github.event.before }}"
+          CURRENT_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
+          
+          # Docker config files that require image rebuild
+          DOCKER_CONFIG_FILES=(
+            "docker/Dockerfile"
+            "docker/vsftpd.conf"
+            "docker/sshd_config"
+            "docker/docker-entrypoint.sh"
+            "docker/pam-vsftpd"
+            "docker/logrotate-vsftpd"
+            "docker/logrotate-sshd"
+            "docker/fail2ban-jail.conf"
+            "docker/fail2ban-vsftpd.conf"
+            "docker/fail2ban-sshd.conf"
+            "docker/docker-compose.prod.yml"
+            "scripts/service-watchdog.sh"
+            "scripts/setup-letsencrypt.sh"
+            "scripts/enable-vsftpd-ssl.sh"
+            "scripts/create-sftp-user.sh"
+            "config/crontab"
+          )
+          
+          CONFIG_CHANGED="false"
+          
+          # If we have a previous commit, check what changed
+          if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "0000000000000000000000000000000000000000" ]; then
+            echo "Comparing changes from $PREV_SHA to $CURRENT_SHA..."
+            for file in "${DOCKER_CONFIG_FILES[@]}"; do
+              if git diff --name-only "$PREV_SHA" "$CURRENT_SHA" | grep -q "^${file}$"; then
+                echo "  ✓ $file changed"
+                CONFIG_CHANGED="true"
+              fi
+            done
+          else
+            # No previous commit (initial deploy or can't determine), assume config might have changed
+            echo "⚠️  Cannot determine previous commit, will check for config changes on server"
+            CONFIG_CHANGED="unknown"
+          fi
+          
+          if [ "$CONFIG_CHANGED" = "true" ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⚠️  Docker configuration files changed - will force rebuild"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          elif [ "$CONFIG_CHANGED" = "unknown" ]; then
+            echo "⚠️  Will verify config changes on server and rebuild if needed"
+          else
+            echo "✓ No Docker configuration file changes detected"
+          fi
+          
+          echo "config_changed=$CONFIG_CHANGED" >> $GITHUB_OUTPUT
+
       - name: Deploy via Docker Compose
         run: |
           # Get commit SHA from GitHub Actions context (7 characters to match GitHub's short SHA display)
@@ -871,6 +929,10 @@ jobs:
           GIT_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
           GIT_SHA="${GIT_SHA:0:7}"
           echo "Deploying with GIT_SHA: ${GIT_SHA}"
+          
+          # Determine if we need to force rebuild
+          FORCE_REBUILD="${{ steps.docker-config-changed.outputs.config_changed }}"
+          
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF
           set -euo pipefail
           cd ~/aviationwx
@@ -880,11 +942,78 @@ jobs:
           export DOCKER_BUILDKIT=1
           export COMPOSE_DOCKER_CLI_BUILD=1
           
-          echo "Building and starting containers (optimized single operation)..."
-          # Use docker compose up --build for atomic update (more efficient)
-          # This builds and starts in one operation, reducing downtime
-          # Try with --pull first to get latest base images
-          if ! docker compose -f docker/docker-compose.prod.yml up -d --build --pull; then
+          # Check for Docker config changes on server (fallback if git diff didn't work)
+          if [ "$FORCE_REBUILD" = "unknown" ] || [ "$FORCE_REBUILD" = "false" ]; then
+            echo "Verifying Docker config files on server..."
+            CONFIG_CHANGED="false"
+            
+            # Docker config files that require image rebuild
+            DOCKER_CONFIG_FILES=(
+              "docker/Dockerfile"
+              "docker/vsftpd.conf"
+              "docker/sshd_config"
+              "docker/docker-entrypoint.sh"
+              "docker/pam-vsftpd"
+              "docker/logrotate-vsftpd"
+              "docker/logrotate-sshd"
+              "docker/fail2ban-jail.conf"
+              "docker/fail2ban-vsftpd.conf"
+              "docker/fail2ban-sshd.conf"
+              "docker/docker-compose.prod.yml"
+              "scripts/service-watchdog.sh"
+              "scripts/setup-letsencrypt.sh"
+              "scripts/enable-vsftpd-ssl.sh"
+              "scripts/create-sftp-user.sh"
+              "config/crontab"
+            )
+            
+            # Check if any config file was modified more recently than the Docker image
+            if docker images aviationwx:latest --format "{{.CreatedAt}}" 2>/dev/null | head -1 | grep -q .; then
+              IMAGE_TIME=\$(docker images aviationwx:latest --format "{{.CreatedAt}}" 2>/dev/null | head -1)
+              IMAGE_TIMESTAMP=\$(date -d "\$IMAGE_TIME" +%s 2>/dev/null || echo 0)
+              
+              for file in "\${DOCKER_CONFIG_FILES[@]}"; do
+                if [ -f "\$file" ]; then
+                  FILE_TIMESTAMP=\$(stat -c %Y "\$file" 2>/dev/null || stat -f %m "\$file" 2>/dev/null || echo 0)
+                  if [ "\$FILE_TIMESTAMP" -gt "\$IMAGE_TIMESTAMP" ]; then
+                    echo "  ✓ \$file is newer than Docker image"
+                    CONFIG_CHANGED="true"
+                  fi
+                fi
+              done
+            else
+              # No image exists, must rebuild
+              CONFIG_CHANGED="true"
+            fi
+            
+            if [ "\$CONFIG_CHANGED" = "true" ]; then
+              FORCE_REBUILD="true"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "⚠️  Docker configuration files changed - will force rebuild"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            fi
+          fi
+          
+          # Build arguments for cache invalidation
+          if [ "$FORCE_REBUILD" = "true" ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Forcing rebuild without cache due to config changes..."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            # Force rebuild without cache
+            if ! docker compose -f docker/docker-compose.prod.yml build --no-cache web; then
+              echo "❌ ERROR: Docker build failed"
+              exit 1
+            fi
+            # Start containers with the newly built image
+            if ! docker compose -f docker/docker-compose.prod.yml up -d --pull; then
+              echo "⚠️  Warning: Start with --pull failed, trying without --pull..."
+              if ! docker compose -f docker/docker-compose.prod.yml up -d; then
+                echo "❌ ERROR: Failed to start containers"
+                exit 1
+              fi
+            fi
+            echo "✓ Containers rebuilt and started successfully (no cache)"
+          elif ! docker compose -f docker/docker-compose.prod.yml up -d --build --pull; then
             echo "⚠️  Warning: Build with --pull failed, trying without --pull..."
             if ! docker compose -f docker/docker-compose.prod.yml up -d --build; then
               echo ""
