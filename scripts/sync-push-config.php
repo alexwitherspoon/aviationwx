@@ -216,7 +216,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     }
     
     // Create incoming directory if it doesn't exist
-    // Use 0775 for FTP/FTPS (will be set correctly below), 0755 for SFTP
+    // Use 0775 for FTP/FTPS (will be set correctly below), 0775 for SFTP
     if (!is_dir($incomingDir)) {
         if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
             @mkdir($incomingDir, 0775, true);
