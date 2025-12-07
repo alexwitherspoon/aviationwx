@@ -167,9 +167,11 @@ if ($isWeb) {
     echo "<div class='header'><h1>AviationWX Weather Fetcher</h1></div>";
     echo "<p>Processing " . count($config['airports']) . " airports with {$poolSize} workers...</p>";
 } else {
-    echo "AviationWX Weather Fetcher\n";
-    echo "========================\n\n";
-    echo "Processing " . count($config['airports']) . " airports with {$poolSize} workers...\n\n";
+    // Write directly to stderr for cron output - ensures it appears in Docker logs
+    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    @fwrite(STDERR, "AviationWX Weather Fetcher\n");
+    @fwrite(STDERR, "========================\n\n");
+    @fwrite(STDERR, "Processing " . count($config['airports']) . " airports with {$poolSize} workers...\n\n");
 }
 
 $pool = new ProcessPool($poolSize, $workerTimeout, basename(__FILE__), $invocationId);
@@ -195,12 +197,14 @@ if ($isWeb) {
     }
     echo "</body></html>";
 } else {
-    echo "\nDone! Weather cache refreshed.\n";
-    echo "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
+    // Write directly to stderr for cron output - ensures it appears in Docker logs
+    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    @fwrite(STDERR, "\nDone! Weather cache refreshed.\n");
+    $statsLine = "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
     if ($skipped > 0) {
-        echo ", Skipped (already running): {$skipped}";
+        $statsLine .= ", Skipped (already running): {$skipped}";
     }
-    echo "\n";
+    @fwrite(STDERR, $statsLine . "\n");
 }
 
 $scriptDuration = round((microtime(true) - $scriptStartTime) * 1000, 2);

@@ -837,8 +837,10 @@ if ($isWeb) {
     </style></head><body>";
     echo '<div class="header"><h2>🔌 AviationWX Webcam Fetcher</h2></div>';
 } else {
-    echo "AviationWX Webcam Fetcher\n";
-    echo "==========================\n\n";
+    // Write directly to stderr for cron output - ensures it appears in Docker logs
+    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    @fwrite(STDERR, "AviationWX Webcam Fetcher\n");
+    @fwrite(STDERR, "==========================\n\n");
 }
 
 require_once __DIR__ . '/../lib/process-pool.php';
@@ -850,7 +852,9 @@ register_shutdown_function(function() use ($pool) {
 if ($isWeb) {
     echo "<p>Processing webcams with {$poolSize} workers...</p>";
 } else {
-    echo "Processing webcams with {$poolSize} workers...\n\n";
+    // Write directly to stderr for cron output - ensures it appears in Docker logs
+    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    @fwrite(STDERR, "Processing webcams with {$poolSize} workers...\n\n");
 }
 
 $skipped = 0;
@@ -882,12 +886,14 @@ if ($isWeb) {
     }
     echo "</div>";
 } else {
-    echo "\n\nDone! Webcam images cached.\n";
-    echo "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
+    // Write directly to stderr for cron output - ensures it appears in Docker logs
+    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    @fwrite(STDERR, "\n\nDone! Webcam images cached.\n");
+    $statsLine = "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
     if ($skipped > 0) {
-        echo ", Skipped (already running): {$skipped}";
+        $statsLine .= ", Skipped (already running): {$skipped}";
     }
-    echo "\n";
+    @fwrite(STDERR, $statsLine . "\n");
 }
 
 // Log script completion
@@ -935,7 +941,7 @@ if (isset($config['airports']) && is_array($config['airports'])) {
             if ($isWeb) {
                 echo "<span class='info'>View {$airportName} at: <a href=\"{$subdomainUrl}\" target='_blank'>{$subdomainUrl}</a> or <a href=\"{$queryUrl}\" target='_blank'>{$queryUrl}</a></span><br>\n";
             } else {
-                echo "View {$airportName} at: {$subdomainUrl} or {$queryUrl}\n";
+                @fwrite(STDERR, "View {$airportName} at: {$subdomainUrl} or {$queryUrl}\n");
             }
         }
     }
@@ -943,7 +949,7 @@ if (isset($config['airports']) && is_array($config['airports'])) {
     if ($isWeb) {
         echo "<span class='info'>View at: <a href=\"{$protocol}://{$domain}/?airport=<airport-id>\">{$protocol}://{$domain}/?airport=&lt;airport-id&gt;</a></span><br>\n";
     } else {
-        echo "View at: {$protocol}://{$domain}/?airport=<airport-id>\n";
+        @fwrite(STDERR, "View at: {$protocol}://{$domain}/?airport=<airport-id>\n");
     }
 }
 
