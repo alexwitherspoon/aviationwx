@@ -155,16 +155,16 @@ A helper script is available for easy log filtering:
 
 ```bash
 # Show all access logs
-./scripts/filter-logs.sh access
+./scripts/dev-filter-logs.sh access
 
 # Show application logs
-./scripts/filter-logs.sh app
+./scripts/dev-filter-logs.sh app
 
 # Show error logs
-./scripts/filter-logs.sh error
+./scripts/dev-filter-logs.sh error
 
 # Show Nginx logs
-./scripts/filter-logs.sh nginx
+./scripts/dev-filter-logs.sh nginx
 ```
 
 ## Monitoring
