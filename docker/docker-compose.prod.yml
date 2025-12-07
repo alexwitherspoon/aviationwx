@@ -23,7 +23,7 @@ services:
       - /tmp/aviationwx-cache:/var/www/html/cache
       # Note: /var/www/html/uploads is ephemeral (inside container only)
       # Files are uploaded via SFTP/FTP/FTPS, then processed and moved to cache
-      - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates
+      - /etc/letsencrypt:/etc/letsencrypt:rw  # Let's Encrypt certificates (rw needed for certbot to write)
     cap_add:
       - NET_ADMIN
       - NET_RAW
