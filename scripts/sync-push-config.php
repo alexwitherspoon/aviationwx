@@ -550,6 +550,7 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     
     // Set incoming directory to www-data:www-data (guest user for vsftpd)
     // Must be writable by www-data for FTP uploads to work
+    // CRITICAL: Always set to 775 for FTP/FTPS (this function is only called for FTP users)
     if (function_exists('chown')) {
         $wwwDataInfo = @posix_getpwnam('www-data');
         if ($wwwDataInfo !== false) {
@@ -559,9 +560,13 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
                 @chgrp($incomingDir, $wwwDataGroup['gid']);
             }
             // Use 775 permissions to allow group write (www-data group)
+            // Set multiple times to ensure it sticks
             @chmod($incomingDir, 0775);
+            @chmod($incomingDir, 0775); // Force set again
         }
     }
+    // Always set permissions to 775, even if chown doesn't work
+    @chmod($incomingDir, 0775);
     
     // Also ensure the parent directory is writable by www-data if it's not root-owned
     // This is needed for some FTP operations
