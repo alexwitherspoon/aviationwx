@@ -2,6 +2,9 @@
 # Runs inside Docker container
 # Format: minute hour day month weekday user command
 
+# Set PATH for cron jobs (cron has minimal PATH by default)
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 # Webcam refresh - every minute
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-webcam.php > /dev/null 2>&1
 
@@ -13,6 +16,7 @@
 
 # Push webcam config sync - every minute
 # Log errors to file for debugging (stdout/stderr go to Docker logs via logger)
+# PATH is set above to ensure db_load, db_verify, etc. are found
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/sync-push-config.php >> /var/log/cron-sync-push-config.log 2>&1
 
 # Let's Encrypt certificate renewal - weekly (Sunday at 3 AM)
