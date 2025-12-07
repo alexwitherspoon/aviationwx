@@ -1,7 +1,11 @@
-# Cache directories (root level only, not in subdirectories)
+# Cache directories (all levels - contain local state like backoff.json, weather data, etc.)
 /cache/
 /cache-local/
 /*.cache/
+# Cache directories in subdirectories (api/cache, scripts/cache, etc.)
+api/cache/
+scripts/cache/
+**/cache/
 
 # Sensitive configuration files (DO NOT COMMIT)
 airports.json
