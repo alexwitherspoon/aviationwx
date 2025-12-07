@@ -1094,6 +1094,23 @@ jobs:
           fi
           fi
           
+          # Sync FTP/SFTP/FTPS configuration (runs on every deployment)
+          # This ensures users and directories are created/updated immediately after deployment
+          echo "Syncing FTP/SFTP/FTPS configuration..."
+          if docker compose -f docker/docker-compose.prod.yml exec -T web /usr/local/bin/php /var/www/html/scripts/sync-push-config.php 2>&1; then
+            echo "✓ FTP/SFTP/FTPS configuration synced successfully"
+          else
+            echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed"
+            echo "  This may be due to:"
+            echo "    - Config file not yet available"
+            echo "    - Permissions issues"
+            echo "    - Database corruption (will be auto-recovered on next run)"
+            echo ""
+            echo "  Deployment will continue, but FTP/SFTP users may not be configured."
+            echo "  The sync will retry on container startup."
+            # Don't fail deployment - just warn
+          fi
+          
           # Clean up Docker resources conditionally (only if disk usage is high)
           # Check disk usage before cleanup to avoid unnecessary operations
           DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
