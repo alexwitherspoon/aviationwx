@@ -607,14 +607,18 @@ jobs:
           echo "Waiting for web container to be ready..."
           sleep 10
           
-          # Generate FTPS SSL certificates (one-time setup)
-          # This runs after containers are started so the web server is available for HTTP-01 challenge
-          echo "Checking for upload.aviationwx.org SSL certificates..."
-          
-          # Check if certificates already exist in container
-          # This is a one-time setup that only runs if certificates don't exist
-          if docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem 2>/dev/null && \
-             docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/privkey.pem 2>/dev/null; then
+          # Verify container is running before attempting certificate operations
+          if ! docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
+            echo "⚠️  Warning: Web container is not running, skipping certificate generation"
+          else
+            # Generate FTPS SSL certificates (one-time setup)
+            # This runs after containers are started so the web server is available for HTTP-01 challenge
+            echo "Checking for upload.aviationwx.org SSL certificates..."
+            
+            # Check if certificates already exist in container
+            # This is a one-time setup that only runs if certificates don't exist
+            if docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem 2>/dev/null && \
+               docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/privkey.pem 2>/dev/null; then
             echo "✓ SSL certificates for upload.aviationwx.org already exist"
             echo "  Skipping certificate generation (one-time setup already complete)"
           else
@@ -647,6 +651,7 @@ jobs:
               echo ""
               # Don't fail deployment - just warn
             fi
+          fi
           fi
           
           # Clean up Docker resources using the dedicated cleanup script
