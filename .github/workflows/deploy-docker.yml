@@ -129,22 +129,24 @@ jobs:
             // This prevents loops when multiple workflow_run events fire for the same commit
             if (!isManualDispatch) {
               const deployWorkflowPath = '.github/workflows/deploy-docker.yml';
+              const currentRunId = context.runId;
+              
               const existingDeployRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 workflow_id: deployWorkflowPath,
                 head_sha: commitSha,
-                per_page: 5
+                per_page: 10  // Check more runs to account for timing issues
               });
               
-              // Count in-progress or queued deployments for this commit
+              // Count in-progress or queued deployments for this commit, excluding the current run
               const inProgressDeploys = existingDeployRuns.data.workflow_runs.filter(run => 
-                run.status === 'in_progress' || run.status === 'queued'
+                run.id !== currentRunId && (run.status === 'in_progress' || run.status === 'queued')
               );
               
               if (inProgressDeploys.length > 0) {
                 core.info(`⏭️  Skipping deployment - another deployment for commit ${commitSha.substring(0, 7)} is already in progress`);
-                core.info(`Found ${inProgressDeploys.length} in-progress deployment(s) for this commit`);
+                core.info(`Found ${inProgressDeploys.length} in-progress deployment(s) for this commit (excluding current run ${currentRunId})`);
                 core.setOutput('test-success', 'false');
                 core.setOutput('qa-success', 'false');
                 core.setOutput('skip-checks', 'false');
