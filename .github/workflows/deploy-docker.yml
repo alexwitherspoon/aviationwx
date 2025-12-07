@@ -8,7 +8,20 @@ on:
     types:
       - completed
     branches: [ "main" ]
-  workflow_dispatch: {} # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      skip_prerequisites:
+        description: 'Skip prerequisite checks (DANGEROUS - only use in emergencies)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      deployment_reason:
+        description: 'Reason for manual deployment'
+        required: true
+        type: string
 
 # Ensure only one deployment runs at a time
 concurrency:
@@ -27,12 +40,41 @@ jobs:
     outputs:
       test-success: ${{ steps.check.outputs.test-success }}
       qa-success: ${{ steps.check.outputs.qa-success }}
+      skip-checks: ${{ steps.check.outputs.skip-checks }}
     steps:
       - name: Wait for and check required workflows status
         id: check
         uses: actions/github-script@v7
         with:
           script: |
+            const skipInput = '${{ github.event.inputs.skip_prerequisites }}';
+            const isManualDispatch = '${{ github.event_name }}' === 'workflow_dispatch';
+            const deploymentReason = '${{ github.event.inputs.deployment_reason }}';
+            
+            if (isManualDispatch) {
+              core.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+              core.info(`Manual deployment triggered`);
+              core.info(`Reason: ${deploymentReason || 'Not provided'}`);
+              core.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+              
+              if (skipInput === 'true') {
+                core.warning('');
+                core.warning('⚠️  WARNING: Prerequisite checks are being SKIPPED');
+                core.warning('This is DANGEROUS and should only be used in emergencies');
+                core.warning('Deployment will proceed without verifying tests passed');
+                core.warning('');
+                core.setOutput('skip-checks', 'true');
+                core.setOutput('test-success', 'true');  // Fake success to allow deployment
+                core.setOutput('qa-success', 'true');
+                return;
+              } else {
+                core.info('Prerequisite checks will be performed (recommended)');
+                core.setOutput('skip-checks', 'false');
+              }
+            } else {
+              core.setOutput('skip-checks', 'false');
+            }
+            
             // Only deploy on push events (commits/merges to main), not on pull_request events
             // workflow_run event contains the event that triggered the source workflow
             const triggeringEvent = '${{ github.event.workflow_run && github.event.workflow_run.event || github.event_name }}';
@@ -47,8 +89,9 @@ jobs:
               return;
             }
             
-            // Verify this is a push event (direct commit or merge to main)
-            if (triggeringEvent !== 'push') {
+            // For manual dispatch, we've already handled it above
+            // For workflow_run, verify this is a push event
+            if (triggeringEvent !== 'push' && !isManualDispatch) {
               core.warning(`⚠️  Unexpected event type: ${triggeringEvent}. Only push events trigger deployment.`);
               core.setOutput('test-success', 'false');
               core.setOutput('qa-success', 'false');
@@ -249,11 +292,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: check-prerequisites
-    # Only deploy if both workflows succeeded (or manual dispatch which bypasses checks)
+    # Only deploy if both workflows succeeded (or manual dispatch with skip option)
     if: |
       (needs.check-prerequisites.outputs.test-success == 'true' && 
        needs.check-prerequisites.outputs.qa-success == 'true') || 
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'workflow_dispatch' && needs.check-prerequisites.outputs.skip-checks == 'true')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -274,6 +317,143 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
+      - name: Pre-deployment validation (block bad code)
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Pre-Deployment Validation"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Blocking bad code before it reaches production..."
+          echo ""
+          
+          VALIDATION_FAILED=false
+          FAILURE_REASONS=()
+          
+          # Validation 1: Check for common silent failure patterns
+          echo "1. Checking for critical files..."
+          CRITICAL_FILES=(
+            "api/weather.php"
+            "lib/config.php"
+            "lib/rate-limit.php"
+            "lib/circuit-breaker.php"
+            "lib/constants.php"
+            "scripts/process-push-webcams.php"
+            "scripts/sync-push-config.php"
+            "scripts/create-sftp-user.sh"
+            "scripts/service-watchdog.sh"
+            "lib/push-webcam-validator.php"
+            "pages/config-generator.php"
+            "docker/vsftpd.conf"
+            "docker/sshd_config"
+            "docker/docker-compose.prod.yml"
+            "docker/Dockerfile"
+          )
+          
+          for file in "${CRITICAL_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              VALIDATION_FAILED=true
+              FAILURE_REASONS+=("Critical file missing: $file")
+            fi
+          done
+          
+          if [ "$VALIDATION_FAILED" = "false" ]; then
+            echo "✓ All critical files present"
+          fi
+          
+          # Validation 2: Check for syntax errors that might be missed
+          echo ""
+          echo "2. Checking PHP syntax..."
+          PHP_ERRORS=$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" || true)
+          if [ -n "$PHP_ERRORS" ]; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("PHP syntax errors found")
+            echo "❌ PHP syntax errors:"
+            echo "$PHP_ERRORS"
+          else
+            echo "✓ PHP syntax valid"
+          fi
+          
+          # Validation 3: Verify required functions exist
+          echo ""
+          echo "3. Verifying required functions exist..."
+          if ! grep -q "function checkRateLimit" lib/rate-limit.php 2>/dev/null; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("checkRateLimit function missing in lib/rate-limit.php")
+          fi
+          if ! grep -q "function validateAirportId" lib/config.php 2>/dev/null; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("validateAirportId function missing in lib/config.php")
+          fi
+          if ! grep -q "function checkWeatherCircuitBreaker" lib/circuit-breaker.php 2>/dev/null; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("checkWeatherCircuitBreaker function missing in lib/circuit-breaker.php")
+          fi
+          
+          if [ "$VALIDATION_FAILED" = "false" ]; then
+            echo "✓ Required functions present"
+          fi
+          
+          # Validation 4: Check Docker configuration
+          echo ""
+          echo "4. Validating Docker configuration..."
+          if [ ! -f "docker/docker-compose.prod.yml" ]; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("docker-compose.prod.yml missing")
+          fi
+          if [ ! -f "docker/Dockerfile" ]; then
+            VALIDATION_FAILED=true
+            FAILURE_REASONS+=("Dockerfile missing")
+          fi
+          
+          # Check Dockerfile has required components
+          if [ -f "docker/Dockerfile" ]; then
+            if ! grep -q "FROM php:" docker/Dockerfile; then
+              VALIDATION_FAILED=true
+              FAILURE_REASONS+=("Dockerfile missing PHP base image")
+            fi
+            if ! grep -q "fail2ban" docker/Dockerfile; then
+              VALIDATION_FAILED=true
+              FAILURE_REASONS+=("Dockerfile missing fail2ban installation")
+            fi
+          fi
+          
+          if [ "$VALIDATION_FAILED" = "false" ]; then
+            echo "✓ Docker configuration valid"
+          fi
+          
+          # Validation 5: Check JSON files are valid
+          echo ""
+          echo "5. Validating JSON configuration files..."
+          if [ -f "config/airports.json.example" ]; then
+            if ! php -r "json_decode(file_get_contents('config/airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { exit(1); }" 2>/dev/null; then
+              VALIDATION_FAILED=true
+              FAILURE_REASONS+=("config/airports.json.example is invalid JSON")
+            else
+              echo "✓ config/airports.json.example is valid JSON"
+            fi
+          fi
+          
+          # Final check
+          if [ "$VALIDATION_FAILED" = "true" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ PRE-DEPLOYMENT VALIDATION FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "The following issues were found:"
+            for reason in "${FAILURE_REASONS[@]}"; do
+              echo "  ❌ $reason"
+            done
+            echo ""
+            echo "Fix these issues before deploying to production."
+            echo "This validation prevents silent failures from reaching production."
+            exit 1
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Pre-deployment validation passed - code is ready for production"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
       - name: Update cache version for cache busting
         run: |
           # Generate a unique version based on commit SHA and timestamp
@@ -288,27 +468,6 @@ jobs:
           # The updated file will be synced to the server via rsync
           # This avoids creating unnecessary commits and deployment loops
           echo "✓ Cache version updated (will be synced to server)"
-      
-      - name: Verify push webcam files are present
-        run: |
-          echo "Verifying push webcam implementation files..."
-          required_files=(
-            "scripts/process-push-webcams.php"
-            "scripts/sync-push-config.php"
-            "scripts/create-sftp-user.sh"
-            "scripts/service-watchdog.sh"
-            "lib/push-webcam-validator.php"
-            "pages/config-generator.php"
-            "docker/vsftpd.conf"
-            "docker/sshd_config"
-          )
-          for file in "${required_files[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "❌ Required push webcam file missing: $file"
-              exit 1
-            fi
-          done
-          echo "✓ All push webcam files present"
 
       - name: Clean up old directory structure on server
         run: |
@@ -326,125 +485,72 @@ jobs:
           fi
           EOF
 
-      - name: Sync repository to server
+      - name: Tag current working deployment and save state
         run: |
-          # Exclude docker/docker from rsync (defensive - should not exist after path fix)
-          # Exclude uploads directory (ephemeral, created inside container)
-          rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/ || {
-            echo "⚠️  Rsync had some errors, but continuing..."
-            # Continue even if rsync fails on some deletions
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          ROLLBACK_STATE_FILE="/tmp/aviationwx-rollback-state.json"
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Saving Rollback State"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Capturing current working state before deployment..."
+          echo ""
+          
+          # Get current image tag (if exists)
+          CURRENT_IMAGE=$(docker compose -f docker/docker-compose.prod.yml ps web --format json 2>/dev/null | jq -r '.[0].Image // "null"' || echo "null")
+          
+          # Get current commit SHA from container (if available)
+          CURRENT_SHA=$(docker compose -f docker/docker-compose.prod.yml exec -T web printenv GIT_SHA 2>/dev/null || echo "")
+          
+          # Get current container status
+          CONTAINER_STATUS=$(docker compose -f docker/docker-compose.prod.yml ps web --format json 2>/dev/null | jq -r '.[0].State // "unknown"' || echo "unknown")
+          
+          # Generate rollback tag
+          ROLLBACK_TAG="rollback-$(date +%Y%m%d-%H%M%S)"
+          
+          # Save rollback state
+          ROLLBACK_STATE=$(cat << STATE_JSON
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "image": "${CURRENT_IMAGE}",
+            "commit_sha": "${CURRENT_SHA}",
+            "container_status": "${CONTAINER_STATUS}",
+            "rollback_tag": "${ROLLBACK_TAG}"
           }
-
-      - name: Ensure cache directory exists
-        run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
+          STATE_JSON
+          )
           
-          # Get www-data UID/GID from container (typically 33:33)
-          # If container is running, get actual UID/GID from it
-          WWW_DATA_UID=33
-          WWW_DATA_GID=33
-          if docker ps --format '{{.Names}}' | grep -q '^aviationwx-web$'; then
-            # Container is running - get actual UID/GID
-            CONTAINER_UID=$(docker exec aviationwx-web id -u www-data 2>/dev/null || echo "33")
-            CONTAINER_GID=$(docker exec aviationwx-web id -g www-data 2>/dev/null || echo "33")
-            WWW_DATA_UID=${CONTAINER_UID}
-            WWW_DATA_GID=${CONTAINER_GID}
-            echo "Detected www-data UID/GID from container: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          echo "$ROLLBACK_STATE" > "$ROLLBACK_STATE_FILE"
+          
+          if [ "$CURRENT_IMAGE" != "null" ] && [ -n "$CURRENT_IMAGE" ]; then
+            # Tag current image as rollback target
+            echo "Tagging current image for rollback: $ROLLBACK_TAG"
+            if docker tag "$CURRENT_IMAGE" "aviationwx:$ROLLBACK_TAG" 2>/dev/null; then
+              echo "✓ Rollback image tagged successfully"
+              
+              # Keep only last 3 rollback tags (cleanup old ones)
+              docker images "aviationwx:rollback-*" --format "{{.Tag}}" 2>/dev/null | sort -r | tail -n +4 | while read tag; do
+                echo "Removing old rollback tag: $tag"
+                docker rmi "aviationwx:$tag" 2>/dev/null || true
+              done
+            else
+              echo "⚠️  Warning: Failed to tag current image (may not exist yet)"
+            fi
           else
-            echo "Container not running, using default www-data UID/GID: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+            echo "⚠️  Warning: No current image found - cannot create rollback image"
+            echo "Rollback will restore files only (no image rollback)"
           fi
           
-          # Check if parent directory exists and who owns it
-          if [ -d /tmp/aviationwx-cache ]; then
-            CURRENT_OWNER=$(stat -c '%U:%G' /tmp/aviationwx-cache 2>/dev/null || stat -f '%Su:%Sg' /tmp/aviationwx-cache 2>/dev/null || echo "unknown")
-            echo "Existing cache directory owner: ${CURRENT_OWNER}"
-          fi
-          
-          # Try to create directory structure without sudo first
-          if mkdir -p /tmp/aviationwx-cache/webcams 2>/dev/null; then
-            echo "✓ Created cache directory without sudo"
-          else
-            echo "⚠️  Failed to create directory without sudo, trying with sudo..."
-            # Use sudo to create directory structure
-            sudo mkdir -p /tmp/aviationwx-cache/webcams || {
-              echo "❌ Failed to create cache directory even with sudo"
-              exit 1
-            }
-            echo "✓ Created cache directory with sudo"
-          fi
-          
-          # Set ownership to match container's www-data user
-          # Try without sudo first, then with sudo if needed
-          if chown -R ${WWW_DATA_UID}:${WWW_DATA_GID} /tmp/aviationwx-cache 2>/dev/null; then
-            echo "✓ Changed ownership without sudo"
-          else
-            echo "⚠️  Failed to change ownership without sudo, trying with sudo..."
-            sudo chown -R ${WWW_DATA_UID}:${WWW_DATA_GID} /tmp/aviationwx-cache || {
-              echo "⚠️  Failed to change ownership with sudo, using fallback permissions"
-              # Fallback: make world-writable (less secure but works)
-              sudo chmod -R 777 /tmp/aviationwx-cache || true
-            }
-          fi
-          
-          # Ensure directory permissions allow www-data to write
-          # Use 775 for webcams (group writable) and 755 for parent
-          sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
-          sudo chmod 775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 775 /tmp/aviationwx-cache/webcams || true
-          
-          # Verify directory was created and is writable
-          if [ ! -d /tmp/aviationwx-cache/webcams ]; then
-            echo "❌ Failed to create cache directory"
-            exit 1
-          fi
-          
-          # Show final permissions
-          echo "Final directory permissions:"
-          ls -ld /tmp/aviationwx-cache
-          ls -ld /tmp/aviationwx-cache/webcams
-          
-          # Test write access (as current user, which should work if permissions are correct)
-          if touch /tmp/aviationwx-cache/webcams/.test_write 2>/dev/null; then
-            rm -f /tmp/aviationwx-cache/webcams/.test_write
-            echo "✓ Cache directory is writable by deployment user"
-          else
-            echo "⚠️  Cache directory may not be writable by deployment user"
-            echo "   (This is OK if container user can write)"
-          fi
-          
-          # Final verification
-          echo "✓ Cache directory created at /tmp/aviationwx-cache/webcams"
-          echo "✓ Ownership set to ${WWW_DATA_UID}:${WWW_DATA_GID} (www-data)"
+          echo ""
+          echo "Rollback state saved:"
+          echo "$ROLLBACK_STATE" | jq '.' 2>/dev/null || echo "$ROLLBACK_STATE"
+          echo ""
+          echo "✓ Rollback state saved to: $ROLLBACK_STATE_FILE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           EOF
-
-      - name: Note uploads directory is ephemeral
-        run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          # Uploads directory is now ephemeral (inside container only)
-          # Files are uploaded via SFTP/FTP/FTPS, processed, and moved to cache
-          # No host-side directory setup needed
-          echo "ℹ️  Uploads directory is ephemeral (inside container only)"
-          echo "ℹ️  Camera-specific directories are created automatically by sync-push-config.php"
-          echo "ℹ️  Files are processed and moved to cache, then removed from uploads"
-          # Optional: Clean up old host directory if it exists (harmless if left)
-          if [ -d ~/aviationwx/uploads ] || [ -d /var/www/html/uploads ]; then
-            echo "ℹ️  Old uploads directory found on host (will be ignored, safe to remove)"
-            echo "   To remove: rm -rf ~/aviationwx/uploads /var/www/html/uploads"
-          fi
-          EOF
-
-      - name: Note cache location
-        run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          # Cache is now in /tmp/aviationwx-cache (ephemeral, cleared on reboot)
-          # Daily tracking files (peak_gusts.json, temp_extremes.json) will be recreated
-          # if missing. Cache is ephemeral by design - useful for resetting state if needed.
-          echo "ℹ️  Cache directory: /tmp/aviationwx-cache (ephemeral, cleared on reboot)"
-          echo "ℹ️  Application will automatically recreate cache files if missing"
-          EOF
-
 
       - name: Ensure SSL certificates are in place
         run: |
@@ -576,6 +682,112 @@ jobs:
           fi
           EOF
 
+      - name: Ensure cache directory exists
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          
+          # Get www-data UID/GID from container (typically 33:33)
+          # If container is running, get actual UID/GID from it
+          WWW_DATA_UID=33
+          WWW_DATA_GID=33
+          if docker ps --format '{{.Names}}' | grep -q '^aviationwx-web$'; then
+            # Container is running - get actual UID/GID
+            CONTAINER_UID=$(docker exec aviationwx-web id -u www-data 2>/dev/null || echo "33")
+            CONTAINER_GID=$(docker exec aviationwx-web id -g www-data 2>/dev/null || echo "33")
+            WWW_DATA_UID=${CONTAINER_UID}
+            WWW_DATA_GID=${CONTAINER_GID}
+            echo "Detected www-data UID/GID from container: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          else
+            echo "Container not running, using default www-data UID/GID: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          fi
+          
+          # Check if parent directory exists and who owns it
+          if [ -d /tmp/aviationwx-cache ]; then
+            CURRENT_OWNER=$(stat -c '%U:%G' /tmp/aviationwx-cache 2>/dev/null || stat -f '%Su:%Sg' /tmp/aviationwx-cache 2>/dev/null || echo "unknown")
+            echo "Existing cache directory owner: ${CURRENT_OWNER}"
+          fi
+          
+          # Try to create directory structure without sudo first
+          if mkdir -p /tmp/aviationwx-cache/webcams 2>/dev/null; then
+            echo "✓ Created cache directory without sudo"
+          else
+            echo "⚠️  Failed to create directory without sudo, trying with sudo..."
+            # Use sudo to create directory structure
+            sudo mkdir -p /tmp/aviationwx-cache/webcams || {
+              echo "❌ Failed to create cache directory even with sudo"
+              exit 1
+            }
+            echo "✓ Created cache directory with sudo"
+          fi
+          
+          # Set ownership to match container's www-data user
+          # Try without sudo first, then with sudo if needed
+          if chown -R ${WWW_DATA_UID}:${WWW_DATA_GID} /tmp/aviationwx-cache 2>/dev/null; then
+            echo "✓ Changed ownership without sudo"
+          else
+            echo "⚠️  Failed to change ownership without sudo, trying with sudo..."
+            sudo chown -R ${WWW_DATA_UID}:${WWW_DATA_GID} /tmp/aviationwx-cache || {
+              echo "⚠️  Failed to change ownership with sudo, using fallback permissions"
+              # Fallback: make world-writable (less secure but works)
+              sudo chmod -R 777 /tmp/aviationwx-cache || true
+            }
+          fi
+          
+          # Ensure directory permissions allow www-data to write
+          # Use 775 for webcams (group writable) and 755 for parent
+          sudo chmod 755 /tmp/aviationwx-cache 2>/dev/null || chmod 755 /tmp/aviationwx-cache || true
+          sudo chmod 775 /tmp/aviationwx-cache/webcams 2>/dev/null || chmod 775 /tmp/aviationwx-cache/webcams || true
+          
+          # Verify directory was created and is writable
+          if [ ! -d /tmp/aviationwx-cache/webcams ]; then
+            echo "❌ Failed to create cache directory"
+            exit 1
+          fi
+          
+          # Show final permissions
+          echo "Final directory permissions:"
+          ls -ld /tmp/aviationwx-cache
+          ls -ld /tmp/aviationwx-cache/webcams
+          
+          # Test write access (as current user, which should work if permissions are correct)
+          if touch /tmp/aviationwx-cache/webcams/.test_write 2>/dev/null; then
+            rm -f /tmp/aviationwx-cache/webcams/.test_write
+            echo "✓ Cache directory is writable by deployment user"
+          else
+            echo "⚠️  Cache directory may not be writable by deployment user"
+            echo "   (This is OK if container user can write)"
+          fi
+          
+          # Final verification
+          echo "✓ Cache directory created at /tmp/aviationwx-cache/webcams"
+          echo "✓ Ownership set to ${WWW_DATA_UID}:${WWW_DATA_GID} (www-data)"
+          EOF
+
+      - name: Sync repository to server
+        run: |
+          echo "Syncing repository to server..."
+          # Exclude docker/docker from rsync (defensive - should not exist after path fix)
+          # Exclude uploads directory (ephemeral, created inside container)
+          if ! rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ ERROR: Rsync failed - files may not be synced correctly"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "This is critical - deployment cannot proceed without files being synced."
+            echo ""
+            echo "Possible causes:"
+            echo "  - Network connectivity issues"
+            echo "  - SSH connection problems"
+            echo "  - Disk space issues on server"
+            echo "  - Permission problems"
+            echo ""
+            echo "Check SSH connection and server status, then retry deployment."
+            exit 1
+          fi
+          echo "✓ Repository synced successfully"
+
       - name: Deploy via Docker Compose
         run: |
           # Get commit SHA from GitHub Actions context (7 characters to match GitHub's short SHA display)
@@ -592,16 +804,39 @@ jobs:
           export DOCKER_BUILDKIT=1
           export COMPOSE_DOCKER_CLI_BUILD=1
           
-          # Stop and remove existing containers to avoid name conflicts
-          docker compose -f docker/docker-compose.prod.yml down || true
+          echo "Building and starting containers (optimized single operation)..."
+          # Use docker compose up --build for atomic update (more efficient)
+          # This builds and starts in one operation, reducing downtime
+          # Try with --pull first to get latest base images
+          if ! docker compose -f docker/docker-compose.prod.yml up -d --build --pull; then
+            echo "⚠️  Warning: Build with --pull failed, trying without --pull..."
+            if ! docker compose -f docker/docker-compose.prod.yml up -d --build; then
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "❌ ERROR: Docker build/start failed"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo ""
+              echo "Both build attempts (with --pull and without) failed."
+              echo ""
+              echo "Possible causes:"
+              echo "  - Dockerfile syntax errors"
+              echo "  - Missing dependencies or files"
+              echo "  - Network issues pulling base images"
+              echo "  - Disk space issues"
+              echo "  - Docker daemon problems"
+              echo ""
+              echo "Container logs:"
+              docker compose -f docker/docker-compose.prod.yml logs 2>/dev/null || echo "Could not retrieve logs"
+              echo ""
+              echo "Container status:"
+              docker compose -f docker/docker-compose.prod.yml ps 2>/dev/null || echo "Could not retrieve status"
+              echo ""
+              echo "Check Docker logs and Dockerfile, then retry deployment."
+              exit 1
+            fi
+          fi
           
-          # Build using local build cache (BuildKit automatically caches layers)
-          # This significantly speeds up builds by reusing cached layers from previous builds
-          docker compose -f docker/docker-compose.prod.yml build --pull || \
-            docker compose -f docker/docker-compose.prod.yml build
-          
-          # Start containers
-          docker compose -f docker/docker-compose.prod.yml up -d
+          echo "✓ Containers built and started successfully"
           
           # Wait for web container to be ready (needed for certificate generation)
           echo "Waiting for web container to be ready..."
@@ -654,37 +889,89 @@ jobs:
           fi
           fi
           
-          # Clean up Docker resources using the dedicated cleanup script
-          # This modularizes cleanup logic and keeps the workflow concise
-          if [ -f scripts/docker-cleanup.sh ]; then
-            echo "Running Docker cleanup script..."
-            chmod +x scripts/docker-cleanup.sh
-            ./scripts/docker-cleanup.sh
+          # Clean up Docker resources conditionally (only if disk usage is high)
+          # Check disk usage before cleanup to avoid unnecessary operations
+          DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
+          DISK_THRESHOLD=80  # Cleanup if disk usage > 80%
+          
+          echo "Checking disk usage before cleanup..."
+          echo "Current disk usage: ${DISK_USAGE}% (threshold: ${DISK_THRESHOLD}%)"
+          
+          if [ "$DISK_USAGE" -gt "$DISK_THRESHOLD" ]; then
+            echo "Disk usage is above threshold - running Docker cleanup..."
+            # Clean up Docker resources using the dedicated cleanup script
+            # This modularizes cleanup logic and keeps the workflow concise
+            if [ -f scripts/docker-cleanup.sh ]; then
+              echo "Running Docker cleanup script..."
+              chmod +x scripts/docker-cleanup.sh
+              ./scripts/docker-cleanup.sh
+            else
+              echo "⚠️  Cleanup script not found, running basic cleanup..."
+              docker builder prune -f --filter "until=24h" || true
+              docker image prune -f || true
+              docker system prune -f --filter "until=168h" || true
+              docker system df
+            fi
           else
-            echo "⚠️  Cleanup script not found, running basic cleanup..."
-            docker builder prune -f --filter "until=24h" || true
-            docker image prune -f || true
-            docker system prune -f --filter "until=168h" || true
-            docker system df
+            echo "Disk usage is below threshold - skipping cleanup to save time"
+            echo "Current Docker disk usage:"
+            docker system df 2>/dev/null || echo "Could not retrieve Docker disk usage"
           fi
           EOF
 
-      - name: Verify Docker logging configuration
+      - name: Restart Nginx container to pick up config changes
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Logging is now handled by Docker (stdout/stderr)
-          # Docker automatically captures logs and handles rotation
-          # No host-side log directory setup needed
-          echo "✓ Docker logging configured (no host setup required)"
           
-          # Verify jq is available for log filtering (optional but recommended)
-          if command -v jq &> /dev/null; then
-            echo "✓ jq is installed (version: $(jq --version))"
+          echo "Restarting Nginx container..."
+          # Restart Nginx container to ensure it picks up new nginx.conf
+          # This is safer than reload since config file is mounted as volume
+          if ! docker compose -f docker/docker-compose.prod.yml restart nginx; then
+            echo "Restart failed, trying up -d..."
+            if ! docker compose -f docker/docker-compose.prod.yml up -d nginx; then
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "❌ ERROR: Failed to start Nginx container"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo ""
+              echo "Container logs:"
+              docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50
+              exit 1
+            fi
+          fi
+          
+          # Wait for Nginx to be ready
+          sleep 3
+          
+          echo "Testing Nginx configuration..."
+          # Verify Nginx configuration is valid
+          CONFIG_TEST_OUTPUT=$(docker compose -f docker/docker-compose.prod.yml exec -T nginx nginx -t 2>&1 || echo "FAILED")
+          
+          if echo "$CONFIG_TEST_OUTPUT" | grep -qE "syntax is ok|test is successful"; then
+            echo "✓ Nginx configuration is valid"
           else
-            echo "⚠️  jq is not installed - install with: apt install -y jq"
-            echo "   jq is useful for filtering JSON-formatted logs"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ ERROR: Nginx configuration is invalid"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "Nginx config test output:"
+            echo "$CONFIG_TEST_OUTPUT"
+            echo ""
+            echo "Container logs:"
+            docker compose -f docker/docker-compose.prod.yml logs nginx | tail -50
+            echo ""
+            echo "Fix the Nginx configuration and retry deployment."
+            exit 1
+          fi
+          
+          # Verify Nginx is responding (optional check)
+          if ! curl -f -s --max-time 5 http://127.0.0.1/ > /dev/null 2>&1; then
+            echo "⚠️  Warning: Nginx not responding on port 80 (may be expected if SSL only)"
+          else
+            echo "✓ Nginx is responding"
           fi
           EOF
 
@@ -695,6 +982,7 @@ jobs:
           cd ~/aviationwx
           # Force service worker update by updating public/js/service-worker.js timestamp
           # This ensures clients will download new version
+          # Done after Nginx restart to ensure fresh content is served
           touch public/js/service-worker.js || true
           echo "✓ Updated service worker file timestamp to force cache bust"
           
@@ -703,21 +991,63 @@ jobs:
           # docker exec nginx nginx -s reload || true
           EOF
 
-      - name: Restart Nginx container to pick up config changes
+      - name: Post-deployment verification (quick check)
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
           set -euo pipefail
           cd ~/aviationwx
-          # Restart Nginx container to ensure it picks up new nginx.conf
-          # This is safer than reload since config file is mounted as volume
-          docker compose -f docker/docker-compose.prod.yml restart nginx || docker compose -f docker/docker-compose.prod.yml up -d nginx
-          # Verify Nginx container is running and config is valid
-          sleep 2
-          if docker compose -f docker/docker-compose.prod.yml exec -T nginx nginx -t 2>&1 | grep -q "syntax is ok\|test is successful"; then
-            echo "✓ Nginx configuration is valid"
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Post-Deployment Verification (Quick Check)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Verify deployed commit SHA
+          EXPECTED_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
+          EXPECTED_SHA_SHORT="${EXPECTED_SHA:0:7}"
+          
+          echo "Verifying deployed commit SHA..."
+          echo "Expected: ${EXPECTED_SHA_SHORT}"
+          
+          # Get actual SHA from container environment variable
+          ACTUAL_SHA=$(docker compose -f docker/docker-compose.prod.yml exec -T web printenv GIT_SHA 2>/dev/null || echo "")
+          
+          if [ -z "$ACTUAL_SHA" ]; then
+            echo "⚠️  Warning: GIT_SHA environment variable not set in container"
+            echo "This may indicate the deployment didn't set the variable correctly"
           else
-            echo "⚠ Nginx config test failed, but container is running"
+            ACTUAL_SHA_SHORT="${ACTUAL_SHA:0:7}"
+            echo "Actual: ${ACTUAL_SHA_SHORT}"
+            
+            if [ "$EXPECTED_SHA_SHORT" != "$ACTUAL_SHA_SHORT" ]; then
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "❌ ERROR: Deployed commit SHA does not match expected SHA"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "Expected: ${EXPECTED_SHA_SHORT}"
+              echo "Actual: ${ACTUAL_SHA_SHORT}"
+              echo ""
+              echo "This indicates a partial deployment or deployment of wrong code."
+              exit 1
+            fi
+            
+            echo "✓ Deployed commit SHA matches expected SHA"
           fi
+          
+          # Quick service check
+          echo ""
+          echo "Quick service response check..."
+          if ! curl -f -s --max-time 10 https://aviationwx.org/ > /dev/null 2>&1; then
+            echo "⚠️  Warning: Service not responding on https://aviationwx.org/"
+            echo "This may be expected if services are still starting"
+            echo "Full health check will verify this in the next step"
+          else
+            echo "✓ Service is responding"
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✓ Post-deployment verification complete"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           EOF
 
       - name: Verify fail2ban in container
@@ -726,29 +1056,100 @@ jobs:
           set -euo pipefail
           cd ~/aviationwx
           
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Verifying fail2ban in container..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Wait for container to be ready
-          sleep 5
+          # Wait for container to be fully ready
+          echo "Waiting for container services to initialize..."
+          sleep 15  # Increased from 5s to allow fail2ban time to start
           
-          # Check if fail2ban is running in container
-          if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x fail2ban-server > /dev/null 2>&1; then
-            echo "✓ fail2ban is running in container"
+          # Retry logic: check up to 3 times with 5s intervals
+          MAX_RETRIES=3
+          RETRY_INTERVAL=5
+          FAIL2BAN_RUNNING=false
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo ""
+            echo "Attempt $i/$MAX_RETRIES: Checking fail2ban..."
             
-            # Show fail2ban status
-            echo "Fail2ban status:"
-            docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client status 2>/dev/null || echo "⚠️  Could not get fail2ban status"
+            # Check if process is running
+            if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x fail2ban-server > /dev/null 2>&1; then
+              echo "✓ fail2ban-server process is running"
+              
+              # Verify we can connect to fail2ban client
+              if docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client ping > /dev/null 2>&1; then
+                echo "✓ fail2ban-client is responsive"
+                
+                # Get status and verify jails are active
+                STATUS_OUTPUT=$(docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client status 2>&1 || echo "")
+                
+                if echo "$STATUS_OUTPUT" | grep -q "Jail list"; then
+                  JAIL_LIST=$(echo "$STATUS_OUTPUT" | grep -A 10 "Jail list" | tail -n +2 | tr -d ' \t' || echo "")
+                  
+                  if [ -n "$JAIL_LIST" ]; then
+                    echo "✓ Active jails found:"
+                    echo "$JAIL_LIST" | sed 's/^/  - /'
+                    
+                    # Verify at least one jail is enabled (vsftpd or sshd-sftp)
+                    if echo "$JAIL_LIST" | grep -qE "(vsftpd|sshd-sftp)"; then
+                      echo "✓ Required jails (vsftpd/sshd-sftp) are active"
+                      FAIL2BAN_RUNNING=true
+                      break
+                    else
+                      echo "⚠️  Warning: No required jails found in jail list"
+                      echo "Jail list: $JAIL_LIST"
+                    fi
+                  else
+                    echo "⚠️  Warning: Jail list is empty"
+                  fi
+                else
+                  echo "⚠️  Warning: Could not get jail list from status"
+                  echo "Status output: $STATUS_OUTPUT"
+                fi
+              else
+                echo "⚠️  Warning: fail2ban-client is not responsive"
+              fi
+            else
+              echo "⚠️  Warning: fail2ban-server process not found"
+            fi
             
-            # Show active jails
-            echo "Active jails:"
-            docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client status 2>/dev/null | grep -A 10 "Jail list" || echo "⚠️  Could not get jail list"
-          else
-            echo "⚠️  Warning: fail2ban is not running in container"
-            echo "This may be expected if services are still starting"
-            echo "Check container logs: docker compose -f docker/docker-compose.prod.yml logs web | grep fail2ban"
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Waiting ${RETRY_INTERVAL}s before retry..."
+              sleep $RETRY_INTERVAL
+            fi
+          done
+          
+          # Fail deployment if fail2ban is not running properly
+          if [ "$FAIL2BAN_RUNNING" != "true" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ ERROR: fail2ban verification failed after $MAX_RETRIES attempts"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "This is a CRITICAL security feature. Deployment cannot proceed without fail2ban."
+            echo ""
+            echo "Debugging information:"
+            echo ""
+            echo "Container logs (fail2ban related):"
+            docker compose -f docker/docker-compose.prod.yml logs web | grep -i fail2ban | tail -20 || echo "No fail2ban logs found"
+            echo ""
+            echo "Container processes:"
+            docker compose -f docker/docker-compose.prod.yml exec -T web ps aux | grep -E "(fail2ban|vsftpd|sshd)" || echo "No related processes found"
+            echo ""
+            echo "Fail2ban configuration files:"
+            docker compose -f docker/docker-compose.prod.yml exec -T web ls -la /etc/fail2ban/jail.d/ 2>/dev/null || echo "Jail directory not found"
+            echo ""
+            echo "Fail2ban service status:"
+            docker compose -f docker/docker-compose.prod.yml exec -T web systemctl status fail2ban 2>/dev/null || echo "systemctl not available"
+            echo ""
+            exit 1
           fi
           
-          echo "✓ fail2ban verification complete"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✓ fail2ban verification complete - all checks passed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "Note: fail2ban runs inside the container with NET_ADMIN capability"
           echo "to manage iptables rules for brute-force protection."
@@ -760,13 +1161,40 @@ jobs:
           set -euo pipefail
           cd ~/aviationwx
           
-          echo "Running post-deployment health checks..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Post-Deployment Health Checks"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Checking for partial deployment failures..."
+          echo ""
+          
+          HEALTH_CHECK_FAILED=false
+          FAILURE_REASONS=()
+          PARTIAL_DEPLOYMENT=false
+          
+          # Check 1: Verify deployment completed (not partial)
+          echo "1. Checking deployment completeness..."
+          
+          # Check if files were synced
+          if [ ! -f "docker/docker-compose.prod.yml" ]; then
+            HEALTH_CHECK_FAILED=true
+            PARTIAL_DEPLOYMENT=true
+            FAILURE_REASONS+=("Files not synced - partial deployment detected")
+          fi
+          
+          # Check if containers exist
+          if ! docker compose -f docker/docker-compose.prod.yml ps web > /dev/null 2>&1; then
+            HEALTH_CHECK_FAILED=true
+            PARTIAL_DEPLOYMENT=true
+            FAILURE_REASONS+=("Containers not found - partial deployment detected")
+          fi
           
           # Wait for containers to be ready (give them time to start)
-          echo "Waiting for containers to start..."
+          echo ""
+          echo "2. Waiting for containers to start..."
           sleep 8
           
-          # Check if containers are running (check both services explicitly)
+          # Check 3: Containers running
+          echo "3. Checking container status..."
           CONTAINER_STATUS=$(docker compose -f docker/docker-compose.prod.yml ps --format json 2>/dev/null || docker compose -f docker/docker-compose.prod.yml ps)
           
           # Count running containers (both web and nginx should be up)
@@ -774,20 +1202,16 @@ jobs:
           
           # Check that we have at least the web container (nginx is optional but should be running too)
           if [ "$RUNNING_COUNT" -lt "1" ]; then
-            echo "❌ Containers are not running"
-            echo "Container status:"
-            docker compose -f docker/docker-compose.prod.yml ps
-            echo ""
-            echo "Recent logs:"
-            docker compose -f docker/docker-compose.prod.yml logs --tail=30
-            exit 1
+            HEALTH_CHECK_FAILED=true
+            PARTIAL_DEPLOYMENT=true
+            FAILURE_REASONS+=("Web container not running")
+          else
+            echo "✓ Containers are running (${RUNNING_COUNT} container(s) up)"
           fi
           
-          echo "✓ Containers are running (${RUNNING_COUNT} container(s) up)"
-          
-          # Wait for Apache to be fully ready
-          # Check container health status and wait until healthy
-          echo "Waiting for services to be ready..."
+          # Check 4: Container health status
+          echo ""
+          echo "4. Checking container health..."
           MAX_WAIT=60
           WAIT_TIME=0
           while [ $WAIT_TIME -lt $MAX_WAIT ]; do
@@ -796,9 +1220,9 @@ jobs:
               echo "✓ Web container is healthy"
               break
             elif [ "$HEALTH" = "unhealthy" ]; then
-              echo "❌ Web container is unhealthy"
-              docker compose -f docker/docker-compose.prod.yml logs web | tail -50
-              exit 1
+              HEALTH_CHECK_FAILED=true
+              FAILURE_REASONS+=("Container health status: unhealthy")
+              break
             else
               echo "  Container health: $HEALTH (waiting...)"
               sleep 5
@@ -807,35 +1231,91 @@ jobs:
           done
           
           if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-            echo "⚠️  Container did not become healthy within $MAX_WAIT seconds, but continuing..."
+            HEALTH_CHECK_FAILED=true
+            FAILURE_REASONS+=("Container did not become healthy within ${MAX_WAIT} seconds")
           fi
           
           # Additional wait for services to fully initialize
           sleep 5
           
-          # Check if web container is responding (from inside container via exec)
-          # This is more reliable than checking from host since Apache might have Host header issues
-          echo "Testing web container from inside..."
+          # Check 5: Service responding
+          echo ""
+          echo "5. Checking service response..."
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost/ > /dev/null 2>&1; then
-            echo "❌ Web container is not responding (internal check failed)"
-            echo "Checking container logs..."
-            docker compose -f docker/docker-compose.prod.yml logs web | tail -50
-            echo "Checking container status..."
-            docker compose -f docker/docker-compose.prod.yml ps
-            exit 1
-          fi
-          
-          echo "✓ Web container is responding (internal check passed)"
-          
-          # Also check from host port (this might fail if Apache has Host header restrictions)
-          APP_PORT=${APP_PORT:-8080}
-          echo "Testing web container from host on port ${APP_PORT}..."
-          if curl -f -s --max-time 5 http://127.0.0.1:${APP_PORT}/ > /dev/null 2>&1; then
-            echo "✓ Web container is also responding from host on port ${APP_PORT}"
+            HEALTH_CHECK_FAILED=true
+            FAILURE_REASONS+=("Homepage not accessible (internal check failed)")
           else
-            echo "⚠️  Web container not accessible from host (but internal check passed - this may be expected)"
-            echo "This is OK if Nginx reverse proxy is handling external requests"
+            echo "✓ Web container is responding (internal check passed)"
           fi
+          
+          # Check 6: Verify commit SHA matches (detect partial code deployment)
+          echo ""
+          echo "6. Verifying deployed code..."
+          EXPECTED_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
+          EXPECTED_SHA_SHORT="${EXPECTED_SHA:0:7}"
+          ACTUAL_SHA=$(docker compose -f docker/docker-compose.prod.yml exec -T web printenv GIT_SHA 2>/dev/null || echo "")
+          
+          if [ -n "$ACTUAL_SHA" ]; then
+            ACTUAL_SHA_SHORT="${ACTUAL_SHA:0:7}"
+            if [ "$EXPECTED_SHA_SHORT" != "$ACTUAL_SHA_SHORT" ]; then
+              HEALTH_CHECK_FAILED=true
+              PARTIAL_DEPLOYMENT=true
+              FAILURE_REASONS+=("Code mismatch - expected ${EXPECTED_SHA_SHORT}, got ${ACTUAL_SHA_SHORT}")
+            else
+              echo "✓ Deployed code matches expected commit SHA"
+            fi
+          fi
+          
+          # Check 7: API responding
+          echo ""
+          echo "7. Checking API response..."
+          APP_PORT=${APP_PORT:-8080}
+          if ! curl -f -s --max-time 10 "https://aviationwx.org/api/weather.php?id=kspb" > /dev/null 2>&1; then
+            HEALTH_CHECK_FAILED=true
+            FAILURE_REASONS+=("Weather API not responding")
+          else
+            echo "✓ Weather API responding"
+          fi
+          
+          # Final check
+          if [ "$HEALTH_CHECK_FAILED" = "true" ]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ HEALTH CHECKS FAILED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            
+            if [ "$PARTIAL_DEPLOYMENT" = "true" ]; then
+              echo "⚠️  PARTIAL DEPLOYMENT DETECTED"
+              echo "Some deployment steps completed, others failed."
+              echo "System may be in inconsistent state."
+              echo ""
+            fi
+            
+            echo "Failure reasons:"
+            for reason in "${FAILURE_REASONS[@]}"; do
+              echo "  ❌ $reason"
+            done
+            echo ""
+            
+            echo "Container status:"
+            docker compose -f docker/docker-compose.prod.yml ps
+            echo ""
+            
+            echo "Container logs (last 50 lines):"
+            docker compose -f docker/docker-compose.prod.yml logs web | tail -50
+            echo ""
+            
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Triggering automatic rollback..."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1  # This will trigger the rollback step
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ All health checks passed"
+          echo "✅ Deployment completed successfully (no partial deployment detected)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
           # Check if diagnostics page loads (optional check)
           if ! curl -f -s --max-time 5 http://127.0.0.1:${APP_PORT}/diagnostics.php > /dev/null 2>&1; then
@@ -931,5 +1411,116 @@ jobs:
             echo "ℹ️  Webcam WEBP endpoint not accessible (may be expected if WEBP not generated yet)"
           fi
           
+          EOF
+
+      - name: Rollback to previous version (if needed)
+        if: failure()
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          ROLLBACK_STATE_FILE="/tmp/aviationwx-rollback-state.json"
+          
+          if [ ! -f "$ROLLBACK_STATE_FILE" ]; then
+            echo "⚠️  No rollback state file found - cannot rollback automatically"
+            echo "Manual intervention required"
+            exit 1
+          fi
+          
+          ROLLBACK_STATE=$(cat "$ROLLBACK_STATE_FILE")
+          ROLLBACK_TAG=$(echo "$ROLLBACK_STATE" | jq -r '.rollback_tag // "null"')
+          PREVIOUS_SHA=$(echo "$ROLLBACK_STATE" | jq -r '.commit_sha // "unknown"')
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "AUTOMATIC ROLLBACK INITIATED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Rolling back to previous working state..."
+          echo "Previous commit: ${PREVIOUS_SHA}"
+          echo "Rollback tag: ${ROLLBACK_TAG}"
+          echo ""
+          
+          # Step 1: Stop current containers (even if partially started)
+          echo "Step 1: Stopping current containers (cleaning up partial deployment)..."
+          docker compose -f docker/docker-compose.prod.yml down || true
+          sleep 2
+          
+          # Step 2: Check if we have rollback image
+          if [ "$ROLLBACK_TAG" != "null" ] && docker images "aviationwx:$ROLLBACK_TAG" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | grep -q "aviationwx:$ROLLBACK_TAG"; then
+            echo "Step 2: Restoring previous Docker image..."
+            if docker tag "aviationwx:$ROLLBACK_TAG" "aviationwx:latest" 2>/dev/null; then
+              echo "✓ Rollback image tagged successfully"
+              
+              # Step 3: Start containers with rollback image
+              echo "Step 3: Starting containers with rollback image..."
+              export DOCKER_BUILDKIT=1
+              export COMPOSE_DOCKER_CLI_BUILD=1
+              
+              if ! docker compose -f docker/docker-compose.prod.yml up -d; then
+                echo "❌ ERROR: Failed to start containers with rollback image"
+                echo "Manual intervention required"
+                exit 1
+              fi
+            else
+              echo "❌ ERROR: Failed to tag rollback image"
+              echo "Attempting to start containers with current code (may be broken)..."
+              docker compose -f docker/docker-compose.prod.yml up -d || {
+                echo "❌ ERROR: Cannot start containers - manual intervention required"
+                exit 1
+              }
+            fi
+          else
+            echo "⚠️  Warning: No rollback image available"
+            echo "Attempting to start containers with current code (may be broken)..."
+            docker compose -f docker/docker-compose.prod.yml up -d || {
+              echo "❌ ERROR: Cannot start containers - manual intervention required"
+              exit 1
+            }
+          fi
+          
+          # Step 4: Wait for services to be ready
+          echo "Step 4: Waiting for services to be ready..."
+          MAX_WAIT=30
+          WAIT_TIME=0
+          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+            if docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
+              # Check if container is actually responding
+              if docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s http://localhost/ > /dev/null 2>&1; then
+                echo "✓ Services are ready after ${WAIT_TIME}s"
+                break
+              fi
+            fi
+            sleep 2
+            WAIT_TIME=$((WAIT_TIME + 2))
+          done
+          
+          # Step 5: Verify rollback was successful
+          if docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
+            echo "Step 5: Verifying rollback..."
+            
+            # Verify service is responding
+            if curl -f -s --max-time 10 https://aviationwx.org/ > /dev/null 2>&1; then
+              echo "✓ Service is responding after rollback"
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "✅ Rollback completed successfully"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo ""
+              echo "System restored to previous working state"
+            else
+              echo "⚠️  Warning: Service not responding after rollback"
+              echo "Container is running but service may not be fully functional"
+              echo "Check logs: docker compose -f docker/docker-compose.prod.yml logs web"
+            fi
+          else
+            echo "❌ ERROR: Containers not running after rollback"
+            echo "Manual intervention required"
+            echo ""
+            echo "Debugging info:"
+            docker compose -f docker/docker-compose.prod.yml ps
+            docker compose -f docker/docker-compose.prod.yml logs web | tail -50
+            exit 1
+          fi
           EOF
 
