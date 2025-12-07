@@ -1,6 +1,6 @@
 #!/bin/bash
 # Log filtering utility for AviationWX Docker logs
-# Usage: ./scripts/filter-logs.sh [access|app|error|nginx|apache|all] [container]
+# Usage: ./scripts/dev-filter-logs.sh [access|app|error|nginx|apache|all] [container]
 
 set -euo pipefail
 
