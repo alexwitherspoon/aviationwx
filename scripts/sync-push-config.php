@@ -73,7 +73,7 @@ function updateLastSyncTimestamp() {
 function backupConfigFile($configFile) {
     $backupDir = '/var/backups/aviationwx';
     if (!is_dir($backupDir)) {
-        @mkdir($backupDir, 0755, true);
+        @mkdir($backupDir, 0775, true);
     }
     
     $backupFile = $backupDir . '/airports_' . date('Y-m-d_His') . '.json';
@@ -198,7 +198,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     
     // Ensure parent directories exist and are root-owned (required for SFTP chroot)
     if (!is_dir($webcamsBaseDir)) {
-        @mkdir($webcamsBaseDir, 0755, true);
+        @mkdir($webcamsBaseDir, 0775, true);
     }
     // Ensure webcams directory is root:root (critical for SFTP chroot)
     if (function_exists('chown') && is_dir($webcamsBaseDir)) {
@@ -207,12 +207,12 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
         if ($rootGroup !== false) {
             @chgrp($webcamsBaseDir, $rootGroup['gid']);
         }
-        @chmod($webcamsBaseDir, 0755);
+        @chmod($webcamsBaseDir, 0775);
     }
     
     // Create parent directory if it doesn't exist
     if (!is_dir($baseDir)) {
-        @mkdir($baseDir, 0755, true);
+        @mkdir($baseDir, 0775, true);
     }
     
     // Create incoming directory if it doesn't exist
@@ -226,7 +226,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     }
     
     // Set permissions on parent directory (must be root:root for chroot)
-    @chmod($baseDir, 0755);
+        @chmod($baseDir, 0775);
     if (function_exists('chown')) {
         // Try to set to root, but don't fail if we can't
         @chown($baseDir, 0); // 0 = root UID
@@ -253,7 +253,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
         } else {
             // For SFTP: incoming will be owned by the user (set by create-sftp-user.sh)
             // We'll let the SFTP user creation script handle it
-            @chmod($incomingDir, 0755);
+            @chmod($incomingDir, 0775);
         }
     } else {
         // Default: use 775 for FTP/FTPS compatibility (will be overridden by createFtpUser if needed)
@@ -261,7 +261,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
         if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
             @chmod($incomingDir, 0775);
         } else {
-            @chmod($incomingDir, 0755);
+            @chmod($incomingDir, 0775);
         }
     }
     
@@ -508,7 +508,7 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     // Create per-user config
     $userConfigDir = '/etc/vsftpd/users';
     if (!is_dir($userConfigDir)) {
-        @mkdir($userConfigDir, 0755, true);
+        @mkdir($userConfigDir, 0775, true);
     }
     
     $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
@@ -517,7 +517,7 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     
     // Ensure parent directories exist and are root-owned (required for chroot)
     if (!is_dir($webcamsBaseDir)) {
-        @mkdir($webcamsBaseDir, 0755, true);
+        @mkdir($webcamsBaseDir, 0775, true);
     }
     // Ensure webcams directory is root:root (critical for SFTP chroot, also good for FTP)
     if (function_exists('chown') && is_dir($webcamsBaseDir)) {
@@ -526,12 +526,12 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         if ($rootGroup !== false) {
             @chgrp($webcamsBaseDir, $rootGroup['gid']);
         }
-        @chmod($webcamsBaseDir, 0755);
+        @chmod($webcamsBaseDir, 0775);
     }
     
     // Ensure directories exist with correct permissions
     if (!is_dir($chrootDir)) {
-        @mkdir($chrootDir, 0755, true);
+        @mkdir($chrootDir, 0775, true);
     }
     if (!is_dir($incomingDir)) {
         // Create with 0775 permissions for FTP/FTPS (www-data needs write access)
@@ -545,7 +545,7 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         if ($rootGroup !== false) {
             @chgrp($chrootDir, $rootGroup['gid']);
         }
-        @chmod($chrootDir, 0755);
+        @chmod($chrootDir, 0775);
     }
     
     // Set incoming directory to www-data:www-data (guest user for vsftpd)
