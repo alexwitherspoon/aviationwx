@@ -348,6 +348,12 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
+      - name: Load deployment helpers
+        run: |
+          # Source deployment helper functions for consistent error handling
+          source scripts/deploy-helpers.sh
+          echo "✓ Deployment helpers loaded"
+
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -477,18 +483,16 @@ jobs:
           # Final check
           if [ "$VALIDATION_FAILED" = "true" ]; then
             echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "❌ PRE-DEPLOYMENT VALIDATION FAILED"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "The following issues were found:"
-            for reason in "${FAILURE_REASONS[@]}"; do
-              echo "  ❌ $reason"
-            done
-            echo ""
-            echo "Fix these issues before deploying to production."
-            echo "This validation prevents silent failures from reaching production."
-            exit 1
+            # Use deployment helper for consistent error formatting
+            REASONS_TEXT=$(printf "  ❌ %s\n" "${FAILURE_REASONS[@]}")
+            deployment_error \
+              "Pre-Deployment Validation" \
+              "The following issues were found:\n${REASONS_TEXT}" \
+              "1. Review the validation errors above
+2. Fix syntax errors, missing files, or configuration issues
+3. Ensure all required functions exist in their respective files
+4. Verify Docker configuration files are present and valid
+5. This validation prevents silent failures from reaching production"
           fi
           
           echo ""
@@ -504,7 +508,7 @@ jobs:
           
           # Update the cache version in public/js/service-worker.js
           # The script handles missing files and verification
-          bash scripts/update-cache-version.sh "${DEPLOY_VERSION}"
+          bash scripts/deploy-update-cache-version.sh "${DEPLOY_VERSION}"
           
           # Note: We don't commit service-worker.js changes during deployment
           # The updated file will be synced to the server via rsync
@@ -706,12 +710,12 @@ jobs:
           echo "Configuring firewall ports for all services..."
           
           # Run firewall configuration script
-          if [ -f scripts/configure-firewall.sh ]; then
-            chmod +x scripts/configure-firewall.sh
-            ./scripts/configure-firewall.sh
+          if [ -f scripts/deploy-configure-firewall.sh ]; then
+            chmod +x scripts/deploy-configure-firewall.sh
+            ./scripts/deploy-configure-firewall.sh
           else
             echo "⚠️  Firewall script not found, configuring ports manually..."
-            # Fallback: configure ports directly (should match configure-firewall.sh)
+            # Fallback: configure ports directly (should match deploy-configure-firewall.sh)
             sudo ufw allow 80/tcp comment 'HTTP (Nginx)' || true
             sudo ufw allow 443/tcp comment 'HTTPS (Nginx)' || true
             sudo ufw allow 2121/tcp comment 'FTP/FTPS (Push webcams)' || true
@@ -813,21 +817,15 @@ jobs:
           # Exclude uploads directory (ephemeral, created inside container)
           # Exclude ssl directory (contains SSL certificates copied from Let's Encrypt, not in git)
           if ! rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' --exclude 'ssl' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/; then
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "❌ ERROR: Rsync failed - files may not be synced correctly"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "This is critical - deployment cannot proceed without files being synced."
-            echo ""
-            echo "Possible causes:"
-            echo "  - Network connectivity issues"
-            echo "  - SSH connection problems"
-            echo "  - Disk space issues on server"
-            echo "  - Permission problems"
-            echo ""
-            echo "Check SSH connection and server status, then retry deployment."
-            exit 1
+            deployment_error \
+              "File Synchronization (Rsync)" \
+              "Rsync failed - files may not be synced correctly. This is critical - deployment cannot proceed without files being synced." \
+              "1. Check network connectivity: ping ${{ secrets.HOST }}
+2. Verify SSH connection: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'echo Connection OK'
+3. Check server disk space: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'df -h'
+4. Verify permissions on server: ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'ls -la ~/aviationwx'
+5. Check rsync logs for specific errors
+6. Retry deployment after resolving issues"
           fi
           echo "✓ Repository synced successfully"
 
@@ -857,9 +855,21 @@ jobs:
               chmod +x scripts/restore-ssl-certificates.sh
               ./scripts/restore-ssl-certificates.sh
             else
-              echo "❌ ERROR: restore-ssl-certificates.sh script not found"
-              echo "This should not happen - script should be synced via rsync"
-              exit 1
+              # Source deployment helper if available
+              if [ -f scripts/deploy-helpers.sh ]; then
+                source scripts/deploy-helpers.sh
+                deployment_error \
+                  "SSL Certificate Restoration" \
+                  "restore-ssl-certificates.sh script not found. This should not happen - script should be synced via rsync." \
+                  "1. Verify script exists: ls -la scripts/restore-ssl-certificates.sh
+2. Check if rsync excluded the scripts directory
+3. Verify file permissions
+4. Manually restore certificates if needed: sudo cp /etc/letsencrypt/live/aviationwx.org/*.pem ssl/"
+              else
+                echo "❌ ERROR: restore-ssl-certificates.sh script not found"
+                echo "This should not happen - script should be synced via rsync"
+                exit 1
+              fi
             fi
           fi
           EOF
@@ -936,6 +946,10 @@ jobs:
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF
           set -euo pipefail
           cd ~/aviationwx
+          # Source deployment helper functions for consistent error handling
+          if [ -f scripts/deploy-helpers.sh ]; then
+            source scripts/deploy-helpers.sh
+          fi
           # Set GIT_SHA as environment variable for docker compose
           export GIT_SHA="$GIT_SHA"
           # Enable BuildKit for better caching (if not already enabled)
@@ -1001,43 +1015,43 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             # Force rebuild without cache
             if ! docker compose -f docker/docker-compose.prod.yml build --no-cache web; then
-              echo "❌ ERROR: Docker build failed"
-              exit 1
+              deployment_error \
+                "Docker Build (No Cache)" \
+                "Docker build failed when forcing rebuild without cache" \
+                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config
+2. Check disk space: df -h
+3. Check Docker daemon: systemctl status docker
+4. Review build logs above for specific errors
+5. Try manual build: docker compose -f docker/docker-compose.prod.yml build --no-cache web"
             fi
             # Start containers with the newly built image
             if ! docker compose -f docker/docker-compose.prod.yml up -d --pull; then
               echo "⚠️  Warning: Start with --pull failed, trying without --pull..."
               if ! docker compose -f docker/docker-compose.prod.yml up -d; then
-                echo "❌ ERROR: Failed to start containers"
-                exit 1
+                deployment_error \
+                  "Container Startup" \
+                  "Failed to start containers after build" \
+                  "1. Check container logs: docker compose -f docker/docker-compose.prod.yml logs
+2. Verify container status: docker compose -f docker/docker-compose.prod.yml ps
+3. Check port conflicts: netstat -tuln | grep -E ':(80|443|2121|2222)'
+4. Review docker-compose.prod.yml configuration
+5. Check Docker daemon logs: journalctl -u docker"
               fi
             fi
             echo "✓ Containers rebuilt and started successfully (no cache)"
           elif ! docker compose -f docker/docker-compose.prod.yml up -d --build --pull; then
             echo "⚠️  Warning: Build with --pull failed, trying without --pull..."
             if ! docker compose -f docker/docker-compose.prod.yml up -d --build; then
-              echo ""
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo "❌ ERROR: Docker build/start failed"
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-              echo ""
-              echo "Both build attempts (with --pull and without) failed."
-              echo ""
-              echo "Possible causes:"
-              echo "  - Dockerfile syntax errors"
-              echo "  - Missing dependencies or files"
-              echo "  - Network issues pulling base images"
-              echo "  - Disk space issues"
-              echo "  - Docker daemon problems"
-              echo ""
-              echo "Container logs:"
-              docker compose -f docker/docker-compose.prod.yml logs 2>/dev/null || echo "Could not retrieve logs"
-              echo ""
-              echo "Container status:"
-              docker compose -f docker/docker-compose.prod.yml ps 2>/dev/null || echo "Could not retrieve status"
-              echo ""
-              echo "Check Docker logs and Dockerfile, then retry deployment."
-              exit 1
+              deployment_error \
+                "Docker Build/Start" \
+                "Both build attempts (with --pull and without) failed" \
+                "1. Check Dockerfile syntax: docker compose -f docker/docker-compose.prod.yml config
+2. Verify all required files are present (check Dockerfile COPY commands)
+3. Check network connectivity for pulling base images: ping registry-1.docker.io
+4. Check disk space: df -h
+5. Check Docker daemon: systemctl status docker
+6. Review Docker logs: journalctl -u docker
+7. Try manual build: docker compose -f docker/docker-compose.prod.yml build web"
             fi
           fi
           
@@ -1123,10 +1137,10 @@ jobs:
             echo "Disk usage is above threshold - running Docker cleanup..."
             # Clean up Docker resources using the dedicated cleanup script
             # This modularizes cleanup logic and keeps the workflow concise
-            if [ -f scripts/docker-cleanup.sh ]; then
+            if [ -f scripts/deploy-docker-cleanup.sh ]; then
               echo "Running Docker cleanup script..."
-              chmod +x scripts/docker-cleanup.sh
-              ./scripts/docker-cleanup.sh
+              chmod +x scripts/deploy-docker-cleanup.sh
+              ./scripts/deploy-docker-cleanup.sh
             else
               echo "⚠️  Cleanup script not found, running basic cleanup..."
               docker builder prune -f --filter "until=24h" || true
@@ -1174,12 +1188,15 @@ jobs:
           if echo "$CONFIG_TEST_OUTPUT" | grep -qE "syntax is ok|test is successful"; then
             echo "✓ Nginx configuration is valid"
           else
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "❌ ERROR: Nginx configuration is invalid"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "Nginx config test output:"
+            deployment_error \
+              "Nginx Configuration Validation" \
+              "Nginx configuration test failed - configuration is invalid" \
+              "1. Review Nginx config test output above
+2. Check nginx.conf syntax: docker compose -f docker/docker-compose.prod.yml exec nginx nginx -t
+3. Verify all referenced files exist
+4. Check for missing semicolons, brackets, or typos
+5. Review docker/nginx.conf and docker/nginx-main.conf
+6. Fix configuration errors and retry deployment"
             echo "$CONFIG_TEST_OUTPUT"
             echo ""
             echo "Container logs:"
@@ -1367,28 +1384,26 @@ jobs:
           
           # Fail deployment if fail2ban is not running properly
           if [ "$FAIL2BAN_RUNNING" != "true" ]; then
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "❌ ERROR: fail2ban verification failed after $MAX_RETRIES attempts"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "This is a CRITICAL security feature. Deployment cannot proceed without fail2ban."
-            echo ""
-            echo "Debugging information:"
-            echo ""
-            echo "Container logs (fail2ban related):"
-            docker compose -f docker/docker-compose.prod.yml logs web | grep -i fail2ban | tail -20 || echo "No fail2ban logs found"
-            echo ""
-            echo "Container processes:"
-            docker compose -f docker/docker-compose.prod.yml exec -T web ps aux | grep -E "(fail2ban|vsftpd|sshd)" || echo "No related processes found"
-            echo ""
-            echo "Fail2ban configuration files:"
-            docker compose -f docker/docker-compose.prod.yml exec -T web ls -la /etc/fail2ban/jail.d/ 2>/dev/null || echo "Jail directory not found"
-            echo ""
-            echo "Fail2ban service status:"
-            docker compose -f docker/docker-compose.prod.yml exec -T web systemctl status fail2ban 2>/dev/null || echo "systemctl not available"
-            echo ""
-            exit 1
+            # Collect debugging information before calling deployment_error
+            FAIL2BAN_LOGS=$(docker compose -f docker/docker-compose.prod.yml logs web | grep -i fail2ban | tail -20 || echo "No fail2ban logs found")
+            FAIL2BAN_PROCESSES=$(docker compose -f docker/docker-compose.prod.yml exec -T web ps aux | grep -E "(fail2ban|vsftpd|sshd)" || echo "No related processes found")
+            FAIL2BAN_CONFIG=$(docker compose -f docker/docker-compose.prod.yml exec -T web ls -la /etc/fail2ban/jail.d/ 2>/dev/null || echo "Jail directory not found")
+            FAIL2BAN_STATUS=$(docker compose -f docker/docker-compose.prod.yml exec -T web systemctl status fail2ban 2>/dev/null || echo "systemctl not available")
+            
+            deployment_error \
+              "fail2ban Verification" \
+              "fail2ban verification failed after $MAX_RETRIES attempts. This is a CRITICAL security feature - deployment cannot proceed without fail2ban." \
+              "1. Check container logs (fail2ban related):
+   ${FAIL2BAN_LOGS}
+2. Check container processes:
+   ${FAIL2BAN_PROCESSES}
+3. Verify fail2ban configuration:
+   ${FAIL2BAN_CONFIG}
+4. Check fail2ban service status:
+   ${FAIL2BAN_STATUS}
+5. Review Dockerfile for fail2ban installation
+6. Check entrypoint script for fail2ban startup
+7. Verify fail2ban configuration files are copied correctly"
           fi
           
           echo ""
