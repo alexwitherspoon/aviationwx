@@ -180,11 +180,12 @@ test_ftp() {
     echo "$test_content" > "/tmp/$test_file"
     
     # Use curl for FTP testing
-    local ftp_url="ftp://${username}:${password}@${HOST}:${FTP_PORT}/"
+    # Upload to incoming/ subdirectory (FTP users are chrooted and can only write there)
+    local ftp_url="ftp://${username}:${password}@${HOST}:${FTP_PORT}/incoming/"
     
     # Test upload
     if curl -s --ftp-create-dirs --upload-file "/tmp/$test_file" "$ftp_url$test_file" > /dev/null 2>&1; then
-        # Test download
+        # Test download (from incoming/ subdirectory)
         if curl -s --fail "$ftp_url$test_file" -o "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
             # Verify content
             if diff -q "/tmp/$test_file" "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
@@ -238,7 +239,7 @@ test_ftps() {
     local curl_exit=$?
     
     if [ $curl_exit -eq 0 ]; then
-        # Test download with SSL
+        # Test download with SSL (from incoming/ subdirectory)
         if curl -s --ftp-ssl --insecure --fail "$ftps_url$test_file" -o "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
             # Verify content
             if diff -q "/tmp/$test_file" "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
