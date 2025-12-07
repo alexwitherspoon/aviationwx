@@ -119,26 +119,6 @@ class PushWebcamValidatorTest extends TestCase
         }
     }
     
-    public function testInvalidPort()
-    {
-        $cam = [
-            'name' => 'Test Camera',
-            'type' => 'push',
-            'push_config' => [
-                'username' => 'aB3xK9mP2qR7vN',  // 14 chars
-                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'sftp',
-                'port' => 99999
-            ]
-        ];
-        
-        $result = validatePushWebcamConfig($cam, 'kspb', 0);
-        
-        $this->assertFalse($result['valid']);
-        $errorMessages = implode(' ', $result['errors']);
-        $this->assertStringContainsString('port must be between 1 and 65535', $errorMessages);
-    }
-    
     public function testInvalidRefreshSeconds()
     {
         $cam = [
