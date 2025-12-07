@@ -60,7 +60,7 @@ function updateLastSyncTimestamp() {
     $trackFile = $trackDir . '/last_sync.json';
     
     if (!is_dir($trackDir)) {
-        @mkdir($trackDir, 0755, true);
+        @mkdir($trackDir, 0775, true);
     }
     
     $data = ['timestamp' => time()];
@@ -221,7 +221,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
         if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
             @mkdir($incomingDir, 0775, true);
         } else {
-            @mkdir($incomingDir, 0755, true);
+            @mkdir($incomingDir, 0775, true);
         }
     }
     
@@ -257,7 +257,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
         }
     } else {
         // Default: use 775 for FTP/FTPS compatibility (will be overridden by createFtpUser if needed)
-        // But if protocol is unknown, default to 755
+        // But if protocol is unknown, default to 775
         if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
             @chmod($incomingDir, 0775);
         } else {
@@ -325,7 +325,7 @@ function getExistingPushCameras() {
 function getUsernameTrackingFile() {
     $trackDir = __DIR__ . '/../cache/push_webcams';
     if (!is_dir($trackDir)) {
-        @mkdir($trackDir, 0755, true);
+        @mkdir($trackDir, 0775, true);
     }
     return $trackDir . '/username_mapping.json';
 }
