@@ -802,22 +802,22 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
             echo "Rsync may have deleted the ssl/ directory. Re-copying certificates..."
-            ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-            set -euo pipefail
-            cd ~/aviationwx
-            mkdir -p ssl
-            if sudo test -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem && sudo test -f /etc/letsencrypt/live/aviationwx.org/privkey.pem; then
-              sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/
-              sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/
-              sudo chown -R $(whoami):$(whoami) ssl/
-              sudo chmod 644 ssl/fullchain.pem
-              sudo chmod 600 ssl/privkey.pem
-              echo "✓ SSL certificates re-copied"
-            else
-              echo "❌ ERROR: Cannot re-copy certificates - Let's Encrypt files not found"
-              exit 1
-            fi
-            EOF
+            ssh ${{ secrets.USER }}@${{ secrets.HOST }} bash << 'EOF'
+set -euo pipefail
+cd ~/aviationwx
+mkdir -p ssl
+if sudo test -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem && sudo test -f /etc/letsencrypt/live/aviationwx.org/privkey.pem; then
+  sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/
+  sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/
+  sudo chown -R $(whoami):$(whoami) ssl/
+  sudo chmod 644 ssl/fullchain.pem
+  sudo chmod 600 ssl/privkey.pem
+  echo "✓ SSL certificates re-copied"
+else
+  echo "❌ ERROR: Cannot re-copy certificates - Let's Encrypt files not found"
+  exit 1
+fi
+EOF
           fi
 
       - name: Deploy via Docker Compose
