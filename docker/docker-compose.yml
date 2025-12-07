@@ -9,6 +9,10 @@ services:
     container_name: aviationwx-web
     ports:
       - "${APP_PORT:-8080}:80"
+      # Expose FTP/FTPS and SFTP ports for local testing
+      # Using non-standard ports to avoid conflicts with system services
+      - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
+      - "12222:2222"  # SFTP (mapped to avoid conflicts)
     volumes:
       # Mount airports.json from host (relative to docker/ directory)
       - ../config/airports.json:/var/www/html/config/airports.json:ro
