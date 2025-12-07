@@ -164,30 +164,55 @@ function updateLastProcessedTime($airportId, $camIndex) {
 
 /**
  * Find newest valid image in upload directory
+ * Optimized to exit quickly if no new files are found
  * 
  * @param string $uploadDir Upload directory path
  * @param int $maxWaitSeconds Maximum wait time for file to be fully written
+ * @param int|null $lastProcessedTime Timestamp of last processed file (null = no filter)
  * @param array|null $pushConfig Optional push_config for per-camera validation
  * @return string|null Path to valid image file or null
  */
-function findNewestValidImage($uploadDir, $maxWaitSeconds, $pushConfig = null) {
+function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = null, $pushConfig = null) {
     if (!is_dir($uploadDir)) {
         return null;
     }
     
     $files = glob($uploadDir . '*.{jpg,jpeg,png}', GLOB_BRACE);
     if (empty($files)) {
-        return null;
+        return null; // No files - exit immediately
+    }
+    
+    // Quick check: if we have last processed time, filter files by mtime first
+    // This avoids waiting on old files that were already processed
+    if ($lastProcessedTime !== null && $lastProcessedTime > 0) {
+        $filteredFiles = [];
+        foreach ($files as $file) {
+            $mtime = @filemtime($file);
+            if ($mtime !== false && $mtime > $lastProcessedTime) {
+                $filteredFiles[] = $file;
+            }
+        }
+        
+        // If no files newer than last processed, exit immediately
+        if (empty($filteredFiles)) {
+            return null;
+        }
+        
+        $files = $filteredFiles;
     }
     
     // Sort by mtime (newest first)
     usort($files, function($a, $b) {
-        return filemtime($b) - filemtime($a);
+        $mtimeA = @filemtime($a);
+        $mtimeB = @filemtime($b);
+        if ($mtimeA === false) return 1;
+        if ($mtimeB === false) return -1;
+        return $mtimeB - $mtimeA;
     });
     
     $startTime = time();
     foreach ($files as $file) {
-        // Check if file is fully written
+        // Check if file is fully written (only wait if we have a candidate)
         if (isFileFullyWritten($file, $maxWaitSeconds, $startTime)) {
             // Validate image (with per-camera limits if provided)
             if (validateImageFile($file, $pushConfig)) {
@@ -201,17 +226,32 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $pushConfig = null) {
 
 /**
  * Check if file is fully written
+ * Optimized to check quickly for old files
  */
 function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
     $maxWait = time() - $startTime >= $maxWaitSeconds;
     
-    // Check file size stability
+    // Quick check: if file is old (more than 2 seconds), assume it's stable
+    $mtime = @filemtime($file);
+    if ($mtime !== false) {
+        $age = time() - $mtime;
+        if ($age >= 2) {
+            // File is at least 2 seconds old, very likely fully written
+            // Still do a quick size check to be sure
+            $size = @filesize($file);
+            if ($size !== false && $size > 0) {
+                return true;
+            }
+        }
+    }
+    
+    // For newer files, check size stability
     $size1 = @filesize($file);
     if ($size1 === false) {
         return false;
     }
     
-    // Wait a bit and check again
+    // Wait a bit and check again (only for files that might still be writing)
     usleep(500000); // 0.5 seconds
     
     $size2 = @filesize($file);
@@ -222,11 +262,17 @@ function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
     // If sizes match and we've waited enough or hit max wait, consider it stable
     if ($size1 === $size2) {
         // Check mtime - file should be at least 1 second old (not currently being written)
-        $mtime = filemtime($file);
-        $age = time() - $mtime;
-        
-        if ($age >= 1 || $maxWait) {
-            return true;
+        if ($mtime === false) {
+            $mtime = @filemtime($file);
+        }
+        if ($mtime !== false) {
+            $age = time() - $mtime;
+            if ($age >= 1 || $maxWait) {
+                return true;
+            }
+        } else {
+            // Can't get mtime, but sizes match - assume stable
+            return $maxWait;
         }
     }
     
@@ -407,6 +453,17 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null) {
 function processPushCamera($airportId, $camIndex, $cam, $airport) {
     $uploadDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex . '/incoming/';
     
+    // Quick check: if directory doesn't exist or has no files, exit immediately
+    if (!is_dir($uploadDir)) {
+        return false; // No directory - exit immediately
+    }
+    
+    // Quick check: if no image files exist, exit immediately (no waiting)
+    $hasFiles = !empty(glob($uploadDir . '*.{jpg,jpeg,png}', GLOB_BRACE));
+    if (!$hasFiles) {
+        return false; // No files - exit immediately
+    }
+    
     // Check if directory is writable
     if (!isDirectoryWritable($uploadDir)) {
         aviationwx_log('warning', 'upload directory not writable', [
@@ -432,7 +489,8 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     $pushConfig = $cam['push_config'] ?? null;
     
     // Find newest valid image (with per-camera limits)
-    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $pushConfig);
+    // Pass lastProcessed time to quickly skip old files
+    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessed, $pushConfig);
     
     if (!$newestFile) {
         aviationwx_log('info', 'no valid image found', [
