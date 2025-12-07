@@ -1132,7 +1132,7 @@ jobs:
           # Clean up Docker resources conditionally (only if disk usage is high)
           # Check disk usage before cleanup to avoid unnecessary operations
           DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
-          DISK_THRESHOLD=80  # Cleanup if disk usage > 80%
+          DISK_THRESHOLD=40  # Cleanup if disk usage > 40%
           
           echo "Checking disk usage before cleanup..."
           echo "Current disk usage: ${DISK_USAGE}% (threshold: ${DISK_THRESHOLD}%)"
