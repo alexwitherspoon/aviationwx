@@ -136,16 +136,28 @@ function aviationwx_log(string $level, string $message, array $context = [], str
         // Errors and warnings go to stderr, info/debug go to stdout
         $isError = in_array($entry['level'], ['warning','error','critical','alert','emergency'], true);
         
+        // In CLI, check if running via cron (non-interactive, no TTY)
+        // When running via cron, use error_log() to ensure output goes to Docker logs
+        // Cron captures stdout/stderr, but error_log() goes to syslog/stderr which Docker captures
+        $isCron = false;
+        if (php_sapi_name() === 'cli') {
+            // Check if running via cron: no TTY on stdin
+            if (function_exists('posix_isatty') && !@posix_isatty(STDIN)) {
+                $isCron = true;
+            }
+        }
+        
         // In CLI, STDOUT/STDERR are defined and work directly
-        if (php_sapi_name() === 'cli' && defined('STDOUT') && defined('STDERR')) {
+        // BUT: when running via cron, use error_log() instead so output goes to Docker logs
+        if (php_sapi_name() === 'cli' && !$isCron && defined('STDOUT') && defined('STDERR')) {
             $stream = $isError ? STDERR : STDOUT;
             @fwrite($stream, $jsonLine);
             @fflush($stream);
         } else {
-            // Web context (Apache/mod_php): use error_log() which writes to Apache error log
-            // Apache error log is captured by Docker as stderr
+            // Web context (Apache/mod_php) OR CLI via cron: use error_log() which writes to Apache error log / syslog
+            // Both are captured by Docker as stderr
             // Note: php://stdout goes to HTTP response body (not what we want)
-            // php://stderr might work but error_log() is more reliable for Apache
+            // php://stderr might work but error_log() is more reliable for Apache and cron
             @error_log($jsonLine);
         }
     } else {
