@@ -823,6 +823,13 @@ function syncAllPushCameras($config) {
                 if ($username && isset($cam['push_config']['password'])) {
                     if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
                         // Success - mapping already updated in syncCameraUser
+                        // Ensure permissions are correct after user creation (createFtpUser sets 775, but verify)
+                        if (in_array(strtolower($protocol), ['ftp', 'ftps'])) {
+                            $incomingDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}/incoming";
+                            if (is_dir($incomingDir)) {
+                                @chmod($incomingDir, 0775);
+                            }
+                        }
                     }
                 }
             }
