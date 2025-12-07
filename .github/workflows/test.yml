@@ -27,7 +27,7 @@ jobs:
         with:
           php-version: '8.3'
           extensions: apcu, gd, zip, curl
-          coverage: none
+          coverage: pcov
       
       - name: Cache Composer dependencies
         uses: actions/cache@v4
@@ -58,15 +58,16 @@ jobs:
       - name: Run PHPUnit - Unit Tests (Critical)
         run: |
           echo "Running unit tests..."
-          # Run tests and capture exit code (allow exit code 1 for warnings)
-          vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --no-coverage || exit_code=$?
+          echo "Including: ProcessPoolTest, WorkerModeTest, and all other unit tests"
+          # Run tests with coverage (pcov is installed)
+          vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --coverage-clover unit-coverage.xml || exit_code=$?
           exit_code=${exit_code:-$?}
           # Exit code 0 = success, 1 = warnings, 2+ = failures
           if [ $exit_code -gt 1 ]; then
             echo "❌ Unit tests failed - check output above"
             exit 1
           elif [ $exit_code -eq 1 ]; then
-            echo "⚠️  Unit tests passed with warnings (expected in CI without coverage driver)"
+            echo "⚠️  Unit tests passed with warnings"
           else
             echo "✓ Unit tests passed"
           fi
@@ -74,15 +75,16 @@ jobs:
       - name: Run PHPUnit - Integration Tests
         run: |
           echo "Running integration tests..."
-          # Run tests and capture exit code (allow exit code 1 for warnings)
-          vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage || exit_code=$?
+          echo "Including: ProcessPoolIntegrationTest, ProcessPoolOutputTest, and all other integration tests"
+          # Run tests with coverage (pcov is installed)
+          vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --coverage-clover integration-coverage.xml || exit_code=$?
           exit_code=${exit_code:-$?}
           # Exit code 0 = success, 1 = warnings, 2+ = failures
           if [ $exit_code -gt 1 ]; then
             echo "❌ Integration tests failed - check output above"
             exit 1
           elif [ $exit_code -eq 1 ]; then
-            echo "⚠️  Integration tests passed with warnings (expected in CI without coverage driver)"
+            echo "⚠️  Integration tests passed with warnings"
           else
             echo "✓ Integration tests passed"
           fi
@@ -118,7 +120,7 @@ jobs:
         run: |
           echo "Running webcam refresh initialization tests..."
           echo "Testing CAM_TS initialization and data attributes..."
-          vendor/bin/phpunit tests/Unit/WebcamRefreshInitializationTest.php --testdox --stop-on-failure --no-coverage || exit_code=$?
+          vendor/bin/phpunit tests/Unit/WebcamRefreshInitializationTest.php --testdox --stop-on-failure || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ WebcamRefreshInitializationTest failed"
@@ -134,7 +136,7 @@ jobs:
           echo "Running weather data merge tests..."
           echo "Testing mergeWeatherDataWithFallback function and error handling..."
           # Test the new merge functionality and error handling
-          vendor/bin/phpunit tests/Unit/WeatherDataMergeTest.php --testdox --stop-on-failure --no-coverage || exit_code=$?
+          vendor/bin/phpunit tests/Unit/WeatherDataMergeTest.php --testdox --stop-on-failure || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ WeatherDataMergeTest failed"
@@ -146,14 +148,14 @@ jobs:
           fi
           
           # Verify merge function exists and VRB wind direction handling
-          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_VariableWindDirection --testdox --no-coverage || exit_code=$?
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_VariableWindDirection --testdox || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ VRB wind direction handling test failed"
             exit 1
           fi
           
-          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_NonNumericWindSpeed --testdox --no-coverage || exit_code=$?
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_NonNumericWindSpeed --testdox || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ Non-numeric wind speed handling test failed"
@@ -170,6 +172,8 @@ jobs:
           path: |
             unit-results.xml
             integration-results.xml
+            unit-coverage.xml
+            integration-coverage.xml
           retention-days: 7
       
       - name: Validate Merge Functionality
