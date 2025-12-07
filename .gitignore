@@ -89,3 +89,14 @@ desktop.ini
 # Playwright test artifacts
 tests/Browser/playwright-report/
 tests/Browser/playwright-results.json
+
+# Diagnostic and temporary documentation files (never commit)
+docs/*DIAGNOSTICS*.md
+docs/*TROUBLESHOOTING*.md
+docs/*TEST*.md
+docs/*TEMP*.md
+docs/*ANALYSIS*.md
+docs/*CHECKLIST*.md
+docs/*PLAN*.md
+docs/*QUESTIONS*.md
+docs/*RESULTS*.md
