@@ -13,8 +13,8 @@ services:
       - "2121:2121"  # FTP/FTPS (both protocols on same port)
       - "2222:2222"  # SFTP
     volumes:
-      # Use local test config file
-      - ../config/airports.test.json:/var/www/html/airports.json:ro
+      # Use local airports.json for testing
+      - ../config/airports.json:/var/www/html/airports.json:ro
       - ../cache-local:/var/www/html/cache
       # Note: /var/www/html/uploads is ephemeral (inside container only)
       - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates (if available)
