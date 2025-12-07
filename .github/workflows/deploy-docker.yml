@@ -786,8 +786,32 @@ jobs:
           echo "✓ Containers are running (${RUNNING_COUNT} container(s) up)"
           
           # Wait for Apache to be fully ready
+          # Check container health status and wait until healthy
           echo "Waiting for services to be ready..."
-          sleep 10
+          MAX_WAIT=60
+          WAIT_TIME=0
+          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+            HEALTH=$(docker compose -f docker/docker-compose.prod.yml ps web --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+            if [ "$HEALTH" = "healthy" ]; then
+              echo "✓ Web container is healthy"
+              break
+            elif [ "$HEALTH" = "unhealthy" ]; then
+              echo "❌ Web container is unhealthy"
+              docker compose -f docker/docker-compose.prod.yml logs web | tail -50
+              exit 1
+            else
+              echo "  Container health: $HEALTH (waiting...)"
+              sleep 5
+              WAIT_TIME=$((WAIT_TIME + 5))
+            fi
+          done
+          
+          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+            echo "⚠️  Container did not become healthy within $MAX_WAIT seconds, but continuing..."
+          fi
+          
+          # Additional wait for services to fully initialize
+          sleep 5
           
           # Check if web container is responding (from inside container via exec)
           # This is more reliable than checking from host since Apache might have Host header issues
