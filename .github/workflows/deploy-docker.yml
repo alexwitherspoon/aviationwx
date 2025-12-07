@@ -445,6 +445,7 @@ jobs:
           echo "ℹ️  Application will automatically recreate cache files if missing"
           EOF
 
+
       - name: Ensure SSL certificates are in place
         run: |
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
@@ -601,6 +602,52 @@ jobs:
           
           # Start containers
           docker compose -f docker/docker-compose.prod.yml up -d
+          
+          # Wait for web container to be ready (needed for certificate generation)
+          echo "Waiting for web container to be ready..."
+          sleep 10
+          
+          # Generate FTPS SSL certificates (one-time setup)
+          # This runs after containers are started so the web server is available for HTTP-01 challenge
+          echo "Checking for upload.aviationwx.org SSL certificates..."
+          
+          # Check if certificates already exist in container
+          # This is a one-time setup that only runs if certificates don't exist
+          if docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem 2>/dev/null && \
+             docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/privkey.pem 2>/dev/null; then
+            echo "✓ SSL certificates for upload.aviationwx.org already exist"
+            echo "  Skipping certificate generation (one-time setup already complete)"
+          else
+            echo "SSL certificates for upload.aviationwx.org not found"
+            echo "Attempting one-time certificate generation..."
+            echo ""
+            echo "Requirements:"
+            echo "  - Domain upload.aviationwx.org must resolve to this server"
+            echo "  - Port 80 must be accessible (for Let's Encrypt validation)"
+            echo "  - Web server must be running"
+            echo ""
+            
+            # Try to generate certificates inside the container
+            # Use LETSENCRYPT_EMAIL environment variable
+            if docker compose -f docker/docker-compose.prod.yml exec -T -e LETSENCRYPT_EMAIL=alex@alexwitherspoon.com web /usr/local/bin/setup-letsencrypt.sh 2>&1; then
+              echo "✓ SSL certificates generated successfully for upload.aviationwx.org"
+              echo "  FTPS will be automatically enabled on next container start"
+              # Restart container to pick up SSL configuration
+              docker compose -f docker/docker-compose.prod.yml restart web || true
+            else
+              echo "⚠️  Warning: Failed to generate SSL certificates for upload.aviationwx.org"
+              echo "  This may be due to:"
+              echo "    - Domain not resolving to this server"
+              echo "    - Port 80 not accessible"
+              echo "    - Let's Encrypt rate limits"
+              echo ""
+              echo "  Deployment will continue, but FTPS will not be available until certificates are generated."
+              echo "  You can manually generate certificates by running:"
+              echo "    docker compose -f docker/docker-compose.prod.yml exec web /usr/local/bin/setup-letsencrypt.sh"
+              echo ""
+              # Don't fail deployment - just warn
+            fi
+          fi
           
           # Clean up Docker resources using the dedicated cleanup script
           # This modularizes cleanup logic and keeps the workflow concise
