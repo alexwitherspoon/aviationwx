@@ -15,9 +15,10 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php > /dev/null 2>&1
 
 # Push webcam config sync - every minute
+# Must run as root to write to /etc/vsftpd/ and create system users
 # Log errors to file for debugging (stdout/stderr go to Docker logs via logger)
 # PATH is set above to ensure db_load, db_verify, etc. are found
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/sync-push-config.php >> /var/log/cron-sync-push-config.log 2>&1
+* * * * * root cd /var/www/html && /usr/local/bin/php scripts/sync-push-config.php >> /var/log/cron-sync-push-config.log 2>&1
 
 # Let's Encrypt certificate renewal - weekly (Sunday at 3 AM)
 # After renewal, enable SSL in vsftpd if not already enabled
