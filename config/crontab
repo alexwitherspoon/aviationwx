@@ -1,19 +1,29 @@
 # AviationWX Cron Jobs
 # Runs inside Docker container
-# Format: minute hour day month weekday user command
 
 # Set PATH for cron jobs (cron has minimal PATH by default)
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Webcam refresh - every minute
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-webcam.php > /dev/null 2>&1
+# Webcam Image Fetcher - Runs every minute
+# Fetches webcam images from configured sources (MJPEG streams, RTSP, static images)
+# and caches them for serving via the webcam API. Skips cameras with fresh cache.
+# Output and errors are logged to Docker logs (stdout/stderr).
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-webcam.php
 
-# Weather refresh - every minute
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-weather.php > /dev/null 2>&1
+# Weather Data Fetcher - Runs every minute
+# Refreshes weather cache for all configured airports by calling the weather API endpoint.
+# Ensures weather data stays fresh for display on airport pages.
+# Output and errors are logged to Docker logs (stdout/stderr).
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-weather.php
 
-# Push webcam file processor - every minute
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php > /dev/null 2>&1
+# Push Webcam Processor - Runs every minute
+# Processes webcam images uploaded via SFTP/FTP/FTPS by push cameras.
+# Moves uploaded images from uploads directory to cache directory for serving.
+# Output and errors are logged to Docker logs (stdout/stderr).
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php
 
-# Let's Encrypt certificate renewal - weekly (Sunday at 3 AM)
-# After renewal, enable SSL in vsftpd if not already enabled
-0 3 * * 0 root certbot renew --quiet --no-self-upgrade && /usr/local/bin/enable-vsftpd-ssl.sh > /dev/null 2>&1 || true
+# Let's Encrypt Certificate Renewal - Runs weekly (Sunday at 3 AM)
+# Renews SSL certificates for upload.aviationwx.org if they're expiring soon.
+# After renewal, enables SSL/TLS in vsftpd if certificates are available.
+# Errors are logged but don't fail the container (|| true).
+0 3 * * 0 root certbot renew --quiet --no-self-upgrade && /usr/local/bin/enable-vsftpd-ssl.sh || true
