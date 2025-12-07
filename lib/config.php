@@ -124,6 +124,30 @@ function getDefaultWeatherRefresh() {
 }
 
 /**
+ * Get weather worker pool size from global config
+ * @return int Number of concurrent workers (default: 5)
+ */
+function getWeatherWorkerPoolSize() {
+    return (int)getGlobalConfig('weather_worker_pool_size', 5);
+}
+
+/**
+ * Get webcam worker pool size from global config
+ * @return int Number of concurrent workers (default: 5)
+ */
+function getWebcamWorkerPoolSize() {
+    return (int)getGlobalConfig('webcam_worker_pool_size', 5);
+}
+
+/**
+ * Get worker timeout from global config
+ * @return int Timeout in seconds (default: 45)
+ */
+function getWorkerTimeout() {
+    return (int)getGlobalConfig('worker_timeout_seconds', 45);
+}
+
+/**
  * Load airport configuration with caching
  * Uses APCu cache if available, falls back to static variable for request lifetime
  * Automatically invalidates cache when file modification time changes
