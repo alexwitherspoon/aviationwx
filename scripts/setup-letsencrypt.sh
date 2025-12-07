@@ -48,6 +48,7 @@ certbot certonly \
     --no-eff-email \
     --non-interactive \
     --domains "$DOMAIN" \
+    --disable-hook-validation \
     --cert-path /etc/letsencrypt/live/$DOMAIN/cert.pem \
     --key-path /etc/letsencrypt/live/$DOMAIN/privkey.pem \
     --fullchain-path /etc/letsencrypt/live/$DOMAIN/fullchain.pem \
