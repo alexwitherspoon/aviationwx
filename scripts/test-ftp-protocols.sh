@@ -188,8 +188,8 @@ test_ftp() {
         if curl -s --fail "$ftp_url$test_file" -o "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
             # Verify content
             if diff -q "/tmp/$test_file" "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
-                # Test delete
-                if curl -s --fail -X "DELE $test_file" "$ftp_url" > /dev/null 2>&1; then
+                    # Test delete (from incoming/ subdirectory)
+                    if curl -s --fail -X "DELE incoming/$test_file" "ftp://${username}:${password}@${HOST}:${FTP_PORT}/" > /dev/null 2>&1; then
                     log_success "FTP test passed (upload, download, delete)"
                     rm -f "/tmp/$test_file" "/tmp/${test_file}.downloaded"
                     return 0
@@ -242,8 +242,8 @@ test_ftps() {
         if curl -s --ftp-ssl --insecure --fail "$ftps_url$test_file" -o "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
             # Verify content
             if diff -q "/tmp/$test_file" "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
-                # Test delete with SSL
-                if curl -s --ftp-ssl --insecure --fail -X "DELE $test_file" "$ftps_url" > /dev/null 2>&1; then
+                    # Test delete with SSL (from incoming/ subdirectory)
+                    if curl -s --ftp-ssl --insecure --fail -X "DELE incoming/$test_file" "ftps://${username}:${password}@${HOST}:${FTP_PORT}/" > /dev/null 2>&1; then
                     log_success "FTPS test passed (upload, download, delete)"
                     rm -f "/tmp/$test_file" "/tmp/${test_file}.downloaded"
                     return 0
