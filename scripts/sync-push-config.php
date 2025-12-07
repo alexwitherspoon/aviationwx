@@ -251,7 +251,13 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
             @chmod($incomingDir, 0755);
         }
     } else {
-        @chmod($incomingDir, 0755);
+        // Default: use 775 for FTP/FTPS compatibility (will be overridden by createFtpUser if needed)
+        // But if protocol is unknown, default to 755
+        if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
+            @chmod($incomingDir, 0775);
+        } else {
+            @chmod($incomingDir, 0755);
+        }
     }
     
     return $incomingDir;
