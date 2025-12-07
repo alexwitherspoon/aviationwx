@@ -2,7 +2,7 @@
 # Enable SSL in vsftpd when Let's Encrypt certificates are available
 # This script should be run after certificates are obtained
 
-set -e
+set -euo pipefail
 
 DOMAIN="upload.aviationwx.org"
 CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
@@ -63,8 +63,12 @@ sed -i '/^# rsa_cert_file=/d' "$VSFTPD_CONF"
 sed -i '/^# rsa_private_key_file=/d' "$VSFTPD_CONF"
 
 # Verify configuration syntax
-if ! vsftpd -olisten=NO "$VSFTPD_CONF" 2>&1 | grep -q "listening on"; then
-    log_message "ERROR: vsftpd configuration test failed, restoring backup"
+# Use timeout to prevent hanging, and capture output for debugging
+CONFIG_TEST_OUTPUT=$(timeout 5 vsftpd -olisten=NO "$VSFTPD_CONF" 2>&1 || echo "CONFIG_TEST_FAILED")
+if ! echo "$CONFIG_TEST_OUTPUT" | grep -q "listening on"; then
+    log_message "ERROR: vsftpd configuration test failed"
+    log_message "Test output: $CONFIG_TEST_OUTPUT"
+    log_message "Restoring backup configuration..."
     cp "$VSFTPD_CONF_BACKUP" "$VSFTPD_CONF"
     exit 1
 fi
