@@ -58,14 +58,18 @@ sed -i 's/^ssl_tlsv1=NO/ssl_tlsv1=YES/' "$VSFTPD_CONF"
 
 # Enable TLSv1.1 and TLSv1.2 for broad camera compatibility
 # vsftpd 3.0+ supports these; older versions will ignore unknown options
+# Uncomment if they're commented, or add if they don't exist
+sed -i 's/^# ssl_tlsv1_1=YES/ssl_tlsv1_1=YES/' "$VSFTPD_CONF" 2>/dev/null || true
+sed -i 's/^# ssl_tlsv1_2=YES/ssl_tlsv1_2=YES/' "$VSFTPD_CONF" 2>/dev/null || true
+sed -i 's/^ssl_tlsv1_1=NO/ssl_tlsv1_1=YES/' "$VSFTPD_CONF" 2>/dev/null || true
+sed -i 's/^ssl_tlsv1_2=NO/ssl_tlsv1_2=YES/' "$VSFTPD_CONF" 2>/dev/null || true
+# Add if they don't exist (not commented and not uncommented)
 if ! grep -q "^ssl_tlsv1_1=" "$VSFTPD_CONF" 2>/dev/null; then
     echo "ssl_tlsv1_1=YES" >> "$VSFTPD_CONF"
 fi
 if ! grep -q "^ssl_tlsv1_2=" "$VSFTPD_CONF" 2>/dev/null; then
     echo "ssl_tlsv1_2=YES" >> "$VSFTPD_CONF"
 fi
-sed -i 's/^ssl_tlsv1_1=NO/ssl_tlsv1_1=YES/' "$VSFTPD_CONF" 2>/dev/null || true
-sed -i 's/^ssl_tlsv1_2=NO/ssl_tlsv1_2=YES/' "$VSFTPD_CONF" 2>/dev/null || true
 
 # Disable insecure SSL versions
 sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$VSFTPD_CONF"
