@@ -171,6 +171,24 @@ fi
 # Trap signals to clean up fail2ban on exit
 trap "kill $WATCHDOG_PID $FAIL2BAN_PID 2>/dev/null || true" EXIT
 
+# Sync FTP/SFTP/FTPS configuration on container startup
+# This ensures users and directories are created/updated when container starts
+# Runs as root to write to /etc/vsftpd/ and create system users
+echo "Syncing FTP/SFTP/FTPS configuration..."
+if cd /var/www/html && /usr/local/bin/php scripts/sync-push-config.php 2>&1; then
+    echo "✓ FTP/SFTP/FTPS configuration synced successfully"
+else
+    echo "⚠️  Warning: FTP/SFTP/FTPS configuration sync failed"
+    echo "  This may be due to:"
+    echo "    - Config file not yet available"
+    echo "    - Permissions issues"
+    echo "    - Database corruption (will be auto-recovered on next run)"
+    echo ""
+    echo "  Container will continue starting, but FTP/SFTP users may not be configured."
+    echo "  The sync will retry on next container restart or deployment."
+    # Don't fail container startup - just warn
+fi
+
 # Execute Apache entrypoint (starts Apache in foreground)
 # Use docker-php-entrypoint if available, otherwise call apache2-foreground directly
 if command -v docker-php-entrypoint >/dev/null 2>&1; then

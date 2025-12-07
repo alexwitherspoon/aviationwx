@@ -2,13 +2,18 @@
 /**
  * Push Webcam Configuration Synchronizer
  * Watches airports.json for changes and syncs directories/users
- * Runs via cron every minute
+ * 
+ * Runs:
+ * - On container startup via docker-entrypoint.sh
+ * - During deployment via GitHub Actions workflow
+ * 
+ * This is more durable than cron and ensures immediate sync after deployments.
+ * The script is idempotent and checks for config changes before syncing.
  */
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 
-// Set up invocation tracking
 $invocationId = aviationwx_get_invocation_id();
 $triggerInfo = aviationwx_detect_trigger_type();
 
@@ -17,6 +22,169 @@ aviationwx_log('info', 'push-config sync started', [
     'trigger' => $triggerInfo['trigger'],
     'context' => $triggerInfo['context']
 ], 'app');
+
+/**
+ * Check if script is running as root (required for system operations)
+ */
+function checkRootPermissions() {
+    $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+    $isRoot = ($uid === 0);
+    
+    if (!$isRoot) {
+        $username = 'unknown';
+        if ($uid !== null && function_exists('posix_getpwuid')) {
+            $userInfo = @posix_getpwuid($uid);
+            if ($userInfo !== false && isset($userInfo['name'])) {
+                $username = $userInfo['name'];
+            }
+        }
+        aviationwx_log('error', 'sync-push-config: must run as root', [
+            'current_uid' => $uid,
+            'current_user' => $username,
+            'required' => 'root (UID 0)'
+        ], 'app');
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Verify directory permissions and ownership
+ * Returns array with 'success' boolean and 'issues' array
+ */
+function verifyDirectoryPermissions($path, $expectedOwner, $expectedGroup, $expectedPerms) {
+    $issues = [];
+    
+    if (!is_dir($path)) {
+        return ['success' => false, 'issues' => ["Directory does not exist: $path"]];
+    }
+    
+    $stat = @stat($path);
+    if (!$stat) {
+        return ['success' => false, 'issues' => ["Cannot stat directory: $path"]];
+    }
+    
+    if ($expectedOwner !== null) {
+        $expectedOwnerUid = is_numeric($expectedOwner) ? intval($expectedOwner) : null;
+        if ($expectedOwnerUid === null && function_exists('posix_getpwnam')) {
+            $ownerInfo = @posix_getpwnam($expectedOwner);
+            $expectedOwnerUid = $ownerInfo ? $ownerInfo['uid'] : null;
+        }
+        
+        if ($expectedOwnerUid !== null && $stat['uid'] !== $expectedOwnerUid) {
+            $actualOwner = function_exists('posix_getpwuid') ? @posix_getpwuid($stat['uid'])['name'] : $stat['uid'];
+            $issues[] = "Ownership mismatch: expected UID $expectedOwnerUid ($expectedOwner), got UID {$stat['uid']} ($actualOwner)";
+        }
+    }
+    
+    if ($expectedGroup !== null) {
+        $expectedGroupGid = is_numeric($expectedGroup) ? intval($expectedGroup) : null;
+        if ($expectedGroupGid === null && function_exists('posix_getgrnam')) {
+            $groupInfo = @posix_getgrnam($expectedGroup);
+            $expectedGroupGid = $groupInfo ? $groupInfo['gid'] : null;
+        }
+        
+        if ($expectedGroupGid !== null && $stat['gid'] !== $expectedGroupGid) {
+            $actualGroup = function_exists('posix_getgrgid') ? @posix_getgrgid($stat['gid'])['name'] : $stat['gid'];
+            $issues[] = "Group mismatch: expected GID $expectedGroupGid ($expectedGroup), got GID {$stat['gid']} ($actualGroup)";
+        }
+    }
+    
+    if ($expectedPerms !== null) {
+        $actualPerms = substr(sprintf('%o', $stat['mode']), -4);
+        $expectedPermsStr = is_numeric($expectedPerms) ? sprintf('%04o', $expectedPerms) : $expectedPerms;
+        
+        // Normalize to 4-digit format
+        if (strlen($actualPerms) === 3) {
+            $actualPerms = '0' . $actualPerms;
+        }
+        if (strlen($expectedPermsStr) === 3) {
+            $expectedPermsStr = '0' . $expectedPermsStr;
+        }
+        
+        // Compare last 3 digits (permissions, ignoring file type)
+        if (substr($actualPerms, -3) !== substr($expectedPermsStr, -3)) {
+            $issues[] = "Permissions mismatch: expected $expectedPermsStr, got $actualPerms";
+        }
+    }
+    
+    return [
+        'success' => empty($issues),
+        'issues' => $issues
+    ];
+}
+
+/**
+ * Set directory permissions with verification
+ * Returns true if successful, false otherwise
+ */
+function setDirectoryPermissions($path, $owner, $group, $perms, $description = '') {
+    $success = true;
+    $errors = [];
+    
+    if ($owner !== null && function_exists('chown')) {
+        $ownerUid = is_numeric($owner) ? intval($owner) : null;
+        if ($ownerUid === null && function_exists('posix_getpwnam')) {
+            $ownerInfo = @posix_getpwnam($owner);
+            $ownerUid = $ownerInfo ? $ownerInfo['uid'] : null;
+        }
+        
+        if ($ownerUid !== null) {
+            if (!@chown($path, $ownerUid)) {
+                $errors[] = "Failed to set owner to UID $ownerUid ($owner)";
+                $success = false;
+            }
+        } else {
+            $errors[] = "Cannot resolve owner: $owner";
+            $success = false;
+        }
+    }
+    
+    if ($group !== null && function_exists('chgrp')) {
+        $groupGid = is_numeric($group) ? intval($group) : null;
+        if ($groupGid === null && function_exists('posix_getgrnam')) {
+            $groupInfo = @posix_getgrnam($group);
+            $groupGid = $groupInfo ? $groupInfo['gid'] : null;
+        }
+        
+        if ($groupGid !== null) {
+            if (!@chgrp($path, $groupGid)) {
+                $errors[] = "Failed to set group to GID $groupGid ($group)";
+                $success = false;
+            }
+        } else {
+            $errors[] = "Cannot resolve group: $group";
+            $success = false;
+        }
+    }
+    
+    if ($perms !== null) {
+        $permsInt = is_numeric($perms) ? intval($perms) : octdec($perms);
+        if (!@chmod($path, $permsInt)) {
+            $errors[] = "Failed to set permissions to " . sprintf('%04o', $permsInt);
+            $success = false;
+        }
+    }
+    
+    if ($success) {
+        $verification = verifyDirectoryPermissions($path, $owner, $group, $perms);
+        if (!$verification['success']) {
+            $errors = array_merge($errors, $verification['issues']);
+            $success = false;
+        }
+    }
+    
+    if (!$success && !empty($errors)) {
+        aviationwx_log('warning', 'sync-push-config: permission setting failed', [
+            'path' => $path,
+            'description' => $description ?: 'directory',
+            'errors' => $errors
+        ], 'app');
+    }
+    
+    return $success;
+}
 
 /**
  * Get config file path
@@ -77,7 +245,13 @@ function backupConfigFile($configFile) {
     }
     
     $backupFile = $backupDir . '/airports_' . date('Y-m-d_His') . '.json';
-    @copy($configFile, $backupFile);
+    if (!@copy($configFile, $backupFile)) {
+        aviationwx_log('warning', 'sync-push-config: failed to create config backup', [
+            'backup_file' => $backupFile,
+            'source_file' => $configFile
+        ], 'app');
+        // Continue anyway - backup failure shouldn't block sync
+    }
     
     // Keep only last 5 backups
     $backups = glob($backupDir . '/airports_*.json');
@@ -101,49 +275,40 @@ function isVsftpdDatabaseCorrupted() {
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
     
-    // If database doesn't exist but users file does, it's corrupted/missing
+    // Missing database with non-empty users file indicates corruption
     if (!file_exists($vsftpdDbFile) && file_exists($vsftpdUserFile)) {
         $content = @file_get_contents($vsftpdUserFile);
         if ($content && trim($content) !== '') {
-            // Users file has content but no database - corrupted
             return true;
         }
     }
     
-    // If database exists, check if it's valid
     if (file_exists($vsftpdDbFile)) {
-        // Check if database is empty (0 bytes)
         if (filesize($vsftpdDbFile) === 0) {
             return true;
         }
         
-        // Check Berkeley DB magic number (first 12 bytes should be specific values)
-        // Berkeley DB hash files start with specific magic bytes
+        // Check Berkeley DB magic number (first 4 bytes should be non-zero)
         $header = @file_get_contents($vsftpdDbFile, false, null, 0, 12);
         if ($header === false || strlen($header) < 12) {
             return true;
         }
         
-        // Check for Berkeley DB hash magic number
-        // Hash databases typically start with specific bytes
-        // If header doesn't look like a valid Berkeley DB file, it's corrupted
         $magicBytes = unpack('C*', substr($header, 0, 4));
-        // Basic sanity check - Berkeley DB files have non-zero magic bytes
+        // All zeros in first 4 bytes indicates corruption
         if (isset($magicBytes[1]) && $magicBytes[1] === 0 && 
             isset($magicBytes[2]) && $magicBytes[2] === 0 &&
             isset($magicBytes[3]) && $magicBytes[3] === 0 &&
             isset($magicBytes[4]) && $magicBytes[4] === 0) {
-            // All zeros in first 4 bytes suggests corruption or empty file
             return true;
         }
         
-        // Try to verify database using db_verify (most reliable check)
+        // Verify using db_verify (most reliable check)
         if (function_exists('exec')) {
             $output = [];
             $returnCode = 0;
             @exec("db_verify " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
             if ($returnCode !== 0) {
-                // db_verify failed - database is corrupted
                 aviationwx_log('warning', 'sync-push-config: db_verify failed, database corrupted', [
                     'db_file' => $vsftpdDbFile,
                     'output' => implode("\n", $output),
@@ -153,15 +318,13 @@ function isVsftpdDatabaseCorrupted() {
             }
         }
         
-        // Also try db_dump as a secondary check (tests readability)
+        // Secondary check: test readability with db_dump
         if (function_exists('exec')) {
             $output = [];
             $returnCode = 0;
             @exec("db_dump -p " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
-            // If db_dump fails, database might be corrupted (even if db_verify passed)
             if ($returnCode !== 0) {
                 $errorOutput = implode("\n", $output);
-                // Check for specific corruption errors
                 if (preg_match('/BDB\d+|unexpected file type|corrupt|invalid/i', $errorOutput)) {
                     aviationwx_log('warning', 'sync-push-config: db_dump failed with corruption error', [
                         'db_file' => $vsftpdDbFile,
@@ -173,24 +336,19 @@ function isVsftpdDatabaseCorrupted() {
             }
         }
         
-        // If users file exists and has content, verify database matches
+        // Heuristic: verify database size matches expected user count
+        // Berkeley DB hash files are typically at least 8KB for small datasets
         if (file_exists($vsftpdUserFile)) {
             $userContent = @file_get_contents($vsftpdUserFile);
             if ($userContent && trim($userContent) !== '') {
-                // Count users in text file (each user takes 2 lines: username, password)
                 $userLines = array_filter(explode("\n", $userContent), function($line) {
                     return trim($line) !== '';
                 });
                 $expectedUsers = count($userLines) / 2;
                 
-                // If we have users in text file but database is suspiciously small, it might be corrupted
-                // Berkeley DB hash files are typically at least 8KB even for small datasets
-                if ($expectedUsers > 0 && filesize($vsftpdDbFile) < 8192) {
-                    // This is a heuristic - small database with users might indicate corruption
-                    // But we'll be more conservative and only flag if it's very small (< 4KB)
-                    if (filesize($vsftpdDbFile) < 4096) {
-                        return true;
-                    }
+                // Flag if database is suspiciously small (< 4KB) with users present
+                if ($expectedUsers > 0 && filesize($vsftpdDbFile) < 4096) {
+                    return true;
                 }
             }
         }
@@ -222,81 +380,59 @@ function validateConfigBeforeApply($configFile) {
 }
 
 /**
+ * Ensure base webcams directory exists with correct permissions (root:root)
+ */
+function ensureWebcamsBaseDirectory() {
+    $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
+    
+    if (!is_dir($webcamsBaseDir)) {
+        @mkdir($webcamsBaseDir, 0775, true);
+    }
+    
+    // Root ownership required for SFTP chroot
+    setDirectoryPermissions($webcamsBaseDir, 0, 'root', 0775, 'webcams base directory');
+    
+    return $webcamsBaseDir;
+}
+
+/**
  * Create upload directory for camera
  * Creates both parent directory and incoming subdirectory with correct permissions
  */
 function createCameraDirectory($airportId, $camIndex, $protocol = null) {
-    $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
+    $webcamsBaseDir = ensureWebcamsBaseDirectory();
     $baseDir = $webcamsBaseDir . '/' . $airportId . '_' . $camIndex;
     $incomingDir = $baseDir . '/incoming';
     
-    // Ensure parent directories exist and are root-owned (required for SFTP chroot)
-    if (!is_dir($webcamsBaseDir)) {
-        @mkdir($webcamsBaseDir, 0775, true);
-    }
-    // Ensure webcams directory is root:root (critical for SFTP chroot)
-    if (function_exists('chown') && is_dir($webcamsBaseDir)) {
-        @chown($webcamsBaseDir, 0); // root UID
-        $rootGroup = @posix_getgrnam('root');
-        if ($rootGroup !== false) {
-            @chgrp($webcamsBaseDir, $rootGroup['gid']);
-        }
-        @chmod($webcamsBaseDir, 0775);
-    }
-    
-    // Create parent directory if it doesn't exist
     if (!is_dir($baseDir)) {
         @mkdir($baseDir, 0775, true);
     }
     
-    // Create incoming directory if it doesn't exist
-    // Use 0775 for FTP/FTPS (will be set correctly below), 0775 for SFTP
     if (!is_dir($incomingDir)) {
-        if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
-            @mkdir($incomingDir, 0775, true);
-        } else {
-            @mkdir($incomingDir, 0775, true);
-        }
+        @mkdir($incomingDir, 0775, true);
     }
     
-    // Set permissions on parent directory (must be root:root for chroot)
-        @chmod($baseDir, 0775);
-    if (function_exists('chown')) {
-        // Try to set to root, but don't fail if we can't
-        @chown($baseDir, 0); // 0 = root UID
-        $groupInfo = @posix_getgrnam('root');
-        if ($groupInfo !== false) {
-            @chgrp($baseDir, $groupInfo['gid']);
-        }
-    }
+    // Root ownership required for chroot
+    setDirectoryPermissions($baseDir, 0, 'root', 0775, "camera base directory for {$airportId}_{$camIndex}");
     
-    // Set permissions on incoming directory based on protocol
-    if (function_exists('chown')) {
-        if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
-            // For FTP/FTPS: incoming must be owned by www-data (guest user)
-            // Use 775 permissions to allow group write (www-data group)
-            $wwwDataInfo = @posix_getpwnam('www-data');
-            if ($wwwDataInfo !== false) {
-                @chown($incomingDir, $wwwDataInfo['uid']);
-                $wwwDataGroup = @posix_getgrnam('www-data');
-                if ($wwwDataGroup !== false) {
-                    @chgrp($incomingDir, $wwwDataGroup['gid']);
-                }
-                @chmod($incomingDir, 0775);
-            }
+    $protocol = strtolower($protocol ?? '');
+    if (in_array($protocol, ['ftp', 'ftps'])) {
+        // FTP/FTPS: www-data ownership required for vsftpd guest user
+        $wwwDataInfo = @posix_getpwnam('www-data');
+        if ($wwwDataInfo !== false) {
+            setDirectoryPermissions(
+                $incomingDir,
+                $wwwDataInfo['uid'],
+                'www-data',
+                0775,
+                "FTP incoming directory for {$airportId}_{$camIndex}"
+            );
         } else {
-            // For SFTP: incoming will be owned by the user (set by create-sftp-user.sh)
-            // We'll let the SFTP user creation script handle it
             @chmod($incomingDir, 0775);
         }
     } else {
-        // Default: use 775 for FTP/FTPS compatibility (will be overridden by createFtpUser if needed)
-        // But if protocol is unknown, default to 775
-        if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
-            @chmod($incomingDir, 0775);
-        } else {
-            @chmod($incomingDir, 0775);
-        }
+        // SFTP: ownership set by create-sftp-user.sh
+        @chmod($incomingDir, 0775);
     }
     
     return $incomingDir;
@@ -308,22 +444,49 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
 function removeCameraDirectory($airportId, $camIndex) {
     $uploadDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex;
     
-    if (is_dir($uploadDir)) {
-        // Remove recursively
+    if (!is_dir($uploadDir)) {
+        return;
+    }
+    
+    try {
         $files = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($uploadDir, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
+            RecursiveDirectoryIterator::CHILD_FIRST
         );
         
+        $errors = [];
         foreach ($files as $file) {
+            $path = $file->getRealPath();
             if ($file->isDir()) {
-                @rmdir($file->getRealPath());
+                if (!@rmdir($path)) {
+                    $errors[] = "Failed to remove directory: $path";
+                }
             } else {
-                @unlink($file->getRealPath());
+                if (!@unlink($path)) {
+                    $errors[] = "Failed to remove file: $path";
+                }
             }
         }
         
-        @rmdir($uploadDir);
+        if (!@rmdir($uploadDir)) {
+            $errors[] = "Failed to remove main directory: $uploadDir";
+        }
+        
+        if (!empty($errors)) {
+            aviationwx_log('warning', 'sync-push-config: some files/directories could not be removed', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'directory' => $uploadDir,
+                'errors' => $errors
+            ], 'app');
+        }
+    } catch (Exception $e) {
+        aviationwx_log('error', 'sync-push-config: exception while removing camera directory', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'directory' => $uploadDir,
+            'error' => $e->getMessage()
+        ], 'app');
     }
 }
 
@@ -341,7 +504,7 @@ function getExistingPushCameras() {
     $dirs = glob($uploadBaseDir . '/*', GLOB_ONLYDIR);
     foreach ($dirs as $dir) {
         $basename = basename($dir);
-        // Format: airportId_camIndex
+        // Directory format: airportId_camIndex
         if (preg_match('/^([a-z0-9]{3,4})_(\d+)$/', $basename, $matches)) {
             $cameras[] = [
                 'airport' => $matches[1],
@@ -430,7 +593,7 @@ function userExists($username) {
     if (function_exists('posix_getpwnam')) {
         return posix_getpwnam($username) !== false;
     }
-    // Fallback: check /etc/passwd
+    // Fallback to /etc/passwd
     $passwd = @file_get_contents('/etc/passwd');
     if ($passwd) {
         return strpos($passwd, $username . ':') !== false;
@@ -444,7 +607,6 @@ function userExists($username) {
 function createSftpUser($airportId, $camIndex, $username, $password) {
     $chrootDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}";
     
-    // Use helper script
     $cmd = sprintf(
         '/usr/local/bin/create-sftp-user.sh %s %s %s 2>&1',
         escapeshellarg($username),
@@ -452,6 +614,8 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
         escapeshellarg($chrootDir)
     );
     
+    $output = [];
+    $code = 0;
     exec($cmd, $output, $code);
     
     if ($code !== 0) {
@@ -493,19 +657,16 @@ function rebuildVsftpdDatabase() {
         aviationwx_log('warning', 'sync-push-config: Cannot rebuild database, users file is empty', [
             'user_file' => $vsftpdUserFile
         ], 'app');
-        // If users file is empty and database exists, remove database
         if (file_exists($vsftpdDbFile)) {
             @unlink($vsftpdDbFile);
         }
-        return true; // Not an error, just no users
+        return true;
     }
     
-    // Remove corrupted database
     if (file_exists($vsftpdDbFile)) {
         @unlink($vsftpdDbFile);
     }
     
-    // Rebuild database
     $output = [];
     $returnCode = 0;
     exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $returnCode);
@@ -518,7 +679,6 @@ function rebuildVsftpdDatabase() {
         return false;
     }
     
-    // Verify database was created and is not empty
     if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
         aviationwx_log('error', 'sync-push-config: database file not created or is empty after rebuild', [
             'db_file' => $vsftpdDbFile,
@@ -528,7 +688,6 @@ function rebuildVsftpdDatabase() {
         return false;
     }
     
-    // Verify database is not corrupted
     $output = [];
     $returnCode = 0;
     @exec("db_verify " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
@@ -555,7 +714,6 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
     
-    // Read existing users
     $users = [];
     if (file_exists($vsftpdUserFile)) {
         $lines = @file($vsftpdUserFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -568,10 +726,8 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         }
     }
     
-    // Add/update user
     $users[$username] = $password;
     
-    // Write users file
     $content = '';
     foreach ($users as $user => $pass) {
         $content .= $user . "\n" . $pass . "\n";
@@ -584,17 +740,12 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         return false;
     }
     
-    // Remove old database if it exists (in case it's corrupted)
     if (file_exists($vsftpdDbFile)) {
         @unlink($vsftpdDbFile);
     }
     
-    // Remove old database if it exists (always rebuild to ensure integrity)
-    if (file_exists($vsftpdDbFile)) {
-        @unlink($vsftpdDbFile);
-    }
-    
-    // Rebuild database
+    $output = [];
+    $code = 0;
     exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
     
     if ($code !== 0) {
@@ -604,7 +755,6 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         return false;
     }
     
-    // Verify database was created and is not empty
     if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
         aviationwx_log('error', 'sync-push-config: database file not created or is empty after db_load', [
             'db_file' => $vsftpdDbFile,
@@ -614,86 +764,38 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         return false;
     }
     
-    // Create per-user config
     $userConfigDir = '/etc/vsftpd/users';
     if (!is_dir($userConfigDir)) {
         @mkdir($userConfigDir, 0775, true);
     }
     
-    $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
+    $webcamsBaseDir = ensureWebcamsBaseDirectory();
     $chrootDir = $webcamsBaseDir . '/' . $airportId . '_' . $camIndex;
     $incomingDir = $chrootDir . '/incoming';
     
-    // Ensure parent directories exist and are root-owned (required for chroot)
-    if (!is_dir($webcamsBaseDir)) {
-        @mkdir($webcamsBaseDir, 0775, true);
-    }
-    // Ensure webcams directory is root:root (critical for SFTP chroot, also good for FTP)
-    if (function_exists('chown') && is_dir($webcamsBaseDir)) {
-        @chown($webcamsBaseDir, 0); // root UID
-        $rootGroup = @posix_getgrnam('root');
-        if ($rootGroup !== false) {
-            @chgrp($webcamsBaseDir, $rootGroup['gid']);
-        }
-        @chmod($webcamsBaseDir, 0775);
-    }
-    
-    // Ensure directories exist with correct permissions
     if (!is_dir($chrootDir)) {
         @mkdir($chrootDir, 0775, true);
     }
     if (!is_dir($incomingDir)) {
-        // Create with 0775 permissions for FTP/FTPS (www-data needs write access)
         @mkdir($incomingDir, 0775, true);
     }
     
-    // Set parent directory to root:root (required for chroot)
-    if (function_exists('chown')) {
-        @chown($chrootDir, 0); // root UID
-        $rootGroup = @posix_getgrnam('root');
-        if ($rootGroup !== false) {
-            @chgrp($chrootDir, $rootGroup['gid']);
-        }
-        @chmod($chrootDir, 0775);
-    }
+    // Root ownership required for chroot
+    setDirectoryPermissions($chrootDir, 0, 'root', 0775, "FTP chroot directory for {$airportId}_{$camIndex}");
     
-    // Set incoming directory to www-data:www-data (guest user for vsftpd)
-    // Must be writable by www-data for FTP uploads to work
-    // CRITICAL: Always set to 775 for FTP/FTPS (this function is only called for FTP users)
-    if (function_exists('chown')) {
-        $wwwDataInfo = @posix_getpwnam('www-data');
-        if ($wwwDataInfo !== false) {
-            @chown($incomingDir, $wwwDataInfo['uid']);
-            $wwwDataGroup = @posix_getgrnam('www-data');
-            if ($wwwDataGroup !== false) {
-                @chgrp($incomingDir, $wwwDataGroup['gid']);
-            }
-            // Use 775 permissions to allow group write (www-data group)
-            // Set multiple times to ensure it sticks
+    // www-data ownership required for vsftpd guest user
+    $wwwDataInfo = @posix_getpwnam('www-data');
+    if ($wwwDataInfo !== false) {
+        setDirectoryPermissions(
+            $incomingDir,
+            $wwwDataInfo['uid'],
+            'www-data',
+            0775,
+            "FTP incoming directory for {$airportId}_{$camIndex}"
+            );
+        } else {
             @chmod($incomingDir, 0775);
-            @chmod($incomingDir, 0775); // Force set again
         }
-    }
-    // Always set permissions to 775, even if chown doesn't work
-    @chmod($incomingDir, 0775);
-    
-    // Also ensure the parent directory is writable by www-data if it's not root-owned
-    // This is needed for some FTP operations
-    if (function_exists('chown') && is_dir($chrootDir)) {
-        $stat = @stat($chrootDir);
-        if ($stat && $stat['uid'] !== 0) {
-            // If not root-owned, ensure it's www-data owned and writable
-            $wwwDataInfo = @posix_getpwnam('www-data');
-            if ($wwwDataInfo !== false) {
-                @chown($chrootDir, $wwwDataInfo['uid']);
-                $wwwDataGroup = @posix_getgrnam('www-data');
-                if ($wwwDataGroup !== false) {
-                    @chgrp($chrootDir, $wwwDataGroup['gid']);
-                }
-                @chmod($chrootDir, 0775);
-            }
-        }
-    }
     
     $userConfigFile = $userConfigDir . '/' . $username;
     $config = "local_root={$chrootDir}\n";
@@ -722,7 +824,6 @@ function removeFtpUser($username) {
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
     $userConfigFile = '/etc/vsftpd/users/' . $username;
     
-    // Read existing users
     $users = [];
     if (file_exists($vsftpdUserFile)) {
         $lines = @file($vsftpdUserFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -735,7 +836,6 @@ function removeFtpUser($username) {
         }
     }
     
-    // Write users file
     $content = '';
     foreach ($users as $user => $pass) {
         $content .= $user . "\n" . $pass . "\n";
@@ -748,13 +848,13 @@ function removeFtpUser($username) {
         ], 'app');
     }
     
-    // Rebuild database
     if (count($users) > 0) {
-        // Remove old database if it exists (in case it's corrupted)
         if (file_exists($vsftpdDbFile)) {
             @unlink($vsftpdDbFile);
         }
         
+        $output = [];
+        $code = 0;
         exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
         if ($code !== 0) {
             aviationwx_log('warning', 'sync-push-config: db_load failed during user removal', [
@@ -763,11 +863,9 @@ function removeFtpUser($username) {
             ], 'app');
         }
     } else {
-        // No users left, remove database
         @unlink($vsftpdDbFile);
     }
     
-    // Remove user config
     if (file_exists($userConfigFile)) {
         @unlink($userConfigFile);
     }
@@ -781,7 +879,8 @@ function removeFtpUser($username) {
  * Remove SFTP user
  */
 function removeSftpUser($username) {
-    // Remove system user
+    $output = [];
+    $code = 0;
     exec('userdel ' . escapeshellarg($username) . ' 2>&1', $output, $code);
     
     if ($code === 0) {
@@ -789,7 +888,6 @@ function removeSftpUser($username) {
             'username' => $username
         ], 'app');
     } else {
-        // User might not exist, which is OK
         aviationwx_log('debug', 'sync-push-config: SFTP user removal attempted', [
             'username' => $username,
             'output' => implode("\n", $output),
@@ -814,7 +912,6 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
         return false;
     }
     
-    // Validate username and password format
     if (!validateUsername($username)) {
         aviationwx_log('error', 'sync-push-config: invalid username format', [
             'airport' => $airportId,
@@ -836,7 +933,6 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
     
     $cameraKey = $airportId . '_' . $camIndex;
     
-    // Check if username is already assigned to a different camera
     if (isset($usernameMapping[$username])) {
         $existingKey = $usernameMapping[$username]['camera'];
         if ($existingKey !== $cameraKey) {
@@ -848,7 +944,6 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
             return false;
         }
         
-        // Check if protocol changed
         $existingProtocol = $usernameMapping[$username]['protocol'];
         if ($existingProtocol !== $protocol) {
             aviationwx_log('info', 'sync-push-config: protocol changed, removing old user', [
@@ -858,12 +953,10 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
                 'camera' => $cameraKey
             ], 'app');
             
-            // Remove old user
             removeCameraUser($username, $existingProtocol);
         }
     }
     
-    // Create/update user
     $success = false;
     if ($protocol === 'sftp') {
         $success = createSftpUser($airportId, $camIndex, $username, $password);
@@ -879,7 +972,6 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
     }
     
     if ($success) {
-        // Update username mapping
         $usernameMapping[$username] = [
             'camera' => $cameraKey,
             'airport' => $airportId,
@@ -913,7 +1005,6 @@ function syncAllPushCameras($config) {
     $usernameMapping = loadUsernameMapping();
     $newUsernameMapping = [];
     
-    // Build list of configured cameras
     foreach ($config['airports'] ?? [] as $airportId => $airport) {
         if (!isset($airport['webcams']) || !is_array($airport['webcams'])) {
             continue;
@@ -936,26 +1027,31 @@ function syncAllPushCameras($config) {
                     'key' => $cameraKey
                 ];
                 
-                // Create directory with protocol-specific permissions
                 createCameraDirectory($airportId, $camIndex, $protocol);
                 
-                // Create/update FTP/SFTP user
                 if ($username && isset($cam['push_config']['password'])) {
                     if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
-                        // Success - mapping already updated in syncCameraUser
-                        // Ensure permissions are correct after user creation (createFtpUser sets 775, but verify)
-                        // CRITICAL: Force set 775 permissions for FTP/FTPS directories
+                        // Verify permissions for FTP/FTPS (createFtpUser sets them, but verify)
                         if (in_array(strtolower($protocol), ['ftp', 'ftps'])) {
                             $incomingDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}/incoming";
                             if (is_dir($incomingDir)) {
-                                // Force set permissions multiple times to ensure it sticks
-                                @chmod($incomingDir, 0775);
-                                @chmod($incomingDir, 0775);
-                                // Verify permissions were set
-                                $actualPerms = @substr(sprintf('%o', @fileperms($incomingDir)), -4);
-                                if ($actualPerms !== '0775' && $actualPerms !== '775') {
-                                    // Retry with explicit octal
-                                    @chmod($incomingDir, 0775);
+                                $wwwDataInfo = @posix_getpwnam('www-data');
+                                if ($wwwDataInfo !== false) {
+                                    $verification = verifyDirectoryPermissions(
+                                        $incomingDir,
+                                        $wwwDataInfo['uid'],
+                                        'www-data',
+                                        0775
+                                    );
+                                    if (!$verification['success']) {
+                                        setDirectoryPermissions(
+                                            $incomingDir,
+                                            $wwwDataInfo['uid'],
+                                            'www-data',
+                                            0775,
+                                            "FTP incoming directory for {$airportId}_{$camIndex}"
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -965,7 +1061,6 @@ function syncAllPushCameras($config) {
         }
     }
     
-    // Remove orphaned directories and users
     foreach ($existing as $existingCam) {
         $found = false;
         $cameraKey = $existingCam['airport'] . '_' . $existingCam['cam'];
@@ -979,7 +1074,6 @@ function syncAllPushCameras($config) {
         }
         
         if (!$found) {
-            // Find username from tracking file (not from config, since camera was removed)
             $username = null;
             $protocol = null;
             
@@ -998,17 +1092,14 @@ function syncAllPushCameras($config) {
                 'protocol' => $protocol
             ], 'app');
             
-            // Remove user
             if ($username && $protocol) {
                 removeCameraUser($username, $protocol);
             }
             
-            // Remove directory
             removeCameraDirectory($existingCam['airport'], $existingCam['cam']);
         }
     }
     
-    // Clean up username mapping - remove entries for cameras that no longer exist
     foreach ($usernameMapping as $user => $info) {
         $found = false;
         foreach ($configured as $configCam) {
@@ -1018,14 +1109,12 @@ function syncAllPushCameras($config) {
             }
         }
         if ($found) {
-            // Keep this entry (will be updated in newUsernameMapping if user was synced)
             if (!isset($newUsernameMapping[$user])) {
                 $newUsernameMapping[$user] = $info;
             }
         }
     }
     
-    // Save updated username mapping
     saveUsernameMapping($newUsernameMapping);
 }
 
@@ -1033,6 +1122,11 @@ function syncAllPushCameras($config) {
  * Main sync function
  */
 function syncPushConfig() {
+    if (!checkRootPermissions()) {
+        aviationwx_log('error', 'sync-push-config: exiting due to insufficient permissions', [], 'app');
+        exit(1);
+    }
+    
     $configFile = getConfigFilePath();
     
     if (!file_exists($configFile)) {
@@ -1043,7 +1137,6 @@ function syncPushConfig() {
     $configMtime = filemtime($configFile);
     $lastSync = getLastSyncTimestamp();
     
-    // Check if vsftpd database is corrupted (check before early return)
     $databaseCorrupted = isVsftpdDatabaseCorrupted();
     if ($databaseCorrupted) {
         aviationwx_log('warning', 'sync-push-config: vsftpd database appears corrupted, attempting rebuild', [
@@ -1051,23 +1144,17 @@ function syncPushConfig() {
             'user_file' => '/etc/vsftpd/virtual_users.txt'
         ], 'app');
         
-        // Try to rebuild database from users file first (faster than full sync)
         if (rebuildVsftpdDatabase()) {
             aviationwx_log('info', 'sync-push-config: Database rebuilt successfully, continuing with sync', [], 'app');
         } else {
-            aviationwx_log('warning', 'sync-push-config: Database rebuild failed, will rebuild during full sync', [], 'app');
+            aviationwx_log('warning', 'sync-push-config: Database rebuild failed, will rebuild during full sync', [            ], 'app');
         }
-        
-        // Force sync by continuing (don't return early) to ensure all users are recreated
     } else {
-        // Check if config changed
         if ($configMtime <= $lastSync) {
-            // No changes and database is healthy
             return;
         }
     }
     
-    // Validate config before applying
     $validation = validateConfigBeforeApply($configFile);
     if (!$validation['valid']) {
         aviationwx_log('error', 'config validation failed, skipping sync', [
@@ -1076,27 +1163,21 @@ function syncPushConfig() {
         return;
     }
     
-    // Backup config
     $backupFile = backupConfigFile($configFile);
     aviationwx_log('info', 'config backed up', ['backup_file' => $backupFile], 'app');
     
-    // Load config
     $config = loadConfig(false);
     if (!$config) {
         aviationwx_log('error', 'config load failed', [], 'app');
         exit(1);
     }
     
-    // Sync cameras
     syncAllPushCameras($config);
-    
-    // Update sync timestamp
     updateLastSyncTimestamp();
     
     aviationwx_log('info', 'push-config sync completed', [], 'app');
 }
 
-// Run sync (only when executed directly, not when included)
 if (php_sapi_name() === 'cli') {
     $scriptName = $_SERVER['PHP_SELF'] ?? $_SERVER['SCRIPT_NAME'] ?? '';
     if (basename($scriptName) === basename(__FILE__) || $scriptName === __FILE__) {
