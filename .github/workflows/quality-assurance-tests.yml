@@ -70,7 +70,7 @@ jobs:
       - name: Run Performance Tests
         run: |
           echo "Running performance tests..."
-          vendor/bin/phpunit --testsuite Performance --testdox --log-junit performance-results.xml --no-coverage || [ $? -eq 1 ]
+          vendor/bin/phpunit --testsuite Performance --testdox --log-junit performance-results.xml --coverage-clover performance-coverage.xml || [ $? -eq 1 ]
         continue-on-error: true
         env:
           CONFIG_PATH: tests/Fixtures/airports.json.test
@@ -168,7 +168,7 @@ jobs:
         run: |
           echo "Running E2E tests with mocked APIs..."
           echo "Note: These tests use mocked API responses"
-          vendor/bin/phpunit --testsuite E2E --testdox --log-junit e2e-results.xml --no-coverage
+          vendor/bin/phpunit --testsuite E2E --testdox --log-junit e2e-results.xml --coverage-clover e2e-coverage.xml
         env:
           TEST_API_URL: http://localhost:8080
       
@@ -264,7 +264,7 @@ jobs:
         run: |
           echo "Running smoke tests against local instance..."
           echo "Note: Docker container uses config/airports.json (mounted from host)"
-          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --no-coverage
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --coverage-clover smoke-coverage.xml
         env:
           TEST_API_URL: http://localhost:8080
       
@@ -317,7 +317,7 @@ jobs:
           echo "⚠️  WARNING: Running smoke tests against PRODUCTION"
           echo "Production URL: https://aviationwx.org"
           # Allow warnings but fail on actual test failures
-          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-prod-results.xml --no-coverage || [ $? -eq 1 ]
+          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-prod-results.xml --coverage-clover smoke-prod-coverage.xml || [ $? -eq 1 ]
         continue-on-error: true
         env:
           TEST_PROD_URL: https://aviationwx.org
@@ -364,7 +364,7 @@ jobs:
         run: |
           echo "Validating external links (AirNav, SkyVector, AOPA, FAA Weather)..."
           echo "Note: These tests check URL formats and reachability"
-          vendor/bin/phpunit tests/Integration/ExternalLinksTest.php --testdox --log-junit external-links-results.xml --no-coverage || [ $? -eq 1 ]
+          vendor/bin/phpunit tests/Integration/ExternalLinksTest.php --testdox --log-junit external-links-results.xml --coverage-clover external-links-coverage.xml || [ $? -eq 1 ]
         continue-on-error: true
         env:
           CONFIG_PATH: tests/Fixtures/airports.json.test
