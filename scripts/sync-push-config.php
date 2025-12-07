@@ -216,8 +216,13 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     }
     
     // Create incoming directory if it doesn't exist
+    // Use 0775 for FTP/FTPS (will be set correctly below), 0755 for SFTP
     if (!is_dir($incomingDir)) {
-        @mkdir($incomingDir, 0755, true);
+        if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
+            @mkdir($incomingDir, 0775, true);
+        } else {
+            @mkdir($incomingDir, 0755, true);
+        }
     }
     
     // Set permissions on parent directory (must be root:root for chroot)
@@ -529,7 +534,8 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         @mkdir($chrootDir, 0755, true);
     }
     if (!is_dir($incomingDir)) {
-        @mkdir($incomingDir, 0755, true);
+        // Create with 0775 permissions for FTP/FTPS (www-data needs write access)
+        @mkdir($incomingDir, 0775, true);
     }
     
     // Set parent directory to root:root (required for chroot)
