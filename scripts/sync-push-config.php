@@ -95,6 +95,77 @@ function backupConfigFile($configFile) {
 }
 
 /**
+ * Check if vsftpd database is corrupted or invalid
+ */
+function isVsftpdDatabaseCorrupted() {
+    $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
+    $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
+    
+    // If database doesn't exist but users file does, it's corrupted/missing
+    if (!file_exists($vsftpdDbFile) && file_exists($vsftpdUserFile)) {
+        $content = @file_get_contents($vsftpdUserFile);
+        if ($content && trim($content) !== '') {
+            // Users file has content but no database - corrupted
+            return true;
+        }
+    }
+    
+    // If database exists, check if it's valid
+    if (file_exists($vsftpdDbFile)) {
+        // Check if database is empty (0 bytes)
+        if (filesize($vsftpdDbFile) === 0) {
+            return true;
+        }
+        
+        // Try to verify database format using file command or db_dump
+        // Berkeley DB files should have a specific header
+        $header = @file_get_contents($vsftpdDbFile, false, null, 0, 20);
+        if ($header === false || strlen($header) < 20) {
+            return true;
+        }
+        
+        // Check if we can read from the database using db_dump (if available)
+        // This is a more thorough check but requires db_util package
+        if (function_exists('exec')) {
+            $output = [];
+            $returnCode = 0;
+            @exec("db_dump -p " . escapeshellarg($vsftpdDbFile) . " 2>&1", $output, $returnCode);
+            // If db_dump fails and we have a users file, database is likely corrupted
+            if ($returnCode !== 0 && file_exists($vsftpdUserFile)) {
+                $userContent = @file_get_contents($vsftpdUserFile);
+                if ($userContent && trim($userContent) !== '') {
+                    return true;
+                }
+            }
+        }
+        
+        // If users file exists and has content, verify database matches
+        if (file_exists($vsftpdUserFile)) {
+            $userContent = @file_get_contents($vsftpdUserFile);
+            if ($userContent && trim($userContent) !== '') {
+                // Count users in text file (each user takes 2 lines: username, password)
+                $userLines = array_filter(explode("\n", $userContent), function($line) {
+                    return trim($line) !== '';
+                });
+                $expectedUsers = count($userLines) / 2;
+                
+                // If we have users in text file but database is suspiciously small, it might be corrupted
+                // Berkeley DB hash files are typically at least 8KB even for small datasets
+                if ($expectedUsers > 0 && filesize($vsftpdDbFile) < 8192) {
+                    // This is a heuristic - small database with users might indicate corruption
+                    // But we'll be more conservative and only flag if it's very small (< 4KB)
+                    if (filesize($vsftpdDbFile) < 4096) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
  * Validate config before applying
  */
 function validateConfigBeforeApply($configFile) {
@@ -161,10 +232,10 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     }
     
     // Set permissions on incoming directory based on protocol
-    @chmod($incomingDir, 0755);
     if (function_exists('chown')) {
         if (in_array(strtolower($protocol ?? ''), ['ftp', 'ftps'])) {
             // For FTP/FTPS: incoming must be owned by www-data (guest user)
+            // Use 775 permissions to allow group write (www-data group)
             $wwwDataInfo = @posix_getpwnam('www-data');
             if ($wwwDataInfo !== false) {
                 @chown($incomingDir, $wwwDataInfo['uid']);
@@ -172,11 +243,15 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
                 if ($wwwDataGroup !== false) {
                     @chgrp($incomingDir, $wwwDataGroup['gid']);
                 }
+                @chmod($incomingDir, 0775);
             }
         } else {
             // For SFTP: incoming will be owned by the user (set by create-sftp-user.sh)
             // We'll let the SFTP user creation script handle it
+            @chmod($incomingDir, 0755);
         }
+    } else {
+        @chmod($incomingDir, 0755);
     }
     
     return $incomingDir;
@@ -394,12 +469,27 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         @unlink($vsftpdDbFile);
     }
     
+    // Remove old database if it exists (always rebuild to ensure integrity)
+    if (file_exists($vsftpdDbFile)) {
+        @unlink($vsftpdDbFile);
+    }
+    
     // Rebuild database
     exec('db_load -T -t hash -f ' . escapeshellarg($vsftpdUserFile) . ' ' . escapeshellarg($vsftpdDbFile) . ' 2>&1', $output, $code);
     
     if ($code !== 0) {
         aviationwx_log('error', 'sync-push-config: db_load failed', [
             'output' => implode("\n", $output)
+        ], 'app');
+        return false;
+    }
+    
+    // Verify database was created and is not empty
+    if (!file_exists($vsftpdDbFile) || filesize($vsftpdDbFile) === 0) {
+        aviationwx_log('error', 'sync-push-config: database file not created or is empty after db_load', [
+            'db_file' => $vsftpdDbFile,
+            'exists' => file_exists($vsftpdDbFile),
+            'size' => file_exists($vsftpdDbFile) ? filesize($vsftpdDbFile) : 0
         ], 'app');
         return false;
     }
@@ -447,6 +537,7 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     }
     
     // Set incoming directory to www-data:www-data (guest user for vsftpd)
+    // Must be writable by www-data for FTP uploads to work
     if (function_exists('chown')) {
         $wwwDataInfo = @posix_getpwnam('www-data');
         if ($wwwDataInfo !== false) {
@@ -455,7 +546,26 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
             if ($wwwDataGroup !== false) {
                 @chgrp($incomingDir, $wwwDataGroup['gid']);
             }
-            @chmod($incomingDir, 0755);
+            // Use 775 permissions to allow group write (www-data group)
+            @chmod($incomingDir, 0775);
+        }
+    }
+    
+    // Also ensure the parent directory is writable by www-data if it's not root-owned
+    // This is needed for some FTP operations
+    if (function_exists('chown') && is_dir($chrootDir)) {
+        $stat = @stat($chrootDir);
+        if ($stat && $stat['uid'] !== 0) {
+            // If not root-owned, ensure it's www-data owned and writable
+            $wwwDataInfo = @posix_getpwnam('www-data');
+            if ($wwwDataInfo !== false) {
+                @chown($chrootDir, $wwwDataInfo['uid']);
+                $wwwDataGroup = @posix_getgrnam('www-data');
+                if ($wwwDataGroup !== false) {
+                    @chgrp($chrootDir, $wwwDataGroup['gid']);
+                }
+                @chmod($chrootDir, 0775);
+            }
         }
     }
     
@@ -791,10 +901,20 @@ function syncPushConfig() {
     $configMtime = filemtime($configFile);
     $lastSync = getLastSyncTimestamp();
     
-    // Check if config changed
-    if ($configMtime <= $lastSync) {
-        // No changes
-        return;
+    // Check if vsftpd database is corrupted (check before early return)
+    $databaseCorrupted = isVsftpdDatabaseCorrupted();
+    if ($databaseCorrupted) {
+        aviationwx_log('warning', 'sync-push-config: vsftpd database appears corrupted, forcing rebuild', [
+            'db_file' => '/etc/vsftpd/virtual_users.db',
+            'user_file' => '/etc/vsftpd/virtual_users.txt'
+        ], 'app');
+        // Force sync by continuing (don't return early)
+    } else {
+        // Check if config changed
+        if ($configMtime <= $lastSync) {
+            // No changes and database is healthy
+            return;
+        }
     }
     
     // Validate config before applying
