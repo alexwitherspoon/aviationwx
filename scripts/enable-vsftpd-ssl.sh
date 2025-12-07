@@ -71,17 +71,22 @@ fi
 
 log_message "SSL configuration updated successfully"
 
-# Restart vsftpd to apply changes
-log_message "Restarting vsftpd to apply SSL configuration..."
-if service vsftpd restart 2>&1; then
-    log_message "vsftpd restarted successfully with SSL enabled"
-    log_message "Both FTP and FTPS are now available on port 2121"
-    log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
+# Restart vsftpd to apply changes (only if it's already running)
+if pgrep -x vsftpd > /dev/null 2>&1; then
+    log_message "vsftpd is running, restarting to apply SSL configuration..."
+    if service vsftpd restart 2>&1; then
+        log_message "vsftpd restarted successfully with SSL enabled"
+        log_message "Both FTP and FTPS are now available on port 2121"
+        log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
+    else
+        log_message "ERROR: Failed to restart vsftpd, restoring backup"
+        cp "$VSFTPD_CONF_BACKUP" "$VSFTPD_CONF"
+        service vsftpd restart || true
+        exit 1
+    fi
 else
-    log_message "ERROR: Failed to restart vsftpd, restoring backup"
-    cp "$VSFTPD_CONF_BACKUP" "$VSFTPD_CONF"
-    service vsftpd restart || true
-    exit 1
+    log_message "vsftpd is not running yet - SSL configuration will be applied when vsftpd starts"
+    log_message "Both FTP and FTPS will be available on port 2121 once vsftpd is started"
 fi
 
 log_message "SSL enablement complete"
