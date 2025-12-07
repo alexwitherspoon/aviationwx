@@ -554,9 +554,12 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 - `protocol`: One of `"sftp"`, `"ftp"`, or `"ftps"`
 
 **Optional Fields:**
-- `port`: Port number (defaults: SFTP=2222, FTPS=2122, FTP=2121)
 - `max_file_size_mb`: Maximum file size in MB (default: 100MB, max: 100MB)
 - `allowed_extensions`: Array of allowed file extensions (default: `["jpg", "jpeg", "png"]`)
+
+**Note**:
+- **SFTP**: Port 2222
+- **FTP/FTPS**: Port 2121 (both protocols on same port)
 
 **Push Webcam Example (SFTP):**
 ```json
@@ -569,7 +572,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
   "refresh_seconds": 60,
   "push_config": {
     "protocol": "sftp",
-    "port": 2222,
     "username": "kspbCam0Push01",
     "password": "SecurePass1234",
     "max_file_size_mb": 10,
@@ -589,7 +591,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
   "refresh_seconds": 120,
   "push_config": {
     "protocol": "ftps",
-    "port": 2122,
     "username": "kspbCam1Push02",
     "password": "AnotherPass5678",
     "max_file_size_mb": 20
@@ -607,7 +608,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
   "partner_link": "https://partner.com",
   "push_config": {
     "protocol": "ftp",
-    "port": 2121,
     "username": "kspbCam2Push03",
     "password": "LegacyPass9012"
   }
@@ -619,26 +619,28 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 After configuration, the system automatically creates SFTP/FTP users. Cameras should connect using:
 
 - **SFTP**: 
-  - Host: `upload.aviationwx.org` (or your server's upload subdomain)
-  - Port: 2222 (or custom port from `push_config.port`)
+  - Host: `upload.aviationwx.org`
+  - Port: **2222**
   - Username: From `push_config.username`
   - Password: From `push_config.password`
   - Directory: Automatically chrooted to the camera's upload directory
 
-- **FTPS (Secure FTP)**:
-  - Host: `upload.aviationwx.org` (or your server's upload subdomain)
-  - Port: 2122 (or custom port from `push_config.port`)
+- **FTPS (Secure FTP with TLS/SSL)**:
+  - Host: `upload.aviationwx.org`
+  - Port: **2121**
   - Username: From `push_config.username`
   - Password: From `push_config.password`
-  - Encryption: TLS/SSL required
+  - Encryption: TLS/SSL (negotiated via `AUTH SSL` or `AUTH TLS`)
   - Directory: Automatically chrooted to the camera's upload directory
+  - **Note**: FTPS and FTP share the same port (2121). The client negotiates encryption during connection.
 
-- **FTP (Plain)**:
-  - Host: `upload.aviationwx.org` (or your server's upload subdomain)
-  - Port: 2121 (or custom port from `push_config.port`)
+- **FTP (Plain, unencrypted)**:
+  - Host: `upload.aviationwx.org`
+  - Port: **2121**
   - Username: From `push_config.username`
   - Password: From `push_config.password`
   - Directory: Automatically chrooted to the camera's upload directory
+  - **Note**: Both FTP and FTPS work on port 2121. FTPS requires SSL certificates to be configured (see SSL Setup below).
 
 #### Security Features
 

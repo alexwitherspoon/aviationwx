@@ -1,0 +1,8 @@
+{
+    "test_airport_0": {
+        "failures": 1,
+        "next_allowed_time": 1762724667,
+        "last_attempt": 1762724607,
+        "backoff_seconds": 60
+    }
+}

@@ -33,10 +33,15 @@ log_message "Enabling SSL in vsftpd configuration..."
 cp "$VSFTPD_CONF" "$VSFTPD_CONF_BACKUP"
 
 # Enable SSL by replacing the disabled section
+# Note: We allow both FTP and FTPS on the same port (2121)
+# Clients can choose to use SSL/TLS or not
 sed -i 's/^ssl_enable=NO/ssl_enable=YES/' "$VSFTPD_CONF"
 sed -i 's/^# ssl_enable=YES/ssl_enable=YES/' "$VSFTPD_CONF"
-sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=YES/' "$VSFTPD_CONF"
-sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=YES/' "$VSFTPD_CONF"
+# Allow both FTP (unencrypted) and FTPS (encrypted) on port 2121
+sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=NO/' "$VSFTPD_CONF"
+sed -i 's/^force_local_data_ssl=YES/force_local_data_ssl=NO/' "$VSFTPD_CONF"
+sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$VSFTPD_CONF"
+sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$VSFTPD_CONF"
 sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$VSFTPD_CONF"
 sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$VSFTPD_CONF"
 sed -i 's/^# ssl_sslv3=NO/ssl_sslv3=NO/' "$VSFTPD_CONF"
@@ -47,8 +52,8 @@ sed -i 's|^# rsa_private_key_file=.*|rsa_private_key_file='"$CERT_DIR"'/privkey.
 
 # Remove commented lines if they exist
 sed -i '/^# ssl_enable=YES/d' "$VSFTPD_CONF"
-sed -i '/^# force_local_data_ssl=YES/d' "$VSFTPD_CONF"
-sed -i '/^# force_local_logins_ssl=YES/d' "$VSFTPD_CONF"
+sed -i '/^# force_local_data_ssl=/d' "$VSFTPD_CONF"
+sed -i '/^# force_local_logins_ssl=/d' "$VSFTPD_CONF"
 sed -i '/^# ssl_tlsv1=YES/d' "$VSFTPD_CONF"
 sed -i '/^# ssl_sslv2=NO/d' "$VSFTPD_CONF"
 sed -i '/^# ssl_sslv3=NO/d' "$VSFTPD_CONF"
@@ -70,7 +75,8 @@ log_message "SSL configuration updated successfully"
 log_message "Restarting vsftpd to apply SSL configuration..."
 if service vsftpd restart 2>&1; then
     log_message "vsftpd restarted successfully with SSL enabled"
-    log_message "FTPS is now available on port 2122"
+    log_message "Both FTP and FTPS are now available on port 2121"
+    log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
 else
     log_message "ERROR: Failed to restart vsftpd, restoring backup"
     cp "$VSFTPD_CONF_BACKUP" "$VSFTPD_CONF"

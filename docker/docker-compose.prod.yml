@@ -12,8 +12,7 @@ services:
     restart: always
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:80"  # Bind to localhost only, Nginx handles external
-      - "2121:2121"  # FTP
-      - "2122:2122"  # FTPS
+      - "2121:2121"  # FTP/FTPS (both protocols on same port)
       - "2222:2222"  # SFTP
       # FTP passive mode ports (50000-50100) - Docker Compose doesn't support ranges directly
       # These ports are opened via firewall script, and Docker's default iptables rules allow them

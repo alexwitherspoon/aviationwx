@@ -10,8 +10,7 @@ set -e
 PORTS=(
     "80:tcp:HTTP (Nginx)"
     "443:tcp:HTTPS (Nginx)"
-    "2121:tcp:FTP (Push webcams)"
-    "2122:tcp:FTPS (Push webcams)"
+    "2121:tcp:FTP/FTPS (Push webcams - both protocols on same port)"
     "2222:tcp:SFTP (Push webcams)"
     "50000:50100:tcp:FTP passive mode (Push webcams)"
     "22:tcp:SSH (System access)"
