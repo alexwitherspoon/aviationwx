@@ -769,7 +769,8 @@ jobs:
           echo "Syncing repository to server..."
           # Exclude docker/docker from rsync (defensive - should not exist after path fix)
           # Exclude uploads directory (ephemeral, created inside container)
-          if ! rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/; then
+          # Exclude ssl directory (contains SSL certificates copied from Let's Encrypt, not in git)
+          if ! rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' --exclude 'ssl' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "❌ ERROR: Rsync failed - files may not be synced correctly"
@@ -787,6 +788,37 @@ jobs:
             exit 1
           fi
           echo "✓ Repository synced successfully"
+          
+          # Verify SSL certificates are still present after rsync
+          # (rsync --delete could remove them if ssl/ wasn't excluded)
+          echo ""
+          echo "Verifying SSL certificates are still present after rsync..."
+          if ssh ${{ secrets.USER }}@${{ secrets.HOST }} '[ -f ~/aviationwx/ssl/fullchain.pem ] && [ -f ~/aviationwx/ssl/privkey.pem ]'; then
+            echo "✓ SSL certificates verified after rsync"
+          else
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⚠️  WARNING: SSL certificates missing after rsync"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "Rsync may have deleted the ssl/ directory. Re-copying certificates..."
+            ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+            set -euo pipefail
+            cd ~/aviationwx
+            mkdir -p ssl
+            if sudo test -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem && sudo test -f /etc/letsencrypt/live/aviationwx.org/privkey.pem; then
+              sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/
+              sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/
+              sudo chown -R $(whoami):$(whoami) ssl/
+              sudo chmod 644 ssl/fullchain.pem
+              sudo chmod 600 ssl/privkey.pem
+              echo "✓ SSL certificates re-copied"
+            else
+              echo "❌ ERROR: Cannot re-copy certificates - Let's Encrypt files not found"
+              exit 1
+            fi
+            EOF
+          fi
 
       - name: Deploy via Docker Compose
         run: |
@@ -972,6 +1004,29 @@ jobs:
             echo "⚠️  Warning: Nginx not responding on port 80 (may be expected if SSL only)"
           else
             echo "✓ Nginx is responding"
+          fi
+          
+          # Verify SSL certificates are accessible inside nginx container
+          echo ""
+          echo "Verifying SSL certificates are accessible in nginx container..."
+          if docker compose -f docker/docker-compose.prod.yml exec -T nginx test -f /etc/nginx/ssl/fullchain.pem && \
+             docker compose -f docker/docker-compose.prod.yml exec -T nginx test -f /etc/nginx/ssl/privkey.pem; then
+            echo "✓ SSL certificates are accessible in nginx container"
+          else
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ ERROR: SSL certificates not accessible in nginx container"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "This indicates a volume mount problem."
+            echo "Checking host-side certificates..."
+            ls -la ssl/ || echo "ssl/ directory not found on host"
+            echo ""
+            echo "Container volume mounts:"
+            docker inspect aviationwx-nginx | grep -A 20 Mounts || echo "Could not inspect container"
+            echo ""
+            echo "Fix: Ensure ssl/ directory exists on host and contains certificates."
+            exit 1
           fi
           EOF
 
