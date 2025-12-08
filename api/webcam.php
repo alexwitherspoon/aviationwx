@@ -54,6 +54,12 @@ if ($isJsonRequest) {
 
 /**
  * Serve placeholder image
+ * 
+ * Serves a placeholder image when webcam is unavailable or invalid.
+ * Attempts to serve placeholder.jpg if available, otherwise serves a 1x1 transparent PNG.
+ * Sets appropriate cache headers for placeholder images.
+ * 
+ * @return void
  */
 function servePlaceholder() {
     ob_end_clean(); // Ensure no output before headers (end and clean in one call)
@@ -315,7 +321,15 @@ $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']
 
 /**
  * Find the latest valid image file (JPG or WEBP)
- * Returns array with 'file' => path, 'mtime' => timestamp, 'size' => bytes, or null if none found
+ * 
+ * Scans both JPG and WEBP cache files, validates they are actual image files,
+ * and returns the most recent valid image. Validates file headers to ensure
+ * files are not corrupted.
+ * 
+ * @param string $cacheJpg Path to JPG cache file
+ * @param string $cacheWebp Path to WEBP cache file
+ * @return array|null Array with keys: 'file' (string path), 'mtime' (int timestamp),
+ *   'size' (int bytes), 'type' (string MIME type), or null if no valid image found
  */
 function findLatestValidImage($cacheJpg, $cacheWebp) {
     $candidates = [];
@@ -517,12 +531,16 @@ if ((time() - $fileMtime) < $perCamRefresh) {
 
 /**
  * Fetch a single webcam image in background (for background refresh)
- * @param string $airportId
- * @param int $camIndex
- * @param array $cam Camera config
- * @param string $cacheFile Target cache file path
+ * 
+ * Fetches a webcam image and updates cache files. Supports RTSP, MJPEG, and static images.
+ * Generates WEBP version in background. Updates circuit breaker on success/failure.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param array $cam Camera configuration array
+ * @param string $cacheFile Target JPG cache file path
  * @param string $cacheWebp Target WEBP cache file path
- * @return bool Success status
+ * @return bool True on success, false on failure or skip (circuit breaker, VPN down)
  */
 function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $cacheWebp) {
     $url = $cam['url'];

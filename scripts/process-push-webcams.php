@@ -20,6 +20,13 @@ aviationwx_log('info', 'push-webcam processor started', [
 
 /**
  * Get camera refresh seconds (with minimum of 60)
+ * 
+ * Determines refresh interval for a camera, checking camera-specific setting,
+ * airport-level setting, or default. Enforces minimum of 60 seconds.
+ * 
+ * @param array $cam Camera configuration array
+ * @param array $airport Airport configuration array
+ * @return int Refresh interval in seconds (minimum 60)
  */
 function getCameraRefreshSeconds($cam, $airport) {
     if (isset($cam['refresh_seconds'])) {
@@ -34,6 +41,12 @@ function getCameraRefreshSeconds($cam, $airport) {
 
 /**
  * Check if directory is writable
+ * 
+ * Verifies directory exists and is writable by attempting to create a test file.
+ * More reliable than is_writable() alone, which may have permission issues.
+ * 
+ * @param string $dir Directory path to check
+ * @return bool True if directory exists and is writable, false otherwise
  */
 function isDirectoryWritable($dir) {
     if (!is_dir($dir)) {
@@ -56,7 +69,16 @@ function isDirectoryWritable($dir) {
 }
 
 /**
- * Check disk space
+ * Check disk space availability
+ * 
+ * Checks free disk space and returns status based on percentage free.
+ * Used to prevent processing when disk is nearly full.
+ * 
+ * @param string $path Path to check disk space for
+ * @return array {
+ *   'status' => string ('ok', 'warning', 'critical', or 'unknown'),
+ *   'percent' => float|null (percentage free, null if unknown)
+ * }
  */
 function checkDiskSpace($path) {
     $freeBytes = @disk_free_space($path);
@@ -79,6 +101,16 @@ function checkDiskSpace($path) {
 
 /**
  * Check inode usage
+ * 
+ * Checks inode (file system entry) usage to detect when filesystem is running
+ * out of inodes (even if disk space is available). Critical for systems with
+ * many small files.
+ * 
+ * @param string $path Path to check inode usage for
+ * @return array {
+ *   'status' => string ('ok', 'warning', 'critical', or 'unknown'),
+ *   'percent' => float|null (percentage used, null if unknown)
+ * }
  */
 function checkInodeUsage($path) {
     if (function_exists('statvfs')) {
@@ -105,6 +137,13 @@ function checkInodeUsage($path) {
 
 /**
  * Get last processed time for a camera
+ * 
+ * Retrieves the timestamp of the last successfully processed image for a camera.
+ * Used to skip already-processed files and prevent duplicate processing.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return int Unix timestamp of last processed file, or 0 if none
  */
 function getLastProcessedTime($airportId, $camIndex) {
     $trackDir = __DIR__ . '/../cache/push_webcams';
@@ -125,6 +164,13 @@ function getLastProcessedTime($airportId, $camIndex) {
 
 /**
  * Update last processed time for a camera
+ * 
+ * Updates the timestamp of the last successfully processed image for a camera.
+ * Uses file locking to ensure atomic updates in concurrent environments.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return void
  */
 function updateLastProcessedTime($airportId, $camIndex) {
     $trackDir = __DIR__ . '/../cache/push_webcams';
@@ -226,7 +272,15 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
 
 /**
  * Check if file is fully written
- * Optimized to check quickly for old files
+ * 
+ * Determines if a file has finished being written by checking size stability.
+ * Optimized to quickly return true for old files (>= 2 seconds old).
+ * For newer files, waits and checks if size remains stable.
+ * 
+ * @param string $file File path to check
+ * @param int $maxWaitSeconds Maximum wait time in seconds
+ * @param int $startTime Start timestamp (for calculating elapsed time)
+ * @return bool True if file appears fully written, false otherwise
  */
 function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
     $maxWait = time() - $startTime >= $maxWaitSeconds;
@@ -282,9 +336,14 @@ function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
 /**
  * Validate image file
  * 
- * @param string $file File path
- * @param array|null $pushConfig Optional push_config for per-camera limits
- * @return bool
+ * Validates that a file is a valid image meeting size, extension, and MIME type
+ * requirements. Checks file headers to ensure it's actually a JPEG or PNG.
+ * 
+ * @param string $file File path to validate
+ * @param array|null $pushConfig Optional push_config for per-camera validation limits
+ *   - max_file_size_mb: Maximum file size in MB (default: 100)
+ *   - allowed_extensions: Array of allowed extensions (default: all)
+ * @return bool True if file is valid image, false otherwise
  */
 function validateImageFile($file, $pushConfig = null) {
     if (!file_exists($file) || !is_readable($file)) {
@@ -351,7 +410,14 @@ function validateImageFile($file, $pushConfig = null) {
 
 /**
  * Move image to cache
- * Validates source file before moving to prevent errors
+ * 
+ * Atomically moves a validated image file from upload directory to cache directory.
+ * Validates source file before moving and triggers WEBP generation in background.
+ * 
+ * @param string $sourceFile Source file path in upload directory
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return string|false Cache file path on success, false on failure
  */
 function moveToCache($sourceFile, $airportId, $camIndex) {
     // Validate source file exists and is readable
@@ -421,6 +487,15 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
 
 /**
  * Generate WEBP version of image (non-blocking)
+ * 
+ * Converts JPG cache file to WEBP format using ffmpeg. Runs in background
+ * when possible to avoid blocking. Falls back to synchronous generation with
+ * timeout if exec() is unavailable.
+ * 
+ * @param string $cacheFile JPG cache file path
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return bool True if WEBP generation started/succeeded, false on failure
  */
 function generateWebp($cacheFile, $airportId, $camIndex) {
     // Validate source file exists and is readable
@@ -484,7 +559,13 @@ function generateWebp($cacheFile, $airportId, $camIndex) {
 
 /**
  * Clean up upload directory
- * Validates directory and files before deletion
+ * 
+ * Removes old files from upload directory, keeping only the specified file.
+ * Validates directory exists and is writable before attempting cleanup.
+ * 
+ * @param string $uploadDir Upload directory path
+ * @param string|null $keepFile File to keep (optional, all others deleted)
+ * @return void
  */
 function cleanupUploadDirectory($uploadDir, $keepFile = null) {
     // Validate directory exists and is writable
@@ -536,6 +617,16 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null) {
 
 /**
  * Process a single push camera
+ * 
+ * Processes uploaded images for a push camera. Finds newest valid image,
+ * validates it, moves to cache, generates WEBP, and cleans up upload directory.
+ * Updates last processed timestamp on success.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param array $cam Camera configuration array
+ * @param array $airport Airport configuration array
+ * @return void
  */
 function processPushCamera($airportId, $camIndex, $cam, $airport) {
     $uploadDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex . '/incoming/';
@@ -611,6 +702,12 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
 
 /**
  * Main processing function
+ * 
+ * Main entry point for processing push webcam uploads. Acquires file lock to prevent
+ * concurrent execution, loads configuration, processes all configured push cameras,
+ * and synchronizes SFTP/FTP user accounts. Handles errors gracefully and logs activity.
+ * 
+ * @return void
  */
 function processPushWebcams() {
     $lockFile = '/tmp/process-push-webcams.lock';
