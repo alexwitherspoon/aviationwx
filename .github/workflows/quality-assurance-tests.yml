@@ -27,11 +27,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Create test airports.json
+      - name: Setup test configuration
         run: |
+          # Note: airports.json is NOT in repository - only exists on production host
+          # CI uses test fixtures (tests/Fixtures/airports.json.test) via CONFIG_PATH
+          # This step creates a minimal config for Docker setup only (not used by tests)
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
-            echo "✓ Created config/airports.json from example"
+            echo "✓ Created minimal config/airports.json for Docker setup (tests use fixtures)"
           fi
       
       # Note: Docker builds are handled in individual test jobs with layer caching
@@ -114,11 +117,14 @@ jobs:
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
-      - name: Create test airports.json
+      - name: Setup test configuration
         run: |
+          # Note: airports.json is NOT in repository - only exists on production host
+          # CI uses test fixtures (tests/Fixtures/airports.json.test) via CONFIG_PATH
+          # This step creates a minimal config for Docker setup only (not used by tests)
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
-            echo "✓ Created config/airports.json from example"
+            echo "✓ Created minimal config/airports.json for Docker setup (tests use fixtures)"
           fi
       
       - name: Set up Docker Buildx
@@ -229,11 +235,14 @@ jobs:
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
-      - name: Create test airports.json
+      - name: Setup test configuration
         run: |
+          # Note: airports.json is NOT in repository - only exists on production host
+          # CI uses test fixtures (tests/Fixtures/airports.json.test) via CONFIG_PATH
+          # This step creates a minimal config for Docker setup only (not used by tests)
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
-            echo "✓ Created config/airports.json from example"
+            echo "✓ Created minimal config/airports.json for Docker setup (tests use fixtures)"
           fi
       
       - name: Set up Docker Buildx
@@ -437,11 +446,14 @@ jobs:
           # This speeds up installation significantly
           npx playwright install --with-deps chromium
       
-      - name: Create test airports.json
+      - name: Setup test configuration
         run: |
+          # Note: airports.json is NOT in repository - only exists on production host
+          # CI uses test fixtures (tests/Fixtures/airports.json.test) via CONFIG_PATH
+          # This step creates a minimal config for Docker setup only (not used by tests)
           if [ ! -f config/airports.json ]; then
             cp config/airports.json.example config/airports.json
-            echo "✓ Created config/airports.json from example"
+            echo "✓ Created minimal config/airports.json for Docker setup (tests use fixtures)"
           fi
       
       - name: Set up Docker Buildx
