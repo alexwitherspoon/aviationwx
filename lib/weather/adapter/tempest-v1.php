@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/../../constants.php';
+require_once __DIR__ . '/../../test-mocks.php';
 
 /**
  * Parse Tempest API response
@@ -101,18 +102,24 @@ function fetchTempestWeather($source): ?array {
     // Fetch current observation
     $url = "https://swd.weatherflow.com/swd/rest/observations/station/{$stationId}?token={$apiKey}";
     
-    // Create context with explicit timeout
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => CURL_TIMEOUT,
-            'ignore_errors' => true,
-        ],
-    ]);
-    
-    $response = @file_get_contents($url, false, $context);
-    
-    if ($response === false) {
-        return null;
+    // Check for mock response in test mode
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        $response = $mockResponse;
+    } else {
+        // Create context with explicit timeout
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => CURL_TIMEOUT,
+                'ignore_errors' => true,
+            ],
+        ]);
+        
+        $response = @file_get_contents($url, false, $context);
+        
+        if ($response === false) {
+            return null;
+        }
     }
     
     return parseTempestResponse($response);

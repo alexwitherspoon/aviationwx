@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/../../constants.php';
+require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
 
 /**
@@ -189,32 +190,39 @@ function fetchWeatherLinkWeather($source): ?array {
     // API key goes in query parameter, secret goes in header
     $url = "https://api.weatherlink.com/v2/current/{$stationId}?api-key=" . urlencode($apiKey);
     
-    // Use curl for proper header support
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => CURL_TIMEOUT,
-        CURLOPT_CONNECTTIMEOUT => CURL_TIMEOUT,
-        CURLOPT_HTTPHEADER => [
-            'x-api-secret: ' . $apiSecret,
-            'Accept: application/json',
-        ],
-        CURLOPT_USERAGENT => 'AviationWX/1.0',
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if ($response === false || !empty($error) || $httpCode !== 200) {
-        aviationwx_log('warning', 'WeatherLink API fetch failed', [
-            'http_code' => $httpCode,
-            'error' => $error,
-            'response_length' => $response ? strlen($response) : 0
-        ], 'app');
-        return null;
+    // Check for mock response in test mode
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        $response = $mockResponse;
+        $httpCode = 200;
+    } else {
+        // Use curl for proper header support
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CURL_TIMEOUT,
+            CURLOPT_HTTPHEADER => [
+                'x-api-secret: ' . $apiSecret,
+                'Accept: application/json',
+            ],
+            CURLOPT_USERAGENT => 'AviationWX/1.0',
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($response === false || !empty($error) || $httpCode !== 200) {
+            aviationwx_log('warning', 'WeatherLink API fetch failed', [
+                'http_code' => $httpCode,
+                'error' => $error,
+                'response_length' => $response ? strlen($response) : 0
+            ], 'app');
+            return null;
+        }
     }
     
     return parseWeatherLinkResponse($response);

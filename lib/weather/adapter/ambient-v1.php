@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/../../constants.php';
+require_once __DIR__ . '/../../test-mocks.php';
 
 /**
  * Parse Ambient Weather API response
@@ -87,17 +88,23 @@ function fetchAmbientWeather($source): ?array {
     // Fetch current conditions (uses device list endpoint)
     $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
     
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => 10,
-            'ignore_errors' => true,
-        ],
-    ]);
-    
-    $response = @file_get_contents($url, false, $context);
-    
-    if ($response === false) {
-        return null;
+    // Check for mock response in test mode
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        $response = $mockResponse;
+    } else {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'ignore_errors' => true,
+            ],
+        ]);
+        
+        $response = @file_get_contents($url, false, $context);
+        
+        if ($response === false) {
+            return null;
+        }
     }
     
     return parseAmbientResponse($response);

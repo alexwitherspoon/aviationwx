@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../circuit-breaker.php';
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/../test-mocks.php';
 require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
 require_once __DIR__ . '/adapter/weatherlink-v1.php';
@@ -101,6 +102,24 @@ function fetchWeatherAsync($airport, $airportId = null) {
         return null;
     }
     
+    // Check for mock responses in test mode before making real requests
+    $primaryMockResponse = $primaryUrl !== null ? getMockHttpResponse($primaryUrl) : null;
+    $metarMockResponse = $metarUrl !== null ? getMockHttpResponse($metarUrl) : null;
+    
+    // If both are mocked, skip curl entirely and process mock responses directly
+    if ($primaryMockResponse !== null && $metarMockResponse !== null) {
+        $primaryResponse = $primaryMockResponse;
+        $metarResponse = $metarMockResponse;
+        $primaryCode = 200;
+        $metarCode = 200;
+        $primaryError = '';
+        $metarError = '';
+        $primaryErrno = 0;
+        $metarErrno = 0;
+        // Skip curl execution and jump to response processing
+        goto process_responses;
+    }
+    
     // Create multi-handle for parallel requests
     $mh = curl_multi_init();
     if ($mh === false) {
@@ -111,8 +130,8 @@ function fetchWeatherAsync($airport, $airportId = null) {
     $ch1 = null;
     $ch2 = null;
     
-    // Initialize primary curl handle if not in backoff
-    if ($primaryUrl !== null) {
+    // Initialize primary curl handle if not in backoff and not mocked
+    if ($primaryUrl !== null && $primaryMockResponse === null) {
         $ch1 = curl_init($primaryUrl);
         if ($ch1 === false) {
             curl_multi_close($mh);
@@ -130,8 +149,8 @@ function fetchWeatherAsync($airport, $airportId = null) {
         curl_multi_add_handle($mh, $ch1);
     }
     
-    // Initialize METAR curl handle if not in backoff
-    if ($metarUrl !== null) {
+    // Initialize METAR curl handle if not in backoff and not mocked
+    if ($metarUrl !== null && $metarMockResponse === null) {
         $ch2 = curl_init($metarUrl);
         if ($ch2 === false) {
             if ($ch1 !== null) {
@@ -192,6 +211,22 @@ function fetchWeatherAsync($airport, $airportId = null) {
     $metarError = $ch2 !== null ? curl_error($ch2) : '';
     $primaryErrno = $ch1 !== null ? curl_errno($ch1) : 0;
     $metarErrno = $ch2 !== null ? curl_errno($ch2) : 0;
+    
+    // Override with mock responses if available (for mixed mock/real case)
+    if ($primaryMockResponse !== null) {
+        $primaryResponse = $primaryMockResponse;
+        $primaryCode = 200;
+        $primaryError = '';
+        $primaryErrno = 0;
+    }
+    if ($metarMockResponse !== null) {
+        $metarResponse = $metarMockResponse;
+        $metarCode = 200;
+        $metarError = '';
+        $metarErrno = 0;
+    }
+    
+    process_responses:
     
     // Determine failure severity based on HTTP code
     $primarySeverity = 'transient';

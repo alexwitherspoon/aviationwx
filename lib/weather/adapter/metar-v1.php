@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/../../constants.php';
+require_once __DIR__ . '/../../test-mocks.php';
 
 /**
  * Parse METAR response
@@ -249,18 +250,24 @@ function fetchMETARFromStation($stationId, $airport): ?array {
     // Fetch METAR from aviationweather.gov (new API format)
     $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
     
-    // Create context with explicit timeout
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => CURL_TIMEOUT,
-            'ignore_errors' => true,
-        ],
-    ]);
-    
-    $response = @file_get_contents($url, false, $context);
-    
-    if ($response === false) {
-        return null;
+    // Check for mock response in test mode
+    $mockResponse = getMockHttpResponse($url);
+    if ($mockResponse !== null) {
+        $response = $mockResponse;
+    } else {
+        // Create context with explicit timeout
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => CURL_TIMEOUT,
+                'ignore_errors' => true,
+            ],
+        ]);
+        
+        $response = @file_get_contents($url, false, $context);
+        
+        if ($response === false) {
+            return null;
+        }
     }
     
     $parsed = parseMETARResponse($response, $airport);
