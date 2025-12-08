@@ -30,6 +30,12 @@ function validateAirportId(string $id): bool {
 
 /**
  * Check if we're in a production environment
+ * 
+ * Determines production status by checking:
+ * 1. APP_ENV environment variable
+ * 2. ENVIRONMENT environment variable
+ * 3. HTTP_HOST domain (checks for production TLDs, excludes test/staging)
+ * 
  * @return bool True if production, false otherwise
  */
 function isProduction() {
@@ -155,10 +161,14 @@ function getWorkerTimeout() {
 
 /**
  * Load airport configuration with caching
- * Uses APCu cache if available, falls back to static variable for request lifetime
- * Automatically invalidates cache when file modification time changes
  * 
- * SECURITY: Prevents test data (airports.json.test) from being used in production
+ * Uses APCu cache if available, falls back to static variable for request lifetime.
+ * Automatically invalidates cache when file modification time changes.
+ * 
+ * SECURITY: Prevents test data (airports.json.test) from being used in production.
+ * 
+ * @param bool $useCache Whether to use APCu caching (default: true)
+ * @return array|null Configuration array with 'airports' and optional 'config' keys, or null on error
  */
 function loadConfig($useCache = true) {
     static $cachedConfig = null;
@@ -369,7 +379,11 @@ function loadConfig($useCache = true) {
 
 /**
  * Clear configuration cache
- * Removes both the config data and the modification time check
+ * 
+ * Removes both the config data and the modification time check from APCu.
+ * This forces the next loadConfig() call to reload from disk.
+ * 
+ * @return void
  */
 function clearConfigCache() {
     if (function_exists('apcu_delete')) {

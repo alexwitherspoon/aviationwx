@@ -6,7 +6,13 @@
 
 /**
  * Get the current page URL (canonical)
- * For airport pages, always use the subdomain URL (e.g., https://kspb.aviationwx.org)
+ * 
+ * Returns the canonical URL for the current page. For airport pages, always uses
+ * the subdomain URL format (e.g., https://kspb.aviationwx.org) regardless of how
+ * the page was accessed.
+ * 
+ * @param string|null $airportId Optional airport ID to generate subdomain URL
+ * @return string Canonical URL (protocol + host + path, query params removed)
  */
 function getCanonicalUrl($airportId = null) {
     $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -26,6 +32,11 @@ function getCanonicalUrl($airportId = null) {
 
 /**
  * Get base URL (protocol + domain)
+ * 
+ * Returns the base URL for the current request (protocol + host).
+ * Used for generating absolute URLs in structured data and meta tags.
+ * 
+ * @return string Base URL (e.g., 'https://aviationwx.org')
  */
 function getBaseUrl() {
     $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -35,6 +46,11 @@ function getBaseUrl() {
 
 /**
  * Generate Organization structured data (JSON-LD) for homepage
+ * 
+ * Creates Schema.org Organization structured data for the homepage.
+ * Includes name, URL, logo, description, social links, and contact information.
+ * 
+ * @return array Schema.org Organization JSON-LD structure
  */
 function generateOrganizationSchema() {
     $baseUrl = getBaseUrl();
@@ -58,6 +74,14 @@ function generateOrganizationSchema() {
 
 /**
  * Generate LocalBusiness structured data (JSON-LD) for airport pages
+ * 
+ * Creates Schema.org LocalBusiness structured data for airport pages.
+ * Includes airport name, description, address, geo coordinates, webcam images,
+ * and service offerings.
+ * 
+ * @param array $airport Airport configuration array
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return array Schema.org LocalBusiness JSON-LD structure
  */
 function generateAirportSchema($airport, $airportId) {
     $baseUrl = getBaseUrl();
@@ -121,6 +145,16 @@ function generateAirportSchema($airport, $airportId) {
 
 /**
  * Generate Open Graph and Twitter Card meta tags
+ * 
+ * Creates HTML meta tags for social media sharing (Open Graph and Twitter Cards).
+ * Includes title, description, URL, image, and type. Uses default image if none provided.
+ * 
+ * @param string $title Page title
+ * @param string $description Page description
+ * @param string $url Canonical URL
+ * @param string|null $image Image URL (optional, uses default if null)
+ * @param string $type Open Graph type (default: 'website')
+ * @return string HTML meta tags (newline-separated)
  */
 function generateSocialMetaTags($title, $description, $url, $image = null, $type = 'website') {
     $baseUrl = getBaseUrl();
@@ -154,6 +188,14 @@ function generateSocialMetaTags($title, $description, $url, $image = null, $type
 
 /**
  * Generate enhanced meta tags
+ * 
+ * Creates standard HTML meta tags including description, keywords, author,
+ * robots, and content-language.
+ * 
+ * @param string $description Page description
+ * @param string $keywords Comma-separated keywords (default: empty)
+ * @param string $author Author name (default: 'Alex Witherspoon')
+ * @return string HTML meta tags (newline-separated)
  */
 function generateEnhancedMetaTags($description, $keywords = '', $author = 'Alex Witherspoon') {
     $tags = [];
@@ -184,6 +226,12 @@ function generateEnhancedMetaTags($description, $keywords = '', $author = 'Alex 
 
 /**
  * Generate canonical URL tag
+ * 
+ * Creates HTML canonical link tag to prevent duplicate content issues.
+ * Uses provided URL or generates canonical URL automatically.
+ * 
+ * @param string|null $url Canonical URL (optional, auto-generated if null)
+ * @return string HTML canonical link tag
  */
 function generateCanonicalTag($url = null) {
     $url = $url ?: getCanonicalUrl();
@@ -192,6 +240,12 @@ function generateCanonicalTag($url = null) {
 
 /**
  * Generate structured data JSON-LD script tag
+ * 
+ * Wraps structured data in a JSON-LD script tag for embedding in HTML.
+ * Formats JSON with pretty printing for readability.
+ * 
+ * @param array $data Structured data array (Schema.org format)
+ * @return string HTML script tag with JSON-LD content
  */
 function generateStructuredDataScript($data) {
     return '<script type="application/ld+json">' . "\n" . 
@@ -201,7 +255,12 @@ function generateStructuredDataScript($data) {
 
 /**
  * Generate favicon and icon tags for HTML head
- * Returns all necessary favicon, Apple touch icon, and manifest links
+ * 
+ * Returns all necessary favicon, Apple touch icon, and manifest links.
+ * Includes standard favicons, Android Chrome icons, Apple touch icon, and
+ * web app manifest for PWA support.
+ * 
+ * @return string HTML link and meta tags (newline-separated)
  */
 function generateFaviconTags() {
     $baseUrl = getBaseUrl();
@@ -236,7 +295,12 @@ function generateFaviconTags() {
 
 /**
  * Get logo URL for structured data
- * Checks for logo file in favicon folder, falls back to largest favicon or about-photo.jpg
+ * 
+ * Determines the logo URL for use in structured data. Checks for common logo
+ * file names in the favicon directory, falls back to largest favicon, then
+ * to about-photo image. Prefers WebP format when available.
+ * 
+ * @return string Absolute URL to logo/image file
  */
 function getLogoUrl() {
     $baseUrl = getBaseUrl();

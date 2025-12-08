@@ -6,6 +6,19 @@
 
 require_once __DIR__ . '/logger.php';
 
+/**
+ * Process Pool Manager
+ * 
+ * Manages a pool of worker processes for parallel execution of tasks.
+ * Features:
+ * - Configurable maximum concurrent workers
+ * - Per-worker timeout handling
+ * - Duplicate job prevention
+ * - Automatic cleanup of finished/timed-out workers
+ * - Thread-safe job tracking
+ * 
+ * Used by fetch-weather.php and fetch-webcam.php for parallel processing.
+ */
 class ProcessPool {
     private $maxWorkers;
     private $timeout;
@@ -29,7 +42,12 @@ class ProcessPool {
     
     /**
      * Generate job key from arguments to identify duplicates
-     * Weather: "kspb", Webcam: "kspb_0"
+     * 
+     * Creates a unique key from job arguments to prevent duplicate jobs.
+     * Examples: Weather job "kspb" -> "kspb", Webcam job ["kspb", 0] -> "kspb_0"
+     * 
+     * @param array $args Job arguments
+     * @return string Job key (underscore-separated arguments)
      */
     private function getJobKey(array $args) {
         return implode('_', $args);
@@ -37,6 +55,12 @@ class ProcessPool {
     
     /**
      * Check if job is already running (cleans up finished workers first)
+     * 
+     * Checks if a job with the given key is currently active.
+     * Automatically cleans up finished workers before checking.
+     * 
+     * @param string $jobKey Job key to check
+     * @return bool True if job is running, false otherwise
      */
     private function isJobRunning($jobKey) {
         $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
@@ -46,7 +70,12 @@ class ProcessPool {
     
     /**
      * Add job to pool (skips duplicates, waits for slot if full)
-     * @return bool True if added, false if duplicate
+     * 
+     * Adds a new job to the worker pool. Skips if duplicate job is already running.
+     * Waits for available slot if pool is full (max 5 minutes timeout).
+     * 
+     * @param array $args Job arguments (e.g., ['kspb'] for weather, ['kspb', 0] for webcam)
+     * @return bool True if added successfully, false if duplicate or spawn failed
      */
     public function addJob(array $args) {
         $jobKey = $this->getJobKey($args);
@@ -75,7 +104,15 @@ class ProcessPool {
     
     /**
      * Wait for all workers to complete
-     * @return array ['completed' => int, 'timed_out' => int, 'failed' => int]
+     * 
+     * Blocks until all workers in the pool have finished (completed, timed out, or failed).
+     * Periodically checks worker status and cleans up finished workers.
+     * 
+     * @return array {
+     *   'completed' => int,   // Number of successfully completed jobs
+     *   'timed_out' => int,    // Number of jobs that exceeded timeout
+     *   'failed' => int        // Number of jobs that failed (non-zero exit code)
+     * }
      */
     public function waitForAll() {
         $stats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
@@ -90,6 +127,11 @@ class ProcessPool {
     
     /**
      * Get current number of active workers
+     * 
+     * Returns the count of currently running workers. Automatically cleans up
+     * finished workers before counting.
+     * 
+     * @return int Number of active workers (0 to maxWorkers)
      */
     public function getActiveCount() {
         $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
@@ -99,7 +141,13 @@ class ProcessPool {
     
     /**
      * Spawn worker process
-     * @return array|null Worker data or null on failure
+     * 
+     * Creates a new worker process using proc_open(). The worker runs the script
+     * in --worker mode with the provided arguments.
+     * 
+     * @param array $args Job arguments to pass to worker script
+     * @return array|null Worker data array with keys: 'proc' (resource), 'pipes' (array),
+     *   'started' (int timestamp), 'args' (array), 'pid' (int|null), or null on failure
      */
     private function spawnWorker(array $args) {
         $scriptPath = __DIR__ . '/../scripts/' . basename($this->scriptName);
@@ -154,7 +202,16 @@ class ProcessPool {
     
     /**
      * Clean up finished or timed-out workers
-     * @param array &$stats Statistics to update
+     * 
+     * Checks all workers and removes those that have finished or exceeded timeout.
+     * Updates statistics array with counts of completed, timed-out, and failed jobs.
+     * Terminates timed-out workers with SIGTERM, then SIGKILL if needed.
+     * 
+     * @param array &$stats Statistics array to update (passed by reference)
+     *   - 'completed' => int (incremented for successful jobs)
+     *   - 'timed_out' => int (incremented for timed-out jobs)
+     *   - 'failed' => int (incremented for failed jobs)
+     * @return void
      */
     private function cleanupFinished(array &$stats) {
         $now = time();
@@ -229,6 +286,12 @@ class ProcessPool {
     
     /**
      * Close all pipes for a worker
+     * 
+     * Closes all pipe resources (stdin, stdout, stderr) for a worker process.
+     * Prevents resource leaks when workers are cleaned up.
+     * 
+     * @param array $pipes Array of pipe resources to close
+     * @return void
      */
     private function closePipes(array $pipes) {
         foreach ($pipes as $pipe) {
@@ -240,6 +303,12 @@ class ProcessPool {
     
     /**
      * Wait for available slot in pool (max 5 minutes)
+     * 
+     * Blocks until a slot becomes available in the worker pool.
+     * Periodically checks for finished workers and cleans them up.
+     * Times out after 5 minutes to prevent indefinite blocking.
+     * 
+     * @return void
      */
     private function waitForSlot() {
         $maxWait = 300;
@@ -269,6 +338,12 @@ class ProcessPool {
     
     /**
      * Cleanup: terminate all remaining workers (call on script exit)
+     * 
+     * Terminates all active workers and cleans up resources.
+     * Should be called on script exit (via register_shutdown_function).
+     * Attempts graceful termination (SIGTERM) first, then force kill (SIGKILL).
+     * 
+     * @return void
      */
     public function cleanup() {
         foreach ($this->workers as $worker) {

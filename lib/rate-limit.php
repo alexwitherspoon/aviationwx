@@ -9,9 +9,13 @@ require_once __DIR__ . '/config.php';
 
 /**
  * Check if request should be rate limited
- * @param string $key Unique key for this rate limit (e.g., 'weather_api')
- * @param int $maxRequests Maximum requests allowed
- * @param int $windowSeconds Time window in seconds
+ * 
+ * Implements IP-based rate limiting using APCu (preferred) or file-based fallback.
+ * Extracts client IP from X-Forwarded-For header or REMOTE_ADDR.
+ * 
+ * @param string $key Unique key for this rate limit (e.g., 'weather_api', 'webcam_api')
+ * @param int $maxRequests Maximum requests allowed in the time window (default: RATE_LIMIT_WEATHER_MAX)
+ * @param int $windowSeconds Time window in seconds (default: RATE_LIMIT_WEATHER_WINDOW)
  * @return bool True if allowed, false if rate limited
  */
 function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
@@ -162,7 +166,18 @@ function checkRateLimitFileBased(string $key, int $maxRequests, int $windowSecon
 
 /**
  * Fallback for file-based rate limiting when file handle operations fail
- * Uses file_put_contents with LOCK_EX as last resort
+ * 
+ * Uses file_put_contents with LOCK_EX as last resort when file handle operations fail.
+ * This is less reliable than checkRateLimitFileBased() due to potential race conditions,
+ * but provides a fallback when file locking is unavailable.
+ * 
+ * @param string $key Rate limit key
+ * @param int $maxRequests Maximum requests allowed
+ * @param int $windowSeconds Time window in seconds
+ * @param string $ip Client IP address
+ * @param string $rateLimitFile Path to rate limit file
+ * @param int $now Current timestamp
+ * @return bool True if allowed, false if rate limited
  */
 function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip, $rateLimitFile, $now) {
     $data = [];

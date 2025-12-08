@@ -10,9 +10,18 @@ require_once __DIR__ . '/logger.php';
 
 /**
  * Base circuit breaker check
+ * 
+ * Checks if a resource should be skipped due to circuit breaker backoff.
+ * Returns skip status, remaining backoff time, and failure count.
+ * 
  * @param string $key Unique identifier (e.g., 'kspb_weather_primary' or 'kspb_0')
  * @param string $backoffFile Path to backoff.json file
- * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int, 'failures' => int]
+ * @return array {
+ *   'skip' => bool,              // True if should skip (circuit open)
+ *   'reason' => string,          // Reason for skip ('circuit_open' or '')
+ *   'backoff_remaining' => int,  // Seconds remaining in backoff period
+ *   'failures' => int            // Number of consecutive failures
+ * }
  */
 function checkCircuitBreakerBase($key, $backoffFile) {
     $now = time();
@@ -49,9 +58,17 @@ function checkCircuitBreakerBase($key, $backoffFile) {
 
 /**
  * Base failure recording with file locking
+ * 
+ * Records a failure and updates exponential backoff state.
+ * Uses file locking to prevent race conditions in concurrent environments.
+ * Backoff duration scales with failure count and severity (permanent = 2x multiplier).
+ * 
  * @param string $key Unique identifier
  * @param string $backoffFile Path to backoff.json file
- * @param string $severity 'transient' or 'permanent'
+ * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ *   - transient: Normal backoff scaling
+ *   - permanent: 2x multiplier (for auth errors, config issues, etc.)
+ * @return void
  */
 function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transient') {
     $cacheDir = dirname($backoffFile);
@@ -141,8 +158,13 @@ function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transi
 
 /**
  * Base success recording with file locking
+ * 
+ * Records a successful operation and resets circuit breaker state.
+ * Clears failure count and backoff period. Uses file locking for thread safety.
+ * 
  * @param string $key Unique identifier
  * @param string $backoffFile Path to backoff.json file
+ * @return void
  */
 function recordCircuitBreakerSuccessBase($key, $backoffFile) {
     $cacheDir = dirname($backoffFile);
@@ -221,9 +243,15 @@ function recordCircuitBreakerSuccessBase($key, $backoffFile) {
 
 /**
  * Check if weather API should be skipped due to backoff
- * @param string $airportId
- * @param string $sourceType 'primary' or 'metar'
- * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int, 'failures' => int]
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param string $sourceType Weather source type: 'primary' or 'metar'
+ * @return array {
+ *   'skip' => bool,              // True if should skip (circuit open)
+ *   'reason' => string,          // Reason for skip ('circuit_open' or '')
+ *   'backoff_remaining' => int,  // Seconds remaining in backoff period
+ *   'failures' => int            // Number of consecutive failures
+ * }
  */
 function checkWeatherCircuitBreaker($airportId, $sourceType) {
     $cacheDir = __DIR__ . '/../cache';
@@ -240,9 +268,11 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
 
 /**
  * Record a weather API failure and update backoff state
- * @param string $airportId
- * @param string $sourceType 'primary' or 'metar'
- * @param string $severity 'transient' or 'permanent'
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param string $sourceType Weather source type: 'primary' or 'metar'
+ * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ * @return void
  */
 function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') {
     $cacheDir = __DIR__ . '/../cache';
@@ -259,8 +289,10 @@ function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') 
 
 /**
  * Record a weather API success and reset backoff state
- * @param string $airportId
- * @param string $sourceType 'primary' or 'metar'
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param string $sourceType Weather source type: 'primary' or 'metar'
+ * @return void
  */
 function recordWeatherSuccess($airportId, $sourceType) {
     $backoffFile = __DIR__ . '/../cache/backoff.json';
@@ -270,9 +302,15 @@ function recordWeatherSuccess($airportId, $sourceType) {
 
 /**
  * Check if webcam should be skipped due to backoff
- * @param string $airportId
- * @param int $camIndex
- * @return array ['skip' => bool, 'reason' => string, 'backoff_remaining' => int, 'failures' => int]
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return array {
+ *   'skip' => bool,              // True if should skip (circuit open)
+ *   'reason' => string,          // Reason for skip ('circuit_open' or '')
+ *   'backoff_remaining' => int,  // Seconds remaining in backoff period
+ *   'failures' => int            // Number of consecutive failures
+ * }
  */
 function checkWebcamCircuitBreaker($airportId, $camIndex) {
     $cacheDir = __DIR__ . '/../cache';
@@ -289,9 +327,11 @@ function checkWebcamCircuitBreaker($airportId, $camIndex) {
 
 /**
  * Record a webcam failure and update backoff state
- * @param string $airportId
- * @param int $camIndex
- * @param string $severity 'transient' or 'permanent'
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ * @return void
  */
 function recordWebcamFailure($airportId, $camIndex, $severity = 'transient') {
     $cacheDir = __DIR__ . '/../cache';
@@ -308,8 +348,10 @@ function recordWebcamFailure($airportId, $camIndex, $severity = 'transient') {
 
 /**
  * Record a webcam success and reset backoff state
- * @param string $airportId
- * @param int $camIndex
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return void
  */
 function recordWebcamSuccess($airportId, $camIndex) {
     $backoffFile = __DIR__ . '/../cache/backoff.json';
