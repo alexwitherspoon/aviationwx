@@ -98,6 +98,121 @@ Get your API credentials from [WeatherLink.com](https://weatherlink.com) and add
 - This fallback only occurs when `metar_station` is explicitly configured
 - Empty or invalid station IDs in `nearby_metar_stations` are automatically skipped
 
+## Airport Identifiers and URL Routing
+
+AviationWX supports multiple airport identifier types and automatically routes users to the preferred identifier. The system uses a priority hierarchy to determine which identifier should be used in URLs.
+
+### Identifier Priority
+
+The system uses the following priority order (highest to lowest):
+
+1. **ICAO Code** (International Civil Aviation Organization) - 4 letters, e.g., `KSPB`, `KPDX`
+2. **IATA Code** (International Air Transport Association) - 3 letters, e.g., `SPB`, `PDX`
+3. **FAA Identifier (LID)** (Federal Aviation Administration Location Identifier) - 3-4 characters, e.g., `SPB`, `03S`
+4. **Custom Airport ID** - The key used in `airports.json` (fallback if no other identifiers exist)
+
+### How It Works
+
+When you configure an airport, you can specify multiple identifier types:
+
+```json
+{
+  "airports": {
+    "kspb": {
+      "name": "Scappoose Industrial Airpark",
+      "icao": "KSPB",
+      "iata": "SPB",
+      "faa": "SPB",
+      ...
+    }
+  }
+}
+```
+
+**URL Routing Behavior:**
+
+- The system automatically determines the **primary identifier** based on the priority hierarchy
+- Users can access the airport using **any** of the configured identifiers (ICAO, IATA, FAA, or airport ID)
+- The system automatically redirects users to the primary identifier URL
+- Example: Accessing `pdx.aviationwx.org` redirects to `kpdx.aviationwx.org` (IATA → ICAO)
+
+### Identifier Examples
+
+**Example 1: Airport with all identifier types**
+```json
+{
+  "airports": {
+    "kspb": {
+      "name": "Scappoose Industrial Airpark",
+      "icao": "KSPB",    // Primary identifier (highest priority)
+      "iata": "SPB",      // Accessible via spb.aviationwx.org (redirects to kspb.aviationwx.org)
+      "faa": "SPB",       // Accessible via spb.aviationwx.org (redirects to kspb.aviationwx.org)
+      ...
+    }
+  }
+}
+```
+- Primary URL: `https://kspb.aviationwx.org` (uses ICAO)
+- Alternative URLs that redirect: `spb.aviationwx.org` (IATA/FAA)
+
+**Example 2: Airport with ICAO and IATA**
+```json
+{
+  "airports": {
+    "kpdx": {
+      "name": "Portland International Airport",
+      "icao": "KPDX",    // Primary identifier
+      "iata": "PDX",      // Accessible via pdx.aviationwx.org (redirects to kpdx.aviationwx.org)
+      ...
+    }
+  }
+}
+```
+- Primary URL: `https://kpdx.aviationwx.org` (uses ICAO)
+- Alternative URL that redirects: `pdx.aviationwx.org` (IATA)
+
+**Example 3: Airport with only FAA identifier**
+```json
+{
+  "airports": {
+    "03s": {
+      "name": "Example Airport",
+      "faa": "03S",       // Primary identifier (no ICAO or IATA)
+      ...
+    }
+  }
+}
+```
+- Primary URL: `https://03s.aviationwx.org` (uses FAA, since no ICAO/IATA exists)
+
+**Example 4: Airport with custom identifier only**
+```json
+{
+  "airports": {
+    "custom-airport": {
+      "name": "Custom Airport Name",
+      // No icao, iata, or faa fields
+      ...
+    }
+  }
+}
+```
+- Primary URL: `https://custom-airport.aviationwx.org` (uses airport ID as fallback)
+
+### Configuration Guidelines
+
+1. **Always include ICAO code if available** - This is the most preferred identifier
+2. **Include IATA code if the airport has one** - Many commercial airports have IATA codes
+3. **Include FAA identifier (LID) if different from IATA** - Some airports have FAA identifiers that differ from IATA
+4. **Use descriptive airport IDs** - The airport ID (JSON key) should be meaningful, typically matching the ICAO code in lowercase
+5. **All identifiers are case-insensitive** - The system handles case conversion automatically
+
+### Redirect Behavior
+
+- **301 Permanent Redirect** - When accessing via a non-primary identifier, users are redirected to the primary identifier URL
+- **Query parameters preserved** - Any query parameters in the original URL are preserved in the redirect
+- **Subdomain format** - All airport URLs use subdomain format: `{identifier}.aviationwx.org`
+
 ## Adding a New Airport
 
 Add an entry to `airports.json` following this structure:
@@ -108,6 +223,8 @@ Add an entry to `airports.json` following this structure:
     "airportid": {
       "name": "Full Airport Name",
       "icao": "ICAO",
+      "iata": "IATA",
+      "faa": "FAA",
       "address": "City, State",
       "lat": 45.7710278,
       "lon": -122.8618333,

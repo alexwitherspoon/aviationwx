@@ -103,9 +103,12 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         $requestedIdentifier = strtoupper(trim($rawAirportIdentifier));
         $primaryIdentifierUpper = strtoupper(trim($primaryIdentifier));
         
-        // Only redirect if the requested identifier doesn't match the primary identifier.
-        // This ensures we only redirect when a more preferred identifier exists.
-        // For example: if airport has no ICAO but has IATA, accessing via IATA won't redirect.
+        // Redirect if the requested identifier doesn't match the primary identifier.
+        // This ensures we redirect to the most preferred identifier (ICAO > IATA > FAA > Airport ID).
+        // Examples:
+        // - pdx -> kpdx (IATA/airport ID -> ICAO)
+        // - kpdx -> kpdx (no redirect, already using primary)
+        // - spb -> kspb (IATA -> ICAO)
         if ($requestedIdentifier !== $primaryIdentifierUpper) {
             // Determine protocol (HTTPS preferred)
             $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
