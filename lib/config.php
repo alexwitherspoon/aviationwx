@@ -219,13 +219,16 @@ function loadConfig($useCache = true) {
     // Note: In CI (GitHub Actions), airports.json doesn't exist - this is expected and handled gracefully
     if (!file_exists($configFile)) {
         // In CI, this is normal - tests use CONFIG_PATH pointing to test fixtures
-        // In production, this indicates a deployment issue
+        // In production, this is a critical failure - airports.json MUST exist
         if (!isProduction()) {
             // Non-production: log as info (expected in CI/test environments)
             aviationwx_log('info', 'config file not found (using defaults)', ['path' => $configFile], 'app');
         } else {
-            // Production: log as error (deployment issue)
-            aviationwx_log('error', 'config file not found', ['path' => $configFile], 'app');
+            // Production: CRITICAL ERROR - airports.json is required, fail immediately
+            aviationwx_log('error', 'config file not found - PRODUCTION FAILURE', ['path' => $configFile], 'app');
+            error_log('CRITICAL: airports.json not found in production at: ' . $configFile);
+            // In production, we cannot continue without airports.json - return null to fail fast
+            // The application should handle this gracefully by showing an error page
         }
         return null;
     }
