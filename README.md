@@ -25,6 +25,7 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - 🤝 **[Contributing](CONTRIBUTING.md)** - How to contribute
 - 🔒 **[Security](docs/SECURITY.md)** - Security best practices
 - 📊 **[Operations](docs/OPERATIONS.md)** - Logging, monitoring, troubleshooting
+- 📝 **[Code Style Guide](CODE_STYLE.md)** - Coding standards and practices
 
 ## Features
 

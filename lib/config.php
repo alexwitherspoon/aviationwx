@@ -1216,8 +1216,15 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         return ['valid' => true, 'errors' => [], 'warnings' => ['Could not download ICAO airport list - skipping validation']];
     }
     
-    // Convert to associative array for fast lookup
-    $icaoLookup = array_flip($icaoList);
+    // Convert to associative array for fast lookup (case-insensitive)
+    // Normalize all ICAO codes to uppercase for case-insensitive matching
+    $icaoLookup = [];
+    foreach ($icaoList as $code) {
+        $normalized = strtoupper(trim($code));
+        if (!empty($normalized)) {
+            $icaoLookup[$normalized] = true;
+        }
+    }
     
     foreach ($config['airports'] as $airportId => $airport) {
         $icao = isset($airport['icao']) ? strtoupper(trim($airport['icao'])) : '';
@@ -1233,7 +1240,7 @@ function validateAirportsIcaoCodes(?array $config = null): array {
             continue;
         }
         
-        // Check if it's a real airport
+        // Check if it's a real airport (case-insensitive lookup)
         if (!isset($icaoLookup[$icao])) {
             $errors[] = "Airport '{$airportId}' has ICAO code '{$icao}' which is not found in the official airport list";
         }
