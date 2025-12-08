@@ -189,6 +189,12 @@ See [Configuration Guide](docs/CONFIGURATION.md) for detailed setup instructions
 
 MIT License - See [LICENSE](LICENSE) file
 
+## Data Sources
+
+AviationWX uses the following external data sources:
+
+- **ICAO Airport Codes**: Airport code validation uses data from [lxndrblz/Airports](https://github.com/lxndrblz/Airports) (CC-BY-SA-4.0 license)
+
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
