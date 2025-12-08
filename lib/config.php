@@ -165,6 +165,10 @@ function getWorkerTimeout() {
  * Uses APCu cache if available, falls back to static variable for request lifetime.
  * Automatically invalidates cache when file modification time changes.
  * 
+ * IMPORTANT: airports.json is NOT in the repository - it only exists on the production host.
+ * - CI (GitHub Actions): Never has access - runs in GitHub's cloud, uses test fixtures
+ * - CD (Deployment): Has access - runs on production host where file exists at /home/aviationwx/airports.json
+ * 
  * SECURITY: Prevents test data (airports.json.test) from being used in production.
  * 
  * @param bool $useCache Whether to use APCu caching (default: true)
@@ -212,8 +216,17 @@ function loadConfig($useCache = true) {
     }
     
     // Validate file exists and is not a directory
+    // Note: In CI (GitHub Actions), airports.json doesn't exist - this is expected and handled gracefully
     if (!file_exists($configFile)) {
-        aviationwx_log('error', 'config file not found', ['path' => $configFile], 'app');
+        // In CI, this is normal - tests use CONFIG_PATH pointing to test fixtures
+        // In production, this indicates a deployment issue
+        if (!isProduction()) {
+            // Non-production: log as info (expected in CI/test environments)
+            aviationwx_log('info', 'config file not found (using defaults)', ['path' => $configFile], 'app');
+        } else {
+            // Production: log as error (deployment issue)
+            aviationwx_log('error', 'config file not found', ['path' => $configFile], 'app');
+        }
         return null;
     }
     if (is_dir($configFile)) {
