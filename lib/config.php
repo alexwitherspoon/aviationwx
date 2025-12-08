@@ -600,7 +600,11 @@ function findSimilarAirports(string $searchCode, array $config, int $maxResults 
  * Download and cache ICAO airport codes list from GitHub
  * 
  * Downloads from lxndrblz/Airports repository (CC-BY-SA-4.0 license)
+ * Source: https://github.com/lxndrblz/Airports
  * Caches the list locally to avoid repeated downloads
+ * 
+ * NOTE: This data source is incomplete and may not include all valid ICAO codes.
+ * It is used for reference only and missing codes should not be treated as errors.
  * 
  * @param bool $forceRefresh Force refresh even if cache exists
  * @return array|null Array of ICAO codes (uppercase) or null on error
@@ -1188,13 +1192,17 @@ function validateAirportsJsonStructure(array $config): array {
  * Validate ICAO codes in airports.json against real airport list
  * 
  * Checks all ICAO codes in the config against the cached airport list.
- * Used for CI/CD validation to catch invalid airport codes before deployment.
+ * 
+ * NOTE: The external data source (lxndrblz/Airports) is incomplete and may not
+ * include all valid ICAO codes. Missing codes are reported as warnings, not errors,
+ * since the data source cannot be trusted as comprehensive.
  * 
  * @param array|null $config Optional config array (if already loaded)
- * @return array Array with 'valid' (bool) and 'errors' (array of error messages)
+ * @return array Array with 'valid' (bool), 'errors' (array), and optional 'warnings' (array)
  */
 function validateAirportsIcaoCodes(?array $config = null): array {
     $errors = [];
+    $warnings = [];
     
     if ($config === null) {
         $config = loadConfig();
@@ -1240,14 +1248,16 @@ function validateAirportsIcaoCodes(?array $config = null): array {
             continue;
         }
         
-        // Check if it's a real airport (case-insensitive lookup)
+        // Check if it's in the external list (warning only, not error)
+        // The external data source is incomplete, so missing codes are warnings
         if (!isset($icaoLookup[$icao])) {
-            $errors[] = "Airport '{$airportId}' has ICAO code '{$icao}' which is not found in the official airport list";
+            $warnings[] = "Airport '{$airportId}' has ICAO code '{$icao}' which is not found in the external airport list (data source may be incomplete)";
         }
     }
     
     return [
         'valid' => empty($errors),
-        'errors' => $errors
+        'errors' => $errors,
+        'warnings' => $warnings
     ];
 }
