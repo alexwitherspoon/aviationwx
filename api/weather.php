@@ -137,7 +137,7 @@ function generateMockWeatherData($airportId, $airport) {
     // Find airport by any identifier type
     $result = findAirportByIdentifier($rawIdentifier);
     if ($result === null || !isset($result['airport']) || !isset($result['airportId'])) {
-    http_response_code(404);
+        http_response_code(HTTP_STATUS_NOT_FOUND);
     ob_clean();
     aviationwx_log('error', 'airport not found', ['identifier' => $rawIdentifier], 'user');
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
@@ -319,27 +319,13 @@ function generateMockWeatherData($airportId, $airport) {
         $weatherData = fetchWeatherSync($airport, $airportId);
     }
     
-    if ($weatherData === null) {
-        $weatherError = 'Weather data unavailable';
-        aviationwx_log('warning', 'weather fetch returned null', [
-            'airport' => $airportId,
-            'source' => $airport['weather_source']['type'] ?? 'unknown'
-        ], 'app');
-    }
-    } catch (Exception $e) {
-    $weatherError = 'Error fetching weather: ' . $e->getMessage();
-    aviationwx_log('error', 'weather fetch exception', [
-        'airport' => $airportId,
-        'err' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-    ], 'app');
     } catch (Throwable $e) {
-    $weatherError = 'Error fetching weather: ' . $e->getMessage();
-    aviationwx_log('error', 'weather fetch throwable', [
-        'airport' => $airportId,
-        'err' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
-    ], 'app');
+        $weatherError = 'Error fetching weather: ' . $e->getMessage();
+        aviationwx_log('error', 'weather fetch error', [
+            'airport' => $airportId,
+            'err' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 'app');
     }
 
     if ($weatherError !== null) {
@@ -353,29 +339,11 @@ function generateMockWeatherData($airportId, $airport) {
             exit; // Don't send another response, request already finished
         }
         
-        http_response_code(503);
+        http_response_code(HTTP_STATUS_SERVICE_UNAVAILABLE);
         aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError], 'app');
         ob_clean();
         echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
         exit;
-    }
-
-    if ($weatherError !== null) {
-    // If we already served stale cache, don't send another response (background refresh failed)
-    if ($hasStaleCache) {
-        // Request already finished with stale cache response, just log the error
-        aviationwx_log('warning', 'weather api background refresh error, stale cache was served', [
-            'airport' => $airportId,
-            'err' => $weatherError
-        ], 'app');
-        exit; // Don't send another response, request already finished
-    }
-    
-    http_response_code(503);
-    aviationwx_log('error', 'weather api error', ['airport' => $airportId, 'err' => $weatherError], 'app');
-    ob_clean();
-    echo json_encode(['success' => false, 'error' => 'Unable to fetch weather data']);
-    exit;
     }
 
     if ($weatherData === null) {
@@ -390,7 +358,7 @@ function generateMockWeatherData($airportId, $airport) {
     }
     
     // No stale cache available - send error response
-    http_response_code(503);
+    http_response_code(HTTP_STATUS_SERVICE_UNAVAILABLE);
     aviationwx_log('error', 'weather api no data', ['airport' => $airportId], 'app');
     ob_clean();
     echo json_encode(['success' => false, 'error' => 'Weather data unavailable']);

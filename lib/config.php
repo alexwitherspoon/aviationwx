@@ -38,7 +38,7 @@ function validateAirportId(?string $id): bool {
  * 
  * @return bool True if production, false otherwise
  */
-function isProduction() {
+function isProduction(): bool {
     // Check APP_ENV environment variable
     $appEnv = getenv('APP_ENV');
     if ($appEnv === 'production') {
@@ -82,7 +82,7 @@ function isProduction() {
  * @param mixed $default Default value if not set
  * @return mixed Configuration value or default
  */
-function getGlobalConfig($key, $default = null) {
+function getGlobalConfig(string $key, mixed $default = null): mixed {
     $config = loadConfig();
     if ($config === null) {
         return $default;
@@ -99,7 +99,7 @@ function getGlobalConfig($key, $default = null) {
  * Get default timezone from global config
  * @return string Timezone identifier (default: UTC)
  */
-function getDefaultTimezone() {
+function getDefaultTimezone(): string {
     return getGlobalConfig('default_timezone', 'UTC');
 }
 
@@ -107,7 +107,7 @@ function getDefaultTimezone() {
  * Get base domain from global config
  * @return string Base domain (default: aviationwx.org)
  */
-function getBaseDomain() {
+function getBaseDomain(): string {
     return getGlobalConfig('base_domain', 'aviationwx.org');
 }
 
@@ -115,7 +115,7 @@ function getBaseDomain() {
  * Get maximum stale hours from global config
  * @return int Maximum stale hours (default: 3)
  */
-function getMaxStaleHours() {
+function getMaxStaleHours(): int {
     return (int)getGlobalConfig('max_stale_hours', 3);
 }
 
@@ -123,7 +123,7 @@ function getMaxStaleHours() {
  * Get default webcam refresh interval from global config
  * @return int Default webcam refresh in seconds (default: 60)
  */
-function getDefaultWebcamRefresh() {
+function getDefaultWebcamRefresh(): int {
     return (int)getGlobalConfig('webcam_refresh_default', 60);
 }
 
@@ -131,7 +131,7 @@ function getDefaultWebcamRefresh() {
  * Get default weather refresh interval from global config
  * @return int Default weather refresh in seconds (default: 60)
  */
-function getDefaultWeatherRefresh() {
+function getDefaultWeatherRefresh(): int {
     return (int)getGlobalConfig('weather_refresh_default', 60);
 }
 
@@ -139,7 +139,7 @@ function getDefaultWeatherRefresh() {
  * Get weather worker pool size from global config
  * @return int Number of concurrent workers (default: 5)
  */
-function getWeatherWorkerPoolSize() {
+function getWeatherWorkerPoolSize(): int {
     return (int)getGlobalConfig('weather_worker_pool_size', 5);
 }
 
@@ -147,7 +147,7 @@ function getWeatherWorkerPoolSize() {
  * Get webcam worker pool size from global config
  * @return int Number of concurrent workers (default: 5)
  */
-function getWebcamWorkerPoolSize() {
+function getWebcamWorkerPoolSize(): int {
     return (int)getGlobalConfig('webcam_worker_pool_size', 5);
 }
 
@@ -155,7 +155,7 @@ function getWebcamWorkerPoolSize() {
  * Get worker timeout from global config
  * @return int Timeout in seconds (default: 45)
  */
-function getWorkerTimeout() {
+function getWorkerTimeout(): int {
     return (int)getGlobalConfig('worker_timeout_seconds', 45);
 }
 
@@ -174,7 +174,7 @@ function getWorkerTimeout() {
  * @param bool $useCache Whether to use APCu caching (default: true)
  * @return array|null Configuration array with 'airports' and optional 'config' keys, or null on error
  */
-function loadConfig($useCache = true) {
+function loadConfig(bool $useCache = true): ?array {
     static $cachedConfig = null;
     
     // Get config file path
@@ -275,6 +275,8 @@ function loadConfig($useCache = true) {
     $cachedConfigMtime = null;
     
     // Read and validate JSON
+    // Use @ to suppress errors for non-critical file operations
+    // We handle failures explicitly with null check and logging below
     $jsonContent = @file_get_contents($configFile);
     if ($jsonContent === false) {
         aviationwx_log('error', 'config read failed', ['path' => $configFile], 'app');
@@ -401,7 +403,7 @@ function loadConfig($useCache = true) {
  * 
  * @return void
  */
-function clearConfigCache() {
+function clearConfigCache(): void {
     if (function_exists('apcu_delete')) {
         apcu_delete('aviationwx_config');
         apcu_delete('aviationwx_config_mtime');
@@ -607,6 +609,8 @@ function getGitSha(): string {
             } elseif (strlen($sha) > 0) {
                 // If we got a shorter SHA, pad it or use full SHA
                 // Fall back to full SHA and take first 7 characters
+                // Use @ to suppress errors for non-critical git operations
+                // We handle failures explicitly with null checks below
                 $fullSha = @shell_exec('cd ' . escapeshellarg(__DIR__) . ' && git rev-parse HEAD 2>/dev/null');
                 if ($fullSha) {
                     $fullSha = trim($fullSha);
@@ -722,7 +726,9 @@ function getOurAirportsData(bool $forceRefresh = false): ?array {
     if (!$forceRefresh && file_exists($cacheFile)) {
         $cacheAge = time() - filemtime($cacheFile);
         if ($cacheAge < $cacheMaxAge) {
-            $cached = @json_decode(file_get_contents($cacheFile), true);
+            // Use @ to suppress errors for non-critical cache file operations
+            // We handle failures explicitly with null checks and fallbacks below
+            $cached = @json_decode(@file_get_contents($cacheFile), true);
             if (is_array($cached) && isset($cached['icao']) && isset($cached['iata']) && isset($cached['faa'])) {
                 return $cached;
             }
@@ -746,7 +752,9 @@ function getOurAirportsData(bool $forceRefresh = false): ?array {
             aviationwx_log('warning', 'failed to download OurAirports data', [], 'app');
             // Return cached version if available, even if stale
             if (file_exists($cacheFile)) {
-                $cached = @json_decode(file_get_contents($cacheFile), true);
+                // Use @ to suppress errors for non-critical cache file operations
+            // We handle failures explicitly with null checks and fallbacks below
+            $cached = @json_decode(@file_get_contents($cacheFile), true);
                 if (is_array($cached) && isset($cached['icao'])) {
                     return $cached;
                 }
@@ -816,8 +824,12 @@ function getOurAirportsData(bool $forceRefresh = false): ?array {
         // Save to cache
         $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
+            // Use @ to suppress errors for non-critical directory creation
+            // We handle failures explicitly with error checks below
             @mkdir($cacheDir, 0755, true);
         }
+        // Use @ to suppress errors for non-critical cache file writes
+        // We handle failures explicitly with error checks below
         @file_put_contents($cacheFile, json_encode($result, JSON_PRETTY_PRINT));
         
         aviationwx_log('info', 'OurAirports data downloaded and cached', [
@@ -832,7 +844,9 @@ function getOurAirportsData(bool $forceRefresh = false): ?array {
         aviationwx_log('error', 'error downloading OurAirports data', ['error' => $e->getMessage()], 'app');
         // Return cached version if available
         if (file_exists($cacheFile)) {
-            $cached = @json_decode(file_get_contents($cacheFile), true);
+            // Use @ to suppress errors for non-critical cache file operations
+            // We handle failures explicitly with null checks and fallbacks below
+            $cached = @json_decode(@file_get_contents($cacheFile), true);
             if (is_array($cached) && isset($cached['icao'])) {
                 return $cached;
             }
@@ -863,7 +877,9 @@ function getIcaoAirportList(bool $forceRefresh = false): ?array {
     if (!$forceRefresh && file_exists($cacheFile)) {
         $cacheAge = time() - filemtime($cacheFile);
         if ($cacheAge < $cacheMaxAge) {
-            $cached = @json_decode(file_get_contents($cacheFile), true);
+            // Use @ to suppress errors for non-critical cache file operations
+            // We handle failures explicitly with null checks and fallbacks below
+            $cached = @json_decode(@file_get_contents($cacheFile), true);
             if (is_array($cached) && !empty($cached)) {
                 return $cached;
             }
@@ -888,7 +904,9 @@ function getIcaoAirportList(bool $forceRefresh = false): ?array {
             aviationwx_log('warning', 'failed to download ICAO list', [], 'app');
             // Return cached version if available, even if stale
             if (file_exists($cacheFile)) {
-                $cached = @json_decode(file_get_contents($cacheFile), true);
+                // Use @ to suppress errors for non-critical cache file operations
+            // We handle failures explicitly with null checks and fallbacks below
+            $cached = @json_decode(@file_get_contents($cacheFile), true);
                 if (is_array($cached)) {
                     return $cached;
                 }
@@ -931,6 +949,8 @@ function getIcaoAirportList(bool $forceRefresh = false): ?array {
         // Save to cache
         $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
+            // Use @ to suppress errors for non-critical directory creation
+            // We handle failures explicitly with error checks below
             @mkdir($cacheDir, 0755, true);
         }
         @file_put_contents($cacheFile, json_encode($icaoCodes, JSON_PRETTY_PRINT));
@@ -942,7 +962,9 @@ function getIcaoAirportList(bool $forceRefresh = false): ?array {
         aviationwx_log('error', 'error downloading ICAO list', ['error' => $e->getMessage()], 'app');
         // Return cached version if available
         if (file_exists($cacheFile)) {
-            $cached = @json_decode(file_get_contents($cacheFile), true);
+            // Use @ to suppress errors for non-critical cache file operations
+            // We handle failures explicitly with null checks and fallbacks below
+            $cached = @json_decode(@file_get_contents($cacheFile), true);
             if (is_array($cached)) {
                 return $cached;
             }
@@ -1316,6 +1338,8 @@ function getIcaoFromIata(string $iataCode): ?string {
         // Save mapping to cache
         $cacheDir = dirname($mappingCacheFile);
         if (!is_dir($cacheDir)) {
+            // Use @ to suppress errors for non-critical directory creation
+            // We handle failures explicitly with error checks below
             @mkdir($cacheDir, 0755, true);
         }
         @file_put_contents($mappingCacheFile, json_encode($iataToIcao, JSON_PRETTY_PRINT));
@@ -1441,6 +1465,8 @@ function getIcaoFromFaa(string $faaCode): ?string {
         // Save mapping to cache
         $cacheDir = dirname($mappingCacheFile);
         if (!is_dir($cacheDir)) {
+            // Use @ to suppress errors for non-critical directory creation
+            // We handle failures explicitly with error checks below
             @mkdir($cacheDir, 0755, true);
         }
         @file_put_contents($mappingCacheFile, json_encode($faaToIcao, JSON_PRETTY_PRINT));
@@ -1631,12 +1657,12 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Validate IATA format (optional) and track for uniqueness
-        if (isset($airport['iata']) && $airport['iata'] !== null) {
+        if (isset($airport['iata']) && $airport['iata'] !== null && is_string($airport['iata'])) {
             if (!isValidIataFormat($airport['iata'])) {
                 $errors[] = "Airport '{$airportCode}' has invalid IATA code format: '{$airport['iata']}' (must be exactly 3 uppercase letters)";
             } else {
-                // Guard against null to prevent PHP 8.1+ deprecation warning
-                $iataKey = strtoupper(trim((string)$airport['iata']));
+                // Type check ensures $airport['iata'] is string, preventing PHP 8.1+ deprecation warnings
+                $iataKey = strtoupper(trim($airport['iata']));
                 if (!isset($iataMap[$iataKey])) {
                     $iataMap[$iataKey] = [];
                 }

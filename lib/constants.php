@@ -112,3 +112,19 @@ if (!defined('BACKGROUND_REFRESH_MAX_TIME')) {
     define('BACKGROUND_REFRESH_MAX_TIME', 40); // Leave 5s buffer before script timeout
 }
 
+// HTTP status codes
+if (!defined('HTTP_STATUS_OK')) {
+    define('HTTP_STATUS_OK', 200);
+}
+if (!defined('HTTP_STATUS_NOT_FOUND')) {
+    define('HTTP_STATUS_NOT_FOUND', 404);
+}
+if (!defined('HTTP_STATUS_SERVICE_UNAVAILABLE')) {
+    define('HTTP_STATUS_SERVICE_UNAVAILABLE', 503);
+}
+
+// Error rate monitoring
+if (!defined('ERROR_RATE_WINDOW_SECONDS')) {
+    define('ERROR_RATE_WINDOW_SECONDS', 3600); // 1 hour
+}
+

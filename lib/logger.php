@@ -238,10 +238,13 @@ function aviationwx_record_error_event(): void {
     if (!is_array($events)) $events = [];
     $now = time();
     $events[] = $now;
-    // Purge older than 3600s
-    $threshold = $now - 3600;
+    // Purge older than ERROR_RATE_WINDOW_SECONDS
+    if (!defined('ERROR_RATE_WINDOW_SECONDS')) {
+        require_once __DIR__ . '/constants.php';
+    }
+    $threshold = $now - ERROR_RATE_WINDOW_SECONDS;
     $events = array_values(array_filter($events, fn($t) => $t >= $threshold));
-    apcu_store($key, $events, 3600);
+    apcu_store($key, $events, ERROR_RATE_WINDOW_SECONDS);
 }
 }
 
@@ -258,8 +261,11 @@ function aviationwx_error_rate_last_hour(): int {
     if (!function_exists('apcu_fetch')) return 0;
     $events = apcu_fetch('aviationwx_error_events');
     if (!is_array($events)) return 0;
+    if (!defined('ERROR_RATE_WINDOW_SECONDS')) {
+        require_once __DIR__ . '/constants.php';
+    }
     $now = time();
-    $threshold = $now - 3600;
+    $threshold = $now - ERROR_RATE_WINDOW_SECONDS;
     $events = array_values(array_filter($events, fn($t) => $t >= $threshold));
     return count($events);
 }
