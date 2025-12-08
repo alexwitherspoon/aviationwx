@@ -132,7 +132,13 @@ Tests: 11, Assertions: 23, Errors: 0
 
 ## Additional Context: Missing airports.json in CI
 
-**Important**: `airports.json` is **not in the repository** - it only exists on the production host. CD deploy can access it because deployment happens on the production host. All code must handle missing config gracefully in CI/CD environments.
+**Important**: `airports.json` is **not in the repository** - it only exists on the production host.
+
+**CI vs CD Access**:
+- **CI (GitHub Actions)**: ❌ **Never has access** to `airports.json` - runs in GitHub's cloud, not on production host
+- **CD (Deployment)**: ✅ **Has access** to `airports.json` - runs on production host where the file exists
+
+All code must handle missing config gracefully in CI environments. Tests use fixtures (`tests/Fixtures/airports.json.test`) instead of the real config file.
 
 ### Verification
 
@@ -150,9 +156,10 @@ Tests: 11, Assertions: 23, Errors: 0
 
 **Deployment context**:
 - `airports.json` is **not in the repository** (excluded via `.gitignore`)
-- File only exists on the production host
-- CD deploy runs on production host, so it can access the file
-- CI/CD pipelines use test fixtures (`tests/Fixtures/airports.json.test`)
+- File only exists on the production host at `/home/aviationwx/airports.json`
+- **CI (GitHub Actions)**: Never has access - runs in GitHub's cloud infrastructure
+- **CD (Deployment)**: Has access - runs on production host where file exists
+- CI pipelines use test fixtures (`tests/Fixtures/airports.json.test`) for testing
 
 **Conclusion**: ✅ All refactored code handles missing `airports.json` correctly with proper fallbacks. Code is safe for CI environments where the config file doesn't exist.
 
