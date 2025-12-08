@@ -66,7 +66,7 @@ function generateOrganizationSchema() {
         ],
         'contactPoint' => [
             '@type' => 'ContactPoint',
-            'email' => 'alex@alexwitherspoon.com',
+            'email' => 'contact@aviationwx.org',
             'contactType' => 'Customer Service'
         ]
     ];
