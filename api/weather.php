@@ -113,37 +113,28 @@ function generateMockWeatherData($airportId, $airport) {
     exit;
     }
 
-    // Get and validate airport ID
-    $rawAirportId = $_GET['airport'] ?? '';
-    if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
+    // Get and validate airport identifier (supports ICAO, IATA, FAA, or airport ID)
+    $rawIdentifier = $_GET['airport'] ?? '';
+    if (empty($rawIdentifier)) {
     http_response_code(400);
     ob_clean();
-    aviationwx_log('error', 'invalid airport id', ['airport' => $rawAirportId], 'user');
-    echo json_encode(['success' => false, 'error' => 'Invalid airport ID']);
+    aviationwx_log('error', 'missing airport identifier', [], 'user');
+    echo json_encode(['success' => false, 'error' => 'Airport identifier required']);
     exit;
     }
 
-    $airportId = strtolower(trim($rawAirportId));
-
-    // Load airport config (with caching)
-    $config = loadConfig();
-    if ($config === null) {
-    http_response_code(500);
-    ob_clean();
-    aviationwx_log('error', 'config load failed', [], 'app');
-    echo json_encode(['success' => false, 'error' => 'Service temporarily unavailable']);
-    exit;
-    }
-
-    if (!isset($config['airports'][$airportId])) {
+    // Find airport by any identifier type
+    $result = findAirportByIdentifier($rawIdentifier);
+    if ($result === null || !isset($result['airport']) || !isset($result['airportId'])) {
     http_response_code(404);
     ob_clean();
-    aviationwx_log('error', 'airport not found', ['airport' => $airportId], 'user');
+    aviationwx_log('error', 'airport not found', ['identifier' => $rawIdentifier], 'user');
     echo json_encode(['success' => false, 'error' => 'Airport not found']);
     exit;
     }
 
-    $airport = $config['airports'][$airportId];
+    $airport = $result['airport'];
+    $airportId = $result['airportId'];
 
     // Check if we're using test config - if so, return mock weather data
     $envConfigPath = getenv('CONFIG_PATH');
