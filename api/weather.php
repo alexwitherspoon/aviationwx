@@ -123,6 +123,17 @@ function generateMockWeatherData($airportId, $airport) {
     exit;
     }
 
+    // Basic format validation: identifiers should be 3-4 alphanumeric characters
+    // (ICAO: 4 chars, IATA: 3 chars, FAA: 3-4 chars, airport ID: 3-4 chars)
+    $trimmed = trim($rawIdentifier);
+    if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 4 || !preg_match('/^[a-z0-9]{3,4}$/i', $trimmed)) {
+    http_response_code(400);
+    ob_clean();
+    aviationwx_log('error', 'invalid airport identifier format', ['identifier' => $rawIdentifier], 'user');
+    echo json_encode(['success' => false, 'error' => 'Invalid airport identifier format']);
+    exit;
+    }
+
     // Find airport by any identifier type
     $result = findAirportByIdentifier($rawIdentifier);
     if ($result === null || !isset($result['airport']) || !isset($result['airportId'])) {

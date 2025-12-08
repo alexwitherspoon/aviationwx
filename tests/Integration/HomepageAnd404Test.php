@@ -216,24 +216,51 @@ class HomepageAnd404Test extends TestCase
     {
         // Test general 404
         $response = $this->makeRequest('nonexistent-page');
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        // Always assert - even if not 404, should not have PHP errors
+        $html = $response['body'] ?? '';
+        $this->assertStringNotContainsString(
+            'Fatal error',
+            $html,
+            "404 page should not contain PHP fatal errors"
+        );
+        $this->assertStringNotContainsString(
+            'Parse error',
+            $html,
+            "404 page should not contain PHP parse errors"
+        );
+        
         if ($response['http_code'] == 404) {
-            $html = $response['body'];
-            $this->assertStringNotContainsString(
-                'Fatal error',
-                $html,
-                "General 404 should not contain PHP errors"
-            );
+            // Additional check for 404 page structure
+            $this->assertNotEmpty($html, "404 page should have content");
         }
         
         // Test airport 404
         $response = $this->makeRequest('?airport=xxxx');
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        $html = $response['body'] ?? '';
+        $this->assertStringNotContainsString(
+            'Fatal error',
+            $html,
+            "Airport 404 page should not contain PHP fatal errors"
+        );
+        $this->assertStringNotContainsString(
+            'Parse error',
+            $html,
+            "Airport 404 page should not contain PHP parse errors"
+        );
+        
         if ($response['http_code'] == 404) {
-            $html = $response['body'];
-            $this->assertStringNotContainsString(
-                'Fatal error',
-                $html,
-                "Airport 404 should not contain PHP errors"
-            );
+            // Additional check for 404 page structure
+            $this->assertNotEmpty($html, "Airport 404 page should have content");
         }
     }
     

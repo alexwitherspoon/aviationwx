@@ -7,6 +7,16 @@
 require_once __DIR__ . '/lib/config.php';
 
 // Check if this is a status page request
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+$parsedUri = parse_url($requestUri);
+$requestPath = isset($parsedUri['path']) ? trim($parsedUri['path'], '/') : '';
+
+// Route status.php requests
+if ($requestPath === 'status.php') {
+    include 'pages/status.php';
+    exit;
+}
+
 $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
 if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['status'] === '1')) {
     // Route to status page
@@ -15,9 +25,6 @@ if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['statu
 }
 
 // Check if there's a path component in the request (for general 404s)
-$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-$parsedUri = parse_url($requestUri);
-$requestPath = isset($parsedUri['path']) ? trim($parsedUri['path'], '/') : '';
 $hasPathComponent = !empty($requestPath) && $requestPath !== 'index.php';
 
 // Detect if this is an airport-related request (query parameter or subdomain)

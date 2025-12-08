@@ -66,6 +66,7 @@ function servePlaceholder() {
     if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
         header('Content-Type: image/jpeg');
         header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+        header('X-Cache-Status: MISS'); // Placeholder served - no cache
         $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
         $size = @filesize($placeholderPath);
         if ($size > 0) {
@@ -81,6 +82,7 @@ function servePlaceholder() {
     } else {
         header('Content-Type: image/png');
         header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+        header('X-Cache-Status: MISS'); // Placeholder served - no cache
         header('Content-Length: 95');
         echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
     }
