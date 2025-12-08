@@ -13,11 +13,11 @@ require_once __DIR__ . '/constants.php';
  * Airport IDs must be 3-4 lowercase alphanumeric characters (ICAO format).
  * Validates format before trimming to prevent "k spb" from becoming "kspb".
  * 
- * @param string $id Airport ID to validate
+ * @param string|null $id Airport ID to validate
  * @return bool True if valid ICAO format, false otherwise
  */
-function validateAirportId(string $id): bool {
-    if (empty($id)) {
+function validateAirportId(?string $id): bool {
+    if ($id === null || empty($id)) {
         return false;
     }
     // Check for whitespace BEFORE trimming (reject IDs with whitespace)
