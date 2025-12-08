@@ -17,6 +17,12 @@ if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['statu
 // Get airport ID from request
 $airportId = getAirportIdFromRequest();
 
+// Check if there's a path component in the request (for general 404s)
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+$parsedUri = parse_url($requestUri);
+$requestPath = isset($parsedUri['path']) ? trim($parsedUri['path'], '/') : '';
+$hasPathComponent = !empty($requestPath) && $requestPath !== 'index.php';
+
 // Load configuration (with caching)
 $config = loadConfig();
 if ($config === null) {
@@ -43,13 +49,23 @@ if (!empty($airportId)) {
         include 'pages/airport.php';
         exit;
     } else {
-        // Airport not found - don't reveal which airports exist
+        // Airport not found on subdomain - show airport-specific 404
         http_response_code(404);
-        include 'pages/error-404.php';
+        // Make airport ID available to 404 page
+        $requestedAirportId = $airportId;
+        include 'pages/error-404-airport.php';
         exit;
     }
 }
 
-// No airport specified, show homepage
+// No airport specified
+// If there's a path component, it's a general 404 (invalid path)
+if ($hasPathComponent) {
+    http_response_code(404);
+    include 'pages/error-404.php';
+    exit;
+}
+
+// No airport and no path - show homepage
 include 'pages/homepage.php';
 
