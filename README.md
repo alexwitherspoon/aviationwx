@@ -82,7 +82,7 @@ See [Local Development Setup](docs/LOCAL_SETUP.md) for complete instructions.
 
 1. **Get API Keys**: Obtain credentials from your weather station provider (Tempest, Ambient, or WeatherLink)
 2. **Gather your Webcam information**: RSTP, FTP(s), or the make and model of what you have.
-3. **Email alex@alexwitherspoon.com** to participate in AviationWX.org and we'll get it added.
+3. **Email contact@aviationwx.org** to participate in AviationWX.org and we'll get it added.
 
 P.S. - Do you need help sponsoring a local airport with equipment? Reach out, I'd like to talk to you about options!
 
