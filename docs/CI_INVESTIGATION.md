@@ -132,7 +132,7 @@ Tests: 11, Assertions: 23, Errors: 0
 
 ## Additional Context: Missing airports.json in CI
 
-**Important**: In the main project repo, `airports.json` is not available until the CD deploy step. All code must handle missing config gracefully.
+**Important**: `airports.json` is **not in the repository** - it only exists on the production host. CD deploy can access it because deployment happens on the production host. All code must handle missing config gracefully in CI/CD environments.
 
 ### Verification
 
@@ -148,5 +148,11 @@ Tests: 11, Assertions: 23, Errors: 0
 - Bootstrap sets `CONFIG_PATH` if not already set
 - All functions tested with and without config file
 
-**Conclusion**: ✅ All refactored code handles missing `airports.json` correctly with proper fallbacks.
+**Deployment context**:
+- `airports.json` is **not in the repository** (excluded via `.gitignore`)
+- File only exists on the production host
+- CD deploy runs on production host, so it can access the file
+- CI/CD pipelines use test fixtures (`tests/Fixtures/airports.json.test`)
+
+**Conclusion**: ✅ All refactored code handles missing `airports.json` correctly with proper fallbacks. Code is safe for CI environments where the config file doesn't exist.
 
