@@ -9,13 +9,19 @@ require_once __DIR__ . '/constants.php';
 
 /**
  * Validate and sanitize airport ID
- * Airport IDs must be 3-4 lowercase alphanumeric characters (ICAO format)
+ * 
+ * Airport IDs must be 3-4 lowercase alphanumeric characters (ICAO format).
+ * Validates format before trimming to prevent "k spb" from becoming "kspb".
+ * 
+ * @param string $id Airport ID to validate
+ * @return bool True if valid ICAO format, false otherwise
  */
-function validateAirportId($id) {
+function validateAirportId(string $id): bool {
     if (empty($id)) {
         return false;
     }
     // Check for whitespace BEFORE trimming (reject IDs with whitespace)
+    // This prevents "k spb" from becoming "kspb" after trim
     if (preg_match('/\s/', $id)) {
         return false;
     }
@@ -374,9 +380,13 @@ function clearConfigCache() {
 
 /**
  * Get sanitized airport ID from request
- * Checks both query parameter and subdomain
+ * 
+ * Checks both query parameter and subdomain, validating format before returning.
+ * Supports both ?airport=kspb and kspb.aviationwx.org patterns.
+ * 
+ * @return string Validated airport ID (3-4 lowercase alphanumeric) or empty string
  */
-function getAirportIdFromRequest() {
+function getAirportIdFromRequest(): string {
     $airportId = '';
     
     // First, try query parameter
@@ -388,15 +398,18 @@ function getAirportIdFromRequest() {
     } else {
         // Try extracting from subdomain
         $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
+        $baseDomain = getBaseDomain();
         
-        // Match subdomain pattern (kspb.aviationwx.org)
-        if (preg_match('/^([a-z0-9]{3,4})\.aviationwx\.org$/', $host, $matches)) {
+        // Match subdomain pattern (e.g., kspb.aviationwx.org)
+        // Uses base domain from config to support custom domains
+        $pattern = '/^([a-z0-9]{3,4})\.' . preg_quote($baseDomain, '/') . '$/';
+        if (preg_match($pattern, $host, $matches)) {
             $rawId = $matches[1];
             if (validateAirportId($rawId)) {
                 $airportId = $rawId;
             }
         } else {
-            // Also check if host has 3+ parts (handles other TLDs)
+            // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
             $hostParts = explode('.', $host);
             if (count($hostParts) >= 3) {
                 $rawId = $hostParts[0];
@@ -412,11 +425,15 @@ function getAirportIdFromRequest() {
 
 /**
  * Get the current Git commit SHA (short version)
- * Tries multiple methods to get the SHA for display in footers
+ * 
+ * Tries multiple methods to get the SHA for display in footers:
+ * 1. Environment variable (set during deployment)
+ * 2. .git/HEAD file (if in git repository)
+ * 3. git command (if available)
  * 
  * @return string Short SHA (7 characters) or empty string if unavailable
  */
-function getGitSha() {
+function getGitSha(): string {
     // Try environment variable first (set during deployment)
     $sha = getenv('GIT_SHA');
     if ($sha && strlen($sha) >= 7) {

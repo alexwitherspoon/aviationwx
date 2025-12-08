@@ -67,14 +67,18 @@ function checkRateLimit($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeco
 
 /**
  * File-based rate limiting fallback
- * Uses file locking to ensure atomic read-modify-write operations
+ * 
+ * Uses file locking to ensure atomic read-modify-write operations.
+ * Without proper locking, concurrent requests could both read the same count,
+ * increment independently, and write back, causing rate limit bypass.
+ * 
  * @param string $key Rate limit key
  * @param int $maxRequests Maximum requests allowed
  * @param int $windowSeconds Time window in seconds
  * @param string $ip Client IP address
  * @return bool True if allowed, false if rate limited
  */
-function checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip) {
+function checkRateLimitFileBased(string $key, int $maxRequests, int $windowSeconds, string $ip): bool {
     $cacheDir = __DIR__ . '/../cache';
     if (!is_dir($cacheDir)) {
         if (!@mkdir($cacheDir, 0755, true)) {
@@ -87,6 +91,7 @@ function checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip) {
     $now = time();
     
     // Use file locking for atomic read-modify-write
+    // Critical: Without locking, race conditions allow rate limit bypass
     $fp = @fopen($rateLimitFile, 'c+');
     if ($fp === false) {
         // Fallback to non-locked write if we can't open file
@@ -94,7 +99,8 @@ function checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip) {
         return checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip, $rateLimitFile, $now);
     }
     
-    // Acquire exclusive lock (blocking to ensure atomicity)
+    // Acquire exclusive lock (blocking) to ensure atomicity
+    // This prevents concurrent requests from both reading the same count
     if (!@flock($fp, LOCK_EX)) {
         @fclose($fp);
         aviationwx_log('warning', 'rate limit file lock failed, using fallback', ['file' => $rateLimitFile], 'app');
@@ -141,6 +147,7 @@ function checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip) {
     }
     
     // Write modified data back while lock is still held
+    // Truncate first to ensure clean write (prevents partial overwrites)
     @ftruncate($fp, 0);
     @rewind($fp);
     @fwrite($fp, json_encode($data));
@@ -192,12 +199,16 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
 
 /**
  * Get remaining rate limit for this key
+ * 
+ * Returns the number of requests remaining in the current time window
+ * and when the window resets. Used for X-RateLimit-* headers.
+ * 
  * @param string $key Rate limit key
  * @param int $maxRequests Maximum requests allowed
- * @param int $windowSeconds Time window in seconds (optional, for consistency)
- * @return array|null Returns array with 'remaining' and 'reset' keys, or null if unavailable
+ * @param int $windowSeconds Time window in seconds
+ * @return array Returns array with 'remaining' (int) and 'reset' (int timestamp) keys
  */
-function getRateLimitRemaining($key, $maxRequests = RATE_LIMIT_WEATHER_MAX, $windowSeconds = RATE_LIMIT_WEATHER_WINDOW) {
+function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHER_MAX, int $windowSeconds = RATE_LIMIT_WEATHER_WINDOW): array {
     // Extract IP address (shared logic)
     $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     $ip = trim(explode(',', $ip)[0]);
