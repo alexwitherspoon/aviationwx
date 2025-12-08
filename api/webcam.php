@@ -1,10 +1,14 @@
 <?php
 /**
- * Webcam Image Fetcher
- * Serves cached webcam images with background refresh support
+ * Webcam Image Server with Background Refresh
  * 
- * When cache is stale, serves stale cache immediately and triggers background refresh
- * Similar to weather.php's stale-while-revalidate pattern
+ * Implements stale-while-revalidate pattern for optimal performance:
+ * 1. If cache is fresh: serve immediately
+ * 2. If cache is stale: serve stale cache immediately, trigger background refresh
+ * 3. Background refresh uses file locking to prevent concurrent refreshes
+ * 
+ * This ensures fast response times while keeping data fresh. Similar pattern
+ * to weather.php's stale-while-revalidate implementation.
  */
 
 // Start output buffering IMMEDIATELY to catch any output from included files
