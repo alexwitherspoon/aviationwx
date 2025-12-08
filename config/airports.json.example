@@ -145,14 +145,6 @@
           "url": "https://example-org.com"
         }
       ]
-    },
-    "_example_kpdx": {
-      "_comment": "Example: Portland International Airport - shows ICAO, IATA, and FAA identifiers",
-      "name": "Portland International Airport",
-      "icao": "KPDX",
-      "iata": "PDX",
-      "faa": "PDX",
-      "_note": "Accessing pdx.aviationwx.org redirects to kpdx.aviationwx.org (IATA -> ICAO)"
     }
   }
 }
