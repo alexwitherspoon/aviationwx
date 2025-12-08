@@ -55,7 +55,64 @@
       "timezone": "America/Los_Angeles",
       "weather_source": {
         "type": "metar"
-      }
+      },
+      "metar_station": "KPDX",
+      "webcams": [
+        {
+          "name": "Test Camera PDX",
+          "url": "https://example.com/pdx-cam.jpg",
+          "position": "south"
+        }
+      ]
+    },
+    "test_ambient": {
+      "name": "Test Ambient Weather Airport",
+      "icao": "KTST",
+      "iata": null,
+      "faa": "TST",
+      "address": "Test Location",
+      "lat": 45.5,
+      "lon": -122.5,
+      "elevation_ft": 500,
+      "timezone": "America/Los_Angeles",
+      "weather_source": {
+        "type": "ambient",
+        "api_key": "test_ambient_api_key",
+        "application_key": "test_ambient_app_key"
+      },
+      "metar_station": "KTST",
+      "webcams": [
+        {
+          "name": "Test Camera Ambient",
+          "url": "https://example.com/ambient-cam.jpg",
+          "position": "north"
+        }
+      ]
+    },
+    "test_weatherlink": {
+      "name": "Test WeatherLink Airport",
+      "icao": "KTWL",
+      "iata": null,
+      "faa": "TWL",
+      "address": "Test Location",
+      "lat": 45.6,
+      "lon": -122.6,
+      "elevation_ft": 600,
+      "timezone": "America/Los_Angeles",
+      "weather_source": {
+        "type": "weatherlink",
+        "api_key": "test_weatherlink_api_key",
+        "api_secret": "test_weatherlink_api_secret",
+        "station_id": "123456"
+      },
+      "metar_station": "KTWL",
+      "webcams": [
+        {
+          "name": "Test Camera WeatherLink",
+          "url": "https://example.com/weatherlink-cam.jpg",
+          "position": "east"
+        }
+      ]
     },
     "03s": {
       "name": "Sandy River Airport",
