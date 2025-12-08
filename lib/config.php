@@ -77,6 +77,55 @@ function isProduction(): bool {
 }
 
 /**
+ * Check if application is running in test mode
+ * 
+ * Test mode is active when:
+ * - CONFIG_PATH environment variable points to airports.json.test
+ * - APP_ENV is set to 'testing' or 'test'
+ * - Running in CI (GITHUB_ACTIONS or CI env var) and using test config
+ * 
+ * @return bool True if in test mode, false otherwise
+ */
+function isTestMode(): bool {
+    // Check CONFIG_PATH environment variable
+    $envConfigPath = getenv('CONFIG_PATH');
+    if ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false) {
+        return true;
+    }
+    
+    // Check APP_ENV
+    $appEnv = getenv('APP_ENV');
+    if ($appEnv === 'testing' || $appEnv === 'test') {
+        return true;
+    }
+    
+    // Check if running in CI
+    if (getenv('CI') === 'true' || getenv('GITHUB_ACTIONS') === 'true') {
+        // In CI, check if we're using test config
+        $envConfigPath = getenv('CONFIG_PATH');
+        if ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false) {
+            return true;
+        }
+        // Also check if default config path contains test markers
+        // In CI, we copy test fixture to config/airports.json, so check content for test markers
+        $defaultConfigPath = __DIR__ . '/../config/airports.json';
+        if (file_exists($defaultConfigPath)) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with null checks below
+            $configContent = @file_get_contents($defaultConfigPath);
+            if ($configContent && (
+                strpos($configContent, '"test_api_key_') !== false ||
+                strpos($configContent, 'example.com') !== false
+            )) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
  * Get global configuration value with fallback to default
  * @param string $key Configuration key
  * @param mixed $default Default value if not set
