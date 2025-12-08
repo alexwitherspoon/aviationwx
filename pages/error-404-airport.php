@@ -18,9 +18,37 @@ $isValidIcaoFormat = isValidIcaoFormat($requestedAirportId);
 $config = loadConfig();
 $isRealAirport = false;
 $similarAirports = [];
+$displayAirportId = $requestedAirportId; // The airport code to display in messages
 
+// Check if identifier is a valid ICAO code
 if ($isValidIcaoFormat && !empty($requestedAirportId)) {
     $isRealAirport = isValidRealAirport($requestedAirportId, $config);
+}
+
+// If not found as ICAO, check if it's a valid IATA code and find corresponding ICAO
+if (!$isRealAirport && !empty($requestedAirportId)) {
+    if (isValidIataFormat($requestedAirportId)) {
+        $icaoFromIata = getIcaoFromIata($requestedAirportId);
+        if ($icaoFromIata !== null) {
+            // Found ICAO for this IATA code, check if it's a real airport
+            $isRealAirport = isValidRealAirport($icaoFromIata, $config);
+            if ($isRealAirport) {
+                // Use the ICAO code for display since that's the standard identifier
+                $displayAirportId = $icaoFromIata;
+            }
+        }
+    } elseif (isValidFaaFormat($requestedAirportId)) {
+        // Check if it's a valid FAA identifier and find corresponding ICAO
+        $icaoFromFaa = getIcaoFromFaa($requestedAirportId);
+        if ($icaoFromFaa !== null) {
+            // Found ICAO for this FAA code, check if it's a real airport
+            $isRealAirport = isValidRealAirport($icaoFromFaa, $config);
+            if ($isRealAirport) {
+                // Use the ICAO code for display since that's the standard identifier
+                $displayAirportId = $icaoFromFaa;
+            }
+        }
+    }
 }
 
 // Only show "Did you mean?" suggestions for typos or invalid codes
@@ -302,14 +330,14 @@ $canonicalUrl = getCanonicalUrl();
                 <div class="error-code">404</div>
                 <h1>
                     <?php if ($isRealAirport): ?>
-                        <?= htmlspecialchars($requestedAirportId) ?> Isn't Online Yet
+                        <?= htmlspecialchars($displayAirportId) ?> Isn't Online Yet
                     <?php else: ?>
                         Airport Not Found
                     <?php endif; ?>
                 </h1>
                 <p>
                     <?php if ($isRealAirport): ?>
-                        <span class="airport-code-highlight"><?= htmlspecialchars($requestedAirportId) ?></span> is a real airport, but it's not yet part of the AviationWX network.
+                        <span class="airport-code-highlight"><?= htmlspecialchars($displayAirportId) ?></span> is a real airport, but it's not yet part of the AviationWX network.
                     <?php else: ?>
                         <?php if ($isValidIcaoFormat): ?>
                             <span class="airport-code-highlight"><?= htmlspecialchars($requestedAirportId) ?></span> doesn't appear to be a valid airport code.
@@ -320,7 +348,7 @@ $canonicalUrl = getCanonicalUrl();
                 </p>
                 <?php if ($isRealAirport): ?>
                 <p style="margin-top: 1rem; font-size: 1rem; opacity: 0.9;">
-                    But it could be! Here's how you can help bring weather dashboards to <?= htmlspecialchars($requestedAirportId) ?>.
+                    But it could be! Here's how you can help bring weather dashboards to <?= htmlspecialchars($displayAirportId) ?>.
                 </p>
                 <?php endif; ?>
             </div>
@@ -354,7 +382,7 @@ $canonicalUrl = getCanonicalUrl();
             <div class="section">
                 <h2>Why This Matters</h2>
                 <p>
-                    <strong><?= htmlspecialchars($requestedAirportId) ?></strong> is a real airport, but pilots searching for weather information here aren't finding it. 
+                    <strong><?= htmlspecialchars($displayAirportId) ?></strong> is a real airport, but pilots searching for weather information here aren't finding it. 
                     We've verified this is a legitimate airport that needs weather dashboard coverage.
                 </p>
                 
@@ -366,7 +394,7 @@ $canonicalUrl = getCanonicalUrl();
                 
                 <p><strong>Economic Impact</strong></p>
                 <p>
-                    Tools like this encourage airport use, bringing more pilots to <strong><?= htmlspecialchars($requestedAirportId) ?></strong> and supporting local economic activity.
+                    Tools like this encourage airport use, bringing more pilots to <strong><?= htmlspecialchars($displayAirportId) ?></strong> and supporting local economic activity.
                 </p>
                 
                 <p><strong>Community & Culture</strong></p>
@@ -393,10 +421,10 @@ $canonicalUrl = getCanonicalUrl();
                         <li><strong>Advocate</strong> - If you're part of a flying club or organization, bring it up at meetings</li>
                     </ul>
                     <?php
-                    $emailSubject = rawurlencode("Request to add {$requestedAirportId} to AviationWX.org");
+                    $emailSubject = rawurlencode("Request to add {$displayAirportId} to AviationWX.org");
                     $emailBody = encodeEmailBody("Hello,
 
-I'm reaching out about AviationWX.org, a free weather dashboard service for airports. I noticed that {$requestedAirportId} isn't yet part of the network, and I think it would be a valuable addition.
+I'm reaching out about AviationWX.org, a free weather dashboard service for airports. I noticed that {$displayAirportId} isn't yet part of the network, and I think it would be a valuable addition.
 
 AviationWX.org provides:
 - Real-time weather data and webcams
@@ -413,7 +441,7 @@ Example airport dashboard: https://kspb.aviationwx.org
 
 If you're interested, please contact: contact@aviationwx.org
 
-Thank you for considering this opportunity to enhance safety and information for pilots at {$requestedAirportId}.
+Thank you for considering this opportunity to enhance safety and information for pilots at {$displayAirportId}.
 
 Best regards");
                     ?>
@@ -441,20 +469,20 @@ Best regards");
                     
                     <p style="margin-top: 1rem;"><strong>What you get:</strong></p>
                     <ul>
-                        <li>Free weather dashboard at <code><?= htmlspecialchars($requestedAirportId) ?>.aviationwx.org</code></li>
+                        <li>Free weather dashboard at <code><?= htmlspecialchars($displayAirportId) ?>.aviationwx.org</code></li>
                         <li>We handle all technical setup and ongoing maintenance</li>
                         <li>Equipment ownership stays with the airport (if we provide it)</li>
                         <li>SEO benefits - we link to your organization's website to help drive traffic</li>
                         <li>No ongoing costs or maintenance burden on your end</li>
                     </ul>
                     <?php
-                    $ownerEmailSubject = rawurlencode("Request to add {$requestedAirportId} to AviationWX.org");
+                    $ownerEmailSubject = rawurlencode("Request to add {$displayAirportId} to AviationWX.org");
                     $ownerEmailBody = encodeEmailBody("Hello AviationWX.org team,
 
-I'm interested in adding {$requestedAirportId} to the AviationWX.org network. Please find the information below:
+I'm interested in adding {$displayAirportId} to the AviationWX.org network. Please find the information below:
 
 === AIRPORT INFORMATION ===
-Airport ICAO Code: {$requestedAirportId}
+Airport ICAO Code: {$displayAirportId}
 Airport Name: [Please provide]
 Organization/Contact Name: [Please provide]
 Your Email: [Please provide]
@@ -513,7 +541,7 @@ Best regards,
                     <li><strong>Contact us</strong> - Reach out via email (see below) or share your airport's contact information</li>
                     <li><strong>We discuss requirements</strong> - Existing equipment vs. new setup, what's needed, timeline</li>
                     <li><strong>We handle all setup</strong> - Technical work is on us, you just provide access and permission</li>
-                    <li><strong>Your airport goes live!</strong> - Pilots can start using the dashboard at <?= htmlspecialchars($requestedAirportId) ?>.aviationwx.org</li>
+                    <li><strong>Your airport goes live!</strong> - Pilots can start using the dashboard at <?= htmlspecialchars($displayAirportId) ?>.aviationwx.org</li>
                 </ol>
             </div>
 
@@ -563,12 +591,12 @@ Best regards,
                 </p>
                 <div class="contact-info">
                     <strong>Contact Alex Witherspoon:</strong><br>
-                    <a href="mailto:contact@aviationwx.org?subject=<?= rawurlencode("Request to add {$requestedAirportId} to AviationWX") ?>">
+                    <a href="mailto:contact@aviationwx.org?subject=<?= rawurlencode("Request to add {$displayAirportId} to AviationWX") ?>">
                         contact@aviationwx.org
                     </a>
                 </div>
                 <p style="text-align: center; font-size: 0.9rem; color: #666; margin-top: 1rem;">
-                    Email subject will be pre-filled: "Request to add <?= htmlspecialchars($requestedAirportId) ?> to AviationWX"
+                    Email subject will be pre-filled: "Request to add <?= htmlspecialchars($displayAirportId) ?> to AviationWX"
                 </p>
                 <p style="text-align: center; font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
                     Happy to answer questions, discuss requirements, or help coordinate setup.

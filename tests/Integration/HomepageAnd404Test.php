@@ -179,6 +179,108 @@ class HomepageAnd404Test extends TestCase
     }
     
     /**
+     * Test airport 404 page recognizes IATA codes and shows real airport message
+     * 
+     * When an IATA code like PDX is requested but the airport is not in the network,
+     * it should recognize it as a valid airport and show the "real airport but not in network" message.
+     */
+    public function testAirport404_RecognizesIataCode()
+    {
+        // Test with PDX (Portland International Airport) - a real airport not in the network
+        $response = $this->makeRequest('?airport=pdx');
+        
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        // Should return 404 (airport not in network)
+        $this->assertEquals(
+            404,
+            $response['http_code'],
+            "Airport 404 should return 404 status for PDX (got: {$response['http_code']})"
+        );
+        
+        $html = $response['body'];
+        
+        // Should recognize PDX as a real airport and show the "real airport but not in network" message
+        // The page should contain "KPDX" (the ICAO code) or "isn't online yet" or similar message
+        $this->assertStringContainsString(
+            'isn\'t online yet',
+            strtolower($html),
+            "Airport 404 should recognize PDX as a real airport and show 'isn't online yet' message"
+        );
+        
+        // Should contain the ICAO code (KPDX) in the response
+        $this->assertStringContainsString(
+            'KPDX',
+            $html,
+            "Airport 404 should display ICAO code KPDX for PDX IATA code"
+        );
+    }
+    
+    /**
+     * Test airport 404 page recognizes FAA codes and shows real airport message
+     */
+    public function testAirport404_RecognizesFaaCode()
+    {
+        // Test with a real FAA code that's not in the network
+        // Using PDX as FAA identifier (same as IATA for this airport)
+        $response = $this->makeRequest('?airport=PDX');
+        
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        // Should return 404 (airport not in network)
+        $this->assertEquals(
+            404,
+            $response['http_code'],
+            "Airport 404 should return 404 status for PDX FAA code (got: {$response['http_code']})"
+        );
+        
+        $html = $response['body'];
+        
+        // Should recognize as a real airport
+        $this->assertStringContainsString(
+            'isn\'t online yet',
+            strtolower($html),
+            "Airport 404 should recognize PDX FAA code as a real airport"
+        );
+    }
+    
+    /**
+     * Test airport 404 page handles invalid codes correctly
+     */
+    public function testAirport404_HandlesInvalidCode()
+    {
+        // Test with an invalid code
+        $response = $this->makeRequest('?airport=INVALID123');
+        
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        // Should return 404
+        $this->assertEquals(
+            404,
+            $response['http_code'],
+            "Airport 404 should return 404 status for invalid code (got: {$response['http_code']})"
+        );
+        
+        $html = $response['body'];
+        
+        // Should show "doesn't appear to be a valid airport code" message
+        $this->assertStringContainsString(
+            'doesn\'t appear to be a valid airport code',
+            strtolower($html),
+            "Airport 404 should show invalid code message for invalid codes"
+        );
+    }
+    
+    /**
      * Test homepage has no PHP errors
      */
     public function testHomepage_NoPhpErrors()

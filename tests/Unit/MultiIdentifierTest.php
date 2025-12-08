@@ -507,5 +507,131 @@ class MultiIdentifierTest extends TestCase
         $result = validateAirportsJsonStructure($config);
         $this->assertTrue($result['valid']);
     }
+    
+    /**
+     * Test getIcaoFromIata - Valid IATA code
+     * 
+     * Note: This test requires network access to download OurAirports data.
+     * It may be skipped if the network is unavailable.
+     */
+    public function testGetIcaoFromIata_ValidIata()
+    {
+        // Test with PDX (Portland International Airport)
+        $result = getIcaoFromIata('PDX');
+        
+        if ($result === null) {
+            $this->markTestSkipped('Could not get ICAO from IATA (network issue or service unavailable)');
+            return;
+        }
+        
+        $this->assertEquals('KPDX', $result, 'PDX IATA code should map to KPDX ICAO code');
+    }
+    
+    /**
+     * Test getIcaoFromIata - Case insensitive
+     */
+    public function testGetIcaoFromIata_CaseInsensitive()
+    {
+        $result1 = getIcaoFromIata('pdx');
+        $result2 = getIcaoFromIata('PDX');
+        $result3 = getIcaoFromIata('Pdx');
+        
+        if ($result1 === null) {
+            $this->markTestSkipped('Could not get ICAO from IATA (network issue or service unavailable)');
+            return;
+        }
+        
+        // All should return the same result
+        $this->assertEquals($result1, $result2, 'Should be case insensitive');
+        $this->assertEquals($result1, $result3, 'Should be case insensitive');
+    }
+    
+    /**
+     * Test getIcaoFromIata - Invalid format
+     */
+    public function testGetIcaoFromIata_InvalidFormat()
+    {
+        $this->assertNull(getIcaoFromIata('XX'), '2-letter code should return null');
+        $this->assertNull(getIcaoFromIata('XXXX'), '4-letter code should return null');
+        $this->assertNull(getIcaoFromIata(''), 'Empty string should return null');
+    }
+    
+    /**
+     * Test getIcaoFromIata - Non-existent IATA code
+     */
+    public function testGetIcaoFromIata_NonExistent()
+    {
+        // Use a code that's unlikely to exist (but valid format)
+        $result = getIcaoFromIata('ZZZ');
+        
+        // Should return null if not found, or a valid ICAO if it does exist
+        // We just check it's either null or a valid ICAO format
+        if ($result !== null) {
+            $this->assertMatchesRegularExpression('/^[A-Z0-9]{3,4}$/', $result, 'If found, should be valid ICAO format');
+        }
+    }
+    
+    /**
+     * Test getIcaoFromFaa - Valid FAA code
+     * 
+     * Note: This test requires network access to download OurAirports data.
+     * It may be skipped if the network is unavailable.
+     */
+    public function testGetIcaoFromFaa_ValidFaa()
+    {
+        // Test with PDX (Portland International Airport - FAA identifier)
+        $result = getIcaoFromFaa('PDX');
+        
+        if ($result === null) {
+            $this->markTestSkipped('Could not get ICAO from FAA (network issue or service unavailable)');
+            return;
+        }
+        
+        $this->assertEquals('KPDX', $result, 'PDX FAA code should map to KPDX ICAO code');
+    }
+    
+    /**
+     * Test getIcaoFromFaa - Case insensitive
+     */
+    public function testGetIcaoFromFaa_CaseInsensitive()
+    {
+        $result1 = getIcaoFromFaa('pdx');
+        $result2 = getIcaoFromFaa('PDX');
+        $result3 = getIcaoFromFaa('Pdx');
+        
+        if ($result1 === null) {
+            $this->markTestSkipped('Could not get ICAO from FAA (network issue or service unavailable)');
+            return;
+        }
+        
+        // All should return the same result
+        $this->assertEquals($result1, $result2, 'Should be case insensitive');
+        $this->assertEquals($result1, $result3, 'Should be case insensitive');
+    }
+    
+    /**
+     * Test getIcaoFromFaa - Invalid format
+     */
+    public function testGetIcaoFromFaa_InvalidFormat()
+    {
+        $this->assertNull(getIcaoFromFaa('XX'), '2-character code should return null');
+        $this->assertNull(getIcaoFromFaa('XXXXX'), '5-character code should return null');
+        $this->assertNull(getIcaoFromFaa(''), 'Empty string should return null');
+    }
+    
+    /**
+     * Test getIcaoFromFaa - Non-existent FAA code
+     */
+    public function testGetIcaoFromFaa_NonExistent()
+    {
+        // Use a code that's unlikely to exist (but valid format)
+        $result = getIcaoFromFaa('ZZZZ');
+        
+        // Should return null if not found, or a valid ICAO if it does exist
+        // We just check it's either null or a valid ICAO format
+        if ($result !== null) {
+            $this->assertMatchesRegularExpression('/^[A-Z0-9]{3,4}$/', $result, 'If found, should be valid ICAO format');
+        }
+    }
 }
 

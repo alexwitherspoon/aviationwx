@@ -96,6 +96,40 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
     }
     
     if ($airport !== null && $airportId !== null) {
+        // Get the primary identifier for this airport (ICAO > IATA > FAA > Airport ID)
+        // getPrimaryIdentifier() automatically returns the most preferred identifier that exists,
+        // so if no ICAO exists, it returns IATA; if no IATA, returns FAA; etc.
+        $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+        $requestedIdentifier = strtoupper(trim($rawAirportIdentifier));
+        $primaryIdentifierUpper = strtoupper(trim($primaryIdentifier));
+        
+        // Only redirect if the requested identifier doesn't match the primary identifier.
+        // This ensures we only redirect when a more preferred identifier exists.
+        // For example: if airport has no ICAO but has IATA, accessing via IATA won't redirect.
+        if ($requestedIdentifier !== $primaryIdentifierUpper) {
+            // Determine protocol (HTTPS preferred)
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            
+            // Get base domain
+            $baseDomain = getBaseDomain();
+            
+            // Construct the primary identifier URL
+            // Use subdomain format (e.g., https://kpdx.aviationwx.org)
+            $primaryUrl = $protocol . '://' . strtolower($primaryIdentifier) . '.' . $baseDomain;
+            
+            // Preserve any query parameters (excluding the airport parameter)
+            $queryParams = $_GET;
+            unset($queryParams['airport']);
+            if (!empty($queryParams)) {
+                $primaryUrl .= '?' . http_build_query($queryParams);
+            }
+            
+            // Perform 301 permanent redirect to the primary identifier URL
+            http_response_code(301);
+            header('Location: ' . $primaryUrl);
+            exit;
+        }
+        
         // Set airport-specific variables for use in template
         $airport['id'] = $airportId;
         
