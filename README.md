@@ -193,7 +193,8 @@ MIT License - See [LICENSE](LICENSE) file
 
 AviationWX uses the following external data sources:
 
-- **ICAO Airport Codes**: Airport code validation uses data from [lxndrblz/Airports](https://github.com/lxndrblz/Airports) (CC-BY-SA-4.0 license) for reference. Note: This data source is incomplete and may not include all valid ICAO codes, so missing codes are reported as warnings rather than errors.
+- **Airport Identifiers (ICAO, IATA, FAA)**: Airport code validation uses data from [OurAirports](https://ourairports.com/data/) (Public Domain). OurAirports provides comprehensive airport data with 40,000+ airports worldwide, updated nightly. This data is used to validate ICAO, IATA, and FAA identifiers in the airport configuration.
+- **ICAO Airport Codes (Legacy)**: For backward compatibility, airport code validation also supports data from [lxndrblz/Airports](https://github.com/lxndrblz/Airports) (CC-BY-SA-4.0 license) as a fallback. Note: This data source is incomplete and may not include all valid ICAO codes.
 
 ## Contributing
 
