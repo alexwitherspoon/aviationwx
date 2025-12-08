@@ -113,3 +113,15 @@ docs/*DESIGN*.md
 docs/*EXECUTION*.md
 docs/*FIXES*.md
 docs/*SUMMARY*.md
+
+# AI-specific configuration files (keep local only, never commit)
+.cursorrules
+.cursor/
+*.cursorrules
+.cursorrc
+.cursor-settings.json
+
+# AI-generated temporary files (if any)
+*.ai-temp
+*.ai-backup
+*_ai_*.tmp
