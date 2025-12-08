@@ -613,7 +613,7 @@ The deployment workflow has multiple guard checks:
 
 ---
 
-## Test Configuration Fixes
+## Test Configuration and Mocking
 
 ### Problem
 Docker containers in CI were using `config/airports.json.example` which contains invalid airport keys (e.g., `_example_kpdx`). Config validation rejects these, causing:
@@ -621,10 +621,27 @@ Docker containers in CI were using `config/airports.json.example` which contains
 - Weather endpoint returns 404 (airport not found)
 - Homepage returns 500 (config error)
 
+Additionally, tests were attempting to make real HTTP requests to weather APIs and webcam sources, which would fail in CI without valid API keys.
+
 ### Solution
-1. Use test fixture (`tests/Fixtures/airports.json.test`) instead of example
-2. Validate config file is valid JSON before starting containers
-3. Enhanced health check to verify config is loaded
+1. **Test Configuration**: Use test fixture (`tests/Fixtures/airports.json.test`) instead of example
+2. **Test Mode Detection**: Automatic detection via `CONFIG_PATH` environment variable or `APP_ENV=testing`
+3. **HTTP Request Mocking**: All weather provider APIs and webcam sources are automatically mocked in test mode
+4. **Enhanced Test Config**: Test fixture includes examples of all weather provider types (Tempest, Ambient, WeatherLink, METAR)
+5. **Health Check**: Verify config is loaded before running tests
+
+### Test Mocking Infrastructure
+
+The test suite automatically detects test mode and uses mocked API responses:
+
+- **Weather APIs**: All weather provider adapters check for test mode and return mock responses instead of making real HTTP requests
+- **Webcam Sources**: Webcam fetchers return placeholder images for test URLs
+- **No Network Required**: Tests run completely offline, ensuring reliability and speed
+
+Test mode is automatically enabled when:
+- `CONFIG_PATH` points to `airports.json.test`
+- `APP_ENV` is set to `testing` or `test`
+- Running in CI with test config markers detected
 
 ### Health Check Improvement
 ```bash
