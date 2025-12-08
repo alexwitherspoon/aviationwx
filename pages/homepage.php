@@ -8,7 +8,15 @@ header('Expires: 0');
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 
-// Get configuration for stats
+// Encode email body for mailto: URLs with readable formatting
+// Uses rawurlencode (%20 for spaces) and %0A for newlines to ensure proper display in email clients
+function encodeEmailBody($text) {
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    $lines = explode("\n", $text);
+    $encodedLines = array_map('rawurlencode', $lines);
+    return implode('%0A', $encodedLines);
+}
+
 // Use CONFIG_PATH environment variable if set (for production), otherwise use default path
 $envConfigPath = getenv('CONFIG_PATH');
 $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
@@ -502,14 +510,19 @@ $ogImage = file_exists($aboutPhotoWebp)
     <div class="container">
         <div class="hero">
             <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 76px; height: 76px; background: transparent;"> AviationWX.org</h1>
-            <p>Get instant access to weather data, webcams, and aviation metrics at airports across the network.</p>
+            <p style="font-size: 1.4rem; font-weight: 500; margin-bottom: 1rem;">
+                Reduce general aviation incidents, promote safety, and ensure accessible solutions for smaller airports and aviators.
+            </p>
+            <p style="font-size: 1.1rem; opacity: 0.95; margin-bottom: 2rem;">
+                Free weather dashboards with real-time webcams and weather data. We handle all the technical work—you just provide permission and access.
+            </p>
+            <div class="btn-group" style="margin-top: 1.5rem;">
+                <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Add Your Airport</a>
+                <a href="#participating-airports" class="btn-secondary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">View Airports</a>
+            </div>
         </div>
 
         <!-- Stats -->
-        <?php
-        // Stats already calculated in SEO section above
-        ?>
-        
         <div class="stats">
             <div class="stat-card">
                 <div class="stat-number"><?= $totalAirports ?></div>
@@ -526,13 +539,136 @@ $ogImage = file_exists($aboutPhotoWebp)
         </div>
 
         <section>
-            <h2>Why AviationWX?</h2>
-            <p>AviationWX provides real-time, localized weather data specifically designed for pilots making flight decisions. Each airport dashboard includes:</p>
+            <h2>Why This Matters</h2>
+            <div class="highlight-box" style="border-left-color: #dc3545; background: #fff5f5;">
+                <p><strong>Safety First</strong></p>
+                <p>
+                    Weather-related factors contribute to a significant portion of general aviation accidents. Real-time webcams and weather data help pilots see actual visibility conditions and make safer go/no-go decisions. CFIs use these tools to teach student pilots how to make smart weather decisions.
+                </p>
+                
+                <p style="margin-top: 1.5rem;"><strong>Economic Impact</strong></p>
+                <p>
+                    Tools like this encourage airport use, bringing more pilots to your airport and supporting local economic activity.
+                </p>
+                
+                <p style="margin-top: 1.5rem;"><strong>Community & Culture</strong></p>
+                <p>
+                    Better weather information brings positive attention to the general aviation community, supports airport organizations, and strengthens aviation culture.
+                </p>
+                
+                <p style="margin-top: 1.5rem;">
+                    <strong>It's completely free</strong> - for the airport, for pilots, always. No fees, no subscriptions, no ads.
+                </p>
+            </div>
+        </section>
+
+        <section id="how-it-works">
+            <h2>How It Works</h2>
+            <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                <div class="feature-card">
+                    <h3>1. Contact Us</h3>
+                    <p>Reach out via email with your airport information. We'll discuss your existing equipment or what's needed for new setup.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>2. We Handle Setup</h3>
+                    <p>All technical work is on us. We integrate with existing equipment or provide new equipment if needed.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>3. Your Airport Goes Live</h3>
+                    <p>Pilots can start using your dashboard immediately at <code>ICAO.aviationwx.org</code>. We handle all ongoing maintenance.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="for-airport-owners">
+            <h2>For Airport Owners, Operators & Organizations</h2>
+            <div class="user-group-section" style="border-left-color: #28a745;">
+                <h3 style="color: #28a745; text-align: center;">🏢 Add Your Airport - It's Free & Easy!</h3>
+                <p><strong>Webcams and weather stations are useful, but can be expensive and a pain to operate.</strong> Some profit-driven services make it hard to bring this safety net to smaller airports in a sustainable way. METAR and other systems are good, but often aren't timely enough.</p>
+                
+                <p style="margin-top: 1rem;"><strong>Safety at your airport saves lives, saves property, and makes your airport more useful to a broader range of aviators.</strong></p>
+                
+                <p style="margin-top: 1.5rem;"><strong>What we need:</strong></p>
+                <ul>
+                    <li>Permission to partner with the AviationWX.org project</li>
+                    <li>Access to existing webcam and weather equipment data if available</li>
+                    <li>If no local webcam or weather station is available, access to power and/or internet for equipment</li>
+                </ul>
+                
+                <p style="margin-top: 1.5rem;"><strong>What you get:</strong></p>
+                <ul>
+                    <li>Free weather dashboard at <code>ICAO.aviationwx.org</code></li>
+                    <li>We handle all technical setup and ongoing maintenance</li>
+                    <li>Equipment ownership stays with the airport (if we provide it)</li>
+                    <li>SEO benefits - we link to your organization's website to help drive traffic</li>
+                    <li>No ongoing costs or maintenance burden on your end</li>
+                </ul>
+                <?php
+                $ownerEmailSubject = rawurlencode("Request to add airport to AviationWX.org");
+                $ownerEmailBody = encodeEmailBody("Hello AviationWX.org team,
+
+I'm interested in adding my airport to the AviationWX.org network. Please find the information below:
+
+=== AIRPORT INFORMATION ===
+Airport ICAO Code: [Please provide]
+Airport Name: [Please provide]
+Organization/Contact Name: [Please provide]
+Your Email: [Please provide]
+Your Phone: [Optional]
+
+=== EXISTING EQUIPMENT (if available) ===
+Webcams:
+- Number of webcams: [Please provide]
+- Webcam make/model: [Please provide]
+- Webcam URL/API endpoint: [Please provide]
+- Access credentials: [Please provide if needed]
+
+Weather Station:
+- Weather station make/model: [Please provide]
+- Weather station API endpoint: [Please provide]
+- API key/credentials: [Please provide]
+- Data format: [Please provide if known]
+
+=== INFRASTRUCTURE (if new equipment needed) ===
+Power:
+- Power available at location: [Yes/No]
+- Power source type: [e.g., Grid, Solar, Generator]
+- Location details: [Please describe where equipment could be installed]
+
+Internet:
+- Internet available at location: [Yes/No]
+- Internet type: [e.g., Wired, WiFi, Cellular]
+- Bandwidth/speed: [If known]
+- Location details: [Please describe where equipment could be installed]
+
+=== ADDITIONAL INFORMATION ===
+Preferred installation location: [Please describe]
+Any special considerations: [Please note any restrictions, access requirements, etc.]
+
+Thank you for providing this free service to the aviation community!
+
+Best regards,
+[Your name]");
+                ?>
+                <p style="margin-top: 1.5rem; text-align: center;">
+                    <a href="mailto:contact@aviationwx.org?subject=<?= $ownerEmailSubject ?>&body=<?= $ownerEmailBody ?>" class="btn-primary" style="background: #28a745; border-color: #28a745; font-size: 1.1rem; padding: 1rem 2rem;">
+                        📧 Get Started - Send Setup Information
+                    </a>
+                </p>
+                <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666; text-align: center;">
+                    Opens your email client with a template you can fill out with your airport's information
+                </p>
+            </div>
+        </section>
+
+        <section>
+            <h2>What You Get</h2>
+            <p>Each airport dashboard provides real-time, localized weather data designed for pilots making flight decisions:</p>
             
             <div class="features">
                 <div class="feature-card">
                     <h3>🌡️ Real-Time Weather</h3>
-                    <p>Live data from on-site weather stations including Tempest, Ambient Weather, WeatherLink, or METAR observations.</p>
+                    <p>Live data from on-site weather stations (Tempest, Ambient Weather, WeatherLink) or METAR observations.</p>
                 </div>
                 
                 <div class="feature-card">
@@ -542,7 +678,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 
                 <div class="feature-card">
                     <h3>🧭 Wind Visualization</h3>
-                    <p>Interactive runway wind diagram showing wind speed, direction, and crosswind components.</p>
+                    <p>Interactive runway wind diagram with wind speed, direction, and crosswind components.</p>
                 </div>
                 
                 <div class="feature-card">
@@ -551,220 +687,17 @@ $ogImage = file_exists($aboutPhotoWebp)
                 </div>
                 
                 <div class="feature-card">
-                    <h3>📊 Current Conditions</h3>
-                    <p>Temperature, humidity, visibility, ceiling, precipitation, and more—all in one place.</p>
+                    <h3>📱 Mobile & Desktop</h3>
+                    <p>Lightweight, quick-loading website optimized for mobile and desktop. Fast access when you need it most.</p>
                 </div>
                 
                 <div class="feature-card">
-                    <h3>⏰ Local & Zulu Time</h3>
-                    <p>Dual time display with sunrise/sunset times for proper flight planning.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <h3>📱 Mobile & Desktop Friendly</h3>
-                    <p>Lightweight, quick-loading website optimized for both mobile devices and desktops. Fast access to weather data when you need it most.</p>
-                </div>
-                
-                <div class="feature-card">
-                    <h3>🆓 Free for All</h3>
-                    <p>No fees, no subscriptions, no ads, and no apps needed. Access all weather data and webcams completely free—just visit the website in your browser.</p>
+                    <h3>🆓 Free Forever</h3>
+                    <p>No fees, no subscriptions, no ads, no apps needed. Completely free for airports and pilots.</p>
                 </div>
             </div>
         </section>
 
-        <section id="participating-airports">
-            <h2>Participating Airports</h2>
-            <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
-            <?php
-            // Re-read config file (use same path resolution as above)
-            $envConfigPath = getenv('CONFIG_PATH');
-            $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
-            $config = json_decode(file_get_contents($configFileForList), true);
-            $airports = isset($config['airports']) ? $config['airports'] : [];
-            $airportsPerPage = 9;
-            $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
-            $totalPages = max(1, ceil(count($airports) / $airportsPerPage));
-            $currentPage = min($currentPage, $totalPages);
-            $startIndex = ($currentPage - 1) * $airportsPerPage;
-            $airportsOnPage = array_slice($airports, $startIndex, $airportsPerPage, true);
-            
-            // Function to fetch weather data for an airport
-            // Always reads fresh from disk (no PHP-level caching) to ensure up-to-date data
-            function getAirportWeather($airportId) {
-                // Cache is at root level, not in pages directory
-                $cacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
-                if (file_exists($cacheFile)) {
-                    // Clear any PHP opcache for this file to ensure fresh read
-                    if (function_exists('opcache_invalidate')) {
-                        @opcache_invalidate($cacheFile, true);
-                    }
-                    // Read file directly with no caching
-                    $cacheData = json_decode(file_get_contents($cacheFile), true);
-                    // Cache file stores weather data directly (not wrapped in 'weather' key)
-                    if ($cacheData && is_array($cacheData)) {
-                        // Add file modification time to data for freshness checking
-                        $cacheData['_cache_file_mtime'] = filemtime($cacheFile);
-                        return $cacheData;
-                    }
-                }
-                return null;
-            }
-            
-            // Function to format relative time
-            function formatRelativeTime($timestamp) {
-                if (!$timestamp || $timestamp <= 0) return 'Unknown';
-                $diff = time() - $timestamp;
-                if ($diff < 60) return 'Just now';
-                if ($diff < 3600) return floor($diff / 60) . 'm ago';
-                if ($diff < 86400) return floor($diff / 3600) . 'h ago';
-                return floor($diff / 86400) . 'd ago';
-            }
-            
-            // Function to get newest timestamp from displayed data
-            // Uses observation timestamps from weather sources (not file modification time)
-            function getNewestDataTimestamp($weather) {
-                if (!$weather) return null;
-                $timestamps = [];
-                
-                // Temperature comes from primary source
-                if (isset($weather['temperature_f']) || isset($weather['temperature'])) {
-                    if (isset($weather['last_updated_primary']) && $weather['last_updated_primary'] > 0) {
-                        $timestamps[] = $weather['last_updated_primary'];
-                    }
-                }
-                
-                // Wind comes from primary source
-                if (isset($weather['wind_speed']) && $weather['wind_speed'] !== null) {
-                    if (isset($weather['last_updated_primary']) && $weather['last_updated_primary'] > 0) {
-                        $timestamps[] = $weather['last_updated_primary'];
-                    }
-                }
-                
-                // Condition comes from METAR source
-                if (isset($weather['flight_category']) && $weather['flight_category'] !== null) {
-                    if (isset($weather['last_updated_metar']) && $weather['last_updated_metar'] > 0) {
-                        $timestamps[] = $weather['last_updated_metar'];
-                    }
-                }
-                
-                // Use observation time if available (more accurate than fetch time)
-                // Prefer observation times from both sources over fetch times
-                if (isset($weather['obs_time_primary']) && $weather['obs_time_primary'] > 0) {
-                    $timestamps[] = $weather['obs_time_primary'];
-                }
-                if (isset($weather['obs_time_metar']) && $weather['obs_time_metar'] > 0) {
-                    $timestamps[] = $weather['obs_time_metar'];
-                }
-                
-                // Fallback to general last_updated if no source-specific timestamps
-                // This uses the latest observation time from all sources (calculated in weather.php)
-                if (empty($timestamps) && isset($weather['last_updated']) && $weather['last_updated'] > 0) {
-                    $timestamps[] = $weather['last_updated'];
-                }
-                
-                return !empty($timestamps) ? max($timestamps) : null;
-            }
-            ?>
-            <div class="airports-list">
-                <?php foreach ($airportsOnPage as $airportId => $airport): 
-                    $url = 'https://' . $airportId . '.aviationwx.org';
-                    $weather = getAirportWeather($airportId);
-                    $flightCategory = $weather['flight_category'] ?? null;
-                    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-                    // Convert Celsius to Fahrenheit if needed
-                    if ($temperature !== null && $temperature < 50 && !isset($weather['temperature_f'])) {
-                        $temperature = ($temperature * 9/5) + 32;
-                    }
-                    $windSpeed = $weather['wind_speed'] ?? null;
-                    $newestTimestamp = getNewestDataTimestamp($weather);
-                ?>
-                <div class="airport-card">
-                    <a href="<?= htmlspecialchars($url) ?>">
-                        <div class="airport-code"><?= htmlspecialchars($airport['icao']) ?></div>
-                        <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
-                        <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
-                        
-                        <div class="airport-metrics">
-                            <div class="metric">
-                                <div class="metric-label">Condition</div>
-                                <?php if ($flightCategory): 
-                                    $conditionClass = strtolower($flightCategory);
-                                ?>
-                                    <span class="flight-condition <?= htmlspecialchars($conditionClass) ?>">
-                                        <?= htmlspecialchars($flightCategory) ?>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="flight-condition unknown">--</span>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="metric">
-                                <div class="metric-label">Temperature</div>
-                                <div class="metric-value">
-                                    <?= $temperature !== null ? htmlspecialchars(round($temperature)) . '°F' : '--' ?>
-                                </div>
-                            </div>
-                            
-                            <div class="metric">
-                                <div class="metric-label">Wind</div>
-                                <div class="metric-value">
-                                    <?= $windSpeed !== null ? htmlspecialchars(round($windSpeed)) . ' kts' : '--' ?>
-                                </div>
-                            </div>
-                            
-                            <?php if ($newestTimestamp): ?>
-                            <div class="metric" style="flex-basis: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e9ecef;">
-                                <div class="metric-label" style="font-size: 0.7rem;">Last Updated</div>
-                                <div class="metric-value" style="font-size: 0.8rem; color: #555; font-weight: 500;">
-                                    <?= htmlspecialchars(formatRelativeTime($newestTimestamp)) ?>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </a>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            
-            <?php if (count($airports) > $airportsPerPage): ?>
-            <div class="pagination">
-                <button onclick="changePage(<?= $currentPage - 1 ?>)" <?= $currentPage <= 1 ? 'disabled' : '' ?>>
-                    Previous
-                </button>
-                <span class="pagination-info">
-                    Page <?= $currentPage ?> of <?= $totalPages ?>
-                </span>
-                <?php
-                // Show page numbers (max 5 visible)
-                $startPage = max(1, $currentPage - 2);
-                $endPage = min($totalPages, $currentPage + 2);
-                
-                if ($startPage > 1) {
-                    echo '<button onclick="changePage(1)">1</button>';
-                    if ($startPage > 2) echo '<span>...</span>';
-                }
-                
-                for ($i = $startPage; $i <= $endPage; $i++) {
-                    $active = $i === $currentPage ? 'active' : '';
-                    echo '<button class="' . $active . '" onclick="changePage(' . $i . ')">' . $i . '</button>';
-                }
-                
-                if ($endPage < $totalPages) {
-                    if ($endPage < $totalPages - 1) echo '<span>...</span>';
-                    echo '<button onclick="changePage(' . $totalPages . ')">' . $totalPages . '</button>';
-                }
-                ?>
-                <button onclick="changePage(<?= $currentPage + 1 ?>)" <?= $currentPage >= $totalPages ? 'disabled' : '' ?>>
-                    Next
-                </button>
-            </div>
-            <?php endif; ?>
-            
-            <?php else: ?>
-            <p style="text-align: center; color: #555; padding: 2rem;">No airports currently configured.</p>
-            <?php endif; ?>
-        </section>
-        
         <script>
         function changePage(page) {
             const url = new URL(window.location);
@@ -773,123 +706,237 @@ $ogImage = file_exists($aboutPhotoWebp)
         }
         </script>
 
-        <!-- User Groups -->
-        <section class="user-groups">
-            <h2>For Everyone in Aviation</h2>
+        <!-- For Pilots -->
+        <section>
+            <h2>For Pilots</h2>
+            <div class="user-group-section">
+                <h3 style="text-align: center;"><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> Make Better Flight Decisions</h3>
+                <p>Use AviationWX to make better-informed flight decisions with real-time weather data and visual conditions. See actual visibility conditions before departure or approach, and make informed go/no-go decisions with up-to-date information.</p>
+                <p style="margin-top: 1rem;"><strong>CFIs love this tool</strong> - it helps teach student pilots how to make smart weather decisions. Real-time webcams and weather data provide the timely, accurate information that helps prevent incidents.</p>
+                <p style="margin-top: 1rem; font-weight: 500;">Share this service with fellow pilots and airport owners to help grow the aviation weather network!</p>
+            </div>
             
-            <!-- For Pilots -->
-            <div class="user-group-section">
-                <h3><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> For Pilots</h3>
-                <p>Use AviationWX to make better-informed flight decisions with real-time weather data and visual conditions.</p>
-                <p style="margin-top: 1rem; font-weight: 500;">Share this service with fellow pilots to help grow the aviation weather network!</p>
+            <div id="participating-airports" style="margin-top: 3rem;">
+                <h2 style="text-align: center; margin-bottom: 2rem;">Participating Airports</h2>
+                <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
+                <?php
+                $envConfigPath = getenv('CONFIG_PATH');
+                $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
+                $config = json_decode(file_get_contents($configFileForList), true);
+                $airports = isset($config['airports']) ? $config['airports'] : [];
+                $airportsPerPage = 9;
+                $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+                $totalPages = max(1, ceil(count($airports) / $airportsPerPage));
+                $currentPage = min($currentPage, $totalPages);
+                $startIndex = ($currentPage - 1) * $airportsPerPage;
+                $airportsOnPage = array_slice($airports, $startIndex, $airportsPerPage, true);
                 
-                <div class="btn-group" style="margin-top: 1.5rem; justify-content: flex-start;">
-                    <a href="#participating-airports" class="btn-primary">View Airports</a>
-                </div>
-            </div>
-
-            <!-- For Airport Operators -->
-            <div class="user-group-section">
-                <h3>🏢 For Airport Operators</h3>
-                <p><strong>Add Your Airport - It's Easy!</strong></p>
-                <p>Getting your airport on AviationWX is straightforward and free. Here's what you need:</p>
-                <ul style="margin: 1rem 0 0 2rem;">
-                    <li>A local weather station (Tempest, Ambient Weather, or WeatherLink) - we'll help you set it up</li>
-                    <li>Optional webcam feeds (MJPEG streams, RTSP streams, static images, or push uploads via SFTP/FTP/FTPS)</li>
-                    <li>Basic airport metadata (runways, frequencies, services)</li>
-                </ul>
-                <p style="margin-top: 1.5rem; font-weight: 500;">We handle all the technical setup and provide you with a dedicated subdomain using your ICAO airport code: <code>ICAO.aviationwx.org</code> (e.g., <code>KSPB.aviationwx.org</code>)</p>
+                // Always reads fresh from disk (no PHP-level caching) to ensure up-to-date data
+                function getAirportWeather($airportId) {
+                    $cacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+                    if (file_exists($cacheFile)) {
+                        // Clear opcache to ensure fresh read
+                        if (function_exists('opcache_invalidate')) {
+                            @opcache_invalidate($cacheFile, true);
+                        }
+                        $cacheData = json_decode(file_get_contents($cacheFile), true);
+                        // Cache file stores weather data directly (not wrapped in 'weather' key)
+                        if ($cacheData && is_array($cacheData)) {
+                            $cacheData['_cache_file_mtime'] = filemtime($cacheFile);
+                            return $cacheData;
+                        }
+                    }
+                    return null;
+                }
                 
-                <div class="contact-info" style="margin-top: 2rem;">
-                    <strong>Ready to get started?</strong><br>
-                    Contact Alex Witherspoon: <a href="mailto:alex@alexwitherspoon.com">alex@alexwitherspoon.com</a>
-                </div>
-            </div>
-
-            <!-- For Developers -->
-            <div class="user-group-section">
-                <h3>💻 For Developers</h3>
-                <p><strong>Open Source Project</strong></p>
-                <p>AviationWX is fully open source and welcomes contributions from the developer community.</p>
-                <ul style="margin: 1rem 0 0 2rem;">
-                    <li>View the codebase on GitHub</li>
-                    <li>Submit bug reports and feature requests</li>
-                    <li>Contribute improvements and new features</li>
-                    <li>Review contribution guidelines</li>
-                </ul>
+                function formatRelativeTime($timestamp) {
+                    if (!$timestamp || $timestamp <= 0) return 'Unknown';
+                    $diff = time() - $timestamp;
+                    if ($diff < 60) return 'Just now';
+                    if ($diff < 3600) return floor($diff / 60) . 'm ago';
+                    if ($diff < 86400) return floor($diff / 3600) . 'h ago';
+                    return floor($diff / 86400) . 'd ago';
+                }
                 
-                <div class="btn-group" style="margin-top: 1.5rem; justify-content: flex-start;">
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org" class="btn-primary" target="_blank" rel="noopener">
-                        View on GitHub
-                    </a>
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" class="btn-secondary" target="_blank" rel="noopener">
-                        Contributing Guidelines
-                    </a>
+                // Uses observation timestamps from weather sources (not file modification time)
+                function getNewestDataTimestamp($weather) {
+                    if (!$weather) return null;
+                    $timestamps = [];
+                    
+                    if (isset($weather['temperature_f']) || isset($weather['temperature'])) {
+                        if (isset($weather['last_updated_primary']) && $weather['last_updated_primary'] > 0) {
+                            $timestamps[] = $weather['last_updated_primary'];
+                        }
+                    }
+                    
+                    if (isset($weather['wind_speed']) && $weather['wind_speed'] !== null) {
+                        if (isset($weather['last_updated_primary']) && $weather['last_updated_primary'] > 0) {
+                            $timestamps[] = $weather['last_updated_primary'];
+                        }
+                    }
+                    
+                    if (isset($weather['flight_category']) && $weather['flight_category'] !== null) {
+                        if (isset($weather['last_updated_metar']) && $weather['last_updated_metar'] > 0) {
+                            $timestamps[] = $weather['last_updated_metar'];
+                        }
+                    }
+                    
+                    // Prefer observation times over fetch times for accuracy
+                    if (isset($weather['obs_time_primary']) && $weather['obs_time_primary'] > 0) {
+                        $timestamps[] = $weather['obs_time_primary'];
+                    }
+                    if (isset($weather['obs_time_metar']) && $weather['obs_time_metar'] > 0) {
+                        $timestamps[] = $weather['obs_time_metar'];
+                    }
+                    
+                    // Fallback to general last_updated if no source-specific timestamps
+                    if (empty($timestamps) && isset($weather['last_updated']) && $weather['last_updated'] > 0) {
+                        $timestamps[] = $weather['last_updated'];
+                    }
+                    
+                    return !empty($timestamps) ? max($timestamps) : null;
+                }
+                ?>
+                <div class="airports-list">
+                    <?php foreach ($airportsOnPage as $airportId => $airport): 
+                        $url = 'https://' . $airportId . '.aviationwx.org';
+                        $weather = getAirportWeather($airportId);
+                        $flightCategory = $weather['flight_category'] ?? null;
+                        $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
+                        if ($temperature !== null && $temperature < 50 && !isset($weather['temperature_f'])) {
+                            $temperature = ($temperature * 9/5) + 32;
+                        }
+                        $windSpeed = $weather['wind_speed'] ?? null;
+                        $newestTimestamp = getNewestDataTimestamp($weather);
+                    ?>
+                    <div class="airport-card">
+                        <a href="<?= htmlspecialchars($url) ?>">
+                            <div class="airport-code"><?= htmlspecialchars($airport['icao']) ?></div>
+                            <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
+                            <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
+                            
+                            <div class="airport-metrics">
+                                <div class="metric">
+                                    <div class="metric-label">Condition</div>
+                                    <?php if ($flightCategory): 
+                                        $conditionClass = strtolower($flightCategory);
+                                    ?>
+                                        <span class="flight-condition <?= htmlspecialchars($conditionClass) ?>">
+                                            <?= htmlspecialchars($flightCategory) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="flight-condition unknown">--</span>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="metric">
+                                    <div class="metric-label">Temperature</div>
+                                    <div class="metric-value">
+                                        <?= $temperature !== null ? htmlspecialchars(round($temperature)) . '°F' : '--' ?>
+                                    </div>
+                                </div>
+                                
+                                <div class="metric">
+                                    <div class="metric-label">Wind</div>
+                                    <div class="metric-value">
+                                        <?= $windSpeed !== null ? htmlspecialchars(round($windSpeed)) . ' kts' : '--' ?>
+                                    </div>
+                                </div>
+                                
+                                <?php if ($newestTimestamp): ?>
+                                <div class="metric" style="flex-basis: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e9ecef;">
+                                    <div class="metric-label" style="font-size: 0.7rem;">Last Updated</div>
+                                    <div class="metric-value" style="font-size: 0.8rem; color: #555; font-weight: 500;">
+                                        <?= htmlspecialchars(formatRelativeTime($newestTimestamp)) ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </a>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
+                
+                <?php if (count($airports) > $airportsPerPage): ?>
+                <div class="pagination">
+                    <button onclick="changePage(<?= $currentPage - 1 ?>)" <?= $currentPage <= 1 ? 'disabled' : '' ?>>
+                        Previous
+                    </button>
+                    <span class="pagination-info">
+                        Page <?= $currentPage ?> of <?= $totalPages ?>
+                    </span>
+                    <?php
+                    $startPage = max(1, $currentPage - 2);
+                    $endPage = min($totalPages, $currentPage + 2);
+                    
+                    if ($startPage > 1) {
+                        echo '<button onclick="changePage(1)">1</button>';
+                        if ($startPage > 2) echo '<span>...</span>';
+                    }
+                    
+                    for ($i = $startPage; $i <= $endPage; $i++) {
+                        $active = $i === $currentPage ? 'active' : '';
+                        echo '<button class="' . $active . '" onclick="changePage(' . $i . ')">' . $i . '</button>';
+                    }
+                    
+                    if ($endPage < $totalPages) {
+                        if ($endPage < $totalPages - 1) echo '<span>...</span>';
+                        echo '<button onclick="changePage(' . $totalPages . ')">' . $totalPages . '</button>';
+                    }
+                    ?>
+                    <button onclick="changePage(<?= $currentPage + 1 ?>)" <?= $currentPage >= $totalPages ? 'disabled' : '' ?>>
+                        Next
+                    </button>
+                </div>
+                <?php endif; ?>
+                
+                <?php else: ?>
+                <p style="text-align: center; color: #555; padding: 2rem;">No airports currently configured.</p>
+                <?php endif; ?>
             </div>
         </section>
 
-        <!-- Contact & Support -->
         <section>
-            <h2>Contact & Support</h2>
-            <div class="highlight-box">
-                <h3>Report Issues</h3>
-                <p>Found a bug or have a suggestion? We'd love to hear from you!</p>
-                <ul style="margin: 1rem 0 0 2rem;">
-                    <li><strong>Email:</strong> <a href="mailto:alex@alexwitherspoon.com">alex@alexwitherspoon.com</a></li>
-                    <li><strong>GitHub Issues:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/issues" target="_blank" rel="noopener">Open a bug report or feature request</a></li>
-                </ul>
-            </div>
-        </section>
-
-        <section>
-            <h2>Supported Weather Sources</h2>
-            <div class="features">
-                <div class="feature-card">
-                    <h3>Tempest Weather</h3>
-                    <p>Real-time data from Tempest weather stations with comprehensive meteorological observations.</p>
+            <h2>Supported Equipment and Systems</h2>
+            <p style="text-align: center; color: #555; margin-bottom: 2rem;">We work with existing equipment, help you pick equipment or can provide new equipment. We can integrate with a broad range of equipment, and if it isn't supported today we can probably add support quickly. All formats are automatically processed and optimized.</p>
+            
+            <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 3rem;">
+                <div>
+                    <h3 style="color: #0066cc; margin-bottom: 1rem;">🌡️ Weather Sources</h3>
+                    <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
+                        <li>Tempest Weather</li>
+                        <li>Ambient Weather</li>
+                        <li>Davis WeatherLink</li>
+                        <li>METAR observations</li>
+                    </ul>
                 </div>
-                <div class="feature-card">
-                    <h3>Ambient Weather</h3>
-                    <p>Integration with Ambient Weather stations for reliable local weather data.</p>
+                
+                <div>
+                    <h3 style="color: #0066cc; margin-bottom: 1rem;">📹 Webcam Connectivity Types</h3>
+                    <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
+                        <li>MJPEG streams</li>
+                        <li>RTSP/RTSPS streams</li>
+                        <li>Static images (JPEG/PNG)</li>
+                        <li>Push uploads via SFTP/FTP/FTPS</li>
+                    </ul>
                 </div>
-                <div class="feature-card">
-                    <h3>Davis WeatherLink</h3>
-                    <p>Support for Davis Instruments WeatherLink stations via the WeatherLink v2 API.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>METAR Data</h3>
-                    <p>Automated parsing of METAR observations with visibility and ceiling information.</p>
-                </div>
-            </div>
-        </section>
-
-        <section>
-            <h2>Supported Webcam Sources & Formats</h2>
-            <div class="features features-webcam">
-                <div class="feature-card">
-                    <h3>MJPEG Streams</h3>
-                    <p>Motion JPEG streams that automatically extract frames. Works with most IP cameras and webcam servers.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem; word-break: break-word; overflow-wrap: break-word;">Example: <code style="word-break: break-all; overflow-wrap: anywhere; display: inline-block; max-width: 100%;">https://camera.example.com/video.mjpg</code></p>
-                </div>
-                <div class="feature-card">
-                    <h3>Static Images</h3>
-                    <p>JPEG or PNG images that are automatically downloaded and cached. PNG images are converted to JPEG for consistency.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem; word-break: break-word; overflow-wrap: break-word;">Example: <code style="word-break: break-all; overflow-wrap: anywhere; display: inline-block; max-width: 100%;">https://camera.example.com/webcam.jpg</code></p>
-                </div>
-                <div class="feature-card">
-                    <h3>RTSP/RTSPS Streams</h3>
-                    <p>Real Time Streaming Protocol streams (including secure RTSPS over TLS) captured via ffmpeg. Supports TCP and UDP transport.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem; word-break: break-word; overflow-wrap: break-word;">Example: <code style="word-break: break-all; overflow-wrap: anywhere; display: inline-block; max-width: 100%;">rtsp://camera.example.com:554/stream</code></p>
-                </div>
-                <div class="feature-card">
-                    <h3>Push Uploads (SFTP/FTP/FTPS)</h3>
-                    <p>Cameras can push images directly to the server via SFTP, FTP, or FTPS. Perfect for cameras behind firewalls or on private networks that can't be accessed directly.</p>
-                    <p style="font-size: 0.9rem; color: #555; margin-top: 0.5rem;">The system automatically processes uploaded images and makes them available on the website. Each camera gets dedicated credentials and upload directory.</p>
+                
+                <div>
+                    <h3 style="color: #0066cc; margin-bottom: 1rem;">⚡ Infrastructure</h3>
+                    <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
+                        <li>Hardline Power</li>
+                        <li>POE (Power over Ethernet)</li>
+                        <li>Solar powered</li>
+                        <li>WiFi internet</li>
+                        <li>Hardline internet</li>
+                        <li>Cellular</li>
+                        <li>Satellite</li>
+                    </ul>
                 </div>
             </div>
-            <p style="text-align: center; color: #555; margin-top: 1rem; font-size: 0.9rem;">
-                The system automatically detects the source type from the URL format (for pull-based webcams). Push webcams upload directly via SFTP/FTP/FTPS. All formats are cached and optimized for fast loading.
+            
+            <p style="text-align: center; margin-top: 2rem;">
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" class="btn-secondary" target="_blank" rel="noopener">View Technical Details on GitHub</a>
             </p>
         </section>
 
@@ -920,6 +967,21 @@ $ogImage = file_exists($aboutPhotoWebp)
                 </p>
             </div>
             
+            <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #0066cc;">
+                <h3 style="color: #0066cc; margin-top: 0;">💻 Open Source Project</h3>
+                <p>AviationWX is fully open source and welcomes contributions. View the codebase, submit issues, or contribute improvements.</p>
+                
+                <div class="btn-group" style="margin-top: 1.5rem; justify-content: center;">
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org" class="btn-primary" target="_blank" rel="noopener">
+                        View on GitHub
+                    </a>
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" class="btn-secondary" target="_blank" rel="noopener">
+                        Contributing Guidelines
+                    </a>
+                </div>
+                <p style="margin-top: 1rem; font-size: 0.9rem; color: #666; text-align: center;">Deep technical documentation lives in the GitHub repository.</p>
+            </div>
+            
             <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #28a745;">
                 <h3 style="color: #28a745; margin-top: 0;">Donating</h3>
                 <p>
@@ -928,11 +990,20 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <p style="margin-top: 1rem;">
                     You can sponsor this project through <a href="https://github.com/sponsors/alexwitherspoon" target="_blank" rel="noopener">GitHub Sponsors</a>. Every contribution helps cover hosting costs, maintenance, and continued development of new features.
                 </p>
-                <div class="btn-group" style="margin-top: 1.5rem; justify-content: flex-start;">
+                <div class="btn-group" style="margin-top: 1.5rem; justify-content: center;">
                     <a href="https://github.com/sponsors/alexwitherspoon" class="btn-primary" target="_blank" rel="noopener">
                         Support on GitHub Sponsors
                     </a>
                 </div>
+            </div>
+            
+            <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #0066cc;">
+                <h3 style="color: #0066cc; margin-top: 0;">Report Issues</h3>
+                <p>Found a bug or have a suggestion? We'd love to hear from you!</p>
+                <ul style="margin: 1rem 0 0 2rem;">
+                    <li><strong>Email:</strong> <a href="mailto:contact@aviationwx.org">contact@aviationwx.org</a></li>
+                    <li><strong>GitHub Issues:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/issues" target="_blank" rel="noopener">Open a bug report or feature request</a></li>
+                </ul>
             </div>
         </section>
 
