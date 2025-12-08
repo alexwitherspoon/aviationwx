@@ -37,7 +37,10 @@ services:
       - "50019:50019"  # FTP passive mode
     volumes:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
-      - /home/aviationwx/airports.json:/var/www/html/airports.json:ro
+      # PRODUCTION: This file MUST exist - application will fail if missing (no fallback to test files)
+      # Docker will fail to start if the source file doesn't exist (unless using a bind mount that allows missing files)
+      # Application code will also fail fast if file is missing in production
+      - /home/aviationwx/airports.json:/var/www/html/config/airports.json:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
       # Note: /var/www/html/uploads is ephemeral (inside container only)
       # Files are uploaded via SFTP/FTP/FTPS, then processed and moved to cache
@@ -48,7 +51,7 @@ services:
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
-      - CONFIG_PATH=/var/www/html/airports.json
+      - CONFIG_PATH=/var/www/html/config/airports.json
       - WEBCAM_REFRESH_DEFAULT=${WEBCAM_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_DEFAULT=${WEATHER_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_URL=http://localhost
