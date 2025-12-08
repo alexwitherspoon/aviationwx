@@ -37,6 +37,14 @@ if (isset($_GET['airport']) && !empty($_GET['airport'])) {
     $rawAirportIdentifier = trim($_GET['airport']);
 }
 
+// Load configuration (with caching) - do this early so getBaseDomain() works
+$config = loadConfig();
+if ($config === null) {
+    error_log('Failed to load configuration');
+    http_response_code(500);
+    die('Configuration error. Please contact the administrator.');
+}
+
 // Check for airport subdomain
 if (!$isAirportRequest) {
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
@@ -59,14 +67,6 @@ if (!$isAirportRequest) {
             }
         }
     }
-}
-
-// Load configuration (with caching)
-$config = loadConfig();
-if ($config === null) {
-    error_log('Failed to load configuration');
-    http_response_code(500);
-    die('Configuration error. Please contact the administrator.');
 }
 
 // If this is an airport-related request, handle it

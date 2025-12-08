@@ -24,10 +24,11 @@ on:
         required: true
         type: string
 
-# Ensure only one deployment runs at a time
+# Ensure only one deployment runs at a time per commit
+# Include commit SHA to prevent duplicate deployments for the same commit
 concurrency:
-  group: deploy-production
-  cancel-in-progress: false
+  group: deploy-production-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true  # Cancel old deployments when new one starts for same commit
 
 # Permissions for deployment
 permissions:
@@ -54,13 +55,18 @@ jobs:
             
             // CRITICAL: Check if the triggering QA workflow run succeeded
             // This prevents loops when QA tests fail - we should not deploy
-            if (!isManualDispatch && '${{ github.event.workflow_run.conclusion }}' !== 'success') {
-              const conclusion = '${{ github.event.workflow_run.conclusion }}' || 'unknown';
-              core.info(`⏭️  Skipping deployment - QA workflow did not succeed (conclusion: ${conclusion})`);
-              core.info('Only successful QA test runs trigger deployment to prevent loops');
-              core.setOutput('qa-success', 'false');
-              core.setOutput('skip-checks', 'false');
-              return;
+            // Check this FIRST before doing any other work
+            if (!isManualDispatch) {
+              const triggeringConclusion = '${{ github.event.workflow_run.conclusion }}';
+              if (triggeringConclusion !== 'success') {
+                const conclusion = triggeringConclusion || 'unknown';
+                core.info(`⏭️  Skipping deployment - QA workflow did not succeed (conclusion: ${conclusion})`);
+                core.info('Only successful QA test runs trigger deployment to prevent loops');
+                core.setOutput('qa-success', 'false');
+                core.setOutput('skip-checks', 'false');
+                return;
+              }
+              core.info(`✓ QA workflow succeeded (conclusion: ${triggeringConclusion})`);
             }
             
             if (isManualDispatch) {
@@ -137,8 +143,9 @@ jobs:
             }
             core.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
             
-            // Prevent duplicate deployments: Check if this commit is already being deployed
+            // Prevent duplicate deployments: Check if this commit is already deployed or deploying
             // This prevents loops when multiple workflow_run events fire for the same commit
+            // Check for ANY deployment (queued, in-progress, or recently completed) for this commit
             if (!isManualDispatch) {
               const deployWorkflowPath = '.github/workflows/deploy-docker.yml';
               const currentRunId = context.runId;
@@ -148,21 +155,54 @@ jobs:
                 repo: context.repo.repo,
                 workflow_id: deployWorkflowPath,
                 head_sha: commitSha,
-                per_page: 10  // Check more runs to account for timing issues
+                per_page: 20  // Check more runs to account for timing issues
               });
               
-              // Count in-progress or queued deployments for this commit, excluding the current run
-              const inProgressDeploys = existingDeployRuns.data.workflow_runs.filter(run => 
-                run.id !== currentRunId && (run.status === 'in_progress' || run.status === 'queued')
+              // Filter out the current run
+              const otherRuns = existingDeployRuns.data.workflow_runs.filter(run => run.id !== currentRunId);
+              
+              // Check for in-progress or queued deployments
+              const activeDeploys = otherRuns.filter(run => 
+                run.status === 'in_progress' || run.status === 'queued'
               );
               
-              if (inProgressDeploys.length > 0) {
-                core.info(`⏭️  Skipping deployment - another deployment for commit ${commitSha.substring(0, 7)} is already in progress`);
-                core.info(`Found ${inProgressDeploys.length} in-progress deployment(s) for this commit (excluding current run ${currentRunId})`);
+              // Check for recently completed successful deployments (within last 5 minutes)
+              // This prevents re-deploying the same commit immediately after a successful deployment
+              const now = Date.now();
+              const recentSuccessfulDeploys = otherRuns.filter(run => {
+                if (run.status !== 'completed' || run.conclusion !== 'success') {
+                  return false;
+                }
+                const completedAt = new Date(run.updated_at || run.created_at).getTime();
+                const ageMinutes = (now - completedAt) / (1000 * 60);
+                return ageMinutes < 5; // Within last 5 minutes
+              });
+              
+              if (activeDeploys.length > 0) {
+                core.info(`⏭️  Skipping deployment - another deployment for commit ${commitSha.substring(0, 7)} is already active`);
+                core.info(`Found ${activeDeploys.length} active deployment(s) for this commit:`);
+                activeDeploys.forEach(run => {
+                  core.info(`  - Run ${run.id}: ${run.status} (${run.conclusion || 'pending'})`);
+                });
                 core.setOutput('qa-success', 'false');
                 core.setOutput('skip-checks', 'false');
                 return;
               }
+              
+              if (recentSuccessfulDeploys.length > 0) {
+                core.info(`⏭️  Skipping deployment - commit ${commitSha.substring(0, 7)} was recently deployed successfully`);
+                core.info(`Found ${recentSuccessfulDeploys.length} recent successful deployment(s) for this commit:`);
+                recentSuccessfulDeploys.forEach(run => {
+                  const completedAt = new Date(run.updated_at || run.created_at);
+                  const ageMinutes = Math.round((now - completedAt.getTime()) / (1000 * 60));
+                  core.info(`  - Run ${run.id}: completed ${ageMinutes} minute(s) ago`);
+                });
+                core.setOutput('qa-success', 'false');
+                core.setOutput('skip-checks', 'false');
+                return;
+              }
+              
+              core.info(`✓ No duplicate deployments found for commit ${commitSha.substring(0, 7)}`);
             }
             
             const maxWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
