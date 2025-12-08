@@ -124,6 +124,7 @@ See the [Deployment Guide](docs/DEPLOYMENT.md) for:
 
 ### Contributing & Security
 - **[Contributing](CONTRIBUTING.md)** - How to contribute code, report bugs, suggest features
+- **[Code Style Guide](CODE_STYLE.md)** - Coding standards, comment guidelines, and testing requirements
 - **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community guidelines
 - **[Security](docs/SECURITY.md)** - Security best practices and guidelines
 

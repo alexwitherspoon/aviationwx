@@ -59,8 +59,9 @@ make up
    ```
 
 2. **Make your changes** following our coding standards:
-   - Follow existing code style and conventions
-   - Add comments for complex logic
+   - Follow [CODE_STYLE.md](CODE_STYLE.md) guidelines
+   - Add concise comments only for critical or unclear logic
+   - **Write tests for all new functionality**
    - Update documentation for user-facing changes
    - Write clear commit messages
 
@@ -92,21 +93,20 @@ make up
 
 ## Coding Standards
 
-### PHP Code Style
+**See [CODE_STYLE.md](CODE_STYLE.md) for complete coding standards and guidelines.**
+
+**Important**: This is a **safety-critical application** used by pilots for flight decisions. Code quality, reliability, and graceful degradation are paramount.
+
+### Quick Reference
 
 - Use PSR-12 coding standards where applicable
-- Add docblocks for functions and classes:
-  ```php
-  /**
-   * Brief description
-   * 
-   * @param type $param Description
-   * @return type Description
-   */
-  ```
+- Add PHPDoc blocks for functions and classes (see [CODE_STYLE.md](CODE_STYLE.md) for format)
 - Use meaningful variable and function names
-- Comment complex logic
+- **Comments should be concise** - only comment critical or unclear logic
 - Keep functions focused and single-purpose
+- **Critical paths must have test coverage** - see [Testing Requirements](CODE_STYLE.md#testing-requirements)
+- **Never show stale data** - After `MAX_STALE_HOURS`, null out fields and show "---"
+- **Handle errors explicitly** - Don't silently fail (safety-critical)
 
 ### Security Guidelines
 
@@ -145,7 +145,7 @@ make up
 - **Performance optimization**: Caching, query optimization
 - **Error handling**: Better error messages and logging
 - **Code quality**: Refactoring, removing duplication
-- **Testing**: Unit tests, integration tests
+- **Testing**: Unit tests, integration tests (see [CODE_STYLE.md](CODE_STYLE.md#testing-requirements))
 
 ### Documentation
 
