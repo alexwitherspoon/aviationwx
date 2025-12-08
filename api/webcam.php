@@ -149,29 +149,37 @@ $reqId = aviationwx_get_request_id();
 header('X-Request-ID: ' . $reqId);
 
 // Support both 'id' and 'airport' parameters for backward compatibility
-$rawAirportId = $_GET['id'] ?? $_GET['airport'] ?? '';
+$rawIdentifier = $_GET['id'] ?? $_GET['airport'] ?? '';
 // Support both 'cam' and 'index' parameters for backward compatibility
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : (isset($_GET['index']) ? intval($_GET['index']) : 0);
 
-if (empty($rawAirportId) || !validateAirportId($rawAirportId)) {
-    aviationwx_log('error', 'webcam invalid airport id', ['id' => $rawAirportId], 'user');
+if (empty($rawIdentifier)) {
+    aviationwx_log('error', 'webcam missing airport identifier', [], 'user');
     servePlaceholder();
 }
 
-$airportId = strtolower(trim($rawAirportId));
+// Find airport by any identifier type (ICAO, IATA, FAA, or airport ID)
+$result = findAirportByIdentifier($rawIdentifier);
+if ($result === null || !isset($result['airport']) || !isset($result['airportId'])) {
+    aviationwx_log('error', 'webcam airport not found', ['identifier' => $rawIdentifier], 'user');
+    servePlaceholder();
+}
+
+$airport = $result['airport'];
+$airportId = $result['airportId'];
+
+// Load config for webcam access
+$config = loadConfig();
+if ($config === null) {
+    aviationwx_log('error', 'webcam config load failed', [], 'app');
+    servePlaceholder();
+}
 
 // Validate cam index is non-negative and within bounds
 if ($camIndex < 0) {
     $camIndex = 0;
 }
 // Upper bound will be validated after config is loaded
-
-// Load config (with caching)
-$config = loadConfig();
-if ($config === null || !isset($config['airports'][$airportId])) {
-    aviationwx_log('error', 'webcam config missing', ['airport' => $airportId], 'app');
-    servePlaceholder();
-}
 
 // Validate cam index is within bounds
 $maxCamIndex = isset($config['airports'][$airportId]['webcams']) 

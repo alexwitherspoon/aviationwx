@@ -40,16 +40,29 @@ if (!empty($airportId)) {
         die('Configuration error. Please contact the administrator.');
     }
     
+    // Lookup airport (supports lookup by any identifier type)
+    $airport = null;
+    // First try direct lookup (backward compatibility)
     if (isset($config['airports'][$airportId])) {
-        // Set airport-specific variables for use in template
         $airport = $config['airports'][$airportId];
+    } else {
+        // Try lookup by identifier (ICAO, IATA, FAA)
+        $result = findAirportByIdentifier($airportId, $config);
+        if ($result !== null && isset($result['airport']) && isset($result['airportId'])) {
+            $airport = $result['airport'];
+            $airportId = $result['airportId'];
+        }
+    }
+    
+    if ($airport !== null) {
+        // Set airport-specific variables for use in template
         $airport['id'] = $airportId;
         
         // Include the airport template
         include 'pages/airport.php';
         exit;
     } else {
-        // Airport not found on subdomain - show airport-specific 404
+        // Airport not found - show airport-specific 404
         http_response_code(404);
         // Make airport ID available to 404 page
         $requestedAirportId = $airportId;
