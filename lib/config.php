@@ -13,11 +13,11 @@ require_once __DIR__ . '/constants.php';
  * Airport IDs must be 3-4 lowercase alphanumeric characters (ICAO format).
  * Validates format before trimming to prevent "k spb" from becoming "kspb".
  * 
- * @param string $id Airport ID to validate
+ * @param string|null $id Airport ID to validate
  * @return bool True if valid ICAO format, false otherwise
  */
-function validateAirportId(string $id): bool {
-    if (empty($id)) {
+function validateAirportId(?string $id): bool {
+    if ($id === null || empty($id)) {
         return false;
     }
     // Check for whitespace BEFORE trimming (reject IDs with whitespace)
@@ -165,6 +165,10 @@ function getWorkerTimeout() {
  * Uses APCu cache if available, falls back to static variable for request lifetime.
  * Automatically invalidates cache when file modification time changes.
  * 
+ * IMPORTANT: airports.json is NOT in the repository - it only exists on the production host.
+ * - CI (GitHub Actions): Never has access - runs in GitHub's cloud, uses test fixtures
+ * - CD (Deployment): Has access - runs on production host where file exists at /home/aviationwx/airports.json
+ * 
  * SECURITY: Prevents test data (airports.json.test) from being used in production.
  * 
  * @param bool $useCache Whether to use APCu caching (default: true)
@@ -212,8 +216,20 @@ function loadConfig($useCache = true) {
     }
     
     // Validate file exists and is not a directory
+    // Note: In CI (GitHub Actions), airports.json doesn't exist - this is expected and handled gracefully
     if (!file_exists($configFile)) {
-        aviationwx_log('error', 'config file not found', ['path' => $configFile], 'app');
+        // In CI, this is normal - tests use CONFIG_PATH pointing to test fixtures
+        // In production, this is a critical failure - airports.json MUST exist
+        if (!isProduction()) {
+            // Non-production: log as info (expected in CI/test environments)
+            aviationwx_log('info', 'config file not found (using defaults)', ['path' => $configFile], 'app');
+        } else {
+            // Production: CRITICAL ERROR - airports.json is required, fail immediately
+            aviationwx_log('error', 'config file not found - PRODUCTION FAILURE', ['path' => $configFile], 'app');
+            error_log('CRITICAL: airports.json not found in production at: ' . $configFile);
+            // In production, we cannot continue without airports.json - return null to fail fast
+            // The application should handle this gracefully by showing an error page
+        }
         return null;
     }
     if (is_dir($configFile)) {
@@ -401,39 +417,140 @@ function clearConfigCache() {
  * @return string Validated airport ID (3-4 lowercase alphanumeric) or empty string
  */
 function getAirportIdFromRequest(): string {
-    $airportId = '';
+    $identifier = '';
     
     // First, try query parameter
     if (isset($_GET['airport']) && !empty($_GET['airport'])) {
-        $rawId = strtolower(trim($_GET['airport']));
-        if (validateAirportId($rawId)) {
-            $airportId = $rawId;
-        }
+        $identifier = trim($_GET['airport']);
     } else {
         // Try extracting from subdomain
         $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
         $baseDomain = getBaseDomain();
         
-        // Match subdomain pattern (e.g., kspb.aviationwx.org)
+        // Match subdomain pattern (e.g., kspb.aviationwx.org or 03s.aviationwx.org)
         // Uses base domain from config to support custom domains
-        $pattern = '/^([a-z0-9]{3,4})\.' . preg_quote($baseDomain, '/') . '$/';
+        // Support 3-4 alphanumeric (ICAO/FAA) and custom identifiers (with hyphens)
+        $pattern = '/^([a-z0-9-]{3,50})\.' . preg_quote($baseDomain, '/') . '$/';
         if (preg_match($pattern, $host, $matches)) {
-            $rawId = $matches[1];
-            if (validateAirportId($rawId)) {
-                $airportId = $rawId;
-            }
+            $identifier = $matches[1];
         } else {
             // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
             $hostParts = explode('.', $host);
             if (count($hostParts) >= 3) {
-                $rawId = $hostParts[0];
-                if (validateAirportId($rawId)) {
-                    $airportId = $rawId;
-                }
+                $identifier = $hostParts[0];
             }
         }
     }
     
+    if (empty($identifier)) {
+        return '';
+    }
+    
+    // Try to find airport by identifier (supports ICAO, IATA, FAA, or airport ID)
+    $result = findAirportByIdentifier($identifier);
+    if ($result !== null && isset($result['airportId'])) {
+        return $result['airportId'];
+    }
+    
+    // Fallback: if identifier matches airport ID format, return as-is (backward compatibility)
+    if (validateAirportId($identifier)) {
+        return strtolower($identifier);
+    }
+    
+    return '';
+}
+
+/**
+ * Find airport by any identifier type (ICAO, IATA, FAA, or airport ID)
+ * 
+ * Searches for an airport using priority:
+ * 1. Direct key lookup (primary identifier)
+ * 2. ICAO code (preferred)
+ * 3. IATA code
+ * 4. FAA identifier
+ * 
+ * @param string $identifier The identifier to search for (case-insensitive)
+ * @param array|null $config Optional config array (if already loaded)
+ * @return array|null Airport configuration array with 'airport' and 'airportId' keys, or null if not found
+ *                    Returns ['airport' => array, 'airportId' => string] on success
+ */
+function findAirportByIdentifier(string $identifier, ?array $config = null): ?array {
+    if ($config === null) {
+        $config = loadConfig();
+    }
+    if (!$config || !isset($config['airports'])) {
+        return null;
+    }
+    
+    $identifier = trim($identifier);
+    if (empty($identifier)) {
+        return null;
+    }
+    
+    $identifierUpper = strtoupper($identifier);
+    $identifierLower = strtolower($identifier);
+    
+    // 1. Direct key lookup (primary identifier - backward compatibility)
+    if (isset($config['airports'][$identifierUpper])) {
+        return ['airport' => $config['airports'][$identifierUpper], 'airportId' => $identifierUpper];
+    }
+    if (isset($config['airports'][$identifierLower])) {
+        return ['airport' => $config['airports'][$identifierLower], 'airportId' => $identifierLower];
+    }
+    if (isset($config['airports'][$identifier])) {
+        return ['airport' => $config['airports'][$identifier], 'airportId' => $identifier];
+    }
+    
+    // 2. Search by identifier type (priority: ICAO > IATA > FAA)
+    foreach ($config['airports'] as $airportId => $airport) {
+        // Check ICAO (preferred) - guard against null/empty to prevent PHP 8.1+ deprecation
+        if (isset($airport['icao']) && !empty($airport['icao']) && strtoupper(trim($airport['icao'])) === $identifierUpper) {
+            return ['airport' => $airport, 'airportId' => $airportId];
+        }
+        // Check IATA - guard against null/empty
+        if (isset($airport['iata']) && !empty($airport['iata']) && strtoupper(trim($airport['iata'])) === $identifierUpper) {
+            return ['airport' => $airport, 'airportId' => $airportId];
+        }
+        // Check FAA - guard against null/empty
+        if (isset($airport['faa']) && !empty($airport['faa']) && strtoupper(trim($airport['faa'])) === $identifierUpper) {
+            return ['airport' => $airport, 'airportId' => $airportId];
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Get the primary identifier for an airport based on priority
+ * 
+ * Priority: ICAO > IATA > FAA > Custom (airport ID)
+ * 
+ * @param string $airportId The airport ID (config key)
+ * @param array|null $airport Optional airport config (if already loaded)
+ * @return string The primary identifier to use
+ */
+function getPrimaryIdentifier(string $airportId, ?array $airport = null): string {
+    if ($airport === null) {
+        $config = loadConfig();
+        if ($config && isset($config['airports'][$airportId])) {
+            $airport = $config['airports'][$airportId];
+        } else {
+            return $airportId; // Fallback to airport ID
+        }
+    }
+    
+    // Priority: ICAO > IATA > FAA > Airport ID
+    if (isset($airport['icao']) && !empty($airport['icao'])) {
+        return strtoupper(trim($airport['icao']));
+    }
+    if (isset($airport['iata']) && !empty($airport['iata'])) {
+        return strtoupper(trim($airport['iata']));
+    }
+    if (isset($airport['faa']) && !empty($airport['faa'])) {
+        return strtoupper(trim($airport['faa']));
+    }
+    
+    // Fallback to airport ID (may be custom identifier)
     return $airportId;
 }
 
@@ -525,7 +642,8 @@ function findSimilarAirports(string $searchCode, array $config, int $maxResults 
     $suggestions = [];
     
     foreach ($config['airports'] as $airportId => $airport) {
-        $icao = isset($airport['icao']) ? strtoupper(trim($airport['icao'])) : '';
+        // Guard against null to prevent PHP 8.1+ deprecation warning
+        $icao = (isset($airport['icao']) && !empty($airport['icao'])) ? strtoupper(trim((string)$airport['icao'])) : '';
         if (empty($icao)) {
             continue;
         }
@@ -584,13 +702,158 @@ function findSimilarAirports(string $searchCode, array $config, int $maxResults 
 }
 
 /**
+ * Download and cache OurAirports data (ICAO, IATA, FAA codes)
+ * 
+ * Downloads from OurAirports project (Public Domain)
+ * Source: https://davidmegginson.github.io/ourairports-data/airports.csv
+ * Caches the data locally to avoid repeated downloads
+ * 
+ * OurAirports provides comprehensive airport data with 40,000+ airports worldwide,
+ * including ICAO, IATA, and FAA (gps_code) identifiers. Data is updated nightly.
+ * 
+ * @param bool $forceRefresh Force refresh even if cache exists
+ * @return array|null Array with 'icao', 'iata', and 'faa' keys, each containing arrays of codes, or null on error
+ */
+function getOurAirportsData(bool $forceRefresh = false): ?array {
+    $cacheFile = __DIR__ . '/../cache/ourairports_data.json';
+    $cacheMaxAge = 7 * 24 * 3600; // 7 days (data updated nightly)
+    
+    // Check cache first (unless forcing refresh)
+    if (!$forceRefresh && file_exists($cacheFile)) {
+        $cacheAge = time() - filemtime($cacheFile);
+        if ($cacheAge < $cacheMaxAge) {
+            $cached = @json_decode(file_get_contents($cacheFile), true);
+            if (is_array($cached) && isset($cached['icao']) && isset($cached['iata']) && isset($cached['faa'])) {
+                return $cached;
+            }
+        }
+    }
+    
+    // Download from OurAirports
+    try {
+        $csvUrl = 'https://davidmegginson.github.io/ourairports-data/airports.csv';
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30, // Larger timeout for big file
+                'method' => 'GET',
+                'header' => 'User-Agent: AviationWX/1.0',
+                'ignore_errors' => true
+            ]
+        ]);
+        
+        $csvContent = @file_get_contents($csvUrl, false, $context);
+        if ($csvContent === false) {
+            aviationwx_log('warning', 'failed to download OurAirports data', [], 'app');
+            // Return cached version if available, even if stale
+            if (file_exists($cacheFile)) {
+                $cached = @json_decode(file_get_contents($cacheFile), true);
+                if (is_array($cached) && isset($cached['icao'])) {
+                    return $cached;
+                }
+            }
+            return null;
+        }
+        
+        // Parse CSV and extract codes
+        // CSV columns: id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,...
+        $icaoCodes = [];
+        $iataCodes = [];
+        $faaCodes = [];
+        $lines = explode("\n", $csvContent);
+        $headerSkipped = false;
+        
+        foreach ($lines as $lineNum => $line) {
+            $line = trim($line);
+            if (empty($line)) {
+                continue;
+            }
+            
+            // Skip header line
+            if (!$headerSkipped) {
+                $headerSkipped = true;
+                continue;
+            }
+            
+            // Parse CSV line (handle quoted fields properly)
+            // Use null as escape parameter for PHP 8.1+ compatibility
+            $fields = str_getcsv($line, ',', '"', null);
+            if (count($fields) < 15) {
+                continue; // Skip malformed lines
+            }
+            
+            // Column 12: icao_code
+            if (isset($fields[12]) && !empty($fields[12])) {
+                $icao = strtoupper(trim($fields[12]));
+                if (preg_match('/^[A-Z0-9]{3,4}$/', $icao)) {
+                    $icaoCodes[$icao] = true;
+                }
+            }
+            
+            // Column 13: iata_code
+            if (isset($fields[13]) && !empty($fields[13])) {
+                $iata = strtoupper(trim($fields[13]));
+                if (preg_match('/^[A-Z]{3}$/', $iata)) {
+                    $iataCodes[$iata] = true;
+                }
+            }
+            
+            // Column 14: gps_code (FAA identifier)
+            if (isset($fields[14]) && !empty($fields[14])) {
+                $faa = strtoupper(trim($fields[14]));
+                if (preg_match('/^[A-Z0-9]{3,4}$/', $faa)) {
+                    $faaCodes[$faa] = true;
+                }
+            }
+        }
+        
+        // Convert to simple arrays
+        $result = [
+            'icao' => array_keys($icaoCodes),
+            'iata' => array_keys($iataCodes),
+            'faa' => array_keys($faaCodes)
+        ];
+        
+        // Save to cache
+        $cacheDir = dirname($cacheFile);
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        @file_put_contents($cacheFile, json_encode($result, JSON_PRETTY_PRINT));
+        
+        aviationwx_log('info', 'OurAirports data downloaded and cached', [
+            'icao_count' => count($result['icao']),
+            'iata_count' => count($result['iata']),
+            'faa_count' => count($result['faa'])
+        ], 'app');
+        
+        return $result;
+        
+    } catch (Exception $e) {
+        aviationwx_log('error', 'error downloading OurAirports data', ['error' => $e->getMessage()], 'app');
+        // Return cached version if available
+        if (file_exists($cacheFile)) {
+            $cached = @json_decode(file_get_contents($cacheFile), true);
+            if (is_array($cached) && isset($cached['icao'])) {
+                return $cached;
+            }
+        }
+        return null;
+    }
+}
+
+/**
  * Download and cache ICAO airport codes list from GitHub
  * 
  * Downloads from lxndrblz/Airports repository (CC-BY-SA-4.0 license)
+ * Source: https://github.com/lxndrblz/Airports
  * Caches the list locally to avoid repeated downloads
+ * 
+ * NOTE: This function is deprecated in favor of getOurAirportsData() which provides
+ * more comprehensive data. Kept for backward compatibility.
  * 
  * @param bool $forceRefresh Force refresh even if cache exists
  * @return array|null Array of ICAO codes (uppercase) or null on error
+ * @deprecated Use getOurAirportsData() instead for better coverage
  */
 function getIcaoAirportList(bool $forceRefresh = false): ?array {
     $cacheFile = __DIR__ . '/../cache/icao_airports.json';
@@ -693,9 +956,10 @@ function getIcaoAirportList(bool $forceRefresh = false): ?array {
  * 
  * Validates against:
  * 1. Our own airport config (fastest, most reliable)
- * 2. Cached ICAO airport list from GitHub (lxndrblz/Airports)
+ * 2. Cached OurAirports data (comprehensive, 40,000+ airports)
  * 3. Cached lookup results (APCu)
- * 4. METAR data availability (fallback, only if list unavailable)
+ * 4. Legacy ICAO airport list from GitHub (fallback)
+ * 5. METAR data availability (fallback, only if lists unavailable)
  * 
  * @param string $icaoCode The ICAO code to validate (e.g., "KSPB")
  * @param array|null $config Optional config array (if already loaded, pass it to avoid reloading)
@@ -715,7 +979,8 @@ function isValidRealAirport(string $icaoCode, ?array $config = null): bool {
     
     if ($config !== null && isset($config['airports'])) {
         foreach ($config['airports'] as $airportId => $airport) {
-            $airportIcao = isset($airport['icao']) ? strtoupper(trim($airport['icao'])) : '';
+            // Guard against null to prevent PHP 8.1+ deprecation warning
+            $airportIcao = (isset($airport['icao']) && !empty($airport['icao'])) ? strtoupper(trim((string)$airport['icao'])) : '';
             if ($airportIcao === $icaoCode) {
                 return true; // Found in our config - definitely a real airport
             }
@@ -731,7 +996,20 @@ function isValidRealAirport(string $icaoCode, ?array $config = null): bool {
         }
     }
     
-    // Check against cached ICAO airport list (from GitHub)
+    // Check against OurAirports data (preferred, more comprehensive)
+    $ourairportsData = getOurAirportsData();
+    if ($ourairportsData !== null && isset($ourairportsData['icao']) && is_array($ourairportsData['icao'])) {
+        $isValid = in_array($icaoCode, $ourairportsData['icao'], true);
+        
+        // Cache the result for 30 days (airports don't change often)
+        if (function_exists('apcu_store')) {
+            apcu_store($cacheKey, $isValid, 2592000); // 30 day cache
+        }
+        
+        return $isValid;
+    }
+    
+    // Fallback to legacy ICAO list (for backward compatibility)
     $icaoList = getIcaoAirportList();
     if ($icaoList !== null && is_array($icaoList)) {
         $isValid = in_array($icaoCode, $icaoList, true);
@@ -793,6 +1071,8 @@ function isValidRealAirport(string $icaoCode, ?array $config = null): bool {
  * This checks format only, not whether the airport actually exists.
  * Use isValidRealAirport() to check if it's a real airport.
  * 
+ * ICAO codes are 3-4 alphanumeric characters, typically uppercase letters.
+ * 
  * @param string $icaoCode The ICAO code to validate
  * @return bool True if valid format (3-4 alphanumeric characters), false otherwise
  */
@@ -802,6 +1082,154 @@ function isValidIcaoFormat(string $icaoCode): bool {
     }
     $icaoCode = strtoupper(trim($icaoCode));
     return preg_match('/^[A-Z0-9]{3,4}$/', $icaoCode) === 1;
+}
+
+/**
+ * Check if an IATA code format is valid (syntactic validation only)
+ * 
+ * IATA codes are exactly 3 uppercase letters, used primarily for commercial aviation.
+ * 
+ * @param string $iataCode The IATA code to validate
+ * @return bool True if valid format (exactly 3 uppercase letters), false otherwise
+ */
+function isValidIataFormat(string $iataCode): bool {
+    if (empty($iataCode)) {
+        return false;
+    }
+    $iataCode = strtoupper(trim($iataCode));
+    return preg_match('/^[A-Z]{3}$/', $iataCode) === 1;
+}
+
+/**
+ * Check if an FAA identifier format is valid (syntactic validation only)
+ * 
+ * FAA identifiers are 3-4 alphanumeric characters and can start with numbers.
+ * Used for US airports, including small private fields.
+ * 
+ * Examples: "03S", "KSPB", "PDX"
+ * 
+ * @param string $faaId The FAA identifier to validate
+ * @return bool True if valid format (3-4 alphanumeric characters), false otherwise
+ */
+function isValidFaaFormat(string $faaId): bool {
+    if (empty($faaId)) {
+        return false;
+    }
+    $faaId = strtoupper(trim($faaId));
+    return preg_match('/^[A-Z0-9]{3,4}$/', $faaId) === 1;
+}
+
+/**
+ * Check if an IATA code is a valid, real airport code
+ * 
+ * Validates against OurAirports data (comprehensive, 40,000+ airports).
+ * 
+ * @param string $iataCode The IATA code to validate (e.g., "PDX")
+ * @return bool True if the IATA code is a real airport code, false otherwise
+ */
+function isValidRealIataCode(string $iataCode): bool {
+    if (empty($iataCode)) {
+        return false;
+    }
+    
+    $iataCode = strtoupper(trim($iataCode));
+    
+    // Check format first
+    if (!isValidIataFormat($iataCode)) {
+        return false;
+    }
+    
+    // Check APCu cache for previous lookups
+    $cacheKey = 'iata_valid_' . $iataCode;
+    if (function_exists('apcu_fetch')) {
+        $cached = apcu_fetch($cacheKey);
+        if ($cached !== false) {
+            return (bool)$cached;
+        }
+    }
+    
+    // Check against OurAirports data
+    $ourairportsData = getOurAirportsData();
+    if ($ourairportsData !== null && isset($ourairportsData['iata']) && is_array($ourairportsData['iata'])) {
+        $isValid = in_array($iataCode, $ourairportsData['iata'], true);
+        
+        // Cache the result for 30 days
+        if (function_exists('apcu_store')) {
+            apcu_store($cacheKey, $isValid, 2592000); // 30 day cache
+        }
+        
+        return $isValid;
+    }
+    
+    return false;
+}
+
+/**
+ * Check if an FAA identifier is a valid, real airport code
+ * 
+ * Validates against OurAirports data (comprehensive, 40,000+ airports).
+ * FAA identifiers are stored in the gps_code field in OurAirports.
+ * 
+ * @param string $faaCode The FAA identifier to validate (e.g., "03S", "KSPB")
+ * @return bool True if the FAA identifier is a real airport code, false otherwise
+ */
+function isValidRealFaaCode(string $faaCode): bool {
+    if (empty($faaCode)) {
+        return false;
+    }
+    
+    $faaCode = strtoupper(trim($faaCode));
+    
+    // Check format first
+    if (!isValidFaaFormat($faaCode)) {
+        return false;
+    }
+    
+    // Check APCu cache for previous lookups
+    $cacheKey = 'faa_valid_' . $faaCode;
+    if (function_exists('apcu_fetch')) {
+        $cached = apcu_fetch($cacheKey);
+        if ($cached !== false) {
+            return (bool)$cached;
+        }
+    }
+    
+    // Check against OurAirports data
+    $ourairportsData = getOurAirportsData();
+    if ($ourairportsData !== null && isset($ourairportsData['faa']) && is_array($ourairportsData['faa'])) {
+        $isValid = in_array($faaCode, $ourairportsData['faa'], true);
+        
+        // Cache the result for 30 days
+        if (function_exists('apcu_store')) {
+            apcu_store($cacheKey, $isValid, 2592000); // 30 day cache
+        }
+        
+        return $isValid;
+    }
+    
+    return false;
+}
+
+/**
+ * Check if a custom identifier format is valid (syntactic validation only)
+ * 
+ * Custom identifiers are used for informal airports without official codes.
+ * Format: lowercase alphanumeric with hyphens, 3-50 characters.
+ * 
+ * Examples: "sandy-river", "private-strip-1"
+ * 
+ * @param string $customId The custom identifier to validate
+ * @return bool True if valid format, false otherwise
+ */
+function isValidCustomIdentifierFormat(string $customId): bool {
+    if (empty($customId)) {
+        return false;
+    }
+    $customId = strtolower(trim($customId));
+    // Must start and end with alphanumeric, can contain hyphens in middle
+    return preg_match('/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/', $customId) === 1 && 
+           strlen($customId) >= 3 && 
+           strlen($customId) <= 50;
 }
 
 /**
@@ -904,6 +1332,12 @@ function validateAirportsJsonStructure(array $config): array {
         return preg_match('/^[A-Z]{3,4}$/', $icao) === 1;
     };
     
+    // Track identifiers for uniqueness checks (case-insensitive)
+    $nameMap = []; // name => [airportIds]
+    $icaoMap = []; // icao => [airportIds]
+    $iataMap = []; // iata => [airportIds]
+    $faaMap = [];  // faa => [airportIds]
+    
     // Validate each airport
     foreach ($config['airports'] as $airportCode => $airport) {
         if (!is_array($airport)) {
@@ -912,17 +1346,64 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Required fields
-        $requiredFields = ['name', 'icao', 'lat', 'lon'];
+        $requiredFields = ['name', 'lat', 'lon'];
         foreach ($requiredFields as $field) {
             if (!isset($airport[$field])) {
                 $errors[] = "Airport '{$airportCode}' missing required field: '{$field}'";
             }
         }
         
-        // Validate ICAO format (note: real airport validation is separate)
+        // Track airport name for uniqueness (case-insensitive)
+        if (isset($airport['name']) && is_string($airport['name'])) {
+            $nameKey = strtolower(trim($airport['name']));
+            if (!isset($nameMap[$nameKey])) {
+                $nameMap[$nameKey] = [];
+            }
+            $nameMap[$nameKey][] = $airportCode;
+        }
+        
+        // Identifiers (icao, iata, faa) are optional - if not set, airport ID is used as identifier
+        // No validation required - airport can have no identifiers and use airport ID only
+        
+        // Validate ICAO format (note: real airport validation is separate) and track for uniqueness
         if (isset($airport['icao'])) {
-            if (!$validateIcaoFormat($airport['icao'])) {
-                $errors[] = "Airport '{$airportCode}' has invalid ICAO code format: '{$airport['icao']}' (must be 3-4 uppercase letters)";
+            if (!isValidIcaoFormat($airport['icao'])) {
+                $errors[] = "Airport '{$airportCode}' has invalid ICAO code format: '{$airport['icao']}' (must be 3-4 alphanumeric characters)";
+            } else {
+                // Guard against null to prevent PHP 8.1+ deprecation warning
+                $icaoKey = strtoupper(trim((string)$airport['icao']));
+                if (!isset($icaoMap[$icaoKey])) {
+                    $icaoMap[$icaoKey] = [];
+                }
+                $icaoMap[$icaoKey][] = $airportCode;
+            }
+        }
+        
+        // Validate IATA format (optional) and track for uniqueness
+        if (isset($airport['iata']) && $airport['iata'] !== null) {
+            if (!isValidIataFormat($airport['iata'])) {
+                $errors[] = "Airport '{$airportCode}' has invalid IATA code format: '{$airport['iata']}' (must be exactly 3 uppercase letters)";
+            } else {
+                // Guard against null to prevent PHP 8.1+ deprecation warning
+                $iataKey = strtoupper(trim((string)$airport['iata']));
+                if (!isset($iataMap[$iataKey])) {
+                    $iataMap[$iataKey] = [];
+                }
+                $iataMap[$iataKey][] = $airportCode;
+            }
+        }
+        
+        // Validate FAA format (optional) and track for uniqueness
+        if (isset($airport['faa']) && $airport['faa'] !== null) {
+            if (!isValidFaaFormat($airport['faa'])) {
+                $errors[] = "Airport '{$airportCode}' has invalid FAA identifier format: '{$airport['faa']}' (must be 3-4 alphanumeric characters)";
+            } else {
+                // Guard against null to prevent PHP 8.1+ deprecation warning
+                $faaKey = strtoupper(trim((string)$airport['faa']));
+                if (!isset($faaMap[$faaKey])) {
+                    $faaMap[$faaKey] = [];
+                }
+                $faaMap[$faaKey][] = $airportCode;
             }
         }
         
@@ -1164,6 +1645,34 @@ function validateAirportsJsonStructure(array $config): array {
         }
     }
     
+    // Check uniqueness of airport names
+    foreach ($nameMap as $nameKey => $airportIds) {
+        if (count($airportIds) > 1) {
+            $errors[] = "Duplicate airport name found: '" . $nameKey . "' used by airports: " . implode(', ', $airportIds);
+        }
+    }
+    
+    // Check uniqueness of ICAO codes
+    foreach ($icaoMap as $icaoKey => $airportIds) {
+        if (count($airportIds) > 1) {
+            $errors[] = "Duplicate ICAO code found: '" . $icaoKey . "' used by airports: " . implode(', ', $airportIds);
+        }
+    }
+    
+    // Check uniqueness of IATA codes
+    foreach ($iataMap as $iataKey => $airportIds) {
+        if (count($airportIds) > 1) {
+            $errors[] = "Duplicate IATA code found: '" . $iataKey . "' used by airports: " . implode(', ', $airportIds);
+        }
+    }
+    
+    // Check uniqueness of FAA identifiers
+    foreach ($faaMap as $faaKey => $airportIds) {
+        if (count($airportIds) > 1) {
+            $errors[] = "Duplicate FAA identifier found: '" . $faaKey . "' used by airports: " . implode(', ', $airportIds);
+        }
+    }
+    
     return [
         'valid' => empty($errors),
         'errors' => $errors,
@@ -1172,16 +1681,16 @@ function validateAirportsJsonStructure(array $config): array {
 }
 
 /**
- * Validate ICAO codes in airports.json against real airport list
+ * Validate airport identifiers (ICAO, IATA, FAA) in airports.json against real airport lists
  * 
- * Checks all ICAO codes in the config against the cached airport list.
- * Used for CI/CD validation to catch invalid airport codes before deployment.
+ * Checks all identifier codes in the config against OurAirports data (comprehensive, 40,000+ airports).
  * 
  * @param array|null $config Optional config array (if already loaded)
- * @return array Array with 'valid' (bool) and 'errors' (array of error messages)
+ * @return array Array with 'valid' (bool), 'errors' (array), and optional 'warnings' (array)
  */
 function validateAirportsIcaoCodes(?array $config = null): array {
     $errors = [];
+    $warnings = [];
     
     if ($config === null) {
         $config = loadConfig();
@@ -1195,39 +1704,90 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         return ['valid' => false, 'errors' => ['No airports found in configuration']];
     }
     
-    // Get ICAO list (will download if needed)
-    $icaoList = getIcaoAirportList();
-    if ($icaoList === null || empty($icaoList)) {
-        // If we can't get the list, we can't validate - but don't fail
-        // This allows deployments to proceed even if GitHub is temporarily unavailable
-        return ['valid' => true, 'errors' => [], 'warnings' => ['Could not download ICAO airport list - skipping validation']];
+    // Get OurAirports data (will download if needed)
+    $ourairportsData = getOurAirportsData();
+    if ($ourairportsData === null) {
+        // If we can't get the data, we can't validate - but don't fail
+        // This allows deployments to proceed even if OurAirports is temporarily unavailable
+        return ['valid' => true, 'errors' => [], 'warnings' => ['Could not download OurAirports data - skipping validation']];
     }
     
-    // Convert to associative array for fast lookup
-    $icaoLookup = array_flip($icaoList);
+    // Build lookup arrays for fast access
+    $icaoLookup = [];
+    if (isset($ourairportsData['icao']) && is_array($ourairportsData['icao'])) {
+        foreach ($ourairportsData['icao'] as $code) {
+            $normalized = strtoupper(trim($code));
+            if (!empty($normalized)) {
+                $icaoLookup[$normalized] = true;
+            }
+        }
+    }
     
+    $iataLookup = [];
+    if (isset($ourairportsData['iata']) && is_array($ourairportsData['iata'])) {
+        foreach ($ourairportsData['iata'] as $code) {
+            $normalized = strtoupper(trim($code));
+            if (!empty($normalized)) {
+                $iataLookup[$normalized] = true;
+            }
+        }
+    }
+    
+    $faaLookup = [];
+    if (isset($ourairportsData['faa']) && is_array($ourairportsData['faa'])) {
+        foreach ($ourairportsData['faa'] as $code) {
+            $normalized = strtoupper(trim($code));
+            if (!empty($normalized)) {
+                $faaLookup[$normalized] = true;
+            }
+        }
+    }
+    
+    // Validate each airport's identifiers
     foreach ($config['airports'] as $airportId => $airport) {
-        $icao = isset($airport['icao']) ? strtoupper(trim($airport['icao'])) : '';
-        
-        if (empty($icao)) {
-            $errors[] = "Airport '{$airportId}' is missing ICAO code";
-            continue;
+        // Validate ICAO code if present
+        if (isset($airport['icao']) && !empty($airport['icao'])) {
+            $icao = strtoupper(trim((string)$airport['icao']));
+            
+            // Check format
+            if (!isValidIcaoFormat($icao)) {
+                $errors[] = "Airport '{$airportId}' has invalid ICAO format: '{$icao}'";
+            } elseif (!isset($icaoLookup[$icao])) {
+                // Missing from OurAirports - warning only (data may be incomplete for very new/rare airports)
+                $warnings[] = "Airport '{$airportId}' has ICAO code '{$icao}' which is not found in OurAirports data";
+            }
         }
         
-        // Check if it's a valid format
-        if (!isValidIcaoFormat($icao)) {
-            $errors[] = "Airport '{$airportId}' has invalid ICAO format: '{$icao}'";
-            continue;
+        // Validate IATA code if present
+        if (isset($airport['iata']) && !empty($airport['iata']) && $airport['iata'] !== null) {
+            $iata = strtoupper(trim((string)$airport['iata']));
+            
+            // Check format
+            if (!isValidIataFormat($iata)) {
+                $errors[] = "Airport '{$airportId}' has invalid IATA format: '{$iata}'";
+            } elseif (!isset($iataLookup[$iata])) {
+                // Missing from OurAirports - warning only
+                $warnings[] = "Airport '{$airportId}' has IATA code '{$iata}' which is not found in OurAirports data";
+            }
         }
         
-        // Check if it's a real airport
-        if (!isset($icaoLookup[$icao])) {
-            $errors[] = "Airport '{$airportId}' has ICAO code '{$icao}' which is not found in the official airport list";
+        // Validate FAA identifier if present
+        if (isset($airport['faa']) && !empty($airport['faa']) && $airport['faa'] !== null) {
+            $faa = strtoupper(trim((string)$airport['faa']));
+            
+            // Check format
+            if (!isValidFaaFormat($faa)) {
+                $errors[] = "Airport '{$airportId}' has invalid FAA identifier format: '{$faa}'";
+            } elseif (!isset($faaLookup[$faa])) {
+                // Missing from OurAirports - warning only
+                $warnings[] = "Airport '{$airportId}' has FAA identifier '{$faa}' which is not found in OurAirports data";
+            }
         }
     }
     
     return [
         'valid' => empty($errors),
-        'errors' => $errors
+        'errors' => $errors,
+        'warnings' => $warnings
     ];
 }

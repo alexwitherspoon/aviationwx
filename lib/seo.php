@@ -87,11 +87,14 @@ function generateAirportSchema($airport, $airportId) {
     $baseUrl = getBaseUrl();
     $airportUrl = 'https://' . $airportId . '.aviationwx.org';
     
+    // Get primary identifier for display (handles null ICAO)
+    $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+    
     $schema = [
         '@context' => 'https://schema.org',
         '@type' => 'LocalBusiness',
-        'name' => $airport['name'] . ' (' . $airport['icao'] . ')',
-        'description' => 'Live webcams and real-time weather conditions for ' . $airport['name'] . ' (' . $airport['icao'] . ')',
+        'name' => $airport['name'] . ' (' . $primaryIdentifier . ')',
+        'description' => 'Live webcams and real-time weather conditions for ' . $airport['name'] . ' (' . $primaryIdentifier . ')',
         'url' => $airportUrl,
         'address' => [
             '@type' => 'PostalAddress',
@@ -121,7 +124,7 @@ function generateAirportSchema($airport, $airportId) {
         }
         // Update description to emphasize live webcams
         $webcamCount = count($airport['webcams']);
-        $schema['description'] = 'Live webcams (' . $webcamCount . ' camera' . ($webcamCount > 1 ? 's' : '') . ') and real-time runway conditions for ' . $airport['name'] . ' (' . $airport['icao'] . ')';
+        $schema['description'] = 'Live webcams (' . $webcamCount . ' camera' . ($webcamCount > 1 ? 's' : '') . ') and real-time runway conditions for ' . $airport['name'] . ' (' . $primaryIdentifier . ')';
     }
     
     // Add service description emphasizing live webcams and runway conditions

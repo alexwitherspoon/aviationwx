@@ -6,9 +6,11 @@ require_once __DIR__ . '/../lib/seo.php';
 // SEO variables - emphasize live webcams and runway conditions
 $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
 $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') . ' and ' : '';
-$pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($airport['icao']) . ') - Live Webcams & Runway Conditions';
-$pageDescription = 'Live webcams and real-time runway conditions for ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($airport['icao']) . '). ' . $webcamText . 'current weather, wind, visibility, and aviation metrics. Free for pilots.';
-$pageKeywords = htmlspecialchars($airport['icao']) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($airport['icao']) . ' weather, airport webcam, pilot weather, aviation weather';
+// Get primary identifier (ICAO > IATA > FAA > Airport ID) for display
+$primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
+$pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . ') - Live Webcams & Runway Conditions';
+$pageDescription = 'Live webcams and real-time runway conditions for ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . '). ' . $webcamText . 'current weather, wind, visibility, and aviation metrics. Free for pilots.';
+$pageKeywords = htmlspecialchars($primaryIdentifier) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($primaryIdentifier) . ' weather, airport webcam, pilot weather, aviation weather';
 // Get base domain from global config
 require_once __DIR__ . '/../lib/config.php';
 $baseDomain = getBaseDomain();
@@ -236,7 +238,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($airport['icao']) ?>)</h1>
+            <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($primaryIdentifier) ?>)</h1>
             <h2 style="font-size: 1.2rem; color: #ddd; margin-top: 0.25rem; font-weight: normal;">
                 <address style="font-style: normal; margin: 0;">
                     <?php
@@ -357,10 +359,24 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <!-- Airport Information -->
         <section class="airport-info">
             <div class="info-grid">
+                <?php if (!empty($airport['icao'])): ?>
                 <div class="info-item">
                     <span class="label">ICAO:</span>
                     <span class="value"><?= htmlspecialchars($airport['icao']) ?></span>
                 </div>
+                <?php endif; ?>
+                <?php if (!empty($airport['iata'])): ?>
+                <div class="info-item">
+                    <span class="label">IATA:</span>
+                    <span class="value"><?= htmlspecialchars($airport['iata']) ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($airport['faa'])): ?>
+                <div class="info-item">
+                    <span class="label">FAA:</span>
+                    <span class="value"><?= htmlspecialchars($airport['faa']) ?></span>
+                </div>
+                <?php endif; ?>
                 <div class="info-item">
                     <span class="label">Elevation:</span>
                     <span class="value"><?= $airport['elevation_ft'] ?> ft</span>
@@ -401,9 +417,12 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             </div>
 
             <div class="links">
+                <?php if (!empty($airport['airnav_url'])): ?>
                 <a href="<?= htmlspecialchars($airport['airnav_url']) ?>" target="_blank" rel="noopener" class="btn">
                     AirNav
                 </a>
+                <?php endif; ?>
+                <?php if (!empty($airport['icao'])): ?>
                 <a href="https://skyvector.com/airport/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn">
                     SkyVector
                 </a>
@@ -411,7 +430,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     AOPA
                 </a>
                 <?php
-                // Generate FAA Weather Cams URL
+                // Generate FAA Weather Cams URL (only if ICAO exists)
                 // URL format: https://weathercams.faa.gov/map/{min_lon},{min_lat},{max_lon},{max_lat}/airport/{icao}/
                 // Create bounding box around airport (2 degree buffer for visibility)
                 $buffer = 2.0;
@@ -433,6 +452,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <a href="<?= htmlspecialchars($faa_weather_url) ?>" target="_blank" rel="noopener" class="btn">
                     FAA Weather
                 </a>
+                <?php endif; ?>
                 <?php
                 // Render custom links if configured
                 if (!empty($airport['links']) && is_array($airport['links'])) {

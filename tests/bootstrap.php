@@ -44,6 +44,8 @@ if (file_exists(__DIR__ . '/Helpers/TestHelper.php')) {
 }
 
 // Ensure the test airports.json is used if CONFIG_PATH is not set
+// Note: airports.json is NOT in repository - only exists on production host
+// CI (GitHub Actions) never has access to airports.json, so tests use fixtures
 if (!getenv('CONFIG_PATH') && file_exists(__DIR__ . '/Fixtures/airports.json.test')) {
     putenv('CONFIG_PATH=' . __DIR__ . '/Fixtures/airports.json.test');
 }
