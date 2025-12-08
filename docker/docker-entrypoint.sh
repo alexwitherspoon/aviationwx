@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# Ensure config directory exists (needed for airports.json mount)
+CONFIG_DIR="/var/www/html/config"
+if [ ! -d "${CONFIG_DIR}" ]; then
+    echo "Creating config directory: ${CONFIG_DIR}"
+    mkdir -p "${CONFIG_DIR}"
+    chown www-data:www-data "${CONFIG_DIR}" 2>/dev/null || true
+fi
+
 # Start cron daemon in background
 echo "Starting cron daemon..."
 cron

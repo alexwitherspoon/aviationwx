@@ -180,8 +180,8 @@ jobs:
         run: |
           echo "🔍 Validating merge functionality implementation..."
           
-          # Check that mergeWeatherDataWithFallback function exists
-          if ! grep -q "function mergeWeatherDataWithFallback" api/weather.php; then
+          # Check that mergeWeatherDataWithFallback function exists (moved to lib/weather/staleness.php)
+          if ! grep -q "function mergeWeatherDataWithFallback" lib/weather/staleness.php; then
             echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
             exit 1
           fi
@@ -191,13 +191,13 @@ jobs:
             echo "⚠️  Warning: mergeWeatherDataWithFallback may not be called before cache write"
           fi
           
-          # Check for VRB wind direction handling
-          if ! grep -q "wdir.*VRB\|'VRB'" api/weather.php; then
+          # Check for VRB wind direction handling (in METAR adapter)
+          if ! grep -q "wdir.*VRB\|'VRB'" lib/weather/adapter/metar-v1.php; then
             echo "⚠️  Warning: VRB wind direction handling may be missing"
           fi
           
-          # Check for numeric checks on wind data
-          if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" api/weather.php; then
+          # Check for numeric checks on wind data (in METAR adapter)
+          if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" lib/weather/adapter/metar-v1.php; then
             echo "⚠️  Warning: Numeric validation for wind data may be missing"
           fi
           
