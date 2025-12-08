@@ -1,7 +1,7 @@
 # AviationWX Docker Management
 # Quick commands for local development
 
-.PHONY: help init build up down restart logs shell test smoke clean config
+.PHONY: help init build build-force up down restart logs shell test test-local smoke clean config
 
 help: ## Show this help message
 	@echo 'AviationWX Docker Management'
@@ -21,37 +21,51 @@ init: ## Initialize environment (copy env.example to .env)
 config: ## Generate configuration from .env
 	@bash config/docker-config.sh
 
-build: ## Build Docker containers
-	@docker compose -f docker/docker-compose.yml build
+build: ## Build Docker containers (local development)
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml build
 
-up: build ## Start containers
-	@docker compose -f docker/docker-compose.yml up -d
+build-force: ## Force rebuild Docker containers (no cache)
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml build --no-cache
+
+up: build ## Start containers (local development)
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml up -d
 
 down: ## Stop containers
-	@docker compose -f docker/docker-compose.yml down
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml down
 
 restart: ## Restart containers
-	@docker compose -f docker/docker-compose.yml restart
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml restart
 
 logs: ## View container logs
-	@docker compose -f docker/docker-compose.yml logs -f
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml logs -f
 
 shell: ## Open shell in web container
-	@docker compose -f docker/docker-compose.yml exec web bash
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec web bash
 
-test: ## Test the application
+test: ## Test the application (quick curl test)
 	@echo "Testing AviationWX..."
 	@curl -f http://localhost:8080 || echo "✗ Homepage failed"
 	@echo "✓ Tests complete"
 
+test-local: build-force up ## Rebuild containers and run PHPUnit tests locally
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "Rebuilding Docker containers and running local tests"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Waiting for containers to be ready..."
+	@sleep 5
+	@echo ""
+	@echo "Running PHPUnit tests..."
+	@TEST_API_URL=http://localhost:8080 vendor/bin/phpunit --testdox || (echo ""; echo "⚠️  Some tests failed. Check output above."; exit 1)
+
 smoke: ## Smoke test main endpoints (requires running containers)
 	@echo "Smoke testing..."
 	@echo "- Homepage" && curl -sf http://127.0.0.1:8080 >/dev/null && echo " ✓"
-	@echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:8080/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
-	@echo "- Webcam fetch script (PHP present)" && docker compose -f docker/docker-compose.yml exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
+	@echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:8080/api/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
+	@echo "- Webcam fetch script (PHP present)" && docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec -T web php -v >/dev/null && echo " ✓ (PHP OK)"
 
 clean: ## Remove containers and volumes
-	@docker compose -f docker/docker-compose.yml down -v
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml down -v
 	@docker system prune -f
 
 # Production commands
@@ -64,6 +78,9 @@ logs-prod: ## View production logs
 
 # Quick development workflow
 dev: init up logs ## Start development environment
+
+# Testing workflow
+test-rebuild: test-local ## Rebuild containers before testing (alias for test-local)
 
 # Minification (optional - CSS minification for production)
 minify: ## Minify CSS (requires perl or sed)
@@ -79,5 +96,5 @@ minify: ## Minify CSS (requires perl or sed)
 # Configuration update
 update-config: ## Update configuration and restart
 	@bash config/docker-config.sh
-	@docker compose -f docker/docker-compose.yml restart
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml restart
 

@@ -10,6 +10,8 @@
     "kspb": {
       "name": "Scappoose Airport",
       "icao": "KSPB",
+      "iata": null,
+      "faa": "KSPB",
       "address": "Scappoose, Oregon",
       "lat": 45.7710278,
       "lon": -122.8618333,
@@ -40,6 +42,34 @@
           "url": "https://example.com/org"
         }
       ]
+    },
+    "pdx": {
+      "name": "Portland International Airport",
+      "icao": "KPDX",
+      "iata": "PDX",
+      "faa": "PDX",
+      "address": "Portland, Oregon",
+      "lat": 45.5897694,
+      "lon": -122.5950944,
+      "elevation_ft": 30,
+      "timezone": "America/Los_Angeles",
+      "weather_source": {
+        "type": "metar"
+      }
+    },
+    "03s": {
+      "name": "Sandy River Airport",
+      "icao": null,
+      "iata": null,
+      "faa": "03S",
+      "address": "Sandy, Oregon",
+      "lat": 45.395,
+      "lon": -122.261,
+      "elevation_ft": 1000,
+      "timezone": "America/Los_Angeles",
+      "weather_source": {
+        "type": "metar"
+      }
     }
   }
 }

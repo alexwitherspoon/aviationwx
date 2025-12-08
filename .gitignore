@@ -8,6 +8,9 @@ scripts/cache/
 **/cache/
 
 # Sensitive configuration files (DO NOT COMMIT)
+# Note: airports.json is NOT in repository - only exists on production host
+# CI (GitHub Actions) never has access - uses test fixtures (tests/Fixtures/airports.json.test)
+# CD (Deployment) has access - runs on production host where file exists
 airports.json
 # Keep airports.json.example in the repo as a template
 # Keep airports.json.test for CI/CD testing
@@ -125,3 +128,6 @@ docs/*SUMMARY*.md
 *.ai-temp
 *.ai-backup
 *_ai_*.tmp
+
+# Docker Compose local overrides (user-specific paths)
+docker/docker-compose.override.yml

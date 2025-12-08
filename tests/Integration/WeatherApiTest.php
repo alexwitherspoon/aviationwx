@@ -75,9 +75,30 @@ class WeatherApiTest extends TestCase
         $_SERVER['REQUEST_METHOD'] = 'GET';
         $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
         
-        // This would require a proper integration test framework
-        // For now, we test the validation function directly
+        // Test that invalid airport ID format is rejected
         $this->assertFalse(validateAirportId('invalid!!'));
+        
+        // Test that findAirportByIdentifier returns null for invalid identifier
+        $result = findAirportByIdentifier('invalid!!');
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test weather endpoint accepts IATA codes
+     */
+    public function testWeatherEndpoint_AcceptsIataCode()
+    {
+        // This test verifies the endpoint structure supports multi-identifier lookup
+        // Full integration test would require HTTP request to endpoint
+        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        if (file_exists($configPath)) {
+            $config = json_decode(file_get_contents($configPath), true);
+            if ($config && isset($config['airports']['pdx']['iata'])) {
+                $iata = $config['airports']['pdx']['iata'];
+                $result = findAirportByIdentifier($iata, $config);
+                $this->assertNotNull($result, "Should find airport by IATA: $iata");
+            }
+        }
     }
 }
 

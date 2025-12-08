@@ -811,7 +811,7 @@ Best regards,
                     ?>
                     <div class="airport-card">
                         <a href="<?= htmlspecialchars($url) ?>">
-                            <div class="airport-code"><?= htmlspecialchars($airport['icao']) ?></div>
+                            <div class="airport-code"><?= htmlspecialchars(getPrimaryIdentifier($airportId, $airport)) ?></div>
                             <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
                             <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
                             
