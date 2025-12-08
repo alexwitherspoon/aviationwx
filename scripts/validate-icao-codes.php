@@ -1,10 +1,10 @@
 #!/usr/bin/env php
 <?php
 /**
- * Validate ICAO Airport Codes
+ * Validate Airport Identifiers (ICAO, IATA, FAA)
  * 
- * Standalone script to validate ICAO codes in airports.json against the official
- * airport list from GitHub (lxndrblz/Airports).
+ * Standalone script to validate airport identifiers in airports.json against
+ * OurAirports data (comprehensive, 40,000+ airports worldwide).
  * 
  * This script can be used in CI/CD pipelines (including the secrets repo) to
  * catch invalid airport codes before deployment.
@@ -57,10 +57,10 @@ if (!isset($config['airports']) || !is_array($config['airports'])) {
     exit(2);
 }
 
-echo "Validating ICAO codes in: {$configPath}\n";
+echo "Validating airport identifiers (ICAO, IATA, FAA) in: {$configPath}\n";
 echo str_repeat('=', 60) . "\n";
 
-// Validate ICAO codes
+// Validate airport identifiers
 $result = validateAirportsIcaoCodes($config);
 
 // Show warnings if any
@@ -84,6 +84,6 @@ if (!$result['valid']) {
 
 // Success
 $airportCount = count($config['airports']);
-echo "✅ Validation PASSED - All {$airportCount} airport ICAO code(s) are valid\n";
+echo "✅ Validation PASSED - All airport identifiers are valid for {$airportCount} airport(s)\n";
 exit(0);
 
