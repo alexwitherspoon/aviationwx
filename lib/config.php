@@ -1671,12 +1671,12 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Validate FAA format (optional) and track for uniqueness
-        if (isset($airport['faa']) && $airport['faa'] !== null) {
+        if (isset($airport['faa']) && $airport['faa'] !== null && is_string($airport['faa'])) {
             if (!isValidFaaFormat($airport['faa'])) {
                 $errors[] = "Airport '{$airportCode}' has invalid FAA identifier format: '{$airport['faa']}' (must be 3-4 alphanumeric characters)";
             } else {
-                // Guard against null to prevent PHP 8.1+ deprecation warning
-                $faaKey = strtoupper(trim((string)$airport['faa']));
+                // Type check ensures $airport['faa'] is string, preventing PHP 8.1+ deprecation warnings
+                $faaKey = strtoupper(trim($airport['faa']));
                 if (!isset($faaMap[$faaKey])) {
                     $faaMap[$faaKey] = [];
                 }
