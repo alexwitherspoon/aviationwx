@@ -286,11 +286,17 @@ cd aviationwx
 
 ### 2. Configure airports.json
 
-**`airports.json` is automatically deployed via GitHub Actions** from a private secrets repository.
+**IMPORTANT**: `airports.json` is **NOT in the repository** - it only exists on the production host.
 
-- The file is deployed to `/home/aviationwx/airports.json` automatically
+**Deployment**:
+- `airports.json` is automatically deployed via GitHub Actions from a private secrets repository
+- The file is deployed to `/home/aviationwx/airports.json` on the production host
 - No manual setup required - the GitHub Actions workflow handles deployment
 - Updates are automatically deployed when the secrets repository is updated
+
+**CI vs CD Access**:
+- **CI (GitHub Actions)**: ❌ Never has access - runs in GitHub's cloud, uses test fixtures
+- **CD (Deployment)**: ✅ Has access - runs on production host where file exists
 
 **Note**: If you need to manually create `airports.json` for initial setup:
 
