@@ -4,6 +4,11 @@
  * Supports MJPEG streams, RTSP streams, and static images
  */
 
+// Load test mocking if available
+if (file_exists(__DIR__ . '/../lib/test-mocks.php')) {
+    require_once __DIR__ . '/../lib/test-mocks.php';
+}
+
 /**
  * Detect webcam source type from URL
  * 
@@ -43,22 +48,52 @@ function detectWebcamSourceType($url) {
  * @return bool True on success, false on failure
  */
 function fetchStaticImage($url, $cacheFile) {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => CURL_TIMEOUT,
-        CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3,
-        CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
-        CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
-    ]);
-    
-    $data = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
+    // Check for mock response in test mode
+    if (function_exists('getMockHttpResponse')) {
+        $mockResponse = getMockHttpResponse($url);
+        if ($mockResponse !== null) {
+            // Use mock response
+            $data = $mockResponse;
+            $httpCode = 200;
+            $error = '';
+        } else {
+            // Proceed with real request
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => CURL_TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
+                CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
+                CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
+            ]);
+            
+            $data = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+        }
+    } else {
+        // No mocking available, proceed with real request
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
+            CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
+        ]);
+        
+        $data = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+    }
     
     if ($error) {
         // Log curl error
