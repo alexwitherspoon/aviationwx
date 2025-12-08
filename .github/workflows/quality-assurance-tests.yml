@@ -695,10 +695,14 @@ jobs:
           load: true
       
       - name: Start Docker containers
+        env:
+          CONFIG_PATH: ${{ github.workspace }}/config/airports.json
+          APP_ENV: testing
         run: |
           # Tag the pre-built image for docker-compose
           docker tag aviationwx:test aviationwx:latest || true
           # Start local instance for testing
+          # Environment variables are passed via env: block above
           docker compose -f docker/docker-compose.yml up -d
           # Reduced wait time - health check will verify readiness
           sleep 10

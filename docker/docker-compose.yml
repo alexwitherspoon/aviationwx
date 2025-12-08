@@ -24,7 +24,8 @@ services:
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
-      - CONFIG_PATH=/var/www/html/config/airports.json
+      - CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}
+      - APP_ENV=${APP_ENV:-}
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
