@@ -1,46 +1,196 @@
 <?php
-// Load SEO utilities for favicon tags
+// Load SEO utilities
+require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
+
+// Get base URL for links
+$baseUrl = getBaseUrl();
+
+// SEO variables
+$pageTitle = 'Page Not Found - AviationWX.org';
+$pageDescription = 'The page you\'re looking for doesn\'t exist. Return to AviationWX.org to find airport weather dashboards.';
+$canonicalUrl = getCanonicalUrl();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Airport Not Found - AviationWX.org</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php
     // Favicon and icon tags
     echo generateFaviconTags();
     echo "\n    ";
+    
+    // Enhanced meta tags
+    echo generateEnhancedMetaTags($pageDescription, 'page not found, 404, aviation weather');
+    echo "\n    ";
+    
+    // Canonical URL
+    echo generateCanonicalTag($canonicalUrl);
+    echo "\n    ";
+    
+    // Open Graph and Twitter Card tags
+    echo generateSocialMetaTags($pageTitle, $pageDescription, $canonicalUrl);
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">
     <style>
         .error-container {
-            text-align: center;
+            max-width: 700px;
+            margin: 0 auto;
             padding: 4rem 2rem;
+            text-align: center;
+        }
+        .error-hero {
+            padding: 3rem 2rem;
+            background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 2rem;
         }
         .error-code {
-            font-size: 4rem;
+            font-size: 6rem;
             font-weight: bold;
-            color: #dc3545;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+            line-height: 1;
         }
-        .error-message {
-            font-size: 1.5rem;
+        .error-hero h1 {
+            font-size: 2rem;
             margin: 1rem 0;
+        }
+        .error-hero p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin: 0.5rem 0;
+        }
+        .section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        .section h2 {
+            color: #0066cc;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        .helpful-links {
+            list-style: none;
+            padding: 0;
+            margin: 1.5rem 0;
+        }
+        .helpful-links li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .helpful-links li:last-child {
+            border-bottom: none;
+        }
+        .helpful-links a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            transition: color 0.2s;
+        }
+        .helpful-links a:hover {
+            color: #0052a3;
+            text-decoration: underline;
+        }
+        .helpful-links a::before {
+            content: "→";
+            margin-right: 0.75rem;
+            font-weight: bold;
+        }
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.2s;
+            margin: 0.5rem;
+        }
+        .btn-primary {
+            background: #0066cc;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0052a3;
+        }
+        .btn-secondary {
+            background: white;
+            color: #0066cc;
+            border: 2px solid #0066cc;
+        }
+        .btn-secondary:hover {
+            background: #0066cc;
+            color: white;
+        }
+        .note {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #0066cc;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+            color: #666;
+        }
+        .note strong {
+            color: #333;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="error-container">
-            <div class="error-code">404</div>
-            <h1>Airport Not Found</h1>
-            <p class="error-message">This airport is not in our network.</p>
-            <p><a href="https://aviationwx.org" class="btn">Return to Homepage</a></p>
+            <div class="error-hero">
+                <div class="error-code">404</div>
+                <h1>Page Not Found</h1>
+                <p>The page you're looking for doesn't exist or has been moved.</p>
+            </div>
+
+            <div class="section">
+                <h2>What Were You Looking For?</h2>
+                <ul class="helpful-links">
+                    <li>
+                        <a href="https://aviationwx.org">Homepage</a>
+                    </li>
+                    <li>
+                        <a href="https://aviationwx.org#participating-airports">View All Airports</a>
+                    </li>
+                    <li>
+                        <a href="https://aviationwx.org#about-the-project">About the Project</a>
+                    </li>
+                    <li>
+                        <a href="https://status.aviationwx.org">System Status</a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/alexwitherspoon/aviationwx.org">GitHub Repository</a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <div class="note">
+                    <strong>Looking for a specific airport?</strong><br>
+                    Airport dashboards are available at <code>ICAO.aviationwx.org</code> (e.g., <code>kspb.aviationwx.org</code>). 
+                    If the airport you're looking for isn't online yet, visit its subdomain to learn how to help add it to the network.
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 2rem;">
+                <a href="https://aviationwx.org" class="btn btn-primary">Return to Homepage</a>
+            </div>
         </div>
     </div>
 </body>
 </html>
-
