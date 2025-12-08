@@ -7,38 +7,564 @@ on:
     branches: [ "main" ]
   workflow_dispatch: {} # Allow manual trigger
 
+# CRITICAL: Prevent concurrent runs from interfering with each other
+# Group by branch and commit SHA to ensure each commit gets its own run
+# Cancel in-progress runs when a new commit is pushed (prevents old runs from completing)
+concurrency:
+  group: qa-tests-${{ github.ref }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+  cancel-in-progress: true  # Cancel old runs when new commit is pushed
+
 # Default permissions for all jobs in this workflow
 permissions:
   contents: read
   actions: read
 
 jobs:
-  # Setup Docker environment once - shared by E2E and browser tests
-  setup-docker:
-    name: Setup Docker Environment
+  # Test job - runs all PHPUnit tests (unit, integration, critical safety tests)
+  test:
+    name: PHPUnit Tests
     runs-on: ubuntu-latest
-    # This job sets up Docker and makes it available to dependent jobs
-    # Note: We can't share containers across jobs, but we can optimize the setup
+    # Critical - must pass before deployment
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # CRITICAL: Fetch full history to ensure commit SHA is accurate
+          fetch-depth: 0
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Setup test configuration
+      - name: Validate commit and branch context
         run: |
-          # Note: airports.json is NOT in repository - only exists on production host
-          # CI uses test fixtures (tests/Fixtures/airports.json.test) via CONFIG_PATH
-          # This step creates a minimal config for Docker setup only (not used by tests)
-          if [ ! -f config/airports.json ]; then
-            cp config/airports.json.example config/airports.json
-            echo "✓ Created minimal config/airports.json for Docker setup (tests use fixtures)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Workflow Context Validation"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Workflow Run ID: ${{ github.run_id }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Verify we're on the expected branch (for push events)
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            echo "⚠️  Warning: Not on main branch (branch: ${{ github.ref_name }})"
+          fi
+          
+          # Verify commit SHA matches what we checked out
+          CHECKED_OUT_SHA=$(git rev-parse HEAD)
+          if [ "$CHECKED_OUT_SHA" != "${{ github.sha }}" ]; then
+            echo "❌ CRITICAL: Commit SHA mismatch!"
+            echo "  Expected: ${{ github.sha }}"
+            echo "  Checked out: $CHECKED_OUT_SHA"
+            exit 1
+          fi
+          echo "✓ Commit SHA validated: $CHECKED_OUT_SHA"
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl
+          coverage: pcov
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Validate PHP syntax
+        run: |
+          echo "Checking PHP syntax..."
+          errors=$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" || true)
+          if [ ! -z "$errors" ]; then
+            echo "❌ PHP syntax errors found:"
+            echo "$errors"
+            exit 1
+          else
+            echo "✓ All PHP files have valid syntax"
           fi
       
-      # Note: Docker builds are handled in individual test jobs with layer caching
-      # This job only sets up the environment and doesn't build images
+      - name: Run PHPUnit - Unit Tests (Critical)
+        run: |
+          echo "Running unit tests..."
+          echo "Including: ProcessPoolTest, WorkerModeTest, and all other unit tests"
+          # Run tests with coverage (pcov is installed)
+          vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --coverage-clover unit-coverage.xml || exit_code=$?
+          exit_code=${exit_code:-$?}
+          # Exit code 0 = success, 1 = warnings, 2+ = failures
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ Unit tests failed - check output above"
+            exit 1
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  Unit tests passed with warnings"
+          else
+            echo "✓ Unit tests passed"
+          fi
+      
+      - name: Run PHPUnit - Integration Tests
+        run: |
+          echo "Running integration tests..."
+          echo "Including: ProcessPoolIntegrationTest, ProcessPoolOutputTest, and all other integration tests"
+          # Run tests with coverage (pcov is installed)
+          vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --coverage-clover integration-coverage.xml || exit_code=$?
+          exit_code=${exit_code:-$?}
+          # Exit code 0 = success, 1 = warnings, 2+ = failures
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ Integration tests failed - check output above"
+            exit 1
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  Integration tests passed with warnings"
+          else
+            echo "✓ Integration tests passed"
+          fi
+      
+      - name: Run Critical Safety Tests
+        run: |
+          echo "Running critical safety tests..."
+          # These are critical - must pass (allow exit code 1 for warnings)
+          vendor/bin/phpunit tests/Unit/StaleDataSafetyTest.php --testdox --stop-on-failure --no-coverage || exit_code1=$?
+          exit_code1=${exit_code1:-$?}
+          if [ $exit_code1 -gt 1 ]; then
+            echo "❌ StaleDataSafetyTest failed"
+            exit 1
+          fi
+          
+          vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage || exit_code2=$?
+          exit_code2=${exit_code2:-$?}
+          if [ $exit_code2 -gt 1 ]; then
+            echo "❌ WeatherCalculationsTest failed"
+            exit 1
+          fi
+          
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --testdox --stop-on-failure --no-coverage || exit_code3=$?
+          exit_code3=${exit_code3:-$?}
+          if [ $exit_code3 -gt 1 ]; then
+            echo "❌ ErrorHandlingTest failed"
+            exit 1
+          fi
+          
+          echo "✓ Critical safety tests passed (warnings allowed)"
+      
+      - name: Run Webcam Refresh Initialization Tests
+        run: |
+          echo "Running webcam refresh initialization tests..."
+          echo "Testing CAM_TS initialization and data attributes..."
+          vendor/bin/phpunit tests/Unit/WebcamRefreshInitializationTest.php --testdox --stop-on-failure || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ WebcamRefreshInitializationTest failed"
+            exit 1
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  WebcamRefreshInitializationTest passed with warnings (expected in CI without coverage driver)"
+          else
+            echo "✓ WebcamRefreshInitializationTest passed"
+          fi
+      
+      - name: Run Weather Data Merge Tests
+        run: |
+          echo "Running weather data merge tests..."
+          echo "Testing mergeWeatherDataWithFallback function and error handling..."
+          # Test the new merge functionality and error handling
+          vendor/bin/phpunit tests/Unit/WeatherDataMergeTest.php --testdox --stop-on-failure || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ WeatherDataMergeTest failed"
+            exit 1
+          elif [ $exit_code -eq 1 ]; then
+            echo "⚠️  WeatherDataMergeTest passed with warnings (expected in CI without coverage driver)"
+          else
+            echo "✓ WeatherDataMergeTest passed"
+          fi
+          
+          # Verify merge function exists and VRB wind direction handling
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_VariableWindDirection --testdox || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ VRB wind direction handling test failed"
+            exit 1
+          fi
+          
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_NonNumericWindSpeed --testdox || exit_code=$?
+          exit_code=${exit_code:-$?}
+          if [ $exit_code -gt 1 ]; then
+            echo "❌ Non-numeric wind speed handling test failed"
+            exit 1
+          fi
+          
+          echo "✓ Weather data merge and error handling tests passed"
+      
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: critical-test-results
+          path: |
+            unit-results.xml
+            integration-results.xml
+            unit-coverage.xml
+            integration-coverage.xml
+          retention-days: 7
+
+  # Lint job - runs code validation, security checks, and file structure validation
+  lint:
+    name: Code Validation & Linting
+    runs-on: ubuntu-latest
+    # Critical - must pass before deployment
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate commit and branch context
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Workflow Context Validation"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Workflow Run ID: ${{ github.run_id }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          CHECKED_OUT_SHA=$(git rev-parse HEAD)
+          if [ "$CHECKED_OUT_SHA" != "${{ github.sha }}" ]; then
+            echo "❌ CRITICAL: Commit SHA mismatch!"
+            exit 1
+          fi
+          echo "✓ Commit SHA validated: $CHECKED_OUT_SHA"
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: apcu, gd, zip, curl
+          coverage: none
+      
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
+      
+      - name: Validate Merge Functionality
+        run: |
+          echo "🔍 Validating merge functionality implementation..."
+          
+          # Check that mergeWeatherDataWithFallback function exists (moved to lib/weather/staleness.php)
+          if ! grep -q "function mergeWeatherDataWithFallback" lib/weather/staleness.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
+            exit 1
+          fi
+          
+          # Check that merge is called before cache write
+          if ! grep -q "mergeWeatherDataWithFallback.*existingCache" api/weather.php; then
+            echo "⚠️  Warning: mergeWeatherDataWithFallback may not be called before cache write"
+          fi
+          
+          # Check for VRB wind direction handling (in METAR adapter)
+          if ! grep -q "wdir.*VRB\|'VRB'" lib/weather/adapter/metar-v1.php; then
+            echo "⚠️  Warning: VRB wind direction handling may be missing"
+          fi
+          
+          # Check for numeric checks on wind data (in METAR adapter)
+          if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" lib/weather/adapter/metar-v1.php; then
+            echo "⚠️  Warning: Numeric validation for wind data may be missing"
+          fi
+          
+          echo "✓ Merge functionality validation complete"
+      
+      - name: Check for required files
+        run: |
+          required_files=(
+            "index.php"
+            "api/weather.php"
+            "api/webcam.php"
+            "lib/config.php"
+            "lib/rate-limit.php"
+            "lib/constants.php"
+            "lib/circuit-breaker.php"
+            "scripts/process-push-webcams.php"
+            "scripts/sync-push-config.php"
+            "lib/push-webcam-validator.php"
+            "pages/config-generator.php"
+            "pages/status.php"
+          )
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file missing: $file"
+              exit 1
+            fi
+          done
+          echo "✓ All required files present"
+      
+      - name: Validate JSON files
+        run: |
+          if [ -f "config/airports.json.example" ]; then
+            php -r "json_decode(file_get_contents('config/airports.json.example'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
+            echo "✓ config/airports.json.example is valid JSON"
+          fi
+      
+      - name: Test config utilities
+        run: |
+          php -r "
+          require_once 'lib/config.php';
+          
+          // Test validation
+          \$tests = [
+            ['kspb', true],
+            ['KSPB', true], // Should be lowercased
+            ['kx12', true],
+            ['invalid!!', false],
+            ['', false],
+            ['toolong123', false],
+            ['ab', false], // Too short
+          ];
+          
+          foreach (\$tests as [\$id, \$expected]) {
+            \$result = validateAirportId(\$id);
+            if (\$result !== \$expected) {
+              echo 'FAIL: validateAirportId(\"' . \$id . '\") returned ' . (\$result ? 'true' : 'false') . ', expected ' . (\$expected ? 'true' : 'false') . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Airport ID validation tests passed' . PHP_EOL;
+          "
+      
+      - name: Test push webcam configuration validation
+        run: |
+          php -r "
+          require_once 'lib/push-webcam-validator.php';
+          
+          // Test push webcam config validation
+          \$validConfig = [
+            'name' => 'Test Camera',
+            'push_config' => [
+              'username' => 'aB3xK9mP2qR7vN',
+              'password' => 'mK8pL3nQ6rT9vW',
+              'protocol' => 'sftp',
+              'port' => 2222,
+              'max_file_size_mb' => 10,
+              'allowed_extensions' => ['jpg', 'jpeg']
+            ],
+            'refresh_seconds' => 300
+          ];
+          
+          \$result = validatePushWebcamConfig(\$validConfig, 'test', 0);
+          
+          if (!\$result['valid']) {
+            echo 'FAIL: Valid push webcam config was rejected' . PHP_EOL;
+            echo 'Errors: ' . implode(', ', \$result['errors']) . PHP_EOL;
+            exit(1);
+          }
+          
+          echo '✓ Push webcam configuration validation working' . PHP_EOL;
+          "
+      
+      - name: Check for security issues
+        run: |
+          # Check for dangerous functions in PHP files
+          dangerous_patterns=(
+            "eval("
+            "base64_decode.*\$_GET"
+            "base64_decode.*\$_POST"
+            "file_get_contents.*\$_GET"
+            "file_get_contents.*\$_POST"
+          )
+          
+          for pattern in "${dangerous_patterns[@]}"; do
+            matches=$(grep -r "$pattern" --include="*.php" . | grep -v "test" | grep -v "diagnostics" || true)
+            if [ ! -z "$matches" ]; then
+              echo "⚠️  Potentially dangerous pattern found: $pattern"
+              echo "$matches"
+              # Don't fail, just warn
+            fi
+          done
+          
+          echo "✓ Security check complete"
+      
+      - name: Run VPN Manager Security Tests
+        run: |
+          echo "Running VPN Manager security tests..."
+          if [ ! -f "scripts/test-vpn-manager-security.py" ]; then
+            echo "❌ VPN Manager security test file not found"
+            exit 1
+          fi
+          
+          # Python 3 is available by default on ubuntu-latest
+          python3 scripts/test-vpn-manager-security.py
+          exit_code=$?
+          
+          if [ $exit_code -eq 0 ]; then
+            echo "✓ VPN Manager security tests passed"
+          else
+            echo "❌ VPN Manager security tests failed"
+            exit 1
+          fi
+      
+      - name: Test rate limiting functions
+        run: |
+          php -r "
+          require_once 'lib/rate-limit.php';
+          
+          // Basic function existence test
+          if (!function_exists('checkRateLimit')) {
+            echo 'FAIL: checkRateLimit function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('getRateLimitRemaining')) {
+            echo 'FAIL: getRateLimitRemaining function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('checkRateLimitFileBased')) {
+            echo 'FAIL: checkRateLimitFileBased function not found (file-based fallback)' . PHP_EOL;
+            exit(1);
+          }
+          
+          echo '✓ Rate limiting functions exist' . PHP_EOL;
+          "
+      
+      - name: Test circuit breaker functions
+        run: |
+          php -r "
+          require_once 'lib/circuit-breaker.php';
+          
+          // Check weather-specific wrappers
+          if (!function_exists('checkWeatherCircuitBreaker')) {
+            echo 'FAIL: checkWeatherCircuitBreaker function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWeatherFailure')) {
+            echo 'FAIL: recordWeatherFailure function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWeatherSuccess')) {
+            echo 'FAIL: recordWeatherSuccess function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          // Check webcam-specific wrappers
+          if (!function_exists('checkWebcamCircuitBreaker')) {
+            echo 'FAIL: checkWebcamCircuitBreaker function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWebcamFailure')) {
+            echo 'FAIL: recordWebcamFailure function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          if (!function_exists('recordWebcamSuccess')) {
+            echo 'FAIL: recordWebcamSuccess function not found' . PHP_EOL;
+            exit(1);
+          }
+          
+          echo '✓ Circuit breaker functions exist' . PHP_EOL;
+          "
+      
+      - name: Test constants file
+        run: |
+          php -r "
+          require_once 'lib/constants.php';
+          
+          // Check that key constants are defined
+          \$required_constants = [
+            'DEFAULT_WEBCAM_REFRESH',
+            'DEFAULT_WEATHER_REFRESH',
+            'RATE_LIMIT_WEATHER_MAX',
+            'RATE_LIMIT_WEATHER_WINDOW',
+            'BACKOFF_BASE_SECONDS',
+            'CACHE_FILE_MAX_SIZE',
+            'CURL_TIMEOUT',
+            'CONFIG_CACHE_TTL',
+            'MAX_STALE_HOURS'
+          ];
+          
+          foreach (\$required_constants as \$const) {
+            if (!defined(\$const)) {
+              echo 'FAIL: Constant ' . \$const . ' not defined' . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Required constants defined' . PHP_EOL;
+          "
+      
+      - name: Validate push webcam functions
+        run: |
+          php -r "
+          // Check that push webcam functions exist
+          require_once 'lib/push-webcam-validator.php';
+          require_once 'scripts/process-push-webcams.php';
+          require_once 'scripts/sync-push-config.php';
+          
+          \$functions = [
+            'validatePushWebcamConfig',
+            'processPushWebcams',
+            'syncPushConfig',
+            'getCameraRefreshSeconds',
+            'findNewestValidImage',
+            'validateImageFile'
+          ];
+          
+          foreach (\$functions as \$func) {
+            if (!function_exists(\$func)) {
+              echo 'FAIL: Function ' . \$func . ' not found' . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Push webcam functions exist' . PHP_EOL;
+          "
+      
+      - name: Check Dockerfile
+        run: |
+          if [ ! -f "docker/Dockerfile" ]; then
+            echo "❌ Dockerfile missing"
+            exit 1
+          fi
+          
+          # Check for required components
+          grep -q "FROM php:8.3-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
+          grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
+          
+          # Check for push webcam dependencies
+          grep -q "vsftpd" docker/Dockerfile || (echo "❌ vsftpd not found in Dockerfile (required for push webcams)" && exit 1)
+          grep -q "openssh-server" docker/Dockerfile || (echo "❌ openssh-server not found in Dockerfile (required for SFTP)" && exit 1)
+          grep -q "certbot" docker/Dockerfile || (echo "⚠️  certbot not found in Dockerfile (required for FTPS)" || true)
+          grep -q "logrotate" docker/Dockerfile || (echo "⚠️  logrotate not found in Dockerfile (recommended for FTP/SFTP logs)" || true)
+          
+          echo "✓ Dockerfile checks passed"
+      
+      - name: Check docker-compose files
+        run: |
+          if [ ! -f "docker/docker-compose.yml" ] || [ ! -f "docker/docker-compose.prod.yml" ]; then
+            echo "❌ Docker Compose files missing"
+            exit 1
+          fi
+          echo "✓ Docker Compose files present"
 
   performance-tests:
     name: Performance Tests
@@ -95,6 +621,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate commit and branch context
+        run: |
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          CHECKED_OUT_SHA=$(git rev-parse HEAD)
+          if [ "$CHECKED_OUT_SHA" != "${{ github.sha }}" ]; then
+            echo "❌ CRITICAL: Commit SHA mismatch!"
+            exit 1
+          fi
+          echo "✓ Commit SHA validated: $CHECKED_OUT_SHA"
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -213,6 +752,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate commit and branch context
+        run: |
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          CHECKED_OUT_SHA=$(git rev-parse HEAD)
+          if [ "$CHECKED_OUT_SHA" != "${{ github.sha }}" ]; then
+            echo "❌ CRITICAL: Commit SHA mismatch!"
+            exit 1
+          fi
+          echo "✓ Commit SHA validated: $CHECKED_OUT_SHA"
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -538,3 +1090,63 @@ jobs:
         if: always()
         run: |
           docker compose -f docker/docker-compose.yml down
+
+  # Final job that depends on all critical QA jobs completing successfully
+  # This ensures deployment only triggers after ALL quality checks pass
+  qa-complete:
+    name: Quality Assurance Complete
+    runs-on: ubuntu-latest
+    needs: [test, lint, e2e-tests, smoke-tests]
+    if: always()
+    
+    steps:
+      - name: Validate workflow context
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "QA Completion Job - Context Validation"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Workflow Run ID: ${{ github.run_id }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
+      - name: Check all critical jobs succeeded
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Quality Assurance Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Checking critical job results..."
+          echo ""
+          
+          # Check each critical job
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "❌ test job failed"
+            exit 1
+          fi
+          echo "✓ test job passed"
+          
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ lint job failed"
+            exit 1
+          fi
+          echo "✓ lint job passed"
+          
+          if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "❌ e2e-tests job failed"
+            exit 1
+          fi
+          echo "✓ e2e-tests job passed"
+          
+          if [ "${{ needs.smoke-tests.result }}" != "success" ]; then
+            echo "❌ smoke-tests job failed"
+            exit 1
+          fi
+          echo "✓ smoke-tests job passed"
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ All critical quality assurance checks passed"
+          echo "✅ Ready for deployment"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
