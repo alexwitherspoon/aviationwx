@@ -128,3 +128,6 @@ docs/*SUMMARY*.md
 *.ai-temp
 *.ai-backup
 *_ai_*.tmp
+
+# Docker Compose local overrides (user-specific paths)
+docker/docker-compose.override.yml
