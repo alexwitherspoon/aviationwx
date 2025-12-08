@@ -6,6 +6,12 @@
 
 /**
  * Detect webcam source type from URL
+ * 
+ * Analyzes URL to determine webcam source type. Checks for RTSP protocol,
+ * file extensions, and defaults to MJPEG stream.
+ * 
+ * @param string $url Webcam URL
+ * @return string Source type: 'rtsp', 'static_jpeg', 'static_png', or 'mjpeg'
  */
 function detectWebcamSourceType($url) {
     if (stripos($url, 'rtsp://') === 0 || stripos($url, 'rtsps://') === 0) {
@@ -27,6 +33,14 @@ function detectWebcamSourceType($url) {
 
 /**
  * Fetch a static image (JPEG or PNG)
+ * 
+ * Downloads a static image from URL and saves to cache. Validates image format
+ * and converts PNG to JPEG if needed. Uses atomic file operations to prevent
+ * corruption during write.
+ * 
+ * @param string $url Image URL
+ * @param string $cacheFile Target cache file path (JPG format)
+ * @return bool True on success, false on failure
  */
 function fetchStaticImage($url, $cacheFile) {
     $ch = curl_init();
@@ -100,9 +114,13 @@ function fetchStaticImage($url, $cacheFile) {
  */
 /**
  * Classify RTSP error from ffmpeg output/exit code
- * @param int $exitCode
- * @param string $errorOutput
- * @return string Error code: 'timeout', 'auth', 'tls', 'dns', 'connection', 'unknown'
+ * 
+ * Analyzes ffmpeg exit code and error output to categorize RTSP stream errors.
+ * Used to determine appropriate circuit breaker severity (transient vs permanent).
+ * 
+ * @param int $exitCode ffmpeg exit code (124 = timeout)
+ * @param string $errorOutput ffmpeg stderr output
+ * @return string Error code: 'timeout', 'auth', 'tls', 'dns', 'connection', or 'unknown'
  */
 function classifyRTSPError($exitCode, $errorOutput) {
     $output = strtolower($errorOutput);
@@ -149,7 +167,12 @@ function classifyRTSPError($exitCode, $errorOutput) {
 
 /**
  * Map RTSP error code to severity for backoff policy
- * @param string $code
+ * 
+ * Maps classified RTSP errors to severity levels for circuit breaker backoff.
+ * Transient errors (timeout, connection, DNS) use normal backoff.
+ * Permanent errors (auth, TLS) use 2x multiplier backoff.
+ * 
+ * @param string $code Error code from classifyRTSPError()
  * @return string 'transient' or 'permanent'
  */
 function mapErrorSeverity($code) {
@@ -168,7 +191,12 @@ function mapErrorSeverity($code) {
 
 /**
  * Check if ffmpeg is available
- * @return bool True if ffmpeg is available
+ * 
+ * Checks if ffmpeg binary is available in the system PATH.
+ * Uses static caching to avoid repeated system calls.
+ * Required for RTSP/RTSPS stream processing.
+ * 
+ * @return bool True if ffmpeg is available, false otherwise
  */
 function isFfmpegAvailable() {
     static $available = null;
@@ -181,6 +209,20 @@ function isFfmpegAvailable() {
     return $available;
 }
 
+/**
+ * Fetch frame from RTSP stream using ffmpeg
+ * 
+ * Captures a single frame from RTSP/RTSPS stream using ffmpeg. Supports retries
+ * and error classification. RTSPS streams are forced to use TCP transport.
+ * 
+ * @param string $url RTSP/RTSPS stream URL
+ * @param string $cacheFile Target cache file path (JPG format)
+ * @param string $transport Transport protocol: 'tcp' or 'udp' (default: 'tcp')
+ * @param int $timeoutSeconds Connection timeout in seconds (default: RTSP_DEFAULT_TIMEOUT)
+ * @param int $retries Number of retry attempts (default: RTSP_DEFAULT_RETRIES)
+ * @param int $maxRuntime Maximum runtime for ffmpeg in seconds (default: RTSP_MAX_RUNTIME)
+ * @return bool True on success, false on failure
+ */
 function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = RTSP_DEFAULT_TIMEOUT, $retries = RTSP_DEFAULT_RETRIES, $maxRuntime = RTSP_MAX_RUNTIME) {
     // Check if ffmpeg is available
     if (!isFfmpegAvailable()) {
@@ -317,7 +359,14 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
 
 /**
  * Fetch first JPEG frame from MJPEG stream
- * Handles both raw MJPEG streams and multipart MJPEG streams with boundaries
+ * 
+ * Downloads from MJPEG stream and extracts the first complete JPEG frame.
+ * Handles both raw MJPEG streams and multipart MJPEG streams with boundaries.
+ * Stops after receiving one complete frame (detected by JPEG end marker).
+ * 
+ * @param string $url MJPEG stream URL
+ * @param string $cacheFile Target cache file path (JPG format)
+ * @return bool True on success, false on failure
  */
 function fetchMJPEGStream($url, $cacheFile) {
     $ch = curl_init();
@@ -431,14 +480,36 @@ if (file_exists($vpnRoutingFile)) {
 }
 
 // Circuit breaker wrapper functions for backward compatibility
+/**
+ * Check circuit breaker for webcam (wrapper for backward compatibility)
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return array Circuit breaker status array
+ */
 function checkCircuitBreaker($airportId, $camIndex) {
     return checkWebcamCircuitBreaker($airportId, $camIndex);
 }
 
+/**
+ * Record webcam failure (wrapper for backward compatibility)
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ * @return void
+ */
 function recordFailure($airportId, $camIndex, $severity = 'transient') {
     recordWebcamFailure($airportId, $camIndex, $severity);
 }
 
+/**
+ * Record webcam success (wrapper for backward compatibility)
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return void
+ */
 function recordSuccess($airportId, $camIndex) {
     recordWebcamSuccess($airportId, $camIndex);
 }
@@ -459,6 +530,14 @@ if (php_sapi_name() === 'cli' && isset($argv) && is_array($argv)) {
 
 /**
  * Acquire lock for camera to prevent concurrent processing
+ * 
+ * Creates a file-based lock to prevent multiple processes from processing
+ * the same camera simultaneously. Automatically cleans up stale locks.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timeout Lock acquisition timeout in seconds (default: 5)
+ * @return resource|false File handle if lock acquired, false on timeout/failure
  */
 function acquireCameraLock($airportId, $camIndex, $timeout = 5) {
     $lockFile = "/tmp/webcam_lock_{$airportId}_{$camIndex}.lock";
@@ -512,6 +591,12 @@ function releaseCameraLock($fp) {
 
 /**
  * Generate unique tmp filename to prevent collisions
+ * 
+ * Creates a unique temporary filename by appending PID, timestamp, and random number.
+ * Prevents race conditions when multiple processes write to the same cache file.
+ * 
+ * @param string $cacheFile Base cache file path
+ * @return string Unique temporary file path
  */
 function getUniqueTmpFile($cacheFile) {
     return $cacheFile . '.tmp.' . getmypid() . '.' . time() . '.' . mt_rand(1000, 9999);

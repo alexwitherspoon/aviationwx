@@ -24,6 +24,15 @@ if (php_sapi_name() === 'cli' && isset($argv) && is_array($argv)) {
     }
 }
 
+/**
+ * Get weather refresh base URL
+ * 
+ * Determines the base URL for weather refresh requests. Checks WEATHER_REFRESH_URL
+ * environment variable first, then detects Docker environment and falls back to
+ * localhost with appropriate port.
+ * 
+ * @return string Base URL (without trailing slash)
+ */
 function getWeatherBaseUrl() {
     $baseUrl = getenv('WEATHER_REFRESH_URL');
     if (!$baseUrl) {
@@ -37,6 +46,15 @@ function getWeatherBaseUrl() {
 
 /**
  * Process single airport weather refresh
+ * 
+ * Makes HTTP request to weather API endpoint to trigger cache refresh.
+ * Logs success/failure and returns status for worker process tracking.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param string $baseUrl Base URL for weather API (e.g., 'http://localhost')
+ * @param string $invocationId Invocation ID for log correlation
+ * @param string $triggerType Trigger type ('cron_job', 'web_request', 'manual_cli')
+ * @return bool True on success, false on failure
  */
 function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType) {
     $weatherUrl = $baseUrl . '/weather.php?airport=' . urlencode($airportId);

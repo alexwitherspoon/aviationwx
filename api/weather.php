@@ -12,6 +12,13 @@ require_once __DIR__ . '/../lib/circuit-breaker.php';
 
 /**
  * Parse Ambient Weather API response (for async use)
+ * 
+ * Parses JSON response from Ambient Weather API and converts to standard format.
+ * Handles unit conversions (Fahrenheit to Celsius, mph to knots).
+ * Observation time is converted from milliseconds to seconds.
+ * 
+ * @param string $response JSON response from Ambient Weather API
+ * @return array|null Weather data array with standard keys, or null on parse error
  */
 function parseAmbientResponse($response) {
     $data = json_decode($response, true);
@@ -60,7 +67,14 @@ function parseAmbientResponse($response) {
 
 /**
  * Generate mock weather data for local testing
- * Returns realistic static weather data for visualization
+ * 
+ * Generates consistent but varied mock weather data based on airport ID.
+ * Uses airport ID as seed to ensure each airport has different but stable weather.
+ * Returns realistic values for all weather fields.
+ * 
+ * @param string $airportId Airport ID (used as seed for consistency)
+ * @param array $airport Airport configuration array
+ * @return array Mock weather data array with all standard fields
  */
 function generateMockWeatherData($airportId, $airport) {
     // Generate consistent but varied mock data based on airport ID
@@ -113,6 +127,15 @@ function generateMockWeatherData($airportId, $airport) {
 
 /**
  * Parse METAR response (for async use)
+ * 
+ * Parses JSON response from METAR API and converts to standard format.
+ * Handles complex visibility parsing (fractions, mixed numbers), cloud cover,
+ * ceiling detection, and variable wind direction (VRB).
+ * Attempts to parse observation time from METAR string if not in JSON.
+ * 
+ * @param string $response JSON response from METAR API
+ * @param array $airport Airport configuration array
+ * @return array|null Weather data array with standard keys, or null on parse error
  */
 function parseMETARResponse($response, $airport) {
     $data = json_decode($response, true);
@@ -318,7 +341,15 @@ function parseMETARResponse($response, $airport) {
 
 /**
  * Merge new weather data with existing cache, preserving last known good values
- * for fields that are missing or invalid in new data
+ * 
+ * Merges new weather data with existing cache, intelligently preserving values
+ * from cache when new data is missing or invalid. Handles source-specific staleness
+ * (primary source vs METAR) and preserves daily values (precip_accum) appropriately.
+ * 
+ * @param array $newData New weather data from API
+ * @param array $existingData Existing cached weather data
+ * @param int $maxStaleSeconds Maximum age in seconds for preserving cached values
+ * @return array Merged weather data array
  */
 function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds) {
     if (!is_array($existingData) || !is_array($newData)) {
@@ -422,8 +453,16 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
 
 /**
  * Helper function to null out stale fields based on source timestamps
- * Note: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
- * considered stale - they represent valid historical data for the day regardless of current measurement age
+ * 
+ * Nulls out weather fields that are too stale based on their source timestamps.
+ * Fields from primary source are checked against last_updated_primary.
+ * Fields from METAR are checked against last_updated_metar.
+ * Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) are NOT
+ * considered stale - they represent valid historical data for the day.
+ * 
+ * @param array &$data Weather data array (modified in place)
+ * @param int $maxStaleSeconds Maximum age in seconds before field is considered stale
+ * @return void
  */
 function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $primarySourceFields = [
@@ -1472,6 +1511,13 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
 
 /**
  * Parse Tempest API response (for async use)
+ * 
+ * Parses JSON response from Tempest WeatherFlow API and converts to standard format.
+ * Handles unit conversions (m/s to knots, mb to inHg, mm to inches).
+ * Observation time is provided as Unix timestamp in seconds.
+ * 
+ * @param string|null $response JSON response from Tempest API
+ * @return array|null Weather data array with standard keys, or null on parse error
  */
 function parseTempestResponse($response) {
     if ($response === null) {
@@ -1538,6 +1584,12 @@ function parseTempestResponse($response) {
 
 /**
  * Fetch weather from Tempest API (synchronous, for fallback)
+ * 
+ * Makes HTTP request to Tempest WeatherFlow API to fetch current weather observations.
+ * Used as fallback when async fetch fails. Returns parsed weather data or null on failure.
+ * 
+ * @param array $source Weather source configuration (must contain 'api_key' and 'station_id')
+ * @return array|null Weather data array with standard keys, or null on failure
  */
 function fetchTempestWeather($source) {
     $apiKey = $source['api_key'];
@@ -1565,6 +1617,12 @@ function fetchTempestWeather($source) {
 
 /**
  * Fetch weather from Ambient Weather API (synchronous, for fallback)
+ * 
+ * Makes HTTP request to Ambient Weather API to fetch current weather observations.
+ * Requires both API key and application key. Used as fallback when async fetch fails.
+ * 
+ * @param array $source Weather source configuration (must contain 'api_key' and 'application_key')
+ * @return array|null Weather data array with standard keys, or null on failure
  */
 function fetchAmbientWeather($source) {
     // Ambient Weather API requires API Key and Application Key
@@ -1596,6 +1654,13 @@ function fetchAmbientWeather($source) {
 
 /**
  * Fetch weather from WeatherLink v2 API (synchronous, for fallback)
+ * 
+ * Makes HTTP request to WeatherLink v2 API to fetch current weather observations.
+ * Requires API key, API secret, and station ID. API key in query, secret in header.
+ * Used as fallback when async fetch fails.
+ * 
+ * @param array $source Weather source configuration (must contain 'api_key', 'api_secret', and 'station_id')
+ * @return array|null Weather data array with standard keys, or null on failure
  */
 function fetchWeatherLinkWeather($source) {
     // WeatherLink v2 API requires API Key, API Secret, and Station ID
@@ -1644,10 +1709,16 @@ function fetchWeatherLinkWeather($source) {
 
 /**
  * Parse WeatherLink v2 API response
- * WeatherLink uses a sensor-based structure with sensors array containing lsid and data arrays
- * Based on API documentation and sample responses:
- * - Response structure: { "station_id": ..., "sensors": [ { "lsid": ..., "data": [ { "ts": ..., "data": { ... } } ] } ] }
- * - Field units: Temperature (F), Wind Speed (mph), Pressure (inHg), Rainfall (inches)
+ * 
+ * Parses JSON response from WeatherLink v2 API and converts to standard format.
+ * WeatherLink uses a sensor-based structure with sensors array containing lsid and data arrays.
+ * Handles unit conversions (Fahrenheit to Celsius, mph to knots).
+ * 
+ * Response structure: { "station_id": ..., "sensors": [ { "lsid": ..., "data": [ { "ts": ..., "data": { ... } } ] } ] }
+ * Field units: Temperature (F), Wind Speed (mph), Pressure (inHg), Rainfall (inches)
+ * 
+ * @param string|null $response JSON response from WeatherLink v2 API
+ * @return array|null Weather data array with standard keys, or null on parse error
  */
 function parseWeatherLinkResponse($response) {
     if ($response === null) {
@@ -1795,9 +1866,13 @@ function parseWeatherLinkResponse($response) {
 /**
  * Fetch METAR data from a single station ID
  * 
- * @param string $stationId The METAR station ID to fetch
- * @param array $airport Airport configuration (for logging context)
- * @return array|null Parsed METAR data or null on failure
+ * Makes HTTP request to aviationweather.gov API to fetch METAR data for a specific station.
+ * Parses the response and returns standardized weather data. Used by fetchMETAR() for
+ * primary and fallback station fetching.
+ * 
+ * @param string $stationId The METAR station ID to fetch (e.g., 'KSPB')
+ * @param array $airport Airport configuration array (for logging context)
+ * @return array|null Parsed METAR data array with standard keys, or null on failure
  */
 function fetchMETARFromStation($stationId, $airport) {
     // Fetch METAR from aviationweather.gov (new API format)
@@ -1923,7 +1998,13 @@ function fetchMETAR($airport) {
 
 
 /**
- * Calculate dewpoint
+ * Calculate dewpoint from temperature and humidity
+ * 
+ * Uses Magnus formula to calculate dewpoint temperature in Celsius.
+ * 
+ * @param float|null $tempC Temperature in Celsius
+ * @param float|null $humidity Relative humidity percentage (0-100)
+ * @return float|null Dewpoint in Celsius, or null if inputs are invalid
  */
 function calculateDewpoint($tempC, $humidity) {
     if ($tempC === null || $humidity === null) return null;
@@ -1940,6 +2021,12 @@ function calculateDewpoint($tempC, $humidity) {
 
 /**
  * Calculate humidity from temperature and dewpoint
+ * 
+ * Uses Magnus formula to calculate relative humidity from temperature and dewpoint.
+ * 
+ * @param float|null $tempC Temperature in Celsius
+ * @param float|null $dewpointC Dewpoint in Celsius
+ * @return int|null Relative humidity percentage (0-100), or null if inputs are invalid
  */
 function calculateHumidityFromDewpoint($tempC, $dewpointC) {
     if ($tempC === null || $dewpointC === null) return null;
@@ -1955,6 +2042,13 @@ function calculateHumidityFromDewpoint($tempC, $dewpointC) {
 
 /**
  * Calculate pressure altitude
+ * 
+ * Calculates pressure altitude in feet based on station elevation and altimeter setting.
+ * Formula: Pressure Altitude = Station Elevation + (29.92 - Altimeter) × 1000
+ * 
+ * @param array $weather Weather data array (must contain 'pressure' key in inHg)
+ * @param array $airport Airport configuration array (must contain 'elevation_ft')
+ * @return int|null Pressure altitude in feet, or null if required data is missing
  */
 function calculatePressureAltitude($weather, $airport) {
     if (!isset($weather['pressure'])) {
@@ -1972,6 +2066,13 @@ function calculatePressureAltitude($weather, $airport) {
 
 /**
  * Calculate density altitude
+ * 
+ * Calculates density altitude in feet based on station elevation, temperature, and pressure.
+ * Density altitude accounts for both pressure and temperature effects on aircraft performance.
+ * 
+ * @param array $weather Weather data array (must contain 'temperature' in Celsius and 'pressure' in inHg)
+ * @param array $airport Airport configuration array (must contain 'elevation_ft')
+ * @return int|null Density altitude in feet, or null if required data is missing
  */
 function calculateDensityAltitude($weather, $airport) {
     if (!isset($weather['temperature']) || !isset($weather['pressure'])) {
@@ -1995,6 +2096,9 @@ function calculateDensityAltitude($weather, $airport) {
 
 /**
  * Get airport timezone from config, with fallback to global default
+ * 
+ * @param array $airport Airport configuration array
+ * @return string Timezone identifier (e.g., 'America/New_York')
  */
 function getAirportTimezone($airport) {
     // Check if timezone is specified in airport config
@@ -2008,7 +2112,12 @@ function getAirportTimezone($airport) {
 
 /**
  * Get today's date key (Y-m-d format) based on airport's local timezone midnight
- * Uses local timezone to determine "today" for daily resets
+ * 
+ * Uses airport's local timezone to determine "today" for daily resets.
+ * This ensures daily tracking values reset at local midnight, not UTC midnight.
+ * 
+ * @param array $airport Airport configuration array
+ * @return string Date key in Y-m-d format (e.g., '2024-12-19')
  */
 function getAirportDateKey($airport) {
     $timezone = getAirportTimezone($airport);
@@ -2019,6 +2128,12 @@ function getAirportDateKey($airport) {
 
 /**
  * Get sunrise time for airport
+ * 
+ * Calculates sunrise time for today based on airport's latitude, longitude, and timezone.
+ * Uses PHP's date_sun_info() function.
+ * 
+ * @param array $airport Airport configuration array (must contain 'lat', 'lon', and optionally 'timezone')
+ * @return string|null Sunrise time in HH:mm format (local timezone), or null if calculation fails
  */
 function getSunriseTime($airport) {
     $lat = $airport['lat'];
@@ -2041,6 +2156,12 @@ function getSunriseTime($airport) {
 
 /**
  * Get sunset time for airport
+ * 
+ * Calculates sunset time for today based on airport's latitude, longitude, and timezone.
+ * Uses PHP's date_sun_info() function.
+ * 
+ * @param array $airport Airport configuration array (must contain 'lat', 'lon', and optionally 'timezone')
+ * @return string|null Sunset time in HH:mm format (local timezone), or null if calculation fails
  */
 function getSunsetTime($airport) {
     $lat = $airport['lat'];
@@ -2063,12 +2184,16 @@ function getSunsetTime($airport) {
 
 /**
  * Update today's peak gust for an airport
- * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight
- * Still uses Y-m-d format for consistency, but calculated from local timezone
- * @param string $airportId Airport identifier
- * @param float $currentGust Current gust speed value
- * @param array|null $airport Airport configuration array
- * @param int|null $obsTimestamp Observation timestamp (when the weather was actually observed), defaults to current time
+ * 
+ * Tracks the highest gust speed for the current day (based on airport's local timezone).
+ * Uses observation timestamp to record when the peak gust was actually observed.
+ * Automatically cleans up entries older than 2 days.
+ * 
+ * @param string $airportId Airport identifier (e.g., 'kspb')
+ * @param float $currentGust Current gust speed value (knots)
+ * @param array|null $airport Airport configuration array (optional, for timezone)
+ * @param int|null $obsTimestamp Observation timestamp (when weather was observed), defaults to current time
+ * @return void
  */
 function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp = null) {
     try {
@@ -2167,8 +2292,17 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
 
 /**
  * Get today's peak gust for an airport
- * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight
- * Still uses Y-m-d format for consistency, but calculated from local timezone
+ * 
+ * Retrieves the highest gust speed recorded for today (based on airport's local timezone).
+ * Returns structured data with value and timestamp of when peak gust was observed.
+ * 
+ * @param string $airportId Airport identifier (e.g., 'kspb')
+ * @param float $currentGust Current gust speed value (used as fallback if no data)
+ * @param array|null $airport Airport configuration array (optional, for timezone)
+ * @return array {
+ *   'value' => float,  // Peak gust speed in knots
+ *   'ts' => int|null   // Timestamp when peak gust was observed, or null
+ * }
  */
 function getPeakGust($airportId, $currentGust, $airport = null) {
     $file = __DIR__ . '/../cache/peak_gusts.json';
@@ -2226,6 +2360,7 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
 
 /**
  * Calculate flight category (VFR, MVFR, IFR, LIFR) based on ceiling and visibility
+ * 
  * Uses standard FAA aviation weather category definitions (worst-case rule):
  * - LIFR (Magenta): Visibility < 1 mile OR Ceiling < 500 feet
  * - IFR (Red): Visibility 1 to <= 3 miles OR Ceiling 500 to < 1,000 feet
@@ -2234,6 +2369,9 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
  * 
  * For categories other than VFR, the WORST of the two conditions determines the category.
  * VFR requires BOTH conditions to meet minimums per FAA standards.
+ * 
+ * @param array $weather Weather data array (should contain 'ceiling' in feet and 'visibility' in SM)
+ * @return string|null Flight category ('VFR', 'MVFR', 'IFR', 'LIFR'), or null if insufficient data
  */
 function calculateFlightCategory($weather) {
     $ceiling = $weather['ceiling'] ?? null;
@@ -2319,12 +2457,16 @@ function calculateFlightCategory($weather) {
 
 /**
  * Update today's high and low temperatures for an airport
- * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight
- * Still uses Y-m-d format for consistency, but calculated from local timezone
- * @param string $airportId Airport identifier
- * @param float $currentTemp Current temperature value
- * @param array|null $airport Airport configuration array
- * @param int|null $obsTimestamp Observation timestamp (when the weather was actually observed), defaults to current time
+ * 
+ * Tracks the highest and lowest temperatures for the current day (based on airport's local timezone).
+ * Uses observation timestamp to record when extremes were actually observed.
+ * Automatically cleans up entries older than 2 days.
+ * 
+ * @param string $airportId Airport identifier (e.g., 'kspb')
+ * @param float $currentTemp Current temperature value (Celsius)
+ * @param array|null $airport Airport configuration array (optional, for timezone)
+ * @param int|null $obsTimestamp Observation timestamp (when weather was observed), defaults to current time
+ * @return void
  */
 function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimestamp = null) {
     try {
@@ -2428,8 +2570,20 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
 
 /**
  * Get today's high and low temperatures for an airport
- * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight
- * Still uses Y-m-d format for consistency, but calculated from local timezone
+ * 
+ * Retrieves the highest and lowest temperatures recorded for today (based on airport's local timezone).
+ * Returns structured data with values and timestamps of when extremes were observed.
+ * Uses airport's local timezone midnight for date key to ensure daily reset at local midnight.
+ * 
+ * @param string $airportId Airport identifier (e.g., 'kspb')
+ * @param float $currentTemp Current temperature value (used as fallback if no data)
+ * @param array|null $airport Airport configuration array (optional, for timezone)
+ * @return array {
+ *   'high' => float,      // High temperature in Celsius
+ *   'low' => float,       // Low temperature in Celsius
+ *   'high_ts' => int,     // Timestamp when high was observed
+ *   'low_ts' => int       // Timestamp when low was observed
+ * }
  */
 function getTempExtremes($airportId, $currentTemp, $airport = null) {
     $file = __DIR__ . '/../cache/temp_extremes.json';

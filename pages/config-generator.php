@@ -46,6 +46,11 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') 
 
 /**
  * Generate random 14-character credential
+ * 
+ * Generates a cryptographically secure random 14-character alphanumeric string.
+ * Used for generating SFTP/FTP usernames and passwords for push webcams.
+ * 
+ * @return string 14-character alphanumeric string (mixed case)
  */
 function generateRandomCredential() {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -58,6 +63,12 @@ function generateRandomCredential() {
 
 /**
  * Check if airport exists (without exposing details)
+ * 
+ * Checks if an airport ID exists in the configuration without exposing
+ * which airports are configured. Used for validation in config generator.
+ * 
+ * @param string $airportId Airport ID to check
+ * @return bool True if airport exists, false otherwise
  */
 function airportExists($airportId) {
     $config = loadConfig();

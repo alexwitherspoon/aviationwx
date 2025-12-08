@@ -188,6 +188,11 @@ function setDirectoryPermissions($path, $owner, $group, $perms, $description = '
 
 /**
  * Get config file path
+ * 
+ * Determines the path to airports.json configuration file. Checks CONFIG_PATH
+ * environment variable first, then falls back to default paths.
+ * 
+ * @return string Path to config file
  */
 function getConfigFilePath() {
     $envConfigPath = getenv('CONFIG_PATH');
@@ -205,6 +210,11 @@ function getConfigFilePath() {
 
 /**
  * Get last sync timestamp
+ * 
+ * Retrieves the timestamp of the last successful configuration sync.
+ * Used to prevent unnecessary re-syncing when configuration hasn't changed.
+ * 
+ * @return int Unix timestamp of last sync, or 0 if never synced
  */
 function getLastSyncTimestamp() {
     $trackFile = __DIR__ . '/../cache/push_webcams/last_sync.json';
@@ -222,6 +232,11 @@ function getLastSyncTimestamp() {
 
 /**
  * Update last sync timestamp
+ * 
+ * Updates the timestamp of the last successful configuration sync.
+ * Creates tracking directory if it doesn't exist.
+ * 
+ * @return void
  */
 function updateLastSyncTimestamp() {
     $trackDir = __DIR__ . '/../cache/push_webcams';
@@ -237,6 +252,12 @@ function updateLastSyncTimestamp() {
 
 /**
  * Backup config file
+ * 
+ * Creates a timestamped backup of the configuration file before making changes.
+ * Keeps only the last 5 backups to prevent disk space issues.
+ * 
+ * @param string $configFile Path to config file to backup
+ * @return string|false Path to backup file on success, false on failure
  */
 function backupConfigFile($configFile) {
     $backupDir = '/var/backups/aviationwx';
@@ -270,6 +291,15 @@ function backupConfigFile($configFile) {
 
 /**
  * Check if vsftpd database is corrupted or invalid
+ * 
+ * Performs multiple checks to detect vsftpd Berkeley DB corruption:
+ * - Missing database with non-empty users file
+ * - Zero-size database file
+ * - Invalid magic bytes
+ * - db_verify and db_dump validation
+ * - Size heuristics
+ * 
+ * @return bool True if database appears corrupted, false otherwise
  */
 function isVsftpdDatabaseCorrupted() {
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
@@ -359,6 +389,16 @@ function isVsftpdDatabaseCorrupted() {
 
 /**
  * Validate config before applying
+ * 
+ * Validates JSON syntax and basic structure of configuration file before
+ * applying changes. Prevents applying invalid configurations that could
+ * break the system.
+ * 
+ * @param string $configFile Path to config file to validate
+ * @return array {
+ *   'valid' => bool,    // True if config is valid
+ *   'error' => string   // Error message if invalid (optional)
+ * }
  */
 function validateConfigBeforeApply($configFile) {
     $content = @file_get_contents($configFile);
@@ -381,6 +421,11 @@ function validateConfigBeforeApply($configFile) {
 
 /**
  * Ensure base webcams directory exists with correct permissions (root:root)
+ * 
+ * Creates the base uploads/webcams directory if it doesn't exist and sets
+ * correct ownership (root:root) required for SFTP chroot functionality.
+ * 
+ * @return string Path to webcams base directory
  */
 function ensureWebcamsBaseDirectory() {
     $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
@@ -397,7 +442,14 @@ function ensureWebcamsBaseDirectory() {
 
 /**
  * Create upload directory for camera
- * Creates both parent directory and incoming subdirectory with correct permissions
+ * 
+ * Creates both parent directory and incoming subdirectory with correct permissions.
+ * Sets ownership based on protocol: root:root for SFTP chroot, www-data for FTP/FTPS.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string|null $protocol Protocol type: 'ftp', 'ftps', or null for SFTP
+ * @return string Path to incoming directory
  */
 function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     $webcamsBaseDir = ensureWebcamsBaseDirectory();
@@ -440,6 +492,13 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
 
 /**
  * Remove camera directory
+ * 
+ * Recursively removes upload directory for a camera when it's no longer configured.
+ * Handles errors gracefully and logs any files/directories that couldn't be removed.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return void
  */
 function removeCameraDirectory($airportId, $camIndex) {
     $uploadDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex;
@@ -492,6 +551,11 @@ function removeCameraDirectory($airportId, $camIndex) {
 
 /**
  * Get existing push cameras from filesystem
+ * 
+ * Scans uploads/webcams directory to find existing push camera directories.
+ * Parses directory names to extract airport ID and camera index.
+ * 
+ * @return array Array of camera arrays with 'airport' and 'cam' keys
  */
 function getExistingPushCameras() {
     $uploadBaseDir = __DIR__ . '/../uploads/webcams';
@@ -518,6 +582,11 @@ function getExistingPushCameras() {
 
 /**
  * Get username tracking file path
+ * 
+ * Returns the path to the username-to-camera mapping file. Creates tracking
+ * directory if it doesn't exist.
+ * 
+ * @return string Path to username_mapping.json file
  */
 function getUsernameTrackingFile() {
     $trackDir = __DIR__ . '/../cache/push_webcams';
@@ -529,6 +598,11 @@ function getUsernameTrackingFile() {
 
 /**
  * Load username-to-camera mapping
+ * 
+ * Loads the mapping of SFTP/FTP usernames to airport/camera combinations.
+ * Returns empty array if file doesn't exist or is invalid.
+ * 
+ * @return array Username mapping array (username => ['airport' => string, 'cam' => int])
  */
 function loadUsernameMapping() {
     $trackFile = getUsernameTrackingFile();
@@ -546,6 +620,12 @@ function loadUsernameMapping() {
 
 /**
  * Save username-to-camera mapping
+ * 
+ * Saves the mapping of SFTP/FTP usernames to airport/camera combinations.
+ * Uses file locking to ensure atomic writes.
+ * 
+ * @param array $mapping Username mapping array (username => ['airport' => string, 'cam' => int])
+ * @return bool True on success, false on failure
  */
 function saveUsernameMapping($mapping) {
     $trackFile = getUsernameTrackingFile();
@@ -568,6 +648,11 @@ function saveUsernameMapping($mapping) {
 
 /**
  * Validate username format (14 alphanumeric characters)
+ * 
+ * Validates that a username matches the required format for push webcam accounts.
+ * 
+ * @param string $username Username to validate
+ * @return bool True if username is valid, false otherwise
  */
 function validateUsername($username) {
     if (strlen($username) !== 14) {
@@ -578,6 +663,11 @@ function validateUsername($username) {
 
 /**
  * Validate password format (14 alphanumeric characters)
+ * 
+ * Validates that a password matches the required format for push webcam accounts.
+ * 
+ * @param string $password Password to validate
+ * @return bool True if password is valid, false otherwise
  */
 function validatePassword($password) {
     if (strlen($password) !== 14) {
@@ -588,6 +678,11 @@ function validatePassword($password) {
 
 /**
  * Check if user exists
+ * 
+ * Checks if a system user exists by querying POSIX functions or /etc/passwd.
+ * 
+ * @param string $username Username to check
+ * @return bool True if user exists, false otherwise
  */
 function userExists($username) {
     if (function_exists('posix_getpwnam')) {
@@ -603,6 +698,15 @@ function userExists($username) {
 
 /**
  * Create SFTP user
+ * 
+ * Creates a new SFTP user account with chroot directory restriction.
+ * Calls external create-sftp-user.sh script to handle user creation.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $username Username (14 alphanumeric characters)
+ * @param string $password Password (14 alphanumeric characters)
+ * @return bool True on success, false on failure
  */
 function createSftpUser($airportId, $camIndex, $username, $password) {
     $chrootDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}";
@@ -639,7 +743,11 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
 
 /**
  * Rebuild vsftpd database from users file
- * Called when database corruption is detected
+ * 
+ * Rebuilds the vsftpd Berkeley DB database from the virtual_users.txt file.
+ * Called when database corruption is detected. Verifies database after rebuild.
+ * 
+ * @return bool True on success, false on failure
  */
 function rebuildVsftpdDatabase() {
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
@@ -709,6 +817,15 @@ function rebuildVsftpdDatabase() {
 
 /**
  * Create FTP user (vsftpd virtual user)
+ * 
+ * Creates a new vsftpd virtual user account for FTP/FTPS access.
+ * Updates virtual_users.txt, rebuilds database, and creates user config directory.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $username Username (14 alphanumeric characters)
+ * @param string $password Password (14 alphanumeric characters)
+ * @return bool True on success, false on failure
  */
 function createFtpUser($airportId, $camIndex, $username, $password) {
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
