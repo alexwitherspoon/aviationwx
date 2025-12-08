@@ -482,6 +482,20 @@ jobs:
             fi
           fi
           
+          # Validation 6: Validate airports.json using master validation script
+          echo ""
+          echo "6. Validating airports.json (ICAO codes and other checks)..."
+          if [ -f "config/airports.json" ]; then
+            if php scripts/validate-airports-json.php config/airports.json; then
+              echo "✓ All airports.json validations passed"
+            else
+              VALIDATION_FAILED=true
+              FAILURE_REASONS+=("airports.json validation failed - see errors above")
+            fi
+          else
+            echo "⚠ config/airports.json not found - skipping validation"
+          fi
+          
           # Final check
           if [ "$VALIDATION_FAILED" = "true" ]; then
             echo ""
