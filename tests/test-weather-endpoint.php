@@ -70,7 +70,7 @@ header('Content-Type: application/json');
 $airportId = $_GET['airport'] ?? 'kspb';
 
 // Load test config
-$configFile = __DIR__ . '/../airports.json.test';
+$configFile = __DIR__ . '/Fixtures/airports.json.test';
 if (!file_exists($configFile)) {
     echo json_encode(['success' => false, 'error' => 'Test configuration not found']);
     exit;

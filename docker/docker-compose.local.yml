@@ -25,10 +25,12 @@ services:
       - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
       - "12222:2222"  # SFTP (mapped to avoid conflicts)
     volumes:
-      # Mount airports.json - defaults to test file, override in docker-compose.override.yml for real file
-      # Priority: override.yml (if exists) > airports.json (if exists) > airports.json.test (fallback)
-      # For local development with real airports.json, create docker-compose.override.yml to override this path
-      - ../tests/Fixtures/airports.json.test:/var/www/html/config/airports.json:ro
+      # Mount config directory for local development (writable so entrypoint can create airports.json from fallback)
+      # Entrypoint will handle fallback: airports.json (if exists) > airports.json.example > airports.json.test
+      # For local development with real airports.json, create config/airports.json or use docker-compose.override.yml
+      - ../config:/var/www/html/config
+      # Also mount tests directory so test fixture is available as fallback
+      - ../tests:/var/www/html/tests:ro
       # Mount cache directory from /tmp (ephemeral, cleared on reboot)
       - /tmp/aviationwx-cache:/var/www/html/cache
     cap_add:
@@ -67,7 +69,8 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - ../tests/Fixtures/airports.json.test:/var/www/html/config/airports.json:ro
+      - ../config:/var/www/html/config:ro
+      - ../tests:/var/www/html/tests:ro
       - vpn-config:/etc/ipsec-shared:ro
     restart: unless-stopped
     healthcheck:
@@ -96,7 +99,8 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - ../tests/Fixtures/airports.json.test:/var/www/html/config/airports.json:ro
+      - ../config:/var/www/html/config:ro
+      - ../tests:/var/www/html/tests:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
       - vpn-config:/etc/ipsec-shared
     environment:

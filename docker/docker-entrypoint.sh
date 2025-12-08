@@ -3,10 +3,52 @@ set -e
 
 # Ensure config directory exists (needed for airports.json mount)
 CONFIG_DIR="/var/www/html/config"
+CONFIG_FILE="${CONFIG_DIR}/airports.json"
 if [ ! -d "${CONFIG_DIR}" ]; then
     echo "Creating config directory: ${CONFIG_DIR}"
     mkdir -p "${CONFIG_DIR}"
     chown www-data:www-data "${CONFIG_DIR}" 2>/dev/null || true
+fi
+
+# Handle airports.json fallback for local development
+# Production: airports.json is mounted from /home/aviationwx/airports.json (must exist)
+# Local: If airports.json doesn't exist, create it from fallback sources (example > test fixture)
+if [ ! -f "${CONFIG_FILE}" ]; then
+    echo "airports.json not found in config directory, checking for fallback sources..."
+    
+    # Try to copy from example file (for local development)
+    EXAMPLE_FILE="/var/www/html/config/airports.json.example"
+    TEST_FILE="/var/www/html/tests/Fixtures/airports.json.test"
+    
+    if [ -f "${EXAMPLE_FILE}" ]; then
+        echo "Copying airports.json from example file..."
+        cp "${EXAMPLE_FILE}" "${CONFIG_FILE}" 2>/dev/null || {
+            echo "⚠️  Warning: Could not write to ${CONFIG_FILE} (read-only mount?)"
+            echo "  Falling back to test fixture..."
+        }
+    fi
+    
+    # If still doesn't exist (either example wasn't found or copy failed), try test fixture
+    if [ ! -f "${CONFIG_FILE}" ] && [ -f "${TEST_FILE}" ]; then
+        echo "Copying airports.json from test fixture..."
+        cp "${TEST_FILE}" "${CONFIG_FILE}" 2>/dev/null || {
+            echo "⚠️  Warning: Could not write to ${CONFIG_FILE} (read-only mount?)"
+        }
+    fi
+    
+    # Verify file was created
+    if [ -f "${CONFIG_FILE}" ]; then
+        chmod 644 "${CONFIG_FILE}" 2>/dev/null || true
+        chown www-data:www-data "${CONFIG_FILE}" 2>/dev/null || true
+        echo "✓ Created airports.json from fallback source"
+    else
+        echo "⚠️  Warning: airports.json not found and could not create from fallback sources"
+        echo "  Expected locations:"
+        echo "    - ${CONFIG_FILE} (mounted or should be created)"
+        echo "    - ${EXAMPLE_FILE} (fallback)"
+        echo "    - ${TEST_FILE} (fallback)"
+        echo "  Container will continue, but application may fail without valid config"
+    fi
 fi
 
 # Start cron daemon in background

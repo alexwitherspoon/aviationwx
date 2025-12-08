@@ -17,7 +17,7 @@ if (empty($airportId)) {
 }
 
 // Load airport config
-$configFile = __DIR__ . '/../airports.json.test';
+$configFile = __DIR__ . '/Fixtures/airports.json.test';
 if (!file_exists($configFile)) {
     echo json_encode(['success' => false, 'error' => 'Test configuration not found']);
     exit;
