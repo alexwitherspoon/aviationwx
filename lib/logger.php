@@ -31,6 +31,15 @@ if (!defined('AVIATIONWX_LOG_MAX_FILES')) {
 }
 
 if (!function_exists('aviationwx_get_log_file_path')) {
+/**
+ * Get the file path for a log type
+ * 
+ * Returns the appropriate log file path based on log type.
+ * Only used when file-based logging is enabled (AVIATIONWX_LOG_TO_STDOUT = false).
+ * 
+ * @param string $logType Log type: 'app' or 'user' (default: 'app')
+ * @return string Full path to log file
+ */
 function aviationwx_get_log_file_path(string $logType = 'app'): string {
     if ($logType === 'user') {
         return AVIATIONWX_USER_LOG_FILE;
@@ -40,6 +49,14 @@ function aviationwx_get_log_file_path(string $logType = 'app'): string {
 }
 
 if (!function_exists('aviationwx_init_log_dir')) {
+/**
+ * Initialize log directory structure
+ * 
+ * Creates log directory and initial log files if they don't exist.
+ * Only used when file-based logging is enabled (AVIATIONWX_LOG_TO_STDOUT = false).
+ * 
+ * @return void
+ */
 function aviationwx_init_log_dir(): void {
     if (AVIATIONWX_LOG_TO_STDOUT) {
         return; // No directory needed for stdout/stderr logging
@@ -55,6 +72,15 @@ function aviationwx_init_log_dir(): void {
 }
 
 if (!function_exists('aviationwx_rotate_log_if_needed')) {
+/**
+ * Rotate log file if it exceeds maximum size
+ * 
+ * Implements log rotation: logfile -> logfile.1 -> logfile.2 -> ... -> logfile.N
+ * Deletes files beyond MAX_FILES limit. Only used when file-based logging is enabled.
+ * 
+ * @param string $logFile Full path to log file to check/rotate
+ * @return void
+ */
 function aviationwx_rotate_log_if_needed(string $logFile): void {
     if (AVIATIONWX_LOG_TO_STDOUT) {
         return; // Docker handles rotation for stdout/stderr
@@ -84,6 +110,15 @@ function aviationwx_rotate_log_if_needed(string $logFile): void {
 }
 
 if (!function_exists('aviationwx_get_request_id')) {
+/**
+ * Get or generate request ID for request correlation
+ * 
+ * Returns a unique request ID for correlating log entries within a single request.
+ * Uses X-Request-ID header if present, otherwise generates a random 16-character hex ID.
+ * Uses static caching to ensure same ID is returned throughout request lifetime.
+ * 
+ * @return string Request ID (16 hex characters)
+ */
 function aviationwx_get_request_id(): string {
     static $reqId = null;
     if ($reqId !== null) return $reqId;
@@ -97,6 +132,22 @@ function aviationwx_get_request_id(): string {
 }
 
 if (!function_exists('aviationwx_log')) {
+/**
+ * Log a message with structured context
+ * 
+ * Writes JSONL (JSON Lines) formatted log entries. Supports multiple output destinations:
+ * - stdout/stderr for Docker logging (default)
+ * - File-based logging (backward compatibility)
+ * 
+ * Log levels: 'debug', 'info', 'warning', 'error', 'critical', 'alert', 'emergency'
+ * Automatically records error events for rate monitoring when level is warning or above.
+ * 
+ * @param string $level Log level (debug, info, warning, error, critical, alert, emergency)
+ * @param string $message Log message
+ * @param array $context Additional context data (key-value pairs)
+ * @param string $logType Log type: 'app' or 'user' (default: 'app')
+ * @return void
+ */
 function aviationwx_log(string $level, string $message, array $context = [], string $logType = 'app'): void {
     $now = (new DateTime('now', new DateTimeZone('UTC')))->format('c');
     
@@ -171,6 +222,15 @@ function aviationwx_log(string $level, string $message, array $context = [], str
 }
 
 if (!function_exists('aviationwx_record_error_event')) {
+/**
+ * Record an error event for rate monitoring
+ * 
+ * Stores error event timestamps in APCu for tracking error rates.
+ * Used internally by aviationwx_log() when logging warnings or errors.
+ * Events older than 3600 seconds are automatically purged.
+ * 
+ * @return void
+ */
 function aviationwx_record_error_event(): void {
     if (!function_exists('apcu_fetch')) return;
     $key = 'aviationwx_error_events';
@@ -186,6 +246,14 @@ function aviationwx_record_error_event(): void {
 }
 
 if (!function_exists('aviationwx_error_rate_last_hour')) {
+/**
+ * Get error count from the last hour
+ * 
+ * Returns the number of error/warning events recorded in the last 60 minutes.
+ * Used for alerting and monitoring error rates.
+ * 
+ * @return int Number of error events in the last hour (0 if APCu unavailable)
+ */
 function aviationwx_error_rate_last_hour(): int {
     if (!function_exists('apcu_fetch')) return 0;
     $events = apcu_fetch('aviationwx_error_events');
@@ -198,6 +266,14 @@ function aviationwx_error_rate_last_hour(): int {
 }
 
 if (!function_exists('aviationwx_maybe_log_alert')) {
+/**
+ * Log alert if error rate is high
+ * 
+ * Checks error rate for the last hour and logs an info-level alert if >= 5 errors.
+ * Uses 'info' level to avoid feedback loop (this is a metric, not an error).
+ * 
+ * @return void
+ */
 function aviationwx_maybe_log_alert(): void {
     $count = aviationwx_error_rate_last_hour();
     if ($count >= 5) {
