@@ -1,3 +1,13 @@
+# Local Development Docker Compose Configuration
+# This is an example file for local development
+# 
+# For user-specific overrides (like custom airports.json paths), create:
+# docker-compose.override.yml (gitignored, not checked in)
+#
+# Usage:
+#   docker compose -f docker/docker-compose.local.yml up
+#   or use: make up (which uses this file)
+
 name: aviationwx-local
 
 services:
@@ -9,26 +19,34 @@ services:
     container_name: aviationwx-web-local
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8081:80"
-      - "2121:2121"  # FTP/FTPS (both protocols on same port)
-      - "2222:2222"  # SFTP
+      - "${APP_PORT:-8080}:80"
+      # Expose FTP/FTPS and SFTP ports for local testing
+      # Using non-standard ports to avoid conflicts with system services
+      - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
+      - "12222:2222"  # SFTP (mapped to avoid conflicts)
     volumes:
-      # Use local airports.json for testing
-      - ../config/airports.json:/var/www/html/airports.json:ro
-      - ../cache-local:/var/www/html/cache
-      # Note: /var/www/html/uploads is ephemeral (inside container only)
-      - /etc/letsencrypt:/etc/letsencrypt:ro  # Let's Encrypt certificates (if available)
+      # Mount airports.json - defaults to test file, override in docker-compose.override.yml for real file
+      # Priority: override.yml (if exists) > airports.json (if exists) > airports.json.test (fallback)
+      # For local development with real airports.json, create docker-compose.override.yml to override this path
+      - ../tests/Fixtures/airports.json.test:/var/www/html/config/airports.json:ro
+      # Mount cache directory from /tmp (ephemeral, cleared on reboot)
+      - /tmp/aviationwx-cache:/var/www/html/cache
     cap_add:
       - NET_ADMIN
       - NET_RAW
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
-      - DOMAIN=localhost
-      - CONFIG_PATH=/var/www/html/airports.json
-      - WEBCAM_REFRESH_DEFAULT=60
-      - WEATHER_REFRESH_DEFAULT=60
+      - DOMAIN=${DOMAIN:-localhost}
+      - CONFIG_PATH=/var/www/html/config/airports.json
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
+      - GIT_SHA=${GIT_SHA:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -36,3 +54,65 @@ services:
         max-file: "10"
         tag: "{{.Name}}/{{.ID}}"
 
+  # VPN Server - strongSwan IPsec server
+  # Uses host networking for full VPN functionality (requires Linux or proper host networking support)
+  vpn-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-server
+    image: aviationwx-vpn-server
+    container_name: aviationwx-vpn-local
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ../tests/Fixtures/airports.json.test:/var/www/html/config/airports.json:ro
+      - vpn-config:/etc/ipsec-shared:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ipsec", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+        tag: "{{.Name}}/{{.ID}}"
+
+  # VPN Manager - Manages VPN connections and configuration
+  # Uses host networking to access VPN server and manage connections
+  vpn-manager:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vpn-manager
+    image: aviationwx-vpn-manager
+    container_name: aviationwx-vpn-manager-local
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ../tests/Fixtures/airports.json.test:/var/www/html/config/airports.json:ro
+      - /tmp/aviationwx-cache:/var/www/html/cache
+      - vpn-config:/etc/ipsec-shared
+    environment:
+      - CONFIG_PATH=/var/www/html/config/airports.json
+      - STATUS_FILE=/var/www/html/cache/vpn-status.json
+      - VPN_TEST_MODE=true
+      - VPN_TEST_CLIENT_IP=127.0.0.1
+    restart: unless-stopped
+    depends_on:
+      - vpn-server
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+        tag: "{{.Name}}/{{.ID}}"
+
+volumes:
+  vpn-config:
