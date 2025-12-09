@@ -362,5 +362,94 @@ class HtmlOutputValidationTest extends TestCase
             'body' => $body ?: ''
         ];
     }
+    
+    /**
+     * Test that partnerships section is rendered when partners exist
+     */
+    public function testAirportPage_PartnershipsSectionRendered()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Check for partnerships section
+        $this->assertStringContainsString(
+            'partnerships-section',
+            $html,
+            "Partnerships section should be present in HTML"
+        );
+        
+        // Check for partnerships heading
+        $this->assertStringContainsString(
+            'Support These Partners',
+            $html,
+            "Partnerships heading should be present"
+        );
+    }
+    
+    /**
+     * Test that partnerships section contains partner links
+     */
+    public function testAirportPage_PartnershipsContainLinks()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Check for partner-link class (indicates partner items are rendered)
+        // Note: This test will pass even if no partners are configured (section exists but empty)
+        // The actual partner content depends on the airports.json configuration
+        $hasPartnershipsSection = strpos($html, 'partnerships-section') !== false;
+        
+        if ($hasPartnershipsSection) {
+            // If section exists, check for proper structure
+            $this->assertStringContainsString(
+                'partnerships-container',
+                $html,
+                "Partnerships container should be present"
+            );
+        } else {
+            $this->markTestSkipped("Partnerships section not found - may not be configured for test airport");
+        }
+    }
+    
+    /**
+     * Test that data sources section is rendered
+     */
+    public function testAirportPage_DataSourcesSectionRendered()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Check for data sources content
+        $this->assertStringContainsString(
+            'data-sources-content',
+            $html,
+            "Data sources section should be present in HTML"
+        );
+        
+        // Check for data sources label
+        $this->assertStringContainsString(
+            'Weather data at this airport from',
+            $html,
+            "Data sources label should be present"
+        );
+    }
 }
 

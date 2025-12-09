@@ -41,6 +41,18 @@
           "label": "Supporting Organization",
           "url": "https://example.com/org"
         }
+      ],
+      "partners": [
+        {
+          "name": "Test Partner Organization",
+          "url": "https://example.com/partner",
+          "logo": "https://example.com/partner-logo.png",
+          "description": "Test partner description"
+        },
+        {
+          "name": "Test Partner Without Logo",
+          "url": "https://example.com/partner2"
+        }
       ]
     },
     "pdx": {
