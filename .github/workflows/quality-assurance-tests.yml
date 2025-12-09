@@ -526,6 +526,52 @@ jobs:
           fi
           echo "✓ Docker Compose files present"
 
+  build-docker-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate test fixture exists
+        run: |
+          if [ ! -f "tests/Fixtures/airports.json.test" ]; then
+            echo "❌ Test fixture file missing: tests/Fixtures/airports.json.test"
+            exit 1
+          fi
+          # Validate JSON using Python (available on ubuntu-latest)
+          python3 -m json.tool tests/Fixtures/airports.json.test > /dev/null || {
+            echo "❌ Test fixture is not valid JSON"
+            exit 1
+          }
+          echo "✓ Test fixture is valid JSON"
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image with cache
+        uses: docker/build-push-action@v5
+        id: build
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          tags: aviationwx:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/aviationwx-test.tar
+      
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-test
+          path: /tmp/aviationwx-test.tar
+          retention-days: 1
+          compression-level: 6
+
   performance-tests:
     name: Performance Tests
     runs-on: ubuntu-latest
@@ -566,6 +612,7 @@ jobs:
   e2e-tests:
     name: End-to-End Tests
     runs-on: ubuntu-latest
+    needs: build-docker-image
     
     steps:
       - name: Checkout code
@@ -629,33 +676,29 @@ jobs:
           php -r "json_decode(file_get_contents('config/airports.json'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
           echo "✓ Config file is valid JSON"
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build Docker image with cache
-        uses: docker/build-push-action@v5
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: ./docker/Dockerfile
-          push: false
-          tags: aviationwx:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          load: true
+          name: docker-image-test
+          path: /tmp
+      
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/aviationwx-test.tar
+          docker tag aviationwx:test aviationwx:latest || true
+          echo "✓ Docker image loaded and tagged"
       
       - name: Start Docker containers
         env:
           CONFIG_PATH: ${{ github.workspace }}/config/airports.json
           APP_ENV: testing
         run: |
-          docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 5  # Reduced - health check script will wait properly
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for health check
         run: |
-          bash scripts/wait-for-service-health.sh 90 http://localhost:8080
+          bash scripts/wait-for-service-health.sh 60 http://localhost:8080
       
       - name: Run E2E Tests
         run: |
@@ -690,6 +733,7 @@ jobs:
   smoke-tests:
     name: Smoke Tests - Local
     runs-on: ubuntu-latest
+    needs: build-docker-image
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     
     steps:
@@ -754,30 +798,25 @@ jobs:
           php -r "json_decode(file_get_contents('config/airports.json'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
           echo "✓ Config file is valid JSON"
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build Docker image with cache
-        uses: docker/build-push-action@v5
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: ./docker/Dockerfile
-          push: false
-          tags: aviationwx:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          load: true
+          name: docker-image-test
+          path: /tmp
+      
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/aviationwx-test.tar
+          docker tag aviationwx:test aviationwx:latest || true
+          echo "✓ Docker image loaded and tagged"
       
       - name: Start Docker containers
         run: |
-          # Tag the pre-built image for docker-compose
-          docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 5  # Reduced - health check script will wait properly
       
       - name: Wait for health check
         run: |
-          bash scripts/wait-for-service-health.sh 90 http://localhost:8080
+          bash scripts/wait-for-service-health.sh 60 http://localhost:8080
       
       - name: Run Smoke Tests (Local)
         run: |
@@ -849,6 +888,7 @@ jobs:
   browser-tests:
     name: Browser Tests - ${{ matrix.test-file }}
     runs-on: ubuntu-latest
+    needs: build-docker-image
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -899,30 +939,26 @@ jobs:
           php -r "json_decode(file_get_contents('config/airports.json'), true); if (json_last_error() !== JSON_ERROR_NONE) { echo 'Invalid JSON: ' . json_last_error_msg() . PHP_EOL; exit(1); }"
           echo "✓ Config file is valid JSON"
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build Docker image with cache
-        uses: docker/build-push-action@v5
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          file: ./docker/Dockerfile
-          push: false
-          tags: aviationwx:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          load: true
+          name: docker-image-test
+          path: /tmp
+      
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/aviationwx-test.tar
+          docker tag aviationwx:test aviationwx:latest || true
+          echo "✓ Docker image loaded and tagged"
       
       - name: Start Docker containers
         run: |
-          docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 5  # Reduced - health check script will wait properly
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for service to be ready
         run: |
-          bash scripts/wait-for-service-health.sh 90 http://localhost:8080
+          bash scripts/wait-for-service-health.sh 60 http://localhost:8080
       
       - name: Run Browser Tests
         working-directory: tests/Browser
