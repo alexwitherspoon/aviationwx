@@ -102,7 +102,27 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
             error_log("Airport found via identifier lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
         } else {
             // TODO: Remove debug logging after fixing redirect issue
-            error_log("Airport NOT found: identifier='$rawAirportIdentifier'");
+            error_log("Airport NOT found: identifier='$rawAirportIdentifier' (searched by ICAO/IATA/FAA)");
+            // Additional debug: check if identifier exists in any airport config
+            $identifierUpper = strtoupper($rawAirportIdentifier);
+            $foundInConfig = false;
+            foreach ($config['airports'] as $id => $apt) {
+                if (isset($apt['icao']) && strtoupper(trim($apt['icao'])) === $identifierUpper) {
+                    error_log("DEBUG: Found matching ICAO '$identifierUpper' in airport '$id'");
+                    $foundInConfig = true;
+                }
+                if (isset($apt['iata']) && strtoupper(trim($apt['iata'])) === $identifierUpper) {
+                    error_log("DEBUG: Found matching IATA '$identifierUpper' in airport '$id'");
+                    $foundInConfig = true;
+                }
+                if (isset($apt['faa']) && strtoupper(trim($apt['faa'])) === $identifierUpper) {
+                    error_log("DEBUG: Found matching FAA '$identifierUpper' in airport '$id'");
+                    $foundInConfig = true;
+                }
+            }
+            if (!$foundInConfig) {
+                error_log("DEBUG: No matching ICAO/IATA/FAA found for '$identifierUpper' in any airport config");
+            }
         }
     }
     
