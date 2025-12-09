@@ -36,23 +36,42 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         // Use airport's local timezone to determine "today" (midnight reset at local timezone)
         $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
         
+        // Use file locking to prevent race conditions
+        // Critical: Lock must be acquired BEFORE reading to prevent concurrent updates
+        // from overwriting each other's changes
+        $fp = @fopen($file, 'c+');
+        if ($fp === false) {
+            // Fallback to non-locked write if we can't open file
+            aviationwx_log('warning', 'peak_gusts.json file open failed, using fallback', ['file' => $file], 'app');
+            updatePeakGustFallback($airportId, $currentGust, $airport, $obsTimestamp, $file, $dateKey);
+            return;
+        }
+        
+        // Acquire exclusive lock (blocking) to ensure atomicity
+        // This prevents concurrent requests from both reading the same data
+        if (!@flock($fp, LOCK_EX)) {
+            @fclose($fp);
+            aviationwx_log('warning', 'peak_gusts.json file lock failed, using fallback', ['file' => $file], 'app');
+            updatePeakGustFallback($airportId, $currentGust, $airport, $obsTimestamp, $file, $dateKey);
+            return;
+        }
+        
+        // Read current data while lock is held
         $peakGusts = [];
-        if (file_exists($file)) {
-            $content = file_get_contents($file);
-            if ($content !== false) {
-                $decoded = json_decode($content, true);
+        $fileSize = @filesize($file);
+        if ($fileSize > 0) {
+            $content = @stream_get_contents($fp);
+            if ($content !== false && $content !== '') {
+                $decoded = @json_decode($content, true);
                 $jsonError = json_last_error();
                 
-                // Validate JSON format - if invalid, delete and recreate file
+                // Validate JSON format - if invalid, start with empty array
                 if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
                     aviationwx_log('warning', 'peak_gusts.json has invalid format - recreating', [
                         'airport' => $airportId,
                         'json_error' => json_last_error_msg(),
                         'json_error_code' => $jsonError
                     ], 'app');
-                    // Delete corrupted file
-                    @unlink($file);
-                    // Start with empty array
                     $peakGusts = [];
                 } else {
                     $peakGusts = $decoded;
@@ -127,12 +146,103 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
             }
         }
         
+        // Write modified data back while lock is still held
+        // Truncate first to ensure clean write (prevents partial overwrites)
+        @ftruncate($fp, 0);
+        @rewind($fp);
         $jsonData = json_encode($peakGusts);
         if ($jsonData !== false) {
-            file_put_contents($file, $jsonData, LOCK_EX);
+            @fwrite($fp, $jsonData);
+            @fflush($fp);
         }
+        
+        // Release lock and close
+        @flock($fp, LOCK_UN);
+        @fclose($fp);
     } catch (Exception $e) {
         error_log("Error updating peak gust: " . $e->getMessage());
+    }
+}
+
+/**
+ * Fallback for peak gust update when file handle operations fail
+ * Uses file_put_contents with LOCK_EX as last resort
+ * 
+ * @param string $airportId Airport identifier
+ * @param float $currentGust Current gust speed value
+ * @param array|null $airport Airport configuration array
+ * @param int|null $obsTimestamp Observation timestamp
+ * @param string $file Cache file path
+ * @param string $dateKey Date key for today
+ * @return void
+ */
+function updatePeakGustFallback($airportId, $currentGust, $airport, $obsTimestamp, $file, $dateKey) {
+    try {
+        $peakGusts = [];
+        if (file_exists($file)) {
+            $content = @file_get_contents($file);
+            if ($content !== false) {
+                $decoded = @json_decode($content, true);
+                $jsonError = json_last_error();
+                
+                // Validate JSON format - if invalid, delete and recreate file
+                if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
+                    aviationwx_log('warning', 'peak_gusts.json has invalid format - recreating (fallback)', [
+                        'airport' => $airportId,
+                        'json_error' => json_last_error_msg(),
+                        'json_error_code' => $jsonError
+                    ], 'app');
+                    @unlink($file);
+                    $peakGusts = [];
+                } else {
+                    $peakGusts = $decoded;
+                }
+            }
+        }
+        
+        // Clean up old entries (older than 2 days)
+        $currentDate = new DateTime($dateKey);
+        foreach ($peakGusts as $key => $value) {
+            if (!is_string($key) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $key)) {
+                continue;
+            }
+            $entryDate = new DateTime($key);
+            $daysDiff = $currentDate->diff($entryDate)->days;
+            if ($daysDiff > 2) {
+                unset($peakGusts[$key]);
+            }
+        }
+        
+        // Normalize existing entry
+        $existing = $peakGusts[$dateKey][$airportId] ?? null;
+        if (is_array($existing)) {
+            $existingValue = is_numeric($existing['value']) ? (float)$existing['value'] : 0;
+        } else {
+            $existingValue = is_numeric($existing) ? (float)$existing : 0;
+        }
+        
+        $currentGustFloat = is_numeric($currentGust) ? (float)$currentGust : 0;
+        $timestamp = $obsTimestamp !== null ? $obsTimestamp : time();
+        
+        // Update logic (same as main function)
+        if (!isset($peakGusts[$dateKey][$airportId])) {
+            $peakGusts[$dateKey][$airportId] = [
+                'value' => $currentGustFloat,
+                'ts' => $timestamp,
+            ];
+        } elseif ($currentGustFloat > $existingValue) {
+            $peakGusts[$dateKey][$airportId] = [
+                'value' => $currentGustFloat,
+                'ts' => $timestamp,
+            ];
+        }
+        
+        $jsonData = json_encode($peakGusts);
+        if ($jsonData !== false) {
+            @file_put_contents($file, $jsonData, LOCK_EX);
+        }
+    } catch (Exception $e) {
+        error_log("Error updating peak gust (fallback): " . $e->getMessage());
     }
 }
 
@@ -232,23 +342,42 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
         // Use airport's local timezone to determine "today" (midnight reset at local timezone)
         $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
         
+        // Use file locking to prevent race conditions
+        // Critical: Lock must be acquired BEFORE reading to prevent concurrent updates
+        // from overwriting each other's changes
+        $fp = @fopen($file, 'c+');
+        if ($fp === false) {
+            // Fallback to non-locked write if we can't open file
+            aviationwx_log('warning', 'temp_extremes.json file open failed, using fallback', ['file' => $file], 'app');
+            updateTempExtremesFallback($airportId, $currentTemp, $airport, $obsTimestamp, $file, $dateKey);
+            return;
+        }
+        
+        // Acquire exclusive lock (blocking) to ensure atomicity
+        // This prevents concurrent requests from both reading the same data
+        if (!@flock($fp, LOCK_EX)) {
+            @fclose($fp);
+            aviationwx_log('warning', 'temp_extremes.json file lock failed, using fallback', ['file' => $file], 'app');
+            updateTempExtremesFallback($airportId, $currentTemp, $airport, $obsTimestamp, $file, $dateKey);
+            return;
+        }
+        
+        // Read current data while lock is held
         $tempExtremes = [];
-        if (file_exists($file)) {
-            $content = file_get_contents($file);
-            if ($content !== false) {
-                $decoded = json_decode($content, true);
+        $fileSize = @filesize($file);
+        if ($fileSize > 0) {
+            $content = @stream_get_contents($fp);
+            if ($content !== false && $content !== '') {
+                $decoded = @json_decode($content, true);
                 $jsonError = json_last_error();
                 
-                // Validate JSON format - if invalid, delete and recreate file
+                // Validate JSON format - if invalid, start with empty array
                 if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
                     aviationwx_log('warning', 'temp_extremes.json has invalid format - recreating', [
                         'airport' => $airportId,
                         'json_error' => json_last_error_msg(),
                         'json_error_code' => $jsonError
                     ], 'app');
-                    // Delete corrupted file
-                    @unlink($file);
-                    // Start with empty array
                     $tempExtremes = [];
                 } else {
                     $tempExtremes = $decoded;
@@ -335,12 +464,109 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
             }
         }
         
+        // Write modified data back while lock is still held
+        // Truncate first to ensure clean write (prevents partial overwrites)
+        @ftruncate($fp, 0);
+        @rewind($fp);
         $jsonData = json_encode($tempExtremes);
         if ($jsonData !== false) {
-            file_put_contents($file, $jsonData, LOCK_EX);
+            @fwrite($fp, $jsonData);
+            @fflush($fp);
         }
+        
+        // Release lock and close
+        @flock($fp, LOCK_UN);
+        @fclose($fp);
     } catch (Exception $e) {
         error_log("Error updating temp extremes: " . $e->getMessage());
+    }
+}
+
+/**
+ * Fallback for temp extremes update when file handle operations fail
+ * Uses file_put_contents with LOCK_EX as last resort
+ * 
+ * @param string $airportId Airport identifier
+ * @param float $currentTemp Current temperature value
+ * @param array|null $airport Airport configuration array
+ * @param int|null $obsTimestamp Observation timestamp
+ * @param string $file Cache file path
+ * @param string $dateKey Date key for today
+ * @return void
+ */
+function updateTempExtremesFallback($airportId, $currentTemp, $airport, $obsTimestamp, $file, $dateKey) {
+    try {
+        $tempExtremes = [];
+        if (file_exists($file)) {
+            $content = @file_get_contents($file);
+            if ($content !== false) {
+                $decoded = @json_decode($content, true);
+                $jsonError = json_last_error();
+                
+                // Validate JSON format - if invalid, delete and recreate file
+                if ($jsonError !== JSON_ERROR_NONE || !is_array($decoded)) {
+                    aviationwx_log('warning', 'temp_extremes.json has invalid format - recreating (fallback)', [
+                        'airport' => $airportId,
+                        'json_error' => json_last_error_msg(),
+                        'json_error_code' => $jsonError
+                    ], 'app');
+                    @unlink($file);
+                    $tempExtremes = [];
+                } else {
+                    $tempExtremes = $decoded;
+                }
+            }
+        }
+        
+        // Clean up old entries (older than 2 days)
+        $currentDate = new DateTime($dateKey);
+        foreach ($tempExtremes as $key => $value) {
+            if (!is_string($key) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $key)) {
+                continue;
+            }
+            $entryDate = new DateTime($key);
+            $daysDiff = $currentDate->diff($entryDate)->days;
+            if ($daysDiff > 2) {
+                unset($tempExtremes[$key]);
+            }
+        }
+        
+        $obsTs = $obsTimestamp !== null ? $obsTimestamp : time();
+        $currentTempFloat = is_numeric($currentTemp) ? (float)$currentTemp : 0;
+        
+        // Update logic (same as main function)
+        if (!isset($tempExtremes[$dateKey][$airportId])) {
+            $tempExtremes[$dateKey][$airportId] = [
+                'high' => $currentTempFloat,
+                'low' => $currentTempFloat,
+                'high_ts' => $obsTs,
+                'low_ts' => $obsTs
+            ];
+        } else {
+            $storedHigh = is_numeric($tempExtremes[$dateKey][$airportId]['high']) ? (float)$tempExtremes[$dateKey][$airportId]['high'] : $currentTempFloat;
+            $storedLow = is_numeric($tempExtremes[$dateKey][$airportId]['low']) ? (float)$tempExtremes[$dateKey][$airportId]['low'] : $currentTempFloat;
+            
+            if ($currentTempFloat > $storedHigh) {
+                $tempExtremes[$dateKey][$airportId]['high'] = $currentTempFloat;
+                $tempExtremes[$dateKey][$airportId]['high_ts'] = $obsTs;
+            }
+            if ($currentTempFloat < $storedLow) {
+                $tempExtremes[$dateKey][$airportId]['low'] = $currentTempFloat;
+                $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs;
+            } elseif ($currentTempFloat == $storedLow) {
+                $existingLowTs = $tempExtremes[$dateKey][$airportId]['low_ts'] ?? $obsTs;
+                if ($obsTs < $existingLowTs) {
+                    $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs;
+                }
+            }
+        }
+        
+        $jsonData = json_encode($tempExtremes);
+        if ($jsonData !== false) {
+            @file_put_contents($file, $jsonData, LOCK_EX);
+        }
+    } catch (Exception $e) {
+        error_log("Error updating temp extremes (fallback): " . $e->getMessage());
     }
 }
 
