@@ -55,6 +55,7 @@ if (!$isAirportRequest) {
     if (preg_match($pattern, $host, $matches)) {
         $isAirportRequest = true;
         $rawAirportIdentifier = $matches[1];
+        error_log("Subdomain extracted via pattern: host='$host', baseDomain='$baseDomain', identifier='$rawAirportIdentifier'");
     } else {
         // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
         $hostParts = explode('.', $host);
@@ -64,6 +65,7 @@ if (!$isAirportRequest) {
             if (!in_array($potentialId, ['www', 'status', 'aviationwx'])) {
                 $isAirportRequest = true;
                 $rawAirportIdentifier = $potentialId;
+                error_log("Subdomain extracted via fallback: host='$host', identifier='$rawAirportIdentifier'");
             }
         }
     }
@@ -86,12 +88,16 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
     if (isset($config['airports'][$rawAirportIdentifier])) {
         $airport = $config['airports'][$rawAirportIdentifier];
         $airportId = $rawAirportIdentifier;
+        error_log("Airport found via direct lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
     } else {
         // Try lookup by identifier (ICAO, IATA, FAA)
         $result = findAirportByIdentifier($rawAirportIdentifier, $config);
         if ($result !== null && isset($result['airport']) && isset($result['airportId'])) {
             $airport = $result['airport'];
             $airportId = $result['airportId'];
+            error_log("Airport found via identifier lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
+        } else {
+            error_log("Airport NOT found: identifier='$rawAirportIdentifier'");
         }
     }
     
