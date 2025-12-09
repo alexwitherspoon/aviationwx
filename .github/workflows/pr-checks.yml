@@ -145,8 +145,21 @@ jobs:
       
       - name: Validate Flight Category Logic
         run: |
-          if ! grep -q "function calculateFlightCategory" api/weather.php; then
-            echo "❌ CRITICAL: calculateFlightCategory function missing!"
+          # Check that calculator.php is required (functions moved to library)
+          if ! grep -q "require.*calculator\.php\|include.*calculator\.php" api/weather.php; then
+            echo "❌ CRITICAL: lib/weather/calculator.php not required in api/weather.php!"
+            exit 1
+          fi
+          
+          # Verify calculateFlightCategory function exists in calculator.php
+          if ! grep -q "function calculateFlightCategory" lib/weather/calculator.php; then
+            echo "❌ CRITICAL: calculateFlightCategory function missing from lib/weather/calculator.php!"
+            exit 1
+          fi
+          
+          # Verify function is being called in api/weather.php
+          if ! grep -q "calculateFlightCategory" api/weather.php; then
+            echo "❌ CRITICAL: calculateFlightCategory not being used in api/weather.php!"
             exit 1
           fi
           
