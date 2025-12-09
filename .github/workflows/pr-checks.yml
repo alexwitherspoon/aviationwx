@@ -165,8 +165,8 @@ jobs:
           
           categories=("LIFR" "IFR" "MVFR" "VFR")
           for category in "${categories[@]}"; do
-            if ! grep -q "return '$category'" api/weather.php; then
-              echo "⚠️  Warning: Flight category $category may not be handled"
+            if ! grep -q "return '$category'" lib/weather/calculator.php; then
+              echo "⚠️  Warning: Flight category $category may not be handled in lib/weather/calculator.php"
             fi
           done
           
