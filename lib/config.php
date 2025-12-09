@@ -568,6 +568,45 @@ function findAirportByIdentifier(string $identifier, ?array $config = null): ?ar
         }
     }
     
+    // 3. Fallback: Check cached mapping files (IATA->ICAO, FAA->ICAO) for airports not in config
+    // This allows redirects to work for airports that exist but aren't configured yet
+    $icaoFromMapping = null;
+    
+    // Try IATA to ICAO mapping
+    if (isValidIataFormat($identifierUpper)) {
+        $icaoFromMapping = getIcaoFromIata($identifierUpper);
+    }
+    
+    // Try FAA to ICAO mapping if IATA lookup didn't work
+    if ($icaoFromMapping === null && isValidFaaFormat($identifierUpper)) {
+        $icaoFromMapping = getIcaoFromFaa($identifierUpper);
+    }
+    
+    // If we found an ICAO code from the mapping, create a minimal airport entry
+    if ($icaoFromMapping !== null) {
+        $icaoLower = strtolower($icaoFromMapping);
+        // Use ICAO code as airport ID (lowercase)
+        $airportId = $icaoLower;
+        
+        // Create minimal airport entry with just the ICAO code
+        // This allows redirect logic to work even if airport isn't fully configured
+        $minimalAirport = [
+            'icao' => $icaoFromMapping,
+        ];
+        
+        // Add IATA if that's what was requested
+        if (isValidIataFormat($identifierUpper)) {
+            $minimalAirport['iata'] = $identifierUpper;
+        }
+        
+        // Add FAA if that's what was requested
+        if (isValidFaaFormat($identifierUpper)) {
+            $minimalAirport['faa'] = $identifierUpper;
+        }
+        
+        return ['airport' => $minimalAirport, 'airportId' => $airportId];
+    }
+    
     return null;
 }
 
