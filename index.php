@@ -131,6 +131,10 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
     }
     
     if ($airport !== null && $airportId !== null) {
+        // Check if this is a minimal airport entry (found via cached mapping but not in config)
+        // Minimal entries only have ICAO/IATA/FAA codes, no name or other required fields
+        $isMinimalEntry = !isset($airport['name']) || empty($airport['name']);
+        
         // Get the primary identifier for this airport (ICAO > IATA > FAA > Airport ID)
         // getPrimaryIdentifier() automatically returns the most preferred identifier that exists,
         // so if no ICAO exists, it returns IATA; if no IATA, returns FAA; etc.
@@ -140,13 +144,14 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         
         // TODO: Remove debug logging after fixing redirect issue
         error_log(sprintf(
-            'Redirect check: requested="%s", primary="%s", airportId="%s", icao=%s, iata=%s, match=%s',
+            'Redirect check: requested="%s", primary="%s", airportId="%s", icao=%s, iata=%s, match=%s, minimal=%s',
             $requestedIdentifier,
             $primaryIdentifierUpper,
             $airportId,
             isset($airport['icao']) ? $airport['icao'] : 'null',
             isset($airport['iata']) ? $airport['iata'] : 'null',
-            $requestedIdentifier === $primaryIdentifierUpper ? 'YES' : 'NO'
+            $requestedIdentifier === $primaryIdentifierUpper ? 'YES' : 'NO',
+            $isMinimalEntry ? 'YES' : 'NO'
         ));
         
         // Redirect if the requested identifier doesn't match the primary identifier.
@@ -176,6 +181,15 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
             // Perform 301 permanent redirect to the primary identifier URL
             http_response_code(301);
             header('Location: ' . $primaryUrl);
+            exit;
+        }
+        
+        // If this is a minimal entry (not in config), show 404 page instead of dashboard
+        if ($isMinimalEntry) {
+            http_response_code(404);
+            // Make airport identifier available to 404 page (use primary identifier)
+            $requestedAirportId = $primaryIdentifierUpper;
+            include 'pages/error-404-airport.php';
             exit;
         }
         
