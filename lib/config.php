@@ -1729,9 +1729,33 @@ function validateAirportsJsonStructure(array $config): array {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] refresh_seconds must be positive integer";
                             }
                         }
-                        
-                        if (isset($webcam['partner_link']) && !$validateUrl($webcam['partner_link'])) {
-                            $errors[] = "Airport '{$airportCode}' webcam[{$idx}] has invalid partner_link: must be a valid URL";
+                    }
+                }
+            }
+        }
+        
+        // Validate partners
+        if (isset($airport['partners'])) {
+            if (!is_array($airport['partners'])) {
+                $errors[] = "Airport '{$airportCode}' partners must be an array";
+            } else {
+                foreach ($airport['partners'] as $idx => $partner) {
+                    if (!is_array($partner)) {
+                        $errors[] = "Airport '{$airportCode}' partner[{$idx}] must be an object";
+                    } else {
+                        if (!isset($partner['name']) || !is_string($partner['name']) || empty($partner['name'])) {
+                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] missing or invalid 'name' field";
+                        }
+                        if (!isset($partner['url'])) {
+                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] missing 'url' field";
+                        } elseif (!$validateUrl($partner['url'])) {
+                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] has invalid url: must be a valid URL";
+                        }
+                        if (isset($partner['logo']) && !$validateUrl($partner['logo'])) {
+                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] has invalid logo: must be a valid URL";
+                        }
+                        if (isset($partner['description']) && !is_string($partner['description'])) {
+                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] description must be a string";
                         }
                     }
                 }

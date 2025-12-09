@@ -211,7 +211,7 @@ function generateMockWeatherData($airportId, $airport) {
     }
     $weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
 
-    // nullStaleFieldsBySource is already defined at the top of the file (line 185)
+    // nullStaleFieldsBySource is defined in lib/weather/staleness.php (required at top of file)
     // No need to redefine it here - use the existing function
 
     // Check if this is a cron job request (force refresh regardless of cache freshness)

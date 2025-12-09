@@ -69,8 +69,6 @@
           "name": "North Runway Camera (MJPEG Example)",
           "url": "https://example.com/video.mjpg",
           "position": "north",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-website.com",
           "refresh_seconds": 60
         },
         {
@@ -81,9 +79,7 @@
           "refresh_seconds": 60,
           "username": "admin",
           "password": "password123",
-          "position": "south",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-website.com"
+          "position": "south"
         },
         {
           "name": "East Camera (RTSPS Secure Example)",
@@ -91,9 +87,7 @@
           "type": "rtsp",
           "rtsp_transport": "tcp",
           "refresh_seconds": 30,
-          "position": "east",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-website.com"
+          "position": "east"
         },
         {
           "name": "VPN Camera (Private IP via VPN)",
@@ -101,24 +95,18 @@
           "type": "rtsp",
           "rtsp_transport": "tcp",
           "refresh_seconds": 60,
-          "position": "south-east",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-website.com"
+          "position": "south-east"
         },
         {
           "name": "West Camera (Static Image Example)",
           "url": "https://example.com/webcam.jpg",
           "position": "west",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-website.com",
           "refresh_seconds": 120
         },
         {
           "name": "Push Camera (SFTP/FTP/FTPS Example)",
           "type": "push",
           "position": "north-west",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-website.com",
           "refresh_seconds": 60,
           "push_config": {
             "protocol": "sftp",
@@ -127,6 +115,23 @@
             "max_file_size_mb": 10,
             "allowed_extensions": ["jpg", "jpeg"]
           }
+        }
+      ],
+      "partners": [
+        {
+          "name": "Local Aviation Club",
+          "url": "https://example-aviation-club.com",
+          "logo": "https://example-aviation-club.com/logo.png",
+          "description": "Supporting local aviation community"
+        },
+        {
+          "name": "Weather Station Sponsor",
+          "url": "https://example-weather-sponsor.com",
+          "logo": "https://example-weather-sponsor.com/logo.jpg"
+        },
+        {
+          "name": "Community Organization",
+          "url": "https://example-org.com"
         }
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",

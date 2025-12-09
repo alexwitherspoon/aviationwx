@@ -239,12 +239,6 @@ function generateConfigSnippet($formData) {
             if (!empty($cam['position'] ?? '')) {
                 $webcam['position'] = trim($cam['position']);
             }
-            if (!empty($cam['partner_name'] ?? '')) {
-                $webcam['partner_name'] = trim($cam['partner_name']);
-            }
-            if (!empty($cam['partner_link'] ?? '')) {
-                $webcam['partner_link'] = trim($cam['partner_link']);
-            }
             if (!empty($cam['refresh_seconds'] ?? '')) {
                 $refresh = intval($cam['refresh_seconds']);
                 if ($refresh >= 60) {
@@ -924,19 +918,6 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         <div class="help-text">Minimum 60 seconds (default: 60)</div>
                     </div>
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Partner Name</label>
-                        <input type="text" name="webcams[${idx}][partner_name]" 
-                               value="${escapeHtml(cam.partner_name || '')}">
-                    </div>
-                    <div class="form-group">
-                        <label>Partner Link</label>
-                        <input type="url" name="webcams[${idx}][partner_link]" 
-                               value="${escapeHtml(cam.partner_link || '')}">
-                    </div>
-                </div>
             `;
         }
         
@@ -1160,15 +1141,6 @@ function renderWebcamForm($idx, $cam) {
         
         <div class="form-row">
             <div class="form-group">
-                <label>Partner Name</label>
-                <input type="text" name="webcams[<?= $idx ?>][partner_name]" 
-                       value="<?= htmlspecialchars($cam['partner_name'] ?? '') ?>">
-            </div>
-            <div class="form-group">
-                <label>Partner Link</label>
-                <input type="url" name="webcams[<?= $idx ?>][partner_link]" 
-                       value="<?= htmlspecialchars($cam['partner_link'] ?? '') ?>">
-            </div>
         </div>
     </div>
     <?php

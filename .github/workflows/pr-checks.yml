@@ -61,25 +61,47 @@ jobs:
       
       - name: Validate Stale Data Safety Implementation
         run: |
-          if ! grep -q "function nullStaleFieldsBySource" api/weather.php; then
-            echo "❌ CRITICAL: nullStaleFieldsBySource function missing!"
+          # Check that staleness.php is required (functions moved to library)
+          if ! grep -q "require.*staleness\.php\|include.*staleness\.php" api/weather.php; then
+            echo "❌ CRITICAL: lib/weather/staleness.php not required in api/weather.php!"
             exit 1
           fi
           
-          if ! grep -q "function mergeWeatherDataWithFallback" api/weather.php; then
-            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
+          # Verify nullStaleFieldsBySource function exists in staleness.php
+          if ! grep -q "function nullStaleFieldsBySource" lib/weather/staleness.php; then
+            echo "❌ CRITICAL: nullStaleFieldsBySource function missing from lib/weather/staleness.php!"
             exit 1
           fi
           
-          if ! grep -q "MAX_STALE_HOURS\|maxStaleHours.*3" api/weather.php; then
-            echo "⚠️  Warning: Stale data threshold may not be set correctly"
+          # Verify mergeWeatherDataWithFallback function exists in staleness.php
+          if ! grep -q "function mergeWeatherDataWithFallback" lib/weather/staleness.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing from lib/weather/staleness.php!"
+            exit 1
           fi
           
-          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" api/weather.php; then
+          # Verify functions are being called in api/weather.php
+          if ! grep -q "nullStaleFieldsBySource" api/weather.php; then
+            echo "❌ CRITICAL: nullStaleFieldsBySource not being used in api/weather.php!"
+            exit 1
+          fi
+          
+          if ! grep -q "mergeWeatherDataWithFallback" api/weather.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback not being used in api/weather.php!"
+            exit 1
+          fi
+          
+          # MAX_STALE_HOURS is defined in lib/constants.php, check there or usage in api/weather.php
+          if ! grep -q "MAX_STALE_HOURS" lib/constants.php api/weather.php 2>/dev/null; then
+            echo "⚠️  Warning: Stale data threshold (MAX_STALE_HOURS) may not be set correctly"
+          fi
+          
+          # Daily tracking values preservation is in lib/weather/staleness.php
+          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" lib/weather/staleness.php api/weather.php 2>/dev/null; then
             echo "⚠️  Warning: Daily tracking values preservation may be missing"
           fi
           
-          if ! grep -q "wdir.*VRB\|'VRB'" api/weather.php; then
+          # VRB handling is in lib/weather/adapter/metar-v1.php
+          if ! grep -q "VRB" lib/weather/adapter/metar-v1.php api/weather.php 2>/dev/null; then
             echo "⚠️  Warning: VRB (variable wind direction) handling may be missing"
           fi
           
@@ -126,15 +148,28 @@ jobs:
       
       - name: Validate Flight Category Logic
         run: |
-          if ! grep -q "function calculateFlightCategory" api/weather.php; then
-            echo "❌ CRITICAL: calculateFlightCategory function missing!"
+          # Check that calculator.php is required (functions moved to library)
+          if ! grep -q "require.*calculator\.php\|include.*calculator\.php" api/weather.php; then
+            echo "❌ CRITICAL: lib/weather/calculator.php not required in api/weather.php!"
+            exit 1
+          fi
+          
+          # Verify calculateFlightCategory function exists in calculator.php
+          if ! grep -q "function calculateFlightCategory" lib/weather/calculator.php; then
+            echo "❌ CRITICAL: calculateFlightCategory function missing from lib/weather/calculator.php!"
+            exit 1
+          fi
+          
+          # Verify function is being called in api/weather.php
+          if ! grep -q "calculateFlightCategory" api/weather.php; then
+            echo "❌ CRITICAL: calculateFlightCategory not being used in api/weather.php!"
             exit 1
           fi
           
           categories=("LIFR" "IFR" "MVFR" "VFR")
           for category in "${categories[@]}"; do
-            if ! grep -q "return '$category'" api/weather.php; then
-              echo "⚠️  Warning: Flight category $category may not be handled"
+            if ! grep -q "return '$category'" lib/weather/calculator.php; then
+              echo "⚠️  Warning: Flight category $category may not be handled in lib/weather/calculator.php"
             fi
           done
           
@@ -163,7 +198,8 @@ jobs:
           )
           
           for func in "${critical_functions[@]}"; do
-            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php 2>/dev/null; then
+            # Check in all relevant files including library files where functions have been moved
+            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php lib/weather/calculator.php lib/weather/staleness.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
               exit 1
             fi
