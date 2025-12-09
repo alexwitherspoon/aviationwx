@@ -90,15 +90,18 @@ jobs:
             exit 1
           fi
           
-          if ! grep -q "MAX_STALE_HOURS\|maxStaleHours.*3" api/weather.php; then
-            echo "⚠️  Warning: Stale data threshold may not be set correctly"
+          # MAX_STALE_HOURS is defined in lib/constants.php, check there or usage in api/weather.php
+          if ! grep -q "MAX_STALE_HOURS" lib/constants.php api/weather.php 2>/dev/null; then
+            echo "⚠️  Warning: Stale data threshold (MAX_STALE_HOURS) may not be set correctly"
           fi
           
-          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" api/weather.php; then
+          # Daily tracking values preservation is in lib/weather/staleness.php
+          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" lib/weather/staleness.php api/weather.php 2>/dev/null; then
             echo "⚠️  Warning: Daily tracking values preservation may be missing"
           fi
           
-          if ! grep -q "wdir.*VRB\|'VRB'" api/weather.php; then
+          # VRB handling is in lib/weather/adapter/metar-v1.php
+          if ! grep -q "VRB" lib/weather/adapter/metar-v1.php api/weather.php 2>/dev/null; then
             echo "⚠️  Warning: VRB (variable wind direction) handling may be missing"
           fi
           
@@ -195,7 +198,8 @@ jobs:
           )
           
           for func in "${critical_functions[@]}"; do
-            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php 2>/dev/null; then
+            # Check in all relevant files including library files where functions have been moved
+            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php lib/weather/calculator.php lib/weather/staleness.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
               exit 1
             fi
