@@ -55,6 +55,7 @@ if (!$isAirportRequest) {
     if (preg_match($pattern, $host, $matches)) {
         $isAirportRequest = true;
         $rawAirportIdentifier = $matches[1];
+        // TODO: Remove debug logging after fixing redirect issue
         error_log("Subdomain extracted via pattern: host='$host', baseDomain='$baseDomain', identifier='$rawAirportIdentifier'");
     } else {
         // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
@@ -65,6 +66,7 @@ if (!$isAirportRequest) {
             if (!in_array($potentialId, ['www', 'status', 'aviationwx'])) {
                 $isAirportRequest = true;
                 $rawAirportIdentifier = $potentialId;
+                // TODO: Remove debug logging after fixing redirect issue
                 error_log("Subdomain extracted via fallback: host='$host', identifier='$rawAirportIdentifier'");
             }
         }
@@ -88,6 +90,7 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
     if (isset($config['airports'][$rawAirportIdentifier])) {
         $airport = $config['airports'][$rawAirportIdentifier];
         $airportId = $rawAirportIdentifier;
+        // TODO: Remove debug logging after fixing redirect issue
         error_log("Airport found via direct lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
     } else {
         // Try lookup by identifier (ICAO, IATA, FAA)
@@ -95,8 +98,10 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         if ($result !== null && isset($result['airport']) && isset($result['airportId'])) {
             $airport = $result['airport'];
             $airportId = $result['airportId'];
+            // TODO: Remove debug logging after fixing redirect issue
             error_log("Airport found via identifier lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
         } else {
+            // TODO: Remove debug logging after fixing redirect issue
             error_log("Airport NOT found: identifier='$rawAirportIdentifier'");
         }
     }
@@ -109,7 +114,7 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         $requestedIdentifier = strtoupper(trim($rawAirportIdentifier));
         $primaryIdentifierUpper = strtoupper(trim($primaryIdentifier));
         
-        // Debug logging (remove after debugging)
+        // TODO: Remove debug logging after fixing redirect issue
         error_log(sprintf(
             'Redirect check: requested="%s", primary="%s", airportId="%s", icao=%s, iata=%s, match=%s',
             $requestedIdentifier,
