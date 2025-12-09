@@ -9,7 +9,7 @@ on:
 
 # Prevent concurrent runs - cancel old runs when new commit pushed
 concurrency:
-  group: qa-tests-${{ github.ref }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
+  group: qa-tests-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 permissions:
