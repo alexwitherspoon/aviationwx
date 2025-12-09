@@ -67,14 +67,37 @@ config_ready=false
 
 while [ $elapsed_phase2 -lt $phase2_timeout ]; do
     # Check if weather API returns success (indicates config is loaded)
-    if curl -f -s --max-time 5 "${BASE_URL}/api/weather.php?airport=kspb" 2>/dev/null | grep -q '"success"'; then
-        echo "✓ Configuration loaded and API responding after ${elapsed_phase2}s (total: $((elapsed + elapsed_phase2))s)"
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "✅ Service is ready"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        config_ready=true
-        exit 0
+    response=$(curl -f -s --max-time 5 "${BASE_URL}/api/weather.php?airport=kspb" 2>/dev/null)
+    curl_exit=$?
+    
+    if [ $curl_exit -eq 0 ] && [ -n "$response" ]; then
+        # Check for success:true (ideal case)
+        if echo "$response" | grep -qE '"success"\s*:\s*true'; then
+            echo "✓ Configuration loaded and API responding after ${elapsed_phase2}s (total: $((elapsed + elapsed_phase2))s)"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "✅ Service is ready"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            config_ready=true
+            exit 0
+        fi
+        
+        # Check if we get a JSON response with an error about weather fetch
+        # This indicates config IS loaded (otherwise we'd get "Airport not found" or "Config not found")
+        # Errors like "Unable to fetch weather data" mean config loaded, just weather fetch failed
+        if echo "$response" | grep -qE '"success"\s*:\s*false'; then
+            error_msg=$(echo "$response" | grep -oE '"error"\s*:\s*"[^"]*"' | head -1 || echo "")
+            # If error mentions weather/fetch but NOT config/not found, config is loaded
+            if echo "$error_msg" | grep -qiE "(weather|fetch|Unable)" && ! echo "$error_msg" | grep -qiE "(config|not found|Invalid airport|Airport not found)"; then
+                echo "✓ Configuration loaded (API responding - weather fetch error acceptable in test mode) after ${elapsed_phase2}s (total: $((elapsed + elapsed_phase2))s)"
+                echo ""
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "✅ Service is ready (config loaded, weather fetch may fail in test mode)"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                config_ready=true
+                exit 0
+            fi
+        fi
     fi
     
     # Small wait before retry
