@@ -485,6 +485,105 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             </div>
         </section>
 
+        <!-- Partnerships & Credits -->
+        <?php
+        // Collect unique weather data sources by name
+        $weatherSources = [];
+        
+        // Add primary weather source
+        switch ($airport['weather_source']['type']) {
+            case 'tempest':
+                $weatherSources[] = [
+                    'name' => 'Tempest Weather',
+                    'url' => 'https://tempestwx.com'
+                ];
+                break;
+            case 'ambient':
+                $weatherSources[] = [
+                    'name' => 'Ambient Weather',
+                    'url' => 'https://ambientweather.net'
+                ];
+                break;
+            case 'weatherlink':
+                $weatherSources[] = [
+                    'name' => 'Davis WeatherLink',
+                    'url' => 'https://weatherlink.com'
+                ];
+                break;
+            case 'metar':
+                $weatherSources[] = [
+                    'name' => 'Aviation Weather',
+                    'url' => 'https://aviationweather.gov'
+                ];
+                break;
+        }
+        
+        // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
+        // Only add if not already using METAR as primary source AND metar_station is configured
+        $hasAviationWeather = false;
+        foreach ($weatherSources as $source) {
+            if ($source['name'] === 'Aviation Weather') {
+                $hasAviationWeather = true;
+                break;
+            }
+        }
+        
+        if (!$hasAviationWeather && 
+            in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink']) &&
+            isset($airport['metar_station']) && !empty($airport['metar_station'])) {
+            $weatherSources[] = [
+                'name' => 'Aviation Weather',
+                'url' => 'https://aviationweather.gov'
+            ];
+        }
+        
+        // Get partners from new partners[] array
+        $partners = $airport['partners'] ?? [];
+        
+        // Only show section if we have partners or data sources
+        if (!empty($partners) || !empty($weatherSources)):
+        ?>
+        <section class="partnerships-section">
+            <div class="partnerships-container">
+                <?php if (!empty($partners)): ?>
+                <div class="partnerships-content">
+                    <h3 class="partnerships-heading">Support These Partners</h3>
+                    <p class="partnerships-subheading">These organizations make this airport service possible. Click to visit and show your support.</p>
+                    <div class="partners-grid">
+                        <?php foreach ($partners as $partner): ?>
+                        <div class="partner-item">
+                            <a href="<?= htmlspecialchars($partner['url']) ?>" target="_blank" rel="noopener" class="partner-link" title="<?= htmlspecialchars($partner['description'] ?? $partner['name']) ?>">
+                                <?php if (!empty($partner['logo'])): ?>
+                                <img src="/api/partner-logo.php?url=<?= urlencode($partner['logo']) ?>" 
+                                     alt="<?= htmlspecialchars($partner['name']) ?> logo" 
+                                     class="partner-logo"
+                                     onerror="this.style.display='none';">
+                                <?php endif; ?>
+                                <span class="partner-name"><?= htmlspecialchars($partner['name']) ?></span>
+                            </a>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($weatherSources)): ?>
+                <div class="data-sources-content">
+                    <div class="data-sources-list">
+                        <span class="data-sources-label">Weather data at this airport from </span>
+                        <?php foreach ($weatherSources as $index => $source): ?>
+                        <a href="<?= htmlspecialchars($source['url']) ?>" target="_blank" rel="noopener" class="data-source-link">
+                            <?= htmlspecialchars($source['name']) ?>
+                        </a>
+                        <?php if ($index < count($weatherSources) - 1): ?><span class="data-source-separator"> & </span><?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </section>
+        <?php endif; ?>
+
         <!-- Footer -->
         <footer class="footer">
             <p>
@@ -492,60 +591,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
                 <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
                 <a href="https://status.aviationwx.org">Status</a>
-            </p>
-            <p>
-                <?php
-                // Collect unique weather data sources by name
-                $weatherSourcesNames = [];
-                
-                // Add primary weather source
-                switch ($airport['weather_source']['type']) {
-                    case 'tempest':
-                        $weatherSourcesNames['Tempest Weather'] = '<a href="https://tempestwx.com" target="_blank" rel="noopener">Tempest Weather</a>';
-                        break;
-                    case 'ambient':
-                        $weatherSourcesNames['Ambient Weather'] = '<a href="https://ambientweather.net" target="_blank" rel="noopener">Ambient Weather</a>';
-                        break;
-                    case 'weatherlink':
-                        $weatherSourcesNames['Davis WeatherLink'] = '<a href="https://weatherlink.com" target="_blank" rel="noopener">Davis WeatherLink</a>';
-                        break;
-                    case 'metar':
-                        $weatherSourcesNames['Aviation Weather'] = '<a href="https://aviationweather.gov" target="_blank" rel="noopener">Aviation Weather</a>';
-                        break;
-                }
-                
-                // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
-                // Only add if not already using METAR as primary source AND metar_station is configured
-                if (!isset($weatherSourcesNames['Aviation Weather']) && 
-                    in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink']) &&
-                    isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-                    $weatherSourcesNames['Aviation Weather'] = '<a href="https://aviationweather.gov" target="_blank" rel="noopener">Aviation Weather</a>';
-                }
-                
-                // Collect unique webcam partners
-                $webcamPartners = [];
-                if (!empty($airport['webcams'])) {
-                    foreach ($airport['webcams'] as $cam) {
-                        if (isset($cam['partner_name'])) {
-                            $key = $cam['partner_name'];
-                            // Only add once (deduplicate)
-                            if (!isset($webcamPartners[$key])) {
-                                if (isset($cam['partner_link'])) {
-                                    $webcamPartners[$key] = '<a href="' . htmlspecialchars($cam['partner_link']) . '" target="_blank" rel="noopener">' . htmlspecialchars($cam['partner_name']) . '</a>';
-                                } else {
-                                    $webcamPartners[$key] = htmlspecialchars($cam['partner_name']);
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Format footer credits
-                echo 'Weather data from ' . implode(' & ', $weatherSourcesNames);
-                if (!empty($webcamPartners)) {
-                    echo ' | Webcams in Partnership with ' . implode(' & ', $webcamPartners);
-                }
-                ?>
             </p>
         </footer>
     </div>
