@@ -569,18 +569,22 @@ function findAirportByIdentifier(string $identifier, ?array $config = null): ?ar
         }
     }
     
-    // 3. Fallback: Check cached mapping files (IATA->ICAO, FAA->ICAO) for airports not in config
-    // This allows redirects to work for airports that exist but aren't configured yet
+    // 3. Fallback: Check cached mapping files (IATA->ICAO, FAA->ICAO) for airports not in airports.json
+    // IMPORTANT: This creates a minimal entry ONLY for redirect purposes.
+    // Minimal entries are NOT the same as airports in airports.json and will show 404.
+    // This allows redirects (e.g., pdx -> kpdx) to work even if the airport isn't configured yet.
     $icaoFromMapping = getIcaoFromIdentifier($identifierUpper);
     
     // If we found an ICAO code from the mapping, create a minimal airport entry
+    // This minimal entry only has ICAO/IATA/FAA codes - no name or other required fields.
+    // The calling code must check if it's minimal and show 404 instead of a dashboard.
     if ($icaoFromMapping !== null) {
         $icaoLower = strtolower($icaoFromMapping);
         // Use ICAO code as airport ID (lowercase)
         $airportId = $icaoLower;
         
-        // Create minimal airport entry with just the ICAO code
-        // This allows redirect logic to work even if airport isn't fully configured
+        // Create minimal airport entry with just identifier codes
+        // This allows redirect logic to work, but the airport will show 404 (not a dashboard)
         $minimalAirport = [
             'icao' => $icaoFromMapping,
         ];

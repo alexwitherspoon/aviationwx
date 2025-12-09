@@ -55,8 +55,6 @@ if (!$isAirportRequest) {
     if (preg_match($pattern, $host, $matches)) {
         $isAirportRequest = true;
         $rawAirportIdentifier = $matches[1];
-        // TODO: Remove debug logging after fixing redirect issue
-        error_log("Subdomain extracted via pattern: host='$host', baseDomain='$baseDomain', identifier='$rawAirportIdentifier'");
     } else {
         // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
         $hostParts = explode('.', $host);
@@ -66,8 +64,6 @@ if (!$isAirportRequest) {
             if (!in_array($potentialId, ['www', 'status', 'aviationwx'])) {
                 $isAirportRequest = true;
                 $rawAirportIdentifier = $potentialId;
-                // TODO: Remove debug logging after fixing redirect issue
-                error_log("Subdomain extracted via fallback: host='$host', identifier='$rawAirportIdentifier'");
             }
         }
     }
@@ -90,49 +86,21 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
     if (isset($config['airports'][$rawAirportIdentifier])) {
         $airport = $config['airports'][$rawAirportIdentifier];
         $airportId = $rawAirportIdentifier;
-        // TODO: Remove debug logging after fixing redirect issue
-        error_log("Airport found via direct lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
     } else {
         // Try lookup by identifier (ICAO, IATA, FAA)
+        // Note: findAirportByIdentifier() may return a minimal entry from cached mappings
+        // if the airport isn't in airports.json. These minimal entries are only used for redirects.
         $result = findAirportByIdentifier($rawAirportIdentifier, $config);
         if ($result !== null && isset($result['airport']) && isset($result['airportId'])) {
             $airport = $result['airport'];
             $airportId = $result['airportId'];
-            // TODO: Remove debug logging after fixing redirect issue
-            error_log("Airport found via identifier lookup: identifier='$rawAirportIdentifier', airportId='$airportId'");
-        } else {
-            // TODO: Remove debug logging after fixing redirect issue
-            error_log("Airport NOT found: identifier='$rawAirportIdentifier' (searched by ICAO/IATA/FAA)");
-            // Additional debug: check if identifier exists in any airport config
-            $identifierUpper = strtoupper($rawAirportIdentifier);
-            $foundInConfig = false;
-            foreach ($config['airports'] as $id => $apt) {
-                if (isset($apt['icao']) && strtoupper(trim($apt['icao'])) === $identifierUpper) {
-                    // TODO: Remove debug logging after fixing redirect issue
-                    error_log("DEBUG: Found matching ICAO '$identifierUpper' in airport '$id'");
-                    $foundInConfig = true;
-                }
-                if (isset($apt['iata']) && strtoupper(trim($apt['iata'])) === $identifierUpper) {
-                    // TODO: Remove debug logging after fixing redirect issue
-                    error_log("DEBUG: Found matching IATA '$identifierUpper' in airport '$id'");
-                    $foundInConfig = true;
-                }
-                if (isset($apt['faa']) && strtoupper(trim($apt['faa'])) === $identifierUpper) {
-                    // TODO: Remove debug logging after fixing redirect issue
-                    error_log("DEBUG: Found matching FAA '$identifierUpper' in airport '$id'");
-                    $foundInConfig = true;
-                }
-            }
-            if (!$foundInConfig) {
-                // TODO: Remove debug logging after fixing redirect issue
-                error_log("DEBUG: No matching ICAO/IATA/FAA found for '$identifierUpper' in any airport config");
-            }
         }
     }
     
     if ($airport !== null && $airportId !== null) {
-        // Check if this is a minimal airport entry (found via cached mapping but not in config)
-        // Minimal entries only have ICAO/IATA/FAA codes, no name or other required fields
+        // Check if this is a minimal airport entry (found via cached mapping but not in airports.json)
+        // Minimal entries only have ICAO/IATA/FAA codes from cached mapping files.
+        // They are NOT the same as airports in airports.json and should show 404, not a dashboard.
         $isMinimalEntry = !isset($airport['name']) || empty($airport['name']);
         
         // Get the primary identifier for this airport (ICAO > IATA > FAA > Airport ID)
@@ -142,24 +110,14 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         $requestedIdentifier = strtoupper(trim($rawAirportIdentifier));
         $primaryIdentifierUpper = strtoupper(trim($primaryIdentifier));
         
-        // TODO: Remove debug logging after fixing redirect issue
-        error_log(sprintf(
-            'Redirect check: requested="%s", primary="%s", airportId="%s", icao=%s, iata=%s, match=%s, minimal=%s',
-            $requestedIdentifier,
-            $primaryIdentifierUpper,
-            $airportId,
-            isset($airport['icao']) ? $airport['icao'] : 'null',
-            isset($airport['iata']) ? $airport['iata'] : 'null',
-            $requestedIdentifier === $primaryIdentifierUpper ? 'YES' : 'NO',
-            $isMinimalEntry ? 'YES' : 'NO'
-        ));
-        
         // Redirect if the requested identifier doesn't match the primary identifier.
         // This ensures we redirect to the most preferred identifier (ICAO > IATA > FAA > Airport ID).
         // Examples:
         // - pdx -> kpdx (IATA/airport ID -> ICAO)
         // - kpdx -> kpdx (no redirect, already using primary)
         // - spb -> kspb (IATA -> ICAO)
+        // Note: This redirect works even for minimal entries (from cached mappings),
+        // allowing proper canonical URLs. After redirect, minimal entries will show 404.
         if ($requestedIdentifier !== $primaryIdentifierUpper) {
             // Determine protocol (HTTPS preferred)
             $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -184,7 +142,9 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
             exit;
         }
         
-        // If this is a minimal entry (not in config), show 404 page instead of dashboard
+        // If this is a minimal entry (found via cached mapping but not in airports.json),
+        // show 404 page instead of dashboard. Cached mappings are only for redirects,
+        // not for treating airports as if they're configured in airports.json.
         if ($isMinimalEntry) {
             http_response_code(404);
             // Make airport identifier available to 404 page (use primary identifier)
