@@ -81,10 +81,13 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         // Normalize existing entry to structured format {value, ts}
         $existing = $peakGusts[$dateKey][$airportId] ?? null;
         if (is_array($existing)) {
-            $existingValue = $existing['value'] ?? 0;
+            $existingValue = is_numeric($existing['value']) ? (float)$existing['value'] : 0;
         } else {
             $existingValue = is_numeric($existing) ? (float)$existing : 0;
         }
+
+        // Ensure currentGust is properly cast to float for accurate comparison
+        $currentGustFloat = is_numeric($currentGust) ? (float)$currentGust : 0;
 
         // Use observation timestamp if provided, otherwise fall back to current time
         $timestamp = $obsTimestamp !== null ? $obsTimestamp : time();
@@ -92,19 +95,37 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         // If no entry for today (new day) or current gust is higher, update value and timestamp
         // This ensures we never use yesterday's data for today
         if (!isset($peakGusts[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGust, 'obs_ts' => $timestamp], 'app');
+            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGustFloat, 'obs_ts' => $timestamp], 'app');
             $peakGusts[$dateKey][$airportId] = [
-                'value' => $currentGust,
+                'value' => $currentGustFloat,
                 'ts' => $timestamp,
             ];
-        } elseif ($currentGust > $existingValue) {
+        } elseif ($currentGustFloat > $existingValue) {
             // Update if current gust is higher (only for today's entry)
+            // Use strict float comparison to prevent type coercion issues
+            aviationwx_log('info', 'updating peak gust with higher value', [
+                'airport' => $airportId,
+                'date_key' => $dateKey,
+                'old_peak' => $existingValue,
+                'new_peak' => $currentGustFloat,
+                'obs_ts' => $timestamp
+            ], 'app');
             $peakGusts[$dateKey][$airportId] = [
-                'value' => $currentGust,
+                'value' => $currentGustFloat,
                 'ts' => $timestamp,
             ];
+        } else {
+            // If current gust is not higher, preserve existing value and timestamp
+            // Log this to help debug any issues where peak gust might be incorrectly overwritten
+            if ($currentGustFloat < $existingValue) {
+                aviationwx_log('debug', 'preserving peak gust (current lower than existing)', [
+                    'airport' => $airportId,
+                    'date_key' => $dateKey,
+                    'existing_peak' => $existingValue,
+                    'current_gust' => $currentGustFloat
+                ], 'app');
+            }
         }
-        // If current gust is not higher, preserve existing value and timestamp
         
         $jsonData = json_encode($peakGusts);
         if ($jsonData !== false) {
@@ -256,30 +277,59 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
         // Use observation timestamp if provided, otherwise fall back to current time
         $obsTs = $obsTimestamp !== null ? $obsTimestamp : time();
         
+        // Ensure currentTemp is properly cast to float for accurate comparison
+        $currentTempFloat = is_numeric($currentTemp) ? (float)$currentTemp : 0;
+        
         // Initialize today's entry if it doesn't exist (always start fresh for new day)
         // This ensures we never use yesterday's data for today
         if (!isset($tempExtremes[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTemp, 'obs_ts' => $obsTs], 'app');
+            aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTempFloat, 'obs_ts' => $obsTs], 'app');
             $tempExtremes[$dateKey][$airportId] = [
-                'high' => $currentTemp,
-                'low' => $currentTemp,
+                'high' => $currentTempFloat,
+                'low' => $currentTempFloat,
                 'high_ts' => $obsTs,  // Observation timestamp (when weather was actually observed)
                 'low_ts' => $obsTs    // Observation timestamp (when weather was actually observed)
             ];
         } else {
+            // Normalize stored values to float for accurate comparison
+            $storedHigh = is_numeric($tempExtremes[$dateKey][$airportId]['high']) ? (float)$tempExtremes[$dateKey][$airportId]['high'] : $currentTempFloat;
+            $storedLow = is_numeric($tempExtremes[$dateKey][$airportId]['low']) ? (float)$tempExtremes[$dateKey][$airportId]['low'] : $currentTempFloat;
+            
             // Update high if current is higher
-            if ($currentTemp > $tempExtremes[$dateKey][$airportId]['high']) {
-                $tempExtremes[$dateKey][$airportId]['high'] = $currentTemp;
+            if ($currentTempFloat > $storedHigh) {
+                aviationwx_log('info', 'updating temp high with higher value', [
+                    'airport' => $airportId,
+                    'date_key' => $dateKey,
+                    'old_high' => $storedHigh,
+                    'new_high' => $currentTempFloat,
+                    'obs_ts' => $obsTs
+                ], 'app');
+                $tempExtremes[$dateKey][$airportId]['high'] = $currentTempFloat;
                 $tempExtremes[$dateKey][$airportId]['high_ts'] = $obsTs;
             }
-            if ($currentTemp < $tempExtremes[$dateKey][$airportId]['low']) {
-                $tempExtremes[$dateKey][$airportId]['low'] = $currentTemp;
+            // Update low if current is lower
+            if ($currentTempFloat < $storedLow) {
+                aviationwx_log('info', 'updating temp low with lower value', [
+                    'airport' => $airportId,
+                    'date_key' => $dateKey,
+                    'old_low' => $storedLow,
+                    'new_low' => $currentTempFloat,
+                    'obs_ts' => $obsTs
+                ], 'app');
+                $tempExtremes[$dateKey][$airportId]['low'] = $currentTempFloat;
                 $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs;
             }
             // If same low temperature observed at earlier time, update timestamp to earliest observation
-            elseif ($currentTemp == $tempExtremes[$dateKey][$airportId]['low']) {
+            elseif ($currentTempFloat == $storedLow) {
                 $existingLowTs = $tempExtremes[$dateKey][$airportId]['low_ts'] ?? $obsTs;
                 if ($obsTs < $existingLowTs) {
+                    aviationwx_log('debug', 'updating temp low timestamp to earlier observation', [
+                        'airport' => $airportId,
+                        'date_key' => $dateKey,
+                        'temp' => $currentTempFloat,
+                        'old_ts' => $existingLowTs,
+                        'new_ts' => $obsTs
+                    ], 'app');
                     $tempExtremes[$dateKey][$airportId]['low_ts'] = $obsTs;
                 }
             }
@@ -318,11 +368,14 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     // Fallback to UTC if airport not provided (backward compatibility)
         $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
     
+    // Ensure currentTemp is cast to float for consistency
+    $currentTempFloat = is_numeric($currentTemp) ? (float)$currentTemp : 0;
+    
     if (!file_exists($file)) {
         $now = time();
         return [
-            'high' => $currentTemp, 
-            'low' => $currentTemp,
+            'high' => $currentTempFloat, 
+            'low' => $currentTempFloat,
             'high_ts' => $now,
             'low_ts' => $now
         ];
@@ -332,8 +385,8 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     if ($content === false) {
         $now = time();
         return [
-            'high' => $currentTemp, 
-            'low' => $currentTemp,
+            'high' => $currentTempFloat, 
+            'low' => $currentTempFloat,
             'high_ts' => $now,
             'low_ts' => $now
         ];
@@ -354,8 +407,8 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
         // Return current temp as today's value
         $now = time();
         return [
-            'high' => $currentTemp, 
-            'low' => $currentTemp,
+            'high' => $currentTempFloat, 
+            'low' => $currentTempFloat,
             'high_ts' => $now,
             'low_ts' => $now
         ];
@@ -367,10 +420,14 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     if (isset($tempExtremes[$dateKey][$airportId])) {
         $stored = $tempExtremes[$dateKey][$airportId];
         
-        // Return stored values without modification (this is a getter function)
+        // Return stored values, ensuring they are cast to float for consistency
+        // This is a getter function, but we normalize types to prevent downstream issues
+        $storedHigh = isset($stored['high']) && is_numeric($stored['high']) ? (float)$stored['high'] : $currentTempFloat;
+        $storedLow = isset($stored['low']) && is_numeric($stored['low']) ? (float)$stored['low'] : $currentTempFloat;
+        
         return [
-            'high' => $stored['high'] ?? $currentTemp,
-            'low' => $stored['low'] ?? $currentTemp,
+            'high' => $storedHigh,
+            'low' => $storedLow,
             'high_ts' => $stored['high_ts'] ?? time(),
             'low_ts' => $stored['low_ts'] ?? time()
         ];
@@ -379,8 +436,8 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     // No entry for today - return current temp as today's value
     $now = time();
     return [
-        'high' => $currentTemp, 
-        'low' => $currentTemp,
+        'high' => $currentTempFloat, 
+        'low' => $currentTempFloat,
         'high_ts' => $now,
         'low_ts' => $now
     ];
