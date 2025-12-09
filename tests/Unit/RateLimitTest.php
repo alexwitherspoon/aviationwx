@@ -201,5 +201,161 @@ class RateLimitTest extends TestCase
         $this->assertLessThanOrEqual(10, $result1['remaining'], 'Remaining1 should reflect limit 10');
         $this->assertLessThanOrEqual(100, $result2['remaining'], 'Remaining2 should reflect limit 100');
     }
+    
+    /**
+     * Test checkRateLimitFileBased - Type coercion: string values from JSON should be handled correctly
+     * This tests the fix for type coercion bugs where string comparisons could fail
+     */
+    public function testCheckRateLimitFileBased_TypeCoercionFromJson()
+    {
+        $key = 'test_type_coercion_' . uniqid();
+        $ip = '127.0.0.1';
+        $maxRequests = 5;
+        $windowSeconds = 60;
+        
+        // Create a rate limit file with string values (simulating JSON decode issue)
+        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $now = time();
+        $data = [
+            'count' => '3', // String instead of int
+            'reset' => (string)($now + $windowSeconds) // String instead of int
+        ];
+        file_put_contents($rateLimitFile, json_encode($data), LOCK_EX);
+        clearstatcache();
+        
+        // Should handle string values correctly and still enforce limit
+        $result1 = checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip);
+        $this->assertTrue($result1, 'Should allow request when count is below limit (even with string type)');
+        
+        // Make more requests to hit limit
+        checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip);
+        $result2 = checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip);
+        
+        // Should eventually block
+        $this->assertFalse($result2, 'Should block when limit exceeded, even with string type coercion');
+    }
+    
+    /**
+     * Test checkRateLimitFileBased - Window expiration with string reset time
+     */
+    public function testCheckRateLimitFileBased_WindowExpirationWithStringType()
+    {
+        $key = 'test_window_string_' . uniqid();
+        $ip = '127.0.0.1';
+        $maxRequests = 3;
+        $windowSeconds = 2;
+        
+        // Create file with expired reset time as string
+        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $expiredTime = time() - 10; // Expired 10 seconds ago
+        $data = [
+            'count' => '3', // String
+            'reset' => (string)$expiredTime // String, expired
+        ];
+        file_put_contents($rateLimitFile, json_encode($data), LOCK_EX);
+        clearstatcache();
+        
+        // Should reset window and allow request
+        $result = checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip);
+        $this->assertTrue($result, 'Should reset window when expired, even with string reset time');
+    }
+    
+    /**
+     * Test getRateLimitRemaining - Type coercion: string values should be handled correctly
+     * Note: This test only works when APCu is not available (falls back to file-based)
+     */
+    public function testGetRateLimitRemaining_TypeCoercionFromJson()
+    {
+        // Skip if APCu is available (would use APCu instead of file-based)
+        if (function_exists('apcu_fetch')) {
+            $this->markTestSkipped('APCu available - test requires file-based fallback');
+        }
+        
+        // Set IP in $_SERVER so getRateLimitRemaining uses the correct IP
+        $originalIp = $_SERVER['REMOTE_ADDR'] ?? null;
+        $ip = '127.0.0.1';
+        $_SERVER['REMOTE_ADDR'] = $ip;
+        
+        try {
+            $key = 'test_remaining_string_' . uniqid();
+            $maxRequests = 10;
+            $windowSeconds = 60;
+            
+            // Create file with string values
+            $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+            $now = time();
+            $data = [
+                'count' => '7', // String
+                'reset' => (string)($now + $windowSeconds) // String
+            ];
+            file_put_contents($rateLimitFile, json_encode($data), LOCK_EX);
+            clearstatcache();
+            
+            // Should correctly calculate remaining
+            $result = getRateLimitRemaining($key, $maxRequests, $windowSeconds);
+            $this->assertIsArray($result);
+            $this->assertIsInt($result['remaining'], 'Remaining should be integer');
+            $this->assertIsInt($result['reset'], 'Reset should be integer');
+            $this->assertEquals(3, $result['remaining'], 'Should calculate remaining correctly: 10 - 7 = 3');
+            $this->assertGreaterThan($now, $result['reset'], 'Reset should be in the future');
+        } finally {
+            // Restore original IP
+            if ($originalIp !== null) {
+                $_SERVER['REMOTE_ADDR'] = $originalIp;
+            } else {
+                unset($_SERVER['REMOTE_ADDR']);
+            }
+        }
+    }
+    
+    /**
+     * Test checkRateLimitFileBasedFallback - Type coercion handling
+     */
+    public function testCheckRateLimitFileBasedFallback_TypeCoercion()
+    {
+        $key = 'test_fallback_string_' . uniqid();
+        $ip = '127.0.0.1';
+        $maxRequests = 5;
+        $windowSeconds = 60;
+        
+        // Create file with string values
+        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $now = time();
+        $data = [
+            'count' => '5', // String, at limit
+            'reset' => (string)($now + $windowSeconds) // String
+        ];
+        file_put_contents($rateLimitFile, json_encode($data), LOCK_EX);
+        clearstatcache();
+        
+        // Fallback function should handle string types correctly
+        $result = checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip, $rateLimitFile, $now);
+        $this->assertFalse($result, 'Should block when at limit, even with string count');
+    }
+    
+    /**
+     * Test corrupted JSON file handling
+     */
+    public function testCheckRateLimitFileBased_CorruptedJsonFile()
+    {
+        $key = 'test_corrupted_' . uniqid();
+        $ip = '127.0.0.1';
+        $maxRequests = 5;
+        $windowSeconds = 60;
+        
+        // Create corrupted JSON file
+        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        file_put_contents($rateLimitFile, 'invalid json {', LOCK_EX);
+        clearstatcache();
+        
+        // Should handle gracefully and start fresh
+        $result = checkRateLimitFileBased($key, $maxRequests, $windowSeconds, $ip);
+        $this->assertTrue($result, 'Should handle corrupted JSON and start fresh');
+        
+        // Verify file is now valid JSON
+        $content = file_get_contents($rateLimitFile);
+        $decoded = json_decode($content, true);
+        $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
+    }
 }
 

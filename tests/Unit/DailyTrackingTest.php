@@ -526,5 +526,203 @@ class DailyTrackingTest extends TestCase
             $this->assertNotEquals($sunrise1, $sunrise2);
         }
     }
+    
+    /**
+     * Test updatePeakGust - Type coercion: string values from JSON should be handled correctly
+     * This tests the fix for the bug where slower wind speeds could overwrite higher peak gusts
+     */
+    public function testUpdatePeakGust_TypeCoercionFromJson()
+    {
+        $airportId = 'test_type_coercion_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        // Set initial peak gust
+        updatePeakGust($airportId, 15.0, $airport);
+        clearstatcache();
+        
+        // Manually corrupt the cache file to have string values (simulating JSON decode issue)
+        $cacheDir = getWeatherCacheDir();
+        $file = $cacheDir . '/peak_gusts.json';
+        $dateKey = getAirportDateKey($airport);
+        
+        $peakGusts = json_decode(file_get_contents($file), true);
+        // Simulate JSON storing numbers as strings
+        $peakGusts[$dateKey][$airportId]['value'] = '15'; // String instead of number
+        file_put_contents($file, json_encode($peakGusts), LOCK_EX);
+        clearstatcache();
+        
+        // Try to update with a lower value - should NOT overwrite
+        updatePeakGust($airportId, 10.0, $airport);
+        clearstatcache();
+        
+        $result = getPeakGust($airportId, 10.0, $airport);
+        $value = is_array($result) ? $result['value'] : $result;
+        
+        // Should still be 15 (or higher), not 10
+        $this->assertGreaterThanOrEqual(15.0, $value, 'Peak gust should not be overwritten with lower value, even with string type coercion');
+    }
+    
+    /**
+     * Test updatePeakGust - Type coercion: numeric string input should be handled correctly
+     */
+    public function testUpdatePeakGust_StringInputHandling()
+    {
+        $airportId = 'test_string_input_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        // Test with string input that represents a number
+        updatePeakGust($airportId, '15', $airport); // String input
+        clearstatcache();
+        
+        $result1 = getPeakGust($airportId, 0, $airport);
+        $value1 = is_array($result1) ? $result1['value'] : $result1;
+        $this->assertEquals(15.0, $value1, 'String "15" should be converted to float 15.0');
+        
+        // Higher numeric string should update
+        updatePeakGust($airportId, '20', $airport);
+        clearstatcache();
+        
+        $result2 = getPeakGust($airportId, 0, $airport);
+        $value2 = is_array($result2) ? $result2['value'] : $result2;
+        $this->assertEquals(20.0, $value2, 'String "20" should update peak to 20.0');
+        
+        // Lower numeric string should NOT update
+        updatePeakGust($airportId, '10', $airport);
+        clearstatcache();
+        
+        $result3 = getPeakGust($airportId, 0, $airport);
+        $value3 = is_array($result3) ? $result3['value'] : $result3;
+        $this->assertEquals(20.0, $value3, 'String "10" should NOT overwrite peak of 20.0');
+    }
+    
+    /**
+     * Test updateTempExtremes - Type coercion: string values from JSON should be handled correctly
+     */
+    public function testUpdateTempExtremes_TypeCoercionFromJson()
+    {
+        $airportId = 'test_temp_type_coercion_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        // Set initial temperature extremes
+        updateTempExtremes($airportId, 20.0, $airport);
+        clearstatcache();
+        
+        // Manually corrupt the cache file to have string values
+        $cacheDir = getWeatherCacheDir();
+        $file = $cacheDir . '/temp_extremes.json';
+        $dateKey = getAirportDateKey($airport);
+        
+        $tempExtremes = json_decode(file_get_contents($file), true);
+        // Simulate JSON storing numbers as strings
+        $tempExtremes[$dateKey][$airportId]['high'] = '20'; // String instead of number
+        $tempExtremes[$dateKey][$airportId]['low'] = '20'; // String instead of number
+        file_put_contents($file, json_encode($tempExtremes), LOCK_EX);
+        clearstatcache();
+        
+        // Try to update with a lower value - should update low but not high
+        updateTempExtremes($airportId, 15.0, $airport);
+        clearstatcache();
+        
+        $result = getTempExtremes($airportId, 15.0, $airport);
+        
+        // High should remain 20, low should be 15
+        $this->assertGreaterThanOrEqual(20.0, $result['high'], 'High temp should not be overwritten with lower value');
+        $this->assertEquals(15.0, $result['low'], 'Low temp should be updated to 15.0');
+    }
+    
+    /**
+     * Test updateTempExtremes - Type coercion: numeric string input should be handled correctly
+     */
+    public function testUpdateTempExtremes_StringInputHandling()
+    {
+        $airportId = 'test_temp_string_input_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        // Test with string input
+        updateTempExtremes($airportId, '20', $airport); // String input
+        clearstatcache();
+        
+        $result1 = getTempExtremes($airportId, 0, $airport);
+        $this->assertEquals(20.0, $result1['high'], 'String "20" should be converted to float 20.0');
+        $this->assertEquals(20.0, $result1['low'], 'String "20" should be converted to float 20.0');
+        
+        // Higher numeric string should update high
+        updateTempExtremes($airportId, '25', $airport);
+        clearstatcache();
+        
+        $result2 = getTempExtremes($airportId, 0, $airport);
+        $this->assertEquals(25.0, $result2['high'], 'String "25" should update high to 25.0');
+        $this->assertEquals(20.0, $result2['low'], 'Low should remain 20.0');
+        
+        // Lower numeric string should update low
+        updateTempExtremes($airportId, '15', $airport);
+        clearstatcache();
+        
+        $result3 = getTempExtremes($airportId, 0, $airport);
+        $this->assertEquals(25.0, $result3['high'], 'High should remain 25.0');
+        $this->assertEquals(15.0, $result3['low'], 'String "15" should update low to 15.0');
+    }
+    
+    /**
+     * Test cache file corruption handling - invalid JSON should be recreated
+     */
+    public function testPeakGust_CorruptedJsonFile()
+    {
+        $airportId = 'test_corrupted_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        $cacheDir = getWeatherCacheDir();
+        $file = $cacheDir . '/peak_gusts.json';
+        
+        // Create corrupted JSON file
+        file_put_contents($file, 'invalid json {', LOCK_EX);
+        clearstatcache();
+        
+        // Should handle gracefully and recreate file
+        updatePeakGust($airportId, 15.0, $airport);
+        clearstatcache();
+        
+        $result = getPeakGust($airportId, 15.0, $airport);
+        $value = is_array($result) ? $result['value'] : $result;
+        
+        // Should work after corruption is handled
+        $this->assertEquals(15.0, $value, 'Should handle corrupted JSON and recreate file');
+        
+        // Verify file is now valid JSON
+        $content = file_get_contents($file);
+        $decoded = json_decode($content, true);
+        $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
+    }
+    
+    /**
+     * Test cache file corruption handling for temp extremes
+     */
+    public function testTempExtremes_CorruptedJsonFile()
+    {
+        $airportId = 'test_temp_corrupted_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+        
+        $cacheDir = getWeatherCacheDir();
+        $file = $cacheDir . '/temp_extremes.json';
+        
+        // Create corrupted JSON file
+        file_put_contents($file, 'invalid json {', LOCK_EX);
+        clearstatcache();
+        
+        // Should handle gracefully and recreate file
+        updateTempExtremes($airportId, 20.0, $airport);
+        clearstatcache();
+        
+        $result = getTempExtremes($airportId, 20.0, $airport);
+        
+        // Should work after corruption is handled
+        $this->assertEquals(20.0, $result['high'], 'Should handle corrupted JSON and recreate file');
+        $this->assertEquals(20.0, $result['low'], 'Should handle corrupted JSON and recreate file');
+        
+        // Verify file is now valid JSON
+        $content = file_get_contents($file);
+        $decoded = json_decode($content, true);
+        $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
+    }
 }
 

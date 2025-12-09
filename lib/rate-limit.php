@@ -124,15 +124,21 @@ function checkRateLimitFileBased(string $key, int $maxRequests, int $windowSecon
         }
     }
     
+    // Normalize values from JSON to ensure proper type comparisons
+    // JSON may store numbers as strings, so we need to cast to int
+    $dataReset = isset($data['reset']) && is_numeric($data['reset']) ? (int)$data['reset'] : null;
+    $dataCount = isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : 0;
+    
     // Check if window expired
-    if (isset($data['reset']) && $now >= $data['reset']) {
+    if ($dataReset !== null && $now >= $dataReset) {
         $data = ['count' => 0, 'reset' => $now + $windowSeconds];
-    } elseif (!isset($data['reset'])) {
+    } elseif ($dataReset === null) {
         $data = ['count' => 0, 'reset' => $now + $windowSeconds];
     }
     
-    // Check if limit exceeded
-    if (($data['count'] ?? 0) >= $maxRequests) {
+    // Check if limit exceeded (use normalized count)
+    $currentCount = isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : $dataCount;
+    if ($currentCount >= $maxRequests) {
         @flock($fp, LOCK_UN);
         @fclose($fp);
         aviationwx_log('warning', 'rate limit exceeded (file-based)', [
@@ -144,8 +150,8 @@ function checkRateLimitFileBased(string $key, int $maxRequests, int $windowSecon
         return false;
     }
     
-    // Increment counter
-    $data['count'] = ($data['count'] ?? 0) + 1;
+    // Increment counter (ensure we're working with int)
+    $data['count'] = $currentCount + 1;
     if (!isset($data['reset'])) {
         $data['reset'] = $now + $windowSeconds;
     }
@@ -188,13 +194,19 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
         }
     }
     
-    if (isset($data['reset']) && $now >= $data['reset']) {
+    // Normalize values from JSON to ensure proper type comparisons
+    $dataReset = isset($data['reset']) && is_numeric($data['reset']) ? (int)$data['reset'] : null;
+    $dataCount = isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : 0;
+    
+    if ($dataReset !== null && $now >= $dataReset) {
         $data = ['count' => 0, 'reset' => $now + $windowSeconds];
-    } elseif (!isset($data['reset'])) {
+    } elseif ($dataReset === null) {
         $data = ['count' => 0, 'reset' => $now + $windowSeconds];
     }
     
-    if (($data['count'] ?? 0) >= $maxRequests) {
+    // Check if limit exceeded (use normalized count)
+    $currentCount = isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : $dataCount;
+    if ($currentCount >= $maxRequests) {
         aviationwx_log('warning', 'rate limit exceeded (file-based fallback)', [
             'key' => $key,
             'ip' => $ip,
@@ -203,7 +215,8 @@ function checkRateLimitFileBasedFallback($key, $maxRequests, $windowSeconds, $ip
         return false;
     }
     
-    $data['count'] = ($data['count'] ?? 0) + 1;
+    // Increment counter (ensure we're working with int)
+    $data['count'] = $currentCount + 1;
     if (!isset($data['reset'])) {
         $data['reset'] = $now + $windowSeconds;
     }
@@ -239,11 +252,13 @@ function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHE
             if ($content !== false) {
                 $data = @json_decode($content, true);
                 if (is_array($data)) {
-                    if (isset($data['reset']) && $now < $data['reset']) {
-                        $currentCount = $data['count'] ?? 0;
+                    // Normalize reset time to int for proper comparison
+                    $dataReset = isset($data['reset']) && is_numeric($data['reset']) ? (int)$data['reset'] : null;
+                    if ($dataReset !== null && $now < $dataReset) {
+                        $currentCount = isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : 0;
                         return [
                             'remaining' => (int)max(0, $maxRequests - $currentCount),
-                            'reset' => (int)$data['reset']
+                            'reset' => $dataReset
                         ];
                     }
                 }
@@ -269,11 +284,17 @@ function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHE
     }
     
     // Extract count and reset time from the data array
-    $currentCount = is_array($data) ? ($data['count'] ?? 0) : (is_numeric($data) ? $data : 0);
+    // Normalize to int to prevent type coercion issues
+    $currentCount = is_array($data) 
+        ? (isset($data['count']) && is_numeric($data['count']) ? (int)$data['count'] : 0)
+        : (is_numeric($data) ? (int)$data : 0);
     $now = time();
     
-    // Check if window expired
-    if (is_array($data) && isset($data['reset']) && $now >= $data['reset']) {
+    // Check if window expired (normalize reset time to int for comparison)
+    $dataReset = is_array($data) && isset($data['reset']) && is_numeric($data['reset']) 
+        ? (int)$data['reset'] 
+        : null;
+    if ($dataReset !== null && $now >= $dataReset) {
         // Window expired, all requests are available
         return [
             'remaining' => $maxRequests,
@@ -281,7 +302,7 @@ function getRateLimitRemaining(string $key, int $maxRequests = RATE_LIMIT_WEATHE
         ];
     }
     
-    $resetTime = is_array($data) && isset($data['reset']) ? (int)$data['reset'] : ($now + $windowSeconds);
+    $resetTime = $dataReset !== null ? $dataReset : ($now + $windowSeconds);
     
     return [
         'remaining' => (int)max(0, $maxRequests - $currentCount),

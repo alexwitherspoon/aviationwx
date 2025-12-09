@@ -211,6 +211,7 @@ jobs:
             integration-results.xml
             unit-coverage.xml
             integration-coverage.xml
+          if-no-files-found: ignore
           retention-days: 7
 
   # Lint job - runs code validation, security checks, and file structure validation
@@ -605,13 +606,7 @@ jobs:
         env:
           CONFIG_PATH: tests/Fixtures/airports.json.test
       
-      - name: Upload Performance Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: performance-test-results
-          path: performance-results.xml
-          retention-days: 7
+      # Performance test results not needed - non-critical tests, results visible in logs
   
   e2e-tests:
     name: End-to-End Tests
@@ -770,6 +765,7 @@ jobs:
         with:
           name: e2e-test-results
           path: e2e-results.xml
+          if-no-files-found: ignore
           retention-days: 7
   
   smoke-tests:
@@ -922,6 +918,7 @@ jobs:
         with:
           name: smoke-test-results
           path: smoke-results.xml
+          if-no-files-found: ignore
           retention-days: 7
   
   smoke-tests-production:
@@ -966,13 +963,7 @@ jobs:
         env:
           TEST_PROD_URL: https://aviationwx.org
       
-      - name: Upload Production Smoke Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-prod-test-results
-          path: smoke-prod-results.xml
-          retention-days: 7
+      # Production smoke test results not needed - manual test, results visible in logs
   
   external-links-tests:
     name: External Links Validation
@@ -1014,13 +1005,7 @@ jobs:
         env:
           CONFIG_PATH: tests/Fixtures/airports.json.test
       
-      - name: Upload External Links Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: external-links-test-results
-          path: external-links-results.xml
-          retention-days: 7
+      # External links test results not needed - non-critical tests, results visible in logs
   
   # Split browser tests by file for parallelization
   browser-tests:
@@ -1151,16 +1136,10 @@ jobs:
           path: tests/Browser/playwright-report/
           retention-days: 7
       
-      - name: Upload Playwright Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-results-${{ matrix.test-file }}
-          path: tests/Browser/playwright-results.json
-          retention-days: 7
+      # Playwright test results JSON not needed - HTML report contains all information
       
-      - name: Upload Screenshots
-        if: always()
+      - name: Upload Screenshots (on failure only)
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-screenshots-${{ matrix.test-file }}
