@@ -103,6 +103,17 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         $requestedIdentifier = strtoupper(trim($rawAirportIdentifier));
         $primaryIdentifierUpper = strtoupper(trim($primaryIdentifier));
         
+        // Debug logging (remove after debugging)
+        error_log(sprintf(
+            'Redirect check: requested="%s", primary="%s", airportId="%s", icao=%s, iata=%s, match=%s',
+            $requestedIdentifier,
+            $primaryIdentifierUpper,
+            $airportId,
+            isset($airport['icao']) ? $airport['icao'] : 'null',
+            isset($airport['iata']) ? $airport['iata'] : 'null',
+            $requestedIdentifier === $primaryIdentifierUpper ? 'YES' : 'NO'
+        ));
+        
         // Redirect if the requested identifier doesn't match the primary identifier.
         // This ensures we redirect to the most preferred identifier (ICAO > IATA > FAA > Airport ID).
         // Examples:
