@@ -61,13 +61,32 @@ jobs:
       
       - name: Validate Stale Data Safety Implementation
         run: |
-          if ! grep -q "function nullStaleFieldsBySource" api/weather.php; then
-            echo "❌ CRITICAL: nullStaleFieldsBySource function missing!"
+          # Check that staleness.php is required (functions moved to library)
+          if ! grep -q "require.*staleness\.php\|include.*staleness\.php" api/weather.php; then
+            echo "❌ CRITICAL: lib/weather/staleness.php not required in api/weather.php!"
             exit 1
           fi
           
-          if ! grep -q "function mergeWeatherDataWithFallback" api/weather.php; then
-            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
+          # Verify nullStaleFieldsBySource function exists in staleness.php
+          if ! grep -q "function nullStaleFieldsBySource" lib/weather/staleness.php; then
+            echo "❌ CRITICAL: nullStaleFieldsBySource function missing from lib/weather/staleness.php!"
+            exit 1
+          fi
+          
+          # Verify mergeWeatherDataWithFallback function exists in staleness.php
+          if ! grep -q "function mergeWeatherDataWithFallback" lib/weather/staleness.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing from lib/weather/staleness.php!"
+            exit 1
+          fi
+          
+          # Verify functions are being called in api/weather.php
+          if ! grep -q "nullStaleFieldsBySource" api/weather.php; then
+            echo "❌ CRITICAL: nullStaleFieldsBySource not being used in api/weather.php!"
+            exit 1
+          fi
+          
+          if ! grep -q "mergeWeatherDataWithFallback" api/weather.php; then
+            echo "❌ CRITICAL: mergeWeatherDataWithFallback not being used in api/weather.php!"
             exit 1
           fi
           
