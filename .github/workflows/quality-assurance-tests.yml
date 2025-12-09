@@ -650,36 +650,12 @@ jobs:
         run: |
           docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 10
+          sleep 5  # Reduced - health check script will wait properly
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for health check
         run: |
-          timeout=60
-          elapsed=0
-          while [ $elapsed -lt $timeout ]; do
-            if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
-              if curl -f 'http://localhost:8080/api/weather.php?airport=kspb' 2>/dev/null | grep -q '"success"'; then
-                echo "✓ Service is ready and config loaded after ${elapsed}s"
-                exit 0
-              else
-                echo "Service responding but config not loaded yet... ${elapsed}s"
-              fi
-            fi
-            sleep 1
-            elapsed=$((elapsed + 1))
-            if [ $((elapsed % 5)) -eq 0 ]; then
-              echo "Waiting for service... ${elapsed}s"
-            fi
-          done
-          echo "⚠ Service did not become ready in time"
-          echo "Container status:"
-          docker compose -f docker/docker-compose.yml ps
-          echo "Container logs:"
-          docker compose -f docker/docker-compose.yml logs web | tail -50
-          echo "Config file check:"
-          docker compose -f docker/docker-compose.yml exec -T web ls -la /var/www/html/config/ 2>/dev/null || echo "Cannot check config"
-          exit 1
+          bash scripts/wait-for-service-health.sh 90 http://localhost:8080
       
       - name: Run E2E Tests
         run: |
@@ -797,35 +773,11 @@ jobs:
           # Tag the pre-built image for docker-compose
           docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 10  # Reduced wait time
+          sleep 5  # Reduced - health check script will wait properly
       
       - name: Wait for health check
         run: |
-          timeout=60
-          elapsed=0
-          while [ $elapsed -lt $timeout ]; do
-            if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
-              if curl -f 'http://localhost:8080/api/weather.php?airport=kspb' 2>/dev/null | grep -q '"success"'; then
-                echo "✓ Service is ready and config loaded after ${elapsed}s"
-                exit 0
-              else
-                echo "Service responding but config not loaded yet... ${elapsed}s"
-              fi
-            fi
-            sleep 1
-            elapsed=$((elapsed + 1))
-            if [ $((elapsed % 5)) -eq 0 ]; then
-              echo "Waiting for service... ${elapsed}s"
-            fi
-          done
-          echo "⚠ Service did not become ready"
-          echo "Container status:"
-          docker compose -f docker/docker-compose.yml ps
-          echo "Container logs:"
-          docker compose -f docker/docker-compose.yml logs web | tail -50
-          echo "Config file check:"
-          docker compose -f docker/docker-compose.yml exec -T web ls -la /var/www/html/config/ 2>/dev/null || echo "Cannot check config"
-          exit 1
+          bash scripts/wait-for-service-health.sh 90 http://localhost:8080
       
       - name: Run Smoke Tests (Local)
         run: |
@@ -965,36 +917,12 @@ jobs:
         run: |
           docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 10
+          sleep 5  # Reduced - health check script will wait properly
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for service to be ready
         run: |
-          timeout=60
-          elapsed=0
-          while [ $elapsed -lt $timeout ]; do
-            if curl -f http://localhost:8080/ 2>/dev/null; then
-              if curl -f 'http://localhost:8080/api/weather.php?airport=kspb' 2>/dev/null | grep -q '"success"'; then
-                echo "✓ Service is ready and config loaded after ${elapsed}s"
-                exit 0
-              else
-                echo "Service responding but config not loaded yet... ${elapsed}s"
-              fi
-            fi
-            sleep 1
-            elapsed=$((elapsed + 1))
-            if [ $((elapsed % 5)) -eq 0 ]; then
-              echo "Waiting for service... ${elapsed}s"
-            fi
-          done
-          echo "⚠ Service did not become ready"
-          echo "Container status:"
-          docker compose -f docker/docker-compose.yml ps
-          echo "Container logs:"
-          docker compose -f docker/docker-compose.yml logs web | tail -50
-          echo "Config file check:"
-          docker compose -f docker/docker-compose.yml exec -T web ls -la /var/www/html/config/ 2>/dev/null || echo "Cannot check config"
-          exit 1
+          bash scripts/wait-for-service-health.sh 90 http://localhost:8080
       
       - name: Run Browser Tests
         working-directory: tests/Browser
