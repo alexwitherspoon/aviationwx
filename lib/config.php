@@ -570,34 +570,34 @@ function findAirportByIdentifier(string $identifier, ?array $config = null): ?ar
     }
     
     // 3. Fallback: Check cached mapping files (IATA->ICAO, FAA->ICAO) for airports not in airports.json
-    // IMPORTANT: This creates a minimal entry ONLY for redirect purposes.
-    // Minimal entries are NOT the same as airports in airports.json and will show 404.
-    // This allows redirects (e.g., pdx -> kpdx) to work even if the airport isn't configured yet.
+    // IMPORTANT: This creates an unconfigured airport lookup ONLY for redirect purposes.
+    // Unconfigured airports are valid airport lookups but are NOT the same as airports in airports.json.
+    // They will show 404, not a dashboard. This allows redirects (e.g., pdx -> kpdx) to work even if the airport isn't configured yet.
     $icaoFromMapping = getIcaoFromIdentifier($identifierUpper);
     
-    // If we found an ICAO code from the mapping, create a minimal airport entry
-    // This minimal entry only has ICAO/IATA/FAA codes - no name or other required fields.
-    // The calling code must check if it's minimal and show 404 instead of a dashboard.
+    // If we found an ICAO code from the mapping, create an unconfigured airport lookup
+    // This lookup only has ICAO/IATA/FAA codes - no name or other required fields from airports.json.
+    // The calling code must check if it's unconfigured and show 404 instead of a dashboard.
     if ($icaoFromMapping !== null) {
         $icaoLower = strtolower($icaoFromMapping);
         // Use ICAO code as airport ID (lowercase)
         $airportId = $icaoLower;
         
-        // Create minimal airport entry with just identifier codes
+        // Create unconfigured airport lookup with just identifier codes
         // This allows redirect logic to work, but the airport will show 404 (not a dashboard)
-        $minimalAirport = [
+        $unconfiguredAirport = [
             'icao' => $icaoFromMapping,
         ];
         
         // Add the original identifier if it's IATA or FAA
         $identifierType = detectIdentifierType($identifierUpper);
         if ($identifierType === 'iata') {
-            $minimalAirport['iata'] = $identifierUpper;
+            $unconfiguredAirport['iata'] = $identifierUpper;
         } elseif ($identifierType === 'faa') {
-            $minimalAirport['faa'] = $identifierUpper;
+            $unconfiguredAirport['faa'] = $identifierUpper;
         }
         
-        return ['airport' => $minimalAirport, 'airportId' => $airportId];
+        return ['airport' => $unconfiguredAirport, 'airportId' => $airportId];
     }
     
     return null;

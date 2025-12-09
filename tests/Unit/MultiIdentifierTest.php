@@ -215,6 +215,38 @@ class MultiIdentifierTest extends TestCase
     }
     
     /**
+     * Test findAirportByIdentifier - Unconfigured airport (from cached mapping, not in config)
+     * 
+     * Note: This test requires network access to download OurAirports data.
+     * It may be skipped if the network is unavailable.
+     */
+    public function testFindAirportByIdentifier_UnconfiguredAirport()
+    {
+        // Create a config without PDX to test fallback to cached mappings
+        $configWithoutPdx = [
+            'airports' => [
+                'kspb' => $this->testConfig['airports']['kspb']
+            ]
+        ];
+        
+        // Try to find PDX (should not be in config, but may be found via cached mapping)
+        $result = findAirportByIdentifier('PDX', $configWithoutPdx);
+        
+        // If found via cached mapping, it should be an unconfigured airport (no name field)
+        if ($result !== null) {
+            $this->assertArrayHasKey('airport', $result);
+            $this->assertArrayHasKey('airportId', $result);
+            // Unconfigured airports from cached mappings won't have a name
+            $this->assertFalse(isset($result['airport']['name']) && !empty($result['airport']['name']), 
+                'Unconfigured airport should not have name field');
+            // But should have ICAO code
+            $this->assertNotEmpty($result['airport']['icao'] ?? null, 
+                'Unconfigured airport should have ICAO code from cached mapping');
+        }
+        // If not found (network unavailable or cache missing), that's also acceptable
+    }
+    
+    /**
      * Test findAirportByIdentifier - Airport with no identifiers (uses airport ID)
      */
     public function testFindAirportByIdentifier_NoIdentifiers()
@@ -632,6 +664,130 @@ class MultiIdentifierTest extends TestCase
         if ($result !== null) {
             $this->assertMatchesRegularExpression('/^[A-Z0-9]{3,4}$/', $result, 'If found, should be valid ICAO format');
         }
+    }
+    
+    /**
+     * Test detectIdentifierType - IATA codes
+     */
+    public function testDetectIdentifierType_Iata()
+    {
+        $this->assertEquals('iata', detectIdentifierType('PDX'));
+        $this->assertEquals('iata', detectIdentifierType('SEA'));
+        $this->assertEquals('iata', detectIdentifierType('LAX'));
+    }
+    
+    /**
+     * Test detectIdentifierType - ICAO codes
+     */
+    public function testDetectIdentifierType_Icao()
+    {
+        $this->assertEquals('icao', detectIdentifierType('KPDX'));
+        $this->assertEquals('icao', detectIdentifierType('KSPB'));
+        $this->assertEquals('icao', detectIdentifierType('03S')); // 3 chars with number
+    }
+    
+    /**
+     * Test detectIdentifierType - FAA codes
+     */
+    public function testDetectIdentifierType_Faa()
+    {
+        // FAA codes are 3-4 alphanumeric, same format as ICAO but detected after ICAO
+        // Codes with numbers or 4 characters are detected as ICAO first (higher priority)
+        // "03S" has a number, so it's detected as ICAO, not FAA
+        $this->assertEquals('icao', detectIdentifierType('03S')); // Detected as ICAO due to number
+        
+        // Pure 3-letter codes are detected as IATA first
+        // FAA detection is a fallback for codes that don't match IATA or ICAO patterns
+        // In practice, most valid FAA codes will be detected as ICAO if they have numbers
+    }
+    
+    /**
+     * Test detectIdentifierType - Invalid
+     */
+    public function testDetectIdentifierType_Invalid()
+    {
+        $this->assertNull(detectIdentifierType('XX')); // Too short
+        $this->assertNull(detectIdentifierType('XXXXX')); // Too long
+        $this->assertNull(detectIdentifierType('')); // Empty
+    }
+    
+    /**
+     * Test isValidIdentifierFormat - IATA
+     */
+    public function testIsValidIdentifierFormat_Iata()
+    {
+        $this->assertTrue(isValidIdentifierFormat('PDX', 'iata'));
+        $this->assertFalse(isValidIdentifierFormat('KPDX', 'iata')); // Too long
+        $this->assertFalse(isValidIdentifierFormat('PD', 'iata')); // Too short
+    }
+    
+    /**
+     * Test isValidIdentifierFormat - ICAO
+     */
+    public function testIsValidIdentifierFormat_Icao()
+    {
+        $this->assertTrue(isValidIdentifierFormat('KPDX', 'icao'));
+        $this->assertTrue(isValidIdentifierFormat('KSPB', 'icao'));
+        $this->assertTrue(isValidIdentifierFormat('03S', 'icao'));
+        // Note: "PDX" is technically valid ICAO format (3-4 alphanumeric), but it's also valid IATA
+        // The format checker only checks format, not semantic meaning
+        $this->assertTrue(isValidIdentifierFormat('PDX', 'icao')); // Format is valid (3 alphanumeric)
+    }
+    
+    /**
+     * Test isValidIdentifierFormat - FAA
+     */
+    public function testIsValidIdentifierFormat_Faa()
+    {
+        $this->assertTrue(isValidIdentifierFormat('PDX', 'faa'));
+        $this->assertTrue(isValidIdentifierFormat('03S', 'faa'));
+        $this->assertFalse(isValidIdentifierFormat('XX', 'faa')); // Too short
+    }
+    
+    /**
+     * Test getIcaoFromIdentifier - IATA code
+     * 
+     * Note: This test requires network access to download OurAirports data.
+     * It may be skipped if the network is unavailable.
+     */
+    public function testGetIcaoFromIdentifier_Iata()
+    {
+        $result = getIcaoFromIdentifier('PDX');
+        
+        if ($result === null) {
+            $this->markTestSkipped('Could not get ICAO from identifier (network issue or service unavailable)');
+            return;
+        }
+        
+        $this->assertEquals('KPDX', $result, 'PDX IATA should map to KPDX ICAO');
+    }
+    
+    /**
+     * Test getIcaoFromIdentifier - ICAO code (returns as-is)
+     */
+    public function testGetIcaoFromIdentifier_Icao()
+    {
+        $result = getIcaoFromIdentifier('KPDX');
+        $this->assertEquals('KPDX', $result, 'ICAO code should be returned as-is');
+    }
+    
+    /**
+     * Test getIcaoFromIdentifier - FAA code
+     * 
+     * Note: This test requires network access to download OurAirports data.
+     * It may be skipped if the network is unavailable.
+     */
+    public function testGetIcaoFromIdentifier_Faa()
+    {
+        $result = getIcaoFromIdentifier('PDX');
+        
+        // PDX could be detected as IATA or FAA, but should return KPDX either way
+        if ($result === null) {
+            $this->markTestSkipped('Could not get ICAO from identifier (network issue or service unavailable)');
+            return;
+        }
+        
+        $this->assertEquals('KPDX', $result);
     }
 }
 

@@ -88,8 +88,8 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         $airportId = $rawAirportIdentifier;
     } else {
         // Try lookup by identifier (ICAO, IATA, FAA)
-        // Note: findAirportByIdentifier() may return a minimal entry from cached mappings
-        // if the airport isn't in airports.json. These minimal entries are only used for redirects.
+        // Note: findAirportByIdentifier() may return an unconfigured airport from cached mappings
+        // if the airport isn't in airports.json. These are valid airport lookups used for redirects.
         $result = findAirportByIdentifier($rawAirportIdentifier, $config);
         if ($result !== null && isset($result['airport']) && isset($result['airportId'])) {
             $airport = $result['airport'];
@@ -98,10 +98,10 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
     }
     
     if ($airport !== null && $airportId !== null) {
-        // Check if this is a minimal airport entry (found via cached mapping but not in airports.json)
-        // Minimal entries only have ICAO/IATA/FAA codes from cached mapping files.
-        // They are NOT the same as airports in airports.json and should show 404, not a dashboard.
-        $isMinimalEntry = !isset($airport['name']) || empty($airport['name']);
+        // Check if this is an unconfigured airport (found via cached mapping but not in airports.json)
+        // Unconfigured airports are valid airport lookups with ICAO/IATA/FAA codes from cached mapping files,
+        // but they are NOT configured in airports.json and should show 404, not a dashboard.
+        $isUnconfiguredAirport = !isset($airport['name']) || empty($airport['name']);
         
         // Get the primary identifier for this airport (ICAO > IATA > FAA > Airport ID)
         // getPrimaryIdentifier() automatically returns the most preferred identifier that exists,
@@ -116,8 +116,8 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         // - pdx -> kpdx (IATA/airport ID -> ICAO)
         // - kpdx -> kpdx (no redirect, already using primary)
         // - spb -> kspb (IATA -> ICAO)
-        // Note: This redirect works even for minimal entries (from cached mappings),
-        // allowing proper canonical URLs. After redirect, minimal entries will show 404.
+        // Note: This redirect works even for unconfigured airports (from cached mappings),
+        // allowing proper canonical URLs. After redirect, unconfigured airports will show 404.
         if ($requestedIdentifier !== $primaryIdentifierUpper) {
             // Determine protocol (HTTPS preferred)
             $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -142,10 +142,10 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
             exit;
         }
         
-        // If this is a minimal entry (found via cached mapping but not in airports.json),
-        // show 404 page instead of dashboard. Cached mappings are only for redirects,
-        // not for treating airports as if they're configured in airports.json.
-        if ($isMinimalEntry) {
+        // If this is an unconfigured airport (found via cached mapping but not in airports.json),
+        // show 404 page instead of dashboard. Cached mappings provide valid airport lookups for redirects,
+        // but unconfigured airports are NOT the same as airports in airports.json.
+        if ($isUnconfiguredAirport) {
             http_response_code(404);
             // Make airport identifier available to 404 page (use primary identifier)
             $requestedAirportId = $primaryIdentifierUpper;

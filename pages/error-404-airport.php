@@ -32,8 +32,8 @@ if (!$isRealAirport && !empty($requestedAirportId)) {
     if ($icaoFromIdentifier !== null) {
         // Found ICAO for this identifier, check if it's a real airport
         $isRealAirport = isValidRealAirport($icaoFromIdentifier, $config);
-        if ($isRealAirport) {
-            // Use the ICAO code for display since that's the standard identifier
+            if ($isRealAirport) {
+                // Use the ICAO code for display since that's the standard identifier
             $displayAirportId = $icaoFromIdentifier;
         }
     }
