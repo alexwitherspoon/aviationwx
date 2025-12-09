@@ -31,7 +31,7 @@ class RateLimitTest extends TestCase
     }
 
     /**
-     * Test checkRateLimit - First request should pass
+     * Ensures first request is allowed, establishing baseline rate limit behavior
      */
     public function testCheckRateLimit_FirstRequest()
     {
@@ -42,7 +42,7 @@ class RateLimitTest extends TestCase
     }
 
     /**
-     * Test getRateLimitRemaining - Should return valid array
+     * Ensures rate limit status is correctly reported for API consumers
      */
     public function testGetRateLimitRemaining_ValidKey()
     {
@@ -62,7 +62,7 @@ class RateLimitTest extends TestCase
     }
 
     /**
-     * Test getRateLimitRemaining - Non-existent key
+     * Ensures new keys start with full quota, not zero
      */
     public function testGetRateLimitRemaining_NonExistentKey()
     {
@@ -76,7 +76,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimitFileBased - File-based fallback when APCu unavailable
+     * Ensures rate limiting works when APCu is unavailable, preventing service degradation
      */
     public function testCheckRateLimitFileBased_BasicFunctionality()
     {
@@ -104,7 +104,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimitFileBased - Window expiration
+     * Ensures rate limit windows reset correctly, allowing requests after time window expires
      */
     public function testCheckRateLimitFileBased_WindowExpiration()
     {
@@ -131,7 +131,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimitFileBased - Different IPs have separate limits
+     * Ensures IP-based isolation so one user's requests don't affect another's quota
      */
     public function testCheckRateLimitFileBased_SeparateLimitsPerIP()
     {
@@ -154,7 +154,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimit - Actual blocking behavior
+     * Ensures rate limits are enforced, preventing API abuse
      */
     public function testCheckRateLimit_ActualBlocking()
     {
@@ -178,7 +178,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimit - Different configurations
+     * Ensures different rate limit configurations work independently without interference
      */
     public function testCheckRateLimit_DifferentConfigurations()
     {
@@ -203,8 +203,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimitFileBased - Type coercion: string values from JSON should be handled correctly
-     * This tests the fix for type coercion bugs where string comparisons could fail
+     * Prevents type coercion bug where string "5" != numeric 5, causing incorrect limit enforcement
      */
     public function testCheckRateLimitFileBased_TypeCoercionFromJson()
     {
@@ -236,7 +235,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimitFileBased - Window expiration with string reset time
+     * Ensures window expiration works correctly even when reset time is stored as string
      */
     public function testCheckRateLimitFileBased_WindowExpirationWithStringType()
     {
@@ -261,8 +260,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test getRateLimitRemaining - Type coercion: string values should be handled correctly
-     * Note: This test only works when APCu is not available (falls back to file-based)
+     * Prevents type coercion bug where string counts cause incorrect remaining quota calculations
      */
     public function testGetRateLimitRemaining_TypeCoercionFromJson()
     {
@@ -309,7 +307,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test checkRateLimitFileBasedFallback - Type coercion handling
+     * Ensures fallback function handles type coercion correctly when primary function fails
      */
     public function testCheckRateLimitFileBasedFallback_TypeCoercion()
     {
@@ -334,7 +332,7 @@ class RateLimitTest extends TestCase
     }
     
     /**
-     * Test corrupted JSON file handling
+     * Ensures corrupted rate limit files are gracefully recovered to prevent service disruption
      */
     public function testCheckRateLimitFileBased_CorruptedJsonFile()
     {

@@ -5,32 +5,26 @@ on:
     branches: [ "main" ]
   push:
     branches: [ "main" ]
-  workflow_dispatch: {} # Allow manual trigger
+  workflow_dispatch: {}
 
-# CRITICAL: Prevent concurrent runs from interfering with each other
-# Group by branch and commit SHA to ensure each commit gets its own run
-# Cancel in-progress runs when a new commit is pushed (prevents old runs from completing)
+# Prevent concurrent runs - cancel old runs when new commit pushed
 concurrency:
   group: qa-tests-${{ github.ref }}-${{ github.head_ref || github.ref_name }}-${{ github.sha }}
-  cancel-in-progress: true  # Cancel old runs when new commit is pushed
+  cancel-in-progress: true
 
-# Default permissions for all jobs in this workflow
 permissions:
   contents: read
   actions: read
 
 jobs:
-  # Test job - runs all PHPUnit tests (unit, integration, critical safety tests)
   test:
     name: PHPUnit Tests
     runs-on: ubuntu-latest
-    # Critical - must pass before deployment
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # CRITICAL: Fetch full history to ensure commit SHA is accurate
           fetch-depth: 0
       
       - name: Validate commit and branch context
@@ -44,12 +38,6 @@ jobs:
           echo "Workflow Run ID: ${{ github.run_id }}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Verify we're on the expected branch (for push events)
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" != "main" ]; then
-            echo "⚠️  Warning: Not on main branch (branch: ${{ github.ref_name }})"
-          fi
-          
-          # Verify commit SHA matches what we checked out
           CHECKED_OUT_SHA=$(git rev-parse HEAD)
           if [ "$CHECKED_OUT_SHA" != "${{ github.sha }}" ]; then
             echo "❌ CRITICAL: Commit SHA mismatch!"
@@ -94,12 +82,8 @@ jobs:
       
       - name: Run PHPUnit - Unit Tests (Critical)
         run: |
-          echo "Running unit tests..."
-          echo "Including: ProcessPoolTest, WorkerModeTest, and all other unit tests"
-          # Run tests with coverage (pcov is installed)
           vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --coverage-clover unit-coverage.xml || exit_code=$?
           exit_code=${exit_code:-$?}
-          # Exit code 0 = success, 1 = warnings, 2+ = failures
           if [ $exit_code -gt 1 ]; then
             echo "❌ Unit tests failed - check output above"
             exit 1
@@ -111,12 +95,8 @@ jobs:
       
       - name: Run PHPUnit - Integration Tests
         run: |
-          echo "Running integration tests..."
-          echo "Including: ProcessPoolIntegrationTest, ProcessPoolOutputTest, and all other integration tests"
-          # Run tests with coverage (pcov is installed)
           vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --coverage-clover integration-coverage.xml || exit_code=$?
           exit_code=${exit_code:-$?}
-          # Exit code 0 = success, 1 = warnings, 2+ = failures
           if [ $exit_code -gt 1 ]; then
             echo "❌ Integration tests failed - check output above"
             exit 1
@@ -128,8 +108,6 @@ jobs:
       
       - name: Run Critical Safety Tests
         run: |
-          echo "Running critical safety tests..."
-          # These are critical - must pass (allow exit code 1 for warnings)
           vendor/bin/phpunit tests/Unit/StaleDataSafetyTest.php --testdox --stop-on-failure --no-coverage || exit_code1=$?
           exit_code1=${exit_code1:-$?}
           if [ $exit_code1 -gt 1 ]; then
@@ -170,9 +148,6 @@ jobs:
       
       - name: Run Weather Data Merge Tests
         run: |
-          echo "Running weather data merge tests..."
-          echo "Testing mergeWeatherDataWithFallback function and error handling..."
-          # Test the new merge functionality and error handling
           vendor/bin/phpunit tests/Unit/WeatherDataMergeTest.php --testdox --stop-on-failure || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
@@ -214,11 +189,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Lint job - runs code validation, security checks, and file structure validation
   lint:
     name: Code Validation & Linting
     runs-on: ubuntu-latest
-    # Critical - must pass before deployment
     
     steps:
       - name: Checkout code
@@ -275,17 +248,14 @@ jobs:
             exit 1
           fi
           
-          # Check that merge is called before cache write
           if ! grep -q "mergeWeatherDataWithFallback.*existingCache" api/weather.php; then
             echo "⚠️  Warning: mergeWeatherDataWithFallback may not be called before cache write"
           fi
           
-          # Check for VRB wind direction handling (in METAR adapter)
           if ! grep -q "wdir.*VRB\|'VRB'" lib/weather/adapter/metar-v1.php; then
             echo "⚠️  Warning: VRB wind direction handling may be missing"
           fi
           
-          # Check for numeric checks on wind data (in METAR adapter)
           if ! grep -q "is_numeric.*wdir\|is_numeric.*wspd" lib/weather/adapter/metar-v1.php; then
             echo "⚠️  Warning: Numeric validation for wind data may be missing"
           fi
@@ -382,7 +352,6 @@ jobs:
       
       - name: Check for security issues
         run: |
-          # Check for dangerous functions in PHP files
           dangerous_patterns=(
             "eval("
             "base64_decode.*\$_GET"
@@ -396,7 +365,6 @@ jobs:
             if [ ! -z "$matches" ]; then
               echo "⚠️  Potentially dangerous pattern found: $pattern"
               echo "$matches"
-              # Don't fail, just warn
             fi
           done
           
@@ -410,7 +378,6 @@ jobs:
             exit 1
           fi
           
-          # Python 3 is available by default on ubuntu-latest
           python3 scripts/test-vpn-manager-security.py
           exit_code=$?
           
@@ -426,7 +393,6 @@ jobs:
           php -r "
           require_once 'lib/rate-limit.php';
           
-          // Basic function existence test
           if (!function_exists('checkRateLimit')) {
             echo 'FAIL: checkRateLimit function not found' . PHP_EOL;
             exit(1);
@@ -450,7 +416,6 @@ jobs:
           php -r "
           require_once 'lib/circuit-breaker.php';
           
-          // Check weather-specific wrappers
           if (!function_exists('checkWeatherCircuitBreaker')) {
             echo 'FAIL: checkWeatherCircuitBreaker function not found' . PHP_EOL;
             exit(1);
@@ -466,7 +431,6 @@ jobs:
             exit(1);
           }
           
-          // Check webcam-specific wrappers
           if (!function_exists('checkWebcamCircuitBreaker')) {
             echo 'FAIL: checkWebcamCircuitBreaker function not found' . PHP_EOL;
             exit(1);
@@ -490,7 +454,6 @@ jobs:
           php -r "
           require_once 'lib/constants.php';
           
-          // Check that key constants are defined
           \$required_constants = [
             'DEFAULT_WEBCAM_REFRESH',
             'DEFAULT_WEATHER_REFRESH',
@@ -516,7 +479,6 @@ jobs:
       - name: Validate push webcam functions
         run: |
           php -r "
-          // Check that push webcam functions exist
           require_once 'lib/push-webcam-validator.php';
           require_once 'scripts/process-push-webcams.php';
           require_once 'scripts/sync-push-config.php';
@@ -547,11 +509,8 @@ jobs:
             exit 1
           fi
           
-          # Check for required components
           grep -q "FROM php:8.3-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
           grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
-          
-          # Check for push webcam dependencies
           grep -q "vsftpd" docker/Dockerfile || (echo "❌ vsftpd not found in Dockerfile (required for push webcams)" && exit 1)
           grep -q "openssh-server" docker/Dockerfile || (echo "❌ openssh-server not found in Dockerfile (required for SFTP)" && exit 1)
           grep -q "certbot" docker/Dockerfile || (echo "⚠️  certbot not found in Dockerfile (required for FTPS)" || true)
@@ -570,7 +529,7 @@ jobs:
   performance-tests:
     name: Performance Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't block PR if these fail
+    continue-on-error: true
     
     steps:
       - name: Checkout code
@@ -599,19 +558,14 @@ jobs:
       
       - name: Run Performance Tests
         run: |
-          echo "Running performance tests..."
-          # Performance tests don't need coverage
           vendor/bin/phpunit --testsuite Performance --testdox --log-junit performance-results.xml --no-coverage || [ $? -le 1 ]
         continue-on-error: true
         env:
           CONFIG_PATH: tests/Fixtures/airports.json.test
-      
-      # Performance test results not needed - non-critical tests, results visible in logs
   
   e2e-tests:
     name: End-to-End Tests
     runs-on: ubuntu-latest
-    # These are critical - must pass before deployment
     
     steps:
       - name: Checkout code
@@ -694,12 +648,8 @@ jobs:
           CONFIG_PATH: ${{ github.workspace }}/config/airports.json
           APP_ENV: testing
         run: |
-          # Tag the pre-built image for docker-compose
           docker tag aviationwx:test aviationwx:latest || true
-          # Start local instance for testing
-          # Environment variables are passed via env: block above
           docker compose -f docker/docker-compose.yml up -d
-          # Reduced wait time - health check will verify readiness
           sleep 10
           docker compose -f docker/docker-compose.yml ps
       
@@ -707,11 +657,8 @@ jobs:
         run: |
           timeout=60
           elapsed=0
-          # More aggressive polling - check every 1 second instead of 2
           while [ $elapsed -lt $timeout ]; do
-            # Check basic service availability
             if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
-              # Also verify config is loaded by checking weather endpoint
               if curl -f 'http://localhost:8080/api/weather.php?airport=kspb' 2>/dev/null | grep -q '"success"'; then
                 echo "✓ Service is ready and config loaded after ${elapsed}s"
                 exit 0
@@ -736,17 +683,13 @@ jobs:
       
       - name: Run E2E Tests
         run: |
-          echo "Running E2E tests with mocked APIs..."
-          echo "Note: These tests use mocked API responses"
-          # E2E tests don't need coverage - just verify endpoints work
-          # Exit code 0 = success, 1 = warnings (tests passed), 2+ = failures
           vendor/bin/phpunit --testsuite E2E --testdox --log-junit e2e-results.xml --no-coverage
           exit_code=$?
           if [ $exit_code -eq 0 ]; then
             echo "✓ All E2E tests passed"
           elif [ $exit_code -eq 1 ]; then
             echo "⚠️  E2E tests passed with warnings (this is OK)"
-            exit 0  # Treat warnings as success for E2E tests
+            exit 0
           else
             echo "❌ E2E tests failed"
             exit $exit_code
@@ -771,8 +714,7 @@ jobs:
   smoke-tests:
     name: Smoke Tests - Local
     runs-on: ubuntu-latest
-    # These are critical - must pass before deployment
-    if: github.event_name == 'pull_request' || github.event_name == 'push'  # Auto on PRs and pushes
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     
     steps:
       - name: Checkout code
@@ -862,9 +804,7 @@ jobs:
           timeout=60
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
-            # Check basic service availability
             if curl -f http://localhost:8080/health.php 2>/dev/null || curl -f http://localhost:8080/ 2>/dev/null; then
-              # Also verify config is loaded by checking weather endpoint
               if curl -f 'http://localhost:8080/api/weather.php?airport=kspb' 2>/dev/null | grep -q '"success"'; then
                 echo "✓ Service is ready and config loaded after ${elapsed}s"
                 exit 0
@@ -889,17 +829,13 @@ jobs:
       
       - name: Run Smoke Tests (Local)
         run: |
-          echo "Running smoke tests against local instance..."
-          echo "Note: Docker container uses config/airports.json (mounted from host)"
-          # Smoke tests don't need coverage - just verify endpoints work
-          # Exit code 0 = success, 1 = warnings (tests passed), 2+ = failures
           vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-results.xml --no-coverage
           exit_code=$?
           if [ $exit_code -eq 0 ]; then
             echo "✓ All smoke tests passed"
           elif [ $exit_code -eq 1 ]; then
             echo "⚠️  Smoke tests passed with warnings (this is OK)"
-            exit 0  # Treat warnings as success for smoke tests
+            exit 0
           else
             echo "❌ Smoke tests failed"
             exit $exit_code
@@ -921,54 +857,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
   
-  smoke-tests-production:
-    name: Smoke Tests - Production (Manual Only)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    if: github.event_name == 'workflow_dispatch'  # Only manual dispatch
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: apcu, gd, zip, curl, json, mbstring
-          coverage: none
-      
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            vendor
-            ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
-      
-      - name: Install Composer dependencies
-        run: |
-          composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
-      
-      - name: Run Smoke Tests (Production)
-        run: |
-          echo "⚠️  WARNING: Running smoke tests against PRODUCTION"
-          echo "Production URL: https://aviationwx.org"
-          # Smoke tests don't need coverage - just verify endpoints work
-          # Exit code 0 = success, 1 = warnings, 2+ = failures
-          vendor/bin/phpunit --testsuite Smoke --testdox --log-junit smoke-prod-results.xml --no-coverage || [ $? -le 1 ]
-        continue-on-error: true
-        env:
-          TEST_PROD_URL: https://aviationwx.org
-      
-      # Production smoke test results not needed - manual test, results visible in logs
-  
   external-links-tests:
     name: External Links Validation
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't block PR if these fail (external services can be flaky)
+    continue-on-error: true
     
     steps:
       - name: Checkout code
@@ -997,25 +889,18 @@ jobs:
       
       - name: Run External Links Validation Tests
         run: |
-          echo "Validating external links (AirNav, SkyVector, AOPA, FAA Weather)..."
-          echo "Note: These tests check URL formats and reachability"
-          # External links tests don't need coverage
           vendor/bin/phpunit tests/Integration/ExternalLinksTest.php --testdox --log-junit external-links-results.xml --no-coverage || [ $? -le 1 ]
         continue-on-error: true
         env:
           CONFIG_PATH: tests/Fixtures/airports.json.test
-      
-      # External links test results not needed - non-critical tests, results visible in logs
   
-  # Split browser tests by file for parallelization
   browser-tests:
     name: Browser Tests - ${{ matrix.test-file }}
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't block PR if these fail
+    continue-on-error: true
     strategy:
-      fail-fast: false  # Continue running other matrix jobs even if one fails
+      fail-fast: false
       matrix:
-        # Run each test file in parallel
         test-file: 
           - 'aviationwx.spec.js'
           - 'cache-and-stale-data.spec.js'
@@ -1036,8 +921,6 @@ jobs:
         working-directory: tests/Browser
         run: |
           npm install
-          # Install only browsers we test in CI (Chromium for desktop + mobile)
-          # This speeds up installation significantly
           npx playwright install --with-deps chromium
       
       - name: Setup test configuration
@@ -1080,10 +963,9 @@ jobs:
       
       - name: Start Docker containers
         run: |
-          # Tag the pre-built image for docker-compose
           docker tag aviationwx:test aviationwx:latest || true
           docker compose -f docker/docker-compose.yml up -d
-          sleep 10  # Reduced wait time
+          sleep 10
           docker compose -f docker/docker-compose.yml ps
       
       - name: Wait for service to be ready
@@ -1091,9 +973,7 @@ jobs:
           timeout=60
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
-            # Check basic service availability
             if curl -f http://localhost:8080/ 2>/dev/null; then
-              # Also verify config is loaded by checking weather endpoint
               if curl -f 'http://localhost:8080/api/weather.php?airport=kspb' 2>/dev/null | grep -q '"success"'; then
                 echo "✓ Service is ready and config loaded after ${elapsed}s"
                 exit 0
@@ -1119,13 +999,10 @@ jobs:
       - name: Run Browser Tests
         working-directory: tests/Browser
         run: |
-          # Run only the specific test file from matrix
-          # Use sharding to split tests within the file across workers
           npx playwright test tests/${{ matrix.test-file }} || [ $? -eq 1 ]
         continue-on-error: true
         env:
           TEST_BASE_URL: http://localhost:8080
-          # Increase workers for faster execution (6 workers for better parallelization)
           PLAYWRIGHT_WORKERS: 6
       
       - name: Upload Playwright Report
@@ -1135,8 +1012,6 @@ jobs:
           name: playwright-report-${{ matrix.test-file }}
           path: tests/Browser/playwright-report/
           retention-days: 7
-      
-      # Playwright test results JSON not needed - HTML report contains all information
       
       - name: Upload Screenshots (on failure only)
         if: failure()
@@ -1151,63 +1026,3 @@ jobs:
         if: always()
         run: |
           docker compose -f docker/docker-compose.yml down
-
-  # Final job that depends on all critical QA jobs completing successfully
-  # This ensures deployment only triggers after ALL quality checks pass
-  qa-complete:
-    name: Quality Assurance Complete
-    runs-on: ubuntu-latest
-    needs: [test, lint, e2e-tests, smoke-tests]
-    if: always()
-    
-    steps:
-      - name: Validate workflow context
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "QA Completion Job - Context Validation"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Commit SHA: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Workflow Run ID: ${{ github.run_id }}"
-          echo "Event: ${{ github.event_name }}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      
-      - name: Check all critical jobs succeeded
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Quality Assurance Summary"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "Checking critical job results..."
-          echo ""
-          
-          # Check each critical job
-          if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "❌ test job failed"
-            exit 1
-          fi
-          echo "✓ test job passed"
-          
-          if [ "${{ needs.lint.result }}" != "success" ]; then
-            echo "❌ lint job failed"
-            exit 1
-          fi
-          echo "✓ lint job passed"
-          
-          if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
-            echo "❌ e2e-tests job failed"
-            exit 1
-          fi
-          echo "✓ e2e-tests job passed"
-          
-          if [ "${{ needs.smoke-tests.result }}" != "success" ]; then
-            echo "❌ smoke-tests job failed"
-            exit 1
-          fi
-          echo "✓ smoke-tests job passed"
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ All critical quality assurance checks passed"
-          echo "✅ Ready for deployment"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../api/weather.php';
 class WeatherCalculationsTest extends TestCase
 {
     /**
-     * Test calculateFlightCategory - VFR conditions
+     * Ensures VFR conditions are correctly identified for flight safety
      */
     public function testCalculateFlightCategory_VFR_StandardConditions()
     {
@@ -45,7 +45,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculateFlightCategory - MVFR conditions
+     * Ensures MVFR conditions are correctly identified when visibility is marginal
      */
     public function testCalculateFlightCategory_MVFR_MarginalVisibility()
     {
@@ -68,7 +68,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculateFlightCategory - IFR conditions
+     * Ensures IFR conditions are correctly identified for instrument flight requirements
      */
     public function testCalculateFlightCategory_IFR_Visibility()
     {
@@ -91,7 +91,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculateFlightCategory - LIFR conditions
+     * Ensures LIFR conditions are correctly identified for critical low visibility scenarios
      */
     public function testCalculateFlightCategory_LIFR_BothConditions()
     {
@@ -124,7 +124,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculateFlightCategory - Edge cases
+     * Ensures boundary values are handled correctly to prevent misclassification at thresholds
      */
     public function testCalculateFlightCategory_EdgeCase_BoundaryValues()
     {
@@ -148,7 +148,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculateDensityAltitude
+     * Ensures density altitude is calculated correctly for aircraft performance planning
      */
     public function testCalculateDensityAltitude_StandardConditions()
     {
@@ -202,7 +202,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculatePressureAltitude
+     * Ensures pressure altitude is calculated correctly for altimeter settings
      */
     public function testCalculatePressureAltitude_StandardPressure()
     {
@@ -251,7 +251,7 @@ class WeatherCalculationsTest extends TestCase
     }
 
     /**
-     * Test calculateDewpoint and calculateHumidityFromDewpoint (round-trip)
+     * Ensures dewpoint and humidity calculations are mathematically consistent
      */
     public function testCalculateDewpoint_RoundTrip()
     {

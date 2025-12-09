@@ -2,9 +2,6 @@ name: Deploy to Production
 
 on:
   workflow_run:
-    # Only trigger on Quality Assurance Tests completion
-    # The check-prerequisites job will verify the workflow succeeded
-    # IMPORTANT: Only trigger on successful completion to prevent loops
     workflows: ["Quality Assurance Tests"]
     types:
       - completed
@@ -24,24 +21,23 @@ on:
         required: true
         type: string
 
-# Ensure only one deployment runs at a time per commit
-# Include commit SHA to prevent duplicate deployments for the same commit
+# Prevent concurrent deployments - only one deployment at a time
+# This prevents conflicts when multiple commits are pushed rapidly
 concurrency:
-  group: deploy-production-${{ github.event.workflow_run.head_sha || github.sha }}
-  cancel-in-progress: true  # Cancel old deployments when new one starts for same commit
+  group: deploy-production
+  cancel-in-progress: false  # Don't cancel - queue deployments to prevent conflicts
 
-# Permissions for deployment
 permissions:
   contents: read
   actions: read
   checks: read
 
 jobs:
-  # Fast-fail check: Exit immediately if QA didn't pass (prevents deploy job from even starting)
+  # Fast-fail: Exit immediately if QA didn't pass (prevents deploy job from starting)
   check-qa-passed:
     runs-on: ubuntu-latest
-    timeout-minutes: 1  # Very fast check - just verify QA passed
-    if: github.event_name == 'workflow_run'  # Only check for workflow_run triggers
+    timeout-minutes: 1
+    if: github.event_name == 'workflow_run'
     steps:
       - name: Verify QA workflow succeeded
         uses: actions/github-script@v7
@@ -67,8 +63,8 @@ jobs:
 
   check-prerequisites:
     runs-on: ubuntu-latest
-    timeout-minutes: 35  # Prevent infinite loops
-    needs: check-qa-passed  # Only run if QA passed (or if manual dispatch)
+    timeout-minutes: 35
+    needs: check-qa-passed
     if: always() && (needs.check-qa-passed.result == 'success' || needs.check-qa-passed.result == 'skipped')
     outputs:
       qa-success: ${{ steps.check.outputs.qa-success }}
@@ -83,12 +79,65 @@ jobs:
             const isManualDispatch = '${{ github.event_name }}' === 'workflow_dispatch';
             const deploymentReason = '${{ github.event.inputs.deployment_reason }}';
             
-            // For workflow_run events, QA already verified in check-qa-passed job
-            // For manual dispatch, we still need to check
+            // workflow_run: QA already verified, just check branch/duplicates
             if (!isManualDispatch) {
-              // QA already verified in check-qa-passed, so we can proceed
               core.info(`✓ QA workflow already verified in check-qa-passed job`);
               core.setOutput('qa-success', 'true');
+              core.setOutput('skip-checks', 'false');
+              
+              const commitSha = '${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}';
+              const branchName = '${{ github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name }}';
+              
+              if (branchName !== 'main') {
+                core.warning(`⚠️  Skipping deployment - not on main branch (branch: ${branchName})`);
+                core.warning('Only deployments from main branch are allowed');
+                core.setOutput('qa-success', 'false');
+                return;
+              }
+              
+              const deployWorkflowPath = '.github/workflows/deploy-docker.yml';
+              const currentRunId = context.runId;
+              
+              // Check for ANY active deployments (not just same commit) to prevent conflicts
+              const allDeployRuns = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: deployWorkflowPath,
+                per_page: 20
+              });
+              
+              const otherRuns = allDeployRuns.data.workflow_runs.filter(run => run.id !== currentRunId);
+              
+              const activeDeploys = otherRuns.filter(run => 
+                run.status === 'in_progress' || run.status === 'queued'
+              );
+              
+              if (activeDeploys.length > 0) {
+                const activeCommit = activeDeploys[0].head_sha?.substring(0, 7) || 'unknown';
+                core.info(`⏭️  Skipping deployment - another deployment is already active (commit: ${activeCommit})`);
+                core.info(`   Concurrency control will queue this deployment to prevent conflicts`);
+                core.setOutput('qa-success', 'false');
+                return;
+              }
+              
+              // Check for recent successful deployment of the same commit (within 5 minutes)
+              const now = Date.now();
+              const recentSuccessfulDeploys = otherRuns.filter(run => {
+                if (run.status !== 'completed' || run.conclusion !== 'success') return false;
+                if (run.head_sha !== commitSha) return false;  // Only check same commit
+                const completedAt = new Date(run.updated_at || run.created_at).getTime();
+                const ageMinutes = (now - completedAt) / (1000 * 60);
+                return ageMinutes < 5;
+              });
+              
+              if (recentSuccessfulDeploys.length > 0) {
+                core.info(`⏭️  Skipping deployment - commit ${commitSha.substring(0, 7)} was recently deployed`);
+                core.setOutput('qa-success', 'false');
+                return;
+              }
+              
+              core.info(`✓ All checks passed - ready to deploy`);
+              return;
             }
             
             if (isManualDispatch) {
@@ -104,326 +153,78 @@ jobs:
                 core.warning('Deployment will proceed without verifying tests passed');
                 core.warning('');
                 core.setOutput('skip-checks', 'true');
-                core.setOutput('qa-success', 'true');  // Fake success to allow deployment
+                core.setOutput('qa-success', 'true');
                 return;
               } else {
-                core.info('Prerequisite checks will be performed (recommended)');
                 core.setOutput('skip-checks', 'false');
-                // For manual dispatch without skip, we still need to verify QA passed
-                // This will be checked in the workflow below
               }
             } else {
               core.setOutput('skip-checks', 'false');
             }
             
-            // Only deploy on push events (commits/merges to main), not on pull_request events
-            // workflow_run event contains the event that triggered the source workflow
-            const triggeringEvent = '${{ github.event.workflow_run && github.event.workflow_run.event || github.event_name }}';
-            
-            core.info(`Triggering event: ${triggeringEvent}`);
-            
-            // Skip deployment if triggered by a pull_request event
-            if (triggeringEvent === 'pull_request') {
-              core.info('⏭️  Skipping deployment - triggered by pull_request event (only deploy on push/merge to main)');
-              core.setOutput('qa-success', 'false');
-              return;
-            }
-            
-            // For manual dispatch, we've already handled it above
-            // For workflow_run, verify this is a push event
-            if (triggeringEvent !== 'push' && !isManualDispatch) {
-              core.warning(`⚠️  Unexpected event type: ${triggeringEvent}. Only push events trigger deployment.`);
-              core.setOutput('qa-success', 'false');
-              return;
-            }
-            
-            // Get the commit SHA - use workflow_run head_sha if available, otherwise context.sha
-            const commitSha = '${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}';
-            
-            // Get the triggering workflow run ID if available (from workflow_run event)
-            // GitHub Actions expressions can't use empty strings directly, so we check in JavaScript
-            const triggeringWorkflowRunIdRaw = '${{ github.event.workflow_run && github.event.workflow_run.id }}';
-            const triggeringWorkflowRunId = (triggeringWorkflowRunIdRaw && triggeringWorkflowRunIdRaw !== '') ? triggeringWorkflowRunIdRaw : null;
-            
-            // Get the branch name - critical for ensuring we only deploy from main
-            const branchName = '${{ github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name }}';
-            
-            // CRITICAL GUARD: Only deploy from main branch
-            if (branchName !== 'main') {
-              core.warning(`⚠️  Skipping deployment - not on main branch (branch: ${branchName})`);
-              core.warning('Only deployments from main branch are allowed');
-              core.setOutput('qa-success', 'false');
-              return;
-            }
-            
-            core.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-            core.info(`Deployment Guard Checks`);
-            core.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-            core.info(`Commit SHA: ${commitSha}`);
-            core.info(`Branch: ${branchName}`);
-            core.info(`Current deployment run ID: ${context.runId}`);
-            if (triggeringWorkflowRunId) {
-              core.info(`Triggering QA workflow run ID: ${triggeringWorkflowRunId}`);
-            }
-            core.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-            
-            // Prevent duplicate deployments: Check if this commit is already deployed or deploying
-            // This prevents loops when multiple workflow_run events fire for the same commit
-            // Check for ANY deployment (queued, in-progress, or recently completed) for this commit
-            if (!isManualDispatch) {
-              const deployWorkflowPath = '.github/workflows/deploy-docker.yml';
-              const currentRunId = context.runId;
+            // Manual dispatch: verify QA workflow passed
+            if (isManualDispatch && skipInput !== 'true') {
+              const commitSha = '${{ github.sha }}';
+              const branchName = '${{ github.ref_name }}';
+              const triggeringWorkflowRunIdRaw = '${{ github.event.workflow_run && github.event.workflow_run.id }}';
+              const triggeringWorkflowRunId = (triggeringWorkflowRunIdRaw && triggeringWorkflowRunIdRaw !== '') ? triggeringWorkflowRunIdRaw : null;
               
-              const existingDeployRuns = await github.rest.actions.listWorkflowRuns({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: deployWorkflowPath,
-                head_sha: commitSha,
-                per_page: 20  // Check more runs to account for timing issues
-              });
+              const qaWorkflowPath = '.github/workflows/quality-assurance-tests.yml';
+              const maxWaitTime = 30 * 60 * 1000;
+              const checkInterval = 30 * 1000;
+              const startTime = Date.now();
               
-              // Filter out the current run
-              const otherRuns = existingDeployRuns.data.workflow_runs.filter(run => run.id !== currentRunId);
+              let qaRun = null;
+              let qaSuccess = false;
               
-              // Check for in-progress or queued deployments
-              const activeDeploys = otherRuns.filter(run => 
-                run.status === 'in_progress' || run.status === 'queued'
-              );
-              
-              // Check for recently completed successful deployments (within last 5 minutes)
-              // This prevents re-deploying the same commit immediately after a successful deployment
-              const now = Date.now();
-              const recentSuccessfulDeploys = otherRuns.filter(run => {
-                if (run.status !== 'completed' || run.conclusion !== 'success') {
-                  return false;
-                }
-                const completedAt = new Date(run.updated_at || run.created_at).getTime();
-                const ageMinutes = (now - completedAt) / (1000 * 60);
-                return ageMinutes < 5; // Within last 5 minutes
-              });
-              
-              if (activeDeploys.length > 0) {
-                core.info(`⏭️  Skipping deployment - another deployment for commit ${commitSha.substring(0, 7)} is already active`);
-                core.info(`Found ${activeDeploys.length} active deployment(s) for this commit:`);
-                activeDeploys.forEach(run => {
-                  core.info(`  - Run ${run.id}: ${run.status} (${run.conclusion || 'pending'})`);
-                });
-                core.setOutput('qa-success', 'false');
-                core.setOutput('skip-checks', 'false');
-                return;
-              }
-              
-              if (recentSuccessfulDeploys.length > 0) {
-                core.info(`⏭️  Skipping deployment - commit ${commitSha.substring(0, 7)} was recently deployed successfully`);
-                core.info(`Found ${recentSuccessfulDeploys.length} recent successful deployment(s) for this commit:`);
-                recentSuccessfulDeploys.forEach(run => {
-                  const completedAt = new Date(run.updated_at || run.created_at);
-                  const ageMinutes = Math.round((now - completedAt.getTime()) / (1000 * 60));
-                  core.info(`  - Run ${run.id}: completed ${ageMinutes} minute(s) ago`);
-                });
-                core.setOutput('qa-success', 'false');
-                core.setOutput('skip-checks', 'false');
-                return;
-              }
-              
-              core.info(`✓ No duplicate deployments found for commit ${commitSha.substring(0, 7)}`);
-            }
-            
-            const maxWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
-            const checkInterval = 30 * 1000; // Check every 30 seconds
-            const startTime = Date.now();
-            
-            let qaRun = null;
-            let qaSuccess = false;
-            
-            // Use workflow file path instead of ID (more reliable)
-            const qaWorkflowPath = '.github/workflows/quality-assurance-tests.yml';
-            
-            core.info(`Looking for workflow: ${qaWorkflowPath}`);
-            
-            // Wait for QA workflow to complete
-            // CRITICAL: Use strict matching to prevent confusion with concurrent runs
-            const maxWorkflowAge = 2 * 60 * 60 * 1000; // 2 hours - don't match workflows older than this
-            const workflowStartTime = Date.now();
-            
-            while (Date.now() - startTime < maxWaitTime) {
-              // Get workflow runs by workflow file path for more specific filtering
-              const qaRuns = await github.rest.actions.listWorkflowRuns({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: qaWorkflowPath,
-                head_sha: commitSha,
-                branch: branchName, // CRITICAL: Filter by branch to avoid PR workflow confusion
-                per_page: 20  // Check more runs to find the exact match
-              });
-              
-              // CRITICAL GUARD 1: If we have a triggering workflow run ID, use ONLY that
-              // This is the most reliable way to match the exact workflow that triggered us
-              if (triggeringWorkflowRunId) {
-                qaRun = qaRuns.data.workflow_runs.find(run => 
-                  run.id.toString() === triggeringWorkflowRunId.toString()
-                );
-                
-                if (qaRun) {
-                  core.info(`✓ Found exact QA workflow match by run ID: ${qaRun.id}`);
-                } else {
-                  core.warning(`⚠️  Triggering workflow run ID ${triggeringWorkflowRunId} not found in results`);
-                  core.warning(`This may indicate a race condition or workflow cancellation`);
-                }
-              }
-              
-              // CRITICAL GUARD 2: If not found by ID, use strict matching criteria
-              // Must match: commit SHA, branch, event type, and be recent
-              if (!qaRun) {
-                const now = Date.now();
-                qaRun = qaRuns.data.workflow_runs.find(run => {
-                  // Must match commit SHA exactly
-                  if (run.head_sha !== commitSha) return false;
-                  
-                  // Must match branch exactly (prevents PR workflow confusion)
-                  if (run.head_branch !== branchName) return false;
-                  
-                  // Must be a push or workflow_dispatch event (not pull_request)
-                  if (run.event !== 'push' && run.event !== 'workflow_dispatch') return false;
-                  
-                  // Must be recent (within maxWorkflowAge)
-                  const runTime = new Date(run.created_at).getTime();
-                  const age = now - runTime;
-                  if (age > maxWorkflowAge) {
-                    core.info(`Skipping workflow run ${run.id} - too old (${Math.round(age / 1000 / 60)} minutes)`);
-                    return false;
-                  }
-                  
-                  return true;
+              while (Date.now() - startTime < maxWaitTime) {
+                const qaRuns = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: qaWorkflowPath,
+                  head_sha: commitSha,
+                  branch: branchName,
+                  per_page: 10
                 });
                 
-                if (qaRun) {
-                  core.info(`✓ Found QA workflow match by strict criteria: ${qaRun.id}`);
-                  core.info(`  - Commit SHA: ${qaRun.head_sha.substring(0, 7)}`);
-                  core.info(`  - Branch: ${qaRun.head_branch}`);
-                  core.info(`  - Event: ${qaRun.event}`);
+                if (triggeringWorkflowRunId) {
+                  qaRun = qaRuns.data.workflow_runs.find(run => 
+                    run.id.toString() === triggeringWorkflowRunId.toString()
+                  );
                 }
-              }
-              
-              // CRITICAL GUARD 3: Verify we found the correct workflow
-              if (qaRun) {
-                // Double-check all matching criteria
-                if (qaRun.head_sha !== commitSha) {
-                  core.error(`❌ Workflow run ${qaRun.id} commit SHA mismatch!`);
-                  core.error(`  Expected: ${commitSha}`);
-                  core.error(`  Found: ${qaRun.head_sha}`);
-                  qaRun = null; // Reset and continue searching
-                } else if (qaRun.head_branch !== branchName) {
-                  core.error(`❌ Workflow run ${qaRun.id} branch mismatch!`);
-                  core.error(`  Expected: ${branchName}`);
-                  core.error(`  Found: ${qaRun.head_branch}`);
-                  qaRun = null; // Reset and continue searching
+                
+                if (!qaRun) {
+                  qaRun = qaRuns.data.workflow_runs.find(run => 
+                    run.head_sha === commitSha && 
+                    run.head_branch === branchName &&
+                    (run.event === 'push' || run.event === 'workflow_dispatch')
+                  );
                 }
-              }
-              
-              const qaStatus = qaRun?.status;
-              const qaConclusion = qaRun?.conclusion;
-              
-              core.info(`Quality Assurance Tests: ${qaStatus || 'not found'} (${qaConclusion || 'pending'}) - Run ID: ${qaRun?.id || 'N/A'}`);
-              
-              // If workflow hasn't started yet (queued), wait a bit longer
-              if (qaStatus === 'queued' || !qaRun) {
-                core.info('QA workflow is queued or not found yet, waiting...');
+                
+                if (qaRun && qaRun.status === 'completed') {
+                  qaSuccess = qaRun.conclusion === 'success';
+                  break;
+                }
+                
                 await new Promise(resolve => setTimeout(resolve, checkInterval));
-                continue;
               }
               
-              // Check if workflow has completed
-              if (qaStatus === 'completed') {
-                qaSuccess = qaConclusion === 'success';
-                break;
+              if (!qaRun || !qaSuccess) {
+                core.error(`❌ Quality Assurance Tests workflow did not succeed`);
+                core.setFailed('❌ QA tests must pass before manual deployment (unless skip flag is used)');
+                core.setOutput('qa-success', 'false');
+                return;
               }
               
-              // Wait before checking again
-              core.info('Waiting for QA workflow to complete...');
-              await new Promise(resolve => setTimeout(resolve, checkInterval));
-            }
-            
-            // Final check - ensure we have the workflow with strict validation
-            if (!qaRun) {
-              // Get diagnostic info for debugging
-              const allQaRuns = await github.rest.actions.listWorkflowRuns({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: qaWorkflowPath,
-                branch: branchName,
-                per_page: 10
-              });
-              
-              core.error(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-              core.error(`❌ Could not find matching Quality Assurance Tests workflow`);
-              core.error(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-              core.error(`Looking for:`);
-              core.error(`  - Commit SHA: ${commitSha}`);
-              core.error(`  - Branch: ${branchName}`);
-              if (triggeringWorkflowRunId) {
-                core.error(`  - Workflow Run ID: ${triggeringWorkflowRunId}`);
-              }
-              core.error(``);
-              core.error(`Recent Quality Assurance Tests runs on ${branchName}:`);
-              allQaRuns.data.workflow_runs.slice(0, 5).forEach(run => {
-                const age = Math.round((Date.now() - new Date(run.created_at).getTime()) / 1000 / 60);
-                core.error(`  - Run ${run.id}: ${run.head_sha.substring(0, 7)} (${run.status}) - ${age} min ago - ${run.event} - branch: ${run.head_branch}`);
-              });
-              core.error(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-              
-              core.setFailed('❌ Could not find matching Quality Assurance Tests workflow. This may indicate:');
-              core.setFailed('  1. QA workflow was cancelled or failed before completion');
-              core.setFailed('  2. Multiple concurrent workflows caused a race condition');
-              core.setFailed('  3. Workflow run ID mismatch (workflow may have been re-run)');
-              return;
-            }
-            
-            // CRITICAL GUARD: Final validation before proceeding
-            if (qaRun.head_sha !== commitSha) {
-              core.setFailed(`❌ CRITICAL: Commit SHA mismatch detected!`);
-              core.setFailed(`  Expected: ${commitSha}`);
-              core.setFailed(`  QA Workflow: ${qaRun.head_sha}`);
-              core.setFailed(`  This prevents deploying the wrong commit.`);
-              return;
-            }
-            
-            if (qaRun.head_branch !== branchName) {
-              core.setFailed(`❌ CRITICAL: Branch mismatch detected!`);
-              core.setFailed(`  Expected: ${branchName}`);
-              core.setFailed(`  QA Workflow: ${qaRun.head_branch}`);
-              core.setFailed(`  This prevents deploying from wrong branch.`);
-              return;
-            }
-            
-            if (qaRun.status !== 'completed') {
-              core.setFailed(`❌ Quality Assurance Tests workflow is still running after wait period:
-                - Quality Assurance Tests: ${qaRun.status} (${qaRun.conclusion || 'pending'})`);
-              return;
-            }
-            
-            core.setOutput('qa-success', qaSuccess ? 'true' : 'false');
-            
-            core.info(`Quality Assurance Tests: ${qaRun.conclusion || 'unknown'} (ID: ${qaRun.id})`);
-            
-            if (!qaSuccess) {
-              core.error(`❌ Quality Assurance Tests workflow did not succeed for commit ${commitSha}`);
-              core.error('Deployment is blocked because QA tests did not pass.');
-              core.setFailed('❌ Quality Assurance Tests workflow did not succeed. Deployment blocked.');
-              // Ensure qa-success is explicitly false
-              core.setOutput('qa-success', 'false');
-            } else {
-              core.info('✅ Quality Assurance Tests workflow succeeded - deployment will proceed');
+              core.info('✅ Quality Assurance Tests workflow succeeded');
               core.setOutput('qa-success', 'true');
             }
 
   deploy:
     runs-on: ubuntu-latest
     needs: [check-qa-passed, check-prerequisites]
-    timeout-minutes: 60  # Prevent infinite loops - deployment should complete within 60 minutes
-    # CRITICAL: Only deploy if QA workflow succeeded (or manual dispatch with skip option)
-    # This ensures we never deploy code that failed quality assurance tests
-    # check-qa-passed job will fail fast if QA didn't pass, preventing this job from running
+    timeout-minutes: 60
+    # Only deploy if QA succeeded (or manual dispatch with skip)
     if: |
       (needs.check-qa-passed.result == 'success' || needs.check-qa-passed.result == 'skipped') &&
       ((needs.check-prerequisites.outputs.qa-success == 'true') || 
@@ -432,8 +233,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # When triggered by workflow_run, checkout the commit from that workflow
-          # Otherwise use the commit SHA from the prerequisites check
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 

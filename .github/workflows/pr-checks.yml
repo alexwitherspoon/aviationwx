@@ -5,6 +5,11 @@ on:
     branches: [ "main" ]
     types: [ opened, synchronize, reopened, ready_for_review ]
 
+# Prevent concurrent runs - cancel old runs when PR is updated
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 # Default permissions for all jobs in this workflow
 permissions:
   contents: read
@@ -20,7 +25,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better diffs
+          fetch-depth: 0
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -43,85 +48,41 @@ jobs:
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
-      - name: Run All PHPUnit Tests
+      - name: Validate PHP syntax
         run: |
-          echo "Running full PHPUnit test suite..."
-          # PHPUnit returns exit code 1 for warnings even with failOnWarning=false
-          # Run tests with coverage (pcov is installed)
-          vendor/bin/phpunit --testdox --log-junit=test-results.xml --coverage-clover=coverage.xml
-          exit_code=$?
-          
-          # Exit code 0 = success, 1 = warnings, 2+ = failures
-          if [ $exit_code -eq 0 ]; then
-            echo "✓ All tests passed"
-          elif [ $exit_code -eq 1 ]; then
-            echo "⚠️  Tests passed with warnings"
-          else
-            echo "❌ Tests failed - check output above"
+          errors=$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" || true)
+          if [ ! -z "$errors" ]; then
+            echo "❌ PHP syntax errors found:"
+            echo "$errors"
             exit 1
+          else
+            echo "✓ All PHP files have valid syntax"
           fi
-      
-      - name: Check Test Coverage (Minimum Threshold)
-        run: |
-          echo "Checking test coverage..."
-          # Coverage is generated in the previous step, check if file exists
-          if [ ! -f coverage.xml ]; then
-            echo "⚠️  Coverage file not found - coverage may not have been generated"
-            exit 0
-          fi
-          
-          # Check that critical files have tests
-          critical_files=(
-            "api/weather.php"
-            "lib/config.php"
-            "lib/rate-limit.php"
-            "lib/circuit-breaker.php"
-            "lib/constants.php"
-            "lib/process-pool.php"
-            "scripts/fetch-weather.php"
-            "scripts/fetch-webcam.php"
-          )
-          
-          for file in "${critical_files[@]}"; do
-            if ! grep -q "$file" coverage.xml 2>/dev/null; then
-              echo "⚠️  Warning: $file may not have test coverage"
-            fi
-          done
-          
-          echo "✓ Coverage check complete"
       
       - name: Validate Stale Data Safety Implementation
         run: |
-          echo "🔒 Validating stale data safety implementation..."
-          
-          # Check that nullStaleFieldsBySource function exists
           if ! grep -q "function nullStaleFieldsBySource" api/weather.php; then
             echo "❌ CRITICAL: nullStaleFieldsBySource function missing!"
             exit 1
           fi
           
-          # Check that mergeWeatherDataWithFallback function exists
           if ! grep -q "function mergeWeatherDataWithFallback" api/weather.php; then
             echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
             exit 1
           fi
           
-          # Check that stale data threshold uses constant (MAX_STALE_HOURS)
           if ! grep -q "MAX_STALE_HOURS\|maxStaleHours.*3" api/weather.php; then
             echo "⚠️  Warning: Stale data threshold may not be set correctly"
           fi
           
-          # Check that daily tracking values are preserved
           if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" api/weather.php; then
             echo "⚠️  Warning: Daily tracking values preservation may be missing"
           fi
           
-          # Check for VRB wind direction handling
           if ! grep -q "wdir.*VRB\|'VRB'" api/weather.php; then
             echo "⚠️  Warning: VRB (variable wind direction) handling may be missing"
           fi
           
-          # Check for error handling around parsing
           if ! grep -q "try.*catch.*Exception\|try.*catch.*Throwable" api/weather.php; then
             echo "⚠️  Warning: Error handling around parsing may be missing"
           fi
@@ -130,27 +91,21 @@ jobs:
       
       - name: Validate Push Webcam Implementation
         run: |
-          echo "🔒 Validating push webcam implementation..."
-          
-          # Check that push webcam validator exists
           if ! grep -q "function validatePushWebcamConfig" lib/push-webcam-validator.php; then
             echo "❌ CRITICAL: validatePushWebcamConfig function missing!"
             exit 1
           fi
           
-          # Check that process script exists
           if ! grep -q "function processPushWebcams" scripts/process-push-webcams.php; then
             echo "❌ CRITICAL: processPushWebcams function missing!"
             exit 1
           fi
           
-          # Check that sync script exists
           if ! grep -q "function syncPushConfig" scripts/sync-push-config.php; then
             echo "❌ CRITICAL: syncPushConfig function missing!"
             exit 1
           fi
           
-          # Check that staleness thresholds are correct (5x and 10x refresh_seconds)
           if ! grep -q "refresh_seconds.*5\|5.*refresh_seconds" pages/status.php scripts/process-push-webcams.php; then
             echo "⚠️  Warning: Staleness warning threshold (5x) may not be implemented"
           fi
@@ -159,12 +114,10 @@ jobs:
             echo "⚠️  Warning: Staleness error threshold (10x) may not be implemented"
           fi
           
-          # Check that minimum refresh_seconds is enforced (60 seconds)
           if ! grep -q "60\|min.*60" scripts/process-push-webcams.php lib/push-webcam-validator.php; then
             echo "⚠️  Warning: Minimum refresh_seconds (60s) enforcement may be missing"
           fi
           
-          # Check that file validation is implemented
           if ! grep -q "validateImageFile\|mime_content_type\|getimagesize" scripts/process-push-webcams.php; then
             echo "⚠️  Warning: Image file validation may be missing"
           fi
@@ -173,15 +126,11 @@ jobs:
       
       - name: Validate Flight Category Logic
         run: |
-          echo "🔒 Validating flight category calculation logic..."
-          
-          # Check that calculateFlightCategory function exists
           if ! grep -q "function calculateFlightCategory" api/weather.php; then
             echo "❌ CRITICAL: calculateFlightCategory function missing!"
             exit 1
           fi
           
-          # Check for all flight categories
           categories=("LIFR" "IFR" "MVFR" "VFR")
           for category in "${categories[@]}"; do
             if ! grep -q "return '$category'" api/weather.php; then
@@ -193,9 +142,6 @@ jobs:
       
       - name: Check for Breaking Changes
         run: |
-          echo "Checking for breaking changes..."
-          
-          # Check if critical functions are being removed or renamed
           critical_functions=(
             "calculateFlightCategory"
             "calculateDensityAltitude"
@@ -227,15 +173,11 @@ jobs:
       
       - name: Validate API Response Structure
         run: |
-          echo "Validating API response structure..."
-          
-          # Check that api/weather.php returns JSON
           if ! grep -q "Content-Type: application/json" api/weather.php; then
             echo "❌ CRITICAL: API response doesn't set JSON header!"
             exit 1
           fi
           
-          # Check for error handling
           if ! grep -q "success.*false" api/weather.php; then
             echo "⚠️  Warning: Error response structure may be missing"
           fi
@@ -244,38 +186,30 @@ jobs:
       
       - name: Security Checks
         run: |
-          echo "Running security checks..."
-          
-          # Check for SQL injection risks (even though we use JSON files)
           if grep -r "mysql_query\|mysqli_query\|pg_query" --include="*.php" . | grep -v "test\|vendor" | grep -v "^$"; then
             echo "❌ CRITICAL: Potential SQL injection risk detected!"
             exit 1
           fi
           
-          # Check for XSS vulnerabilities in output
           if grep -r "echo.*\$_GET\|echo.*\$_POST\|echo.*\$_REQUEST" --include="*.php" . | grep -v "test\|vendor" | grep -v "json_encode"; then
             echo "⚠️  Warning: Potential XSS vulnerability - ensure all output is sanitized"
           fi
           
-          # Check that rate limiting is enforced
           if ! grep -q "checkRateLimit" api/weather.php; then
             echo "❌ CRITICAL: Rate limiting not enforced in api/weather.php!"
             exit 1
           fi
           
-          # Check that config generator has rate limiting
           if ! grep -q "checkRateLimit" pages/config-generator.php; then
             echo "❌ CRITICAL: Rate limiting not enforced in pages/config-generator.php!"
             exit 1
           fi
           
-          # Check that push webcam credentials are properly validated
           if ! grep -q "validatePushWebcamConfig" lib/push-webcam-validator.php; then
             echo "❌ CRITICAL: Push webcam validation function missing!"
             exit 1
           fi
           
-          # Check that file uploads are validated (file size, extension, MIME type)
           if ! grep -q "max_file_size_mb\|allowed_extensions\|validateImageFile" scripts/process-push-webcams.php; then
             echo "⚠️  Warning: File upload validation may be missing in process-push-webcams.php"
           fi
@@ -284,13 +218,11 @@ jobs:
       
       - name: Run VPN Manager Security Tests
         run: |
-          echo "Running VPN Manager security tests..."
           if [ ! -f "scripts/test-vpn-manager-security.py" ]; then
             echo "❌ VPN Manager security test file not found"
             exit 1
           fi
           
-          # Python 3 is available by default on ubuntu-latest
           python3 scripts/test-vpn-manager-security.py
           exit_code=$?
           

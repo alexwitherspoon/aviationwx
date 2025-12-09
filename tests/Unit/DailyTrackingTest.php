@@ -73,7 +73,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - First value of the day
+     * Ensures first gust value initializes the daily peak correctly
      */
     public function testUpdatePeakGust_FirstValueOfDay()
     {
@@ -96,7 +96,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - Higher value updates peak
+     * Ensures peak gust only increases, preventing slower winds from overwriting higher peaks
      */
     public function testUpdatePeakGust_HigherValueUpdates()
     {
@@ -128,7 +128,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - Timestamp updates only on new peak
+     * Ensures timestamp reflects when the peak occurred, not when lower values were observed
      */
     public function testUpdatePeakGust_TimestampUpdatesOnNewPeak()
     {
@@ -173,7 +173,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - Multiple airports don't interfere
+     * Ensures airport isolation so one airport's data doesn't affect another
      */
     public function testUpdatePeakGust_MultipleAirports()
     {
@@ -194,7 +194,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - Timezone-aware daily reset
+     * Ensures daily reset occurs at midnight in airport's timezone, not UTC
      */
     public function testUpdatePeakGust_TimezoneAware()
     {
@@ -217,7 +217,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - First value initializes both high and low
+     * Ensures first temperature value correctly initializes both high and low extremes
      */
     public function testUpdateTempExtremes_FirstValue()
     {
@@ -237,7 +237,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Higher temperature updates high
+     * Ensures high temperature only increases, preventing lower temps from overwriting the daily high
      */
     public function testUpdateTempExtremes_HigherTempUpdatesHigh()
     {
@@ -261,7 +261,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Lower temperature updates low
+     * Ensures low temperature only decreases, preventing higher temps from overwriting the daily low
      */
     public function testUpdateTempExtremes_LowerTempUpdatesLow()
     {
@@ -282,7 +282,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Timestamp updates only on new records
+     * Ensures timestamps reflect when extremes occurred, not when non-extreme values were observed
      */
     public function testUpdateTempExtremes_TimestampUpdatesOnNewRecords()
     {
@@ -334,7 +334,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Same low temperature observed at earlier time updates timestamp
+     * Ensures timestamp reflects earliest observation of an extreme value when processing out-of-order data
      */
     public function testUpdateTempExtremes_SameLowAtEarlierTime()
     {
@@ -365,7 +365,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Multiple airports don't interfere
+     * Ensures airport isolation so one airport's temperature data doesn't affect another
      */
     public function testUpdateTempExtremes_MultipleAirports()
     {
@@ -383,7 +383,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getAirportDateKey - Timezone awareness
+     * Ensures date keys use airport timezone for accurate daily tracking boundaries
      */
     public function testGetAirportDateKey_TimezoneAware()
     {
@@ -398,7 +398,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getAirportDateKey - Default timezone
+     * Ensures airports without timezone config fall back to UTC gracefully
      */
     public function testGetAirportDateKey_DefaultTimezone()
     {
@@ -416,7 +416,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getAirportTimezone - Returns configured timezone
+     * Ensures configured airport timezone is returned correctly
      */
     public function testGetAirportTimezone_ReturnsConfigured()
     {
@@ -426,7 +426,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getAirportTimezone - Default fallback
+     * Ensures UTC fallback when airport timezone is not configured
      */
     public function testGetAirportTimezone_DefaultFallback()
     {
@@ -438,7 +438,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getAirportTimezone - Global config override
+     * Ensures global default timezone config is respected when airport timezone is missing
      */
     public function testGetAirportTimezone_GlobalConfigOverride()
     {
@@ -465,7 +465,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getSunriseTime - Valid coordinates
+     * Ensures sunrise calculation works correctly for valid airport coordinates
      */
     public function testGetSunriseTime_ValidCoordinates()
     {
@@ -483,7 +483,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getSunsetTime - Valid coordinates
+     * Ensures sunset calculation works correctly for valid airport coordinates
      */
     public function testGetSunsetTime_ValidCoordinates()
     {
@@ -501,7 +501,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test getSunriseTime - Timezone conversion
+     * Ensures sunrise times are converted to airport timezone, not UTC
      */
     public function testGetSunriseTime_TimezoneConversion()
     {
@@ -528,8 +528,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - Type coercion: string values from JSON should be handled correctly
-     * This tests the fix for the bug where slower wind speeds could overwrite higher peak gusts
+     * Prevents type coercion bug where string "15" < numeric 10, causing slower winds to overwrite higher peaks
      */
     public function testUpdatePeakGust_TypeCoercionFromJson()
     {
@@ -563,7 +562,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updatePeakGust - Type coercion: numeric string input should be handled correctly
+     * Ensures string inputs like "15" are correctly converted to numbers before comparison
      */
     public function testUpdatePeakGust_StringInputHandling()
     {
@@ -596,7 +595,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Type coercion: string values from JSON should be handled correctly
+     * Prevents type coercion bug where string temperatures cause incorrect comparisons
      */
     public function testUpdateTempExtremes_TypeCoercionFromJson()
     {
@@ -631,7 +630,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test updateTempExtremes - Type coercion: numeric string input should be handled correctly
+     * Ensures string temperature inputs are correctly converted to numbers before comparison
      */
     public function testUpdateTempExtremes_StringInputHandling()
     {
@@ -664,7 +663,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test cache file corruption handling - invalid JSON should be recreated
+     * Ensures corrupted cache files are gracefully recovered to prevent data loss
      */
     public function testPeakGust_CorruptedJsonFile()
     {
@@ -695,7 +694,7 @@ class DailyTrackingTest extends TestCase
     }
     
     /**
-     * Test cache file corruption handling for temp extremes
+     * Ensures corrupted temperature cache files are gracefully recovered to prevent data loss
      */
     public function testTempExtremes_CorruptedJsonFile()
     {
