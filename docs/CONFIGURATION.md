@@ -268,9 +268,15 @@ Add an entry to `airports.json` following this structure:
           "url": "https://camera-url.com/stream",
           "username": "user",
           "password": "pass",
-          "position": "north",
-          "partner_name": "Partner Name",
-          "partner_link": "https://partner-link.com"
+          "position": "north"
+        }
+      ],
+      "partners": [
+        {
+          "name": "Partner Organization",
+          "url": "https://partner-link.com",
+          "logo": "https://partner-link.com/logo.png",
+          "description": "Brief description of partnership"
         }
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
@@ -289,6 +295,94 @@ Add an entry to `airports.json` following this structure:
     }
   }
 }
+```
+
+## Partnerships Configuration
+
+Partnerships are organizations, companies, or groups that help make the airport weather service possible. They are prominently displayed in a dedicated section above the footer on the airport dashboard.
+
+### Configuration Format
+
+Add a `partners` array to your airport configuration:
+
+```json
+"partners": [
+  {
+    "name": "Local Aviation Club",
+    "url": "https://example-aviation-club.com",
+    "logo": "https://example-aviation-club.com/logo.png",
+    "description": "Supporting local aviation community"
+  },
+  {
+    "name": "Weather Station Sponsor",
+    "url": "https://example-weather-sponsor.com",
+    "logo": "https://example-weather-sponsor.com/logo.jpg"
+  },
+  {
+    "name": "Community Organization",
+    "url": "https://example-org.com"
+  }
+]
+```
+
+### Fields
+
+- **`name`** (required): The partner organization name
+- **`url`** (required): The full URL to the partner's website (must be HTTPS)
+- **`logo`** (optional): URL to the partner's logo image. Logos are automatically cached locally for 30 days. Supports JPEG, PNG, GIF, and WebP formats. PNG images are automatically converted to JPEG.
+- **`description`** (optional): Brief description of the partnership (used for tooltips/accessibility)
+
+### Behavior
+
+- Partners are **optional** - only airports with a `partners` array will display the partnerships section
+- Partners are displayed prominently in a two-column layout (Partnerships | Data Sources)
+- Logos are automatically downloaded and cached locally for 30 days
+- If a logo fails to load, the partner name is displayed as text
+- All partner links open in a new tab with proper security attributes (`target="_blank" rel="noopener"`)
+- Data sources (weather providers) are automatically deduced from the airport's `weather_source` configuration
+
+### Logo Caching
+
+Partner logos are automatically cached to improve performance and reduce load on partner servers:
+
+- Logos are downloaded on first access and cached in `cache/partners/`
+- Cache TTL: 30 days (2592000 seconds)
+- Supported formats: JPEG, PNG, GIF, WebP (PNG converted to JPEG)
+- Logos are served via `/api/partner-logo.php?url={encoded_url}`
+- If logo download fails, partner name is displayed as text fallback
+
+### Examples
+
+**Airport with Single Partner:**
+```json
+"partners": [
+  {
+    "name": "Local Aviation Club",
+    "url": "https://aviationclub.example.com",
+    "logo": "https://aviationclub.example.com/logo.png"
+  }
+]
+```
+
+**Airport with Multiple Partners:**
+```json
+"partners": [
+  {
+    "name": "Local Aviation Club",
+    "url": "https://aviationclub.example.com",
+    "logo": "https://aviationclub.example.com/logo.png",
+    "description": "Supporting local aviation community"
+  },
+  {
+    "name": "Weather Station Sponsor",
+    "url": "https://weathersponsor.example.com",
+    "logo": "https://weathersponsor.example.com/logo.jpg"
+  },
+  {
+    "name": "Community Organization",
+    "url": "https://community.example.com"
+  }
+]
 ```
 
 ## Custom Links Configuration
@@ -564,8 +658,6 @@ The system automatically detects the source type from the URL:
 - `name`: Display name for the webcam
 - `url`: Full URL to the stream/image
 - `position`: Direction the camera faces (for organization)
-- `partner_name`: Partner organization name
-- `partner_link`: Link to partner website
 
 ### Optional Fields
 - `type`: Explicit source type override (`rtsp`, `mjpeg`, `static_jpeg`, `static_png`) - useful when auto-detection is incorrect
@@ -585,9 +677,7 @@ The system automatically detects the source type from the URL:
 {
   "name": "Main Field View",
   "url": "https://example.com/mjpg/video.mjpg",
-  "position": "north",
-  "partner_name": "Example Partners",
-  "partner_link": "https://example.com"
+  "position": "north"
 }
 ```
 
@@ -604,9 +694,7 @@ The system automatically detects the source type from the URL:
   "transcode_timeout": 8,
   "username": "admin",
   "password": "password123",
-  "position": "south",
-  "partner_name": "Partner Name",
-  "partner_link": "https://partner.com"
+  "position": "south"
 }
 ```
 
@@ -621,9 +709,7 @@ The system automatically detects the source type from the URL:
   "rtsp_fetch_timeout": 10,
   "rtsp_max_runtime": 6,
   "transcode_timeout": 8,
-  "position": "north",
-  "partner_name": "Partner Name",
-  "partner_link": "https://partner.com"
+  "position": "north"
 }
 ```
 
@@ -639,9 +725,7 @@ The system automatically detects the source type from the URL:
 {
   "name": "Weather Station Cam",
   "url": "https://wx.example.com/webcam.jpg",
-  "position": "east",
-  "partner_name": "Weather Station",
-  "partner_link": "https://wx.example.com"
+  "position": "east"
 }
 ```
 
@@ -684,8 +768,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
   "name": "Runway Camera (Push)",
   "type": "push",
   "position": "north",
-  "partner_name": "Partner Name",
-  "partner_link": "https://partner.com",
   "refresh_seconds": 60,
   "push_config": {
     "protocol": "sftp",
@@ -703,8 +785,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
   "name": "Secure Camera (Push)",
   "type": "push",
   "position": "south",
-  "partner_name": "Partner Name",
-  "partner_link": "https://partner.com",
   "refresh_seconds": 120,
   "push_config": {
     "protocol": "ftps",
@@ -721,8 +801,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
   "name": "Legacy Camera (Push)",
   "type": "push",
   "position": "east",
-  "partner_name": "Partner Name",
-  "partner_link": "https://partner.com",
   "push_config": {
     "protocol": "ftp",
     "username": "kspbCam2Push03",
