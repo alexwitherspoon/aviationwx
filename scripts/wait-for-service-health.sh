@@ -67,10 +67,15 @@ config_ready=false
 
 while [ $elapsed_phase2 -lt $phase2_timeout ]; do
     # Check if weather API returns success (indicates config is loaded)
-    response=$(curl -f -s --max-time 5 "${BASE_URL}/api/weather.php?airport=kspb" 2>/dev/null)
+    # Don't use -f flag here - we want to check the response even if HTTP status is an error
+    # We need to handle curl failures gracefully (network errors, timeouts, etc.)
+    set +e  # Temporarily disable exit on error to check curl response
+    response=$(curl -s --max-time 5 "${BASE_URL}/api/weather.php?airport=kspb" 2>/dev/null)
     curl_exit=$?
+    set -e  # Re-enable exit on error
     
-    if [ $curl_exit -eq 0 ] && [ -n "$response" ]; then
+    # Check if we got a response (even if HTTP status was an error)
+    if [ -n "$response" ]; then
         # Check for success:true (ideal case)
         if echo "$response" | grep -qE '"success"\s*:\s*true'; then
             echo "✓ Configuration loaded and API responding after ${elapsed_phase2}s (total: $((elapsed + elapsed_phase2))s)"
