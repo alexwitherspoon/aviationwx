@@ -92,6 +92,9 @@ if (!defined('CONFIG_CACHE_TTL')) {
 if (!defined('PLACEHOLDER_CACHE_TTL')) {
     define('PLACEHOLDER_CACHE_TTL', 3600); // 1 hour
 }
+if (!defined('PARTNER_LOGO_CACHE_TTL')) {
+    define('PARTNER_LOGO_CACHE_TTL', 2592000); // 30 days
+}
 
 // Circuit breaker / backoff
 if (!defined('BACKOFF_BASE_SECONDS')) {
