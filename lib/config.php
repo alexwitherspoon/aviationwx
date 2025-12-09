@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/airport-identifiers.php';
 
 /**
  * Shared Configuration Utilities
@@ -570,17 +571,7 @@ function findAirportByIdentifier(string $identifier, ?array $config = null): ?ar
     
     // 3. Fallback: Check cached mapping files (IATA->ICAO, FAA->ICAO) for airports not in config
     // This allows redirects to work for airports that exist but aren't configured yet
-    $icaoFromMapping = null;
-    
-    // Try IATA to ICAO mapping
-    if (isValidIataFormat($identifierUpper)) {
-        $icaoFromMapping = getIcaoFromIata($identifierUpper);
-    }
-    
-    // Try FAA to ICAO mapping if IATA lookup didn't work
-    if ($icaoFromMapping === null && isValidFaaFormat($identifierUpper)) {
-        $icaoFromMapping = getIcaoFromFaa($identifierUpper);
-    }
+    $icaoFromMapping = getIcaoFromIdentifier($identifierUpper);
     
     // If we found an ICAO code from the mapping, create a minimal airport entry
     if ($icaoFromMapping !== null) {
@@ -594,13 +585,11 @@ function findAirportByIdentifier(string $identifier, ?array $config = null): ?ar
             'icao' => $icaoFromMapping,
         ];
         
-        // Add IATA if that's what was requested
-        if (isValidIataFormat($identifierUpper)) {
+        // Add the original identifier if it's IATA or FAA
+        $identifierType = detectIdentifierType($identifierUpper);
+        if ($identifierType === 'iata') {
             $minimalAirport['iata'] = $identifierUpper;
-        }
-        
-        // Add FAA if that's what was requested
-        if (isValidFaaFormat($identifierUpper)) {
+        } elseif ($identifierType === 'faa') {
             $minimalAirport['faa'] = $identifierUpper;
         }
         
@@ -1185,13 +1174,10 @@ function isValidRealAirport(string $icaoCode, ?array $config = null): bool {
  * 
  * @param string $icaoCode The ICAO code to validate
  * @return bool True if valid format (3-4 alphanumeric characters), false otherwise
+ * @deprecated Use isValidIdentifierFormat($code, 'icao') from airport-identifiers.php instead
  */
 function isValidIcaoFormat(string $icaoCode): bool {
-    if (empty($icaoCode)) {
-        return false;
-    }
-    $icaoCode = strtoupper(trim($icaoCode));
-    return preg_match('/^[A-Z0-9]{3,4}$/', $icaoCode) === 1;
+    return isValidIdentifierFormat($icaoCode, 'icao');
 }
 
 /**
@@ -1201,13 +1187,10 @@ function isValidIcaoFormat(string $icaoCode): bool {
  * 
  * @param string $iataCode The IATA code to validate
  * @return bool True if valid format (exactly 3 uppercase letters), false otherwise
+ * @deprecated Use isValidIdentifierFormat($code, 'iata') from airport-identifiers.php instead
  */
 function isValidIataFormat(string $iataCode): bool {
-    if (empty($iataCode)) {
-        return false;
-    }
-    $iataCode = strtoupper(trim($iataCode));
-    return preg_match('/^[A-Z]{3}$/', $iataCode) === 1;
+    return isValidIdentifierFormat($iataCode, 'iata');
 }
 
 /**
@@ -1220,13 +1203,10 @@ function isValidIataFormat(string $iataCode): bool {
  * 
  * @param string $faaId The FAA identifier to validate
  * @return bool True if valid format (3-4 alphanumeric characters), false otherwise
+ * @deprecated Use isValidIdentifierFormat($code, 'faa') from airport-identifiers.php instead
  */
 function isValidFaaFormat(string $faaId): bool {
-    if (empty($faaId)) {
-        return false;
-    }
-    $faaId = strtoupper(trim($faaId));
-    return preg_match('/^[A-Z0-9]{3,4}$/', $faaId) === 1;
+    return isValidIdentifierFormat($faaId, 'faa');
 }
 
 /**
@@ -1323,257 +1303,24 @@ function isValidRealFaaCode(string $faaCode): bool {
 /**
  * Get ICAO code from IATA code using OurAirports data
  * 
- * Looks up the ICAO code for a given IATA code by parsing OurAirports CSV data.
- * Caches the mapping for performance.
+ * NOTE: This function is now defined in airport-identifiers.php (required at top of this file).
+ * The implementation has been moved there to centralize airport identifier logic.
  * 
  * @param string $iataCode The IATA code to look up (e.g., "PDX")
  * @return string|null The corresponding ICAO code (e.g., "KPDX") or null if not found
  */
-function getIcaoFromIata(string $iataCode): ?string {
-    if (empty($iataCode)) {
-        return null;
-    }
-    
-    $iataCode = strtoupper(trim($iataCode));
-    
-    // Check format first
-    if (!isValidIataFormat($iataCode)) {
-        return null;
-    }
-    
-    // Check APCu cache for previous lookups
-    $cacheKey = 'iata_to_icao_' . $iataCode;
-    if (function_exists('apcu_fetch')) {
-        $cached = apcu_fetch($cacheKey);
-        if ($cached !== false) {
-            return $cached !== '' ? (string)$cached : null;
-        }
-    }
-    
-    // Check file-based cache for the mapping
-    $mappingCacheFile = __DIR__ . '/../cache/iata_to_icao_mapping.json';
-    $mappingCacheMaxAge = 7 * 24 * 3600; // 7 days
-    
-    $mapping = null;
-    if (file_exists($mappingCacheFile)) {
-        $cacheAge = time() - filemtime($mappingCacheFile);
-        if ($cacheAge < $mappingCacheMaxAge) {
-            $cachedMapping = @json_decode(file_get_contents($mappingCacheFile), true);
-            if (is_array($cachedMapping) && isset($cachedMapping[$iataCode])) {
-                $icao = $cachedMapping[$iataCode];
-                // Cache in APCu for faster access
-                if (function_exists('apcu_store')) {
-                    apcu_store($cacheKey, $icao !== null ? $icao : '', 2592000); // 30 day cache
-                }
-                return $icao !== null ? (string)$icao : null;
-            }
-        }
-    }
-    
-    // Build mapping from OurAirports CSV
-    try {
-        $csvUrl = 'https://davidmegginson.github.io/ourairports-data/airports.csv';
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'method' => 'GET',
-                'header' => 'User-Agent: AviationWX/1.0',
-                'ignore_errors' => true
-            ]
-        ]);
-        
-        $csvContent = @file_get_contents($csvUrl, false, $context);
-        if ($csvContent === false) {
-            return null;
-        }
-        
-        // Parse CSV and build IATA -> ICAO mapping
-        // CSV columns: id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,...
-        $iataToIcao = [];
-        $lines = explode("\n", $csvContent);
-        $headerSkipped = false;
-        
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line)) {
-                continue;
-            }
-            
-            // Skip header line
-            if (!$headerSkipped) {
-                $headerSkipped = true;
-                continue;
-            }
-            
-            // Parse CSV line (handle quoted fields properly)
-            $fields = str_getcsv($line, ',', '"', null);
-            if (count($fields) < 15) {
-                continue; // Skip malformed lines
-            }
-            
-            // Column 13: iata_code, Column 12: icao_code
-            $iata = isset($fields[13]) ? strtoupper(trim($fields[13])) : '';
-            $icao = isset($fields[12]) ? strtoupper(trim($fields[12])) : '';
-            
-            // Only store if both IATA and ICAO are valid and not already set (first match wins)
-            if (!empty($iata) && preg_match('/^[A-Z]{3}$/', $iata) && 
-                !empty($icao) && preg_match('/^[A-Z0-9]{3,4}$/', $icao) &&
-                !isset($iataToIcao[$iata])) {
-                $iataToIcao[$iata] = $icao;
-            }
-        }
-        
-        // Save mapping to cache
-        $cacheDir = dirname($mappingCacheFile);
-        if (!is_dir($cacheDir)) {
-            // Use @ to suppress errors for non-critical directory creation
-            // We handle failures explicitly with error checks below
-            @mkdir($cacheDir, 0755, true);
-        }
-        @file_put_contents($mappingCacheFile, json_encode($iataToIcao, JSON_PRETTY_PRINT));
-        
-        // Look up the requested IATA code
-        $result = isset($iataToIcao[$iataCode]) ? $iataToIcao[$iataCode] : null;
-        
-        // Cache in APCu for faster access
-        if (function_exists('apcu_store')) {
-            apcu_store($cacheKey, $result !== null ? $result : '', 2592000); // 30 day cache
-        }
-        
-        return $result !== null ? (string)$result : null;
-        
-    } catch (Exception $e) {
-        aviationwx_log('error', 'error building IATA to ICAO mapping', ['error' => $e->getMessage()], 'app');
-        return null;
-    }
-}
+// Function implementation moved to lib/airport-identifiers.php
 
 /**
  * Get ICAO code from FAA identifier using OurAirports data
  * 
- * Looks up the ICAO code for a given FAA identifier by parsing OurAirports CSV data.
- * Caches the mapping for performance.
+ * NOTE: This function is now defined in airport-identifiers.php (required at top of this file).
+ * The implementation has been moved there to centralize airport identifier logic.
  * 
  * @param string $faaCode The FAA identifier to look up (e.g., "PDX")
  * @return string|null The corresponding ICAO code (e.g., "KPDX") or null if not found
  */
-function getIcaoFromFaa(string $faaCode): ?string {
-    if (empty($faaCode)) {
-        return null;
-    }
-    
-    $faaCode = strtoupper(trim($faaCode));
-    
-    // Check format first
-    if (!isValidFaaFormat($faaCode)) {
-        return null;
-    }
-    
-    // Check APCu cache for previous lookups
-    $cacheKey = 'faa_to_icao_' . $faaCode;
-    if (function_exists('apcu_fetch')) {
-        $cached = apcu_fetch($cacheKey);
-        if ($cached !== false) {
-            return $cached !== '' ? (string)$cached : null;
-        }
-    }
-    
-    // Check file-based cache for the mapping
-    $mappingCacheFile = __DIR__ . '/../cache/faa_to_icao_mapping.json';
-    $mappingCacheMaxAge = 7 * 24 * 3600; // 7 days
-    
-    if (file_exists($mappingCacheFile)) {
-        $cacheAge = time() - filemtime($mappingCacheFile);
-        if ($cacheAge < $mappingCacheMaxAge) {
-            $cachedMapping = @json_decode(file_get_contents($mappingCacheFile), true);
-            if (is_array($cachedMapping) && isset($cachedMapping[$faaCode])) {
-                $icao = $cachedMapping[$faaCode];
-                // Cache in APCu for faster access
-                if (function_exists('apcu_store')) {
-                    apcu_store($cacheKey, $icao !== null ? $icao : '', 2592000); // 30 day cache
-                }
-                return $icao !== null ? (string)$icao : null;
-            }
-        }
-    }
-    
-    // Build mapping from OurAirports CSV
-    try {
-        $csvUrl = 'https://davidmegginson.github.io/ourairports-data/airports.csv';
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'method' => 'GET',
-                'header' => 'User-Agent: AviationWX/1.0',
-                'ignore_errors' => true
-            ]
-        ]);
-        
-        $csvContent = @file_get_contents($csvUrl, false, $context);
-        if ($csvContent === false) {
-            return null;
-        }
-        
-        // Parse CSV and build FAA -> ICAO mapping
-        // CSV columns: id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,...
-        $faaToIcao = [];
-        $lines = explode("\n", $csvContent);
-        $headerSkipped = false;
-        
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line)) {
-                continue;
-            }
-            
-            // Skip header line
-            if (!$headerSkipped) {
-                $headerSkipped = true;
-                continue;
-            }
-            
-            // Parse CSV line (handle quoted fields properly)
-            $fields = str_getcsv($line, ',', '"', null);
-            if (count($fields) < 15) {
-                continue; // Skip malformed lines
-            }
-            
-            // Column 14: gps_code (FAA), Column 12: icao_code
-            $faa = isset($fields[14]) ? strtoupper(trim($fields[14])) : '';
-            $icao = isset($fields[12]) ? strtoupper(trim($fields[12])) : '';
-            
-            // Only store if both FAA and ICAO are valid and not already set (first match wins)
-            if (!empty($faa) && preg_match('/^[A-Z0-9]{3,4}$/', $faa) && 
-                !empty($icao) && preg_match('/^[A-Z0-9]{3,4}$/', $icao) &&
-                !isset($faaToIcao[$faa])) {
-                $faaToIcao[$faa] = $icao;
-            }
-        }
-        
-        // Save mapping to cache
-        $cacheDir = dirname($mappingCacheFile);
-        if (!is_dir($cacheDir)) {
-            // Use @ to suppress errors for non-critical directory creation
-            // We handle failures explicitly with error checks below
-            @mkdir($cacheDir, 0755, true);
-        }
-        @file_put_contents($mappingCacheFile, json_encode($faaToIcao, JSON_PRETTY_PRINT));
-        
-        // Look up the requested FAA code
-        $result = isset($faaToIcao[$faaCode]) ? $faaToIcao[$faaCode] : null;
-        
-        // Cache in APCu for faster access
-        if (function_exists('apcu_store')) {
-            apcu_store($cacheKey, $result !== null ? $result : '', 2592000); // 30 day cache
-        }
-        
-        return $result !== null ? (string)$result : null;
-        
-    } catch (Exception $e) {
-        aviationwx_log('error', 'error building FAA to ICAO mapping', ['error' => $e->getMessage()], 'app');
-        return null;
-    }
-}
+// Function implementation moved to lib/airport-identifiers.php
 
 /**
  * Check if a custom identifier format is valid (syntactic validation only)

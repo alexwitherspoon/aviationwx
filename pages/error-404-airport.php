@@ -25,28 +25,16 @@ if ($isValidIcaoFormat && !empty($requestedAirportId)) {
     $isRealAirport = isValidRealAirport($requestedAirportId, $config);
 }
 
-// If not found as ICAO, check if it's a valid IATA code and find corresponding ICAO
+// If not found as ICAO, check if it's a valid IATA or FAA code and find corresponding ICAO
 if (!$isRealAirport && !empty($requestedAirportId)) {
-    if (isValidIataFormat($requestedAirportId)) {
-        $icaoFromIata = getIcaoFromIata($requestedAirportId);
-        if ($icaoFromIata !== null) {
-            // Found ICAO for this IATA code, check if it's a real airport
-            $isRealAirport = isValidRealAirport($icaoFromIata, $config);
-            if ($isRealAirport) {
-                // Use the ICAO code for display since that's the standard identifier
-                $displayAirportId = $icaoFromIata;
-            }
-        }
-    } elseif (isValidFaaFormat($requestedAirportId)) {
-        // Check if it's a valid FAA identifier and find corresponding ICAO
-        $icaoFromFaa = getIcaoFromFaa($requestedAirportId);
-        if ($icaoFromFaa !== null) {
-            // Found ICAO for this FAA code, check if it's a real airport
-            $isRealAirport = isValidRealAirport($icaoFromFaa, $config);
-            if ($isRealAirport) {
-                // Use the ICAO code for display since that's the standard identifier
-                $displayAirportId = $icaoFromFaa;
-            }
+    // Use generalized function to get ICAO from any identifier type (IATA, FAA, or ICAO)
+    $icaoFromIdentifier = getIcaoFromIdentifier($requestedAirportId);
+    if ($icaoFromIdentifier !== null) {
+        // Found ICAO for this identifier, check if it's a real airport
+        $isRealAirport = isValidRealAirport($icaoFromIdentifier, $config);
+        if ($isRealAirport) {
+            // Use the ICAO code for display since that's the standard identifier
+            $displayAirportId = $icaoFromIdentifier;
         }
     }
 }

@@ -108,19 +108,23 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
             $foundInConfig = false;
             foreach ($config['airports'] as $id => $apt) {
                 if (isset($apt['icao']) && strtoupper(trim($apt['icao'])) === $identifierUpper) {
+                    // TODO: Remove debug logging after fixing redirect issue
                     error_log("DEBUG: Found matching ICAO '$identifierUpper' in airport '$id'");
                     $foundInConfig = true;
                 }
                 if (isset($apt['iata']) && strtoupper(trim($apt['iata'])) === $identifierUpper) {
+                    // TODO: Remove debug logging after fixing redirect issue
                     error_log("DEBUG: Found matching IATA '$identifierUpper' in airport '$id'");
                     $foundInConfig = true;
                 }
                 if (isset($apt['faa']) && strtoupper(trim($apt['faa'])) === $identifierUpper) {
+                    // TODO: Remove debug logging after fixing redirect issue
                     error_log("DEBUG: Found matching FAA '$identifierUpper' in airport '$id'");
                     $foundInConfig = true;
                 }
             }
             if (!$foundInConfig) {
+                // TODO: Remove debug logging after fixing redirect issue
                 error_log("DEBUG: No matching ICAO/IATA/FAA found for '$identifierUpper' in any airport config");
             }
         }
