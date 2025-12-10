@@ -213,6 +213,57 @@ When you configure an airport, you can specify multiple identifier types:
 - **Query parameters preserved** - Any query parameters in the original URL are preserved in the redirect
 - **Subdomain format** - All airport URLs use subdomain format: `{identifier}.aviationwx.org`
 
+## Airport Status Configuration
+
+### Enabled Flag
+
+The `enabled` field controls whether an airport is active in the system.
+
+- **Default**: `false` (opt-in model)
+- **Required**: Must be explicitly set to `true` for airport to be accessible
+- **Behavior when disabled**:
+  - Airport returns 404 (as if it doesn't exist)
+  - Airport is excluded from homepage listings
+  - Weather and webcam data fetching is skipped
+  - Airport is excluded from sitemap
+  - API endpoints return 404
+
+**Example:**
+```json
+{
+  "airports": {
+    "kspb": {
+      "enabled": true,
+      // ... other fields
+    }
+  }
+}
+```
+
+### Maintenance Flag
+
+The `maintenance` field shows a warning banner when an airport is under maintenance.
+
+- **Default**: `false`
+- **Behavior when `true`**:
+  - Shows a red warning banner at the top of the airport page
+  - Banner message: "⚠️ This airport is currently under maintenance. Data may be missing or unreliable."
+  - APIs continue to work normally (banner is UI-only)
+  - Airport must be `enabled: true` for maintenance banner to appear
+
+**Example:**
+```json
+{
+  "airports": {
+    "kczk": {
+      "enabled": true,
+      "maintenance": true,
+      // ... other fields
+    }
+  }
+}
+```
+
 ## Adding a New Airport
 
 Add an entry to `airports.json` following this structure:
@@ -222,6 +273,8 @@ Add an entry to `airports.json` following this structure:
   "airports": {
     "airportid": {
       "name": "Full Airport Name",
+      "enabled": true,
+      "maintenance": false,
       "icao": "ICAO",
       "iata": "IATA",
       "faa": "FAA",
