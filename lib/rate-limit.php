@@ -86,7 +86,7 @@ function checkRateLimitFileBased(string $key, int $maxRequests, int $windowSecon
     $cacheDir = __DIR__ . '/../cache';
     if (!is_dir($cacheDir)) {
         if (!@mkdir($cacheDir, 0755, true)) {
-            aviationwx_log('error', 'rate limit cache directory creation failed', ['dir' => $cacheDir], 'app');
+            aviationwx_log('error', 'rate limit cache directory creation failed', ['dir' => $cacheDir], 'app', true);
             return true; // Fail open - allow request if we can't create directory
         }
     }

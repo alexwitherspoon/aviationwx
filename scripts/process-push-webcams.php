@@ -723,7 +723,7 @@ function processPushWebcams() {
     // Acquire lock
     $fp = @fopen($lockFile, 'c+');
     if (!$fp) {
-        aviationwx_log('error', 'cannot create lock file', ['lock_file' => $lockFile], 'app');
+        aviationwx_log('error', 'cannot create lock file', ['lock_file' => $lockFile], 'app', true);
         exit(1);
     }
     

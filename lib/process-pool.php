@@ -174,7 +174,7 @@ class ProcessPool {
                 'invocation_id' => $this->invocationId,
                 'script' => $this->scriptName,
                 'args' => $args
-            ], 'app');
+            ], 'app', true);
             return null;
         }
         
@@ -332,7 +332,7 @@ class ProcessPool {
                 'script' => $this->scriptName,
                 'max_workers' => $this->maxWorkers,
                 'active_workers' => count($this->workers)
-            ], 'app');
+            ], 'app', true);
         }
     }
     

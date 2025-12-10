@@ -148,7 +148,7 @@ if (!function_exists('aviationwx_log')) {
  * @param string $logType Log type: 'app' or 'user' (default: 'app')
  * @return void
  */
-function aviationwx_log(string $level, string $message, array $context = [], string $logType = 'app'): void {
+function aviationwx_log(string $level, string $message, array $context = [], string $logType = 'app', bool $isInternal = false): void {
     $now = (new DateTime('now', new DateTimeZone('UTC')))->format('c');
     
     // Determine log source based on context
@@ -174,9 +174,10 @@ function aviationwx_log(string $level, string $message, array $context = [], str
         'source' => $source
     ];
     
-    // Error counter for alerting
+    // Error counter for alerting - only count internal errors for system health
+    // External errors (data source failures) are expected and shouldn't trigger alerts
     if (in_array($entry['level'], ['warning','error','critical','alert','emergency'], true)) {
-        aviationwx_record_error_event();
+        aviationwx_record_error_event($isInternal);
     }
     
     // Format as JSONL (one JSON object per line)
@@ -229,11 +230,20 @@ if (!function_exists('aviationwx_record_error_event')) {
  * Used internally by aviationwx_log() when logging warnings or errors.
  * Events older than 3600 seconds are automatically purged.
  * 
+ * Separates internal system errors from external data source failures.
+ * Only internal errors are counted for system health monitoring.
+ * 
+ * @param bool $isInternal True if this is an internal system error, false for external data source failures
  * @return void
  */
-function aviationwx_record_error_event(): void {
+function aviationwx_record_error_event(bool $isInternal = false): void {
     if (!function_exists('apcu_fetch')) return;
-    $key = 'aviationwx_error_events';
+    
+    // Only track internal errors for system health monitoring
+    // External errors (data source failures) are expected and shouldn't trigger alerts
+    if (!$isInternal) return;
+    
+    $key = 'aviationwx_internal_error_events';
     $events = apcu_fetch($key);
     if (!is_array($events)) $events = [];
     $now = time();
@@ -250,16 +260,17 @@ function aviationwx_record_error_event(): void {
 
 if (!function_exists('aviationwx_error_rate_last_hour')) {
 /**
- * Get error count from the last hour
+ * Get internal error count from the last hour
  * 
- * Returns the number of error/warning events recorded in the last 60 minutes.
- * Used for alerting and monitoring error rates.
+ * Returns the number of internal system error/warning events recorded in the last 60 minutes.
+ * Only counts internal system errors, not external data source failures.
+ * Used for alerting and monitoring system health.
  * 
- * @return int Number of error events in the last hour (0 if APCu unavailable)
+ * @return int Number of internal error events in the last hour (0 if APCu unavailable)
  */
 function aviationwx_error_rate_last_hour(): int {
     if (!function_exists('apcu_fetch')) return 0;
-    $events = apcu_fetch('aviationwx_error_events');
+    $events = apcu_fetch('aviationwx_internal_error_events');
     if (!is_array($events)) return 0;
     if (!defined('ERROR_RATE_WINDOW_SECONDS')) {
         require_once __DIR__ . '/constants.php';
@@ -284,7 +295,8 @@ function aviationwx_maybe_log_alert(): void {
     $count = aviationwx_error_rate_last_hour();
     if ($count >= 5) {
         // Use 'info' level to avoid feedback loop - this is a metric, not an error
-        aviationwx_log('info', 'High error rate in last 60 minutes', ['errors_last_hour' => $count]);
+        // Mark as internal=false to avoid counting this alert itself
+        aviationwx_log('info', 'High internal error rate in last 60 minutes', ['internal_errors_last_hour' => $count], 'app', false);
     }
 }
 }

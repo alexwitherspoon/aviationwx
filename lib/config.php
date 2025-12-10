@@ -275,7 +275,7 @@ function loadConfig(bool $useCache = true): ?array {
             aviationwx_log('info', 'config file not found (using defaults)', ['path' => $configFile], 'app');
         } else {
             // Production: CRITICAL ERROR - airports.json is required, fail immediately
-            aviationwx_log('error', 'config file not found - PRODUCTION FAILURE', ['path' => $configFile], 'app');
+            aviationwx_log('error', 'config file not found - PRODUCTION FAILURE', ['path' => $configFile], 'app', true);
             error_log('CRITICAL: airports.json not found in production at: ' . $configFile);
             // In production, we cannot continue without airports.json - return null to fail fast
             // The application should handle this gracefully by showing an error page
@@ -283,7 +283,7 @@ function loadConfig(bool $useCache = true): ?array {
         return null;
     }
     if (is_dir($configFile)) {
-        aviationwx_log('error', 'config path is directory', ['path' => $configFile], 'app');
+        aviationwx_log('error', 'config path is directory', ['path' => $configFile], 'app', true);
         return null;
     }
     
@@ -329,13 +329,13 @@ function loadConfig(bool $useCache = true): ?array {
     // We handle failures explicitly with null check and logging below
     $jsonContent = @file_get_contents($configFile);
     if ($jsonContent === false) {
-        aviationwx_log('error', 'config read failed', ['path' => $configFile], 'app');
+        aviationwx_log('error', 'config read failed', ['path' => $configFile], 'app', true);
         return null;
     }
     
     $config = json_decode($jsonContent, true);
     if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
-        aviationwx_log('error', 'config invalid json', ['error' => json_last_error_msg(), 'path' => $configFile], 'app');
+        aviationwx_log('error', 'config invalid json', ['error' => json_last_error_msg(), 'path' => $configFile], 'app', true);
         return null;
     }
 
@@ -426,7 +426,7 @@ function loadConfig(bool $useCache = true): ?array {
     }
     if (!empty($errors)) {
         // Log and fail-fast
-        aviationwx_log('error', 'config schema errors', ['errors' => $errors], 'app');
+        aviationwx_log('error', 'config schema errors', ['errors' => $errors], 'app', true);
         return null;
     }
 
