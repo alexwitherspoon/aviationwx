@@ -38,7 +38,7 @@ body {
 .header {
     background: #1a1a1a;
     color: white;
-    padding: 2rem;
+    padding: 1.6rem;
     text-align: center;
     margin: -1rem -1rem 2rem -1rem;
 }
@@ -324,15 +324,6 @@ h3 {
     overflow: hidden;
 }
 
-.webcam-item h3 {
-    padding: 1rem;
-    background: #1a1a1a;
-    color: white;
-    margin: 0;
-    font-size: 1rem;
-    text-align: center;
-}
-
 .webcam-container {
     position: relative;
 }
@@ -539,7 +530,7 @@ h3 {
 /* Responsive */
 @media (max-width: 768px) {
     .header {
-        padding: 1.5rem 1.5rem; /* Reduced from 2rem since we removed address and disclaimer */
+        padding: 1.2rem 1.2rem; /* Reduced from 2rem since we removed address and disclaimer */
     }
     
     .header h1 {

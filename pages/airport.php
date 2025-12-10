@@ -251,7 +251,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             <div class="webcam-grid">
                 <?php foreach ($airport['webcams'] as $index => $cam): ?>
                 <div class="webcam-item">
-                    <h3><?= htmlspecialchars($cam['name']) ?></h3>
                     <div class="webcam-container">
                         <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: 16/9; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
                         <picture style="position: relative; z-index: 2;">
@@ -277,6 +276,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                  src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>"
                                  data-initial-timestamp="<?= $mtimeJpg ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?>"
+                                 title="<?= htmlspecialchars($cam['name']) ?>"
                                  class="webcam-image"
                                  width="1600"
                                  height="900"
