@@ -359,24 +359,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <!-- Airport Information -->
         <section class="airport-info">
             <div class="info-grid">
-                <?php if (!empty($airport['icao'])): ?>
-                <div class="info-item">
-                    <span class="label">ICAO:</span>
-                    <span class="value"><?= htmlspecialchars($airport['icao']) ?></span>
-                </div>
-                <?php endif; ?>
-                <?php if (!empty($airport['iata'])): ?>
-                <div class="info-item">
-                    <span class="label">IATA:</span>
-                    <span class="value"><?= htmlspecialchars($airport['iata']) ?></span>
-                </div>
-                <?php endif; ?>
-                <?php if (!empty($airport['faa'])): ?>
-                <div class="info-item">
-                    <span class="label">FAA:</span>
-                    <span class="value"><?= htmlspecialchars($airport['faa']) ?></span>
-                </div>
-                <?php endif; ?>
                 <div class="info-item">
                     <span class="label">Elevation:</span>
                     <span class="value"><?= $airport['elevation_ft'] ?> ft</span>
