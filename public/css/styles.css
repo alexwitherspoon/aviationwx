@@ -508,6 +508,19 @@ h3 {
     border-radius: 8px;
 }
 
+.footer-disclaimer {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.footer-disclaimer em {
+    font-style: italic;
+    color: #666;
+}
+
 .footer a {
     color: #0066cc;
     text-decoration: none;
@@ -525,12 +538,12 @@ h3 {
 
 /* Responsive */
 @media (max-width: 768px) {
-    .header h1 {
-        font-size: 2rem;
+    .header {
+        padding: 1.5rem 1.5rem; /* Reduced from 2rem since we removed address and disclaimer */
     }
     
-    .header h2 {
-        font-size: 1.2rem;
+    .header h1 {
+        font-size: 1.75rem; /* Slightly reduced from 2rem for better mobile fit */
     }
     
     section {

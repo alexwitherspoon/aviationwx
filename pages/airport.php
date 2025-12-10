@@ -244,29 +244,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <!-- Header -->
         <header class="header">
             <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($primaryIdentifier) ?>)</h1>
-            <h2 style="font-size: 1.2rem; color: #ddd; margin-top: 0.25rem; font-weight: normal;">
-                <address style="font-style: normal; margin: 0;">
-                    <?php
-                    // Build Google Maps URL - prefer coordinates for accuracy, fallback to address text
-                    $mapsUrl = '';
-                    if (isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon'])) {
-                        // Use coordinates for precise location
-                        $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['lat'] . ',' . $airport['lon']);
-                    } else {
-                        // Fallback to address text
-                        $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['address']);
-                    }
-                    ?>
-                    <a href="<?= htmlspecialchars($mapsUrl) ?>" 
-                       style="text-decoration: none; color: inherit;"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       title="Open in Google Maps">
-                        <?= htmlspecialchars($airport['address']) ?>
-                    </a>
-                </address>
-            </h2>
-            <p style="font-style: italic; font-size: 0.85rem; color: #ddd; margin-top: 0.5rem;">Data is for advisory use only. Consult official weather sources for flight planning purposes.</p>
         </header>
 
         <!-- Webcams -->
@@ -364,6 +341,39 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <!-- Airport Information -->
         <section class="airport-info">
             <div class="info-grid">
+                <?php
+                // Build Google Maps URL - prefer coordinates for accuracy, fallback to address text
+                $mapsUrl = '';
+                $addressText = '';
+                if (isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon'])) {
+                    // Use coordinates for precise location
+                    $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['lat'] . ',' . $airport['lon']);
+                    // Use address text if available, otherwise show coordinates
+                    $addressText = !empty($airport['address']) ? $airport['address'] : $airport['lat'] . ', ' . $airport['lon'];
+                } else if (!empty($airport['address'])) {
+                    // Fallback to address text
+                    $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['address']);
+                    $addressText = $airport['address'];
+                }
+                
+                // Only show location if we have either coordinates or address
+                if (!empty($mapsUrl) && !empty($addressText)):
+                ?>
+                <div class="info-item">
+                    <span class="label">Location:</span>
+                    <span class="value">
+                        <a href="<?= htmlspecialchars($mapsUrl) ?>" 
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="Open in Google Maps"
+                           style="color: #0066cc; text-decoration: none; transition: color 0.2s;"
+                           onmouseover="this.style.color='#0052a3'; this.style.textDecoration='underline';"
+                           onmouseout="this.style.color='#0066cc'; this.style.textDecoration='none';">
+                            <?= htmlspecialchars($addressText) ?>
+                        </a>
+                    </span>
+                </div>
+                <?php endif; ?>
                 <div class="info-item">
                     <span class="label">Elevation:</span>
                     <span class="value"><?= $airport['elevation_ft'] ?> ft</span>
@@ -573,6 +583,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
 
         <!-- Footer -->
         <footer class="footer">
+            <p class="footer-disclaimer">
+                <em>Data is for advisory use only. Consult official weather sources for flight planning purposes.</em>
+            </p>
             <p>
                 &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
@@ -1601,20 +1614,10 @@ function displayWeather(weather) {
         <!-- Current Status -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '---'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
-            <div class="weather-item sunrise-sunset">
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="font-size: 1.2rem;">🌅</span>
-                    <span class="label">Sunrise</span>
-                </span>
-                <span class="weather-value">${formatTime(weather.sunrise || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
-            </div>
-            <div class="weather-item sunrise-sunset">
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="font-size: 1.2rem;">🌇</span>
-                    <span class="label">Sunset</span>
-                </span>
-                <span class="weather-value">${formatTime(weather.sunset || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
-            </div>
+            ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
+            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
+            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? formatCeiling(weather.ceiling) : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
+            ` : ''}
         </div>
         
         <!-- Temperature -->
