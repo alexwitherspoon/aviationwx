@@ -991,19 +991,26 @@ function setTempUnit(unit) {
 
 // Convert Celsius to Fahrenheit
 function cToF(c) {
-    return Math.round((c * 9/5) + 32);
+    return (c * 9/5) + 32;
 }
 
 // Convert Fahrenheit to Celsius
 function fToC(f) {
-    return Math.round((f - 32) * 5/9);
+    return (f - 32) * 5/9;
 }
 
 // Format temperature based on current unit preference
 function formatTemp(tempC) {
     if (tempC === null || tempC === undefined) return '--';
+    // Validate that tempC is a valid number
+    const numTemp = Number(tempC);
+    if (isNaN(numTemp) || !isFinite(numTemp)) return '--';
     const unit = getTempUnit();
-    return unit === 'C' ? Math.round(tempC) : cToF(tempC);
+    if (unit === 'C') {
+        return numTemp.toFixed(1);
+    } else {
+        return cToF(numTemp).toFixed(1);
+    }
 }
 
 // Format temperature spread (allows decimals) based on current unit preference

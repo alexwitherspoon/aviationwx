@@ -611,13 +611,16 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 #### Temperature Display
 - **Current Temperature**: 
   - Value in selected unit (°C or °F)
+  - Displayed with one decimal place (e.g., "72.5°F" or "22.3°C")
   - No timestamp (current reading)
 - **Today's High**:
   - Highest temperature observed today
+  - Displayed with one decimal place
   - Timestamp showing when high was observed
   - Resets at local midnight
 - **Today's Low**:
   - Lowest temperature observed today
+  - Displayed with one decimal place
   - Timestamp showing when low was observed
   - Resets at local midnight
 
@@ -637,7 +640,9 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 
 #### Moisture Display
 - **Dewpoint**: Temperature in selected unit
+  - Displayed with one decimal place (e.g., "65.2°F" or "18.4°C")
 - **Dewpoint Spread**: Temperature minus dewpoint
+  - Displayed with one decimal place
 - **Humidity**: Percentage (0-100%)
 
 #### Aviation Conditions (METAR Data)
