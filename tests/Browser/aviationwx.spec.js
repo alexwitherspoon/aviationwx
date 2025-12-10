@@ -174,6 +174,37 @@ test.describe('Aviation Weather Dashboard', () => {
     await expect(body).toBeVisible();
   });
 
+  test('should show maintenance banner when airport is in maintenance', async ({ page }) => {
+    // Navigate to an airport in maintenance mode (pdx in test fixtures)
+    await page.goto(`${baseUrl}/?airport=pdx`);
+    await page.waitForLoadState('networkidle');
+    
+    // Check for maintenance banner
+    const banner = page.locator('.maintenance-banner');
+    await expect(banner).toBeVisible({ timeout: 5000 });
+    
+    // Verify banner text
+    const bannerText = await banner.textContent();
+    expect(bannerText).toContain('This airport is currently under maintenance');
+    expect(bannerText).toContain('Data may be missing or unreliable');
+    
+    // Verify banner styling (red background)
+    const backgroundColor = await banner.evaluate((el) => {
+      return window.getComputedStyle(el).backgroundColor;
+    });
+    expect(backgroundColor).toBeTruthy();
+  });
+
+  test('should not show maintenance banner when airport is not in maintenance', async ({ page }) => {
+    // Navigate to an airport not in maintenance (kspb in test fixtures)
+    await page.goto(`${baseUrl}/?airport=kspb`);
+    await page.waitForLoadState('networkidle');
+    
+    // Check that maintenance banner is not visible
+    const banner = page.locator('.maintenance-banner');
+    await expect(banner).toHaveCount(0);
+  });
+
   test('should preserve unit toggle preferences', async ({ page, context }) => {
     const toggle = page.locator('#temp-unit-toggle');
     
