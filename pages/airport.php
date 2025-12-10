@@ -1634,13 +1634,23 @@ function displayWeather(weather) {
             <div class="weather-item"><span class="label">Humidity</span><span class="weather-value">${weather.humidity !== null && weather.humidity !== undefined ? Math.round(weather.humidity) : '--'}</span><span class="weather-unit">${weather.humidity !== null && weather.humidity !== undefined ? '%' : ''}</span></div>
         </div>
         
-        <!-- Visibility & Ceiling (only shown if METAR station is configured) -->
+        <!-- Precipitation & Daylight -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
-            ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
-            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
-            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? formatCeiling(weather.ceiling) : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
-            ` : ''}
+            <div class="weather-item sunrise-sunset">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.2rem;">🌅</span>
+                    <span class="label">Sunrise</span>
+                </span>
+                <span class="weather-value">${formatTime(weather.sunrise || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+            </div>
+            <div class="weather-item sunrise-sunset">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.2rem;">🌇</span>
+                    <span class="label">Sunset</span>
+                </span>
+                <span class="weather-value">${formatTime(weather.sunset || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+            </div>
         </div>
         
         <!-- Pressure & Altitude -->
