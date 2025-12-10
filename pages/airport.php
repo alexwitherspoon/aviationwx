@@ -234,6 +234,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             <strong>⚠️ JavaScript is required</strong> for this site to function properly. Please enable JavaScript in your browser to view weather data and interactive features.
         </div>
     </noscript>
+    <?php if (isAirportInMaintenance($airport)): ?>
+    <div class="maintenance-banner">
+        ⚠️ This airport is currently under maintenance. Data may be missing or unreliable.
+    </div>
+    <?php endif; ?>
     <main>
     <div class="container">
         <!-- Header -->
