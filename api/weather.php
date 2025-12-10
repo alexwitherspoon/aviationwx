@@ -146,6 +146,15 @@ function generateMockWeatherData($airportId, $airport) {
 
     $airport = $result['airport'];
     $airportId = $result['airportId'];
+    
+    // Check if airport is enabled (opt-in model: must have enabled: true)
+    if (!isAirportEnabled($airport)) {
+        http_response_code(HTTP_STATUS_NOT_FOUND);
+        ob_clean();
+        aviationwx_log('error', 'airport not enabled', ['identifier' => $rawIdentifier, 'airport_id' => $airportId], 'user');
+        echo json_encode(['success' => false, 'error' => 'Airport not found']);
+        exit;
+    }
 
     // Check if we're using test config - if so, return mock weather data
     $envConfigPath = getenv('CONFIG_PATH');

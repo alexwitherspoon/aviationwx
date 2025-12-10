@@ -25,8 +25,10 @@ $totalWebcams = 0;
 if (file_exists($configFile)) {
     $config = json_decode(file_get_contents($configFile), true);
     if (isset($config['airports'])) {
-        $totalAirports = count($config['airports']);
-        foreach ($config['airports'] as $airport) {
+        // Only count enabled airports
+        $enabledAirports = getEnabledAirports($config);
+        $totalAirports = count($enabledAirports);
+        foreach ($enabledAirports as $airport) {
             if (isset($airport['webcams'])) {
                 $totalWebcams += count($airport['webcams']);
             }
@@ -723,7 +725,8 @@ Best regards,
                 $envConfigPath = getenv('CONFIG_PATH');
                 $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
                 $config = json_decode(file_get_contents($configFileForList), true);
-                $airports = isset($config['airports']) ? $config['airports'] : [];
+                // Only show enabled airports
+                $airports = getEnabledAirports($config ?? []);
                 $airportsPerPage = 9;
                 $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
                 $totalPages = max(1, ceil(count($airports) / $airportsPerPage));

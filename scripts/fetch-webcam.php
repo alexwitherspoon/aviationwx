@@ -979,6 +979,11 @@ if ($isWeb) {
 
 $skipped = 0;
 foreach ($config['airports'] as $airportId => $airport) {
+    // Only process enabled airports
+    if (!isAirportEnabled($airport)) {
+        continue;
+    }
+    
     if (!isset($airport['webcams']) || !is_array($airport['webcams'])) {
         continue;
     }
@@ -1054,6 +1059,10 @@ if (isset($_SERVER['HTTP_HOST'])) {
 // Show URLs for all airports that were processed
 if (isset($config['airports']) && is_array($config['airports'])) {
     foreach ($config['airports'] as $airportId => $airport) {
+        // Only process enabled airports
+        if (!isAirportEnabled($airport)) {
+            continue;
+        }
         if (isset($airport['webcams']) && is_array($airport['webcams'])) {
             $airportName = $airport['name'] ?? $airportId;
             $subdomainUrl = "{$protocol}://{$airportId}.{$domain}";

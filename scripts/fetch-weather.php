@@ -199,6 +199,11 @@ register_shutdown_function(function() use ($pool) {
 
 $skipped = 0;
 foreach ($config['airports'] as $airportId => $airport) {
+    // Only process enabled airports
+    if (!isAirportEnabled($airport)) {
+        continue;
+    }
+    
     if (!$pool->addJob([$airportId])) {
         $skipped++;
     }

@@ -169,6 +169,12 @@ if ($result === null || !isset($result['airport']) || !isset($result['airportId'
 
 $airport = $result['airport'];
 $airportId = $result['airportId'];
+    
+// Check if airport is enabled (opt-in model: must have enabled: true)
+if (!isAirportEnabled($airport)) {
+    aviationwx_log('error', 'webcam airport not enabled', ['identifier' => $rawIdentifier, 'airport_id' => $airportId], 'user');
+    servePlaceholder();
+}
 
 // Load config for webcam access
 $config = loadConfig();

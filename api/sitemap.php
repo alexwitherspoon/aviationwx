@@ -50,8 +50,9 @@ if ($isMainDomain) {
     echo "  </url>\n";
 }
 
-// Add each airport page
-foreach ($config['airports'] as $airportId => $airport) {
+// Add each enabled airport page
+$enabledAirports = getEnabledAirports($config);
+foreach ($enabledAirports as $airportId => $airport) {
     $airportUrl = $protocol . '://' . $airportId . '.aviationwx.org';
     
     // Determine lastmod date

@@ -153,6 +153,15 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
             exit;
         }
         
+        // Check if airport is enabled (opt-in model: must have enabled: true)
+        if (!isAirportEnabled($airport)) {
+            http_response_code(404);
+            // Make airport identifier available to 404 page (use primary identifier)
+            $requestedAirportId = $primaryIdentifierUpper;
+            include 'pages/error-404-airport.php';
+            exit;
+        }
+        
         // Set airport-specific variables for use in template
         $airport['id'] = $airportId;
         
