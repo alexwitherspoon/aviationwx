@@ -810,6 +810,8 @@ Best regards,
                             $temperature = ($temperature * 9/5) + 32;
                         }
                         $windSpeed = $weather['wind_speed'] ?? null;
+                        $windDirection = $weather['wind_direction'] ?? null;
+                        $hasMetar = isset($airport['metar_station']) && !empty($airport['metar_station']);
                         $newestTimestamp = getNewestDataTimestamp($weather);
                     ?>
                     <div class="airport-card">
@@ -819,6 +821,7 @@ Best regards,
                             <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
                             
                             <div class="airport-metrics">
+                                <?php if ($hasMetar): ?>
                                 <div class="metric">
                                     <div class="metric-label">Condition</div>
                                     <?php if ($flightCategory): 
@@ -831,7 +834,38 @@ Best regards,
                                         <span class="flight-condition unknown">--</span>
                                     <?php endif; ?>
                                 </div>
+                                <?php else: ?>
+                                <div class="metric">
+                                    <div class="metric-label">Wind</div>
+                                    <div class="metric-value">
+                                        <?= $windSpeed !== null ? htmlspecialchars(round($windSpeed)) . ' kts' : '--' ?>
+                                    </div>
+                                </div>
                                 
+                                <div class="metric">
+                                    <div class="metric-label">Direction</div>
+                                    <div class="metric-value">
+                                        <?php 
+                                        if ($windDirection === 'VRB' || $windDirection === 'vrb'):
+                                            echo 'VRB';
+                                        elseif ($windDirection !== null && is_numeric($windDirection)):
+                                            echo htmlspecialchars(round($windDirection)) . '°';
+                                        else:
+                                            echo '--';
+                                        endif;
+                                        ?>
+                                    </div>
+                                </div>
+                                
+                                <div class="metric">
+                                    <div class="metric-label">Current Temp</div>
+                                    <div class="metric-value">
+                                        <?= $temperature !== null ? htmlspecialchars(round($temperature)) . '°F' : '--' ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                                
+                                <?php if ($hasMetar): ?>
                                 <div class="metric">
                                     <div class="metric-label">Temperature</div>
                                     <div class="metric-value">
@@ -845,6 +879,7 @@ Best regards,
                                         <?= $windSpeed !== null ? htmlspecialchars(round($windSpeed)) . ' kts' : '--' ?>
                                     </div>
                                 </div>
+                                <?php endif; ?>
                                 
                                 <?php if ($newestTimestamp): ?>
                                 <div class="metric" style="flex-basis: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e9ecef;">

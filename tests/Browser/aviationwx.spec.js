@@ -80,7 +80,22 @@ test.describe('Aviation Weather Dashboard', () => {
     expect(pageContent).toMatch(/kts|mph|km\/h/i);
   });
 
-  test('should display flight category', async ({ page }) => {
+  test('should display flight category when METAR is configured', async ({ page }) => {
+    // Check if METAR is configured for this airport
+    const hasMetar = await page.evaluate(() => {
+      return typeof AIRPORT_DATA !== 'undefined' && 
+             AIRPORT_DATA && 
+             AIRPORT_DATA.metar_station && 
+             AIRPORT_DATA.metar_station.trim() !== '';
+    });
+    
+    // If METAR is not configured, skip the flight category check
+    // (Condition field is hidden when METAR is not configured)
+    if (!hasMetar) {
+      console.log('METAR not configured for this airport - skipping flight category check');
+      return;
+    }
+    
     await page.waitForTimeout(2000);
     
     const pageContent = await page.textContent('body');
