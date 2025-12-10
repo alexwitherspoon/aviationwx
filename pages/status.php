@@ -210,23 +210,23 @@ function checkSystemHealth() {
         'lastChanged' => $logMtime > 0 ? $logMtime : (isset($logDir) && is_dir($logDir) ? filemtime($logDir) : 0)
     ];
     
-    // Check error rate
+    // Check internal error rate (system errors only, not external data source failures)
     $errorRate = aviationwx_error_rate_last_hour();
     $errorRateStatus = $errorRate === 0 ? 'operational' : ($errorRate < 10 ? 'degraded' : 'down');
     
     // Get last error timestamp
     $lastErrorTime = 0;
     if (function_exists('apcu_fetch')) {
-        $errorEvents = apcu_fetch('aviationwx_error_events');
+        $errorEvents = apcu_fetch('aviationwx_internal_error_events');
         if (is_array($errorEvents) && !empty($errorEvents)) {
             $lastErrorTime = max($errorEvents);
         }
     }
     
     $health['components']['error_rate'] = [
-        'name' => 'Error Rate',
+        'name' => 'System Error Rate',
         'status' => $errorRateStatus,
-        'message' => $errorRate === 0 ? 'No errors in the last hour' : "{$errorRate} errors in the last hour",
+        'message' => $errorRate === 0 ? 'No internal system errors in the last hour' : "{$errorRate} internal system errors in the last hour",
         'lastChanged' => $lastErrorTime > 0 ? $lastErrorTime : ($errorRate === 0 ? time() : 0)
     ];
     
@@ -358,51 +358,131 @@ function checkAirportHealth($airportId, $airport) {
         'components' => []
     ];
     
-    // Check weather cache
+    // Check weather sources - per-source status
     // Cache is at root level, not in pages directory
     $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
     $weatherCacheExists = file_exists($weatherCacheFile);
+    $weatherData = null;
     
     if ($weatherCacheExists) {
-        $weatherAge = time() - filemtime($weatherCacheFile);
-        $weatherRefresh = isset($airport['weather_refresh_seconds']) 
-            ? intval($airport['weather_refresh_seconds']) 
-            : getDefaultWeatherRefresh();
-        
-        // Check if data is fresh, stale, or expired
-        // Get stale threshold from global config
-        $maxStaleHours = getMaxStaleHours();
-        $maxStaleSeconds = $maxStaleHours * 3600;
-        
-        if ($weatherAge < $weatherRefresh) {
-            $weatherStatus = 'operational';
-            $weatherMessage = 'Weather data fresh';
-        } elseif ($weatherAge < $maxStaleSeconds) {
-            $weatherStatus = 'degraded';
-            $weatherMessage = 'Weather data stale (but usable)';
-        } else {
-            $weatherStatus = 'down';
-            $weatherMessage = 'Weather data expired';
-        }
-        
-        // Try to read cache to check if it's valid JSON
         $weatherData = @json_decode(file_get_contents($weatherCacheFile), true);
         if (!is_array($weatherData)) {
-            $weatherStatus = 'down';
-            $weatherMessage = 'Weather cache corrupted';
+            $weatherData = null; // Treat as missing if corrupted
         }
-    } else {
-        $weatherStatus = 'down';
-        $weatherMessage = 'No weather cache available';
     }
     
-    $weatherLastChanged = $weatherCacheExists ? filemtime($weatherCacheFile) : 0;
-    $health['components']['weather'] = [
-        'name' => 'Weather API',
-        'status' => $weatherStatus,
-        'message' => $weatherMessage,
-        'lastChanged' => $weatherLastChanged
-    ];
+    $weatherRefresh = isset($airport['weather_refresh_seconds']) 
+        ? intval($airport['weather_refresh_seconds']) 
+        : getDefaultWeatherRefresh();
+    $maxStaleHours = getMaxStaleHours();
+    $maxStaleSeconds = $maxStaleHours * 3600;
+    
+    $weatherSources = [];
+    
+    // Helper function to get source name from type
+    $getSourceName = function($sourceType) {
+        switch ($sourceType) {
+            case 'tempest': return 'Tempest Weather';
+            case 'ambient': return 'Ambient Weather';
+            case 'weatherlink': return 'Davis WeatherLink';
+            case 'metar': return 'Aviation Weather';
+            default: return 'Unknown Source';
+        }
+    };
+    
+    // Check primary weather source
+    $sourceType = $airport['weather_source']['type'] ?? null;
+    if ($sourceType) {
+        $sourceName = $getSourceName($sourceType);
+        $primaryStatus = 'down';
+        $primaryMessage = 'No data available';
+        $primaryLastChanged = 0;
+        
+        if ($weatherData !== null) {
+            // Check primary source timestamps
+            $primaryTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? null;
+            
+            if ($primaryTimestamp && $primaryTimestamp > 0) {
+                $primaryAge = time() - $primaryTimestamp;
+                $primaryLastChanged = $primaryTimestamp;
+                
+                if ($primaryAge < $weatherRefresh) {
+                    $primaryStatus = 'operational';
+                    $primaryMessage = 'Fresh';
+                } elseif ($primaryAge < $maxStaleSeconds) {
+                    $primaryStatus = 'degraded';
+                    $primaryMessage = 'Stale (but usable)';
+                } else {
+                    $primaryStatus = 'down';
+                    $primaryMessage = 'Expired';
+                }
+            } else {
+                $primaryStatus = 'down';
+                $primaryMessage = 'No timestamp available';
+            }
+        }
+        
+        $weatherSources[] = [
+            'name' => $sourceName,
+            'status' => $primaryStatus,
+            'message' => $primaryMessage,
+            'lastChanged' => $primaryLastChanged
+        ];
+    }
+    
+    // Check METAR source (if configured separately or as supplement)
+    $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
+    $isMetarPrimary = ($sourceType === 'metar');
+    
+    // METAR is shown separately if:
+    // 1. It's the primary source (already added above), OR
+    // 2. It's configured as a supplement (metar_station is set and primary is not metar)
+    if ($isMetarPrimary) {
+        // Already added above, skip
+    } elseif ($hasMetarStation) {
+        $metarStatus = 'down';
+        $metarMessage = 'No data available';
+        $metarLastChanged = 0;
+        
+        if ($weatherData !== null) {
+            // Check METAR source timestamps
+            $metarTimestamp = $weatherData['obs_time_metar'] ?? $weatherData['last_updated_metar'] ?? null;
+            
+            if ($metarTimestamp && $metarTimestamp > 0) {
+                $metarAge = time() - $metarTimestamp;
+                $metarLastChanged = $metarTimestamp;
+                
+                if ($metarAge < $weatherRefresh) {
+                    $metarStatus = 'operational';
+                    $metarMessage = 'Fresh';
+                } elseif ($metarAge < $maxStaleSeconds) {
+                    $metarStatus = 'degraded';
+                    $metarMessage = 'Stale (but usable)';
+                } else {
+                    $metarStatus = 'down';
+                    $metarMessage = 'Expired';
+                }
+            } else {
+                $metarStatus = 'down';
+                $metarMessage = 'No timestamp available';
+            }
+        }
+        
+        $weatherSources[] = [
+            'name' => 'Aviation Weather',
+            'status' => $metarStatus,
+            'message' => $metarMessage,
+            'lastChanged' => $metarLastChanged
+        ];
+    }
+    
+    // Store weather sources (similar to webcam cameras) - only if we have sources
+    if (!empty($weatherSources)) {
+        $health['components']['weather'] = [
+            'name' => 'Weather Sources',
+            'sources' => $weatherSources
+        ];
+    }
     
     // Check webcam caches - per-camera status
     // Cache is at root level, not in pages directory
@@ -566,13 +646,16 @@ function checkAirportHealth($airportId, $airport) {
         }
     }
     
-    $health['components']['webcams'] = [
-        'name' => 'Webcams',
-        'status' => $webcamStatus,
-        'message' => $webcamMessage,
-        'lastChanged' => $webcamLastChanged,
-        'cameras' => $webcamComponents // Per-camera details
-    ];
+    // Store webcam cameras - only if we have cameras
+    if (!empty($webcamComponents)) {
+        $health['components']['webcams'] = [
+            'name' => 'Webcams',
+            'status' => $webcamStatus,
+            'message' => $webcamMessage,
+            'lastChanged' => $webcamLastChanged,
+            'cameras' => $webcamComponents // Per-camera details
+        ];
+    }
     
     // Check VPN status if VPN is enabled
     $vpnStatus = checkVpnStatus($airportId, $airport);
@@ -581,14 +664,40 @@ function checkAirportHealth($airportId, $airport) {
     }
     
     // Determine overall airport status
+    // Check all components including individual sources for weather and webcams
     $hasDown = false;
     $hasDegraded = false;
     foreach ($health['components'] as $comp) {
-        if ($comp['status'] === 'down') {
-            $hasDown = true;
-            break;
-        } elseif ($comp['status'] === 'degraded') {
-            $hasDegraded = true;
+        // Check weather sources
+        if (isset($comp['sources']) && is_array($comp['sources'])) {
+            foreach ($comp['sources'] as $source) {
+                if ($source['status'] === 'down') {
+                    $hasDown = true;
+                    break 2; // Break out of both loops
+                } elseif ($source['status'] === 'degraded') {
+                    $hasDegraded = true;
+                }
+            }
+        }
+        // Check webcam cameras
+        elseif (isset($comp['cameras']) && is_array($comp['cameras'])) {
+            foreach ($comp['cameras'] as $camera) {
+                if ($camera['status'] === 'down') {
+                    $hasDown = true;
+                    break 2; // Break out of both loops
+                } elseif ($camera['status'] === 'degraded') {
+                    $hasDegraded = true;
+                }
+            }
+        }
+        // Check other components (VPN, etc.) that have direct status
+        elseif (isset($comp['status'])) {
+            if ($comp['status'] === 'down') {
+                $hasDown = true;
+                break;
+            } elseif ($comp['status'] === 'degraded') {
+                $hasDegraded = true;
+            }
         }
     }
     
@@ -706,10 +815,54 @@ usort($airportHealth, function($a, $b) {
             justify-content: space-between;
         }
         
+        .airport-card-header {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        
+        .airport-card-header:hover {
+            background-color: #f9fafb;
+        }
+        
+        .airport-card-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
         .status-card-header h2 {
             font-size: 1.25rem;
             font-weight: 600;
             color: #1a1a1a;
+        }
+        
+        .expand-icon {
+            display: inline-block;
+            transition: transform 0.2s;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        
+        .airport-card-header.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+        
+        .airport-card-body {
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .airport-card-body.collapsed {
+            max-height: 0;
+        }
+        
+        .airport-card-body.expanded {
+            max-height: 5000px;
+            transition: max-height 0.5s ease-in;
         }
         
         .status-card-header .status-badge {
@@ -846,9 +999,17 @@ usort($airportHealth, function($a, $b) {
         <?php if (!empty($airportHealth)): ?>
         <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a1a;">Airport Status</h2>
         <?php foreach ($airportHealth as $airport): ?>
+        <?php 
+        // Determine if airport should be expanded by default (not operational = expanded)
+        $isExpanded = ($airport['status'] !== 'operational');
+        ?>
         <div class="status-card">
-            <div class="status-card-header">
-                <h2><?php echo htmlspecialchars($airport['id']); ?></h2>
+            <div class="status-card-header airport-card-header <?php echo $isExpanded ? 'expanded' : ''; ?>" 
+                 onclick="toggleAirport('<?php echo htmlspecialchars($airport['id']); ?>')">
+                <h2>
+                    <span class="expand-icon">▶</span>
+                    <?php echo htmlspecialchars($airport['id']); ?>
+                </h2>
                 <span class="status-badge">
                     <span class="status-indicator <?php echo getStatusColor($airport['status']); ?>">
                         <?php echo getStatusIcon($airport['status']); ?>
@@ -856,56 +1017,83 @@ usort($airportHealth, function($a, $b) {
                     <?php echo ucfirst($airport['status']); ?>
                 </span>
             </div>
-            <div class="status-card-body">
+            <div class="status-card-body airport-card-body <?php echo $isExpanded ? 'expanded' : 'collapsed'; ?>" 
+                 id="airport-<?php echo htmlspecialchars($airport['id']); ?>-body">
                 <ul class="component-list">
                     <?php foreach ($airport['components'] as $component): ?>
-                    <li class="component-item">
-                        <div class="component-info">
-                            <div class="component-name"><?php echo htmlspecialchars($component['name']); ?></div>
-                            <div class="component-message"><?php echo htmlspecialchars($component['message']); ?></div>
-                            <?php if (isset($component['lastChanged']) && $component['lastChanged'] > 0): ?>
-                            <div class="component-timestamp">
-                                Last changed: <?php echo formatRelativeTime($component['lastChanged']); ?>
-                                <span style="color: #ccc;"> • </span>
-                                <?php echo formatAbsoluteTime($component['lastChanged']); ?>
+                    <?php 
+                    // Check if this is weather or webcams (which have individual sources)
+                    $isWeather = ($component['name'] === 'Weather Sources' && isset($component['sources']));
+                    $isWebcams = (isset($component['cameras']) && is_array($component['cameras']) && !empty($component['cameras']));
+                    ?>
+                    <?php if ($isWeather): ?>
+                        <!-- Weather Sources - show individual sources -->
+                        <?php foreach ($component['sources'] as $source): ?>
+                        <li class="component-item">
+                            <div class="component-info">
+                                <div class="component-name"><?php echo htmlspecialchars($source['name']); ?></div>
+                                <div class="component-message"><?php echo htmlspecialchars($source['message']); ?></div>
+                                <?php if (isset($source['lastChanged']) && $source['lastChanged'] > 0): ?>
+                                <div class="component-timestamp">
+                                    Last changed: <?php echo formatRelativeTime($source['lastChanged']); ?>
+                                    <span style="color: #ccc;"> • </span>
+                                    <?php echo formatAbsoluteTime($source['lastChanged']); ?>
+                                </div>
+                                <?php endif; ?>
                             </div>
-                            <?php endif; ?>
-                            <?php if (isset($component['cameras']) && is_array($component['cameras']) && !empty($component['cameras'])): ?>
-                            <div style="margin-top: 0.75rem; padding-left: 1rem; border-left: 2px solid #eee;">
-                                <div style="font-size: 0.875rem; font-weight: 600; color: #666; margin-bottom: 0.5rem;">Individual Cameras:</div>
-                                <ul style="list-style: none; padding: 0; margin: 0;">
-                                    <?php foreach ($component['cameras'] as $camera): ?>
-                                    <li style="padding: 0.5rem 0; border-bottom: 1px solid #f5f5f5;">
-                                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                                            <div style="flex: 1;">
-                                                <div style="font-weight: 500; color: #333;"><?php echo htmlspecialchars($camera['name']); ?></div>
-                                                <div style="font-size: 0.75rem; color: #666; margin-top: 0.25rem;"><?php echo htmlspecialchars($camera['message']); ?></div>
-                                                <?php if (isset($camera['lastChanged']) && $camera['lastChanged'] > 0): ?>
-                                                <div style="font-size: 0.7rem; color: #999; margin-top: 0.25rem; font-style: italic;">
-                                                    <?php echo formatRelativeTime($camera['lastChanged']); ?>
-                                                </div>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; text-transform: capitalize; margin-left: 1rem;">
-                                                <span class="status-indicator <?php echo getStatusColor($camera['status']); ?>">
-                                                    <?php echo getStatusIcon($camera['status']); ?>
-                                                </span>
-                                                <?php echo ucfirst($camera['status']); ?>
-                                            </div>
-                                        </div>
-                                    </li>
-                                    <?php endforeach; ?>
-                                </ul>
+                            <div class="component-status">
+                                <span class="status-indicator <?php echo getStatusColor($source['status']); ?>">
+                                    <?php echo getStatusIcon($source['status']); ?>
+                                </span>
+                                <?php echo ucfirst($source['status']); ?>
                             </div>
-                            <?php endif; ?>
-                        </div>
-                        <div class="component-status">
-                            <span class="status-indicator <?php echo getStatusColor($component['status']); ?>">
-                                <?php echo getStatusIcon($component['status']); ?>
-                            </span>
-                            <?php echo ucfirst($component['status']); ?>
-                        </div>
-                    </li>
+                        </li>
+                        <?php endforeach; ?>
+                    <?php elseif ($isWebcams): ?>
+                        <!-- Webcams - show individual cameras without overall status -->
+                        <?php foreach ($component['cameras'] as $camera): ?>
+                        <li class="component-item">
+                            <div class="component-info">
+                                <div class="component-name"><?php echo htmlspecialchars($camera['name']); ?></div>
+                                <div class="component-message"><?php echo htmlspecialchars($camera['message']); ?></div>
+                                <?php if (isset($camera['lastChanged']) && $camera['lastChanged'] > 0): ?>
+                                <div class="component-timestamp">
+                                    Last changed: <?php echo formatRelativeTime($camera['lastChanged']); ?>
+                                    <span style="color: #ccc;"> • </span>
+                                    <?php echo formatAbsoluteTime($camera['lastChanged']); ?>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="component-status">
+                                <span class="status-indicator <?php echo getStatusColor($camera['status']); ?>">
+                                    <?php echo getStatusIcon($camera['status']); ?>
+                                </span>
+                                <?php echo ucfirst($camera['status']); ?>
+                            </div>
+                        </li>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <!-- Other components (VPN, etc.) - show with status indicator -->
+                        <li class="component-item">
+                            <div class="component-info">
+                                <div class="component-name"><?php echo htmlspecialchars($component['name']); ?></div>
+                                <div class="component-message"><?php echo htmlspecialchars($component['message']); ?></div>
+                                <?php if (isset($component['lastChanged']) && $component['lastChanged'] > 0): ?>
+                                <div class="component-timestamp">
+                                    Last changed: <?php echo formatRelativeTime($component['lastChanged']); ?>
+                                    <span style="color: #ccc;"> • </span>
+                                    <?php echo formatAbsoluteTime($component['lastChanged']); ?>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="component-status">
+                                <span class="status-indicator <?php echo getStatusColor($component['status']); ?>">
+                                    <?php echo getStatusIcon($component['status']); ?>
+                                </span>
+                                <?php echo ucfirst($component['status']); ?>
+                            </div>
+                        </li>
+                    <?php endif; ?>
                     <?php endforeach; ?>
                 </ul>
             </div>
@@ -925,6 +1113,27 @@ usort($airportHealth, function($a, $b) {
             </p>
         </div>
     </div>
+    
+    <script>
+        function toggleAirport(airportId) {
+            const header = document.querySelector(`[onclick="toggleAirport('${airportId}')"]`);
+            const body = document.getElementById(`airport-${airportId}-body`);
+            
+            if (header && body) {
+                const isExpanded = header.classList.contains('expanded');
+                
+                if (isExpanded) {
+                    header.classList.remove('expanded');
+                    body.classList.remove('expanded');
+                    body.classList.add('collapsed');
+                } else {
+                    header.classList.add('expanded');
+                    body.classList.remove('collapsed');
+                    body.classList.add('expanded');
+                }
+            }
+        }
+    </script>
 </body>
 </html>
 
