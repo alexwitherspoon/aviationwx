@@ -1611,7 +1611,7 @@ function displayWeather(weather) {
     const container = document.getElementById('weather-data');
     
     container.innerHTML = `
-        <!-- Current Status -->
+        <!-- Aviation Conditions (METAR-required data) -->
         <div class="weather-group">
             <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '---'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
             ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
