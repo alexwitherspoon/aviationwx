@@ -12,6 +12,10 @@
   "airports": {
     "kspb": {
       "name": "Scappoose Industrial Airpark",
+      "enabled": true,
+      "maintenance": false,
+      "_comment_enabled": "enabled: true is required for airport to be accessible. Defaults to false (opt-in).",
+      "_comment_maintenance": "maintenance: true shows a warning banner. Defaults to false.",
       "icao": "KSPB",
       "iata": "SPB",
       "faa": "SPB",

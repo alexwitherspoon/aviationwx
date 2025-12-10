@@ -638,6 +638,58 @@ function getPrimaryIdentifier(string $airportId, ?array $airport = null): string
 }
 
 /**
+ * Check if an airport is enabled
+ * 
+ * Airports are opt-in: they must have `enabled: true` to be active.
+ * Defaults to false if the field is missing or not explicitly true.
+ * Uses strict boolean check to prevent accidental enabling via truthy values.
+ * 
+ * @param array $airport Airport configuration array
+ * @return bool True if airport is enabled, false otherwise
+ */
+function isAirportEnabled(array $airport): bool {
+    return isset($airport['enabled']) && $airport['enabled'] === true;
+}
+
+/**
+ * Check if an airport is in maintenance mode
+ * 
+ * Returns true only if `maintenance` is explicitly set to true.
+ * Defaults to false if the field is missing or not explicitly true.
+ * Uses strict boolean check to prevent accidental enabling via truthy values.
+ * 
+ * @param array $airport Airport configuration array
+ * @return bool True if airport is in maintenance mode, false otherwise
+ */
+function isAirportInMaintenance(array $airport): bool {
+    return isset($airport['maintenance']) && $airport['maintenance'] === true;
+}
+
+/**
+ * Get only enabled airports from configuration
+ * 
+ * Filters the airports array to return only airports with `enabled: true`.
+ * Preserves airport structure and keys.
+ * 
+ * @param array $config Configuration array with 'airports' key
+ * @return array Filtered airports array containing only enabled airports
+ */
+function getEnabledAirports(array $config): array {
+    if (!isset($config['airports']) || !is_array($config['airports'])) {
+        return [];
+    }
+    
+    $enabledAirports = [];
+    foreach ($config['airports'] as $airportId => $airport) {
+        if (isAirportEnabled($airport)) {
+            $enabledAirports[$airportId] = $airport;
+        }
+    }
+    
+    return $enabledAirports;
+}
+
+/**
  * Get the current Git commit SHA (short version)
  * 
  * Tries multiple methods to get the SHA for display in footers:
