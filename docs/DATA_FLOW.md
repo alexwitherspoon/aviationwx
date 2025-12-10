@@ -1,0 +1,790 @@
+# Weather and Webcam Data Flow Documentation
+
+This document describes how weather and webcam data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
+
+## Table of Contents
+
+1. [Weather Data Fetching](#weather-data-fetching)
+2. [Weather Data Processing](#weather-data-processing)
+3. [Weather Data Calculations](#weather-data-calculations)
+4. [Weather Data Transformations](#weather-data-transformations)
+5. [Weather Data Caching and Staleness](#weather-data-caching-and-staleness)
+6. [Webcam Data Fetching](#webcam-data-fetching)
+7. [Webcam Data Processing](#webcam-data-processing)
+8. [Data Display on Dashboard](#data-display-on-dashboard)
+
+---
+
+## Weather Data Fetching
+
+### Overview
+
+Weather data is fetched from multiple sources and combined to provide a complete picture:
+- **Primary Source**: Tempest, Ambient Weather, WeatherLink, or METAR-only
+- **METAR Supplement**: Aviation weather data (visibility, ceiling, cloud cover) from aviationweather.gov
+
+### Fetching Strategy
+
+The system uses two fetching strategies:
+
+1. **Asynchronous Fetching** (Parallel Requests)
+   - Used when both primary source and METAR are needed
+   - Fetches both sources simultaneously using `curl_multi`
+   - Faster overall response time
+   - Used for: Tempest, Ambient Weather sources
+
+2. **Synchronous Fetching** (Sequential Requests)
+   - Used when async is not applicable
+   - Fetches primary source first, then METAR if needed
+   - Used for: WeatherLink (requires custom headers), METAR-only sources
+
+### Primary Weather Sources
+
+#### Tempest WeatherFlow API
+- **Endpoint**: `https://swd.weatherflow.com/swd/rest/observations/station/{station_id}?token={api_key}`
+- **Data Provided**:
+  - Temperature (Celsius)
+  - Humidity (%)
+  - Pressure (mb, converted to inHg)
+  - Wind speed (m/s, converted to knots)
+  - Wind direction (degrees)
+  - Gust speed (m/s, converted to knots)
+  - Dewpoint (Celsius)
+  - Precipitation accumulation (mm, converted to inches)
+  - Observation timestamp (Unix seconds)
+- **Unit Conversions** (see [Server-Side Conversions](#server-side-conversions-api-adapters) for formulas):
+  - Wind: m/s → knots (`kts = m/s × 1.943844`)
+  - Pressure: mb → inHg (`inHg = mb / 33.8639`)
+  - Precipitation: mm → inches (`inches = mm × 0.0393701`)
+
+#### Ambient Weather API
+- **Endpoint**: `https://api.ambientweather.net/v1/devices?applicationKey={app_key}&apiKey={api_key}`
+- **Data Provided**:
+  - Temperature (Fahrenheit, converted to Celsius)
+  - Humidity (%)
+  - Pressure (inHg)
+  - Wind speed (mph, converted to knots)
+  - Wind direction (degrees)
+  - Gust speed (mph, converted to knots)
+  - Precipitation (inches)
+  - Observation timestamp (milliseconds, converted to seconds)
+- **Unit Conversions** (see [Server-Side Conversions](#server-side-conversions-api-adapters) for formulas):
+  - Temperature: °F → °C (`°C = (°F - 32) / 1.8`)
+  - Wind: mph → knots (`kts = mph × 0.868976`)
+  - Timestamp: milliseconds → seconds (`seconds = ms / 1000`)
+
+#### WeatherLink API
+- **Endpoint**: Varies by API version
+- **Authentication**: Custom headers (requires synchronous fetching)
+- **Data Provided**: Similar to other sources, with API-specific format
+- **Note**: Requires special header authentication, so always uses synchronous fetching
+
+#### METAR-Only Source
+- **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`
+- **Data Provided**:
+  - Temperature (Celsius)
+  - Dewpoint (Celsius)
+  - Wind direction and speed (knots)
+  - Pressure/Altimeter (inHg)
+  - Visibility (statute miles)
+  - Ceiling (feet AGL)
+  - Cloud cover (FEW/SCT/BKN/OVC)
+  - Precipitation (inches)
+  - Observation timestamp (ISO 8601, parsed to Unix seconds)
+
+### METAR Supplementation
+
+When a primary source is configured, METAR data is fetched to supplement:
+- **Visibility**: Required for flight category calculation
+- **Ceiling**: Required for flight category calculation
+- **Cloud Cover**: Additional aviation context
+
+METAR fetching logic:
+1. Attempts primary `metar_station` first
+2. If primary fails and `nearby_metar_stations` are configured, tries each nearby station sequentially
+3. Stops on first successful fetch
+4. If all stations fail, visibility/ceiling remain null
+
+### Circuit Breaker Protection
+
+Both primary and METAR sources have independent circuit breakers:
+
+**Purpose**: Prevents repeated failed API calls when a source is down
+
+**Behavior**:
+- Tracks consecutive failures per source
+- After threshold failures, enters "backoff" period
+- During backoff, skips fetch attempts for that source
+- Backoff duration increases with more failures
+- Permanent errors (4xx HTTP codes) use 2x backoff multiplier
+- Transient errors (timeouts, network issues) use normal backoff
+
+**Result**: System gracefully degrades - if primary fails, METAR-only data may still be available
+
+---
+
+## Weather Data Processing
+
+### Parsing Flow
+
+1. **API Response Received**
+   - Raw JSON from weather API
+   - HTTP status code checked (must be 200)
+   - Response body validated (non-empty)
+
+2. **Source-Specific Parser**
+   - Each adapter has its own parser function
+   - Extracts relevant fields from API response
+   - Performs unit conversions
+   - Handles missing/null values gracefully
+
+3. **Standard Format Conversion**
+   - All sources converted to common data structure
+   - Field names standardized
+   - Units standardized (Celsius, knots, inHg, etc.)
+
+### Observation Time Handling
+
+**Critical for Safety**: The system tracks when weather was actually observed, not just when it was fetched.
+
+**Timestamps Tracked**:
+- `obs_time_primary`: When primary source weather was measured
+- `obs_time_metar`: When METAR observation was made
+- `last_updated_primary`: When primary data was fetched from API
+- `last_updated_metar`: When METAR data was fetched
+- `last_updated`: Most recent observation time from all sources
+
+**Priority**: Observation time is preferred over fetch time for display, as it represents actual weather conditions.
+
+### Data Merging
+
+When both primary and METAR data are available:
+
+1. **Primary Source Provides**:
+   - Temperature, dewpoint, humidity
+   - Wind speed, direction, gusts
+   - Pressure
+   - Precipitation
+
+2. **METAR Source Provides**:
+   - Visibility (overwrites if present)
+   - Ceiling (overwrites if present)
+   - Cloud cover (overwrites if present)
+
+3. **Merge Rules**:
+   - METAR visibility/ceiling explicitly overwrite (even if null = unlimited)
+   - Primary source fields preserved if METAR doesn't provide them
+   - Both timestamps preserved separately for staleness checking
+
+---
+
+## Weather Data Calculations
+
+### Temperature Conversions
+
+**Celsius to Fahrenheit**:
+- Formula: `°F = (°C × 9/5) + 32`
+- Applied to: `temperature`, `dewpoint`
+- Stored as: `temperature_f`, `dewpoint_f`
+- Note: This conversion is performed server-side when storing data (see [Server-Side Conversions](#server-side-conversions-api-adapters))
+
+### Dewpoint Calculations
+
+**From Temperature and Humidity** (Magnus Formula):
+- Used when dewpoint not provided by source
+- Formula: `gamma = ln(humidity/100) + (b × tempC) / (c + tempC)`
+- `dewpoint = (c × gamma) / (b - gamma)`
+- Constants: a=6.1121, b=17.368, c=238.88
+
+**Humidity from Dewpoint** (Reverse Magnus):
+- Used when humidity not provided but dewpoint is
+- Formula: `humidity = (e / esat) × 100`
+- Where `e` and `esat` calculated using Magnus formula
+
+### Dewpoint Spread
+
+**Calculation**: `dewpoint_spread = temperature - dewpoint`
+- Indicates how close temperature is to dewpoint
+- Lower spread = higher humidity, potential for fog
+- Displayed in same unit as temperature (°C or °F)
+
+### Wind Calculations
+
+**Gust Factor**:
+- Formula: `gust_factor = gust_speed - wind_speed`
+- Represents additional wind speed from gusts
+- Displayed in knots
+
+**Variable Wind Direction**:
+- METAR may report "VRB" (variable) instead of numeric direction
+- Preserved as string "VRB" for display
+- Wind visual may show different representation
+
+### Pressure Altitude
+
+**Formula**: `Pressure Altitude = Station Elevation + (29.92 - Altimeter) × 1000`
+
+**Purpose**: Indicates aircraft performance at current pressure
+- Higher pressure altitude = reduced aircraft performance
+- Used for takeoff/landing distance calculations
+
+**Requirements**: 
+- Station elevation (from airport config)
+- Altimeter setting (from weather data, in inHg)
+
+### Density Altitude
+
+**Formula**: 
+1. Calculate pressure altitude first
+2. `Standard Temp (°F) = 59 - (0.003566 × elevation)`
+3. `Actual Temp (°F) = (tempC × 9/5) + 32`
+4. `Density Altitude = Elevation + (120 × (Actual Temp - Standard Temp))`
+
+**Purpose**: Accounts for both pressure AND temperature effects
+- Higher density altitude = significantly reduced aircraft performance
+- Critical for hot/high altitude operations
+
+**Requirements**:
+- Station elevation
+- Temperature (Celsius)
+- Pressure/Altimeter (inHg)
+
+### Flight Category Calculation
+
+**Purpose**: Categorizes flight conditions (VFR, MVFR, IFR, LIFR) based on visibility and ceiling
+
+**Categories** (FAA Standard):
+- **LIFR** (Low Instrument Flight Rules): Visibility < 1 SM OR Ceiling < 500 ft
+- **IFR** (Instrument Flight Rules): Visibility 1-3 SM OR Ceiling 500-999 ft
+- **MVFR** (Marginal VFR): Visibility 3-5 SM OR Ceiling 1,000-2,999 ft
+- **VFR** (Visual Flight Rules): Visibility > 3 SM AND Ceiling ≥ 1,000 ft
+
+**Calculation Logic**:
+1. Categorize visibility separately
+2. Categorize ceiling separately
+3. Use **worst-case rule**: Most restrictive category wins
+4. **Exception**: VFR requires BOTH conditions to be VFR (or better)
+   - If visibility is VFR but ceiling is unknown/unlimited, assume VFR
+   - If ceiling is VFR but visibility unknown, assume MVFR (conservative)
+
+**Special Cases**:
+- Unlimited ceiling (null) = no ceiling restriction = VFR for ceiling
+- Missing visibility = cannot determine category (may use ceiling only)
+- Missing both = null category
+
+---
+
+## Weather Data Transformations
+
+### Daily Tracking
+
+The system tracks daily extremes that reset at local midnight:
+
+#### Temperature Extremes
+- **High Temperature**: Highest temperature observed today
+- **Low Temperature**: Lowest temperature observed today
+- **Reset Time**: Local midnight (based on airport timezone)
+- **Storage**: JSON file with date-based keys (`YYYY-MM-DD`)
+- **Update Logic**:
+  - On each weather fetch, compare current temp to stored extremes
+  - Update high if current > stored high
+  - Update low if current < stored low
+  - If current equals stored low, update timestamp to earliest observation
+- **Observation Timestamps**: Tracks when each extreme was actually observed (not when fetched)
+
+#### Peak Gust
+- **Value**: Highest gust speed observed today
+- **Reset Time**: Local midnight
+- **Storage**: Same JSON structure as temperature extremes
+- **Update Logic**: Only updates if current gust > stored peak
+- **Observation Timestamp**: Tracks when peak gust occurred
+
+**Date Key Calculation**:
+- Uses airport's local timezone to determine "today"
+- Ensures daily reset happens at local midnight, not UTC
+- Example: Airport in PST (UTC-8) resets at 00:00 PST, not 00:00 UTC
+
+**Data Persistence**:
+- Stored in `cache/temp_extremes.json` and `cache/peak_gusts.json`
+- File locking prevents race conditions during concurrent updates
+- Old entries (>2 days) automatically cleaned up
+
+### Staleness Handling
+
+**Purpose**: Ensures pilots never see stale data without clear indication
+
+**Staleness Threshold**: 3 hours (configurable via `MAX_STALE_HOURS`)
+
+**Source-Specific Staleness**:
+- Primary source fields checked against `last_updated_primary`
+- METAR fields checked against `last_updated_metar`
+- Fields nulled independently based on their source
+
+**Fields Affected by Staleness**:
+- **Primary Source**: Temperature, dewpoint, humidity, wind, pressure, precipitation, altitudes
+- **METAR Source**: Visibility, ceiling, cloud cover
+- **NOT Affected**: Daily tracking values (temp_high_today, temp_low_today, peak_gust_today) - these are valid historical data
+
+**Staleness Check Flow**:
+1. Calculate age of each source timestamp
+2. If age >= threshold, null out fields from that source
+3. Recalculate flight category if visibility/ceiling were nulled
+4. Daily tracking values preserved (always valid for the day)
+
+### Data Merging with Fallback
+
+When new data is fetched but some fields are missing:
+
+**Merge Strategy**:
+1. Start with new data as base
+2. For each missing field, check if old cached value exists
+3. If old value exists and is not stale, preserve it
+4. If old value is stale, leave field as null
+
+**Preservable Fields**:
+- Temperature, dewpoint, humidity
+- Wind speed, direction, gusts
+- Pressure, altitudes
+- Visibility, ceiling, cloud cover
+
+**Special Cases**:
+- **Precipitation**: If missing from new data, set to 0 (daily value, should not preserve yesterday's)
+- **METAR Fields**: If METAR was successfully fetched but field is explicitly null (unlimited ceiling), always overwrite old value
+- **Daily Tracking**: Always preserved (valid historical data)
+
+**Purpose**: Provides graceful degradation - if one source fails, last known good values are shown (if not stale)
+
+---
+
+## Weather Data Caching and Staleness
+
+### Cache Strategy: Stale-While-Revalidate
+
+**Pattern**: Serve stale cache immediately, refresh in background
+
+**Flow**:
+1. **Request Received**: Check cache file age
+2. **Cache Fresh** (< refresh interval): Serve immediately, no fetch
+3. **Cache Stale** (≥ refresh interval): 
+   - Serve stale cache immediately (if exists)
+   - Flush response to client
+   - Continue script execution in background
+   - Fetch fresh data
+   - Update cache file
+4. **No Cache**: Fetch fresh data, serve, cache
+
+**Benefits**:
+- Fast response times (always serve immediately)
+- Fresh data (background refresh keeps cache current)
+- Graceful degradation (stale data better than no data)
+
+### Cache File Structure
+
+**Location**: `cache/weather_{airport_id}.json`
+
+**Content**: Complete weather data object with all fields:
+- Raw measurements (temperature, wind, etc.)
+- Calculated values (dewpoint spread, altitudes, etc.)
+- Daily tracking (temp_high_today, peak_gust_today, etc.)
+- Timestamps (last_updated, obs_time_primary, etc.)
+- Flight category and CSS class
+
+### Refresh Intervals
+
+**Per-Airport Configuration**:
+- `weather_refresh_seconds` in airport config (default: 60 seconds)
+- Can be customized per airport based on source update frequency
+
+**Cache Age Checks**:
+- Fresh: Age < refresh interval → serve immediately
+- Stale: Age ≥ refresh interval → serve stale, refresh in background
+- Too Stale: Age ≥ 3 hours → null out stale fields before serving
+
+### Cache Invalidation
+
+**Automatic**:
+- Background refresh updates cache on stale requests
+- Fresh data always overwrites cache
+- Daily tracking updates don't invalidate cache (separate files)
+
+**Manual**:
+- `?force_refresh=1` query parameter forces fresh fetch
+- Cron job requests (detected by User-Agent) always force refresh
+
+---
+
+## Webcam Data Fetching
+
+### Overview
+
+Webcam images are fetched from various source types and cached as JPEG files. The system supports multiple protocols and formats.
+
+### Source Types
+
+#### 1. MJPEG Stream (Default)
+- **Protocol**: HTTP MJPEG stream
+- **Detection**: Default if URL doesn't match other patterns
+- **Fetch Method**: 
+  - Downloads stream data
+  - Extracts first complete JPEG frame (detected by JPEG end marker `0xFF 0xD9`)
+  - Stops after one frame received
+  - Validates JPEG format and size
+- **Timeouts**: 
+  - Connection: 10 seconds
+  - Overall: 30 seconds
+  - Max size: 10MB
+
+#### 2. RTSP Stream
+- **Protocol**: RTSP or RTSPS (secure)
+- **Detection**: URL starts with `rtsp://` or `rtsps://`
+- **Fetch Method**: 
+  - Uses `ffmpeg` to capture single frame
+  - Supports TCP and UDP transport (configurable)
+  - RTSPS always uses TCP
+  - Retries on failure (default: 2 retries)
+- **Configuration**:
+  - `rtsp_transport`: 'tcp' or 'udp' (default: 'tcp')
+  - `rtsp_fetch_timeout`: Connection timeout in seconds
+  - `rtsp_max_runtime`: Maximum ffmpeg runtime (default: 6 seconds)
+- **Error Classification**:
+  - Timeout, connection, DNS errors → transient (normal backoff)
+  - Authentication, TLS errors → permanent (2x backoff)
+
+#### 3. Static JPEG
+- **Detection**: URL ends with `.jpg` or `.jpeg`
+- **Fetch Method**: 
+  - Simple HTTP download
+  - Validates JPEG format
+  - Saves directly to cache
+
+#### 4. Static PNG
+- **Detection**: URL ends with `.png`
+- **Fetch Method**: 
+  - Downloads PNG image
+  - Converts to JPEG using GD library
+  - Quality: 85%
+  - Saves to cache
+
+#### 5. Push Type (Not Fetched)
+- **Type**: `type: 'push'` or has `push_config`
+- **Behavior**: Skipped by fetch script (images pushed by external system)
+
+### Source Type Detection
+
+**Order**:
+1. Check `type` field in camera config (if present)
+2. Check URL protocol (RTSP/RTSPS)
+3. Check file extension (.jpg, .jpeg, .png)
+4. Default to MJPEG
+
+### Fetch Process Flow
+
+1. **Lock Acquisition**
+   - File-based lock prevents concurrent fetches of same camera
+   - Lock file: `/tmp/webcam_lock_{airport_id}_{cam_index}.lock`
+   - Timeout: 5 seconds
+   - Stale locks (> worker timeout + 10s) automatically cleaned
+
+2. **Cache Age Check**
+   - Check if cached image exists and age
+   - If cache age < refresh interval, skip fetch
+   - Refresh interval: Per-camera `refresh_seconds`, or airport default, or global default
+
+3. **VPN Check** (if configured)
+   - Verifies VPN connection is up for cameras requiring VPN
+   - Skips fetch if VPN down
+
+4. **Circuit Breaker Check**
+   - Checks if camera is in backoff period
+   - Skips fetch if circuit breaker open
+   - Error severity affects backoff duration
+
+5. **Source-Specific Fetch**
+   - Calls appropriate fetch function based on source type
+   - Handles errors and retries
+   - Records success/failure for circuit breaker
+
+6. **Image Validation**
+   - Verifies file exists and has content
+   - Checks file size > 0
+   - Validates JPEG format (if GD available)
+
+7. **Transcoding** (if successful)
+   - Converts JPEG to WebP format for modern browsers
+   - Uses ffmpeg with quality setting
+   - Timeout: Configurable (default: 2 seconds)
+   - Both formats cached: `.jpg` and `.webp`
+
+8. **Lock Release**
+   - Releases file lock
+   - Cleans up lock file
+
+### Error Handling
+
+**Failure Recording**:
+- Records failure with severity (transient/permanent)
+- Updates circuit breaker state
+- Logs error details
+
+**Error Classification** (RTSP only):
+- Timeout, connection, DNS → transient
+- Authentication, TLS → permanent
+
+**Fallback Behavior**:
+- Failed fetch: Serves stale cache if available
+- No cache: Serves placeholder image
+- Placeholder: 1x1 transparent PNG or placeholder.jpg if available
+
+---
+
+## Webcam Data Processing
+
+### Image Caching
+
+**Cache Location**: `cache/webcams/{airport_id}_{cam_index}.jpg` (and `.webp`)
+
+**File Naming**: `{airport_id}_{cam_index}.{ext}`
+- Example: `kspb_0.jpg`, `kspb_0.webp`
+
+**Atomic Writes**:
+- Writes to temporary file first: `{cache_file}.tmp.{pid}.{timestamp}.{random}`
+- Validates write success
+- Atomic rename to final filename
+- Prevents corruption from concurrent writes
+
+### Format Conversion
+
+**JPEG to WebP**:
+- Performed after successful JPEG fetch
+- Uses ffmpeg: `ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
+- Quality: 30 (0-100 scale, higher = better quality)
+- Compression: Level 6 (0-6 scale)
+- Timeout: Configurable per camera (default: 2 seconds)
+
+**Purpose**: 
+- WebP provides better compression (smaller file size)
+- Served to browsers that support WebP
+- JPEG served as fallback for older browsers
+
+### Cache Serving
+
+**Endpoint**: `/webcam.php?airport={id}&cam={index}`
+
+**Request Types**:
+1. **Image Request**: Returns JPEG or WebP image
+2. **Timestamp Request**: `?mtime=1` returns JSON with file modification time
+
+**Serving Logic**:
+1. Check if WebP exists and client supports it → serve WebP
+2. Else check if JPEG exists → serve JPEG
+3. Else serve placeholder
+
+**Cache Headers**:
+- Fresh cache: `Cache-Control: public, max-age={remaining_seconds}`
+- Stale cache: `Cache-Control: public, max-age={refresh_interval}, stale-while-revalidate={seconds}`
+- Placeholder: `Cache-Control: public, max-age={placeholder_ttl}`
+
+### Background Refresh
+
+**Pattern**: Same stale-while-revalidate as weather
+
+**Flow**:
+1. Check cache age
+2. If stale, serve immediately
+3. Trigger background refresh (if not already refreshing)
+4. Background refresh uses same fetch process with locking
+
+**Locking**: Prevents multiple concurrent refreshes of same camera
+
+---
+
+## Data Display on Dashboard
+
+### Weather Data Display
+
+#### Flight Category Display
+- **Location**: Top of weather section
+- **Format**: Category name (VFR/MVFR/IFR/LIFR) with emoji
+- **Color Coding**: CSS class `status-{category}` (lowercase)
+- **Timestamp**: Shows observation time for visibility/ceiling (if METAR available)
+
+#### Temperature Display
+- **Current Temperature**: 
+  - Value in selected unit (°C or °F)
+  - No timestamp (current reading)
+- **Today's High**:
+  - Highest temperature observed today
+  - Timestamp showing when high was observed
+  - Resets at local midnight
+- **Today's Low**:
+  - Lowest temperature observed today
+  - Timestamp showing when low was observed
+  - Resets at local midnight
+
+#### Wind Display
+- **Wind Speed**: User-selectable unit (knots, mph, or km/h)
+  - Default: Knots (kts)
+  - Toggle cycles: kts → mph → km/h → kts
+  - Preference stored in cookies/localStorage
+- **Wind Direction**: Degrees (or "VRB" if variable)
+- **Gust Speed**: Same unit as wind speed (user-selected)
+- **Gust Factor**: Additional speed from gusts (same unit)
+- **Visual**: Wind rose/compass showing direction
+- **Peak Gust Today**:
+  - Highest gust observed today (displayed in user-selected unit)
+  - Timestamp showing when peak occurred
+  - Resets at local midnight
+
+#### Moisture Display
+- **Dewpoint**: Temperature in selected unit
+- **Dewpoint Spread**: Temperature minus dewpoint
+- **Humidity**: Percentage (0-100%)
+
+#### Aviation Conditions (METAR Data)
+- **Visibility**: Statute miles (or km if metric)
+  - Timestamp from METAR observation time
+- **Ceiling**: Feet AGL (or meters if metric)
+  - "Unlimited" if no ceiling (FEW/SCT clouds)
+  - Timestamp from METAR observation time
+- **Cloud Cover**: FEW/SCT/BKN/OVC (if available)
+
+#### Pressure and Altitude
+- **Pressure**: Altimeter setting in inHg
+- **Pressure Altitude**: Calculated from elevation and pressure
+- **Density Altitude**: Calculated from elevation, pressure, and temperature
+
+#### Precipitation and Daylight
+- **Rainfall Today**: Inches (or cm if metric)
+  - Daily accumulation (resets at local midnight)
+- **Sunrise**: Local time in airport timezone
+- **Sunset**: Local time in airport timezone
+
+### Webcam Display
+
+#### Image Display
+- **Format**: JPEG or WebP (based on browser support)
+- **Refresh**: Automatic refresh based on cache age
+- **Placeholder**: Shown if image unavailable
+- **Loading State**: Shown during fetch
+
+#### Timestamp Display
+- **Last Updated**: Shows when image was captured
+- **Format**: Relative time ("2 minutes ago") or absolute time
+- **Update Frequency**: Checks timestamp periodically
+
+### Data Refresh Behavior
+
+#### Automatic Refresh
+- **Weather**: Refreshes every 60 seconds (or per-airport interval)
+- **Webcam**: Refreshes when cache age exceeds refresh interval
+- **Client-Side**: JavaScript polls for updates
+
+#### Stale Data Handling
+- **Indication**: "Stale" flag in response
+- **Behavior**: Client schedules immediate refresh if data is stale
+- **Display**: Data shown but marked as potentially outdated
+
+#### Error Handling
+- **Network Errors**: Retries with exponential backoff
+- **API Errors**: Shows last known good data (if available)
+- **Missing Data**: Fields show "--" or "---"
+- **Placeholder Images**: Shown for unavailable webcams
+
+### Unit Conversions
+
+#### Server-Side Conversions (API Adapters)
+
+These conversions happen when parsing data from external APIs to standardize to internal format:
+
+**Temperature**:
+- Fahrenheit to Celsius: `°C = (°F - 32) / 1.8`
+  - Used by: Ambient Weather, WeatherLink
+  - Alternative form: `°C = (°F - 32) × 5/9`
+- Celsius to Fahrenheit: `°F = (°C × 9/5) + 32`
+  - Used for: Storing `temperature_f` and `dewpoint_f` fields
+  - Applied to: Temperature, dewpoint
+
+**Wind Speed**:
+- Meters per second to knots: `kts = m/s × 1.943844`
+  - Used by: Tempest WeatherFlow API
+- Miles per hour to knots: `kts = mph × 0.868976`
+  - Used by: Ambient Weather, WeatherLink
+- Note: METAR provides wind in knots directly (no conversion)
+
+**Pressure**:
+- Millibars to inches of mercury: `inHg = mb / 33.8639`
+  - Used by: Tempest WeatherFlow API
+  - Note: Ambient Weather and METAR provide pressure in inHg directly
+
+**Precipitation**:
+- Millimeters to inches: `inches = mm × 0.0393701`
+  - Used by: Tempest WeatherFlow, WeatherLink
+  - Note: Ambient Weather provides precipitation in inches directly
+
+**Time**:
+- Milliseconds to seconds: `seconds = milliseconds / 1000`
+  - Used by: Ambient Weather API (observation timestamp)
+
+#### Client-Side Conversions (Display)
+
+These conversions happen in the browser for user display preferences:
+
+**Temperature**:
+- Server provides both °C and °F (pre-calculated)
+- Client toggles display unit (no calculation needed)
+- Calculations use stored Celsius values
+- Conversion formulas (for reference):
+  - Celsius to Fahrenheit: `°F = (°C × 9/5) + 32`
+  - Fahrenheit to Celsius: `°C = (°F - 32) × 5/9`
+- Dewpoint spread conversion: Same as temperature (multiply by 9/5 for °F)
+
+**Wind Speed**:
+- Server stores wind speeds in knots (aviation standard)
+- Client converts for display based on user preference
+- Conversion formulas:
+  - Knots to miles per hour: `mph = kts × 1.15078`
+  - Knots to kilometers per hour: `km/h = kts × 1.852`
+- Default unit: Knots (kts)
+- User can toggle between: kts, mph, km/h
+- Preference persists across sessions via cookies
+- Applied to: Wind speed, gust speed, gust factor, peak gust today
+
+**Distance (Visibility)**:
+- Statute miles to kilometers: `km = SM × 1.609344`
+- Kilometers to statute miles: `SM = km / 1.609344`
+- Default unit: Statute miles (SM)
+- User can toggle between: SM, km
+- Preference stored in cookies
+
+**Distance (Ceiling/Altitude)**:
+- Feet to meters: `m = ft × 0.3048`
+- Meters to feet: `ft = m / 0.3048` (or `ft = m × 3.28084`)
+- Default unit: Feet (ft)
+- User can toggle between: ft, m
+- Preference stored in cookies
+- Applied to: Ceiling, pressure altitude, density altitude
+
+**Precipitation**:
+- Inches to centimeters: `cm = in × 2.54`
+- Centimeters to inches: `in = cm / 2.54`
+- Default unit: Inches (in)
+- User can toggle between: in, cm
+- Preference stored in cookies
+- Applied to: Rainfall today
+
+---
+
+## Summary
+
+This system provides a robust, fault-tolerant data pipeline that:
+
+1. **Fetches** weather from multiple sources (primary + METAR) in parallel when possible
+2. **Processes** raw API data into standardized format with unit conversions
+3. **Calculates** aviation-specific metrics (altitudes, flight category, dewpoint)
+4. **Tracks** daily extremes (temperature highs/lows, peak gusts) that reset at local midnight
+5. **Handles** staleness gracefully by nulling old data and preserving last known good values
+6. **Caches** data with stale-while-revalidate pattern for fast responses
+7. **Fetches** webcam images from various protocols (MJPEG, RTSP, static)
+8. **Displays** all data with proper timestamps, units, and formatting
+
+The system prioritizes **safety** (accurate, timely data), **performance** (fast responses), and **reliability** (graceful degradation when sources fail).
