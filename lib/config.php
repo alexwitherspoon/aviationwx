@@ -1664,7 +1664,6 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['services'])) {
                 $errors[] = "Airport '{$airportCode}' services must be an object";
             } else {
-                // Validate known service fields with their expected types
                 if (isset($airport['services']['fuel'])) {
                     if (!is_string($airport['services']['fuel'])) {
                         $errors[] = "Airport '{$airportCode}' service 'fuel' must be a string, got: " . gettype($airport['services']['fuel']);
@@ -1677,8 +1676,7 @@ function validateAirportsJsonStructure(array $config): array {
                     }
                 }
                 
-                // Allow other service fields for future extensibility
-                // (no validation on unknown fields to allow flexibility)
+                // Unknown service fields allowed for future extensibility
             }
         }
         

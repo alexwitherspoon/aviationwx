@@ -245,5 +245,165 @@ class ConfigValidationTest extends TestCase
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Partner with non-string description should fail validation');
     }
+
+    /**
+     * Test services validation - Valid configurations
+     */
+    public function testServices_ValidWithFuelAndRepairs()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => [
+                        'fuel' => '100LL, Jet-A',
+                        'repairs_available' => true
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid services with fuel string and repairs boolean should pass validation');
+    }
+
+    public function testServices_ValidWithFuelOnly()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => [
+                        'fuel' => '100LL'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid services with fuel only should pass validation');
+    }
+
+    public function testServices_ValidWithRepairsOnly()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => [
+                        'repairs_available' => false
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid services with repairs only should pass validation');
+    }
+
+    public function testServices_ValidWithUnknownFields()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => [
+                        'fuel' => '100LL',
+                        'repairs_available' => true,
+                        'future_service' => 'some value'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Services with unknown fields should pass validation (extensibility)');
+    }
+
+    public function testServices_EmptyObject()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => []
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Empty services object should be valid');
+    }
+
+    /**
+     * Test services validation - Invalid configurations
+     */
+    public function testServices_InvalidFuelType()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => [
+                        'fuel' => true  // Should be string
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Services with non-string fuel should fail validation');
+        $this->assertStringContainsString("service 'fuel' must be a string", implode(' ', $result['errors']));
+    }
+
+    public function testServices_InvalidRepairsType()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => [
+                        'repairs_available' => 'yes'  // Should be boolean
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Services with non-boolean repairs_available should fail validation');
+        $this->assertStringContainsString("service 'repairs_available' must be a boolean", implode(' ', $result['errors']));
+    }
+
+    public function testServices_NotAnObject()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'services' => 'not-an-object'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Services that is not an object should fail validation');
+        $this->assertStringContainsString('services must be an object', implode(' ', $result['errors']));
+    }
 }
 
