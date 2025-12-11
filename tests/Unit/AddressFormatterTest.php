@@ -274,4 +274,99 @@ class AddressFormatterTest extends TestCase
         $this->assertNotEmpty($result);
         $this->assertStringNotContainsString('<script>', $result);
     }
+    
+    /**
+     * Test formatAddressEnvelope() - Address with special characters
+     */
+    public function testFormatAddressEnvelope_SpecialCharacters()
+    {
+        $address = "123 Main St #5, Portland, OR 97201";
+        $result = formatAddressEnvelope($address);
+        
+        // Should handle special characters and HTML escape them
+        // Note: <br> tags are allowed (they're part of the formatting)
+        $this->assertNotEmpty($result);
+        // Should not contain unescaped <script> tags or other dangerous HTML
+        $this->assertStringNotContainsString('<script>', $result);
+        $this->assertStringContainsString('123 Main St #5', $result);
+    }
+    
+    /**
+     * Test formatAddressEnvelope() - International address format
+     */
+    public function testFormatAddressEnvelope_InternationalAddress()
+    {
+        $address = "123 Main Street, Toronto, ON M5H 2N2, Canada";
+        $result = formatAddressEnvelope($address);
+        
+        $this->assertNotEmpty($result);
+        $this->assertStringContainsString('Canada', $result);
+        $this->assertStringContainsString('Toronto', $result);
+    }
+    
+    /**
+     * Test formatAddressEnvelope() - Address without commas
+     */
+    public function testFormatAddressEnvelope_NoCommas()
+    {
+        $address = "123 Main Street Portland Oregon 97201";
+        $result = formatAddressEnvelope($address);
+        
+        // Should fallback to sanitized original
+        $this->assertNotEmpty($result);
+        $this->assertStringContainsString('123 Main Street Portland Oregon 97201', $result);
+    }
+    
+    /**
+     * Test formatAddressEnvelope() - Very long address
+     */
+    public function testFormatAddressEnvelope_VeryLongAddress()
+    {
+        $address = "12345 Very Long Street Name That Goes On And On, Portland, OR 97201";
+        $result = formatAddressEnvelope($address);
+        
+        $this->assertNotEmpty($result);
+        $this->assertStringContainsString('Portland', $result);
+        $this->assertStringContainsString('OR', $result);
+    }
+    
+    /**
+     * Test formatAddressEnvelope() - Address with HTML entities
+     */
+    public function testFormatAddressEnvelope_HtmlEntities()
+    {
+        $address = "123 Main St & Co, Portland, OR 97201";
+        $result = formatAddressEnvelope($address);
+        
+        // Should escape HTML entities (ampersand should be &amp;)
+        $this->assertNotEmpty($result);
+        $this->assertStringContainsString('&amp;', $result); // Should be escaped to &amp;
+        $this->assertStringNotContainsString(' & ', $result); // Should not contain unescaped &
+    }
+    
+    /**
+     * Test parseAddressComponents() - Address with multiple spaces
+     */
+    public function testParseAddressComponents_MultipleSpaces()
+    {
+        $address = "123   Main   St,   Portland,   OR   97201";
+        $result = parseAddressComponents($address);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals('Portland', $result['city']);
+        $this->assertEquals('OR', $result['state']);
+    }
+    
+    /**
+     * Test parseAddressComponents() - ZIP code with extension
+     */
+    public function testParseAddressComponents_ZipWithExtension()
+    {
+        $address = "Portland, OR 97201-1234";
+        $result = parseAddressComponents($address);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals('97201-1234', $result['zip']);
+        $this->assertEquals('OR', $result['state']);
+    }
 }
