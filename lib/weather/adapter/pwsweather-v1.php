@@ -173,3 +173,4 @@ function fetchPWSWeather($source): ?array {
     
     return parsePWSWeatherResponse($response);
 }
+
