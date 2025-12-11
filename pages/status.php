@@ -438,7 +438,7 @@ function checkAirportHealth($airportId, $airport) {
     
     // METAR is shown separately if:
     // 1. It's the primary source (already added above), OR
-    // 2. It's enabled as a supplement (metar_enabled=true and primary is not metar)
+    // 2. It's configured as supplement (metar_station set and primary is not metar)
     if ($isMetarPrimary) {
         // Already added above, skip
     } elseif ($isMetarEnabled) {
