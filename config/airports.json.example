@@ -140,8 +140,7 @@
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
       "metar_station": "KSPB",
-      "metar_enabled": false,
-      "_comment_metar_enabled": "metar_enabled: true enables METAR data fetching for this airport. Defaults to false (opt-in). Requires metar_station to be configured. This is a per-airport setting.",
+      "metar_enabled": true,
       "nearby_metar_stations": [
         "KABC",
         "KDEF"
