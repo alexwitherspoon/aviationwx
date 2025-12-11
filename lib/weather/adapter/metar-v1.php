@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/../../constants.php';
+require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../test-mocks.php';
 
 /**
@@ -187,29 +188,38 @@ function parseMETARResponse($response, $airport): ?array {
                 
                 // Try to create the observation time
                 // Handle month rollovers intelligently:
-                // - If day > current day by more than 3, it's likely from previous month
-                // - If day < current day by more than 3, it could be from next month (end-of-month case)
+                // - If observation is more than METAR_OBS_TIME_FUTURE_THRESHOLD_DAYS in the future,
+                //   it's likely from previous month (e.g., day 31 -> day 1 rollover)
+                // - If observation is more than METAR_OBS_TIME_PAST_THRESHOLD_DAYS in the past,
+                //   it could be from next month (end-of-month case, e.g., day 1 -> day 31)
                 // - Otherwise, assume same month
+                // 
+                // Edge cases handled:
+                // - Month boundaries: Day 31 -> Day 1 (previous month)
+                // - End of month: Day 1 -> Day 31 (next month, if >25 days old)
+                // - Leap years: February 29 handling via DateTime
+                // - Invalid dates: Caught by try/catch
                 try {
                     // First, try current month
                     $obsDateTime = new DateTime("{$year}-{$month}-{$day} {$hour}:{$minute}:00", new DateTimeZone('UTC'));
-                    $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                    $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / SECONDS_PER_DAY;
                     
-                    // If observation is more than 3 days in the future, try previous month
-                    if ($daysDiff > 3) {
+                    // If observation is more than threshold days in the future, try previous month
+                    if ($daysDiff > METAR_OBS_TIME_FUTURE_THRESHOLD_DAYS) {
                         $obsDateTime->modify('-1 month');
-                        $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                        $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / SECONDS_PER_DAY;
                     }
                     
-                    // If observation is more than 25 days in the past, try next month (end-of-month rollover)
-                    if ($daysDiff < -25) {
+                    // If observation is more than threshold days in the past, try next month (end-of-month rollover)
+                    if ($daysDiff < -METAR_OBS_TIME_PAST_THRESHOLD_DAYS) {
                         $obsDateTime->modify('+1 month');
-                        $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                        $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / SECONDS_PER_DAY;
                     }
                     
-                    // Final validation: observation should be within reasonable range (not more than 3 days old or future)
-                    // METAR observations are typically hourly, so 3 days is a safe threshold
-                    if ($daysDiff >= -72 && $daysDiff <= 3) {
+                    // Final validation: observation should be within reasonable range
+                    // METAR observations are typically hourly, so METAR_OBS_TIME_MAX_AGE_SECONDS is a safe threshold
+                    $maxAgeDays = METAR_OBS_TIME_MAX_AGE_SECONDS / SECONDS_PER_DAY;
+                    if ($daysDiff >= -$maxAgeDays && $daysDiff <= METAR_OBS_TIME_FUTURE_THRESHOLD_DAYS) {
                         $obsTime = $obsDateTime->getTimestamp();
                     }
                 } catch (Exception $e) {
@@ -301,7 +311,6 @@ function fetchMETAR($airport): ?array {
     if (!is_array($airport)) {
         return null;
     }
-    require_once __DIR__ . '/../../logger.php';
     require_once __DIR__ . '/../utils.php';
     
     // METAR enabled if metar_station is configured
@@ -343,8 +352,6 @@ function fetchMETARFromNearbyStations(array $airport, string $primaryStationId):
         empty($airport['nearby_metar_stations'])) {
         return null;
     }
-    
-    require_once __DIR__ . '/../../logger.php';
     
     foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
         // Skip empty, non-string, or whitespace-only stations
