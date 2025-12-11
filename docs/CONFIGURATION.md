@@ -88,14 +88,22 @@ Get your API credentials from [WeatherLink.com](https://weatherlink.com) and add
 
 **METAR Station Configuration:**
 - `metar_station`: Primary METAR station ID (e.g., `"KSPB"`)
+- `metar_enabled`: Boolean flag to enable/disable METAR data fetching **for this specific airport** (default: `false`)
 - `nearby_metar_stations`: Array of alternate METAR station IDs for fallback (e.g., `["KVUO", "KHIO"]`)
+
+**METAR Enable/Disable (Per-Airport Setting):**
+- `metar_enabled` is a **per-airport setting** - each airport can independently enable or disable METAR
+- When `false` or not set, METAR fetching is disabled for that airport even if `metar_station` is configured
+- Requires both `metar_enabled: true` AND `metar_station` to be configured for METAR fetching to occur
+- This is an opt-in feature - each airport must explicitly enable METAR to use it
+- Example: Airport A can have `metar_enabled: true` while Airport B has `metar_enabled: false`
 
 **Fallback Behavior:**
 - The system attempts to fetch METAR data from the primary `metar_station` first
 - If the primary station fails (network error, station unavailable, etc.), the system automatically tries each station in `nearby_metar_stations` in order
 - The first successful fetch is used; remaining stations are not attempted
 - If all stations fail, the system logs a warning and continues without METAR data
-- This fallback only occurs when `metar_station` is explicitly configured
+- This fallback only occurs when `metar_enabled: true` AND `metar_station` is explicitly configured
 - Empty or invalid station IDs in `nearby_metar_stations` are automatically skipped
 
 ## Airport Identifiers and URL Routing
