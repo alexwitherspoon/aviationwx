@@ -812,7 +812,8 @@ Best regards,
                         }
                         $windSpeed = $weather['wind_speed'] ?? null;
                         $windDirection = $weather['wind_direction'] ?? null;
-                        $hasMetar = isset($airport['metar_station']) && !empty($airport['metar_station']);
+                        require_once __DIR__ . '/../lib/weather/utils.php';
+                        $hasMetar = isMetarEnabled($airport);
                         $newestTimestamp = getNewestDataTimestamp($weather);
                     ?>
                     <div class="airport-card">

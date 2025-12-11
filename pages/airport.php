@@ -531,12 +531,15 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             }
             
             if (!$hasAviationWeather && 
-                in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink']) &&
-                isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-                $weatherSources[] = [
-                    'name' => 'Aviation Weather',
-                    'url' => 'https://aviationweather.gov'
-                ];
+                in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink'])) {
+                require_once __DIR__ . '/../lib/weather/utils.php';
+                // Only show METAR source if enabled for this airport
+                if (isMetarEnabled($airport)) {
+                    $weatherSources[] = [
+                        'name' => 'Aviation Weather',
+                        'url' => 'https://aviationweather.gov'
+                    ];
+                }
             }
         }
         
@@ -1625,7 +1628,7 @@ function displayWeather(weather) {
     
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
-        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
+        ${(AIRPORT_DATA && AIRPORT_DATA.metar_enabled && AIRPORT_DATA.metar_station) ? `
         <div class="weather-group">
             <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '---'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
             <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>

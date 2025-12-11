@@ -432,15 +432,16 @@ function checkAirportHealth($airportId, $airport) {
     }
     
     // Check METAR source (if configured separately or as supplement)
-    $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
+    require_once __DIR__ . '/../lib/weather/utils.php';
+    $isMetarEnabled = isMetarEnabled($airport);
     $isMetarPrimary = ($sourceType === 'metar');
     
     // METAR is shown separately if:
     // 1. It's the primary source (already added above), OR
-    // 2. It's configured as a supplement (metar_station is set and primary is not metar)
+    // 2. It's enabled as a supplement (metar_enabled=true and primary is not metar)
     if ($isMetarPrimary) {
         // Already added above, skip
-    } elseif ($hasMetarStation) {
+    } elseif ($isMetarEnabled) {
         $metarStatus = 'down';
         $metarMessage = 'No data available';
         $metarLastChanged = 0;
