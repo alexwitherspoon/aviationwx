@@ -339,6 +339,115 @@ class HtmlOutputValidationTest extends TestCase
     }
     
     /**
+     * Test that JavaScript code doesn't contain PHP functions
+     */
+    public function testAirportPage_JavaScriptNoPhpFunctions()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] != 200) {
+            $this->markTestSkipped("Page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Extract JavaScript code
+        preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $html, $matches);
+        
+        $phpFunctions = ['empty(', 'isset(', 'array_', 'str_', 'preg_'];
+        
+        foreach ($matches[1] as $index => $jsCode) {
+            // Skip empty scripts
+            if (trim($jsCode) === '') {
+                continue;
+            }
+            
+            foreach ($phpFunctions as $func) {
+                // Check if function appears in code (but not in comments or strings)
+                if (strpos($jsCode, $func) !== false) {
+                    // Get context around the match
+                    $matchIndex = strpos($jsCode, $func);
+                    $context = substr($jsCode, max(0, $matchIndex - 50), 150);
+                    
+                    // Check if it's in a comment
+                    $beforeMatch = substr($jsCode, 0, $matchIndex);
+                    $isInComment = 
+                        (strrpos($beforeMatch, '//') !== false && 
+                         strrpos($beforeMatch, "\n", strrpos($beforeMatch, '//')) === false) ||
+                        (strrpos($beforeMatch, '/*') !== false && 
+                         strrpos($beforeMatch, '*/', strrpos($beforeMatch, '/*')) === false);
+                    
+                    // Check if it's in a string (simplified check)
+                    $isInString = preg_match('/["\'`].*' . preg_quote($func, '/') . '/', $context);
+                    
+                    if (!$isInComment && !$isInString) {
+                        $this->fail(
+                            "Script block #{$index} contains PHP function: {$func}\n" .
+                            "Context: " . substr($context, 0, 100)
+                        );
+                    }
+                }
+            }
+        }
+        
+        $this->assertTrue(true);
+    }
+    
+    /**
+     * Test that JavaScript uses correct API endpoints
+     */
+    public function testAirportPage_JavaScriptApiEndpointsAreCorrect()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] != 200) {
+            $this->markTestSkipped("Page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Check for incorrect weather.php calls (should be /api/weather.php)
+        // Look for patterns like: "/weather.php?" or "weather.php?" but not "/api/weather.php"
+        $incorrectPatterns = [
+            '/["\']\/weather\.php\?/',  // "/weather.php?"
+            '/["\']weather\.php\?/',     // "weather.php?" (relative)
+        ];
+        
+        $errors = [];
+        foreach ($incorrectPatterns as $pattern) {
+            if (preg_match_all($pattern, $html, $matches)) {
+                foreach ($matches[0] as $match) {
+                    // Get context around the match
+                    $matchIndex = strpos($html, $match);
+                    $context = substr($html, max(0, $matchIndex - 50), 150);
+                    
+                    // If context doesn't contain /api/weather.php, it's an error
+                    if (strpos($context, '/api/weather.php') === false && 
+                        strpos($context, 'api/weather.php') === false) {
+                        $errors[] = "Found incorrect weather API call: {$match}";
+                    }
+                }
+            }
+        }
+        
+        if (!empty($errors)) {
+            $this->fail(
+                "JavaScript should not call /weather.php directly (use /api/weather.php)\n" .
+                "Errors found:\n" . implode("\n", $errors)
+            );
+        }
+        
+        // Verify correct endpoint is used
+        $this->assertStringContainsString(
+            '/api/weather.php',
+            $html,
+            "JavaScript should call /api/weather.php endpoint"
+        );
+    }
+    
+    /**
      * Helper method to make HTTP request
      */
     private function makeRequest(string $path): array
