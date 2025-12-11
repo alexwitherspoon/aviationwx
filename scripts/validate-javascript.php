@@ -8,7 +8,16 @@
  * - Incorrect API endpoint URLs
  * - JavaScript syntax issues
  * 
- * Usage: php scripts/validate-javascript.php [--files=file1.php,file2.php]
+ * Usage:
+ *   php scripts/validate-javascript.php
+ *   php scripts/validate-javascript.php --files=pages/airport.php,pages/homepage.php
+ * 
+ * Examples:
+ *   # Validate all PHP files in pages directory (default)
+ *   php scripts/validate-javascript.php
+ * 
+ *   # Validate specific files
+ *   php scripts/validate-javascript.php --files=pages/airport.php
  * 
  * Exit codes:
  * - 0: All checks passed
@@ -37,7 +46,13 @@ foreach ($files as $file) {
         continue;
     }
     
-    $content = file_get_contents($file);
+    // Read file with error handling
+    $content = @file_get_contents($file);
+    if ($content === false) {
+        echo "Warning: Could not read file: $file\n";
+        continue;
+    }
+    
     preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $content, $matches);
     
     foreach ($matches[1] as $i => $jsCode) {
