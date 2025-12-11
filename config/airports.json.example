@@ -14,12 +14,9 @@
       "name": "Scappoose Industrial Airpark",
       "enabled": true,
       "maintenance": false,
-      "_comment_enabled": "enabled: true is required for airport to be accessible. Defaults to false (opt-in).",
-      "_comment_maintenance": "maintenance: true shows a warning banner. Defaults to false.",
       "icao": "KSPB",
       "iata": "SPB",
       "faa": "SPB",
-      "_comment_identifiers": "Identifier priority: ICAO > IATA > FAA > Airport ID. Users can access via any identifier (e.g., kspb.aviationwx.org, spb.aviationwx.org) and will be redirected to the primary identifier (ICAO if available). See CONFIGURATION.md for details.",
       "address": "City, State",
       "lat": 45.7710278,
       "lon": -122.8618333,
@@ -50,54 +47,14 @@
         "station_id": "YOUR_STATION_ID",
         "api_key": "YOUR_TEMPEST_API_KEY"
       },
-      "_weather_source_examples": {
-        "_comment": "All supported weather source types with default configurations:",
-        "_tempest_example": {
-          "type": "tempest",
-          "station_id": "YOUR_STATION_ID",
-          "api_key": "YOUR_TEMPEST_API_KEY"
-        },
-        "_ambient_example": {
-          "type": "ambient",
-          "api_key": "YOUR_API_KEY",
-          "application_key": "YOUR_APPLICATION_KEY"
-        },
-        "_weatherlink_example": {
-          "type": "weatherlink",
-          "station_id": "YOUR_STATION_ID",
-          "api_key": "YOUR_WEATHERLINK_API_KEY",
-          "api_secret": "YOUR_WEATHERLINK_API_SECRET"
-        },
-        "_pwsweather_example": {
-          "type": "pwsweather",
-          "station_id": "KMAHANOV10",
-          "client_id": "YOUR_AERIS_CLIENT_ID",
-          "client_secret": "YOUR_AERIS_CLIENT_SECRET"
-        },
-        "_metar_example": {
-          "type": "metar"
-        }
-      },
-      "_vpn_example": {
-        "enabled": true,
-        "type": "ipsec",
-        "connection_name": "kspb_vpn",
-        "remote_subnet": "192.168.1.0/24",
-        "psk": "your-pre-shared-key-here",
-        "ike_version": "2",
-        "encryption": "aes256gcm128",
-        "dh_group": "14"
-      },
       "webcams": [
         {
-          "_comment": "=== MJPEG Stream (Basic) ===",
           "name": "North Runway Camera (MJPEG)",
           "url": "https://example.com/video.mjpg",
           "position": "north",
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== MJPEG Stream (With Authentication) ===",
           "name": "South Runway Camera (MJPEG Auth)",
           "url": "https://example.com/mjpg/stream",
           "type": "mjpeg",
@@ -107,7 +64,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== Static JPEG Image (Basic) ===",
           "name": "West Camera (Static JPEG)",
           "url": "https://example.com/webcam.jpg",
           "type": "static_jpeg",
@@ -115,7 +71,6 @@
           "refresh_seconds": 120
         },
         {
-          "_comment": "=== Static JPEG Image (With Authentication) ===",
           "name": "East Camera (Static JPEG Auth)",
           "url": "https://example.com/webcam.jpg",
           "type": "static_jpeg",
@@ -125,7 +80,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== Static PNG Image (Auto-converted to JPEG) ===",
           "name": "North-East Camera (Static PNG)",
           "url": "https://example.com/webcam.png",
           "type": "static_png",
@@ -133,7 +87,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== RTSP Stream (Basic with defaults) ===",
           "name": "Runway Camera (RTSP Basic)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
@@ -142,7 +95,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== RTSP Stream (With Authentication) ===",
           "name": "Tower Camera (RTSP Auth)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
@@ -153,7 +105,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== RTSP Stream (With All Advanced Options) ===",
           "name": "Hangar Camera (RTSP Advanced)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
@@ -167,7 +118,6 @@
           "refresh_seconds": 30
         },
         {
-          "_comment": "=== RTSP Stream (UDP Transport) ===",
           "name": "Field Camera (RTSP UDP)",
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
@@ -176,7 +126,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== RTSPS Stream (Secure RTSP over TLS - Basic) ===",
           "name": "Secure Camera (RTSPS Basic)",
           "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
           "type": "rtsp",
@@ -185,7 +134,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== RTSPS Stream (Secure RTSP with All Options) ===",
           "name": "Secure Tower Camera (RTSPS Advanced)",
           "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
           "type": "rtsp",
@@ -199,7 +147,6 @@
           "refresh_seconds": 30
         },
         {
-          "_comment": "=== RTSP Stream (Private IP via VPN) ===",
           "name": "VPN Camera (Private IP)",
           "url": "rtsp://192.168.1.100:554/stream1",
           "type": "rtsp",
@@ -208,7 +155,6 @@
           "refresh_seconds": 60
         },
         {
-          "_comment": "=== Push Webcam (SFTP - Basic) ===",
           "name": "Push Camera (SFTP Basic)",
           "type": "push",
           "position": "north",
@@ -220,7 +166,6 @@
           }
         },
         {
-          "_comment": "=== Push Webcam (SFTP - With All Options) ===",
           "name": "Push Camera (SFTP Full)",
           "type": "push",
           "position": "south",
@@ -235,7 +180,6 @@
           }
         },
         {
-          "_comment": "=== Push Webcam (FTPS - Secure FTP) ===",
           "name": "Secure Push Camera (FTPS)",
           "type": "push",
           "position": "east",
@@ -250,7 +194,6 @@
           }
         },
         {
-          "_comment": "=== Push Webcam (FTP - Plain) ===",
           "name": "Legacy Push Camera (FTP)",
           "type": "push",
           "position": "west",
@@ -284,7 +227,6 @@
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
       "metar_station": "KSPB",
-      "_comment_metar_station": "METAR station ID. If configured, METAR data fetching is automatically enabled for this airport.",
       "nearby_metar_stations": [
         "KABC",
         "KDEF"
