@@ -296,14 +296,15 @@ function fetchMETAR($airport): ?array {
     require_once __DIR__ . '/../../logger.php';
     require_once __DIR__ . '/../utils.php';
     
-    // Per-airport METAR enable check (requires metar_enabled=true AND metar_station)
+    // METAR enabled if metar_station is configured
     if (!isMetarEnabled($airport)) {
-        aviationwx_log('info', 'METAR disabled - skipping METAR fetch', [
+        aviationwx_log('info', 'METAR not configured - skipping METAR fetch', [
             'airport' => $airport['icao'] ?? 'unknown'
         ], 'app');
         return null;
     }
     
+    // Station is guaranteed to exist and be non-empty after isMetarEnabled() check
     $stationId = $airport['metar_station'];
     $result = fetchMETARFromStation($stationId, $airport);
     
@@ -313,7 +314,8 @@ function fetchMETAR($airport): ?array {
         !empty($airport['nearby_metar_stations'])) {
         
         foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
-            if (empty($nearbyStation) || !is_string($nearbyStation)) {
+            // Skip empty, non-string, or whitespace-only stations
+            if (!is_string($nearbyStation) || empty(trim($nearbyStation))) {
                 continue;
             }
             

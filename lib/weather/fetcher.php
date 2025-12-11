@@ -93,12 +93,12 @@ function fetchWeatherAsync($airport, $airportId = null) {
     $metarUrl = null;
     $stationId = null; // Initialize for use in error logging
     if (!$metarCircuit['skip']) {
-        // Only fetch METAR if enabled and metar_station is configured
+        // Fetch METAR if metar_station is configured
         if (isMetarEnabled($airport)) {
             $stationId = $airport['metar_station'];
             $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
         } else {
-            aviationwx_log('info', 'METAR disabled or not configured - skipping METAR fetch', [
+            aviationwx_log('info', 'METAR not configured - skipping METAR fetch', [
                 'airport' => $airportId,
                 'icao' => $airport['icao'] ?? 'unknown'
             ], 'app');
@@ -392,7 +392,8 @@ function fetchWeatherAsync($airport, $airportId = null) {
         
         // Try nearby stations sequentially (synchronous fallback)
         foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
-            if (empty($nearbyStation) || !is_string($nearbyStation)) {
+            // Skip empty, non-string, or whitespace-only stations
+            if (!is_string($nearbyStation) || empty(trim($nearbyStation))) {
                 continue;
             }
             
@@ -545,7 +546,7 @@ function fetchWeatherSync($airport, $airportId = null) {
         }
         
         // Try to fetch METAR for visibility/ceiling if not already present
-        // Only fetch if METAR is enabled and metar_station is configured
+        // Fetch if metar_station is configured
         if (!$metarCircuit['skip']) {
             if (isMetarEnabled($airport)) {
                 $metarData = fetchMETAR($airport);
