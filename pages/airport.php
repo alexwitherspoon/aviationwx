@@ -2,6 +2,7 @@
 // Load SEO utilities and config (for getGitSha function)
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/address-formatter.php';
 
 // SEO variables - emphasize live webcams and runway conditions
 $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
@@ -349,15 +350,23 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 // Build Google Maps URL - prefer coordinates for accuracy, fallback to address text
                 $mapsUrl = '';
                 $addressText = '';
+                $formattedAddress = '';
                 if (isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon'])) {
                     // Use coordinates for precise location
                     $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['lat'] . ',' . $airport['lon']);
                     // Use address text if available, otherwise show coordinates
-                    $addressText = !empty($airport['address']) ? $airport['address'] : $airport['lat'] . ', ' . $airport['lon'];
+                    if (!empty($airport['address'])) {
+                        $addressText = $airport['address'];
+                        $formattedAddress = formatAddressEnvelope($airport['address']);
+                    } else {
+                        $addressText = $airport['lat'] . ', ' . $airport['lon'];
+                        $formattedAddress = htmlspecialchars($addressText);
+                    }
                 } else if (!empty($airport['address'])) {
                     // Fallback to address text
                     $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['address']);
                     $addressText = $airport['address'];
+                    $formattedAddress = formatAddressEnvelope($airport['address']);
                 }
                 
                 // Only show location if we have either coordinates or address
@@ -370,10 +379,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                            target="_blank"
                            rel="noopener noreferrer"
                            title="Open in Google Maps"
-                           style="color: #0066cc; text-decoration: none; transition: color 0.2s;"
-                           onmouseover="this.style.color='#0052a3'; this.style.textDecoration='underline';"
-                           onmouseout="this.style.color='#0066cc'; this.style.textDecoration='none';">
-                            <?= htmlspecialchars($addressText) ?>
+                           class="address-link">
+                            <?= $formattedAddress ?>
                         </a>
                     </span>
                 </div>
