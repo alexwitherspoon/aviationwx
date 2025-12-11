@@ -921,6 +921,68 @@ class ApiParsingTest extends TestCase
     }
     
     /**
+     * Test parsePWSWeatherResponse - Gust speed from windGustKTS field
+     */
+    public function testParsePWSWeatherResponse_GustSpeedFromWindGustKTS()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'windSpeedKTS' => 5,  // Wind speed
+                        'windGustKTS' => 7,   // Gust speed (different from wind speed)
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals(5, $result['wind_speed'], 'Wind speed should be 5 knots');
+        $this->assertEquals(7, $result['gust_speed'], 'Gust speed should be 7 knots from windGustKTS field');
+        $this->assertEquals(7, $result['peak_gust'], 'Peak gust should match gust_speed');
+        // Verify gust speed is NOT the same as wind speed (proves we're using windGustKTS)
+        $this->assertNotEquals($result['wind_speed'], $result['gust_speed'], 'Gust speed should differ from wind speed');
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Missing gust speed (should be null, not wind speed)
+     */
+    public function testParsePWSWeatherResponse_MissingGustSpeed_ReturnsNull()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'windSpeedKTS' => 5,  // Wind speed present
+                        // windGustKTS missing
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals(5, $result['wind_speed'], 'Wind speed should be 5 knots');
+        $this->assertNull($result['gust_speed'], 'Gust speed should be null when windGustKTS is missing');
+        $this->assertNull($result['peak_gust'], 'Peak gust should be null when gust speed is null');
+    }
+    
+    /**
      * Test parsePWSWeatherResponse - API error response
      */
     public function testParsePWSWeatherResponse_ApiErrorResponse()
