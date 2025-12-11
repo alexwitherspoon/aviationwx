@@ -52,8 +52,7 @@ require_once __DIR__ . '/../../test-mocks.php';
  * 
  * @param string|null $response JSON response from AerisWeather API
  * @return array|null Weather data array with standard keys, or null on parse error
- * 
- * @throws null Returns null on any parse error (invalid JSON, missing fields, API errors)
+ *                    Returns null on any parse error (invalid JSON, missing fields, API errors)
  */
 function parsePWSWeatherResponse(?string $response): ?array {
     if ($response === null || $response === '' || !is_string($response)) {
@@ -96,10 +95,8 @@ function parsePWSWeatherResponse(?string $response): ?array {
     
     // Parse observation time (when the weather was actually measured)
     // AerisWeather provides timestamp as Unix timestamp in seconds
-    $obsTime = null;
-    if (isset($obs['timestamp']) && is_numeric($obs['timestamp'])) {
-        $obsTime = (int)$obs['timestamp'];
-    }
+    // Timestamp already validated above, so safe to cast
+    $obsTime = (int)$obs['timestamp'];
     
     // Temperature - already in Celsius
     $temperature = isset($obs['tempC']) && is_numeric($obs['tempC']) ? (float)$obs['tempC'] : null;
