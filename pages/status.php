@@ -55,13 +55,25 @@ function getStatusIcon(string $status): string {
  * @return string Formatted relative time string or 'Unknown' if invalid
  */
 function formatRelativeTime(int $timestamp): string {
+    require_once __DIR__ . '/../lib/constants.php';
+    
     if (!$timestamp || $timestamp <= 0) return 'Unknown';
     $diff = time() - $timestamp;
-    if ($diff < 60) return 'Just now';
-    if ($diff < 3600) return floor($diff / 60) . ' minute' . (floor($diff / 60) == 1 ? '' : 's') . ' ago';
-    if ($diff < 86400) return floor($diff / 3600) . ' hour' . (floor($diff / 3600) == 1 ? '' : 's') . ' ago';
-    if ($diff < 604800) return floor($diff / 86400) . ' day' . (floor($diff / 86400) == 1 ? '' : 's') . ' ago';
-    return floor($diff / 604800) . ' week' . (floor($diff / 604800) == 1 ? '' : 's') . ' ago';
+    if ($diff < SECONDS_PER_MINUTE) return 'Just now';
+    if ($diff < SECONDS_PER_HOUR) {
+        $minutes = floor($diff / SECONDS_PER_MINUTE);
+        return $minutes . ' minute' . ($minutes == 1 ? '' : 's') . ' ago';
+    }
+    if ($diff < SECONDS_PER_DAY) {
+        $hours = floor($diff / SECONDS_PER_HOUR);
+        return $hours . ' hour' . ($hours == 1 ? '' : 's') . ' ago';
+    }
+    if ($diff < SECONDS_PER_WEEK) {
+        $days = floor($diff / SECONDS_PER_DAY);
+        return $days . ' day' . ($days == 1 ? '' : 's') . ' ago';
+    }
+    $weeks = floor($diff / SECONDS_PER_WEEK);
+    return $weeks . ' week' . ($weeks == 1 ? '' : 's') . ' ago';
 }
 
 /**
@@ -199,7 +211,8 @@ function checkSystemHealth(): array {
         $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
         $hasRecentLogs = false;
         if ($logMtime > 0) {
-            $hasRecentLogs = (time() - $logMtime) < 3600; // Within last hour
+            require_once __DIR__ . '/../lib/constants.php';
+            $hasRecentLogs = (time() - $logMtime) < STATUS_RECENT_LOG_THRESHOLD_SECONDS;
         }
         
         // Check if log directory is writable (for local development)
@@ -233,8 +246,9 @@ function checkSystemHealth(): array {
     ];
     
     // Check internal error rate (system errors only, not external data source failures)
+    require_once __DIR__ . '/../lib/constants.php';
     $errorRate = aviationwx_error_rate_last_hour();
-    $errorRateStatus = $errorRate === 0 ? 'operational' : ($errorRate < 10 ? 'degraded' : 'down');
+    $errorRateStatus = $errorRate === 0 ? 'operational' : ($errorRate < ERROR_RATE_DEGRADED_THRESHOLD ? 'degraded' : 'down');
     
     // Get last error timestamp
     $lastErrorTime = 0;
@@ -426,12 +440,14 @@ function checkAirportHealth(string $airportId, array $airport): array {
         }
     }
     
+    require_once __DIR__ . '/../lib/constants.php';
+    
     $weatherRefresh = isset($airport['weather_refresh_seconds']) 
         ? intval($airport['weather_refresh_seconds']) 
         : getDefaultWeatherRefresh();
     $maxStaleHours = getMaxStaleHours();
-    $maxStaleSeconds = $maxStaleHours * 3600;
-    $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+    $maxStaleSeconds = $maxStaleHours * SECONDS_PER_HOUR;
+    $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * SECONDS_PER_HOUR;
     
     $weatherSources = [];
     
@@ -610,9 +626,10 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $cacheAge = time() - @filemtime($cacheFile);
                 $camLastChanged = @filemtime($cacheFile) ?: 0;
                 
-                // Unified staleness logic: 5x for warning, 10x for error
-                $warningThreshold = $webcamRefresh * 5;
-                $errorThreshold = $webcamRefresh * 10;
+                // Unified staleness logic: warning and error thresholds based on refresh interval
+                require_once __DIR__ . '/../lib/constants.php';
+                $warningThreshold = $webcamRefresh * WEBCAM_STALENESS_WARNING_MULTIPLIER;
+                $errorThreshold = $webcamRefresh * WEBCAM_STALENESS_ERROR_MULTIPLIER;
                 
                 // Check for error files (pull cameras only)
                 $errorFile = $cacheJpg . '.error.json';

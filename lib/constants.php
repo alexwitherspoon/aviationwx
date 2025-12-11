@@ -133,4 +133,32 @@ if (!defined('HTTP_STATUS_SERVICE_UNAVAILABLE')) {
 if (!defined('ERROR_RATE_WINDOW_SECONDS')) {
     define('ERROR_RATE_WINDOW_SECONDS', 3600); // 1 hour
 }
+if (!defined('ERROR_RATE_DEGRADED_THRESHOLD')) {
+    define('ERROR_RATE_DEGRADED_THRESHOLD', 10); // System degraded if >= 10 errors/hour
+}
+
+// Time constants (seconds)
+if (!defined('SECONDS_PER_MINUTE')) {
+    define('SECONDS_PER_MINUTE', 60);
+}
+if (!defined('SECONDS_PER_HOUR')) {
+    define('SECONDS_PER_HOUR', 3600);
+}
+if (!defined('SECONDS_PER_DAY')) {
+    define('SECONDS_PER_DAY', 86400);
+}
+if (!defined('SECONDS_PER_WEEK')) {
+    define('SECONDS_PER_WEEK', 604800);
+}
+
+// Status page thresholds
+if (!defined('STATUS_RECENT_LOG_THRESHOLD_SECONDS')) {
+    define('STATUS_RECENT_LOG_THRESHOLD_SECONDS', SECONDS_PER_HOUR); // Logs considered recent if within 1 hour
+}
+if (!defined('WEBCAM_STALENESS_WARNING_MULTIPLIER')) {
+    define('WEBCAM_STALENESS_WARNING_MULTIPLIER', 5); // Warning at 5x refresh interval
+}
+if (!defined('WEBCAM_STALENESS_ERROR_MULTIPLIER')) {
+    define('WEBCAM_STALENESS_ERROR_MULTIPLIER', 10); // Error at 10x refresh interval
+}
 
