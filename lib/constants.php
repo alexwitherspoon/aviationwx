@@ -162,3 +162,14 @@ if (!defined('WEBCAM_STALENESS_ERROR_MULTIPLIER')) {
     define('WEBCAM_STALENESS_ERROR_MULTIPLIER', 10); // Error at 10x refresh interval
 }
 
+// METAR observation time parsing thresholds
+if (!defined('METAR_OBS_TIME_MAX_AGE_SECONDS')) {
+    define('METAR_OBS_TIME_MAX_AGE_SECONDS', 259200); // 3 days in seconds
+}
+if (!defined('METAR_OBS_TIME_FUTURE_THRESHOLD_DAYS')) {
+    define('METAR_OBS_TIME_FUTURE_THRESHOLD_DAYS', 3); // If observation is >3 days in future, try previous month
+}
+if (!defined('METAR_OBS_TIME_PAST_THRESHOLD_DAYS')) {
+    define('METAR_OBS_TIME_PAST_THRESHOLD_DAYS', 25); // If observation is >25 days in past, try next month
+}
+
