@@ -2,8 +2,8 @@
 /**
  * Unit Tests for METAR Enable/Disable Feature
  * 
- * Tests the isMetarEnabled() helper function to ensure per-airport
- * METAR enable/disable functionality works correctly.
+ * Tests the isMetarEnabled() helper function. METAR is enabled
+ * when metar_station is configured (exists and is not empty).
  */
 
 use PHPUnit\Framework\TestCase;
@@ -13,73 +13,55 @@ require_once __DIR__ . '/../../lib/weather/utils.php';
 class MetarEnabledTest extends TestCase
 {
     /**
-     * Test isMetarEnabled - enabled with metar_station configured
+     * Test isMetarEnabled - station configured returns true
      */
-    public function testIsMetarEnabled_EnabledWithStation_ReturnsTrue(): void
-    {
-        $airport = [
-            'icao' => 'KSPB',
-            'metar_enabled' => true,
-            'metar_station' => 'KSPB'
-        ];
-        
-        $this->assertTrue(isMetarEnabled($airport), 'Should return true when metar_enabled=true and metar_station is set');
-    }
-    
-    /**
-     * Test isMetarEnabled - disabled explicitly
-     */
-    public function testIsMetarEnabled_DisabledExplicitly_ReturnsFalse(): void
-    {
-        $airport = [
-            'icao' => 'KSPB',
-            'metar_enabled' => false,
-            'metar_station' => 'KSPB'
-        ];
-        
-        $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_enabled=false');
-    }
-    
-    /**
-     * Test isMetarEnabled - field missing (defaults to disabled)
-     */
-    public function testIsMetarEnabled_FieldMissing_ReturnsFalse(): void
+    public function testIsMetarEnabled_StationConfigured_ReturnsTrue(): void
     {
         $airport = [
             'icao' => 'KSPB',
             'metar_station' => 'KSPB'
-            // metar_enabled not set
         ];
         
-        $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_enabled field is missing (opt-in model)');
+        $this->assertTrue(isMetarEnabled($airport), 'Should return true when metar_station is configured');
     }
     
     /**
-     * Test isMetarEnabled - enabled but no metar_station
+     * Test isMetarEnabled - no station returns false
      */
-    public function testIsMetarEnabled_EnabledButNoStation_ReturnsFalse(): void
+    public function testIsMetarEnabled_NoStation_ReturnsFalse(): void
     {
         $airport = [
-            'icao' => 'KSPB',
-            'metar_enabled' => true
+            'icao' => 'KSPB'
             // metar_station not set
         ];
         
-        $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_enabled=true but metar_station is missing');
+        $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_station is not configured');
     }
     
     /**
-     * Test isMetarEnabled - enabled but empty metar_station
+     * Test isMetarEnabled - empty station returns false
      */
-    public function testIsMetarEnabled_EnabledButEmptyStation_ReturnsFalse(): void
+    public function testIsMetarEnabled_EmptyStation_ReturnsFalse(): void
     {
         $airport = [
             'icao' => 'KSPB',
-            'metar_enabled' => true,
             'metar_station' => ''
         ];
         
         $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_station is empty string');
+    }
+    
+    /**
+     * Test isMetarEnabled - null station returns false
+     */
+    public function testIsMetarEnabled_NullStation_ReturnsFalse(): void
+    {
+        $airport = [
+            'icao' => 'KSPB',
+            'metar_station' => null
+        ];
+        
+        $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_station is null');
     }
     
     /**
@@ -89,45 +71,35 @@ class MetarEnabledTest extends TestCase
     {
         $airportA = [
             'icao' => 'KSPB',
-            'metar_enabled' => true,
             'metar_station' => 'KSPB'
         ];
         
         $airportB = [
-            'icao' => 'KABC',
-            'metar_enabled' => false,
-            'metar_station' => 'KABC'
+            'icao' => 'KABC'
+            // No metar_station configured
         ];
         
         $airportC = [
             'icao' => 'KDEF',
             'metar_station' => 'KDEF'
-            // metar_enabled not set (defaults to false)
         ];
         
-        $this->assertTrue(isMetarEnabled($airportA), 'Airport A should have METAR enabled');
-        $this->assertFalse(isMetarEnabled($airportB), 'Airport B should have METAR disabled');
-        $this->assertFalse(isMetarEnabled($airportC), 'Airport C should have METAR disabled (default)');
+        $this->assertTrue(isMetarEnabled($airportA), 'Airport A should have METAR enabled (station configured)');
+        $this->assertFalse(isMetarEnabled($airportB), 'Airport B should have METAR disabled (no station)');
+        $this->assertTrue(isMetarEnabled($airportC), 'Airport C should have METAR enabled (station configured)');
     }
     
     /**
-     * Test isMetarEnabled - non-boolean metar_enabled values
+     * Test isMetarEnabled - whitespace-only station returns false
      */
-    public function testIsMetarEnabled_NonBooleanValue_ReturnsFalse(): void
+    public function testIsMetarEnabled_WhitespaceStation_ReturnsFalse(): void
     {
-        $airport1 = [
+        $airport = [
             'icao' => 'KSPB',
-            'metar_enabled' => 1, // truthy but not boolean true
-            'metar_station' => 'KSPB'
+            'metar_station' => '   '
         ];
         
-        $airport2 = [
-            'icao' => 'KABC',
-            'metar_enabled' => 'true', // string, not boolean
-            'metar_station' => 'KABC'
-        ];
-        
-        $this->assertFalse(isMetarEnabled($airport1), 'Should return false for non-boolean truthy value');
-        $this->assertFalse(isMetarEnabled($airport2), 'Should return false for string "true"');
+        // empty() considers whitespace-only strings as empty
+        $this->assertFalse(isMetarEnabled($airport), 'Should return false when metar_station is whitespace only');
     }
 }
