@@ -1681,7 +1681,7 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!isset($ws['type'])) {
                     $errors[] = "Airport '{$airportCode}' weather_source missing 'type' field";
                 } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink', 'metar'];
+                    $validTypes = ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'metar'];
                     if (!in_array($ws['type'], $validTypes)) {
                         $errors[] = "Airport '{$airportCode}' weather_source has invalid type: '{$ws['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
                     } else {
@@ -1709,6 +1709,16 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                             if (!isset($ws['station_id'])) {
                                 $errors[] = "Airport '{$airportCode}' weather_source (weatherlink) missing 'station_id'";
+                            }
+                        } elseif ($wsType === 'pwsweather') {
+                            if (!isset($ws['station_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'station_id'";
+                            }
+                            if (!isset($ws['client_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'client_id'";
+                            }
+                            if (!isset($ws['client_secret'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'client_secret'";
                             }
                         }
                     }
