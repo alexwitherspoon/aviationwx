@@ -934,16 +934,17 @@ usort($airportHealth, function($a, $b) {
         
         .airport-card-body {
             overflow: hidden;
-            transition: max-height 0.3s ease-out;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
         }
         
-        .airport-card-body.collapsed {
+        .status-card-body.airport-card-body.collapsed {
             max-height: 0;
+            padding: 0;
         }
         
-        .airport-card-body.expanded {
+        .status-card-body.airport-card-body.expanded {
             max-height: 5000px;
-            transition: max-height 0.5s ease-in;
+            transition: max-height 0.5s ease-in, padding 0.5s ease-in;
         }
         
         .status-card-header .status-badge {
