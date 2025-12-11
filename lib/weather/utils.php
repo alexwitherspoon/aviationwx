@@ -117,3 +117,19 @@ function getSunsetTime($airport) {
     
     return $datetime->format('H:i');
 }
+
+/**
+ * Check if METAR is enabled for a specific airport
+ * 
+ * Per-airport setting: each airport can independently enable/disable METAR.
+ * Requires both metar_enabled=true AND metar_station configured.
+ * 
+ * @param array $airport Single airport configuration array
+ * @return bool True if METAR is enabled for this airport, false otherwise
+ */
+function isMetarEnabled(array $airport): bool {
+    return isset($airport['metar_enabled']) && 
+           $airport['metar_enabled'] === true && 
+           isset($airport['metar_station']) && 
+           !empty($airport['metar_station']);
+}

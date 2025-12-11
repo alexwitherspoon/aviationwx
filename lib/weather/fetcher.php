@@ -14,6 +14,7 @@ require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
 require_once __DIR__ . '/adapter/weatherlink-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
+require_once __DIR__ . '/utils.php';
 
 /**
  * Fetch weather data asynchronously using curl_multi (parallel requests)
@@ -85,12 +86,12 @@ function fetchWeatherAsync($airport, $airportId = null) {
     $metarUrl = null;
     $stationId = null; // Initialize for use in error logging
     if (!$metarCircuit['skip']) {
-        // Only fetch METAR if metar_station is explicitly configured
-        if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
+        // Only fetch METAR if enabled and metar_station is configured
+        if (isMetarEnabled($airport)) {
             $stationId = $airport['metar_station'];
             $metarUrl = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
         } else {
-            aviationwx_log('info', 'METAR station not configured - skipping METAR fetch', [
+            aviationwx_log('info', 'METAR disabled or not configured - skipping METAR fetch', [
                 'airport' => $airportId,
                 'icao' => $airport['icao'] ?? 'unknown'
             ], 'app');
@@ -531,16 +532,17 @@ function fetchWeatherSync($airport, $airportId = null) {
         }
         
         // Try to fetch METAR for visibility/ceiling if not already present
-        // Only fetch if metar_station is explicitly configured
-        if (!$metarCircuit['skip'] && isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-            $metarData = fetchMETAR($airport);
-            // Record success/failure for METAR source
-            if ($metarData !== null) {
-                recordWeatherSuccess($airportId, 'metar');
-            } else {
-                recordWeatherFailure($airportId, 'metar', 'transient');
-            }
-            if ($metarData !== null) {
+        // Only fetch if METAR is enabled and metar_station is configured
+        if (!$metarCircuit['skip']) {
+            if (isMetarEnabled($airport)) {
+                $metarData = fetchMETAR($airport);
+                // Record success/failure for METAR source
+                if ($metarData !== null) {
+                    recordWeatherSuccess($airportId, 'metar');
+                } else {
+                    recordWeatherFailure($airportId, 'metar', 'transient');
+                }
+                if ($metarData !== null) {
                 // Use observation time if available, otherwise fall back to fetch time
                 $weatherData['last_updated_metar'] = isset($metarData['obs_time']) && $metarData['obs_time'] !== null 
                     ? $metarData['obs_time'] 
@@ -564,6 +566,7 @@ function fetchWeatherSync($airport, $airportId = null) {
                 }
                 if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
                     $weatherData['cloud_cover'] = $metarData['cloud_cover'];
+                }
                 }
             }
         }

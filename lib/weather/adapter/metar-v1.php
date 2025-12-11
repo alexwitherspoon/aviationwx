@@ -294,10 +294,11 @@ function fetchMETAR($airport): ?array {
         return null;
     }
     require_once __DIR__ . '/../../logger.php';
+    require_once __DIR__ . '/../utils.php';
     
-    // Only fetch if metar_station is explicitly configured
-    if (!isset($airport['metar_station']) || empty($airport['metar_station'])) {
-        aviationwx_log('info', 'METAR station not configured - skipping METAR fetch', [
+    // Per-airport METAR enable check (requires metar_enabled=true AND metar_station)
+    if (!isMetarEnabled($airport)) {
+        aviationwx_log('info', 'METAR disabled - skipping METAR fetch', [
             'airport' => $airport['icao'] ?? 'unknown'
         ], 'app');
         return null;
