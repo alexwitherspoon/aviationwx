@@ -803,7 +803,8 @@ Best regards,
                 <div class="airports-list">
                     <?php foreach ($airportsOnPage as $airportId => $airport): 
                         $url = 'https://' . $airportId . '.aviationwx.org';
-                        $weather = getAirportWeather($airportId);
+                        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
+                        $weather = $hasWeatherSource ? getAirportWeather($airportId) : [];
                         $flightCategory = $weather['flight_category'] ?? null;
                         $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
                         if ($temperature !== null && $temperature < 50 && !isset($weather['temperature_f'])) {
@@ -820,6 +821,7 @@ Best regards,
                             <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
                             <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
                             
+                            <?php if ($hasWeatherSource): ?>
                             <div class="airport-metrics">
                                 <?php if ($hasMetar): ?>
                                 <div class="metric">
@@ -890,6 +892,7 @@ Best regards,
                                 </div>
                                 <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         </a>
                     </div>
                     <?php endforeach; ?>
