@@ -169,6 +169,9 @@ function getMockPWSWeatherResponse() {
                         'windSpeedKTS' => 5,  // Knots - consistent with other mocks
                         'windSpeedKPH' => 9,  // Kilometers per hour
                         'windSpeedMPH' => 6,  // Miles per hour
+                        'windGustKTS' => 7,  // Gust speed in knots - consistent with other mocks (~6.1-6.2 knots)
+                        'windGustKPH' => 13,  // Gust speed in kilometers per hour
+                        'windGustMPH' => 8,  // Gust speed in miles per hour
                         'windDirDEG' => 89,  // Degrees - consistent with other mocks
                         'windDir' => 'E',  // Cardinal direction
                         'weather' => 'Clear',

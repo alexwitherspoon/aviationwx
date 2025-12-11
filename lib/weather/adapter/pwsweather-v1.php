@@ -7,7 +7,25 @@
  * 
  * PWSWeather.com stations upload data to pwsweather.com, and station owners
  * receive access to AerisWeather API to retrieve their station's observations.
- * API documentation: https://www.xweather.com/docs/weather-api/endpoints/observations
+ * 
+ * API Documentation: https://www.xweather.com/docs/weather-api/endpoints/observations
+ * 
+ * Configuration Requirements:
+ * - station_id: PWSWeather.com station identifier
+ * - client_id: AerisWeather API client ID
+ * - client_secret: AerisWeather API client secret
+ * 
+ * Rate Limits:
+ * - AerisWeather API has rate limits based on subscription tier
+ * - Free tier: Limited requests per day
+ * - Paid tiers: Higher rate limits
+ * - Circuit breaker logic in fetcher.php handles rate limit errors
+ * 
+ * Error Handling:
+ * - Invalid API responses return null
+ * - Missing required fields return null
+ * - API errors (success: false) return null
+ * - Network timeouts handled by CURL_TIMEOUT constant
  */
 
 require_once __DIR__ . '/../../constants.php';
@@ -20,8 +38,22 @@ require_once __DIR__ . '/../../test-mocks.php';
  * Handles unit conversions where needed (visibility already in statute miles).
  * Observation time is provided as Unix timestamp in seconds.
  * 
+ * Field Mappings:
+ * - tempC -> temperature (Celsius, no conversion)
+ * - humidity -> humidity (percentage, no conversion)
+ * - pressureIN -> pressure (inHg, no conversion)
+ * - windSpeedKTS/windKTS -> wind_speed (knots, no conversion)
+ * - windGustKTS -> gust_speed (knots, no conversion)
+ * - windDirDEG -> wind_direction (degrees, no conversion)
+ * - precipIN -> precip_accum (inches, no conversion)
+ * - dewpointC -> dewpoint (Celsius, no conversion)
+ * - visibilityMI -> visibility (statute miles, no conversion)
+ * - timestamp -> obs_time (Unix seconds, no conversion)
+ * 
  * @param string|null $response JSON response from AerisWeather API
  * @return array|null Weather data array with standard keys, or null on parse error
+ * 
+ * @throws null Returns null on any parse error (invalid JSON, missing fields, API errors)
  */
 function parsePWSWeatherResponse(?string $response): ?array {
     if ($response === null || $response === '' || !is_string($response)) {
@@ -56,6 +88,12 @@ function parsePWSWeatherResponse(?string $response): ?array {
     
     $obs = $period['ob'];
     
+    // Validate that we have at least some basic weather data
+    // At minimum, we need a timestamp to consider this a valid observation
+    if (!isset($obs['timestamp']) || !is_numeric($obs['timestamp'])) {
+        return null;
+    }
+    
     // Parse observation time (when the weather was actually measured)
     // AerisWeather provides timestamp as Unix timestamp in seconds
     $obsTime = null;
@@ -87,10 +125,10 @@ function parsePWSWeatherResponse(?string $response): ?array {
     }
     
     // Gust speed - already in knots
+    // AerisWeather API provides windGustKTS field for gust data
     $gustSpeedKts = null;
-    if (isset($obs['windSpeedKTS']) && is_numeric($obs['windSpeedKTS'])) {
-        // Use wind speed as gust if no separate gust field
-        $gustSpeedKts = $windSpeedKts;
+    if (isset($obs['windGustKTS']) && is_numeric($obs['windGustKTS'])) {
+        $gustSpeedKts = (int)round((float)$obs['windGustKTS']);
     }
     
     // Precipitation - already in inches
