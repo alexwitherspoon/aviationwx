@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
 
@@ -55,8 +56,6 @@ function getStatusIcon(string $status): string {
  * @return string Formatted relative time string or 'Unknown' if invalid
  */
 function formatRelativeTime(int $timestamp): string {
-    require_once __DIR__ . '/../lib/constants.php';
-    
     if (!$timestamp || $timestamp <= 0) return 'Unknown';
     $diff = time() - $timestamp;
     if ($diff < SECONDS_PER_MINUTE) return 'Just now';
@@ -211,7 +210,6 @@ function checkSystemHealth(): array {
         $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
         $hasRecentLogs = false;
         if ($logMtime > 0) {
-            require_once __DIR__ . '/../lib/constants.php';
             $hasRecentLogs = (time() - $logMtime) < STATUS_RECENT_LOG_THRESHOLD_SECONDS;
         }
         
@@ -246,7 +244,6 @@ function checkSystemHealth(): array {
     ];
     
     // Check internal error rate (system errors only, not external data source failures)
-    require_once __DIR__ . '/../lib/constants.php';
     $errorRate = aviationwx_error_rate_last_hour();
     $errorRateStatus = $errorRate === 0 ? 'operational' : ($errorRate < ERROR_RATE_DEGRADED_THRESHOLD ? 'degraded' : 'down');
     
@@ -440,8 +437,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
         }
     }
     
-    require_once __DIR__ . '/../lib/constants.php';
-    
     $weatherRefresh = isset($airport['weather_refresh_seconds']) 
         ? intval($airport['weather_refresh_seconds']) 
         : getDefaultWeatherRefresh();
@@ -627,7 +622,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $camLastChanged = @filemtime($cacheFile) ?: 0;
                 
                 // Unified staleness logic: warning and error thresholds based on refresh interval
-                require_once __DIR__ . '/../lib/constants.php';
                 $warningThreshold = $webcamRefresh * WEBCAM_STALENESS_WARNING_MULTIPLIER;
                 $errorThreshold = $webcamRefresh * WEBCAM_STALENESS_ERROR_MULTIPLIER;
                 
