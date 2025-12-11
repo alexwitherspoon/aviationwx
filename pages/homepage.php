@@ -535,7 +535,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <div class="stat-label">Live Webcams</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">3</div>
+                <div class="stat-number">4</div>
                 <div class="stat-label">Weather Sources</div>
             </div>
         </div>
@@ -670,7 +670,7 @@ Best regards,
             <div class="features">
                 <div class="feature-card">
                     <h3>🌡️ Real-Time Weather</h3>
-                    <p>Live data from on-site weather stations (Tempest, Ambient Weather, WeatherLink) or METAR observations.</p>
+                    <p>Live data from on-site weather stations (Tempest, Ambient Weather, WeatherLink, PWSWeather.com) or METAR observations.</p>
                 </div>
                 
                 <div class="feature-card">
@@ -949,6 +949,7 @@ Best regards,
                         <li>Tempest Weather</li>
                         <li>Ambient Weather</li>
                         <li>Davis WeatherLink</li>
+                        <li>PWSWeather.com</li>
                         <li>METAR observations</li>
                     </ul>
                 </div>
