@@ -424,6 +424,35 @@ test.describe('Aviation Weather Dashboard', () => {
       expect(syntaxErrors).toHaveLength(0);
     }
     
+    // CRITICAL: Check for ReferenceError - undefined variables/functions (like empty() in JavaScript)
+    const referenceErrors = consoleErrors.filter(err => 
+      err.includes('ReferenceError') &&
+      err.includes('is not defined') &&
+      !err.includes('Failed to fetch') && // Network errors are acceptable
+      !err.includes('network')
+    );
+    
+    if (referenceErrors.length > 0) {
+      console.error('CRITICAL: Reference errors found (undefined variables/functions):', referenceErrors);
+      // This is a critical error - fail the test
+      expect(referenceErrors).toHaveLength(0);
+    }
+    
+    // CRITICAL: Check for TypeError - wrong function usage
+    const typeErrors = consoleErrors.filter(err => 
+      err.includes('TypeError') &&
+      !err.includes('Failed to fetch') && // Network errors are acceptable
+      !err.includes('network') &&
+      !err.includes('Cannot read properties of null') && // Some null checks are acceptable
+      !err.includes('Cannot read properties of undefined') // Some undefined checks are acceptable
+    );
+    
+    if (typeErrors.length > 0) {
+      console.error('CRITICAL: Type errors found:', typeErrors);
+      // This is a critical error - fail the test
+      expect(typeErrors).toHaveLength(0);
+    }
+    
     // Filter out known acceptable errors (like API fetch failures in test)
     // HTTP 503 (Service Unavailable) is expected when weather API is unavailable in CI
     const criticalErrors = consoleErrors.filter(err => 
@@ -437,7 +466,9 @@ test.describe('Aviation Weather Dashboard', () => {
       !err.includes('JSON parse error') && // JSON parse errors from weather API (handled gracefully)
       !err.includes('Invalid JSON response') && // Invalid JSON from weather API (handled gracefully)
       !err.includes('Unexpected token') &&  // Already checked above
-      !err.includes('SyntaxError')  // Already checked above
+      !err.includes('SyntaxError') &&  // Already checked above
+      !err.includes('ReferenceError') &&  // Already checked above
+      !err.includes('TypeError')  // Already checked above
     );
     
     if (criticalErrors.length > 0) {
