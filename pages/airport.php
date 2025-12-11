@@ -246,6 +246,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($primaryIdentifier) ?>)</h1>
         </header>
 
+        <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
         <!-- Webcams -->
         <section class="webcam-section">
             <div class="webcam-grid">
@@ -292,7 +293,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <?php endforeach; ?>
             </div>
         </section>
+        <?php endif; ?>
 
+        <?php if (isset($airport['weather_source']) && !empty($airport['weather_source'])): ?>
         <!-- Weather Data -->
         <section class="weather-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -337,6 +340,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 </div>
             </div>
         </section>
+        <?php endif; ?>
 
         <!-- Airport Information -->
         <section class="airport-info">
@@ -487,51 +491,53 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         // Collect unique weather data sources by name
         $weatherSources = [];
         
-        // Add primary weather source
-        switch ($airport['weather_source']['type']) {
-            case 'tempest':
-                $weatherSources[] = [
-                    'name' => 'Tempest Weather',
-                    'url' => 'https://tempestwx.com'
-                ];
-                break;
-            case 'ambient':
-                $weatherSources[] = [
-                    'name' => 'Ambient Weather',
-                    'url' => 'https://ambientweather.net'
-                ];
-                break;
-            case 'weatherlink':
-                $weatherSources[] = [
-                    'name' => 'Davis WeatherLink',
-                    'url' => 'https://weatherlink.com'
-                ];
-                break;
-            case 'metar':
+        // Add primary weather source (only if configured)
+        if (isset($airport['weather_source']) && !empty($airport['weather_source']) && isset($airport['weather_source']['type'])) {
+            switch ($airport['weather_source']['type']) {
+                case 'tempest':
+                    $weatherSources[] = [
+                        'name' => 'Tempest Weather',
+                        'url' => 'https://tempestwx.com'
+                    ];
+                    break;
+                case 'ambient':
+                    $weatherSources[] = [
+                        'name' => 'Ambient Weather',
+                        'url' => 'https://ambientweather.net'
+                    ];
+                    break;
+                case 'weatherlink':
+                    $weatherSources[] = [
+                        'name' => 'Davis WeatherLink',
+                        'url' => 'https://weatherlink.com'
+                    ];
+                    break;
+                case 'metar':
+                    $weatherSources[] = [
+                        'name' => 'Aviation Weather',
+                        'url' => 'https://aviationweather.gov'
+                    ];
+                    break;
+            }
+            
+            // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
+            // Only add if not already using METAR as primary source AND metar_station is configured
+            $hasAviationWeather = false;
+            foreach ($weatherSources as $source) {
+                if ($source['name'] === 'Aviation Weather') {
+                    $hasAviationWeather = true;
+                    break;
+                }
+            }
+            
+            if (!$hasAviationWeather && 
+                in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink']) &&
+                isset($airport['metar_station']) && !empty($airport['metar_station'])) {
                 $weatherSources[] = [
                     'name' => 'Aviation Weather',
                     'url' => 'https://aviationweather.gov'
                 ];
-                break;
-        }
-        
-        // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
-        // Only add if not already using METAR as primary source AND metar_station is configured
-        $hasAviationWeather = false;
-        foreach ($weatherSources as $source) {
-            if ($source['name'] === 'Aviation Weather') {
-                $hasAviationWeather = true;
-                break;
             }
-        }
-        
-        if (!$hasAviationWeather && 
-            in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink']) &&
-            isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-            $weatherSources[] = [
-                'name' => 'Aviation Weather',
-                'url' => 'https://aviationweather.gov'
-            ];
         }
         
         // Get partners from new partners[] array
@@ -1940,6 +1946,7 @@ function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0) {
 
 function openLiveStream(url) { window.open(url, '_blank'); }
 
+<?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
 // Update webcam timestamps (called periodically to refresh relative time display)
 function updateWebcamTimestamps() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
@@ -1967,6 +1974,7 @@ function reloadWebcamImages() {
 // Update relative timestamps every 10 seconds for better responsiveness
 updateWebcamTimestamps();
 setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
+<?php endif; ?>
 
 // Debounce timestamps per camera to avoid multiple fetches when all formats load
 const timestampCheckPending = {};
@@ -2107,6 +2115,7 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
         });
 }
 
+<?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
 // Reload webcam images using per-camera intervals
 <?php foreach ($airport['webcams'] as $index => $cam): 
     // Get webcam refresh from config with global config fallback
@@ -2144,10 +2153,12 @@ setInterval(() => {
     safeSwapCameraImage(<?= $index ?>);
 }, <?= max(1, $perCam) * 1000 ?>);
 <?php endforeach; ?>
+<?php endif; ?>
 
 updateWeatherTimestamp();
 setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds
 
+<?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
 // Batched timestamp refresh for all webcams (debounced to reduce requests)
 let timestampBatchPending = false;
 function batchRefreshAllTimestamps() {
@@ -2163,18 +2174,22 @@ function batchRefreshAllTimestamps() {
 }
 // Refresh all timestamps every 30 seconds (batched)
 setInterval(batchRefreshAllTimestamps, 30000);
+<?php endif; ?>
 
 // Fetch weather data using airport's configured refresh interval
-// Calculate weather refresh interval from airport config
-const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
-    ? AIRPORT_DATA.weather_refresh_seconds * 1000 
-    : 60000; // Default 60 seconds
+// Only fetch if weather_source is configured
+if (AIRPORT_DATA && AIRPORT_DATA.weather_source && !empty(AIRPORT_DATA.weather_source)) {
+    // Calculate weather refresh interval from airport config
+    const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+        ? AIRPORT_DATA.weather_refresh_seconds * 1000 
+        : 60000; // Default 60 seconds
 
-// Delay initial fetch to avoid competing with LCP image load
-setTimeout(() => {
-    fetchWeather();
-}, 500);
-setInterval(fetchWeather, weatherRefreshMs);
+    // Delay initial fetch to avoid competing with LCP image load
+    setTimeout(() => {
+        fetchWeather();
+    }, 500);
+    setInterval(fetchWeather, weatherRefreshMs);
+}
 
 // Handle webcam image load errors - show placeholder image
 function handleWebcamError(camIndex, img) {
