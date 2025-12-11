@@ -1664,11 +1664,21 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['services'])) {
                 $errors[] = "Airport '{$airportCode}' services must be an object";
             } else {
-                foreach ($airport['services'] as $serviceName => $serviceValue) {
-                    if (!is_bool($serviceValue)) {
-                        $errors[] = "Airport '{$airportCode}' service '{$serviceName}' must be a boolean, got: " . gettype($serviceValue);
+                // Validate known service fields with their expected types
+                if (isset($airport['services']['fuel'])) {
+                    if (!is_string($airport['services']['fuel'])) {
+                        $errors[] = "Airport '{$airportCode}' service 'fuel' must be a string, got: " . gettype($airport['services']['fuel']);
                     }
                 }
+                
+                if (isset($airport['services']['repairs_available'])) {
+                    if (!is_bool($airport['services']['repairs_available'])) {
+                        $errors[] = "Airport '{$airportCode}' service 'repairs_available' must be a boolean, got: " . gettype($airport['services']['repairs_available']);
+                    }
+                }
+                
+                // Allow other service fields for future extensibility
+                // (no validation on unknown fields to allow flexibility)
             }
         }
         
