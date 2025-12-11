@@ -42,21 +42,41 @@
         "clearance": "121.65"
       },
       "services": {
-        "fuel_available": true,
-        "repairs_available": true,
-        "100ll": true,
-        "jet_a": false
+        "fuel": "100LL, Jet-A",
+        "repairs_available": true
       },
       "weather_source": {
         "type": "tempest",
         "station_id": "YOUR_STATION_ID",
         "api_key": "YOUR_TEMPEST_API_KEY"
       },
-      "_weather_source_weatherlink_example": {
-        "type": "weatherlink",
-        "station_id": "YOUR_STATION_ID",
-        "api_key": "YOUR_WEATHERLINK_API_KEY",
-        "api_secret": "YOUR_WEATHERLINK_API_SECRET"
+      "_weather_source_examples": {
+        "_comment": "All supported weather source types with default configurations:",
+        "_tempest_example": {
+          "type": "tempest",
+          "station_id": "YOUR_STATION_ID",
+          "api_key": "YOUR_TEMPEST_API_KEY"
+        },
+        "_ambient_example": {
+          "type": "ambient",
+          "api_key": "YOUR_API_KEY",
+          "application_key": "YOUR_APPLICATION_KEY"
+        },
+        "_weatherlink_example": {
+          "type": "weatherlink",
+          "station_id": "YOUR_STATION_ID",
+          "api_key": "YOUR_WEATHERLINK_API_KEY",
+          "api_secret": "YOUR_WEATHERLINK_API_SECRET"
+        },
+        "_pwsweather_example": {
+          "type": "pwsweather",
+          "station_id": "KMAHANOV10",
+          "client_id": "YOUR_AERIS_CLIENT_ID",
+          "client_secret": "YOUR_AERIS_CLIENT_SECRET"
+        },
+        "_metar_example": {
+          "type": "metar"
+        }
       },
       "_vpn_example": {
         "enabled": true,
@@ -70,54 +90,178 @@
       },
       "webcams": [
         {
-          "name": "North Runway Camera (MJPEG Example)",
+          "_comment": "=== MJPEG Stream (Basic) ===",
+          "name": "North Runway Camera (MJPEG)",
           "url": "https://example.com/video.mjpg",
           "position": "north",
           "refresh_seconds": 60
         },
         {
-          "name": "South Runway Camera (RTSP Example)",
-          "url": "rtsp://camera.example.com:554/stream1",
-          "type": "rtsp",
-          "rtsp_transport": "tcp",
-          "refresh_seconds": 60,
+          "_comment": "=== MJPEG Stream (With Authentication) ===",
+          "name": "South Runway Camera (MJPEG Auth)",
+          "url": "https://example.com/mjpg/stream",
+          "type": "mjpeg",
           "username": "admin",
           "password": "password123",
-          "position": "south"
+          "position": "south",
+          "refresh_seconds": 60
         },
         {
-          "name": "East Camera (RTSPS Secure Example)",
-          "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
-          "type": "rtsp",
-          "rtsp_transport": "tcp",
-          "refresh_seconds": 30,
-          "position": "east"
-        },
-        {
-          "name": "VPN Camera (Private IP via VPN)",
-          "url": "rtsp://192.168.1.100:554/stream1",
-          "type": "rtsp",
-          "rtsp_transport": "tcp",
-          "refresh_seconds": 60,
-          "position": "south-east"
-        },
-        {
-          "name": "West Camera (Static Image Example)",
+          "_comment": "=== Static JPEG Image (Basic) ===",
+          "name": "West Camera (Static JPEG)",
           "url": "https://example.com/webcam.jpg",
+          "type": "static_jpeg",
           "position": "west",
           "refresh_seconds": 120
         },
         {
-          "name": "Push Camera (SFTP/FTP/FTPS Example)",
-          "type": "push",
+          "_comment": "=== Static JPEG Image (With Authentication) ===",
+          "name": "East Camera (Static JPEG Auth)",
+          "url": "https://example.com/webcam.jpg",
+          "type": "static_jpeg",
+          "username": "user",
+          "password": "pass",
+          "position": "east",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== Static PNG Image (Auto-converted to JPEG) ===",
+          "name": "North-East Camera (Static PNG)",
+          "url": "https://example.com/webcam.png",
+          "type": "static_png",
+          "position": "north-east",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== RTSP Stream (Basic with defaults) ===",
+          "name": "Runway Camera (RTSP Basic)",
+          "url": "rtsp://camera.example.com:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "position": "south",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== RTSP Stream (With Authentication) ===",
+          "name": "Tower Camera (RTSP Auth)",
+          "url": "rtsp://camera.example.com:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "username": "admin",
+          "password": "password123",
+          "position": "north",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== RTSP Stream (With All Advanced Options) ===",
+          "name": "Hangar Camera (RTSP Advanced)",
+          "url": "rtsp://camera.example.com:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "rtsp_fetch_timeout": 10,
+          "rtsp_max_runtime": 6,
+          "transcode_timeout": 8,
+          "username": "admin",
+          "password": "password123",
+          "position": "south-west",
+          "refresh_seconds": 30
+        },
+        {
+          "_comment": "=== RTSP Stream (UDP Transport) ===",
+          "name": "Field Camera (RTSP UDP)",
+          "url": "rtsp://camera.example.com:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "udp",
+          "position": "west",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== RTSPS Stream (Secure RTSP over TLS - Basic) ===",
+          "name": "Secure Camera (RTSPS Basic)",
+          "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "position": "east",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== RTSPS Stream (Secure RTSP with All Options) ===",
+          "name": "Secure Tower Camera (RTSPS Advanced)",
+          "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "rtsp_fetch_timeout": 10,
+          "rtsp_max_runtime": 6,
+          "transcode_timeout": 8,
+          "username": "admin",
+          "password": "password123",
           "position": "north-west",
+          "refresh_seconds": 30
+        },
+        {
+          "_comment": "=== RTSP Stream (Private IP via VPN) ===",
+          "name": "VPN Camera (Private IP)",
+          "url": "rtsp://192.168.1.100:554/stream1",
+          "type": "rtsp",
+          "rtsp_transport": "tcp",
+          "position": "south-east",
+          "refresh_seconds": 60
+        },
+        {
+          "_comment": "=== Push Webcam (SFTP - Basic) ===",
+          "name": "Push Camera (SFTP Basic)",
+          "type": "push",
+          "position": "north",
           "refresh_seconds": 60,
           "push_config": {
             "protocol": "sftp",
             "username": "kspbCam0Push01",
-            "password": "SecurePass1234",
+            "password": "SecurePass1234"
+          }
+        },
+        {
+          "_comment": "=== Push Webcam (SFTP - With All Options) ===",
+          "name": "Push Camera (SFTP Full)",
+          "type": "push",
+          "position": "south",
+          "refresh_seconds": 60,
+          "push_config": {
+            "protocol": "sftp",
+            "username": "kspbCam1Push02",
+            "password": "AnotherPass5678",
+            "port": 2222,
             "max_file_size_mb": 10,
             "allowed_extensions": ["jpg", "jpeg"]
+          }
+        },
+        {
+          "_comment": "=== Push Webcam (FTPS - Secure FTP) ===",
+          "name": "Secure Push Camera (FTPS)",
+          "type": "push",
+          "position": "east",
+          "refresh_seconds": 120,
+          "push_config": {
+            "protocol": "ftps",
+            "username": "kspbCam2Push03",
+            "password": "SecurePass9012",
+            "port": 2121,
+            "max_file_size_mb": 20,
+            "allowed_extensions": ["jpg", "jpeg", "png"]
+          }
+        },
+        {
+          "_comment": "=== Push Webcam (FTP - Plain) ===",
+          "name": "Legacy Push Camera (FTP)",
+          "type": "push",
+          "position": "west",
+          "refresh_seconds": 60,
+          "push_config": {
+            "protocol": "ftp",
+            "username": "kspbCam3Push04",
+            "password": "LegacyPass3456",
+            "port": 2121,
+            "max_file_size_mb": 100,
+            "allowed_extensions": ["jpg", "jpeg", "png"]
           }
         }
       ],

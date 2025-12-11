@@ -389,18 +389,24 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     <span class="label">Elevation:</span>
                     <span class="value"><?= $airport['elevation_ft'] ?> ft</span>
                 </div>
-                <?php if ($airport['services']['fuel_available']): ?>
                 <div class="info-item">
                     <span class="label">Fuel:</span>
-                    <span class="value"><?= $airport['services']['100ll'] ? '100LL' : '' ?><?= ($airport['services']['100ll'] && $airport['services']['jet_a']) ? ', ' : '' ?><?= $airport['services']['jet_a'] ? 'Jet-A' : '' ?></span>
+                    <span class="value">
+                        <?php
+                        $fuel = '';
+                        if (isset($airport['services']['fuel']) && is_string($airport['services']['fuel'])) {
+                            $fuel = trim($airport['services']['fuel']);
+                        }
+                        echo !empty($fuel) ? htmlspecialchars($fuel) : 'Not Available';
+                        ?>
+                    </span>
                 </div>
-                <?php endif; ?>
-                <?php if ($airport['services']['repairs_available']): ?>
                 <div class="info-item">
                     <span class="label">Repairs:</span>
-                    <span class="value">Available</span>
+                    <span class="value">
+                        <?= !empty($airport['services']['repairs_available'] ?? false) ? 'Available' : 'Not Available' ?>
+                    </span>
                 </div>
-                <?php endif; ?>
             </div>
 
             <!-- Frequencies -->

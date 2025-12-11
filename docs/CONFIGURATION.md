@@ -327,10 +327,8 @@ Add an entry to `airports.json` following this structure:
         "asos": "135.875"
       },
       "services": {
-        "fuel_available": true,
-        "repairs_available": true,
-        "100ll": true,
-        "jet_a": false
+        "fuel": "100LL, Jet-A",
+        "repairs_available": true
       },
       "weather_source": {
         "type": "tempest",

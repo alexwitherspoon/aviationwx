@@ -294,27 +294,39 @@ function generateConfigSnippet($formData) {
         }
     }
     
-    // Services - convert to object format
     if (!empty($formData['services'] ?? '')) {
         $serviceList = array_filter(array_map('trim', explode(',', $formData['services'])));
         if (!empty($serviceList)) {
             $services = [];
+            $fuelTypes = [];
+            $hasRepairs = false;
+            
             foreach ($serviceList as $service) {
                 $serviceLower = strtolower($service);
-                // Map common service names
-                if (strpos($serviceLower, 'fuel') !== false) {
-                    $services['fuel_available'] = true;
-                }
+                
                 if (strpos($serviceLower, 'repair') !== false || strpos($serviceLower, 'maintenance') !== false) {
-                    $services['repairs_available'] = true;
+                    $hasRepairs = true;
                 }
-                if (strpos($serviceLower, '100ll') !== false || strpos($serviceLower, '100 ll') !== false) {
-                    $services['100ll'] = true;
-                }
-                if (strpos($serviceLower, 'jet') !== false || strpos($serviceLower, 'jeta') !== false) {
-                    $services['jet_a'] = true;
+                
+                if (strpos($serviceLower, 'fuel') !== false || 
+                    strpos($serviceLower, '100ll') !== false || 
+                    strpos($serviceLower, '100 ll') !== false ||
+                    strpos($serviceLower, 'jet') !== false || 
+                    strpos($serviceLower, 'jeta') !== false ||
+                    strpos($serviceLower, 'avgas') !== false ||
+                    strpos($serviceLower, 'mogas') !== false) {
+                    $fuelTypes[] = trim($service);
                 }
             }
+            
+            if (!empty($fuelTypes)) {
+                $services['fuel'] = implode(', ', $fuelTypes);
+            }
+            
+            if ($hasRepairs) {
+                $services['repairs_available'] = true;
+            }
+            
             if (!empty($services)) {
                 $airport['services'] = $services;
             }
@@ -750,7 +762,8 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         <label for="services">Services (comma-separated)</label>
                         <input type="text" id="services" name="services"
                                value="<?= htmlspecialchars($_POST['services'] ?? '') ?>"
-                               placeholder="Fuel, Maintenance, Restaurant">
+                               placeholder="100LL, Jet-A, Repairs, Maintenance">
+                        <small style="display: block; margin-top: 0.25rem; color: #666;">Fuel types will be combined into a fuel string. Repairs/Maintenance sets repairs_available.</small>
                     </div>
                 </div>
                 

@@ -451,5 +451,136 @@ class HtmlOutputValidationTest extends TestCase
             "Data sources label should be present"
         );
     }
+    
+    /**
+     * Test that Fuel and Repairs fields are always displayed
+     */
+    public function testAirportPage_FuelAndRepairsAlwaysDisplayed()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Both fields should always be present
+        $this->assertStringContainsString(
+            '<span class="label">Fuel:</span>',
+            $html,
+            "Fuel field label should always be present"
+        );
+        
+        $this->assertStringContainsString(
+            '<span class="label">Repairs:</span>',
+            $html,
+            "Repairs field label should always be present"
+        );
+    }
+    
+    /**
+     * Test that Fuel and Repairs show correct values when configured
+     */
+    public function testAirportPage_FuelAndRepairsShowConfiguredValues()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Load test config to check services configuration
+        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        if (!file_exists($configPath)) {
+            $this->markTestSkipped("Test configuration not found");
+            return;
+        }
+        
+        $config = json_decode(file_get_contents($configPath), true);
+        $services = $config['airports']['kspb']['services'] ?? null;
+        
+        if ($services === null) {
+            $this->markTestSkipped("Services not configured in test fixture");
+            return;
+        }
+        
+        // If fuel is configured, it should be displayed
+        if (!empty($services['fuel'])) {
+            $escapedFuel = htmlspecialchars($services['fuel'], ENT_QUOTES, 'UTF-8');
+            $this->assertStringContainsString(
+                $escapedFuel,
+                $html,
+                "Fuel value should be displayed when configured: {$services['fuel']}"
+            );
+        }
+        
+        // If repairs_available is true, it should show "Available"
+        if (!empty($services['repairs_available'])) {
+            $this->assertStringContainsString(
+                'Available',
+                $html,
+                "Repairs should show 'Available' when repairs_available is true"
+            );
+        }
+    }
+    
+    /**
+     * Test that Fuel and Repairs show "Not Available" when services are missing
+     */
+    public function testAirportPage_FuelAndRepairsShowNotAvailableWhenMissing()
+    {
+        // Use an airport without services configured (03s doesn't have services in fixture)
+        $response = $this->makeRequest('?airport=03s');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Both fields should still be present
+        $this->assertStringContainsString(
+            '<span class="label">Fuel:</span>',
+            $html,
+            "Fuel field label should always be present"
+        );
+        
+        $this->assertStringContainsString(
+            '<span class="label">Repairs:</span>',
+            $html,
+            "Repairs field label should always be present"
+        );
+        
+        // Both should show "Not Available"
+        // Check that "Not Available" appears in the context of Fuel field
+        $fuelLabelPos = strpos($html, '<span class="label">Fuel:</span>');
+        $this->assertNotFalse($fuelLabelPos, "Fuel label should be present");
+        
+        // Check for "Not Available" within 200 characters after Fuel label
+        $fuelContext = substr($html, $fuelLabelPos, 200);
+        $this->assertStringContainsString(
+            'Not Available',
+            $fuelContext,
+            "Fuel should show 'Not Available' when services are missing"
+        );
+        
+        // Check that "Not Available" appears in the context of Repairs field
+        $repairsLabelPos = strpos($html, '<span class="label">Repairs:</span>');
+        $this->assertNotFalse($repairsLabelPos, "Repairs label should be present");
+        
+        // Check for "Not Available" within 200 characters after Repairs label
+        $repairsContext = substr($html, $repairsLabelPos, 200);
+        $this->assertStringContainsString(
+            'Not Available',
+            $repairsContext,
+            "Repairs should show 'Not Available' when services are missing"
+        );
+    }
 }
 

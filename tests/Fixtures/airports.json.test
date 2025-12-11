@@ -34,6 +34,10 @@
       "metar_station": "KSPB",
       "nearby_metar_stations": ["KVUO", "KHIO"],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
+      "services": {
+        "fuel": "100LL, Jet-A",
+        "repairs_available": true
+      },
       "links": [
         {
           "label": "Airport Website",
