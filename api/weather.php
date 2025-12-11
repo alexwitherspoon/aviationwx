@@ -444,11 +444,6 @@ function generateMockWeatherData($airportId, $airport) {
     // Fresh data from API should never be nulled out - it's already current
     // Staleness checks are only applied to cached data before serving (see lines 686, 705)
     // This prevents the bug where fresh data was incorrectly nulled, causing merge to preserve old cache values
-    
-    // Recalculate flight category if visibility/ceiling are missing
-    if ($weatherData['visibility'] === null && $weatherData['ceiling'] === null) {
-        calculateAndSetFlightCategory($weatherData);
-    }
 
     // Merge with existing cache to preserve last known good values for missing/invalid fields
     $existingCache = null;
@@ -465,6 +460,11 @@ function generateMockWeatherData($airportId, $airport) {
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
         $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
         $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds, $maxStaleSecondsMetar);
+        
+        // Recalculate flight category after merge - visibility/ceiling may have been added from cache
+        // If fresh fetch didn't include METAR data but cache has it, flight_category would be null
+        // without this recalculation, causing blank condition field on dashboard
+        calculateAndSetFlightCategory($weatherData);
     }
     
     // Set overall last_updated to most recent observation time from ALL data sources
