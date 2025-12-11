@@ -28,6 +28,7 @@ class ConstantsTest extends TestCase
             'CURL_TIMEOUT',
             'CONFIG_CACHE_TTL',
             'MAX_STALE_HOURS',
+            'MAX_STALE_HOURS_METAR',
             'STALE_WHILE_REVALIDATE_SECONDS',
         ];
         
@@ -68,6 +69,7 @@ class ConstantsTest extends TestCase
         
         // Staleness thresholds should be positive
         $this->assertGreaterThan(0, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be positive');
+        $this->assertGreaterThan(0, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be positive');
         $this->assertGreaterThan(0, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be positive');
     }
     
@@ -115,6 +117,13 @@ class ConstantsTest extends TestCase
         // MAX_STALE_HOURS should be reasonable (e.g., between 1 and 24 hours)
         $this->assertGreaterThanOrEqual(1, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be >= 1 hour');
         $this->assertLessThanOrEqual(24, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be <= 24 hours');
+        
+        // MAX_STALE_HOURS_METAR should be reasonable (e.g., between 1 and 24 hours)
+        // METARs are published hourly, so 2 hours is appropriate
+        $this->assertGreaterThanOrEqual(1, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be >= 1 hour');
+        $this->assertLessThanOrEqual(24, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be <= 24 hours');
+        // METAR threshold should typically be <= primary threshold (since METARs are less frequent)
+        $this->assertLessThanOrEqual(MAX_STALE_HOURS, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be <= MAX_STALE_HOURS');
         
         // STALE_WHILE_REVALIDATE_SECONDS should be reasonable (e.g., between 60 and 3600 seconds)
         $this->assertGreaterThanOrEqual(60, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be >= 60 seconds');

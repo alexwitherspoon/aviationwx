@@ -9,6 +9,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../api/weather.php';
+require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../Helpers/TestHelper.php';
 
 class WeatherDataMergeTest extends TestCase
@@ -278,11 +279,12 @@ class WeatherDataMergeTest extends TestCase
             'wind_speed' => 10,
             'visibility' => 10.0,
             'last_updated_primary' => time() - 4 * 3600,  // 4 hours ago (stale)
-            'last_updated_metar' => time() - 3600,        // 1 hour ago (not stale)
+            'last_updated_metar' => time() - 3600,        // 1 hour ago (not stale for METAR - under 2 hour threshold)
         ]);
         
-        $maxStaleSeconds = 3 * 3600;  // 3 hours
-        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Primary field (stale) should not be preserved
         $this->assertNull($result['wind_speed'], 'Stale primary field should not be preserved');

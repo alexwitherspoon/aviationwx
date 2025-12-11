@@ -41,6 +41,9 @@ if (!defined('CURL_MULTI_OVERALL_TIMEOUT')) {
 if (!defined('MAX_STALE_HOURS')) {
     define('MAX_STALE_HOURS', 3);
 }
+if (!defined('MAX_STALE_HOURS_METAR')) {
+    define('MAX_STALE_HOURS_METAR', 2); // METARs are published hourly, so 2 hours is appropriate
+}
 if (!defined('STALE_WARNING_HOURS')) {
     define('STALE_WARNING_HOURS', 1);
 }

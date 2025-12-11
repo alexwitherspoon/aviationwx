@@ -8,6 +8,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../api/weather.php';
+require_once __DIR__ . '/../../lib/constants.php';
 
 class StaleDataSafetyTest extends TestCase
 {
@@ -27,7 +28,9 @@ class StaleDataSafetyTest extends TestCase
         $originalTemp = $data['temperature'];
         $originalVisibility = $data['visibility'];
         
-        nullStaleFieldsBySource($data, 10800);  // 3 hour threshold
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // All data should remain (both sources fresh)
         $this->assertEquals($originalTemp, $data['temperature']);
@@ -52,7 +55,9 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_metar' => time() - 300        // 5 minutes ago (fresh)
         ]);
         
-        nullStaleFieldsBySource($data, 10800);  // 3 hour threshold
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Primary source fields should be nulled
         $this->assertNull($data['temperature']);
@@ -78,10 +83,12 @@ class StaleDataSafetyTest extends TestCase
             'ceiling' => 5000,
             'cloud_cover' => 'SCT',
             'last_updated_primary' => time() - 300,  // 5 minutes ago (fresh)
-            'last_updated_metar' => time() - 11000    // ~3+ hours ago (stale)
+            'last_updated_metar' => time() - (MAX_STALE_HOURS_METAR * 3600 + 100)  // Just over 2 hours (stale for METAR)
         ]);
         
-        nullStaleFieldsBySource($data, 10800);  // 3 hour threshold
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Primary source fields should remain (primary is fresh)
         $this->assertEquals(15.0, $data['temperature']);
@@ -109,7 +116,9 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_metar' => time() - 11000      // ~3+ hours ago (stale)
         ]);
         
-        nullStaleFieldsBySource($data, 10800);  // 3 hour threshold
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // All fields should be nulled
         $this->assertNull($data['temperature']);
@@ -131,7 +140,9 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_metar' => time() - 11000     // Stale
         ]);
         
-        nullStaleFieldsBySource($data, 10800);
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Current temperature should be nulled (from stale primary source)
         $this->assertNull($data['temperature']);
@@ -147,13 +158,14 @@ class StaleDataSafetyTest extends TestCase
      */
     public function testNullStaleFieldsBySource_AtThreshold()
     {
-        $threshold = 10800;  // 3 hours
+        $threshold = MAX_STALE_HOURS * 3600;  // Primary threshold
         $data = createTestWeatherData([
             'temperature' => 15.0,
             'last_updated_primary' => time() - $threshold  // Exactly at threshold
         ]);
         
-        nullStaleFieldsBySource($data, $threshold);
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $threshold, $maxStaleSecondsMetar);
         
         // Should still be nulled (>= threshold is stale)
         $this->assertNull($data['temperature']);
@@ -164,13 +176,14 @@ class StaleDataSafetyTest extends TestCase
      */
     public function testNullStaleFieldsBySource_JustBeforeThreshold()
     {
-        $threshold = 10800;  // 3 hours
+        $threshold = MAX_STALE_HOURS * 3600;  // Primary threshold
         $data = createTestWeatherData([
             'temperature' => 15.0,
             'last_updated_primary' => time() - ($threshold - 1)  // 1 second before threshold
         ]);
         
-        nullStaleFieldsBySource($data, $threshold);
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        nullStaleFieldsBySource($data, $threshold, $maxStaleSecondsMetar);
         
         // Should remain (not yet stale)
         $this->assertEquals(15.0, $data['temperature']);
@@ -193,8 +206,9 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_primary' => time() - 4 * 3600,  // 4 hours ago (stale)
         ]);
         
-        $maxStaleSeconds = 3 * 3600;  // 3 hours
-        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Stale wind_speed should not be preserved
         $this->assertNull($result['wind_speed'], 'Merge should not preserve stale values');
@@ -205,7 +219,7 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_primary' => time() - 3600,  // 1 hour ago (not stale)
         ]);
         
-        $result2 = mergeWeatherDataWithFallback($newData, $existingData2, $maxStaleSeconds);
+        $result2 = mergeWeatherDataWithFallback($newData, $existingData2, $maxStaleSeconds, $maxStaleSecondsMetar);
         $this->assertEquals(10, $result2['wind_speed'], 'Merge should preserve non-stale values');
     }
 
@@ -226,8 +240,9 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_primary' => time() - 5 * 3600,  // 5 hours ago (very stale)
         ]);
         
-        $maxStaleSeconds = 3 * 3600;  // 3 hours
-        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds);
+        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Daily tracking should always be preserved, regardless of staleness
         $this->assertEquals(20.0, $result['temp_high_today'], 'Daily tracking should be preserved even when source is stale');

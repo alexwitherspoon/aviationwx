@@ -17,17 +17,20 @@ require_once __DIR__ . '/calculator.php';
  * 
  * @param array $newData New weather data from API
  * @param array $existingData Existing cached weather data
- * @param int $maxStaleSeconds Maximum age in seconds for preserving cached values
+ * @param int $maxStaleSeconds Maximum age in seconds for preserving cached primary source values
+ * @param int|null $maxStaleSecondsMetar Maximum age in seconds for preserving cached METAR values (defaults to $maxStaleSeconds if null)
  * @return array Merged weather data array
  */
-function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds) {
+function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar = null) {
+    if ($maxStaleSecondsMetar === null) {
+        $maxStaleSecondsMetar = $maxStaleSeconds;
+    }
     if (!is_array($existingData) || !is_array($newData)) {
         return $newData;
     }
     
-    // Fields that should be preserved from cache if new data is missing/invalid
-    // Note: precip_accum is a daily value and should NOT be preserved from cache
-    // (it should reset each day, so if missing from new data, it should be 0, not yesterday's value)
+    // Fields that can be preserved from cache if new data is missing/invalid
+    // Note: precip_accum is excluded (daily value, resets each day)
     $preservableFields = [
         'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
@@ -38,7 +41,6 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
     ];
     
     // Track which source each field comes from for staleness checking
-    // Note: precip_accum is a daily value and should NOT be preserved from cache
     $primarySourceFields = [
         'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
@@ -71,24 +73,17 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
                 $isStale = ($age >= $maxStaleSeconds);
             } elseif ($isMetarField && isset($existingData['last_updated_metar'])) {
                 $age = time() - $existingData['last_updated_metar'];
-                $isStale = ($age >= $maxStaleSeconds);
+                $isStale = ($age >= $maxStaleSecondsMetar);
             }
             
-            // For METAR fields: If METAR was successfully fetched (last_updated_metar is set),
-            // we need to distinguish between:
-            // 1. Field is explicitly set to null in newData (unlimited/missing) - always overwrite
-            // 2. Field is missing from newData (not in array) - preserve non-stale old values
+            // METAR fields: distinguish between explicit null (unlimited/missing) vs missing from array
             if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
-                // METAR was successfully fetched
-                // Check if field is explicitly set to null (array_key_exists) vs missing (not in array)
                 if (array_key_exists($field, $newData) && $newData[$field] === null) {
-                    // Explicitly null from METAR means unlimited/missing - always overwrite
+                    // Explicit null means unlimited/missing - always overwrite
                     $result[$field] = null;
-                } else {
-                    // Field is missing from newData (not in array) - preserve non-stale old value
-                    if (!$isStale) {
-                        $result[$field] = $oldValue;
-                    }
+                } elseif (!$isStale) {
+                    // Missing from array - preserve non-stale old value
+                    $result[$field] = $oldValue;
                 }
                 continue;
             }
@@ -100,8 +95,7 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
         }
     }
     
-    // Handle precip_accum specially - it's a daily value that should reset each day
-    // If missing from new data, set to 0 (no precipitation today) rather than preserving yesterday's value
+    // precip_accum is a daily value - reset to 0 if missing (don't preserve yesterday's value)
     if (!isset($newData['precip_accum']) || $newData['precip_accum'] === null) {
         $result['precip_accum'] = 0.0;
     }
@@ -130,10 +124,14 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds)
  * considered stale - they represent valid historical data for the day.
  * 
  * @param array &$data Weather data array (modified in place)
- * @param int $maxStaleSeconds Maximum age in seconds before field is considered stale
+ * @param int $maxStaleSeconds Maximum age in seconds before primary source field is considered stale
+ * @param int|null $maxStaleSecondsMetar Maximum age in seconds before METAR field is considered stale (defaults to $maxStaleSeconds if null)
  * @return void
  */
-function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
+function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar = null) {
+    if ($maxStaleSecondsMetar === null) {
+        $maxStaleSecondsMetar = $maxStaleSeconds;
+    }
     $primarySourceFields = [
         'temperature', 'temperature_f',
         'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
@@ -150,7 +148,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $primaryStale = false;
     if (isset($data['last_updated_primary']) && $data['last_updated_primary'] > 0) {
         $primaryAge = time() - $data['last_updated_primary'];
-        $primaryStale = ($primaryAge >= $maxStaleSeconds); // >= means at threshold is stale
+        $primaryStale = ($primaryAge >= $maxStaleSeconds);
         
         if ($primaryStale) {
             foreach ($primarySourceFields as $field) {
@@ -164,7 +162,7 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     $metarStale = false;
     if (isset($data['last_updated_metar']) && $data['last_updated_metar'] > 0) {
         $metarAge = time() - $data['last_updated_metar'];
-        $metarStale = ($metarAge >= $maxStaleSeconds); // >= means at threshold is stale
+        $metarStale = ($metarAge >= $maxStaleSecondsMetar);
         
         if ($metarStale) {
             foreach ($metarSourceFields as $field) {
@@ -176,8 +174,6 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds) {
     }
     
     // Recalculate flight category if METAR data is stale or visibility/ceiling are missing
-    // Note: If METAR is stale, visibility and ceiling are nulled, but we might still have
-    // valid ceiling from primary source or other data that allows category calculation
     if ($metarStale || (($data['visibility'] ?? null) === null && ($data['ceiling'] ?? null) === null)) {
         calculateAndSetFlightCategory($data);
     }

@@ -247,9 +247,9 @@ function generateMockWeatherData($airportId, $airport) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
             // Safety check: Check per-source staleness
-            $maxStaleHours = 3;
-            $maxStaleSeconds = $maxStaleHours * 3600;
-            nullStaleFieldsBySource($cached, $maxStaleSeconds);
+            $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+            $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+            nullStaleFieldsBySource($cached, $maxStaleSeconds, $maxStaleSecondsMetar);
             
             // Set cache headers for cached responses
             $remainingTime = $airportWeatherRefresh - $age;
@@ -267,9 +267,9 @@ function generateMockWeatherData($airportId, $airport) {
         $staleData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($staleData)) {
             // Safety check: Check per-source staleness
-            $maxStaleHours = 3;
-            $maxStaleSeconds = $maxStaleHours * 3600;
-            nullStaleFieldsBySource($staleData, $maxStaleSeconds);
+            $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+            $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+            nullStaleFieldsBySource($staleData, $maxStaleSeconds, $maxStaleSecondsMetar);
             
             $hasStaleCache = true;
             
@@ -460,10 +460,11 @@ function generateMockWeatherData($airportId, $airport) {
     }
     
     // If we have existing cache, merge it with new data to preserve good values
-    // Use MAX_STALE_HOURS threshold for merge (same as cached data staleness check)
+    // Use separate thresholds for primary source and METAR
     if (is_array($existingCache)) {
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds);
+        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds, $maxStaleSecondsMetar);
     }
     
     // Set overall last_updated to most recent observation time from ALL data sources

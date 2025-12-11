@@ -376,6 +376,7 @@ function checkAirportHealth($airportId, $airport) {
         : getDefaultWeatherRefresh();
     $maxStaleHours = getMaxStaleHours();
     $maxStaleSeconds = $maxStaleHours * 3600;
+    $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
     
     $weatherSources = [];
     
@@ -455,7 +456,7 @@ function checkAirportHealth($airportId, $airport) {
                 if ($metarAge < $weatherRefresh) {
                     $metarStatus = 'operational';
                     $metarMessage = 'Fresh';
-                } elseif ($metarAge < $maxStaleSeconds) {
+                } elseif ($metarAge < $maxStaleSecondsMetar) {
                     $metarStatus = 'degraded';
                     $metarMessage = 'Stale (but usable)';
                 } else {
