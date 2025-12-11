@@ -1469,7 +1469,7 @@ async function fetchWeather(forceRefresh = false) {
         
         // Use absolute path to ensure it works from subdomains
         const baseUrl = window.location.protocol + '//' + window.location.host;
-        let url = `${baseUrl}/weather.php?airport=${AIRPORT_ID}`;
+        let url = `${baseUrl}/api/weather.php?airport=${AIRPORT_ID}`;
         
         // Build fetch options
         const fetchOptions = {
@@ -2194,7 +2194,7 @@ setInterval(batchRefreshAllTimestamps, 30000);
 
 // Fetch weather data using airport's configured refresh interval
 // Only fetch if weather_source is configured
-if (AIRPORT_DATA && AIRPORT_DATA.weather_source && !empty(AIRPORT_DATA.weather_source)) {
+if (AIRPORT_DATA && AIRPORT_DATA.weather_source && Object.keys(AIRPORT_DATA.weather_source).length > 0) {
     // Calculate weather refresh interval from airport config
     const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds * 1000 
