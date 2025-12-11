@@ -13,6 +13,7 @@ require_once __DIR__ . '/../test-mocks.php';
 require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
 require_once __DIR__ . '/adapter/weatherlink-v1.php';
+require_once __DIR__ . '/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
 require_once __DIR__ . '/utils.php';
 
@@ -76,6 +77,12 @@ function fetchWeatherAsync($airport, $airportId = null) {
                 // The async multi-curl approach doesn't easily support custom headers per request
                 // We'll handle WeatherLink in the sync path instead
                 return fetchWeatherSync($airport, $airportId);
+            case 'pwsweather':
+                $stationId = $airport['weather_source']['station_id'];
+                $clientId = $airport['weather_source']['client_id'];
+                $clientSecret = $airport['weather_source']['client_secret'];
+                $primaryUrl = "https://api.aerisapi.com/observations/{$stationId}?client_id=" . urlencode($clientId) . "&client_secret=" . urlencode($clientSecret);
+                break;
             default:
                 // Not async-able (METAR-only or unsupported)
                 return fetchWeatherSync($airport, $airportId);
@@ -304,6 +311,9 @@ function fetchWeatherAsync($airport, $airportId = null) {
                 case 'weatherlink':
                     $weatherData = parseWeatherLinkResponse($primaryResponse);
                     break;
+                case 'pwsweather':
+                    $weatherData = parsePWSWeatherResponse($primaryResponse);
+                    break;
             }
             if ($weatherData !== null) {
                 $primaryTimestamp = time(); // Track when primary data was fetched
@@ -465,6 +475,7 @@ function fetchWeatherSync($airport, $airportId = null) {
         case 'tempest':
         case 'ambient':
         case 'weatherlink':
+        case 'pwsweather':
             if ($primaryCircuit['skip']) {
                 aviationwx_log('warning', 'primary weather API circuit breaker open - skipping sync fetch', [
                     'airport' => $airportId,
@@ -479,6 +490,8 @@ function fetchWeatherSync($airport, $airportId = null) {
                     $weatherData = fetchAmbientWeather($airport['weather_source']);
                 } elseif ($sourceType === 'weatherlink') {
                     $weatherData = fetchWeatherLinkWeather($airport['weather_source']);
+                } elseif ($sourceType === 'pwsweather') {
+                    $weatherData = fetchPWSWeather($airport['weather_source']);
                 }
                 // Record success/failure for primary source
                 if ($weatherData !== null) {
