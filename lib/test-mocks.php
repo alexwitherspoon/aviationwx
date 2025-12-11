@@ -48,6 +48,12 @@ function getMockHttpResponse(string $url): ?string {
         return getMockMETARResponse();
     }
     
+    if (strpos($url, 'api.aerisapi.com') !== false) {
+        // AerisWeather API (PWSWeather.com)
+        require_once __DIR__ . '/../tests/mock-weather-responses.php';
+        return getMockPWSWeatherResponse();
+    }
+    
     // Webcam URLs - return placeholder image
     if (strpos($url, 'example.com') !== false || 
         strpos($url, 'test') !== false ||

@@ -822,5 +822,327 @@ class ApiParsingTest extends TestCase
         // Rainfall should be in inches (no conversion)
         $this->assertEqualsWithDelta(0.5, $result['precip_accum'], 0.01);
     }
+    
+    /**
+     * Test parsePWSWeatherResponse - Valid response with all fields
+     */
+    public function testParsePWSWeatherResponse_ValidCompleteResponse()
+    {
+        $response = getMockPWSWeatherResponse();
+        $result = parsePWSWeatherResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('temperature', $result);
+        $this->assertArrayHasKey('humidity', $result);
+        $this->assertArrayHasKey('pressure', $result);
+        $this->assertArrayHasKey('wind_speed', $result);
+        $this->assertArrayHasKey('wind_direction', $result);
+        $this->assertArrayHasKey('gust_speed', $result);
+        $this->assertArrayHasKey('precip_accum', $result);
+        $this->assertArrayHasKey('dewpoint', $result);
+        $this->assertArrayHasKey('obs_time', $result);
+        
+        // Verify values are reasonable
+        $this->assertIsFloat($result['temperature']);
+        $this->assertIsNumeric($result['humidity']);
+        $this->assertIsFloat($result['pressure']);
+        $this->assertIsInt($result['wind_speed']);
+        $this->assertIsInt($result['wind_direction']);
+        $this->assertNotNull($result['obs_time']);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Missing optional fields
+     */
+    public function testParsePWSWeatherResponse_MissingOptionalFields()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.0,
+                        // Missing wind, precip fields
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals(15.0, $result['temperature']);
+        // Missing fields should have null values
+        $this->assertNull($result['wind_speed']);
+        $this->assertEquals(0, $result['precip_accum']); // Defaults to 0
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Empty periods array
+     */
+    public function testParsePWSWeatherResponse_EmptyPeriodsArray()
+    {
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => []
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Null response
+     */
+    public function testParsePWSWeatherResponse_NullResponse()
+    {
+        $result = parsePWSWeatherResponse(null);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Invalid structure
+     */
+    public function testParsePWSWeatherResponse_InvalidStructure()
+    {
+        $response = json_encode(['invalid' => 'structure']);
+        $result = parsePWSWeatherResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - API error response
+     */
+    public function testParsePWSWeatherResponse_ApiErrorResponse()
+    {
+        $response = json_encode([
+            'success' => false,
+            'error' => 'Invalid station ID'
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Visibility in statute miles (no conversion)
+     */
+    public function testParsePWSWeatherResponse_VisibilityInMiles()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.0,
+                        'windSpeedKTS' => 5,
+                        'windDirDEG' => 180,
+                        'visibilityMI' => 10.0, // 10 statute miles
+                        'precipIN' => 0
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        // Visibility should be in statute miles (no conversion)
+        $this->assertEqualsWithDelta(10.0, $result['visibility'], 0.1);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Wind speed already in knots (no conversion)
+     */
+    public function testParsePWSWeatherResponse_WindSpeedInKnots()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.0,
+                        'windSpeedKTS' => 10, // Already in knots
+                        'windDirDEG' => 180,
+                        'precipIN' => 0
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        // Wind speed should be in knots (no conversion)
+        $this->assertEquals(10, $result['wind_speed']);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Pressure in inHg (no conversion)
+     */
+    public function testParsePWSWeatherResponse_PressureInInHg()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.12, // inHg
+                        'windSpeedKTS' => 5,
+                        'windDirDEG' => 180,
+                        'precipIN' => 0
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        // Pressure should be in inHg (no conversion)
+        $this->assertEqualsWithDelta(30.12, $result['pressure'], 0.01);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Precipitation in inches (no conversion)
+     */
+    public function testParsePWSWeatherResponse_PrecipitationInInches()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.0,
+                        'windSpeedKTS' => 5,
+                        'windDirDEG' => 180,
+                        'precipIN' => 0.5 // 0.5 inches
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        // Precipitation should be in inches (no conversion)
+        $this->assertEqualsWithDelta(0.5, $result['precip_accum'], 0.01);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Temperature already in Celsius (no conversion)
+     */
+    public function testParsePWSWeatherResponse_TemperatureInCelsius()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 0.0, // Freezing point in Celsius
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.0,
+                        'windSpeedKTS' => 5,
+                        'windDirDEG' => 180,
+                        'precipIN' => 0
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        // Temperature should be in Celsius (no conversion)
+        $this->assertEqualsWithDelta(0.0, $result['temperature'], 0.1);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Observation timestamp parsing
+     */
+    public function testParsePWSWeatherResponse_ObservationTimestamp()
+    {
+        $timestamp = time();
+        $response = json_encode([
+            'success' => true,
+            'error' => null,
+            'response' => [
+                'id' => 'KMAHANOV10',
+                'periods' => [[
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'tempC' => 15.0,
+                        'humidity' => 70.0,
+                        'pressureIN' => 30.0,
+                        'windSpeedKTS' => 5,
+                        'windDirDEG' => 180,
+                        'precipIN' => 0
+                    ]
+                ]]
+            ]
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        
+        // Observation time should match timestamp
+        $this->assertEquals($timestamp, $result['obs_time']);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Missing response key
+     */
+    public function testParsePWSWeatherResponse_MissingResponseKey()
+    {
+        $response = json_encode([
+            'success' => true,
+            'error' => null
+        ]);
+        
+        $result = parsePWSWeatherResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parsePWSWeatherResponse - Invalid JSON
+     */
+    public function testParsePWSWeatherResponse_InvalidJson()
+    {
+        $response = 'invalid json string';
+        $result = parsePWSWeatherResponse($response);
+        $this->assertNull($result);
+    }
 }
 

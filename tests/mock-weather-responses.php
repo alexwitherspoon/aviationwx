@@ -127,3 +127,65 @@ function getMockWeatherLinkResponse() {
     ]);
 }
 
+/**
+ * Get a mock AerisWeather API response (for PWSWeather.com stations)
+ * Based on actual API structure from documentation and sample responses
+ * AerisWeather uses: { "success": true, "response": { "periods": [ { "ob": { ... } } ] } }
+ * 
+ * Units: Temperature (C), Wind Speed (knots), Pressure (inHg), Precipitation (inches), Visibility (miles)
+ * Note: All mock APIs use consistent values for cross-source testing
+ */
+function getMockPWSWeatherResponse() {
+    $timestamp = time();
+    return json_encode([
+        'success' => true,
+        'error' => null,
+        'response' => [
+            'id' => 'KMAHANOV10',
+            'loc' => [
+                'long' => -122.8618333,
+                'lat' => 45.7710278
+            ],
+            'place' => [
+                'name' => 'Scappoose',
+                'state' => 'OR',
+                'country' => 'US'
+            ],
+            'periods' => [
+                [
+                    'ob' => [
+                        'timestamp' => $timestamp,
+                        'dateTimeISO' => date('c', $timestamp),
+                        'tempC' => 5.6,  // Celsius - consistent with other mocks (~42.8°F)
+                        'tempF' => 42.08,  // Fahrenheit
+                        'dewpointC' => 4.6,  // Celsius - consistent with other mocks
+                        'dewpointF' => 40.28,  // Fahrenheit
+                        'humidity' => 93,  // Percentage - consistent with other mocks
+                        'pressureMB' => 1019.2,  // Millibars
+                        'pressureIN' => 30.08,  // inHg - consistent with other mocks
+                        'windKTS' => 5,  // Knots - consistent with other mocks
+                        'windKPH' => 9,  // Kilometers per hour
+                        'windMPH' => 6,  // Miles per hour
+                        'windSpeedKTS' => 5,  // Knots - consistent with other mocks
+                        'windSpeedKPH' => 9,  // Kilometers per hour
+                        'windSpeedMPH' => 6,  // Miles per hour
+                        'windDirDEG' => 89,  // Degrees - consistent with other mocks
+                        'windDir' => 'E',  // Cardinal direction
+                        'weather' => 'Clear',
+                        'weatherShort' => 'Clear',
+                        'weatherCoded' => 'CL',
+                        'icon' => 'clear.png',
+                        'visibilityKM' => 16.1,  // Kilometers
+                        'visibilityMI' => 10.0,  // Statute miles
+                        'sky' => 0,  // Sky cover (0-8 scale)
+                        'precipMM' => 11.94,  // Millimeters
+                        'precipIN' => 0.47,  // Inches - consistent with other mocks
+                        'solradWM2' => 0,  // Solar radiation
+                        'solradMethod' => 'estimated'
+                    ]
+                ]
+            ]
+        ]
+    ]);
+}
+
