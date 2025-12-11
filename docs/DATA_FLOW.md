@@ -20,7 +20,7 @@ This document describes how weather and webcam data is fetched, processed, calcu
 ### Overview
 
 Weather data is fetched from multiple sources and combined to provide a complete picture:
-- **Primary Source**: Tempest, Ambient Weather, WeatherLink, or METAR-only
+- **Primary Source**: Tempest, Ambient Weather, WeatherLink, PWSWeather.com, or METAR-only
 - **METAR Supplement**: Aviation weather data (visibility, ceiling, cloud cover) from aviationweather.gov
 
 ### Fetching Strategy
@@ -31,7 +31,7 @@ The system uses two fetching strategies:
    - Used when both primary source and METAR are needed
    - Fetches both sources simultaneously using `curl_multi`
    - Faster overall response time
-   - Used for: Tempest, Ambient Weather sources
+   - Used for: Tempest, Ambient Weather, PWSWeather.com sources
 
 2. **Synchronous Fetching** (Sequential Requests)
    - Used when async is not applicable
@@ -78,6 +78,23 @@ The system uses two fetching strategies:
 - **Authentication**: Custom headers (requires synchronous fetching)
 - **Data Provided**: Similar to other sources, with API-specific format
 - **Note**: Requires special header authentication, so always uses synchronous fetching
+
+#### PWSWeather.com (via AerisWeather API)
+- **Endpoint**: `https://api.aerisapi.com/observations/{station_id}?client_id={client_id}&client_secret={client_secret}`
+- **Data Provided**:
+  - Temperature (Celsius)
+  - Humidity (%)
+  - Pressure (inHg)
+  - Wind speed (knots)
+  - Wind direction (degrees)
+  - Gust speed (knots)
+  - Dewpoint (Celsius)
+  - Precipitation accumulation (inches)
+  - Visibility (statute miles)
+  - Observation timestamp (Unix seconds)
+- **Unit Conversions**:
+  - None required (data already in standard units)
+- **Note**: PWSWeather.com stations upload data to pwsweather.com, and station owners receive AerisWeather API access to retrieve observations. Supports async fetching.
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`

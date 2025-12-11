@@ -77,7 +77,23 @@ Get your API credentials from [WeatherLink.com](https://weatherlink.com) and add
 }
 ```
 
-### 4. METAR (Fallback/Primary)
+### 4. PWSWeather.com (via AerisWeather API)
+**Requires:** `station_id`, `client_id`, and `client_secret`
+
+PWSWeather.com stations upload data to pwsweather.com, and station owners receive access to the AerisWeather API to retrieve their station's observations. Get your API credentials from your PWSWeather.com station profile (AerisWeather API section).
+
+**Note**: Your station must be registered on PWSWeather.com and pass Quality Assurance checks before API access is available. This may take up to 4 days for new stations.
+
+```json
+"weather_source": {
+    "type": "pwsweather",
+    "station_id": "KMAHANOV10",
+    "client_id": "your-aeris-client-id",
+    "client_secret": "your-aeris-client-secret"
+}
+```
+
+### 5. METAR (Fallback/Primary)
 **No API key required** - Uses public METAR data
 
 ```json
