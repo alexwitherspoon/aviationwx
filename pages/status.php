@@ -20,8 +20,11 @@ header('Expires: 0');
 
 /**
  * Determine status color (Green/Yellow/Red)
+ * 
+ * @param string $status Status level: 'operational', 'degraded', 'down', or other
+ * @return string Color name: 'green', 'yellow', 'red', or 'gray'
  */
-function getStatusColor($status) {
+function getStatusColor(string $status): string {
     switch ($status) {
         case 'operational': return 'green';
         case 'degraded': return 'yellow';
@@ -32,8 +35,11 @@ function getStatusColor($status) {
 
 /**
  * Get status icon
+ * 
+ * @param string $status Status level: 'operational', 'degraded', 'down', or other
+ * @return string Icon character: '●' for status states, '○' for unknown
  */
-function getStatusIcon($status) {
+function getStatusIcon(string $status): string {
     switch ($status) {
         case 'operational': return '●';
         case 'degraded': return '●';
@@ -44,8 +50,11 @@ function getStatusIcon($status) {
 
 /**
  * Format relative time (e.g., "5 minutes ago", "2 hours ago")
+ * 
+ * @param int $timestamp Unix timestamp
+ * @return string Formatted relative time string or 'Unknown' if invalid
  */
-function formatRelativeTime($timestamp) {
+function formatRelativeTime(int $timestamp): string {
     if (!$timestamp || $timestamp <= 0) return 'Unknown';
     $diff = time() - $timestamp;
     if ($diff < 60) return 'Just now';
@@ -57,16 +66,29 @@ function formatRelativeTime($timestamp) {
 
 /**
  * Format absolute timestamp with timezone
+ * 
+ * @param int $timestamp Unix timestamp
+ * @return string Formatted timestamp string or 'Unknown' if invalid
  */
-function formatAbsoluteTime($timestamp) {
+function formatAbsoluteTime(int $timestamp): string {
     if (!$timestamp || $timestamp <= 0) return 'Unknown';
     return date('Y-m-d H:i:s T', $timestamp);
 }
 
 /**
  * Check system health
+ * 
+ * @return array {
+ *   'components' => array<string, array{
+ *     'name' => string,
+ *     'status' => 'operational'|'degraded'|'down',
+ *     'message' => string,
+ *     'lastChanged' => int,
+ *     'services'?: array
+ *   }>
+ * }
  */
-function checkSystemHealth() {
+function checkSystemHealth(): array {
     $health = [
         'components' => []
     ];
@@ -239,8 +261,16 @@ function checkSystemHealth() {
 
 /**
  * Check FTP/SFTP service health
+ * 
+ * @return array {
+ *   'name' => string,
+ *   'status' => 'operational'|'degraded'|'down',
+ *   'message' => string,
+ *   'lastChanged' => int,
+ *   'services' => array
+ * }
  */
-function checkFtpSftpServices() {
+function checkFtpSftpServices(): array {
     $services = [
         'vsftpd' => [
             'name' => 'FTP/FTPS Server',
@@ -255,6 +285,8 @@ function checkFtpSftpServices() {
     ];
     
     // Check vsftpd process
+    // Use @ to suppress errors for non-critical process checks
+    // We handle failures explicitly with fallback mechanisms below
     $vsftpdRunning = false;
     if (function_exists('exec')) {
         @exec('pgrep -x vsftpd 2>/dev/null', $output, $code);
@@ -263,6 +295,8 @@ function checkFtpSftpServices() {
     $services['vsftpd']['running'] = $vsftpdRunning;
     
     // Check sshd process
+    // Use @ to suppress errors for non-critical process checks
+    // We handle failures explicitly with fallback mechanisms below
     $sshdRunning = false;
     if (function_exists('exec')) {
         @exec('pgrep -x sshd 2>/dev/null', $output, $code);
@@ -299,8 +333,17 @@ function checkFtpSftpServices() {
 
 /**
  * Check VPN status for airport
+ * 
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport configuration array
+ * @return array|null {
+ *   'name' => string,
+ *   'status' => 'operational'|'down',
+ *   'message' => string,
+ *   'lastChanged' => int
+ * }|null Returns null if VPN is not enabled for this airport
  */
-function checkVpnStatus($airportId, $airport) {
+function checkVpnStatus(string $airportId, array $airport): ?array {
     $vpn = $airport['vpn'] ?? null;
     
     if (!$vpn || !($vpn['enabled'] ?? false)) {
@@ -317,6 +360,8 @@ function checkVpnStatus($airportId, $airport) {
         ];
     }
     
+    // Use @ to suppress errors for non-critical file operations
+    // We handle failures explicitly with fallback mechanisms below
     $statusData = @json_decode(file_get_contents($statusFile), true);
     $connectionName = $vpn['connection_name'] ?? "{$airportId}_vpn";
     $connStatus = $statusData['connections'][$connectionName] ?? null;
@@ -350,8 +395,16 @@ function checkVpnStatus($airportId, $airport) {
 
 /**
  * Check airport health
+ * 
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport configuration array
+ * @return array {
+ *   'id' => string,
+ *   'status' => 'operational'|'degraded'|'down',
+ *   'components' => array<string, array>
+ * }
  */
-function checkAirportHealth($airportId, $airport) {
+function checkAirportHealth(string $airportId, array $airport): array {
     $health = [
         'id' => strtoupper($airportId),
         'status' => 'operational',
@@ -365,6 +418,8 @@ function checkAirportHealth($airportId, $airport) {
     $weatherData = null;
     
     if ($weatherCacheExists) {
+        // Use @ to suppress errors for non-critical file operations
+        // We handle failures explicitly with fallback mechanisms below
         $weatherData = @json_decode(file_get_contents($weatherCacheFile), true);
         if (!is_array($weatherData)) {
             $weatherData = null; // Treat as missing if corrupted
@@ -454,10 +509,17 @@ function checkAirportHealth($airportId, $airport) {
                 $metarAge = time() - $metarTimestamp;
                 $metarLastChanged = $metarTimestamp;
                 
+                // METAR status thresholds:
+                // - Operational until 2 hours (MAX_STALE_HOURS_METAR)
+                // - Degraded from 2-3 hours (between MAX_STALE_HOURS_METAR and MAX_STALE_HOURS)
+                // - Down after 3 hours (MAX_STALE_HOURS)
                 if ($metarAge < $weatherRefresh) {
                     $metarStatus = 'operational';
                     $metarMessage = 'Fresh';
                 } elseif ($metarAge < $maxStaleSecondsMetar) {
+                    $metarStatus = 'operational';
+                    $metarMessage = 'Recent';
+                } elseif ($metarAge < $maxStaleSeconds) {
                     $metarStatus = 'degraded';
                     $metarMessage = 'Stale (but usable)';
                 } else {
@@ -520,6 +582,8 @@ function checkAirportHealth($airportId, $airport) {
             
             // Check if cache files exist and are readable
             // Use same path resolution as webcam API (normalize path to handle symlinks)
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with fallback mechanisms below
             $cacheJpgResolved = @realpath($cacheJpg) ?: $cacheJpg;
             $cacheWebpResolved = @realpath($cacheWebp) ?: $cacheWebp;
             $cacheExists = (@file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved)) 
@@ -538,6 +602,8 @@ function checkAirportHealth($airportId, $airport) {
             
             if ($cacheExists) {
                 // Determine which file to use (prefer JPG, fallback to WEBP)
+                // Use @ to suppress errors for non-critical file operations
+                // We handle failures explicitly with fallback mechanisms below
                 $cacheFile = (@file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved)) 
                            ? $cacheJpgResolved 
                            : $cacheWebpResolved;
@@ -557,6 +623,8 @@ function checkAirportHealth($airportId, $airport) {
                 if (!$isPush) {
                     $backoffFile = __DIR__ . '/../cache/backoff.json';
                     if (file_exists($backoffFile)) {
+                        // Use @ to suppress errors for non-critical file operations
+                        // We handle failures explicitly with fallback mechanisms below
                         $backoffData = @json_decode(file_get_contents($backoffFile), true);
                         if (is_array($backoffData)) {
                             $key = $airportId . '_' . $idx;
@@ -758,7 +826,7 @@ usort($airportHealth, function($a, $b) {
             line-height: 1.6;
             color: #333;
             background: #f5f5f5;
-            padding: 2rem 1rem;
+            padding: 2rem 1rem 4rem 1rem;
         }
         
         .container {

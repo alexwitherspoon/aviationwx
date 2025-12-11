@@ -212,6 +212,16 @@ Returns an HTML status page displaying system and airport health status.
 - **Degraded** (Yellow): Component has issues but is still functional
 - **Down** (Red): Component has critical failures
 
+**Weather Source Status Thresholds:**
+- **Primary Weather Sources** (Tempest, Ambient, WeatherLink):
+  - Operational: < refresh interval (typically 60 seconds)
+  - Degraded: refresh interval to 3 hours (MAX_STALE_HOURS)
+  - Down: > 3 hours
+- **METAR/Aviation Weather**:
+  - Operational: < 2 hours (MAX_STALE_HOURS_METAR)
+  - Degraded: 2-3 hours (between MAX_STALE_HOURS_METAR and MAX_STALE_HOURS)
+  - Down: > 3 hours (MAX_STALE_HOURS)
+
 **HTTP Status Codes:**
 - `200`: Status page loaded successfully
 - `503`: Configuration cannot be loaded
