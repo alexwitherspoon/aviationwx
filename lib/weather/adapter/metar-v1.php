@@ -183,27 +183,35 @@ function parseMETARResponse($response, $airport): ?array {
                     $now = new DateTime('now', new DateTimeZone('UTC'));
                     $year = (int)$now->format('Y');
                     $month = (int)$now->format('m');
+                    $currentDay = (int)$now->format('d');
                 
                 // Try to create the observation time
-                // Note: We need to handle month rollovers - if day is greater than current day,
-                // it might be from the previous month
+                // Handle month rollovers intelligently:
+                // - If day > current day by more than 3, it's likely from previous month
+                // - If day < current day by more than 3, it could be from next month (end-of-month case)
+                // - Otherwise, assume same month
                 try {
+                    // First, try current month
                     $obsDateTime = new DateTime("{$year}-{$month}-{$day} {$hour}:{$minute}:00", new DateTimeZone('UTC'));
-                    
-                    // If the observation time is more than 3 days in the future, assume it's from previous month
                     $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                    
+                    // If observation is more than 3 days in the future, try previous month
                     if ($daysDiff > 3) {
-                        // Subtract one month
                         $obsDateTime->modify('-1 month');
-                    }
-                    // If the observation time is more than 3 days in the past (but less than 28 days), assume it's from next month
-                    // (This handles end-of-month cases)
-                    elseif ($daysDiff < -25) {
-                        // Add one month
-                        $obsDateTime->modify('+1 month');
+                        $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
                     }
                     
-                    $obsTime = $obsDateTime->getTimestamp();
+                    // If observation is more than 25 days in the past, try next month (end-of-month rollover)
+                    if ($daysDiff < -25) {
+                        $obsDateTime->modify('+1 month');
+                        $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                    }
+                    
+                    // Final validation: observation should be within reasonable range (not more than 3 days old or future)
+                    // METAR observations are typically hourly, so 3 days is a safe threshold
+                    if ($daysDiff >= -72 && $daysDiff <= 3) {
+                        $obsTime = $obsDateTime->getTimestamp();
+                    }
                 } catch (Exception $e) {
                     // Invalid date, leave obsTime as null
                     error_log("Failed to parse METAR observation time from rawOb: " . $e->getMessage());
@@ -309,28 +317,52 @@ function fetchMETAR($airport): ?array {
     $result = fetchMETARFromStation($stationId, $airport);
     
     // If primary station failed and nearby stations are configured, try fallback
-    if ($result === null && isset($airport['nearby_metar_stations']) && 
-        is_array($airport['nearby_metar_stations']) && 
-        !empty($airport['nearby_metar_stations'])) {
-        
-        foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
-            // Skip empty, non-string, or whitespace-only stations
-            if (!is_string($nearbyStation) || empty(trim($nearbyStation))) {
-                continue;
-            }
-            
-            $fallbackResult = fetchMETARFromStation($nearbyStation, $airport);
-            if ($fallbackResult !== null) {
-                aviationwx_log('info', 'METAR fetch successful from nearby station', [
-                    'airport' => $airport['icao'] ?? 'unknown',
-                    'primary_station' => $stationId,
-                    'used_station' => $nearbyStation
-                ], 'app');
-                return $fallbackResult;
-            }
+    if ($result === null) {
+        $fallbackResult = fetchMETARFromNearbyStations($airport, $stationId);
+        if ($fallbackResult !== null) {
+            return $fallbackResult;
         }
     }
     
     return $result;
+}
+
+/**
+ * Fetch METAR data from nearby stations as fallback
+ * 
+ * Attempts to fetch METAR data from nearby_metar_stations if primary station fails.
+ * Used as a fallback mechanism when primary METAR station is unavailable.
+ * 
+ * @param array $airport Airport configuration array
+ * @param string $primaryStationId Primary METAR station ID (for logging)
+ * @return array|null Parsed METAR data from first successful nearby station, or null if all fail
+ */
+function fetchMETARFromNearbyStations(array $airport, string $primaryStationId): ?array {
+    if (!isset($airport['nearby_metar_stations']) || 
+        !is_array($airport['nearby_metar_stations']) || 
+        empty($airport['nearby_metar_stations'])) {
+        return null;
+    }
+    
+    require_once __DIR__ . '/../../logger.php';
+    
+    foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
+        // Skip empty, non-string, or whitespace-only stations
+        if (!is_string($nearbyStation) || empty(trim($nearbyStation))) {
+            continue;
+        }
+        
+        $fallbackResult = fetchMETARFromStation($nearbyStation, $airport);
+        if ($fallbackResult !== null) {
+            aviationwx_log('info', 'METAR fetch successful from nearby station', [
+                'airport' => $airport['icao'] ?? 'unknown',
+                'primary_station' => $primaryStationId,
+                'used_station' => $nearbyStation
+            ], 'app');
+            return $fallbackResult;
+        }
+    }
+    
+    return null;
 }
 

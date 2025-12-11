@@ -380,33 +380,23 @@ function fetchWeatherAsync($airport, $airportId = null) {
     }
     
     // If primary METAR request failed, try nearby stations as fallback
-    if ($metarData === null && isset($airport['nearby_metar_stations']) && 
-        is_array($airport['nearby_metar_stations']) && 
-        !empty($airport['nearby_metar_stations'])) {
+    if ($metarData === null) {
+        require_once __DIR__ . '/adapter/metar-v1.php';
+        $primaryStationId = $stationId ?? ($airport['metar_station'] ?? 'unknown');
         
         aviationwx_log('info', 'Primary METAR request failed in async path, attempting nearby stations', [
             'airport' => $airportId,
-            'primary_station' => $stationId ?? ($airport['metar_station'] ?? 'unknown'),
-            'nearby_stations' => $airport['nearby_metar_stations']
+            'primary_station' => $primaryStationId,
+            'nearby_stations' => $airport['nearby_metar_stations'] ?? []
         ], 'app');
         
-        // Try nearby stations sequentially (synchronous fallback)
-        foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
-            // Skip empty, non-string, or whitespace-only stations
-            if (!is_string($nearbyStation) || empty(trim($nearbyStation))) {
-                continue;
-            }
-            
-            $fallbackResult = fetchMETARFromStation($nearbyStation, $airport);
-            if ($fallbackResult !== null) {
-                $metarData = $fallbackResult;
-                aviationwx_log('info', 'METAR fetch successful from nearby station (async fallback)', [
-                    'airport' => $airportId,
-                    'primary_station' => $stationId ?? ($airport['metar_station'] ?? 'unknown'),
-                    'used_station' => $nearbyStation
-                ], 'app');
-                break; // Stop on first success
-            }
+        $fallbackResult = fetchMETARFromNearbyStations($airport, $primaryStationId);
+        if ($fallbackResult !== null) {
+            $metarData = $fallbackResult;
+            aviationwx_log('info', 'METAR fetch successful from nearby station (async fallback)', [
+                'airport' => $airportId,
+                'primary_station' => $primaryStationId
+            ], 'app');
         }
     }
     
