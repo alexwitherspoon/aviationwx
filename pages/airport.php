@@ -1400,13 +1400,16 @@ function updateWeatherTimestamp() {
     
     function formatRelativeTime(seconds) {
         if (seconds < 60) {
-            return seconds + ' seconds ago';
+            return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
         } else if (seconds < 3600) {
-            return Math.floor(seconds / 60) + ' minutes ago';
+            const minutes = Math.floor(seconds / 60);
+            return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
         } else if (seconds < 86400) {
-            return Math.floor(seconds / 3600) + ' hours ago';
+            const hours = Math.floor(seconds / 3600);
+            return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
         } else {
-            return Math.floor(seconds / 86400) + ' days ago';
+            const days = Math.floor(seconds / 86400);
+            return days + (days === 1 ? ' day' : ' days') + ' ago';
         }
     }
     
@@ -2022,13 +2025,16 @@ function formatRelativeTime(seconds) {
     }
     
     if (seconds < 60) {
-        return seconds + ' seconds ago';
+        return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
     } else if (seconds < 3600) {
-        return Math.floor(seconds / 60) + ' minutes ago';
+        const minutes = Math.floor(seconds / 60);
+        return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
     } else if (seconds < 86400) {
-        return Math.floor(seconds / 3600) + ' hours ago';
+        const hours = Math.floor(seconds / 3600);
+        return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
     } else {
-        return Math.floor(seconds / 86400) + ' days ago';
+        const days = Math.floor(seconds / 86400);
+        return days + (days === 1 ? ' day' : ' days') + ' ago';
     }
 }
 
