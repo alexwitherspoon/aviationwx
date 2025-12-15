@@ -157,6 +157,10 @@ h3 {
     background: #0052a3;
 }
 
+.foreflight-link {
+    display: none;
+}
+
 /* Weather Section */
 .weather-section {
     padding: 1.5rem 1.5rem 1.5rem 1.5rem; /* Explicit padding, no extra bottom space */

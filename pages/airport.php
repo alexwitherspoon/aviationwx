@@ -433,40 +433,93 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             </div>
 
             <div class="links">
-                <?php if (!empty($airport['airnav_url'])): ?>
-                <a href="<?= htmlspecialchars($airport['airnav_url']) ?>" target="_blank" rel="noopener" class="btn">
+                <?php
+                // Get the best available identifier for external links (ICAO > IATA > FAA)
+                $linkIdentifier = getBestIdentifierForLinks($airport);
+                
+                // AirNav link (manual override or auto-generated)
+                $airnavUrl = null;
+                if (!empty($airport['airnav_url'])) {
+                    $airnavUrl = $airport['airnav_url'];
+                } elseif ($linkIdentifier !== null) {
+                    $airnavUrl = 'https://www.airnav.com/airport/' . $linkIdentifier;
+                }
+                if ($airnavUrl !== null): ?>
+                <a href="<?= htmlspecialchars($airnavUrl) ?>" target="_blank" rel="noopener" class="btn">
                     AirNav
                 </a>
                 <?php endif; ?>
-                <?php if (!empty($airport['icao'])): ?>
-                <a href="https://skyvector.com/airport/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn">
+                
+                <?php
+                // SkyVector link (manual override or auto-generated)
+                $skyvectorUrl = null;
+                if (!empty($airport['skyvector_url'])) {
+                    $skyvectorUrl = $airport['skyvector_url'];
+                } elseif ($linkIdentifier !== null) {
+                    $skyvectorUrl = 'https://skyvector.com/airport/' . $linkIdentifier;
+                }
+                if ($skyvectorUrl !== null): ?>
+                <a href="<?= htmlspecialchars($skyvectorUrl) ?>" target="_blank" rel="noopener" class="btn">
                     SkyVector
                 </a>
-                <a href="https://www.aopa.org/destinations/airports/<?= htmlspecialchars(strtoupper($airport['icao'])) ?>" target="_blank" rel="noopener" class="btn">
+                <?php endif; ?>
+                
+                <?php
+                // AOPA link (manual override or auto-generated)
+                $aopaUrl = null;
+                if (!empty($airport['aopa_url'])) {
+                    $aopaUrl = $airport['aopa_url'];
+                } elseif ($linkIdentifier !== null) {
+                    $aopaUrl = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
+                }
+                if ($aopaUrl !== null): ?>
+                <a href="<?= htmlspecialchars($aopaUrl) ?>" target="_blank" rel="noopener" class="btn">
                     AOPA
                 </a>
+                <?php endif; ?>
+                
                 <?php
-                // Generate FAA Weather Cams URL (only if ICAO exists)
-                // URL format: https://weathercams.faa.gov/map/{min_lon},{min_lat},{max_lon},{max_lat}/airport/{icao}/
-                // Create bounding box around airport (2 degree buffer for visibility)
-                $buffer = 2.0;
-                $min_lon = $airport['lon'] - $buffer;
-                $min_lat = $airport['lat'] - $buffer;
-                $max_lon = $airport['lon'] + $buffer;
-                $max_lat = $airport['lat'] + $buffer;
-                // Remove K prefix from ICAO if present (e.g., KSPB -> SPB)
-                $faa_icao = preg_replace('/^K/', '', strtoupper($airport['icao']));
-                $faa_weather_url = sprintf(
-                    'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
-                    $min_lon,
-                    $min_lat,
-                    $max_lon,
-                    $max_lat,
-                    $faa_icao
-                );
-                ?>
-                <a href="<?= htmlspecialchars($faa_weather_url) ?>" target="_blank" rel="noopener" class="btn">
+                // FAA Weather link (manual override or auto-generated)
+                $faaWeatherUrl = null;
+                if (!empty($airport['faa_weather_url'])) {
+                    $faaWeatherUrl = $airport['faa_weather_url'];
+                } elseif ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])) {
+                    // Generate FAA Weather Cams URL
+                    // URL format: https://weathercams.faa.gov/map/{min_lon},{min_lat},{max_lon},{max_lat}/airport/{identifier}/
+                    $buffer = 2.0;
+                    $min_lon = $airport['lon'] - $buffer;
+                    $min_lat = $airport['lat'] - $buffer;
+                    $max_lon = $airport['lon'] + $buffer;
+                    $max_lat = $airport['lat'] + $buffer;
+                    // Remove K prefix from identifier if present (e.g., KSPB -> SPB)
+                    $faa_identifier = preg_replace('/^K/', '', $linkIdentifier);
+                    $faaWeatherUrl = sprintf(
+                        'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
+                        $min_lon,
+                        $min_lat,
+                        $max_lon,
+                        $max_lat,
+                        $faa_identifier
+                    );
+                }
+                if ($faaWeatherUrl !== null): ?>
+                <a href="<?= htmlspecialchars($faaWeatherUrl) ?>" target="_blank" rel="noopener" class="btn">
                     FAA Weather
+                </a>
+                <?php endif; ?>
+                
+                <?php
+                // ForeFlight link (manual override or auto-generated) - mobile only
+                $foreflightUrl = null;
+                if (!empty($airport['foreflight_url'])) {
+                    $foreflightUrl = $airport['foreflight_url'];
+                } elseif ($linkIdentifier !== null) {
+                    // ForeFlight deeplink format: foreflight://airport/{identifier}
+                    $foreflightUrl = 'foreflight://airport/' . $linkIdentifier;
+                }
+                if ($foreflightUrl !== null): ?>
+                <a href="<?= htmlspecialchars($foreflightUrl) ?>" target="_blank" rel="noopener" class="btn foreflight-link">
+                    ForeFlight
                 </a>
                 <?php endif; ?>
                 <?php
@@ -733,6 +786,31 @@ const RUNWAYS = <?php
 ?>;
 
 // Production logging removed - only log errors in console
+
+/**
+ * Detect if device is mobile (iOS or Android)
+ * @returns {boolean} True if device is mobile
+ */
+function isMobileDevice() {
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+}
+
+// Show ForeFlight link only on mobile devices
+(function() {
+    function showForeFlightLink() {
+        const foreflightLink = document.querySelector('.foreflight-link');
+        if (foreflightLink && isMobileDevice()) {
+            foreflightLink.style.display = '';
+        }
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', showForeFlightLink);
+    } else {
+        showForeFlightLink();
+    }
+})();
 
 /**
  * Get timezone abbreviation for the airport's timezone
