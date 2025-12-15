@@ -27,8 +27,7 @@
       "webcams": [
         {
           "name": "Test Camera 1",
-          "url": "https://example.com/cam1.jpg",
-          "position": "north"
+          "url": "https://example.com/cam1.jpg"
         }
       ],
       "metar_station": "KSPB",
@@ -80,8 +79,7 @@
       "webcams": [
         {
           "name": "Test Camera PDX",
-          "url": "https://example.com/pdx-cam.jpg",
-          "position": "south"
+          "url": "https://example.com/pdx-cam.jpg"
         }
       ]
     },
@@ -106,8 +104,7 @@
       "webcams": [
         {
           "name": "Test Camera SEA",
-          "url": "https://example.com/sea-cam.jpg",
-          "position": "north"
+          "url": "https://example.com/sea-cam.jpg"
         }
       ]
     },
@@ -131,8 +128,7 @@
       "webcams": [
         {
           "name": "Test Camera DEN",
-          "url": "https://example.com/den-cam.jpg",
-          "position": "east"
+          "url": "https://example.com/den-cam.jpg"
         }
       ]
     },
