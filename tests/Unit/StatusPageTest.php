@@ -243,4 +243,215 @@ class StatusPageTest extends TestCase
             unlink($cacheFile);
         }
     }
+    
+    public function testCheckAirportHealth_PrimaryWeather_OperationalWithinWarningThreshold(): void
+    {
+        // Create mock airport config with Tempest source
+        $airportId = 'test_primary_operational';
+        $airport = [
+            'weather_source' => [
+                'type' => 'tempest'
+            ],
+            'weather_refresh_seconds' => 60 // 60-second refresh
+        ];
+        
+        // Create temporary weather cache file
+        $cacheDir = __DIR__ . '/../../cache';
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        
+        // Test: Data 1 minute old (within refresh interval) should be operational
+        $weatherData = [
+            'obs_time_primary' => time() - 60, // 1 minute ago
+            'temperature' => 15.0
+        ];
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertNotNull($primarySource, 'Primary source should be present');
+        $this->assertEquals('operational', $primarySource['status'], 'Should be operational at 1 minute');
+        $this->assertEquals('Operational', $primarySource['message']);
+        
+        // Test: Data 4 minutes old (within 5x threshold) should still be operational
+        $weatherData['obs_time_primary'] = time() - 240; // 4 minutes ago
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertEquals('operational', $primarySource['status'], 'Should be operational at 4 minutes (within 5x threshold)');
+        
+        // Cleanup
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
+    
+    public function testCheckAirportHealth_PrimaryWeather_DegradedWithinErrorThreshold(): void
+    {
+        // Create mock airport config with Tempest source
+        $airportId = 'test_primary_degraded';
+        $airport = [
+            'weather_source' => [
+                'type' => 'tempest'
+            ],
+            'weather_refresh_seconds' => 60 // 60-second refresh
+        ];
+        
+        // Create temporary weather cache file
+        $cacheDir = __DIR__ . '/../../cache';
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        
+        // Test: Data 6 minutes old (5x to 10x threshold) should be degraded
+        $weatherData = [
+            'obs_time_primary' => time() - 360, // 6 minutes ago (between 5x and 10x)
+            'temperature' => 15.0
+        ];
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertNotNull($primarySource, 'Primary source should be present');
+        $this->assertEquals('degraded', $primarySource['status'], 'Should be degraded at 6 minutes (between 5x and 10x)');
+        $this->assertEquals('Stale (warning)', $primarySource['message']);
+        
+        // Test: Data 9 minutes old (still within 10x threshold) should still be degraded
+        $weatherData['obs_time_primary'] = time() - 540; // 9 minutes ago
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertEquals('degraded', $primarySource['status'], 'Should be degraded at 9 minutes (within 10x threshold)');
+        
+        // Cleanup
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
+    
+    public function testCheckAirportHealth_PrimaryWeather_DownAfterErrorThreshold(): void
+    {
+        // Create mock airport config with Tempest source
+        $airportId = 'test_primary_down';
+        $airport = [
+            'weather_source' => [
+                'type' => 'tempest'
+            ],
+            'weather_refresh_seconds' => 60 // 60-second refresh
+        ];
+        
+        // Create temporary weather cache file
+        $cacheDir = __DIR__ . '/../../cache';
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        
+        // Test: Data 11 minutes old (after 10x threshold) should be down
+        $weatherData = [
+            'obs_time_primary' => time() - 660, // 11 minutes ago (after 10x threshold)
+            'temperature' => 15.0
+        ];
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertNotNull($primarySource, 'Primary source should be present');
+        $this->assertEquals('down', $primarySource['status'], 'Should be down at 11 minutes (after 10x threshold)');
+        $this->assertEquals('Stale (error)', $primarySource['message']);
+        
+        // Cleanup
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
+    
+    public function testCheckAirportHealth_PrimaryWeather_RespectsMaxStaleSeconds(): void
+    {
+        // Create mock airport config with very long refresh interval
+        $airportId = 'test_primary_maxstale';
+        $airport = [
+            'weather_source' => [
+                'type' => 'tempest'
+            ],
+            'weather_refresh_seconds' => 1800 // 30-minute refresh (error threshold would be 5 hours, but maxStaleSeconds is 3 hours)
+        ];
+        
+        // Create temporary weather cache file
+        $cacheDir = __DIR__ . '/../../cache';
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        
+        // Test: Data 4 hours old (exceeds maxStaleSeconds of 3 hours) should be down with "Expired"
+        $weatherData = [
+            'obs_time_primary' => time() - (4 * 3600), // 4 hours ago
+            'temperature' => 15.0
+        ];
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertNotNull($primarySource, 'Primary source should be present');
+        $this->assertEquals('down', $primarySource['status'], 'Should be down after maxStaleSeconds (3 hours)');
+        $this->assertEquals('Expired', $primarySource['message'], 'Should show Expired when maxStaleSeconds exceeded');
+        
+        // Cleanup
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
+    
+    public function testCheckAirportHealth_MetarAsPrimary_UsesMetarThresholds(): void
+    {
+        // Create mock airport config with METAR as primary source
+        $airportId = 'test_metar_primary';
+        $airport = [
+            'weather_source' => [
+                'type' => 'metar'
+            ],
+            'weather_refresh_seconds' => 60
+        ];
+        
+        // Create temporary weather cache file
+        $cacheDir = __DIR__ . '/../../cache';
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        
+        // Test: METAR data 1 hour old should be operational (uses METAR thresholds, not multipliers)
+        $weatherData = [
+            'obs_time_primary' => time() - 3600, // 1 hour ago
+            'temperature' => 15.0,
+            'visibility' => 10.0
+        ];
+        file_put_contents($cacheFile, json_encode($weatherData));
+        
+        $health = checkAirportHealth($airportId, $airport);
+        
+        $primarySource = $health['components']['weather']['sources'][0] ?? null;
+        $this->assertNotNull($primarySource, 'Primary METAR source should be present');
+        $this->assertEquals('operational', $primarySource['status'], 'METAR should be operational at 1 hour (uses hourly thresholds)');
+        $this->assertEquals('Recent', $primarySource['message'], 'METAR should show Recent message');
+        
+        // Cleanup
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
 }
+
+
+
+
