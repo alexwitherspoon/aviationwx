@@ -20,16 +20,17 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 /**
- * Determine status color (Green/Yellow/Red)
+ * Determine status color
  * 
- * @param string $status Status level: 'operational', 'degraded', 'down', or other
- * @return string Color name: 'green', 'yellow', 'red', or 'gray'
+ * @param string $status Status level: 'operational', 'degraded', 'down', 'maintenance', or other
+ * @return string Color name: 'green', 'yellow', 'red', 'orange', or 'gray'
  */
 function getStatusColor(string $status): string {
     switch ($status) {
         case 'operational': return 'green';
         case 'degraded': return 'yellow';
         case 'down': return 'red';
+        case 'maintenance': return 'orange';
         default: return 'gray';
     }
 }
@@ -37,14 +38,15 @@ function getStatusColor(string $status): string {
 /**
  * Get status icon
  * 
- * @param string $status Status level: 'operational', 'degraded', 'down', or other
- * @return string Icon character: '●' for status states, '○' for unknown
+ * @param string $status Status level: 'operational', 'degraded', 'down', 'maintenance', or other
+ * @return string Icon character: '●' for status states, '🚧' for maintenance, '○' for unknown
  */
 function getStatusIcon(string $status): string {
     switch ($status) {
         case 'operational': return '●';
         case 'degraded': return '●';
         case 'down': return '●';
+        case 'maintenance': return '🚧';
         default: return '○';
     }
 }
@@ -411,7 +413,7 @@ function checkVpnStatus(string $airportId, array $airport): ?array {
  * @param array $airport Airport configuration array
  * @return array {
  *   'id' => string,
- *   'status' => 'operational'|'degraded'|'down',
+ *   'status' => 'operational'|'degraded'|'down'|'maintenance',
  *   'components' => array<string, array>
  * }
  */
@@ -807,6 +809,11 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     $health['status'] = $hasDown ? 'down' : ($hasDegraded ? 'degraded' : 'operational');
     
+    // Check if airport is in maintenance mode
+    if (isAirportInMaintenance($airport)) {
+        $health['status'] = 'maintenance';
+    }
+    
     return $health;
 }
 
@@ -828,9 +835,9 @@ if (isset($config['airports']) && is_array($config['airports'])) {
     }
 }
 
-// Sort airports by status (down first, then degraded, then operational)
+// Sort airports by status (down first, then maintenance, then degraded, then operational)
 usort($airportHealth, function($a, $b) {
-    $statusOrder = ['down' => 0, 'degraded' => 1, 'operational' => 2];
+    $statusOrder = ['down' => 0, 'maintenance' => 1, 'degraded' => 2, 'operational' => 3];
     return $statusOrder[$a['status']] <=> $statusOrder[$b['status']];
 });
 
@@ -896,6 +903,7 @@ usort($airportHealth, function($a, $b) {
         .status-indicator.green { color: #10b981; }
         .status-indicator.yellow { color: #f59e0b; }
         .status-indicator.red { color: #ef4444; }
+        .status-indicator.orange { color: #f97316; }
         .status-indicator.gray { color: #9ca3af; }
         
         .status-text {
@@ -1105,8 +1113,8 @@ usort($airportHealth, function($a, $b) {
         <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a1a;">Airport Status</h2>
         <?php foreach ($airportHealth as $airport): ?>
         <?php 
-        // Determine if airport should be expanded by default (not operational = expanded)
-        $isExpanded = ($airport['status'] !== 'operational');
+        // Determine if airport should be expanded by default (not operational or maintenance = expanded)
+        $isExpanded = ($airport['status'] !== 'operational' && $airport['status'] !== 'maintenance');
         ?>
         <div class="status-card">
             <div class="status-card-header airport-card-header <?php echo $isExpanded ? 'expanded' : ''; ?>" 
@@ -1119,7 +1127,7 @@ usort($airportHealth, function($a, $b) {
                     <span class="status-indicator <?php echo getStatusColor($airport['status']); ?>">
                         <?php echo getStatusIcon($airport['status']); ?>
                     </span>
-                    <?php echo ucfirst($airport['status']); ?>
+                    <?php echo $airport['status'] === 'maintenance' ? 'Under Maintenance 🚧' : ucfirst($airport['status']); ?>
                 </span>
             </div>
             <div class="status-card-body airport-card-body <?php echo $isExpanded ? 'expanded' : 'collapsed'; ?>" 
