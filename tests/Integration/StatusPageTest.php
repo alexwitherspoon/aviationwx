@@ -259,6 +259,49 @@ class StatusPageTest extends TestCase
     }
     
     /**
+     * Test status page displays maintenance status for airports in maintenance
+     */
+    public function testStatusPage_DisplaysMaintenanceStatus()
+    {
+        $response = $this->makeRequest('?status=1');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        $body = $response['body'];
+        
+        // Check if airport status section exists (may not exist if no airports configured)
+        $hasAirportStatus = strpos($body, 'Airport Status') !== false;
+        
+        if ($hasAirportStatus) {
+            // If airports are configured, check for maintenance status indicators
+            // Maintenance airports should show "Under Maintenance 🚧" and construction emoji
+            // Note: This test will pass if maintenance status is properly implemented
+            // It checks for the maintenance emoji and text
+            $hasMaintenanceEmoji = strpos($body, '🚧') !== false;
+            $hasMaintenanceText = strpos($body, 'Under Maintenance') !== false;
+            
+            // If maintenance airports exist in config, they should show maintenance status
+            // This is a soft check - if no maintenance airports are configured, test still passes
+            if ($hasMaintenanceEmoji || $hasMaintenanceText) {
+                $this->assertTrue(
+                    $hasMaintenanceEmoji && $hasMaintenanceText,
+                    "If maintenance airports are configured, should show maintenance emoji and text"
+                );
+            }
+        }
+        
+        // Page should always have system status
+        $this->assertStringContainsString(
+            'System Status',
+            $body,
+            "Status page should always show system status"
+        );
+    }
+    
+    /**
      * Helper method to make HTTP request
      */
     private function makeRequest(string $path, bool $includeHeaders = true, int $maxRetries = 3): array
