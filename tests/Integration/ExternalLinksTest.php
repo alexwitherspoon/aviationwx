@@ -2,8 +2,9 @@
 /**
  * External Links Validation Tests
  * 
- * Tests that external links (AirNav, SkyVector, AOPA, FAA Weather) are:
+ * Tests that external links (AirNav, SkyVector, AOPA, FAA Weather, ForeFlight) are:
  * - Generating correct URL formats
+ * - Supporting manual overrides
  * - Reachable (returning valid HTTP status codes)
  * - Not redirecting to error pages or unexpected locations
  * 
@@ -56,17 +57,25 @@ class ExternalLinksTest extends TestCase
     public function testAirNavLinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            if (empty($airport['airnav_url'])) {
-                $this->markTestIncomplete("AirNav URL not configured for airport: $airportId");
-                continue;
+            // Check for manual override first
+            if (!empty($airport['airnav_url'])) {
+                $url = $airport['airnav_url'];
+            } else {
+                // Use auto-generated URL if identifier available
+                $linkIdentifier = getBestIdentifierForLinks($airport);
+                if ($linkIdentifier === null) {
+                    $this->markTestIncomplete("No identifier available for AirNav URL: $airportId");
+                    continue;
+                }
+                $url = 'https://www.airnav.com/airport/' . $linkIdentifier;
             }
             
-            $url = $airport['airnav_url'];
             $result = $this->validateUrl($url, 'airnav.com');
             
+            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertTrue(
                 $result['valid'],
-                "AirNav URL for {$airport['icao']} should be valid: {$result['message']}"
+                "AirNav URL for {$identifier} should be valid: {$result['message']}"
             );
         }
     }
@@ -77,19 +86,25 @@ class ExternalLinksTest extends TestCase
     public function testSkyVectorLinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            if (empty($airport['icao'])) {
-                $this->markTestIncomplete("ICAO code not configured for airport: $airportId");
-                continue;
+            // Check for manual override first
+            if (!empty($airport['skyvector_url'])) {
+                $url = $airport['skyvector_url'];
+            } else {
+                // Use auto-generated URL if identifier available
+                $linkIdentifier = getBestIdentifierForLinks($airport);
+                if ($linkIdentifier === null) {
+                    $this->markTestIncomplete("No identifier available for SkyVector URL: $airportId");
+                    continue;
+                }
+                $url = 'https://skyvector.com/airport/' . $linkIdentifier;
             }
-            
-            $icao = strtoupper($airport['icao']);
-            $url = "https://skyvector.com/airport/$icao";
             
             $result = $this->validateUrl($url, 'skyvector.com');
             
+            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertTrue(
                 $result['valid'],
-                "SkyVector URL for {$airport['icao']} should be valid: {$result['message']}"
+                "SkyVector URL for {$identifier} should be valid: {$result['message']}"
             );
         }
     }
@@ -100,19 +115,25 @@ class ExternalLinksTest extends TestCase
     public function testAOPALinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            if (empty($airport['icao'])) {
-                $this->markTestIncomplete("ICAO code not configured for airport: $airportId");
-                continue;
+            // Check for manual override first
+            if (!empty($airport['aopa_url'])) {
+                $url = $airport['aopa_url'];
+            } else {
+                // Use auto-generated URL if identifier available
+                $linkIdentifier = getBestIdentifierForLinks($airport);
+                if ($linkIdentifier === null) {
+                    $this->markTestIncomplete("No identifier available for AOPA URL: $airportId");
+                    continue;
+                }
+                $url = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
             }
-            
-            $icao = strtoupper($airport['icao']);
-            $url = "https://www.aopa.org/destinations/airports/$icao";
             
             $result = $this->validateUrl($url, 'aopa.org');
             
+            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertTrue(
                 $result['valid'],
-                "AOPA URL for {$airport['icao']} should be valid: {$result['message']}"
+                "AOPA URL for {$identifier} should be valid: {$result['message']}"
             );
         }
     }
@@ -123,35 +144,77 @@ class ExternalLinksTest extends TestCase
     public function testFAAWeatherLinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            if (empty($airport['lat']) || empty($airport['lon']) || empty($airport['icao'])) {
-                $this->markTestIncomplete("Required fields missing for FAA Weather URL: $airportId");
-                continue;
+            // Check for manual override first
+            if (!empty($airport['faa_weather_url'])) {
+                $url = $airport['faa_weather_url'];
+            } else {
+                // Generate FAA Weather URL if identifier and coordinates available
+                $linkIdentifier = getBestIdentifierForLinks($airport);
+                if ($linkIdentifier === null || empty($airport['lat']) || empty($airport['lon'])) {
+                    $this->markTestIncomplete("Required fields missing for FAA Weather URL: $airportId");
+                    continue;
+                }
+                
+                $buffer = 2.0;
+                $min_lon = $airport['lon'] - $buffer;
+                $min_lat = $airport['lat'] - $buffer;
+                $max_lon = $airport['lon'] + $buffer;
+                $max_lat = $airport['lat'] + $buffer;
+                
+                // Remove K prefix from identifier if present (e.g., KSPB -> SPB)
+                $faa_identifier = preg_replace('/^K/', '', $linkIdentifier);
+                
+                $url = sprintf(
+                    'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
+                    $min_lon,
+                    $min_lat,
+                    $max_lon,
+                    $max_lat,
+                    $faa_identifier
+                );
             }
-            
-            // Generate FAA Weather URL (same logic as airport-template.php)
-            $buffer = 2.0;
-            $min_lon = $airport['lon'] - $buffer;
-            $min_lat = $airport['lat'] - $buffer;
-            $max_lon = $airport['lon'] + $buffer;
-            $max_lat = $airport['lat'] + $buffer;
-            
-            // Remove K prefix from ICAO if present (e.g., KSPB -> SPB)
-            $faa_icao = preg_replace('/^K/', '', strtoupper($airport['icao']));
-            
-            $url = sprintf(
-                'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
-                $min_lon,
-                $min_lat,
-                $max_lon,
-                $max_lat,
-                $faa_icao
-            );
             
             $result = $this->validateUrl($url, 'weathercams.faa.gov');
             
+            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertTrue(
                 $result['valid'],
-                "FAA Weather URL for {$airport['icao']} should be valid: {$result['message']}"
+                "FAA Weather URL for {$identifier} should be valid: {$result['message']}"
+            );
+        }
+    }
+    
+    /**
+     * Test ForeFlight URLs are valid and properly formatted
+     */
+    public function testForeFlightLinks_AreValid()
+    {
+        foreach ($this->testAirports as $airportId => $airport) {
+            // Check for manual override first
+            if (!empty($airport['foreflight_url'])) {
+                $url = $airport['foreflight_url'];
+            } else {
+                // Use auto-generated URL if identifier available
+                $linkIdentifier = getBestIdentifierForLinks($airport);
+                if ($linkIdentifier === null) {
+                    $this->markTestIncomplete("No identifier available for ForeFlight URL: $airportId");
+                    continue;
+                }
+                $url = 'foreflight://airport/' . $linkIdentifier;
+            }
+            
+            // ForeFlight uses deeplink scheme, validate format
+            $this->assertStringStartsWith(
+                'foreflight://',
+                $url,
+                "ForeFlight URL should use foreflight:// scheme for {$airportId}"
+            );
+            
+            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
+            $this->assertMatchesRegularExpression(
+                '/^foreflight:\/\/airport\/[A-Z0-9]+$/',
+                $url,
+                "ForeFlight URL format should match expected pattern for {$identifier}"
             );
         }
     }
@@ -215,50 +278,70 @@ class ExternalLinksTest extends TestCase
     public function testUrlFormats_MatchExpectedPatterns()
     {
         foreach ($this->testAirports as $airportId => $airport) {
+            $linkIdentifier = getBestIdentifierForLinks($airport);
+            
             // Test SkyVector format
-            if (!empty($airport['icao'])) {
-                $icao = strtoupper($airport['icao']);
-                $skyvectorUrl = "https://skyvector.com/airport/$icao";
+            if ($linkIdentifier !== null) {
+                $skyvectorUrl = !empty($airport['skyvector_url']) 
+                    ? $airport['skyvector_url'] 
+                    : "https://skyvector.com/airport/$linkIdentifier";
                 $this->assertMatchesRegularExpression(
                     '/^https:\/\/skyvector\.com\/airport\/[A-Z0-9]+$/',
                     $skyvectorUrl,
-                    "SkyVector URL format should match expected pattern for {$airport['icao']}"
+                    "SkyVector URL format should match expected pattern for {$linkIdentifier}"
                 );
             }
             
             // Test AOPA format
-            if (!empty($airport['icao'])) {
-                $icao = strtoupper($airport['icao']);
-                $aopaUrl = "https://www.aopa.org/destinations/airports/$icao";
+            if ($linkIdentifier !== null) {
+                $aopaUrl = !empty($airport['aopa_url']) 
+                    ? $airport['aopa_url'] 
+                    : "https://www.aopa.org/destinations/airports/$linkIdentifier";
                 $this->assertMatchesRegularExpression(
                     '/^https:\/\/www\.aopa\.org\/destinations\/airports\/[A-Z0-9]+$/',
                     $aopaUrl,
-                    "AOPA URL format should match expected pattern for {$airport['icao']}"
+                    "AOPA URL format should match expected pattern for {$linkIdentifier}"
                 );
             }
             
             // Test FAA Weather format
-            if (!empty($airport['lat']) && !empty($airport['lon']) && !empty($airport['icao'])) {
-                $buffer = 2.0;
-                $min_lon = $airport['lon'] - $buffer;
-                $min_lat = $airport['lat'] - $buffer;
-                $max_lon = $airport['lon'] + $buffer;
-                $max_lat = $airport['lat'] + $buffer;
-                $faa_icao = preg_replace('/^K/', '', strtoupper($airport['icao']));
-                
-                $faaUrl = sprintf(
-                    'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
-                    $min_lon,
-                    $min_lat,
-                    $max_lon,
-                    $max_lat,
-                    $faa_icao
-                );
+            if ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])) {
+                if (!empty($airport['faa_weather_url'])) {
+                    $faaUrl = $airport['faa_weather_url'];
+                } else {
+                    $buffer = 2.0;
+                    $min_lon = $airport['lon'] - $buffer;
+                    $min_lat = $airport['lat'] - $buffer;
+                    $max_lon = $airport['lon'] + $buffer;
+                    $max_lat = $airport['lat'] + $buffer;
+                    $faa_identifier = preg_replace('/^K/', '', $linkIdentifier);
+                    
+                    $faaUrl = sprintf(
+                        'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
+                        $min_lon,
+                        $min_lat,
+                        $max_lon,
+                        $max_lat,
+                        $faa_identifier
+                    );
+                }
                 
                 $this->assertMatchesRegularExpression(
                     '/^https:\/\/weathercams\.faa\.gov\/map\/[\d\-\.]+,[\d\-\.]+,[\d\-\.]+,[\d\-\.]+\/airport\/[A-Z0-9]+\/$/',
                     $faaUrl,
-                    "FAA Weather URL format should match expected pattern for {$airport['icao']}"
+                    "FAA Weather URL format should match expected pattern for {$linkIdentifier}"
+                );
+            }
+            
+            // Test ForeFlight format
+            if ($linkIdentifier !== null) {
+                $foreflightUrl = !empty($airport['foreflight_url']) 
+                    ? $airport['foreflight_url'] 
+                    : "foreflight://airport/$linkIdentifier";
+                $this->assertMatchesRegularExpression(
+                    '/^foreflight:\/\/airport\/[A-Z0-9]+$/',
+                    $foreflightUrl,
+                    "ForeFlight URL format should match expected pattern for {$linkIdentifier}"
                 );
             }
         }
