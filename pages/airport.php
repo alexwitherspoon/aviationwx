@@ -510,12 +510,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 
                 <?php
                 // ForeFlight link (manual override or auto-generated) - mobile only
+                // ForeFlight accepts ICAO, IATA, or FAA codes (prefer ICAO > IATA > FAA)
                 $foreflightUrl = null;
                 if (!empty($airport['foreflight_url'])) {
                     $foreflightUrl = $airport['foreflight_url'];
                 } elseif ($linkIdentifier !== null) {
-                    // ForeFlight deeplink format: foreflight://airport/{identifier}
-                    $foreflightUrl = 'foreflight://airport/' . $linkIdentifier;
+                    // ForeFlight deeplink format: foreflightmobile://maps/search?q={identifier}
+                    $foreflightUrl = 'foreflightmobile://maps/search?q=' . urlencode($linkIdentifier);
                 }
                 if ($foreflightUrl !== null): ?>
                 <a href="<?= htmlspecialchars($foreflightUrl) ?>" target="_blank" rel="noopener" class="btn foreflight-link">

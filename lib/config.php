@@ -1649,10 +1649,11 @@ function validateAirportsJsonStructure(array $config): array {
             $errors[] = "Airport '{$airportCode}' has invalid faa_weather_url: must be a valid URL";
         }
         if (isset($airport['foreflight_url'])) {
-            // ForeFlight uses deeplink scheme (foreflight://), validate separately
+            // ForeFlight uses deeplink scheme (foreflightmobile://maps/search?q=), validate separately
+            // Accepts ICAO, IATA, or FAA codes
             $foreflightUrl = trim($airport['foreflight_url']);
-            if (!preg_match('/^foreflight:\/\/airport\/[A-Z0-9]+$/', $foreflightUrl)) {
-                $errors[] = "Airport '{$airportCode}' has invalid foreflight_url: must be in format 'foreflight://airport/{identifier}'";
+            if (!preg_match('/^foreflightmobile:\/\/maps\/search\?q=[A-Z0-9]+$/', $foreflightUrl)) {
+                $errors[] = "Airport '{$airportCode}' has invalid foreflight_url: must be in format 'foreflightmobile://maps/search?q={identifier}'";
             }
         }
         
