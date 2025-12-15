@@ -356,6 +356,35 @@ h3 {
     opacity: 0.9;
 }
 
+.webcam-name-label {
+    background: #000;
+    color: #fff;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    border-radius: 0 0 4px 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.webcam-name-text {
+    flex: 1;
+    text-align: left;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.webcam-timestamp {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: #ccc;
+    white-space: nowrap;
+}
+
 .last-updated {
     font-size: 0.85rem;
     color: #aaa;
@@ -559,6 +588,11 @@ h3 {
     
     .webcam-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .webcam-name-text {
+        white-space: normal;
+        word-break: break-word;
     }
     
     .info-grid, .freq-grid, .time-grid {

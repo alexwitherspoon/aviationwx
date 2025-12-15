@@ -291,12 +291,14 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     $mtime = 0;
     $size = 0;
     if ($existsJpg) { 
-        $jpgMtime = @filemtime($cacheJpg);
+        // Use EXIF capture time if available, otherwise filemtime
+        $jpgMtime = getImageCaptureTime($cacheJpg);
         $jpgSize = @filesize($cacheJpg);
-        if ($jpgMtime !== false) { $mtime = max($mtime, (int)$jpgMtime); }
+        if ($jpgMtime > 0) { $mtime = max($mtime, $jpgMtime); }
         if ($jpgSize !== false) { $size = max($size, (int)$jpgSize); }
     }
     if ($existsWebp) { 
+        // WEBP doesn't preserve EXIF, use filemtime
         $webpMtime = @filemtime($cacheWebp);
         $webpSize = @filesize($cacheWebp);
         if ($webpMtime !== false) { $mtime = max($mtime, (int)$webpMtime); }
@@ -336,11 +338,52 @@ $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_se
 $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 
 /**
+ * Extract actual image capture timestamp from EXIF data
+ * 
+ * Attempts to read EXIF DateTimeOriginal from JPEG images.
+ * Falls back to file modification time if EXIF is not available.
+ * 
+ * @param string $filePath Path to image file
+ * @return int Unix timestamp, or 0 if unable to determine
+ */
+function getImageCaptureTime($filePath) {
+    // Try to read EXIF data from JPEG files
+    if (function_exists('exif_read_data') && file_exists($filePath)) {
+        // Use @ to suppress errors for non-critical EXIF operations
+        // We handle failures explicitly with fallback to filemtime below
+        $exif = @exif_read_data($filePath, 'EXIF', true);
+        if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
+            $dateTime = $exif['EXIF']['DateTimeOriginal'];
+            // Parse EXIF date format: "YYYY:MM:DD HH:MM:SS"
+            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+            if ($timestamp !== false && $timestamp > 0) {
+                return (int)$timestamp;
+            }
+        }
+        // Also check main EXIF array (some cameras store it there)
+        if (isset($exif['DateTimeOriginal'])) {
+            $dateTime = $exif['DateTimeOriginal'];
+            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+            if ($timestamp !== false && $timestamp > 0) {
+                return (int)$timestamp;
+            }
+        }
+    }
+    
+    // Fallback to file modification time
+    // Use @ to suppress errors for non-critical file operations
+    // We handle failures explicitly by returning 0
+    $mtime = @filemtime($filePath);
+    return $mtime !== false ? (int)$mtime : 0;
+}
+
+/**
  * Find the latest valid image file (JPG or WEBP)
  * 
  * Scans both JPG and WEBP cache files, validates they are actual image files,
  * and returns the most recent valid image. Validates file headers to ensure
- * files are not corrupted.
+ * files are not corrupted. Uses EXIF capture time when available, otherwise
+ * falls back to file modification time.
  * 
  * @param string $cacheJpg Path to JPG cache file
  * @param string $cacheWebp Path to WEBP cache file
@@ -358,13 +401,13 @@ function findLatestValidImage($cacheJpg, $cacheWebp) {
             @fclose($fp);
             // Validate JPEG header (FF D8 FF)
             if (substr($header, 0, 3) === "\xFF\xD8\xFF") {
-                $mtime = @filemtime($cacheJpg);
+                $captureTime = getImageCaptureTime($cacheJpg);
                 $size = @filesize($cacheJpg);
-                // Validate mtime and size
-                if ($mtime !== false && $size !== false && $size > 0) {
+                // Validate timestamp and size
+                if ($captureTime > 0 && $size !== false && $size > 0) {
                     $candidates[] = [
                         'file' => $cacheJpg,
-                        'mtime' => (int)$mtime,
+                        'mtime' => $captureTime,
                         'size' => (int)$size,
                         'type' => 'image/jpeg'
                     ];
@@ -380,6 +423,7 @@ function findLatestValidImage($cacheJpg, $cacheWebp) {
             $header = @fread($fp, 12);
             @fclose($fp);
             // Validate WEBP header (RIFF...WEBP)
+            // Note: WEBP doesn't preserve EXIF by default, so use filemtime
             if (substr($header, 0, 4) === 'RIFF' && strpos($header, 'WEBP') !== false) {
                 $mtime = @filemtime($cacheWebp);
                 $size = @filesize($cacheWebp);

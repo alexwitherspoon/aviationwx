@@ -4,6 +4,46 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/address-formatter.php';
 
+/**
+ * Extract actual image capture timestamp from EXIF data
+ * 
+ * Attempts to read EXIF DateTimeOriginal from JPEG images.
+ * Falls back to file modification time if EXIF is not available.
+ * 
+ * @param string $filePath Path to image file
+ * @return int Unix timestamp, or 0 if unable to determine
+ */
+function getImageCaptureTimeForPage($filePath) {
+    // Try to read EXIF data from JPEG files
+    if (function_exists('exif_read_data') && file_exists($filePath)) {
+        // Use @ to suppress errors for non-critical EXIF operations
+        // We handle failures explicitly with fallback to filemtime below
+        $exif = @exif_read_data($filePath, 'EXIF', true);
+        if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
+            $dateTime = $exif['EXIF']['DateTimeOriginal'];
+            // Parse EXIF date format: "YYYY:MM:DD HH:MM:SS"
+            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+            if ($timestamp !== false && $timestamp > 0) {
+                return (int)$timestamp;
+            }
+        }
+        // Also check main EXIF array (some cameras store it there)
+        if (isset($exif['DateTimeOriginal'])) {
+            $dateTime = $exif['DateTimeOriginal'];
+            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+            if ($timestamp !== false && $timestamp > 0) {
+                return (int)$timestamp;
+            }
+        }
+    }
+    
+    // Fallback to file modification time
+    // Use @ to suppress errors for non-critical file operations
+    // We handle failures explicitly by returning 0
+    $mtime = @filemtime($filePath);
+    return $mtime !== false ? (int)$mtime : 0;
+}
+
 // SEO variables - emphasize live webcams and runway conditions
 $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
 $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') . ' and ' : '';
@@ -259,13 +299,15 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                             <?php
                             // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
                             // Cache is at root level, not in pages directory
+                            // Use EXIF capture time when available for accurate timestamp display
                             $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
                             $mtimeJpg = 0;
                             $sizeJpg = 0;
                             foreach (['.jpg', '.webp'] as $ext) {
                                 $filePath = $base . $ext;
                                 if (file_exists($filePath)) {
-                                    $mtimeJpg = filemtime($filePath);
+                                    // Use EXIF capture time if available, otherwise filemtime
+                                    $mtimeJpg = getImageCaptureTimeForPage($filePath);
                                     $sizeJpg = filesize($filePath);
                                     break;
                                 }
@@ -289,6 +331,10 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                  onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
                                  onclick="openLiveStream(this.src)">
                         </picture>
+                    </div>
+                    <div class="webcam-name-label">
+                        <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
+                        <span class="webcam-timestamp">Last updated: <span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -2060,15 +2106,23 @@ function openLiveStream(url) { window.open(url, '_blank'); }
 // Update webcam timestamps (called periodically to refresh relative time display)
 function updateWebcamTimestamps() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
-    const timestamp<?= $index ?> = document.getElementById('update-<?= $index ?>')?.dataset.timestamp;
-    if (timestamp<?= $index ?> && timestamp<?= $index ?> !== '0') {
-        const updateDate = new Date(parseInt(timestamp<?= $index ?>) * 1000);
-        const now = new Date();
-        const diffSeconds = Math.floor((now - updateDate) / 1000);
+    // Update webcam timestamp in label
+    const timestampElem<?= $index ?> = document.getElementById('webcam-timestamp-<?= $index ?>');
+    if (timestampElem<?= $index ?>) {
+        // Try to get timestamp from data attribute first, then from CAM_TS
+        const timestampFromAttr<?= $index ?> = timestampElem<?= $index ?>.dataset.timestamp;
+        const timestampFromCamTs<?= $index ?> = CAM_TS[<?= $index ?>];
+        // Parse timestamps to numbers for comparison
+        const attrTimestamp<?= $index ?> = timestampFromAttr<?= $index ?> ? parseInt(timestampFromAttr<?= $index ?>) : 0;
+        const camTsTimestamp<?= $index ?> = timestampFromCamTs<?= $index ?> ? parseInt(timestampFromCamTs<?= $index ?>) : 0;
+        const timestamp<?= $index ?> = attrTimestamp<?= $index ?> > 0 ? attrTimestamp<?= $index ?> : (camTsTimestamp<?= $index ?> > 0 ? camTsTimestamp<?= $index ?> : null);
         
-        const elem = document.getElementById('update-<?= $index ?>');
-        if (elem) {
-            elem.textContent = formatRelativeTime(diffSeconds);
+        if (timestamp<?= $index ?> && timestamp<?= $index ?> > 0) {
+            updateTimestampDisplay(timestampElem<?= $index ?>, timestamp<?= $index ?>);
+        } else {
+            if (!timestampElem<?= $index ?>.textContent || timestampElem<?= $index ?>.textContent === '--') {
+                timestampElem<?= $index ?>.textContent = '--';
+            }
         }
     }
     <?php endforeach; ?>
@@ -2080,31 +2134,6 @@ function reloadWebcamImages() {
     safeSwapCameraImage(<?= $index ?>);
     <?php endforeach; ?>
 }
-
-// Update relative timestamps every 10 seconds for better responsiveness
-updateWebcamTimestamps();
-setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
-<?php endif; ?>
-
-// Debounce timestamps per camera to avoid multiple fetches when all formats load
-const timestampCheckPending = {};
-const timestampCheckRetries = {}; // Track retry attempts
-const CAM_TS = {}; // In-memory timestamps per camera (no UI field)
-
-// Initialize CAM_TS with server-side timestamps from initial image load
-<?php foreach ($airport['webcams'] as $index => $cam): 
-    $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
-    $initialMtime = 0;
-    foreach (['.jpg', '.webp'] as $ext) {
-        $filePath = $base . $ext;
-        if (file_exists($filePath)) {
-            $initialMtime = filemtime($filePath);
-            break;
-        }
-    }
-?>
-CAM_TS[<?= $index ?>] = <?= $initialMtime ?>;
-<?php endforeach; ?>
 
 // Helper to format relative time
 function formatRelativeTime(seconds) {
@@ -2127,26 +2156,103 @@ function formatRelativeTime(seconds) {
     }
 }
 
+function lastCamIndexForElem(elem) {
+    if (!elem || !elem.id) return undefined;
+    // Match both old update-* and new webcam-timestamp-* patterns
+    const m = elem.id.match(/^(?:update|webcam-timestamp)-(\d+)$/);
+    return m ? parseInt(m[1]) : undefined;
+}
+
 // Helper to update timestamp display
 function updateTimestampDisplay(elem, timestamp) {
-    if (!timestamp) return;
+    if (!timestamp || !elem) return;
     
-    const updateDate = new Date(timestamp * 1000);
+    const timestampNum = parseInt(timestamp);
+    if (isNaN(timestampNum) || timestampNum <= 0) {
+        if (elem) {
+            elem.textContent = '--';
+        }
+        return;
+    }
+    
+    const updateDate = new Date(timestampNum * 1000);
     const now = new Date();
     const diffSeconds = Math.floor((now - updateDate) / 1000);
     
-    if (elem) {
-        elem.textContent = formatRelativeTime(diffSeconds);
-        elem.dataset.timestamp = timestamp.toString();
+    // Handle future timestamps (clock skew)
+    if (diffSeconds < 0) {
+        elem.textContent = 'just now';
+        elem.dataset.timestamp = timestampNum.toString();
+        return;
     }
-    CAM_TS[lastCamIndexForElem(elem)] = timestamp; // best-effort record
+    
+    elem.textContent = formatRelativeTime(diffSeconds);
+    elem.dataset.timestamp = timestampNum.toString();
+    
+    const camIndex = lastCamIndexForElem(elem);
+    if (camIndex !== undefined) {
+        CAM_TS[camIndex] = timestampNum;
+    }
 }
 
-function lastCamIndexForElem(elem) {
-    if (!elem || !elem.id) return undefined;
-    const m = elem.id.match(/^update-(\d+)$/);
-    return m ? parseInt(m[1]) : undefined;
+// Debounce timestamps per camera to avoid multiple fetches when all formats load
+const timestampCheckPending = {};
+const timestampCheckRetries = {}; // Track retry attempts
+const CAM_TS = {}; // In-memory timestamps per camera (no UI field)
+
+// Initialize CAM_TS with server-side timestamps from initial image load
+// Uses EXIF capture time when available, otherwise falls back to filemtime
+<?php foreach ($airport['webcams'] as $index => $cam): 
+    $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
+    $initialMtime = 0;
+    foreach (['.jpg', '.webp'] as $ext) {
+        $filePath = $base . $ext;
+        if (file_exists($filePath)) {
+            $initialMtime = getImageCaptureTimeForPage($filePath);
+            break;
+        }
+    }
+?>
+CAM_TS[<?= $index ?>] = <?= $initialMtime ?>;
+<?php endforeach; ?>
+
+// Initialize timestamp displays after DOM is ready
+function initializeWebcamTimestamps() {
+    <?php foreach ($airport['webcams'] as $index => $cam): 
+        $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
+        $initialMtime = 0;
+        foreach (['.jpg', '.webp'] as $ext) {
+            $filePath = $base . $ext;
+            if (file_exists($filePath)) {
+                $initialMtime = getImageCaptureTimeForPage($filePath);
+                break;
+            }
+        }
+    ?>
+    if (<?= $initialMtime ?> > 0) {
+        const timestampElem<?= $index ?> = document.getElementById('webcam-timestamp-<?= $index ?>');
+        if (timestampElem<?= $index ?>) {
+            updateTimestampDisplay(timestampElem<?= $index ?>, <?= $initialMtime ?>);
+        }
+    }
+    <?php endforeach; ?>
 }
+
+// Initialize when DOM is ready
+function initializeWebcamTimestampsAndStartUpdates() {
+    initializeWebcamTimestamps();
+    // Update relative timestamps every 10 seconds for better responsiveness
+    updateWebcamTimestamps();
+    setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeWebcamTimestampsAndStartUpdates);
+} else {
+    // DOM already loaded
+    initializeWebcamTimestampsAndStartUpdates();
+}
+<?php endif; ?>
 
 // Function to update timestamp when image loads
 function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
@@ -2184,11 +2290,16 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
         .then(data => {
             if (data && data.success && data.timestamp) {
                 const elem = document.getElementById(`update-${camIndex}`); // may be null (UI removed)
+                const timestampElem = document.getElementById(`webcam-timestamp-${camIndex}`);
                 const newTimestamp = parseInt(data.timestamp);
-                const currentTimestamp = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : (elem ? parseInt(elem.dataset.timestamp || '0') : 0);
+                const currentTimestamp = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : (timestampElem ? parseInt(timestampElem.dataset.timestamp || '0') : 0);
                 // Only update if timestamp is newer
                 if (newTimestamp > currentTimestamp || retryCount > 0) {
                     updateTimestampDisplay(elem, newTimestamp);
+                    // Update webcam timestamp label
+                    if (timestampElem) {
+                        updateTimestampDisplay(timestampElem, newTimestamp);
+                    }
                     CAM_TS[camIndex] = newTimestamp;
                     // Reset retry count on success
                     timestampCheckRetries[camIndex] = 0;
@@ -2398,6 +2509,11 @@ function safeSwapCameraImage(camIndex) {
                     if (skeleton) skeleton.style.display = 'none';
                 }
                 CAM_TS[camIndex] = newTs;
+                // Update timestamp display in label
+                const timestampElem = document.getElementById(`webcam-timestamp-${camIndex}`);
+                if (timestampElem) {
+                    updateTimestampDisplay(timestampElem, newTs);
+                }
                 updateWebcamTimestampOnLoad(camIndex);
             }).catch((error) => {
                 // Hide skeleton on failure
