@@ -473,15 +473,38 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $primaryAge = time() - $primaryTimestamp;
                 $primaryLastChanged = $primaryTimestamp;
                 
-                if ($primaryAge < $weatherRefresh) {
-                    $primaryStatus = 'operational';
-                    $primaryMessage = 'Fresh';
-                } elseif ($primaryAge < $maxStaleSeconds) {
-                    $primaryStatus = 'degraded';
-                    $primaryMessage = 'Stale (but usable)';
+                // METAR uses hourly thresholds (not multipliers) since updates are hourly at source
+                if ($sourceType === 'metar') {
+                    // Use METAR-specific thresholds (same as supplement METAR logic)
+                    if ($primaryAge < $weatherRefresh) {
+                        $primaryStatus = 'operational';
+                        $primaryMessage = 'Fresh';
+                    } elseif ($primaryAge < $maxStaleSecondsMetar) {
+                        $primaryStatus = 'operational';
+                        $primaryMessage = 'Recent';
+                    } elseif ($primaryAge < $maxStaleSeconds) {
+                        $primaryStatus = 'degraded';
+                        $primaryMessage = 'Stale (but usable)';
+                    } else {
+                        $primaryStatus = 'down';
+                        $primaryMessage = 'Expired';
+                    }
                 } else {
-                    $primaryStatus = 'down';
-                    $primaryMessage = 'Expired';
+                    // Use multiplier-based thresholds for non-METAR sources (Tempest, Ambient, WeatherLink)
+                    // Operational from 0 to 5x refresh interval, degraded from 5x to 10x, down after 10x
+                    $warningThreshold = $weatherRefresh * WEBCAM_STALENESS_WARNING_MULTIPLIER;
+                    $errorThreshold = $weatherRefresh * WEBCAM_STALENESS_ERROR_MULTIPLIER;
+                    
+                    if ($primaryAge < $warningThreshold) {
+                        $primaryStatus = 'operational';
+                        $primaryMessage = 'Operational';
+                    } elseif ($primaryAge < min($errorThreshold, $maxStaleSeconds)) {
+                        $primaryStatus = 'degraded';
+                        $primaryMessage = 'Stale (warning)';
+                    } else {
+                        $primaryStatus = 'down';
+                        $primaryMessage = ($primaryAge >= $maxStaleSeconds) ? 'Expired' : 'Stale (error)';
+                    }
                 }
             } else {
                 $primaryStatus = 'down';
