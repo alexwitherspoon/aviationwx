@@ -186,6 +186,8 @@ class ExternalLinksTest extends TestCase
     
     /**
      * Test ForeFlight URLs are valid and properly formatted
+     * ForeFlight accepts ICAO, IATA, or FAA codes (prefer ICAO > IATA > FAA)
+     * Uses foreflightmobile://maps/search?q= format
      */
     public function testForeFlightLinks_AreValid()
     {
@@ -194,25 +196,25 @@ class ExternalLinksTest extends TestCase
             if (!empty($airport['foreflight_url'])) {
                 $url = $airport['foreflight_url'];
             } else {
-                // Use auto-generated URL if identifier available
+                // Use auto-generated URL if identifier available (ICAO > IATA > FAA)
                 $linkIdentifier = getBestIdentifierForLinks($airport);
                 if ($linkIdentifier === null) {
                     $this->markTestIncomplete("No identifier available for ForeFlight URL: $airportId");
                     continue;
                 }
-                $url = 'foreflight://airport/' . $linkIdentifier;
+                $url = 'foreflightmobile://maps/search?q=' . urlencode($linkIdentifier);
             }
             
             // ForeFlight uses deeplink scheme, validate format
             $this->assertStringStartsWith(
-                'foreflight://',
+                'foreflightmobile://',
                 $url,
-                "ForeFlight URL should use foreflight:// scheme for {$airportId}"
+                "ForeFlight URL should use foreflightmobile:// scheme for {$airportId}"
             );
             
             $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertMatchesRegularExpression(
-                '/^foreflight:\/\/airport\/[A-Z0-9]+$/',
+                '/^foreflightmobile:\/\/maps\/search\?q=[A-Z0-9]+$/',
                 $url,
                 "ForeFlight URL format should match expected pattern for {$identifier}"
             );
@@ -333,13 +335,13 @@ class ExternalLinksTest extends TestCase
                 );
             }
             
-            // Test ForeFlight format
+            // Test ForeFlight format (accepts ICAO, IATA, or FAA - prefer ICAO > IATA > FAA)
             if ($linkIdentifier !== null) {
                 $foreflightUrl = !empty($airport['foreflight_url']) 
                     ? $airport['foreflight_url'] 
-                    : "foreflight://airport/$linkIdentifier";
+                    : "foreflightmobile://maps/search?q=" . urlencode($linkIdentifier);
                 $this->assertMatchesRegularExpression(
-                    '/^foreflight:\/\/airport\/[A-Z0-9]+$/',
+                    '/^foreflightmobile:\/\/maps\/search\?q=[A-Z0-9]+$/',
                     $foreflightUrl,
                     "ForeFlight URL format should match expected pattern for {$linkIdentifier}"
                 );
