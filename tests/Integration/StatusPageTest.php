@@ -276,20 +276,37 @@ class StatusPageTest extends TestCase
         $hasAirportStatus = strpos($body, 'Airport Status') !== false;
         
         if ($hasAirportStatus) {
-            // If airports are configured, check for maintenance status indicators
-            // Maintenance airports should show "Under Maintenance 🚧" and construction emoji
-            // Note: This test will pass if maintenance status is properly implemented
-            // It checks for the maintenance emoji and text
-            $hasMaintenanceEmoji = strpos($body, '🚧') !== false;
-            $hasMaintenanceText = strpos($body, 'Under Maintenance') !== false;
+            // Check if test fixtures are being used by looking for known test airport
+            // If pdx (maintenance airport in test fixtures) exists, verify maintenance status
+            $hasPdx = strpos($body, 'PDX') !== false || strpos($body, 'pdx') !== false;
             
-            // If maintenance airports exist in config, they should show maintenance status
-            // This is a soft check - if no maintenance airports are configured, test still passes
-            if ($hasMaintenanceEmoji || $hasMaintenanceText) {
+            if ($hasPdx) {
+                // Test fixtures include pdx with maintenance: true
+                // Verify that maintenance status is displayed correctly
+                $hasMaintenanceEmoji = strpos($body, '🚧') !== false;
+                $hasMaintenanceText = strpos($body, 'Under Maintenance') !== false;
+                
                 $this->assertTrue(
-                    $hasMaintenanceEmoji && $hasMaintenanceText,
-                    "If maintenance airports are configured, should show maintenance emoji and text"
+                    $hasMaintenanceEmoji,
+                    "If test fixtures are used and pdx (maintenance airport) exists, should show maintenance emoji 🚧"
                 );
+                $this->assertTrue(
+                    $hasMaintenanceText,
+                    "If test fixtures are used and pdx (maintenance airport) exists, should show 'Under Maintenance' text"
+                );
+            } else {
+                // If test fixtures aren't being used, check if any maintenance airports exist
+                // This is a soft check for production configs
+                $hasMaintenanceEmoji = strpos($body, '🚧') !== false;
+                $hasMaintenanceText = strpos($body, 'Under Maintenance') !== false;
+                
+                // If maintenance indicators are present, verify both are shown together
+                if ($hasMaintenanceEmoji || $hasMaintenanceText) {
+                    $this->assertTrue(
+                        $hasMaintenanceEmoji && $hasMaintenanceText,
+                        "If maintenance airports are configured, should show both maintenance emoji and text"
+                    );
+                }
             }
         }
         
