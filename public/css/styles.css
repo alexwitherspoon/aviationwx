@@ -610,6 +610,29 @@ h3 {
     .links .btn:last-child {
         margin-bottom: 0 !important;
     }
+    
+    /* Weather section mobile layout: buttons below header, above last updated */
+    .weather-header-container {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    
+    .weather-header-title {
+        order: 1;
+        width: 100%;
+    }
+    
+    .weather-toggle-buttons {
+        order: 2;
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+    
+    .weather-last-updated-text {
+        order: 3;
+        width: 100%;
+        margin-top: 0.5rem;
+    }
 }
 
 /* Status Colors - Standard Aviation Weather Colors */
