@@ -296,7 +296,7 @@
       "skyvector_url": "https://skyvector.com/airport/CUSTOM",
       "aopa_url": "https://www.aopa.org/destinations/airports/CUSTOM",
       "faa_weather_url": "https://weathercams.faa.gov/map/-124.0,44.0,-120.0,46.0/airport/CUSTOM/",
-      "foreflight_url": "foreflight://airport/CUSTOM",
+      "foreflight_url": "foreflightmobile://maps/search?q=CUSTOM",
       "links": [
         {
           "label": "Airport Website",

@@ -472,9 +472,11 @@ By default, the system automatically generates links using the best available id
 - **SkyVector**: `https://skyvector.com/airport/{identifier}`
 - **AOPA**: `https://www.aopa.org/destinations/airports/{identifier}`
 - **FAA Weather**: `https://weathercams.faa.gov/map/{bounds}/airport/{identifier}/` (requires coordinates)
-- **ForeFlight**: `foreflight://airport/{identifier}` (iOS/mobile deeplink)
+- **ForeFlight**: `foreflightmobile://maps/search?q={identifier}` (iOS/mobile deeplink)
 
 The system uses the best available identifier in priority order: **ICAO > IATA > FAA**. If no standard identifier is available, links are not generated unless manually configured.
+
+**Note:** ForeFlight accepts ICAO, IATA, or FAA codes in its search system, but the system will prefer ICAO codes when available, falling back to IATA or FAA codes as needed.
 
 ### Manual Link Overrides
 
@@ -504,7 +506,7 @@ You can manually override any standard link by providing a URL in the airport co
   "skyvector_url": "https://skyvector.com/airport/CUSTOM",
   "aopa_url": "https://www.aopa.org/destinations/airports/CUSTOM",
   "faa_weather_url": "https://weathercams.faa.gov/map/-124.0,44.0,-120.0,46.0/airport/CUSTOM/",
-  "foreflight_url": "foreflight://airport/CUSTOM"
+  "foreflight_url": "foreflightmobile://maps/search?q=CUSTOM"
 }
 ```
 
