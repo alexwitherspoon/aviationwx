@@ -460,16 +460,64 @@ Partner logos are automatically cached to improve performance and reduce load on
 ]
 ```
 
-## Custom Links Configuration
+## External Links Configuration
 
-You can add custom links to any airport that will appear in the links section alongside the standard links (AirNav, SkyVector, AOPA, FAA Weather). This is useful for linking to:
+The system automatically generates links to external aviation services (AirNav, SkyVector, AOPA, FAA Weather, ForeFlight) based on the best available airport identifier (ICAO > IATA > FAA). You can also manually override any of these links when needed.
+
+### Auto-Generated Links
+
+By default, the system automatically generates links using the best available identifier:
+
+- **AirNav**: `https://www.airnav.com/airport/{identifier}`
+- **SkyVector**: `https://skyvector.com/airport/{identifier}`
+- **AOPA**: `https://www.aopa.org/destinations/airports/{identifier}`
+- **FAA Weather**: `https://weathercams.faa.gov/map/{bounds}/airport/{identifier}/` (requires coordinates)
+- **ForeFlight**: `foreflight://airport/{identifier}` (iOS/mobile deeplink)
+
+The system uses the best available identifier in priority order: **ICAO > IATA > FAA**. If no standard identifier is available, links are not generated unless manually configured.
+
+### Manual Link Overrides
+
+You can manually override any standard link by providing a URL in the airport configuration. Manual URLs take precedence over auto-generated links.
+
+**Available override fields:**
+- `airnav_url`: Override AirNav link
+- `skyvector_url`: Override SkyVector link
+- `aopa_url`: Override AOPA link
+- `faa_weather_url`: Override FAA Weather link
+- `foreflight_url`: Override ForeFlight link
+
+**Example - Manual Override:**
+```json
+{
+  "icao": "KSPB",
+  "airnav_url": "https://www.airnav.com/airport/KSPB",
+  "skyvector_url": "https://skyvector.com/airport/KSPB"
+}
+```
+
+**Example - Airport Without Identifiers (Manual Links Required):**
+```json
+{
+  "name": "Custom Airport",
+  "airnav_url": "https://www.airnav.com/airport/CUSTOM",
+  "skyvector_url": "https://skyvector.com/airport/CUSTOM",
+  "aopa_url": "https://www.aopa.org/destinations/airports/CUSTOM",
+  "faa_weather_url": "https://weathercams.faa.gov/map/-124.0,44.0,-120.0,46.0/airport/CUSTOM/",
+  "foreflight_url": "foreflight://airport/CUSTOM"
+}
+```
+
+### Custom Links
+
+You can add additional custom links that appear after the standard links. This is useful for linking to:
 - Airport websites
 - Supporting organizations
 - FBO websites
 - Local aviation groups
 - Any other relevant resources
 
-### Configuration Format
+**Configuration Format:**
 
 Add a `links` array to your airport configuration:
 
@@ -486,15 +534,15 @@ Add a `links` array to your airport configuration:
 ]
 ```
 
-### Fields
+**Fields:**
 
 - **`label`** (required): The display text for the link button
-- **`url`** (required): The full URL (must be HTTPS)
+- **`url`** (required): The full URL (must be HTTPS for web links, or a valid deeplink scheme like `foreflight://`)
 
-### Behavior
+**Behavior:**
 
-- Links are **optional** - only airports with a `links` array will display custom links
-- Links appear in the links section after the standard links (AirNav, SkyVector, AOPA, FAA Weather)
+- Custom links are **optional** - only airports with a `links` array will display custom links
+- Custom links appear in the links section after the standard links (AirNav, SkyVector, AOPA, FAA Weather, ForeFlight)
 - Each link is rendered as a button with proper security attributes (`target="_blank" rel="noopener"`)
 - Links are only displayed if both `label` and `url` are present and non-empty
 - All user input is properly escaped to prevent XSS attacks

@@ -241,6 +241,68 @@
           "url": "https://example-org.com"
         }
       ]
+    },
+    "kczk": {
+      "name": "Cascade Locks State Airport",
+      "enabled": true,
+      "icao": "KCZK",
+      "address": "City, State",
+      "lat": 45.6769444,
+      "lon": -121.8788889,
+      "elevation_ft": 151,
+      "timezone": "America/Los_Angeles",
+      "runways": [
+        {
+          "name": "06/24",
+          "heading_1": 60,
+          "heading_2": 240
+        }
+      ],
+      "frequencies": {
+        "ctaf": "122.9"
+      },
+      "services": {
+        "fuel_available": false,
+        "repairs_available": false
+      },
+      "webcams": [],
+      "partners": []
+    },
+    "custom-airport": {
+      "name": "Custom Airport Without Standard Identifiers",
+      "enabled": true,
+      "address": "City, State",
+      "lat": 45.0,
+      "lon": -122.0,
+      "elevation_ft": 100,
+      "timezone": "America/Los_Angeles",
+      "runways": [
+        {
+          "name": "18/36",
+          "heading_1": 180,
+          "heading_2": 360
+        }
+      ],
+      "frequencies": {
+        "ctaf": "122.8"
+      },
+      "services": {
+        "fuel_available": false,
+        "repairs_available": false
+      },
+      "webcams": [],
+      "partners": [],
+      "airnav_url": "https://www.airnav.com/airport/CUSTOM",
+      "skyvector_url": "https://skyvector.com/airport/CUSTOM",
+      "aopa_url": "https://www.aopa.org/destinations/airports/CUSTOM",
+      "faa_weather_url": "https://weathercams.faa.gov/map/-124.0,44.0,-120.0,46.0/airport/CUSTOM/",
+      "foreflight_url": "foreflight://airport/CUSTOM",
+      "links": [
+        {
+          "label": "Airport Website",
+          "url": "https://custom-airport.example.com"
+        }
+      ]
     }
   }
 }
