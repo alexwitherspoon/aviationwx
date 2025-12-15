@@ -1127,7 +1127,7 @@ usort($airportHealth, function($a, $b) {
                     <span class="status-indicator <?php echo getStatusColor($airport['status']); ?>">
                         <?php echo getStatusIcon($airport['status']); ?>
                     </span>
-                    <?php echo $airport['status'] === 'maintenance' ? 'Under Maintenance 🚧' : ucfirst($airport['status']); ?>
+                    <?php echo $airport['status'] === 'maintenance' ? 'Under Maintenance' : ucfirst($airport['status']); ?>
                 </span>
             </div>
             <div class="status-card-body airport-card-body <?php echo $isExpanded ? 'expanded' : 'collapsed'; ?>" 
