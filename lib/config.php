@@ -638,6 +638,34 @@ function getPrimaryIdentifier(string $airportId, ?array $airport = null): string
 }
 
 /**
+ * Get the best available identifier for external links
+ * 
+ * Returns the best identifier (ICAO > IATA > FAA) that can be used for external links.
+ * Unlike getPrimaryIdentifier(), this returns null if no standard identifier is available,
+ * since external services won't accept arbitrary airport IDs.
+ * 
+ * Priority: ICAO > IATA > FAA
+ * 
+ * @param array $airport Airport configuration array
+ * @return string|null The best identifier available, or null if none found
+ */
+function getBestIdentifierForLinks(array $airport): ?string {
+    // Priority: ICAO > IATA > FAA
+    if (isset($airport['icao']) && !empty($airport['icao'])) {
+        return strtoupper(trim($airport['icao']));
+    }
+    if (isset($airport['iata']) && !empty($airport['iata'])) {
+        return strtoupper(trim($airport['iata']));
+    }
+    if (isset($airport['faa']) && !empty($airport['faa'])) {
+        return strtoupper(trim($airport['faa']));
+    }
+    
+    // No standard identifier available
+    return null;
+}
+
+/**
  * Check if an airport is enabled
  * 
  * Airports are opt-in: they must have `enabled: true` to be active.
@@ -1610,6 +1638,22 @@ function validateAirportsJsonStructure(array $config): array {
         // Validate URLs
         if (isset($airport['airnav_url']) && !$validateUrl($airport['airnav_url'])) {
             $errors[] = "Airport '{$airportCode}' has invalid airnav_url: must be a valid URL";
+        }
+        if (isset($airport['skyvector_url']) && !$validateUrl($airport['skyvector_url'])) {
+            $errors[] = "Airport '{$airportCode}' has invalid skyvector_url: must be a valid URL";
+        }
+        if (isset($airport['aopa_url']) && !$validateUrl($airport['aopa_url'])) {
+            $errors[] = "Airport '{$airportCode}' has invalid aopa_url: must be a valid URL";
+        }
+        if (isset($airport['faa_weather_url']) && !$validateUrl($airport['faa_weather_url'])) {
+            $errors[] = "Airport '{$airportCode}' has invalid faa_weather_url: must be a valid URL";
+        }
+        if (isset($airport['foreflight_url'])) {
+            // ForeFlight uses deeplink scheme (foreflight://), validate separately
+            $foreflightUrl = trim($airport['foreflight_url']);
+            if (!preg_match('/^foreflight:\/\/airport\/[A-Z0-9]+$/', $foreflightUrl)) {
+                $errors[] = "Airport '{$airportCode}' has invalid foreflight_url: must be in format 'foreflight://airport/{identifier}'";
+            }
         }
         
         // Validate METAR station
