@@ -187,10 +187,14 @@ class ExternalLinksTest extends TestCase
     /**
      * Test ForeFlight URLs are valid and properly formatted
      * ForeFlight accepts ICAO, IATA, or FAA codes (prefer ICAO > IATA > FAA)
-     * Uses foreflightmobile://maps/search?q= format
+     * Uses foreflightmobile://maps/search?q= format per official ForeFlight documentation
      */
     public function testForeFlightLinks_AreValid()
     {
+        // Official ForeFlight URL scheme per their documentation
+        // Source: https://foreflight.com/support/app-urls/
+        $officialScheme = 'foreflightmobile://maps/search?q=';
+        
         foreach ($this->testAirports as $airportId => $airport) {
             // Check for manual override first
             if (!empty($airport['foreflight_url'])) {
@@ -205,19 +209,41 @@ class ExternalLinksTest extends TestCase
                 $url = 'foreflightmobile://maps/search?q=' . urlencode($linkIdentifier);
             }
             
-            // ForeFlight uses deeplink scheme, validate format
+            // Validate against official ForeFlight URL scheme
             $this->assertStringStartsWith(
-                'foreflightmobile://',
+                $officialScheme,
                 $url,
-                "ForeFlight URL should use foreflightmobile:// scheme for {$airportId}"
+                "ForeFlight URL must use official scheme '{$officialScheme}' for {$airportId}"
             );
             
+            // Ensure we're NOT using the old incorrect format
+            $this->assertStringNotContainsString(
+                'foreflight://airport/',
+                $url,
+                "ForeFlight URL must not use deprecated 'foreflight://airport/' format for {$airportId}"
+            );
+            
+            // Validate complete URL format matches official documentation
             $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertMatchesRegularExpression(
                 '/^foreflightmobile:\/\/maps\/search\?q=[A-Z0-9]+$/',
                 $url,
-                "ForeFlight URL format should match expected pattern for {$identifier}"
+                "ForeFlight URL format must match official pattern for {$identifier}"
             );
+            
+            // Verify identifier is properly URL-encoded (though ICAO/IATA/FAA codes don't need encoding)
+            // Extract identifier from URL to verify it matches expected value
+            if (preg_match('/q=([A-Z0-9]+)$/', $url, $matches)) {
+                $urlIdentifier = $matches[1];
+                $expectedIdentifier = getBestIdentifierForLinks($airport);
+                if ($expectedIdentifier !== null) {
+                    $this->assertEquals(
+                        strtoupper($expectedIdentifier),
+                        $urlIdentifier,
+                        "ForeFlight URL identifier should match best available identifier for {$airportId}"
+                    );
+                }
+            }
         }
     }
     
