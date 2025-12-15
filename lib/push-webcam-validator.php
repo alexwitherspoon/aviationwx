@@ -25,6 +25,16 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
     
     $pushConfig = $cam['push_config'];
     
+    // Define allowed push_config fields (strict validation)
+    $allowedPushConfigFields = ['protocol', 'username', 'password', 'port', 'max_file_size_mb', 'allowed_extensions'];
+    
+    // Check for unknown fields in push_config
+    foreach ($pushConfig as $key => $value) {
+        if (!in_array($key, $allowedPushConfigFields)) {
+            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: push_config has unknown field '{$key}'. Allowed fields: " . implode(', ', $allowedPushConfigFields);
+        }
+    }
+    
     // Validate username
     if (!isset($pushConfig['username']) || empty($pushConfig['username'])) {
         $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username is required";

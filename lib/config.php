@@ -1709,6 +1709,17 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_array($airport['services'])) {
                 $errors[] = "Airport '{$airportCode}' services must be an object";
             } else {
+                // Define allowed service fields (strict validation)
+                $allowedServiceFields = ['fuel', 'repairs_available'];
+                
+                // Check for unknown fields and reject them
+                foreach ($airport['services'] as $key => $value) {
+                    if (!in_array($key, $allowedServiceFields)) {
+                        $errors[] = "Airport '{$airportCode}' services has unknown field '{$key}'. Allowed fields: " . implode(', ', $allowedServiceFields);
+                    }
+                }
+                
+                // Validate known fields
                 if (isset($airport['services']['fuel'])) {
                     if (!is_string($airport['services']['fuel'])) {
                         $errors[] = "Airport '{$airportCode}' service 'fuel' must be a string, got: " . gettype($airport['services']['fuel']);
@@ -1720,8 +1731,6 @@ function validateAirportsJsonStructure(array $config): array {
                         $errors[] = "Airport '{$airportCode}' service 'repairs_available' must be a boolean, got: " . gettype($airport['services']['repairs_available']);
                     }
                 }
-                
-                // Unknown service fields allowed for future extensibility
             }
         }
         
@@ -1791,6 +1800,16 @@ function validateAirportsJsonStructure(array $config): array {
                         $webcamType = $webcam['type'] ?? 'http';
                         
                         if ($webcamType === 'push') {
+                            // Define allowed fields for push cameras
+                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds'];
+                            
+                            // Check for unknown fields in push webcam
+                            foreach ($webcam as $key => $value) {
+                                if (!in_array($key, $allowedPushWebcamFields)) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (push type) has unknown field '{$key}'. Allowed fields: " . implode(', ', $allowedPushWebcamFields);
+                                }
+                            }
+                            
                             if (!isset($webcam['push_config'])) {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (push type) missing 'push_config'";
                             } else {
@@ -1822,6 +1841,16 @@ function validateAirportsJsonStructure(array $config): array {
                                 }
                             }
                         } elseif ($webcamType === 'rtsp') {
+                            // Define allowed fields for RTSP cameras
+                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout'];
+                            
+                            // Check for unknown fields in RTSP webcam
+                            foreach ($webcam as $key => $value) {
+                                if (!in_array($key, $allowedRtspWebcamFields)) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (rtsp type) has unknown field '{$key}'. Allowed fields: " . implode(', ', $allowedRtspWebcamFields);
+                                }
+                            }
+                            
                             if (!isset($webcam['rtsp_transport'])) {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (rtsp type) missing 'rtsp_transport' field";
                             }
@@ -1829,6 +1858,16 @@ function validateAirportsJsonStructure(array $config): array {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (rtsp type) missing 'url' field";
                             }
                         } else {
+                            // Define allowed fields for pull cameras (http/mjpeg/static_jpeg/static_png)
+                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds'];
+                            
+                            // Check for unknown fields in pull webcam
+                            foreach ($webcam as $key => $value) {
+                                if (!in_array($key, $allowedPullWebcamFields)) {
+                                    $errors[] = "Airport '{$airportCode}' webcam[{$idx}] (pull type) has unknown field '{$key}'. Allowed fields: " . implode(', ', $allowedPullWebcamFields);
+                                }
+                            }
+                            
                             if (!isset($webcam['url'])) {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] missing required 'url' field";
                             }
