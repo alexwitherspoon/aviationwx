@@ -789,11 +789,21 @@ const RUNWAYS = <?php
 
 /**
  * Detect if device is mobile (iOS or Android)
+ * Uses multiple detection methods to handle edge cases where user agent may be modified
  * @returns {boolean} True if device is mobile
  */
 function isMobileDevice() {
-    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera || '';
+    const ua = userAgent.toLowerCase();
+    
+    // Primary detection: user agent patterns
+    const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
+    
+    // Fallback detection: touch capability + screen size (handles modified UAs)
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth < 768;
+    
+    return isMobileUA || (hasTouchScreen && isSmallScreen);
 }
 
 // Show ForeFlight link only on mobile devices
@@ -801,7 +811,7 @@ function isMobileDevice() {
     function showForeFlightLink() {
         const foreflightLink = document.querySelector('.foreflight-link');
         if (foreflightLink && isMobileDevice()) {
-            foreflightLink.style.display = '';
+            foreflightLink.style.display = 'inline-block';
         }
     }
     
