@@ -270,6 +270,8 @@ The `maintenance` field shows a warning banner when an airport is under maintena
 - **Behavior when `true`**:
   - Shows a red warning banner at the top of the airport page
   - Banner message: "⚠️ This airport is currently under maintenance. Data may be missing or unreliable."
+  - On the status page, shows "Under Maintenance 🚧" with orange/orange indicator instead of normal status colors
+  - Component health checks still run and display normally (weather, webcams, VPN)
   - APIs continue to work normally (banner is UI-only)
   - Airport must be `enabled: true` for maintenance banner to appear
 

@@ -211,6 +211,7 @@ Returns an HTML status page displaying system and airport health status.
 - **Operational** (Green): Component is working correctly
 - **Degraded** (Yellow): Component has issues but is still functional
 - **Down** (Red): Component has critical failures
+- **Under Maintenance** (Orange 🚧): Airport is in maintenance mode (overall status only; components still show individual status)
 
 **Weather Source Status Thresholds:**
 - **Primary Weather Sources** (Tempest, Ambient, WeatherLink):
