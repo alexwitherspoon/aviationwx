@@ -9,9 +9,8 @@ require_once __DIR__ . '/constants.php';
 /**
  * Check if an image appears to be an error frame
  * 
- * Uses multiple detection strategies: grey pixel analysis, edge detection,
- * color variance, and border uniformity. Error frames typically have excessive
- * grey backgrounds with low detail and color variance.
+ * Detects Blue Iris error frames by analyzing grey border patterns and embedded image structures.
+ * Error frames typically have grey borders (where text overlays appear) with embedded content in center.
  * 
  * @param string $imagePath Path to image file (JPEG)
  * @return array {
@@ -54,159 +53,151 @@ function detectErrorFrame(string $imagePath): array {
     $reasons = [];
     $errorScore = 0.0;
     
-    // Strategy 1: Grey pixel analysis
-    // Sample pixels to detect excessive grey/dark backgrounds (error frames are mostly grey)
-    $greyPixelCount = 0;
-    $darkPixelCount = 0;
-    $totalPixels = 0;
-    $sampleSize = min(WEBCAM_ERROR_SAMPLE_SIZE, $width * $height);
-    $stepX = max(1, floor($width / sqrt($sampleSize)));
-    $stepY = max(1, floor($height / sqrt($sampleSize)));
+    // STRATEGY 1: Quick border variance check (early exit for legitimate images)
+    // Error frames have uniform grey borders (low variance), real images have varied borders (high variance)
+    // Sample just the left border (~50-100 pixels) for fast detection
+    $quickBorderWidth = max(1, floor($width * 0.05)); // 5% of width
+    $quickSampleSize = 50; // Sample ~50 pixels from left border
+    $quickStepY = max(1, floor($height / $quickSampleSize));
     
-    $rValues = [];
-    $gValues = [];
-    $bValues = [];
-    
-    for ($y = 0; $y < $height; $y += $stepY) {
-        for ($x = 0; $x < $width; $x += $stepX) {
-            $rgb = imagecolorat($img, $x, $y);
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-            
-            $rValues[] = $r;
-            $gValues[] = $g;
-            $bValues[] = $b;
-            
-            $maxChannel = max($r, $g, $b);
-            $minChannel = min($r, $g, $b);
-            $channelDiff = $maxChannel - $minChannel;
-            
-            if ($channelDiff < WEBCAM_ERROR_GREY_CHANNEL_DIFF) {
-                $greyPixelCount++;
-            }
-            
-            $brightness = ($r + $g + $b) / 3;
-            if ($brightness < WEBCAM_ERROR_DARK_BRIGHTNESS) {
-                $darkPixelCount++;
-            }
-            
-            $totalPixels++;
-        }
+    $quickBorderBrightnesses = [];
+    for ($y = 0; $y < $height; $y += $quickStepY) {
+        $rgb = imagecolorat($img, floor($quickBorderWidth / 2), $y); // Sample middle of left border
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        $quickBorderBrightnesses[] = ($r + $g + $b) / 3;
     }
     
-    // Protect against division by zero
-    if ($totalPixels === 0) {
-        imagedestroy($img);
-        return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['no_pixels_sampled']];
-    }
-    
-    $greyRatio = $greyPixelCount / $totalPixels;
-    $darkRatio = $darkPixelCount / $totalPixels;
-    
-    if ($greyRatio > WEBCAM_ERROR_GREY_RATIO_THRESHOLD) {
-        $errorScore += WEBCAM_ERROR_GREY_SCORE_WEIGHT;
-        $reasons[] = sprintf('high_grey_ratio_%.1f%%', $greyRatio * 100);
-    }
-    if ($darkRatio > WEBCAM_ERROR_DARK_RATIO_THRESHOLD) {
-        $errorScore += WEBCAM_ERROR_DARK_SCORE_WEIGHT;
-        $reasons[] = sprintf('high_dark_ratio_%.1f%%', $darkRatio * 100);
-    }
-    
-    // Strategy 2: Color variance analysis
-    // Error frames have low color variance (uniform colors indicate error frames)
-    if (!empty($rValues)) {
-        $rVariance = calculateVariance($rValues);
-        $gVariance = calculateVariance($gValues);
-        $bVariance = calculateVariance($bValues);
-        $avgVariance = ($rVariance + $gVariance + $bVariance) / 3;
+    if (count($quickBorderBrightnesses) > 10) { // Need enough samples for meaningful variance
+        $quickBorderVariance = calculateVariance($quickBorderBrightnesses);
         
-        if ($avgVariance < WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD) {
-            $errorScore += WEBCAM_ERROR_VARIANCE_SCORE_WEIGHT;
-            $reasons[] = sprintf('low_color_variance_%.1f', $avgVariance);
+        // High variance = varied content in border = real image, exit early
+        // This catches legitimate images quickly (most common case)
+        if ($quickBorderVariance > WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD) {
+            imagedestroy($img);
+            return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['high_border_variance_early_exit']];
         }
+        // Low variance = potential error frame, continue with full border analysis
     }
     
-    // Strategy 3: Edge detection
-    // Error frames have very few edges (low detail)
-    $edgeCount = 0;
-    $edgeSampleSize = min(WEBCAM_ERROR_EDGE_SAMPLE_SIZE, $width * $height);
-    $edgeStepX = max(1, floor($width / sqrt($edgeSampleSize)));
-    $edgeStepY = max(1, floor($height / sqrt($edgeSampleSize)));
-    
-    for ($y = $edgeStepY; $y < $height - $edgeStepY; $y += $edgeStepY) {
-        for ($x = $edgeStepX; $x < $width - $edgeStepX; $x += $edgeStepX) {
-            $rgb1 = imagecolorat($img, $x, $y);
-            $rgb2 = imagecolorat($img, $x + $edgeStepX, $y);
-            $rgb3 = imagecolorat($img, $x, $y + $edgeStepY);
-            
-            $r1 = ($rgb1 >> 16) & 0xFF;
-            $g1 = ($rgb1 >> 8) & 0xFF;
-            $b1 = $rgb1 & 0xFF;
-            
-            $r2 = ($rgb2 >> 16) & 0xFF;
-            $g2 = ($rgb2 >> 8) & 0xFF;
-            $b2 = $rgb2 & 0xFF;
-            
-            $r3 = ($rgb3 >> 16) & 0xFF;
-            $g3 = ($rgb3 >> 8) & 0xFF;
-            $b3 = $rgb3 & 0xFF;
-            
-            $diff1 = abs($r1 - $r2) + abs($g1 - $g2) + abs($b1 - $b2);
-            $diff2 = abs($r1 - $r3) + abs($g1 - $g3) + abs($b1 - $b3);
-            
-            if ($diff1 > WEBCAM_ERROR_EDGE_DIFF_THRESHOLD || $diff2 > WEBCAM_ERROR_EDGE_DIFF_THRESHOLD) {
-                $edgeCount++;
-            }
-        }
-    }
-    
-    $edgeSampleCount = max(1, ($width / $edgeStepX) * ($height / $edgeStepY));
-    $edgeRatio = $edgeCount / $edgeSampleCount;
-    
-    if ($edgeRatio < WEBCAM_ERROR_EDGE_RATIO_THRESHOLD) {
-        $errorScore += WEBCAM_ERROR_EDGE_SCORE_WEIGHT;
-        $reasons[] = sprintf('low_edge_density_%.1f%%', $edgeRatio * 100);
-    }
-    
-    // Strategy 4: Border analysis
-    // Error frames often have uniform grey borders
+    // STRATEGY 2: Full border variance and grey ratio analysis
+    // Sample all border regions (top, bottom, left, right) for comprehensive analysis
     $borderGreyCount = 0;
     $borderStep = max(1, floor(min($width, $height) / WEBCAM_ERROR_BORDER_SAMPLE_SIZE));
+    $borderSampleCount = 0;
     
-    // Top border
-    for ($x = 0; $x < $width; $x += $borderStep) {
-        $rgb = imagecolorat($img, $x, 0);
-        $r = ($rgb >> 16) & 0xFF;
-        $g = ($rgb >> 8) & 0xFF;
-        $b = $rgb & 0xFF;
-        $maxChannel = max($r, $g, $b);
-        $minChannel = min($r, $g, $b);
-        $brightness = ($r + $g + $b) / 3;
-        if (($maxChannel - $minChannel) < WEBCAM_ERROR_GREY_CHANNEL_DIFF && $brightness < WEBCAM_ERROR_BORDER_BRIGHTNESS) {
-            $borderGreyCount++;
+    // Sample border regions (5% of image dimensions) where error text typically appears
+    $borderRegionRatio = 0.05;
+    $borderHeight = max(1, floor($height * $borderRegionRatio));
+    $borderWidth = max(1, floor($width * $borderRegionRatio));
+    
+    $borderRegions = [
+        ['x' => 0, 'y' => 0, 'width' => $width, 'height' => $borderHeight], // Top
+        ['x' => 0, 'y' => $height - $borderHeight, 'width' => $width, 'height' => $borderHeight], // Bottom
+        ['x' => 0, 'y' => 0, 'width' => $borderWidth, 'height' => $height], // Left
+        ['x' => $width - $borderWidth, 'y' => 0, 'width' => $borderWidth, 'height' => $height], // Right
+    ];
+    
+    // Exclude very bright pixels (white text) from border grey count
+    // Text overlays are bright white, so we count all pixels but only count grey (non-text) pixels
+    $textBrightnessThreshold = WEBCAM_ERROR_BRIGHT_PIXEL_THRESHOLD_FOR_TEXT_EXCLUSION;
+    
+    // Collect brightness values for variance analysis and count grey pixels
+    $borderBrightnesses = [];
+    
+    foreach ($borderRegions as $region) {
+        for ($y = $region['y']; $y < min($height, $region['y'] + $region['height']); $y += $borderStep) {
+            for ($x = $region['x']; $x < min($width, $region['x'] + $region['width']); $x += $borderStep) {
+                $rgb = imagecolorat($img, $x, $y);
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
+                $maxChannel = max($r, $g, $b);
+                $minChannel = min($r, $g, $b);
+                $brightness = ($r + $g + $b) / 3;
+                
+                // Store brightness for variance calculation
+                $borderBrightnesses[] = $brightness;
+                
+                // Count all pixels for denominator, but only count grey pixels (excluding text) for numerator
+                // This gives us grey ratio of non-text pixels, which is more accurate for error frame detection
+                $borderSampleCount++;
+                if ($brightness < $textBrightnessThreshold) {
+                    if (($maxChannel - $minChannel) < WEBCAM_ERROR_GREY_CHANNEL_DIFF && $brightness < WEBCAM_ERROR_BORDER_BRIGHTNESS) {
+                        $borderGreyCount++;
+                    }
+                }
+            }
         }
     }
     
-    // Bottom border
-    for ($x = 0; $x < $width; $x += $borderStep) {
-        $rgb = imagecolorat($img, $x, $height - 1);
-        $r = ($rgb >> 16) & 0xFF;
-        $g = ($rgb >> 8) & 0xFF;
-        $b = $rgb & 0xFF;
-        $maxChannel = max($r, $g, $b);
-        $minChannel = min($r, $g, $b);
-        $brightness = ($r + $g + $b) / 3;
-        if (($maxChannel - $minChannel) < WEBCAM_ERROR_GREY_CHANNEL_DIFF && $brightness < WEBCAM_ERROR_BORDER_BRIGHTNESS) {
-            $borderGreyCount++;
-        }
+    $borderGreyRatio = $borderSampleCount > 0 ? $borderGreyCount / $borderSampleCount : 0;
+    
+    // Calculate border variance - this is the key differentiator
+    // Error frames have low variance (uniform grey), real images have higher variance (varied content)
+    $borderVariance = 0.0;
+    if (count($borderBrightnesses) > 10) {
+        $borderVariance = calculateVariance($borderBrightnesses);
     }
     
-    $borderSampleCount = max(1, ($width / $borderStep) * 2);
-    $borderGreyRatio = $borderGreyCount / $borderSampleCount;
-    if ($borderGreyRatio > WEBCAM_ERROR_BORDER_RATIO_THRESHOLD) {
-        $errorScore += WEBCAM_ERROR_BORDER_SCORE_WEIGHT;
-        $reasons[] = sprintf('grey_borders_%.1f%%', $borderGreyRatio * 100);
+    // Check for white text in borders (key differentiator: error frames have white text overlays)
+    // This helps distinguish error frames from legitimate very dark nighttime images
+    $whiteTextCount = 0;
+    $whiteTextTotal = 0;
+    foreach ($borderRegions as $region) {
+        for ($y = $region['y']; $y < min($height, $region['y'] + $region['height']); $y += $borderStep) {
+            for ($x = $region['x']; $x < min($width, $region['x'] + $region['width']); $x += $borderStep) {
+                $rgb = imagecolorat($img, $x, $y);
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
+                $brightness = ($r + $g + $b) / 3;
+                $whiteTextTotal++;
+                if ($brightness > WEBCAM_ERROR_WHITE_PIXEL_THRESHOLD) {
+                    $whiteTextCount++;
+                }
+            }
+        }
+    }
+    $whiteTextRatio = $whiteTextTotal > 0 ? $whiteTextCount / $whiteTextTotal : 0;
+    $hasWhiteText = $whiteTextRatio > 0.02; // At least 2% white pixels indicates text
+    
+    // DETECTION LOGIC: Use variance, grey ratio, and white text to determine if error frame
+    
+    // High variance = varied content = real image (should have exited in Strategy 1, but double-check)
+    if ($borderVariance > WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD) {
+        imagedestroy($img);
+        return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['high_border_variance']];
+    }
+    
+    // Low variance + high grey ratio + white text = definitive error frame
+    // White text is the key differentiator - error frames have text overlays, legitimate dark images don't
+    if ($borderVariance < WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD && $borderGreyRatio > 0.85 && $hasWhiteText) {
+        $errorScore = 0.9; // Strong indicator - uniform grey borders with white text is definitive
+        $reasons[] = sprintf('low_border_variance_%.1f_grey_%.1f%%_white_text_%.1f%%', $borderVariance, $borderGreyRatio * 100, $whiteTextRatio * 100);
+    } elseif ($borderVariance < WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD && $borderGreyRatio > 0.95) {
+        // Extremely uniform borders (>95% grey) even without text = likely error frame
+        // But only if variance is very low (<50) to avoid false positives on legitimate very dark images
+        if ($borderVariance < 50) {
+            $errorScore = 0.7; // Strong but not definitive without text
+            $reasons[] = sprintf('extremely_uniform_border_variance_%.1f_grey_%.1f%%', $borderVariance, $borderGreyRatio * 100);
+        } else {
+            $errorScore = 0.0; // Some variance = likely real image
+            $reasons[] = sprintf('high_grey_but_some_variance_%.1f_grey_%.1f%%', $borderVariance, $borderGreyRatio * 100);
+        }
+    } elseif ($borderVariance < WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD && $borderGreyRatio > 0.70 && $hasWhiteText) {
+        // Medium grey ratio but low variance with white text = potential error frame
+        $errorScore = 0.6;
+        $reasons[] = sprintf('low_border_variance_%.1f_moderate_grey_%.1f%%_white_text_%.1f%%', $borderVariance, $borderGreyRatio * 100, $whiteTextRatio * 100);
+    } elseif ($borderVariance >= WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD && $borderVariance < WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD) {
+        // Medium variance = some variation in borders = likely real image
+        $errorScore = 0.0; // No error - real image
+        $reasons[] = sprintf('medium_border_variance_%.1f_grey_%.1f%%', $borderVariance, $borderGreyRatio * 100);
+    } else {
+        // Low variance but no white text and not extremely uniform = likely legitimate dark image
+        $errorScore = 0.0;
+        $reasons[] = sprintf('low_variance_no_white_text_variance_%.1f_grey_%.1f%%', $borderVariance, $borderGreyRatio * 100);
     }
     
     imagedestroy($img);
