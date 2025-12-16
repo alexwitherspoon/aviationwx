@@ -143,6 +143,8 @@ fi
 echo "Resolving pasv_address from DNS for IPv4 and IPv6..."
 VSFTPD_IPV4_PID=""
 VSFTPD_IPV6_PID=""
+IPV4_RESOLVED=""
+IPV6_RESOLVED=""
 
 if [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
     RESOLVED_IPS=$(/usr/local/bin/resolve-upload-ip.sh "upload.aviationwx.org" "both" 2>&1)
@@ -153,6 +155,7 @@ if [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
         IPV6=$(echo "$RESOLVED_IPS" | grep -E '^[0-9a-fA-F:]+::?[0-9a-fA-F:]*$' | head -1 || true)
         
         if [ -n "$IPV4" ]; then
+            IPV4_RESOLVED="yes"
             if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
                 sed -i "s|^pasv_address=.*|pasv_address=$IPV4|" /etc/vsftpd/vsftpd_ipv4.conf
                 echo "✓ Updated IPv4 pasv_address to: $IPV4"
@@ -167,6 +170,7 @@ if [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
         fi
         
         if [ -n "$IPV6" ]; then
+            IPV6_RESOLVED="yes"
             if [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
                 sed -i "s|^pasv_address=.*|pasv_address=$IPV6|" /etc/vsftpd/vsftpd_ipv6.conf
                 echo "✓ Updated IPv6 pasv_address to: $IPV6"
@@ -188,10 +192,10 @@ else
     echo "⚠️  Warning: resolve-upload-ip.sh not found, using single instance"
 fi
 
-# Start vsftpd instances (IPv4 and/or IPv6)
+# Start vsftpd instances (only if IPs were resolved)
 echo "Starting vsftpd..."
 
-if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
+if [ "$IPV4_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
     echo "Starting vsftpd IPv4 instance..."
     vsftpd /etc/vsftpd/vsftpd_ipv4.conf &
     VSFTPD_IPV4_PID=$!
@@ -205,7 +209,7 @@ if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
     echo "✓ vsftpd IPv4 started (PID: $VSFTPD_IPV4_PID)"
 fi
 
-if [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
+if [ "$IPV6_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
     echo "Starting vsftpd IPv6 instance..."
     vsftpd /etc/vsftpd/vsftpd_ipv6.conf &
     VSFTPD_IPV6_PID=$!
@@ -219,7 +223,7 @@ if [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
     echo "✓ vsftpd IPv6 started (PID: $VSFTPD_IPV6_PID)"
 fi
 
-if [ ! -f "/etc/vsftpd/vsftpd_ipv4.conf" ] && [ ! -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
+if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
     echo "Starting vsftpd (single instance fallback)..."
     if ! service vsftpd start 2>&1; then
         echo "Error: vsftpd failed to start, checking configuration..."
@@ -240,21 +244,21 @@ service ssh start || {
 }
 
 # Verify services are running
-if [ -n "$VSFTPD_IPV4_PID" ]; then
+if [ "$IPV4_RESOLVED" = "yes" ] && [ -n "$VSFTPD_IPV4_PID" ]; then
     if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
         echo "Error: vsftpd IPv4 is not running"
         exit 1
     fi
 fi
 
-if [ -n "$VSFTPD_IPV6_PID" ]; then
+if [ "$IPV6_RESOLVED" = "yes" ] && [ -n "$VSFTPD_IPV6_PID" ]; then
     if ! kill -0 $VSFTPD_IPV6_PID 2>/dev/null; then
         echo "Error: vsftpd IPv6 is not running"
         exit 1
     fi
 fi
 
-if [ -z "$VSFTPD_IPV4_PID" ] && [ -z "$VSFTPD_IPV6_PID" ]; then
+if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
     if ! pgrep -x vsftpd > /dev/null; then
         echo "Error: vsftpd is not running"
         exit 1
