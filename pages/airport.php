@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/address-formatter.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
+require_once __DIR__ . '/../lib/constants.php';
 
 // Normalize weather source for METAR-only airports (sets weather_source if metar_station is configured)
 normalizeWeatherSource($airport);
@@ -835,6 +836,13 @@ const RUNWAYS = <?php
     }
 ?>;
 
+// Weather staleness thresholds (from constants.php)
+const WEATHER_STALENESS_WARNING_HOURS_METAR = <?= WEATHER_STALENESS_WARNING_HOURS_METAR ?>;
+const WEATHER_STALENESS_ERROR_HOURS_METAR = <?= WEATHER_STALENESS_ERROR_HOURS_METAR ?>;
+const WEATHER_STALENESS_WARNING_MULTIPLIER = <?= WEATHER_STALENESS_WARNING_MULTIPLIER ?>;
+const WEATHER_STALENESS_ERROR_MULTIPLIER = <?= WEATHER_STALENESS_ERROR_MULTIPLIER ?>;
+const SECONDS_PER_HOUR = 3600;
+
 // Production logging removed - only log errors in console
 
 /**
@@ -1551,14 +1559,44 @@ function updateWeatherTimestamp() {
         }
     }
     
-    // Solution C: Enhanced visual indicators for stale data
-    // Show warnings earlier (20 minutes) and more aggressive styling
-    const isStale = diffSeconds >= 1200; // 20 minutes - earlier warning
-    const isVeryStale = diffSeconds >= 3600; // 1 hour - critical warning
+    // Determine if using METAR-only source
+    const isMetarOnly = AIRPORT_DATA && 
+                        AIRPORT_DATA.weather_source && 
+                        AIRPORT_DATA.weather_source.type === 'metar';
+    
+    // Get weather refresh interval (default to 60 seconds if not configured)
+    // Ensure minimum value to prevent invalid thresholds
+    const weatherRefreshSeconds = Math.max(1, (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+        ? AIRPORT_DATA.weather_refresh_seconds 
+        : 60);
+    
+    // Use METAR-specific thresholds when using METAR-only source
+    // METARs are published hourly, so thresholds are based on hours, not minutes
+    // For non-METAR sources, use multiplier-based thresholds (similar to webcams)
+    let staleThresholdSeconds, veryStaleThresholdSeconds;
+    if (isMetarOnly) {
+        // METAR thresholds: warning at 1 hour, very stale at 2 hours
+        staleThresholdSeconds = WEATHER_STALENESS_WARNING_HOURS_METAR * SECONDS_PER_HOUR;
+        veryStaleThresholdSeconds = WEATHER_STALENESS_ERROR_HOURS_METAR * SECONDS_PER_HOUR;
+    } else {
+        // Primary source thresholds: use multiplier-based approach (like webcams)
+        // Warning at 5x refresh interval, error at 10x refresh interval
+        staleThresholdSeconds = weatherRefreshSeconds * WEATHER_STALENESS_WARNING_MULTIPLIER;
+        veryStaleThresholdSeconds = weatherRefreshSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER;
+    }
+    
+    const isStale = diffSeconds >= staleThresholdSeconds;
+    const isVeryStale = diffSeconds >= veryStaleThresholdSeconds;
     
     let timeStr;
     if (isVeryStale) {
-        timeStr = '⚠️ Over an hour stale - data may be outdated';
+        if (isMetarOnly) {
+            timeStr = '⚠️ Over 2 hours stale - data may be outdated';
+        } else {
+            // For non-METAR sources, show the actual threshold time
+            const veryStaleTimeStr = formatRelativeTime(veryStaleThresholdSeconds);
+            timeStr = '⚠️ Over ' + veryStaleTimeStr + ' stale - data may be outdated';
+        }
     } else if (isStale) {
         timeStr = '⚠️ ' + formatRelativeTime(diffSeconds) + ' - refreshing...';
     } else {
