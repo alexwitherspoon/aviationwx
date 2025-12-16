@@ -886,6 +886,7 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 **Note**:
 - **SFTP**: Port 2222
 - **FTP/FTPS**: Port 2121 (both protocols on same port)
+- **Dual-stack support**: FTP/FTPS supports both IPv4 and IPv6 connections automatically
 
 **Push Webcam Example (SFTP):**
 ```json
@@ -959,6 +960,14 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
   - Directory: Automatically chrooted to the camera's upload directory
   - **Note**: Both FTP and FTPS work on port 2121. FTPS requires SSL certificates to be configured (see SSL Setup below).
 
+#### Passive Mode Configuration
+
+FTP passive mode automatically uses the correct external IP address from DNS resolution of `upload.aviationwx.org`. The system:
+- Resolves both IPv4 and IPv6 addresses at container startup
+- Starts separate vsftpd instances for IPv4 and IPv6 when both are available
+- Falls back gracefully if only one IP version is available
+- Updates `pasv_address` dynamically to ensure passive data connections work correctly
+
 #### Security Features
 
 - **Chrooted Directories**: Each camera is restricted to its own upload directory
@@ -979,9 +988,10 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
 #### Troubleshooting
 
 - **Images not appearing**: Check that the camera is uploading to the correct directory and that files are valid JPEG/PNG images
-- **Connection issues**: Verify credentials, port numbers, and firewall rules
+- **Connection issues**: Verify credentials, port numbers, and firewall rules. For FTP passive mode issues, ensure passive ports (50000-50019) are open
 - **File size errors**: Ensure uploaded files are within the `max_file_size_mb` limit
 - **Processing delays**: The system processes uploads every minute; allow up to 60 seconds for images to appear
+- **FTP passive mode errors**: The system automatically resolves the correct external IP. If issues persist, verify DNS resolution of `upload.aviationwx.org` returns the correct IPs
 
 ## Refresh Intervals
 
