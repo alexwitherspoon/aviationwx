@@ -25,10 +25,12 @@ on:
         required: false
         type: string
 
-# Prevent concurrent deployments - only one deployment at a time
+# Prevent concurrent deployments - only one deployment at a time per SHA
 # This prevents conflicts when multiple commits are pushed rapidly
+# Using SHA in concurrency group ensures each commit gets its own deployment slot
+# For workflow_run events, use the triggering workflow's SHA; for others, use current SHA
 concurrency:
-  group: deploy-production
+  group: deploy-production-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false  # Don't cancel - queue deployments to prevent conflicts
 
 permissions:
@@ -53,6 +55,11 @@ jobs:
           # For manual dispatch, use provided SHA or default to latest
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
+            if [ -z "$DEPLOY_SHA" ] || [ "$DEPLOY_SHA" = "" ]; then
+              echo "❌ ERROR: workflow_run.head_sha is empty or missing"
+              echo "This indicates the workflow_run event is malformed"
+              exit 1
+            fi
             echo "Using SHA from workflow_run event: ${DEPLOY_SHA:0:7}"
           else
             # Manual dispatch: use provided SHA or default to current SHA
@@ -115,6 +122,21 @@ jobs:
               
               const commitSha = deploySha;
               const branchName = '${{ github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name }}';
+              const workflowRunId = '${{ github.event.workflow_run.id }}';
+              
+              // Verify the workflow_run SHA matches what we determined
+              const workflowRunSha = '${{ github.event.workflow_run.head_sha }}';
+              if (workflowRunSha !== commitSha) {
+                core.error(`❌ CRITICAL: SHA mismatch detected!`);
+                core.error(`   workflow_run.head_sha: ${workflowRunSha.substring(0, 7)}`);
+                core.error(`   Determined SHA: ${commitSha.substring(0, 7)}`);
+                core.error(`   This indicates a potential race condition or workflow_run event issue`);
+                core.setFailed('❌ SHA mismatch - cannot proceed with deployment');
+                core.setOutput('qa-success', 'false');
+                return;
+              }
+              
+              core.info(`✓ Verified workflow_run SHA matches determined SHA: ${commitSha.substring(0, 7)}`);
               
               if (branchName !== 'main') {
                 core.warning(`⚠️  Skipping deployment - not on main branch (branch: ${branchName})`);
@@ -123,10 +145,29 @@ jobs:
                 return;
               }
               
+              // Verify the commit actually exists on main branch
+              try {
+                const commit = await github.rest.repos.getCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: commitSha
+                });
+                
+                if (commit.data.commit.message) {
+                  core.info(`✓ Commit verified: ${commitSha.substring(0, 7)} - ${commit.data.commit.message.split('\n')[0].substring(0, 60)}`);
+                }
+              } catch (error) {
+                core.error(`❌ ERROR: Commit ${commitSha.substring(0, 7)} does not exist in repository`);
+                core.error(`   This may indicate the SHA is invalid or the commit was force-pushed`);
+                core.setFailed('❌ Commit verification failed - cannot proceed with deployment');
+                core.setOutput('qa-success', 'false');
+                return;
+              }
+              
               const deployWorkflowPath = '.github/workflows/deploy-docker.yml';
               const currentRunId = context.runId;
               
-              // Check for ANY active deployments (not just same commit) to prevent conflicts
+              // Check for active deployments of the SAME commit (concurrency handles different commits)
               const allDeployRuns = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -136,14 +177,15 @@ jobs:
               
               const otherRuns = allDeployRuns.data.workflow_runs.filter(run => run.id !== currentRunId);
               
-              const activeDeploys = otherRuns.filter(run => 
-                run.status === 'in_progress' || run.status === 'queued'
+              // Check for active deployments of the same commit
+              const activeDeploysSameCommit = otherRuns.filter(run => 
+                (run.status === 'in_progress' || run.status === 'queued') &&
+                run.head_sha === commitSha
               );
               
-              if (activeDeploys.length > 0) {
-                const activeCommit = activeDeploys[0].head_sha?.substring(0, 7) || 'unknown';
-                core.info(`⏭️  Skipping deployment - another deployment is already active (commit: ${activeCommit})`);
-                core.info(`   Concurrency control will queue this deployment to prevent conflicts`);
+              if (activeDeploysSameCommit.length > 0) {
+                core.info(`⏭️  Skipping deployment - another deployment for commit ${commitSha.substring(0, 7)} is already active`);
+                core.info(`   This prevents duplicate deployments of the same commit`);
                 core.setOutput('qa-success', 'false');
                 return;
               }
@@ -164,7 +206,7 @@ jobs:
                 return;
               }
               
-              core.info(`✓ All checks passed - ready to deploy`);
+              core.info(`✓ All checks passed - ready to deploy commit ${commitSha.substring(0, 7)}`);
               core.setOutput('qa-success', 'true');
               core.setOutput('skip-checks', 'false');
               return;
@@ -300,6 +342,21 @@ jobs:
         with:
           ref: ${{ steps.determine-sha.outputs.deploy_sha }}
           fetch-depth: 0
+
+      - name: Log deployment SHA for tracking
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "DEPLOYMENT SHA TRACKING"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Event: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "QA Workflow Run ID: ${{ github.event.workflow_run.id }}"
+            echo "QA Workflow SHA: ${{ github.event.workflow_run.head_sha }}"
+            echo "QA Workflow Branch: ${{ github.event.workflow_run.head_branch }}"
+          fi
+          echo "Determined SHA: ${{ steps.determine-sha.outputs.deploy_sha }}"
+          echo "Short SHA: ${{ steps.determine-sha.outputs.deploy_sha_short }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Validate SHA exists
         run: |
