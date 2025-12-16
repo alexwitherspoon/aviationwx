@@ -28,6 +28,12 @@ require_once __DIR__ . '/utils.php';
  * @return array|null Weather data array with standard keys, or null on failure
  */
 function fetchWeatherAsync($airport, $airportId = null) {
+    // Normalize weather source configuration (handle airports with metar_station but no weather_source)
+    if (!normalizeWeatherSource($airport)) {
+        aviationwx_log('error', 'no weather source configured in fetchWeatherAsync', ['airport' => $airportId ?? 'unknown'], 'app');
+        return null;
+    }
+    
     $sourceType = $airport['weather_source']['type'];
     $airportId = $airportId ?? 'unknown';
     
@@ -454,6 +460,12 @@ function fetchWeatherAsync($airport, $airportId = null) {
  * @return array|null Weather data array with standard keys, or null on failure
  */
 function fetchWeatherSync($airport, $airportId = null) {
+    // Normalize weather source configuration (handle airports with metar_station but no weather_source)
+    if (!normalizeWeatherSource($airport)) {
+        aviationwx_log('error', 'no weather source configured in fetchWeatherSync', ['airport' => $airportId ?? 'unknown'], 'app');
+        return null;
+    }
+    
     $sourceType = $airport['weather_source']['type'];
     $airportId = $airportId ?? 'unknown';
     $weatherData = null;

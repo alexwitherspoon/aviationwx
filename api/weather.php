@@ -317,6 +317,15 @@ function generateMockWeatherData($airportId, $airport) {
 
     // fetchWeatherAsync() and fetchWeatherSync() are now in lib/weather/fetcher.php
     
+    // Normalize weather source configuration (handle airports with metar_station but no weather_source)
+    if (!normalizeWeatherSource($airport)) {
+        http_response_code(HTTP_STATUS_SERVICE_UNAVAILABLE);
+        aviationwx_log('error', 'no weather source configured', ['airport' => $airportId], 'app');
+        ob_clean();
+        echo json_encode(['success' => false, 'error' => 'Weather source not configured']);
+        exit;
+    }
+    
     // Fetch weather based on source
     $weatherData = null;
     $weatherError = null;
