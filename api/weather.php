@@ -248,7 +248,7 @@ function generateMockWeatherData($airportId, $airport) {
         if (is_array($cached)) {
             // Safety check: Check per-source staleness
             $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-            $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+            $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
             nullStaleFieldsBySource($cached, $maxStaleSeconds, $maxStaleSecondsMetar);
             
             // Set cache headers for cached responses
@@ -268,7 +268,7 @@ function generateMockWeatherData($airportId, $airport) {
         if (is_array($staleData)) {
             // Safety check: Check per-source staleness
             $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-            $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+            $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
             nullStaleFieldsBySource($staleData, $maxStaleSeconds, $maxStaleSecondsMetar);
             
             $hasStaleCache = true;
@@ -467,7 +467,7 @@ function generateMockWeatherData($airportId, $airport) {
     // Use separate thresholds for primary source and METAR
     if (is_array($existingCache)) {
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Recalculate flight category after merge - visibility/ceiling may have been added from cache

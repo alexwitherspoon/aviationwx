@@ -444,7 +444,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
         : getDefaultWeatherRefresh();
     $maxStaleHours = getMaxStaleHours();
     $maxStaleSeconds = $maxStaleHours * SECONDS_PER_HOUR;
-    $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * SECONDS_PER_HOUR;
+    $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * SECONDS_PER_HOUR;
     
     $weatherSources = [];
     
@@ -494,8 +494,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 } else {
                     // Use multiplier-based thresholds for non-METAR sources (Tempest, Ambient, WeatherLink)
                     // Operational from 0 to 5x refresh interval, degraded from 5x to 10x, down after 10x
-                    $warningThreshold = $weatherRefresh * WEBCAM_STALENESS_WARNING_MULTIPLIER;
-                    $errorThreshold = $weatherRefresh * WEBCAM_STALENESS_ERROR_MULTIPLIER;
+                    $warningThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+                    $errorThreshold = $weatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER;
                     
                     if ($primaryAge < $warningThreshold) {
                         $primaryStatus = 'operational';
@@ -546,8 +546,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $metarLastChanged = $metarTimestamp;
                 
                 // METAR status thresholds:
-                // - Operational until 2 hours (MAX_STALE_HOURS_METAR)
-                // - Degraded from 2-3 hours (between MAX_STALE_HOURS_METAR and MAX_STALE_HOURS)
+                // - Operational until 2 hours (WEATHER_STALENESS_ERROR_HOURS_METAR)
+                // - Degraded from 2-3 hours (between WEATHER_STALENESS_ERROR_HOURS_METAR and MAX_STALE_HOURS)
                 // - Down after 3 hours (MAX_STALE_HOURS)
                 if ($metarAge < $weatherRefresh) {
                     $metarStatus = 'operational';
