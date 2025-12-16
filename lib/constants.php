@@ -41,14 +41,26 @@ if (!defined('CURL_MULTI_OVERALL_TIMEOUT')) {
 if (!defined('MAX_STALE_HOURS')) {
     define('MAX_STALE_HOURS', 3);
 }
-if (!defined('MAX_STALE_HOURS_METAR')) {
-    define('MAX_STALE_HOURS_METAR', 2); // METARs are published hourly, so 2 hours is appropriate
-}
-if (!defined('STALE_WARNING_HOURS')) {
-    define('STALE_WARNING_HOURS', 1);
-}
 if (!defined('STALE_WHILE_REVALIDATE_SECONDS')) {
     define('STALE_WHILE_REVALIDATE_SECONDS', 300);
+}
+
+// Weather staleness thresholds
+// METAR-only source thresholds (METARs are published hourly, so hour-based thresholds are appropriate)
+if (!defined('WEATHER_STALENESS_WARNING_HOURS_METAR')) {
+    define('WEATHER_STALENESS_WARNING_HOURS_METAR', 1); // Warning at 1 hour for METAR-only sources
+}
+if (!defined('WEATHER_STALENESS_ERROR_HOURS_METAR')) {
+    define('WEATHER_STALENESS_ERROR_HOURS_METAR', 2); // Error at 2 hours for METAR-only sources
+}
+
+// Weather staleness multipliers (for non-METAR sources - Tempest, Ambient, WeatherLink, etc.)
+// These use multiplier-based thresholds similar to webcams
+if (!defined('WEATHER_STALENESS_WARNING_MULTIPLIER')) {
+    define('WEATHER_STALENESS_WARNING_MULTIPLIER', 5); // Warning at 5x refresh interval
+}
+if (!defined('WEATHER_STALENESS_ERROR_MULTIPLIER')) {
+    define('WEATHER_STALENESS_ERROR_MULTIPLIER', 10); // Error at 10x refresh interval
 }
 
 // Rate limiting defaults
@@ -190,19 +202,19 @@ if (!defined('WEBCAM_ERROR_DARK_BRIGHTNESS')) {
     define('WEBCAM_ERROR_DARK_BRIGHTNESS', 80); // Average brightness < this = dark pixel
 }
 if (!defined('WEBCAM_ERROR_GREY_RATIO_THRESHOLD')) {
-    define('WEBCAM_ERROR_GREY_RATIO_THRESHOLD', 0.6); // >60% grey pixels indicates error frame
+    define('WEBCAM_ERROR_GREY_RATIO_THRESHOLD', 0.85); // >85% grey pixels indicates error frame (was 0.6, too aggressive)
 }
 if (!defined('WEBCAM_ERROR_DARK_RATIO_THRESHOLD')) {
-    define('WEBCAM_ERROR_DARK_RATIO_THRESHOLD', 0.4); // >40% dark pixels indicates error frame
+    define('WEBCAM_ERROR_DARK_RATIO_THRESHOLD', 0.6); // >60% dark pixels indicates error frame (was 0.4, too aggressive)
 }
 if (!defined('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD')) {
-    define('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD', 500); // <500 variance indicates uniform/error frame
+    define('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD', 200); // <200 variance indicates uniform/error frame (was 500, too high)
 }
 if (!defined('WEBCAM_ERROR_EDGE_DIFF_THRESHOLD')) {
     define('WEBCAM_ERROR_EDGE_DIFF_THRESHOLD', 30); // Pixel difference > this = edge detected
 }
 if (!defined('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD')) {
-    define('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD', 0.05); // <5% edge pixels indicates error frame
+    define('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD', 0.02); // <2% edge pixels indicates error frame (was 0.05, too high)
 }
 if (!defined('WEBCAM_ERROR_BORDER_BRIGHTNESS')) {
     define('WEBCAM_ERROR_BORDER_BRIGHTNESS', 120); // Border brightness < this = grey border
@@ -211,7 +223,7 @@ if (!defined('WEBCAM_ERROR_BORDER_RATIO_THRESHOLD')) {
     define('WEBCAM_ERROR_BORDER_RATIO_THRESHOLD', 0.7); // >70% grey borders indicates error frame
 }
 if (!defined('WEBCAM_ERROR_SCORE_THRESHOLD')) {
-    define('WEBCAM_ERROR_SCORE_THRESHOLD', 0.5); // Error score >= this = error frame
+    define('WEBCAM_ERROR_SCORE_THRESHOLD', 0.7); // Error score >= this = error frame (was 0.5, too low)
 }
 if (!defined('WEBCAM_ERROR_GREY_SCORE_WEIGHT')) {
     define('WEBCAM_ERROR_GREY_SCORE_WEIGHT', 0.3); // Weight for grey ratio in error score
@@ -239,5 +251,26 @@ if (!defined('WEBCAM_ERROR_EDGE_SAMPLE_SIZE')) {
 }
 if (!defined('WEBCAM_ERROR_BORDER_SAMPLE_SIZE')) {
     define('WEBCAM_ERROR_BORDER_SAMPLE_SIZE', 50); // Number of border pixels to sample
+}
+if (!defined('WEBCAM_ERROR_EMBEDDED_BORDER_RATIO')) {
+    define('WEBCAM_ERROR_EMBEDDED_BORDER_RATIO', 0.8); // >80% grey borders with less grey center = embedded image pattern
+}
+if (!defined('WEBCAM_ERROR_EMBEDDED_CENTER_RATIO')) {
+    define('WEBCAM_ERROR_EMBEDDED_CENTER_RATIO', 0.7); // Center <70% grey when borders >80% = embedded image
+}
+if (!defined('WEBCAM_ERROR_BRIGHT_CENTER_CONCENTRATION')) {
+    define('WEBCAM_ERROR_BRIGHT_CENTER_CONCENTRATION', 0.7); // >70% bright pixels in center = embedded image pattern
+}
+if (!defined('WEBCAM_ERROR_BRIGHT_PIXEL_THRESHOLD_FOR_TEXT_EXCLUSION')) {
+    define('WEBCAM_ERROR_BRIGHT_PIXEL_THRESHOLD_FOR_TEXT_EXCLUSION', 200); // Brightness > this = likely text, exclude from grey count
+}
+if (!defined('WEBCAM_ERROR_WHITE_PIXEL_THRESHOLD')) {
+    define('WEBCAM_ERROR_WHITE_PIXEL_THRESHOLD', 200); // Brightness > this = white pixel (for text detection)
+}
+if (!defined('WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD', 500); // Variance >500 in border = real image (early exit)
+}
+if (!defined('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD', 200); // Variance <200 in borders = uniform/error frame
 }
 
