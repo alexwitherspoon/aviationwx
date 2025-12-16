@@ -460,7 +460,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     };
     
     // Check primary weather source
-    $sourceType = $airport['weather_source']['type'] ?? null;
+    $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
     if ($sourceType) {
         $sourceName = $getSourceName($sourceType);
         $primaryStatus = 'down';
