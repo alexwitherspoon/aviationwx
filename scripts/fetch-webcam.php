@@ -9,6 +9,10 @@ if (file_exists(__DIR__ . '/../lib/test-mocks.php')) {
     require_once __DIR__ . '/../lib/test-mocks.php';
 }
 
+// Load error detector early (needed by fetch functions)
+require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/webcam-error-detector.php';
+
 /**
  * Detect webcam source type from URL
  * 
@@ -549,9 +553,7 @@ function fetchMJPEGStream($url, $cacheFile) {
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
-require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
-require_once __DIR__ . '/../lib/webcam-error-detector.php';
 // VPN routing is optional - only required if VPN features are used
 $vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
 if (file_exists($vpnRoutingFile)) {
