@@ -253,17 +253,42 @@ test.describe('Cache and Stale Data Handling', () => {
       return;
     }
     
-    // Manually set weatherLastUpdated to be >20 minutes ago (stale threshold is 20 minutes)
-    await page.evaluate(() => {
+    // Get the actual stale threshold based on weather source type
+    // For non-METAR sources: threshold = refresh_interval * 5 (warning multiplier)
+    // For METAR-only sources: threshold = 1 hour
+    const staleThresholdInfo = await page.evaluate(() => {
+      if (typeof AIRPORT_DATA === 'undefined' || !AIRPORT_DATA) {
+        return { isMetarOnly: false, thresholdSeconds: 300 }; // Default: 5 minutes (60s * 5)
+      }
+      
+      const isMetarOnly = AIRPORT_DATA.weather_source && 
+                          AIRPORT_DATA.weather_source.type === 'metar';
+      const refreshSeconds = Math.max(1, AIRPORT_DATA.weather_refresh_seconds || 60);
+      const warningMultiplier = typeof WEATHER_STALENESS_WARNING_MULTIPLIER !== 'undefined' 
+        ? WEATHER_STALENESS_WARNING_MULTIPLIER 
+        : 5;
+      
+      if (isMetarOnly) {
+        const warningHours = typeof WEATHER_STALENESS_WARNING_HOURS_METAR !== 'undefined'
+          ? WEATHER_STALENESS_WARNING_HOURS_METAR
+          : 1;
+        return { isMetarOnly: true, thresholdSeconds: warningHours * 3600 };
+      } else {
+        return { isMetarOnly: false, thresholdSeconds: refreshSeconds * warningMultiplier };
+      }
+    });
+    
+    // Set weatherLastUpdated to exceed the calculated stale threshold
+    const staleAgeSeconds = staleThresholdInfo.thresholdSeconds + 60; // Add 1 minute buffer
+    await page.evaluate((ageSeconds) => {
       if (typeof weatherLastUpdated !== 'undefined') {
-        // Set to 25 minutes ago (exceeds 20-minute stale threshold)
-        weatherLastUpdated = new Date(Date.now() - 25 * 60 * 1000);
+        weatherLastUpdated = new Date(Date.now() - ageSeconds * 1000);
         // Update timestamp display
         if (typeof updateWeatherTimestamp === 'function') {
           updateWeatherTimestamp();
         }
       }
-    });
+    }, staleAgeSeconds);
     
     // Wait for timestamp update to complete
     await page.waitForTimeout(1000);
@@ -301,8 +326,8 @@ test.describe('Cache and Stale Data Handling', () => {
     
     const color = await timestampEl.evaluate(el => window.getComputedStyle(el).color);
     
-    // Should show warning indicator (⚠️) for data >= 20 minutes old
-    // The warning shows as "⚠️ X minutes ago - refreshing..." or "⚠️ Over an hour stale..."
+    // Should show warning indicator (⚠️) for data exceeding stale threshold
+    // The warning shows as "⚠️ X minutes ago - refreshing..." or "⚠️ Over X stale..."
     expect(text).toMatch(/⚠️|warning|stale/i);
     
     // Color should be orange (#f80) or red (#c00) for stale data

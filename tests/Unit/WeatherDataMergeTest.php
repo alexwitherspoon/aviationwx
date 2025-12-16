@@ -283,7 +283,7 @@ class WeatherDataMergeTest extends TestCase
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Primary field (stale) should not be preserved

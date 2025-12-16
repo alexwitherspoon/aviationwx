@@ -28,7 +28,10 @@ class ConstantsTest extends TestCase
             'CURL_TIMEOUT',
             'CONFIG_CACHE_TTL',
             'MAX_STALE_HOURS',
-            'MAX_STALE_HOURS_METAR',
+            'WEATHER_STALENESS_WARNING_HOURS_METAR',
+            'WEATHER_STALENESS_ERROR_HOURS_METAR',
+            'WEATHER_STALENESS_WARNING_MULTIPLIER',
+            'WEATHER_STALENESS_ERROR_MULTIPLIER',
             'STALE_WHILE_REVALIDATE_SECONDS',
         ];
         
@@ -69,7 +72,10 @@ class ConstantsTest extends TestCase
         
         // Staleness thresholds should be positive
         $this->assertGreaterThan(0, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be positive');
-        $this->assertGreaterThan(0, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be positive');
+        $this->assertGreaterThan(0, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be positive');
+        $this->assertGreaterThan(0, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be positive');
+        $this->assertGreaterThan(0, WEATHER_STALENESS_WARNING_MULTIPLIER, 'WEATHER_STALENESS_WARNING_MULTIPLIER should be positive');
+        $this->assertGreaterThan(0, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be positive');
         $this->assertGreaterThan(0, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be positive');
     }
     
@@ -118,16 +124,39 @@ class ConstantsTest extends TestCase
         $this->assertGreaterThanOrEqual(1, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be >= 1 hour');
         $this->assertLessThanOrEqual(24, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be <= 24 hours');
         
-        // MAX_STALE_HOURS_METAR should be reasonable (e.g., between 1 and 24 hours)
+        // WEATHER_STALENESS_ERROR_HOURS_METAR should be reasonable (e.g., between 1 and 24 hours)
         // METARs are published hourly, so 2 hours is appropriate
-        $this->assertGreaterThanOrEqual(1, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be >= 1 hour');
-        $this->assertLessThanOrEqual(24, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be <= 24 hours');
+        $this->assertGreaterThanOrEqual(1, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be >= 1 hour');
+        $this->assertLessThanOrEqual(24, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be <= 24 hours');
         // METAR threshold should typically be <= primary threshold (since METARs are less frequent)
-        $this->assertLessThanOrEqual(MAX_STALE_HOURS, MAX_STALE_HOURS_METAR, 'MAX_STALE_HOURS_METAR should be <= MAX_STALE_HOURS');
+        $this->assertLessThanOrEqual(MAX_STALE_HOURS, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be <= MAX_STALE_HOURS');
         
         // STALE_WHILE_REVALIDATE_SECONDS should be reasonable (e.g., between 60 and 3600 seconds)
         $this->assertGreaterThanOrEqual(60, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be >= 60 seconds');
         $this->assertLessThanOrEqual(3600, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be <= 1 hour');
+    }
+    
+    /**
+     * Test that weather staleness thresholds are reasonable
+     */
+    public function testWeatherStalenessThresholds_AreReasonable()
+    {
+        // METAR warning threshold should be reasonable (e.g., between 0.5 and 12 hours)
+        $this->assertGreaterThanOrEqual(0.5, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be >= 0.5 hours');
+        $this->assertLessThanOrEqual(12, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be <= 12 hours');
+        
+        // METAR warning should be <= METAR error threshold
+        $this->assertLessThanOrEqual(WEATHER_STALENESS_ERROR_HOURS_METAR, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be <= WEATHER_STALENESS_ERROR_HOURS_METAR');
+        
+        // Weather multipliers should be reasonable (e.g., between 2 and 20)
+        $this->assertGreaterThanOrEqual(2, WEATHER_STALENESS_WARNING_MULTIPLIER, 'WEATHER_STALENESS_WARNING_MULTIPLIER should be >= 2');
+        $this->assertLessThanOrEqual(20, WEATHER_STALENESS_WARNING_MULTIPLIER, 'WEATHER_STALENESS_WARNING_MULTIPLIER should be <= 20');
+        
+        $this->assertGreaterThanOrEqual(2, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be >= 2');
+        $this->assertLessThanOrEqual(20, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be <= 20');
+        
+        // Error multiplier should be >= warning multiplier
+        $this->assertGreaterThanOrEqual(WEATHER_STALENESS_WARNING_MULTIPLIER, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be >= WEATHER_STALENESS_WARNING_MULTIPLIER');
     }
 }
 

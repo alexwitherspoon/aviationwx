@@ -29,7 +29,7 @@ class StaleDataSafetyTest extends TestCase
         $originalVisibility = $data['visibility'];
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // All data should remain (both sources fresh)
@@ -56,7 +56,7 @@ class StaleDataSafetyTest extends TestCase
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Primary source fields should be nulled
@@ -83,11 +83,11 @@ class StaleDataSafetyTest extends TestCase
             'ceiling' => 5000,
             'cloud_cover' => 'SCT',
             'last_updated_primary' => time() - 300,  // 5 minutes ago (fresh)
-            'last_updated_metar' => time() - (MAX_STALE_HOURS_METAR * 3600 + 100)  // Just over 2 hours (stale for METAR)
+            'last_updated_metar' => time() - (WEATHER_STALENESS_ERROR_HOURS_METAR * 3600 + 100)  // Just over 2 hours (stale for METAR)
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Primary source fields should remain (primary is fresh)
@@ -117,7 +117,7 @@ class StaleDataSafetyTest extends TestCase
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // All fields should be nulled
@@ -141,7 +141,7 @@ class StaleDataSafetyTest extends TestCase
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Current temperature should be nulled (from stale primary source)
@@ -164,7 +164,7 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_primary' => time() - $threshold  // Exactly at threshold
         ]);
         
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $threshold, $maxStaleSecondsMetar);
         
         // Should still be nulled (>= threshold is stale)
@@ -182,7 +182,7 @@ class StaleDataSafetyTest extends TestCase
             'last_updated_primary' => time() - ($threshold - 1)  // 1 second before threshold
         ]);
         
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $threshold, $maxStaleSecondsMetar);
         
         // Should remain (not yet stale)
@@ -207,7 +207,7 @@ class StaleDataSafetyTest extends TestCase
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Stale wind_speed should not be preserved
@@ -241,7 +241,7 @@ class StaleDataSafetyTest extends TestCase
         ]);
         
         $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = MAX_STALE_HOURS_METAR * 3600;
+        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         $result = mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds, $maxStaleSecondsMetar);
         
         // Daily tracking should always be preserved, regardless of staleness
