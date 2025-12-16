@@ -1125,8 +1125,30 @@ jobs:
           echo "✓ Containers built and started successfully"
           
           # Wait for web container to be ready (needed for certificate generation)
+          # Use polling instead of fixed sleep for faster startup detection
           echo "Waiting for web container to be ready..."
-          sleep 10
+          if [ -f scripts/wait-for-container-health.sh ]; then
+            chmod +x scripts/wait-for-container-health.sh
+            if scripts/wait-for-container-health.sh \
+              --container web \
+              --check-type http \
+              --timeout 30 \
+              --interval 2 \
+              --compose-file docker/docker-compose.prod.yml \
+              --url http://localhost/; then
+              echo "✓ Web container is ready and responding"
+            else
+              echo "⚠️  Warning: Web container did not become ready within timeout"
+              echo "   Continuing anyway - certificate generation may fail"
+            fi
+          else
+            # Fallback to simple status check if script not available
+            echo "⚠️  Health check script not found, using fallback check..."
+            sleep 5
+            if ! docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
+              echo "⚠️  Warning: Web container is not running, skipping certificate generation"
+            fi
+          fi
           
           # Verify container is running before attempting certificate operations
           if ! docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
@@ -1257,8 +1279,20 @@ jobs:
             fi
           fi
           
-          # Wait for Nginx to be ready
-          sleep 3
+          # Wait for Nginx to be ready (polling instead of fixed sleep)
+          echo "Waiting for Nginx to be ready..."
+          if [ -f scripts/wait-for-container-health.sh ]; then
+            chmod +x scripts/wait-for-container-health.sh
+            scripts/wait-for-container-health.sh \
+              --container nginx \
+              --check-type status \
+              --timeout 15 \
+              --interval 1 \
+              --compose-file docker/docker-compose.prod.yml || true
+          else
+            # Fallback to short sleep if script not available
+            sleep 2
+          fi
           
           echo "Testing Nginx configuration..."
           # Verify Nginx configuration is valid
@@ -1426,65 +1460,83 @@ jobs:
           echo "Verifying fail2ban in container..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          # Wait for container to be fully ready
-          echo "Waiting for container services to initialize..."
-          sleep 15  # Increased from 5s to allow fail2ban time to start
-          
-          # Retry logic: check up to 3 times with 5s intervals
-          MAX_RETRIES=3
-          RETRY_INTERVAL=5
-          FAIL2BAN_RUNNING=false
-          
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo ""
-            echo "Attempt $i/$MAX_RETRIES: Checking fail2ban..."
+          # Wait for fail2ban to be ready using polling (faster than fixed sleep)
+          echo "Waiting for fail2ban to be ready..."
+          if [ -f scripts/wait-for-container-health.sh ]; then
+            chmod +x scripts/wait-for-container-health.sh
+            if scripts/wait-for-container-health.sh \
+              --container web \
+              --check-type fail2ban \
+              --timeout 30 \
+              --interval 3 \
+              --compose-file docker/docker-compose.prod.yml; then
+              echo "✓ fail2ban is ready"
+              FAIL2BAN_RUNNING=true
+            else
+              echo "❌ fail2ban did not become ready within timeout"
+              FAIL2BAN_RUNNING=false
+            fi
+          else
+            # Fallback to manual check if script not available
+            echo "⚠️  Health check script not found, using fallback check..."
+            sleep 10
+            FAIL2BAN_RUNNING=false
             
-            # Check if process is running
-            if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x fail2ban-server > /dev/null 2>&1; then
-              echo "✓ fail2ban-server process is running"
+            # Retry logic: check up to 3 times with 5s intervals
+            MAX_RETRIES=3
+            RETRY_INTERVAL=5
+            
+            for i in $(seq 1 $MAX_RETRIES); do
+              echo ""
+              echo "Attempt $i/$MAX_RETRIES: Checking fail2ban..."
               
-              # Verify we can connect to fail2ban client
-              if docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client ping > /dev/null 2>&1; then
-                echo "✓ fail2ban-client is responsive"
+              # Check if process is running
+              if docker compose -f docker/docker-compose.prod.yml exec -T web pgrep -x fail2ban-server > /dev/null 2>&1; then
+                echo "✓ fail2ban-server process is running"
                 
-                # Get status and verify jails are active
-                STATUS_OUTPUT=$(docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client status 2>&1 || echo "")
-                
-                if echo "$STATUS_OUTPUT" | grep -q "Jail list"; then
-                  JAIL_LIST=$(echo "$STATUS_OUTPUT" | grep -A 10 "Jail list" | tail -n +2 | tr -d ' \t' || echo "")
+                # Verify we can connect to fail2ban client
+                if docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client ping > /dev/null 2>&1; then
+                  echo "✓ fail2ban-client is responsive"
                   
-                  if [ -n "$JAIL_LIST" ]; then
-                    echo "✓ Active jails found:"
-                    echo "$JAIL_LIST" | sed 's/^/  - /'
+                  # Get status and verify jails are active
+                  STATUS_OUTPUT=$(docker compose -f docker/docker-compose.prod.yml exec -T web fail2ban-client status 2>&1 || echo "")
+                  
+                  if echo "$STATUS_OUTPUT" | grep -q "Jail list"; then
+                    JAIL_LIST=$(echo "$STATUS_OUTPUT" | grep -A 10 "Jail list" | tail -n +2 | tr -d ' \t' || echo "")
                     
-                    # Verify at least one jail is enabled (vsftpd or sshd-sftp)
-                    if echo "$JAIL_LIST" | grep -qE "(vsftpd|sshd-sftp)"; then
-                      echo "✓ Required jails (vsftpd/sshd-sftp) are active"
-                      FAIL2BAN_RUNNING=true
-                      break
+                    if [ -n "$JAIL_LIST" ]; then
+                      echo "✓ Active jails found:"
+                      echo "$JAIL_LIST" | sed 's/^/  - /'
+                      
+                      # Verify at least one jail is enabled (vsftpd or sshd-sftp)
+                      if echo "$JAIL_LIST" | grep -qE "(vsftpd|sshd-sftp)"; then
+                        echo "✓ Required jails (vsftpd/sshd-sftp) are active"
+                        FAIL2BAN_RUNNING=true
+                        break
+                      else
+                        echo "⚠️  Warning: No required jails found in jail list"
+                        echo "Jail list: $JAIL_LIST"
+                      fi
                     else
-                      echo "⚠️  Warning: No required jails found in jail list"
-                      echo "Jail list: $JAIL_LIST"
+                      echo "⚠️  Warning: Jail list is empty"
                     fi
                   else
-                    echo "⚠️  Warning: Jail list is empty"
+                    echo "⚠️  Warning: Could not get jail list from status"
+                    echo "Status output: $STATUS_OUTPUT"
                   fi
                 else
-                  echo "⚠️  Warning: Could not get jail list from status"
-                  echo "Status output: $STATUS_OUTPUT"
+                  echo "⚠️  Warning: fail2ban-client is not responsive"
                 fi
               else
-                echo "⚠️  Warning: fail2ban-client is not responsive"
+                echo "⚠️  Warning: fail2ban-server process not found"
               fi
-            else
-              echo "⚠️  Warning: fail2ban-server process not found"
-            fi
-            
-            if [ $i -lt $MAX_RETRIES ]; then
-              echo "Waiting ${RETRY_INTERVAL}s before retry..."
-              sleep $RETRY_INTERVAL
-            fi
-          done
+              
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "Waiting ${RETRY_INTERVAL}s before retry..."
+                sleep $RETRY_INTERVAL
+              fi
+            done
+          fi
           
           # Fail deployment if fail2ban is not running properly
           if [ "$FAIL2BAN_RUNNING" != "true" ]; then
@@ -1546,10 +1598,33 @@ jobs:
             FAILURE_REASONS+=("Containers not found - partial deployment detected")
           fi
           
-          # Wait for containers to be ready (give them time to start)
+          # Wait for containers to be ready using polling (faster than fixed sleep)
           echo ""
           echo "2. Waiting for containers to start..."
-          sleep 8
+          if [ -f scripts/wait-for-container-health.sh ]; then
+            chmod +x scripts/wait-for-container-health.sh
+            # First check container is running
+            if scripts/wait-for-container-health.sh \
+              --container web \
+              --check-type status \
+              --timeout 20 \
+              --interval 2 \
+              --compose-file docker/docker-compose.prod.yml; then
+              echo "✓ Container is running"
+            else
+              HEALTH_CHECK_FAILED=true
+              PARTIAL_DEPLOYMENT=true
+              FAILURE_REASONS+=("Web container not running")
+            fi
+          else
+            # Fallback to simple check if script not available
+            sleep 5
+            if ! docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
+              HEALTH_CHECK_FAILED=true
+              PARTIAL_DEPLOYMENT=true
+              FAILURE_REASONS+=("Web container not running")
+            fi
+          fi
           
           # Check 3: Containers running
           echo "3. Checking container status..."
@@ -1567,43 +1642,73 @@ jobs:
             echo "✓ Containers are running (${RUNNING_COUNT} container(s) up)"
           fi
           
-          # Check 4: Container health status
+          # Check 4: Container health status (using polling script)
           echo ""
           echo "4. Checking container health..."
-          MAX_WAIT=60
-          WAIT_TIME=0
-          while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-            HEALTH=$(docker compose -f docker/docker-compose.prod.yml ps web --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-            if [ "$HEALTH" = "healthy" ]; then
+          if [ -f scripts/wait-for-container-health.sh ]; then
+            chmod +x scripts/wait-for-container-health.sh
+            if scripts/wait-for-container-health.sh \
+              --container web \
+              --check-type health \
+              --timeout 60 \
+              --interval 2 \
+              --compose-file docker/docker-compose.prod.yml; then
               echo "✓ Web container is healthy"
-              break
-            elif [ "$HEALTH" = "unhealthy" ]; then
-              HEALTH_CHECK_FAILED=true
-              FAILURE_REASONS+=("Container health status: unhealthy")
-              break
             else
-              echo "  Container health: $HEALTH (waiting...)"
-              sleep 5
-              WAIT_TIME=$((WAIT_TIME + 5))
+              HEALTH_CHECK_FAILED=true
+              FAILURE_REASONS+=("Container did not become healthy within timeout")
             fi
-          done
-          
-          if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-            HEALTH_CHECK_FAILED=true
-            FAILURE_REASONS+=("Container did not become healthy within ${MAX_WAIT} seconds")
+          else
+            # Fallback to manual polling if script not available
+            MAX_WAIT=60
+            WAIT_TIME=0
+            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+              HEALTH=$(docker compose -f docker/docker-compose.prod.yml ps web --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+              if [ "$HEALTH" = "healthy" ]; then
+                echo "✓ Web container is healthy"
+                break
+              elif [ "$HEALTH" = "unhealthy" ]; then
+                HEALTH_CHECK_FAILED=true
+                FAILURE_REASONS+=("Container health status: unhealthy")
+                break
+              else
+                echo "  Container health: $HEALTH (waiting...)"
+                sleep 2
+                WAIT_TIME=$((WAIT_TIME + 2))
+              fi
+            done
+            
+            if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+              HEALTH_CHECK_FAILED=true
+              FAILURE_REASONS+=("Container did not become healthy within ${MAX_WAIT} seconds")
+            fi
           fi
           
-          # Additional wait for services to fully initialize
-          sleep 5
-          
-          # Check 5: Service responding
+          # Check 5: Service responding (HTTP check)
           echo ""
           echo "5. Checking service response..."
-          if ! docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost/ > /dev/null 2>&1; then
-            HEALTH_CHECK_FAILED=true
-            FAILURE_REASONS+=("Homepage not accessible (internal check failed)")
+          if [ -f scripts/wait-for-container-health.sh ]; then
+            chmod +x scripts/wait-for-container-health.sh
+            if scripts/wait-for-container-health.sh \
+              --container web \
+              --check-type http \
+              --timeout 15 \
+              --interval 2 \
+              --compose-file docker/docker-compose.prod.yml \
+              --url http://localhost/; then
+              echo "✓ Web container is responding (internal check passed)"
+            else
+              HEALTH_CHECK_FAILED=true
+              FAILURE_REASONS+=("Homepage not accessible (internal check failed)")
+            fi
           else
-            echo "✓ Web container is responding (internal check passed)"
+            # Fallback to simple check if script not available
+            if ! docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost/ > /dev/null 2>&1; then
+              HEALTH_CHECK_FAILED=true
+              FAILURE_REASONS+=("Homepage not accessible (internal check failed)")
+            else
+              echo "✓ Web container is responding (internal check passed)"
+            fi
           fi
           
           # Check 6: Verify commit SHA matches (detect partial code deployment)
