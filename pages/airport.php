@@ -3,6 +3,10 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/address-formatter.php';
+require_once __DIR__ . '/../lib/weather/utils.php';
+
+// Normalize weather source for METAR-only airports (sets weather_source if metar_station is configured)
+normalizeWeatherSource($airport);
 
 /**
  * Extract actual image capture timestamp from EXIF data
@@ -647,7 +651,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             
             if (!$hasAviationWeather && 
                 in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink', 'pwsweather'])) {
-                require_once __DIR__ . '/../lib/weather/utils.php';
                 // Show METAR source if metar_station is configured
                 if (isMetarEnabled($airport)) {
                     $weatherSources[] = [
