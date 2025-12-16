@@ -28,7 +28,7 @@ This document outlines coding standards and development practices for AviationWX
 - **Show all available data** with "---" for missing fields
 - **Never show stale data** - null out fields that exceed `MAX_STALE_HOURS` (3 hours)
 - **Show timestamps** - Always display data age to users
-- **Warn at thresholds** - Show warnings when data exceeds `STALE_WARNING_HOURS` (1 hour)
+- **Warn at thresholds** - Show warnings when data exceeds `WEATHER_STALENESS_WARNING_HOURS_METAR` (1 hour)
 - **Fail closed** - After `MAX_STALE_HOURS`, show "---" instead of stale data
 
 **Example:**

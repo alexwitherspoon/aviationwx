@@ -219,8 +219,8 @@ Returns an HTML status page displaying system and airport health status.
   - Degraded: 5x to 10x refresh interval (e.g., 300-600 seconds for 60-second refresh) or until 3 hours (whichever is smaller)
   - Down: > 10x refresh interval or > 3 hours (MAX_STALE_HOURS), whichever is smaller
 - **METAR/Aviation Weather** (uses hourly thresholds, not multipliers):
-  - Operational: < 2 hours (MAX_STALE_HOURS_METAR)
-  - Degraded: 2-3 hours (between MAX_STALE_HOURS_METAR and MAX_STALE_HOURS)
+  - Operational: < 2 hours (WEATHER_STALENESS_ERROR_HOURS_METAR)
+  - Degraded: 2-3 hours (between WEATHER_STALENESS_ERROR_HOURS_METAR and MAX_STALE_HOURS)
   - Down: > 3 hours (MAX_STALE_HOURS)
 
 **HTTP Status Codes:**
