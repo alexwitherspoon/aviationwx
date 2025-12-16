@@ -51,39 +51,30 @@
         {
           "name": "North Runway Camera (MJPEG)",
           "url": "https://example.com/video.mjpg",
-          "position": "north",
           "refresh_seconds": 60
         },
         {
           "name": "South Runway Camera (MJPEG Auth)",
           "url": "https://example.com/mjpg/stream",
           "type": "mjpeg",
-          "username": "admin",
-          "password": "password123",
-          "position": "south",
           "refresh_seconds": 60
         },
         {
           "name": "West Camera (Static JPEG)",
           "url": "https://example.com/webcam.jpg",
           "type": "static_jpeg",
-          "position": "west",
           "refresh_seconds": 120
         },
         {
           "name": "East Camera (Static JPEG Auth)",
           "url": "https://example.com/webcam.jpg",
           "type": "static_jpeg",
-          "username": "user",
-          "password": "pass",
-          "position": "east",
           "refresh_seconds": 60
         },
         {
           "name": "North-East Camera (Static PNG)",
           "url": "https://example.com/webcam.png",
           "type": "static_png",
-          "position": "north-east",
           "refresh_seconds": 60
         },
         {
@@ -91,7 +82,6 @@
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "position": "south",
           "refresh_seconds": 60
         },
         {
@@ -99,9 +89,6 @@
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "username": "admin",
-          "password": "password123",
-          "position": "north",
           "refresh_seconds": 60
         },
         {
@@ -112,9 +99,6 @@
           "rtsp_fetch_timeout": 10,
           "rtsp_max_runtime": 6,
           "transcode_timeout": 8,
-          "username": "admin",
-          "password": "password123",
-          "position": "south-west",
           "refresh_seconds": 30
         },
         {
@@ -122,7 +106,6 @@
           "url": "rtsp://camera.example.com:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "udp",
-          "position": "west",
           "refresh_seconds": 60
         },
         {
@@ -130,7 +113,6 @@
           "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "position": "east",
           "refresh_seconds": 60
         },
         {
@@ -141,9 +123,6 @@
           "rtsp_fetch_timeout": 10,
           "rtsp_max_runtime": 6,
           "transcode_timeout": 8,
-          "username": "admin",
-          "password": "password123",
-          "position": "north-west",
           "refresh_seconds": 30
         },
         {
@@ -151,13 +130,11 @@
           "url": "rtsp://192.168.1.100:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",
-          "position": "south-east",
           "refresh_seconds": 60
         },
         {
           "name": "Push Camera (SFTP Basic)",
           "type": "push",
-          "position": "north",
           "refresh_seconds": 60,
           "push_config": {
             "protocol": "sftp",
@@ -168,7 +145,6 @@
         {
           "name": "Push Camera (SFTP Full)",
           "type": "push",
-          "position": "south",
           "refresh_seconds": 60,
           "push_config": {
             "protocol": "sftp",
@@ -182,7 +158,6 @@
         {
           "name": "Secure Push Camera (FTPS)",
           "type": "push",
-          "position": "east",
           "refresh_seconds": 120,
           "push_config": {
             "protocol": "ftps",
@@ -196,7 +171,6 @@
         {
           "name": "Legacy Push Camera (FTP)",
           "type": "push",
-          "position": "west",
           "refresh_seconds": 60,
           "push_config": {
             "protocol": "ftp",
@@ -262,7 +236,6 @@
         "ctaf": "122.9"
       },
       "services": {
-        "fuel_available": false,
         "repairs_available": false
       },
       "webcams": [],
@@ -287,7 +260,6 @@
         "ctaf": "122.8"
       },
       "services": {
-        "fuel_available": false,
         "repairs_available": false
       },
       "webcams": [],
