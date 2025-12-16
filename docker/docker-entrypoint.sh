@@ -256,12 +256,16 @@ if [ "$IPV4_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
     VSFTPD_IPV4_PID=$!
     sleep 1
     if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
-        echo "Error: vsftpd IPv4 failed to start, checking configuration..."
-        vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 || true
-        echo "Error: vsftpd IPv4 failed to start"
-        exit 1
+        echo "⚠️  Warning: vsftpd IPv4 failed to start, checking configuration..."
+        echo "   vsftpd configuration test output:"
+        vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 | sed 's/^/   /' || true
+        echo "⚠️  Warning: vsftpd IPv4 failed to start - continuing without FTP service"
+        echo "   Web service will continue to function, but FTP/FTPS will not be available"
+        echo "   This is non-fatal - container will continue to start"
+        VSFTPD_IPV4_PID=""
+    else
+        echo "✓ vsftpd IPv4 started (PID: $VSFTPD_IPV4_PID)"
     fi
-    echo "✓ vsftpd IPv4 started (PID: $VSFTPD_IPV4_PID)"
 fi
 
 if [ "$IPV6_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
@@ -270,12 +274,16 @@ if [ "$IPV6_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
     VSFTPD_IPV6_PID=$!
     sleep 1
     if ! kill -0 $VSFTPD_IPV6_PID 2>/dev/null; then
-        echo "Error: vsftpd IPv6 failed to start, checking configuration..."
-        vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv6.conf 2>&1 || true
-        echo "Error: vsftpd IPv6 failed to start"
-        exit 1
+        echo "⚠️  Warning: vsftpd IPv6 failed to start, checking configuration..."
+        echo "   vsftpd configuration test output:"
+        vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv6.conf 2>&1 | sed 's/^/   /' || true
+        echo "⚠️  Warning: vsftpd IPv6 failed to start - continuing without FTP service"
+        echo "   Web service will continue to function, but FTP/FTPS will not be available"
+        echo "   This is non-fatal - container will continue to start"
+        VSFTPD_IPV6_PID=""
+    else
+        echo "✓ vsftpd IPv6 started (PID: $VSFTPD_IPV6_PID)"
     fi
-    echo "✓ vsftpd IPv6 started (PID: $VSFTPD_IPV6_PID)"
 fi
 
 # Fallback: If neither IP resolved, try IPv4 config (IPv4 is more likely to work)
@@ -288,15 +296,19 @@ if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
         VSFTPD_IPV4_PID=$!
         sleep 1
         if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
-            echo "Error: vsftpd failed to start, checking configuration..."
-            vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 || true
-            echo "Error: vsftpd failed to start"
-            exit 1
+            echo "⚠️  Warning: vsftpd failed to start, checking configuration..."
+            echo "   vsftpd configuration test output:"
+            vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 | sed 's/^/   /' || true
+            echo "⚠️  Warning: vsftpd failed to start - continuing without FTP service"
+            echo "   Web service will continue to function, but FTP/FTPS will not be available"
+            echo "   This is non-fatal - container will continue to start"
+            VSFTPD_IPV4_PID=""
+        else
+            echo "✓ vsftpd started in fallback mode (PID: $VSFTPD_IPV4_PID)"
         fi
-        echo "✓ vsftpd started in fallback mode (PID: $VSFTPD_IPV4_PID)"
     else
-        echo "Error: No vsftpd config files available"
-        exit 1
+        echo "⚠️  Warning: No vsftpd config files available - FTP service will not be available"
+        echo "   Web service will continue to function normally"
     fi
 fi
 
@@ -310,26 +322,26 @@ service ssh start || {
     exit 1
 }
 
-# Verify services are running
+# Verify services are running (non-fatal for vsftpd - web service is more critical)
 if [ "$IPV4_RESOLVED" = "yes" ] && [ -n "$VSFTPD_IPV4_PID" ]; then
     if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
-        echo "Error: vsftpd IPv4 is not running"
-        exit 1
+        echo "⚠️  Warning: vsftpd IPv4 is not running (non-fatal)"
+        VSFTPD_IPV4_PID=""
     fi
 fi
 
 if [ "$IPV6_RESOLVED" = "yes" ] && [ -n "$VSFTPD_IPV6_PID" ]; then
     if ! kill -0 $VSFTPD_IPV6_PID 2>/dev/null; then
-        echo "Error: vsftpd IPv6 is not running"
-        exit 1
+        echo "⚠️  Warning: vsftpd IPv6 is not running (non-fatal)"
+        VSFTPD_IPV6_PID=""
     fi
 fi
 
 # Verify fallback instance if neither IP was resolved
 if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ] && [ -n "$VSFTPD_IPV4_PID" ]; then
     if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
-        echo "Error: vsftpd fallback instance is not running"
-        exit 1
+        echo "⚠️  Warning: vsftpd fallback instance is not running (non-fatal)"
+        VSFTPD_IPV4_PID=""
     fi
 fi
 
