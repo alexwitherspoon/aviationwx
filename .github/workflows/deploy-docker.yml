@@ -20,6 +20,10 @@ on:
         description: 'Reason for manual deployment'
         required: true
         type: string
+      deploy_sha:
+        description: 'Commit SHA to deploy (leave empty to deploy latest)'
+        required: false
+        type: string
 
 # Prevent concurrent deployments - only one deployment at a time
 # This prevents conflicts when multiple commits are pushed rapidly
@@ -39,7 +43,43 @@ jobs:
     outputs:
       qa-success: ${{ steps.check.outputs.qa-success }}
       skip-checks: ${{ steps.check.outputs.skip-checks }}
+      deploy-sha: ${{ steps.determine-sha-prereq.outputs.deploy_sha }}
+      deploy-sha-short: ${{ steps.determine-sha-prereq.outputs.deploy_sha_short }}
     steps:
+      - name: Determine deployment SHA
+        id: determine-sha-prereq
+        run: |
+          # For workflow_run events, use the triggering workflow's SHA
+          # For manual dispatch, use provided SHA or default to latest
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
+            echo "Using SHA from workflow_run event: ${DEPLOY_SHA:0:7}"
+          else
+            # Manual dispatch: use provided SHA or default to current SHA
+            PROVIDED_SHA="${{ github.event.inputs.deploy_sha }}"
+            if [ -n "$PROVIDED_SHA" ] && [ "$PROVIDED_SHA" != "" ]; then
+              DEPLOY_SHA="$PROVIDED_SHA"
+              echo "Using provided SHA: ${DEPLOY_SHA:0:7}"
+            else
+              DEPLOY_SHA="${{ github.sha }}"
+              echo "Using latest SHA (default): ${DEPLOY_SHA:0:7}"
+            fi
+          fi
+          
+          # Validate SHA format (should be 40 characters for full SHA, or 7+ for short)
+          if [ ${#DEPLOY_SHA} -lt 7 ]; then
+            echo "❌ ERROR: Invalid SHA format: ${DEPLOY_SHA}"
+            echo "SHA must be at least 7 characters"
+            exit 1
+          fi
+          
+          echo "deploy_sha=${DEPLOY_SHA}" >> $GITHUB_OUTPUT
+          echo "deploy_sha_short=${DEPLOY_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Deployment SHA (for prerequisites check): ${DEPLOY_SHA}"
+          echo "Short SHA: ${DEPLOY_SHA:0:7}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Wait for and check required workflows status
         id: check
         uses: actions/github-script@v7
@@ -48,6 +88,8 @@ jobs:
             const skipInput = '${{ github.event.inputs.skip_prerequisites }}';
             const isManualDispatch = '${{ github.event_name }}' === 'workflow_dispatch';
             const deploymentReason = '${{ github.event.inputs.deployment_reason }}';
+            const deploySha = '${{ steps.determine-sha-prereq.outputs.deploy_sha }}';
+            const deployShaShort = '${{ steps.determine-sha-prereq.outputs.deploy_sha_short }}';
             
             // Fast-fail: Check QA conclusion for workflow_run events first
             if (!isManualDispatch) {
@@ -59,7 +101,7 @@ jobs:
                 core.error(`❌ DEPLOYMENT BLOCKED: QA Tests Did Not Pass`);
                 core.error(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
                 core.error(`QA Workflow Conclusion: ${conclusion}`);
-                core.error(`Commit SHA: ${{ github.event.workflow_run.head_sha }}`);
+                core.error(`Commit SHA: ${deployShaShort}`);
                 core.error(``);
                 core.error(`Deployment cannot proceed because Quality Assurance tests failed.`);
                 core.error(`This workflow will exit immediately - deploy job will not run.`);
@@ -71,7 +113,7 @@ jobs:
               
               core.info(`✓ QA workflow succeeded - proceeding with additional checks`);
               
-              const commitSha = '${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}';
+              const commitSha = deploySha;
               const branchName = '${{ github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name }}';
               
               if (branchName !== 'main') {
@@ -152,8 +194,18 @@ jobs:
             
             // Manual dispatch: verify QA workflow passed
             if (isManualDispatch && skipInput !== 'true') {
-              const commitSha = '${{ github.sha }}';
+              // Use the determined deployment SHA
+              const commitSha = deploySha;
               const branchName = '${{ github.ref_name }}';
+              
+              core.info(`Checking QA tests for commit: ${deployShaShort}`);
+              const providedSha = '${{ github.event.inputs.deploy_sha }}';
+              if (providedSha && providedSha.trim() !== '') {
+                core.info(`Using provided SHA: ${deployShaShort}`);
+              } else {
+                core.info(`Using default SHA (latest): ${deployShaShort}`);
+              }
+              
               const triggeringWorkflowRunIdRaw = '${{ github.event.workflow_run && github.event.workflow_run.id }}';
               const triggeringWorkflowRunId = (triggeringWorkflowRunIdRaw && triggeringWorkflowRunIdRaw !== '') ? triggeringWorkflowRunIdRaw : null;
               
@@ -198,13 +250,18 @@ jobs:
               }
               
               if (!qaRun || !qaSuccess) {
-                core.error(`❌ Quality Assurance Tests workflow did not succeed`);
+                core.error(`❌ Quality Assurance Tests workflow did not succeed for commit ${deployShaShort}`);
+                const providedSha = '${{ github.event.inputs.deploy_sha }}';
+                if (providedSha && providedSha.trim() !== '') {
+                  core.error(`Provided SHA: ${deployShaShort}`);
+                  core.error(`Make sure QA tests have passed for this specific commit before deploying.`);
+                }
                 core.setFailed('❌ QA tests must pass before manual deployment (unless skip flag is used)');
                 core.setOutput('qa-success', 'false');
                 return;
               }
               
-              core.info('✅ Quality Assurance Tests workflow succeeded');
+              core.info(`✅ Quality Assurance Tests workflow succeeded for commit ${deployShaShort}`);
               core.setOutput('qa-success', 'true');
             }
 
@@ -217,11 +274,80 @@ jobs:
       (needs.check-prerequisites.outputs.qa-success == 'true') || 
       (github.event_name == 'workflow_dispatch' && needs.check-prerequisites.outputs.skip-checks == 'true')
     steps:
+      - name: Use deployment SHA from prerequisites check
+        id: determine-sha
+        run: |
+          # Use the SHA determined in the check-prerequisites job
+          # This ensures both jobs use the exact same SHA
+          DEPLOY_SHA="${{ needs.check-prerequisites.outputs.deploy-sha }}"
+          DEPLOY_SHA_SHORT="${{ needs.check-prerequisites.outputs.deploy-sha-short }}"
+          
+          if [ -z "$DEPLOY_SHA" ]; then
+            echo "❌ ERROR: Deployment SHA not found from prerequisites check"
+            echo "This should not happen - check-prerequisites job should have determined the SHA"
+            exit 1
+          fi
+          
+          echo "deploy_sha=${DEPLOY_SHA}" >> $GITHUB_OUTPUT
+          echo "deploy_sha_short=${DEPLOY_SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Deployment SHA (from prerequisites): ${DEPLOY_SHA}"
+          echo "Short SHA: ${DEPLOY_SHA_SHORT}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ steps.determine-sha.outputs.deploy_sha }}
           fetch-depth: 0
+
+      - name: Validate SHA exists
+        run: |
+          DEPLOY_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
+          CURRENT_SHA=$(git rev-parse HEAD)
+          
+          # Verify the checked out SHA matches what we intended (or can be resolved)
+          if [ "$CURRENT_SHA" != "$DEPLOY_SHA" ]; then
+            # Try to resolve the SHA (might be a short SHA or tag)
+            RESOLVED_SHA=$(git rev-parse "$DEPLOY_SHA" 2>/dev/null || echo "")
+            if [ -z "$RESOLVED_SHA" ]; then
+              echo "❌ ERROR: SHA ${DEPLOY_SHA:0:7} does not exist in the repository"
+              echo "Please verify the SHA is correct and exists in the repository"
+              exit 1
+            fi
+            # If resolved SHA is different from current, checkout the correct one
+            if [ "$RESOLVED_SHA" != "$CURRENT_SHA" ]; then
+              echo "Resolved SHA ${DEPLOY_SHA:0:7} to ${RESOLVED_SHA:0:7}, checking out..."
+              git checkout "$RESOLVED_SHA"
+              CURRENT_SHA=$(git rev-parse HEAD)
+            fi
+          fi
+          
+          echo "✓ Validated SHA: ${CURRENT_SHA:0:7}"
+          echo "Full SHA: ${CURRENT_SHA}"
+
+      - name: Get previous commit SHA for rollback
+        id: previous-commit
+        run: |
+          # Get the previous commit SHA (parent of current commit)
+          # This will be used for rollback if deployment fails
+          CURRENT_SHA=$(git rev-parse HEAD)
+          
+          # Get the parent commit (previous commit)
+          PREVIOUS_SHA=$(git rev-parse HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_SHA" ]; then
+            # If no parent (first commit), try to get from git log
+            PREVIOUS_SHA=$(git log --format=%H -n 2 | tail -1 2>/dev/null || echo "")
+          fi
+          
+          if [ -n "$PREVIOUS_SHA" ] && [ "$PREVIOUS_SHA" != "$CURRENT_SHA" ]; then
+            echo "previous_commit_sha=${PREVIOUS_SHA}" >> $GITHUB_OUTPUT
+            echo "Previous commit SHA for rollback: ${PREVIOUS_SHA:0:7}"
+          else
+            echo "⚠️  Could not determine previous commit SHA (may be first commit)"
+            echo "previous_commit_sha=" >> $GITHUB_OUTPUT
+          fi
 
       - name: Load deployment helpers
         run: |
@@ -388,7 +514,9 @@ jobs:
       - name: Update cache version for cache busting
         run: |
           # Generate a unique version based on commit SHA and timestamp
-          DEPLOY_VERSION="$(git rev-parse --short HEAD)-$(date +%s)"
+          # Use the determined deployment SHA
+          DEPLOY_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
+          DEPLOY_VERSION="${DEPLOY_SHA:0:7}-$(date +%s)"
           echo "Updating cache version to: ${DEPLOY_VERSION}"
           
           # Update the cache version in public/js/service-worker.js
@@ -418,11 +546,16 @@ jobs:
 
       - name: Tag current working deployment and save state
         run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          # Pass previous commit SHA to server
+          PREVIOUS_COMMIT_SHA="${{ steps.previous-commit.outputs.previous_commit_sha }}"
+          
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} bash -s << 'EOF' "$PREVIOUS_COMMIT_SHA"
           set -euo pipefail
+          PREVIOUS_COMMIT_SHA="$1"
           cd ~/aviationwx
           
-          ROLLBACK_STATE_FILE="/tmp/aviationwx-rollback-state.json"
+          # Use persistent location for rollback state (survives reboots)
+          ROLLBACK_STATE_FILE="$HOME/aviationwx-rollback-state.json"
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Saving Rollback State"
@@ -448,6 +581,7 @@ jobs:
             "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "image": "${CURRENT_IMAGE}",
             "commit_sha": "${CURRENT_SHA}",
+            "previous_commit_sha": "${PREVIOUS_COMMIT_SHA}",
             "container_status": "${CONTAINER_STATUS}",
             "rollback_tag": "${ROLLBACK_TAG}"
           }
@@ -482,6 +616,7 @@ jobs:
           echo "✓ Rollback state saved to: $ROLLBACK_STATE_FILE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           EOF
+          # Note: PREVIOUS_COMMIT_SHA_FROM_RUNNER is passed via SSH heredoc substitution
 
       - name: Ensure SSL certificates are in place
         run: |
@@ -761,8 +896,17 @@ jobs:
           echo "Checking for Docker configuration file changes..."
           
           # Get the previous commit SHA (if available)
-          PREV_SHA="${{ github.event.before }}"
-          CURRENT_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
+          # Note: github.event.before is only available for push events
+          # For workflow_run/workflow_dispatch, we'll use git to find the parent
+          PREV_SHA=""
+          if [ "${{ github.event_name }}" = "push" ]; then
+            PREV_SHA="${{ github.event.before }}"
+          else
+            # For workflow_run/workflow_dispatch, try to get parent from git
+            # This will be set if we have the previous commit info
+            PREV_SHA="${{ steps.previous-commit.outputs.previous_commit_sha }}"
+          fi
+          CURRENT_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
           
           # Docker config files that require image rebuild
           DOCKER_CONFIG_FILES=(
@@ -815,10 +959,9 @@ jobs:
 
       - name: Deploy via Docker Compose
         run: |
-          # Get commit SHA from GitHub Actions context (7 characters to match GitHub's short SHA display)
+          # Get commit SHA from determined deployment SHA (7 characters to match GitHub's short SHA display)
           # Note: .git directory is excluded during rsync, so we can't get SHA from server's git repo
-          GIT_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
-          GIT_SHA="${GIT_SHA:0:7}"
+          GIT_SHA="${{ steps.determine-sha.outputs.deploy_sha_short }}"
           echo "Deploying with GIT_SHA: ${GIT_SHA}"
           
           # Determine if we need to force rebuild
@@ -1161,8 +1304,8 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
           # Verify deployed commit SHA
-          EXPECTED_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
-          EXPECTED_SHA_SHORT="${EXPECTED_SHA:0:7}"
+          EXPECTED_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
+          EXPECTED_SHA_SHORT="${{ steps.determine-sha.outputs.deploy_sha_short }}"
           
           echo "Verifying deployed commit SHA..."
           echo "Expected: ${EXPECTED_SHA_SHORT}"
@@ -1409,8 +1552,8 @@ jobs:
           # Check 6: Verify commit SHA matches (detect partial code deployment)
           echo ""
           echo "6. Verifying deployed code..."
-          EXPECTED_SHA="${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}"
-          EXPECTED_SHA_SHORT="${EXPECTED_SHA:0:7}"
+          EXPECTED_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
+          EXPECTED_SHA_SHORT="${{ steps.determine-sha.outputs.deploy_sha_short }}"
           ACTUAL_SHA=$(docker compose -f docker/docker-compose.prod.yml exec -T web printenv GIT_SHA 2>/dev/null || echo "")
           
           if [ -n "$ACTUAL_SHA" ]; then
@@ -1609,71 +1752,105 @@ jobs:
       - name: Rollback to previous version (if needed)
         if: failure()
         run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
-          set -euo pipefail
-          cd ~/aviationwx
+          # First, get rollback state from server to determine what to rollback to
+          ROLLBACK_STATE=$(ssh ${{ secrets.USER }}@${{ secrets.HOST }} "cat ~/aviationwx-rollback-state.json 2>/dev/null" || echo "")
           
-          ROLLBACK_STATE_FILE="/tmp/aviationwx-rollback-state.json"
-          
-          if [ ! -f "$ROLLBACK_STATE_FILE" ]; then
-            echo "⚠️  No rollback state file found - cannot rollback automatically"
+          if [ -z "$ROLLBACK_STATE" ]; then
+            echo "⚠️  No rollback state file found on server"
+            echo "This may be the first deployment or rollback state was not saved"
             echo "Manual intervention required"
             exit 1
           fi
           
-          ROLLBACK_STATE=$(cat "$ROLLBACK_STATE_FILE")
           ROLLBACK_TAG=$(echo "$ROLLBACK_STATE" | jq -r '.rollback_tag // "null"')
           PREVIOUS_SHA=$(echo "$ROLLBACK_STATE" | jq -r '.commit_sha // "unknown"')
+          PREVIOUS_COMMIT_SHA=$(echo "$ROLLBACK_STATE" | jq -r '.previous_commit_sha // ""')
           
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "AUTOMATIC ROLLBACK INITIATED"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Rolling back to previous working state..."
-          echo "Previous commit: ${PREVIOUS_SHA}"
+          echo "Previous commit SHA: ${PREVIOUS_SHA}"
+          echo "Previous git commit: ${PREVIOUS_COMMIT_SHA}"
           echo "Rollback tag: ${ROLLBACK_TAG}"
           echo ""
           
-          # Step 1: Stop current containers (even if partially started)
-          echo "Step 1: Stopping current containers (cleaning up partial deployment)..."
+          # Step 1: Restore code files from previous commit (on GitHub Actions runner)
+          if [ -n "$PREVIOUS_COMMIT_SHA" ] && [ "$PREVIOUS_COMMIT_SHA" != "" ]; then
+            echo "Step 1: Restoring code files from previous commit ${PREVIOUS_COMMIT_SHA:0:7}..."
+            
+            # Checkout previous commit on the runner
+            if git checkout "$PREVIOUS_COMMIT_SHA" 2>/dev/null; then
+              echo "✓ Checked out previous commit on runner"
+              
+              # Sync previous commit code to server
+              echo "Syncing previous commit code to server..."
+              if rsync -az --delete --exclude '.git' --exclude 'cache' --exclude 'docker/docker' --exclude 'uploads' --exclude 'ssl' ./ ${{ secrets.USER }}@${{ secrets.HOST }}:~/aviationwx/; then
+                echo "✓ Code files restored from previous commit"
+              else
+                echo "⚠️  Warning: Failed to sync code files (rsync failed)"
+                echo "   Will continue with Docker image rollback"
+              fi
+            else
+              echo "⚠️  Warning: Failed to checkout previous commit (git checkout failed)"
+              echo "   Will continue with Docker image rollback only"
+            fi
+          else
+            echo "Step 1: Skipping code file restoration (no previous commit SHA available)"
+          fi
+          
+          # Step 2: Restore Docker image and start containers on server
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << EOF
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          # Source deployment helper functions for consistent error handling
+          if [ -f scripts/deploy-helpers.sh ]; then
+            source scripts/deploy-helpers.sh
+          fi
+          
+          # Step 2: Stop current containers (even if partially started)
+          echo "Step 2: Stopping current containers (cleaning up partial deployment)..."
           docker compose -f docker/docker-compose.prod.yml down || true
           sleep 2
           
-          # Step 2: Check if we have rollback image
+          # Step 3: Restore Docker image
           if [ "$ROLLBACK_TAG" != "null" ] && docker images "aviationwx:$ROLLBACK_TAG" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | grep -q "aviationwx:$ROLLBACK_TAG"; then
-            echo "Step 2: Restoring previous Docker image..."
+            echo "Step 3: Restoring previous Docker image..."
             if docker tag "aviationwx:$ROLLBACK_TAG" "aviationwx:latest" 2>/dev/null; then
               echo "✓ Rollback image tagged successfully"
-              
-              # Step 3: Start containers with rollback image
-              echo "Step 3: Starting containers with rollback image..."
-              export DOCKER_BUILDKIT=1
-              export COMPOSE_DOCKER_CLI_BUILD=1
-              
-              if ! docker compose -f docker/docker-compose.prod.yml up -d; then
-                echo "❌ ERROR: Failed to start containers with rollback image"
-                echo "Manual intervention required"
-                exit 1
-              fi
             else
               echo "❌ ERROR: Failed to tag rollback image"
-              echo "Attempting to start containers with current code (may be broken)..."
-              docker compose -f docker/docker-compose.prod.yml up -d || {
-                echo "❌ ERROR: Cannot start containers - manual intervention required"
-                exit 1
-              }
+              echo "Will attempt to start containers anyway (may need rebuild)"
             fi
           else
-            echo "⚠️  Warning: No rollback image available"
-            echo "Attempting to start containers with current code (may be broken)..."
-            docker compose -f docker/docker-compose.prod.yml up -d || {
-              echo "❌ ERROR: Cannot start containers - manual intervention required"
-              exit 1
-            }
+            echo "Step 3: No rollback image available (will use existing or rebuild)"
           fi
           
-          # Step 4: Wait for services to be ready
-          echo "Step 4: Waiting for services to be ready..."
+          # Step 4: Start containers with rollback image and previous commit SHA
+          echo "Step 4: Starting containers with rollback configuration..."
+          export DOCKER_BUILDKIT=1
+          export COMPOSE_DOCKER_CLI_BUILD=1
+          
+          # Set GIT_SHA to previous commit for rollback
+          if [ -n "$PREVIOUS_SHA" ] && [ "$PREVIOUS_SHA" != "unknown" ]; then
+            export GIT_SHA="${PREVIOUS_SHA:0:7}"
+            echo "Setting GIT_SHA to previous commit: ${GIT_SHA}"
+          fi
+          
+          if ! docker compose -f docker/docker-compose.prod.yml up -d; then
+            echo "❌ ERROR: Failed to start containers with rollback configuration"
+            echo "Manual intervention required"
+            echo ""
+            echo "Debugging info:"
+            docker compose -f docker/docker-compose.prod.yml ps
+            docker compose -f docker/docker-compose.prod.yml logs web | tail -50
+            exit 1
+          fi
+          
+          # Step 5: Wait for services to be ready
+          echo "Step 5: Waiting for services to be ready..."
           MAX_WAIT=30
           WAIT_TIME=0
           while [ $WAIT_TIME -lt $MAX_WAIT ]; do
@@ -1688,9 +1865,21 @@ jobs:
             WAIT_TIME=$((WAIT_TIME + 2))
           done
           
-          # Step 5: Verify rollback was successful
+          # Step 6: Verify rollback was successful
           if docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
-            echo "Step 5: Verifying rollback..."
+            echo "Step 6: Verifying rollback..."
+            
+            # Verify GIT_SHA matches previous commit
+            if [ -n "$PREVIOUS_SHA" ] && [ "$PREVIOUS_SHA" != "unknown" ]; then
+              ACTUAL_SHA=$(docker compose -f docker/docker-compose.prod.yml exec -T web printenv GIT_SHA 2>/dev/null || echo "")
+              if [ -n "$ACTUAL_SHA" ]; then
+                if [ "${ACTUAL_SHA:0:7}" = "${PREVIOUS_SHA:0:7}" ]; then
+                  echo "✓ GIT_SHA matches previous commit: ${ACTUAL_SHA:0:7}"
+                else
+                  echo "⚠️  Warning: GIT_SHA mismatch (expected ${PREVIOUS_SHA:0:7}, got ${ACTUAL_SHA:0:7})"
+                fi
+              fi
+            fi
             
             # Verify service is responding
             if curl -f -s --max-time 10 https://aviationwx.org/ > /dev/null 2>&1; then
@@ -1700,7 +1889,10 @@ jobs:
               echo "✅ Rollback completed successfully"
               echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
               echo ""
-              echo "System restored to previous working state"
+              echo "System restored to previous working state:"
+              echo "  - Code files: ${PREVIOUS_COMMIT_SHA:0:7}"
+              echo "  - Docker image: ${ROLLBACK_TAG}"
+              echo "  - Commit SHA: ${PREVIOUS_SHA:0:7}"
             else
               echo "⚠️  Warning: Service not responding after rollback"
               echo "Container is running but service may not be fully functional"
