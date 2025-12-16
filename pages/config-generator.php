@@ -236,9 +236,6 @@ function generateConfigSnippet($formData) {
                 }
             }
             
-            if (!empty($cam['position'] ?? '')) {
-                $webcam['position'] = trim($cam['position']);
-            }
             if (!empty($cam['refresh_seconds'] ?? '')) {
                 $refresh = intval($cam['refresh_seconds']);
                 if ($refresh >= 60) {
@@ -920,11 +917,6 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Position</label>
-                        <input type="text" name="webcams[${idx}][position]" value="${escapeHtml(cam.position || '')}"
-                               placeholder="north, south, east, west">
-                    </div>
-                    <div class="form-group">
                         <label>Refresh Seconds</label>
                         <input type="number" name="webcams[${idx}][refresh_seconds]" 
                                value="${cam.refresh_seconds || ''}" min="60" placeholder="60">
@@ -1138,12 +1130,6 @@ function renderWebcamForm($idx, $cam) {
         </div>
         
         <div class="form-row">
-            <div class="form-group">
-                <label>Position</label>
-                <input type="text" name="webcams[<?= $idx ?>][position]" 
-                       value="<?= htmlspecialchars($cam['position'] ?? '') ?>"
-                       placeholder="north, south, east, west">
-            </div>
             <div class="form-group">
                 <label>Refresh Seconds</label>
                 <input type="number" name="webcams[<?= $idx ?>][refresh_seconds]" 
