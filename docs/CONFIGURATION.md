@@ -96,18 +96,30 @@ PWSWeather.com stations upload data to pwsweather.com, and station owners receiv
 ### 5. METAR (Fallback/Primary)
 **No API key required** - Uses public METAR data
 
+METAR can be configured in two ways:
+
+**Option 1: Explicit weather_source configuration**
 ```json
 "weather_source": {
     "type": "metar"
-}
+},
+"metar_station": "KSPB"
 ```
 
+**Option 2: Automatic METAR-only (simplified configuration)**
+```json
+"metar_station": "KSPB"
+```
+
+When `metar_station` is configured but `weather_source` is not present, the system automatically uses METAR as the primary weather source. This provides a simplified configuration option for airports that only need METAR data.
+
 **METAR Station Configuration:**
-- `metar_station`: Primary METAR station ID (e.g., `"KSPB"`)
+- `metar_station`: Primary METAR station ID (e.g., `"KSPB"`) - **Required for METAR data**
 - `nearby_metar_stations`: Array of alternate METAR station IDs for fallback (e.g., `["KVUO", "KHIO"]`)
 
 **METAR Enable Behavior:**
 - Configuring `metar_station` automatically enables METAR data fetching for that airport
+- If `weather_source` is not configured, METAR becomes the primary weather source
 - Per-airport: each airport independently enables METAR by configuring `metar_station`
 - To disable METAR, simply omit or remove the `metar_station` field
 - Example: Airport A with `metar_station: "KSPB"` has METAR enabled; Airport B without the field has it disabled

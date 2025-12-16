@@ -241,6 +241,30 @@
       "webcams": [],
       "partners": []
     },
+    "kpfc": {
+      "name": "Pacific City State Airport",
+      "enabled": true,
+      "icao": "KPFC",
+      "address": "City, State",
+      "lat": 45.1993611,
+      "lon": -123.9618944,
+      "elevation_ft": 10,
+      "timezone": "America/Los_Angeles",
+      "runways": [
+        {
+          "name": "14/32",
+          "heading_1": 140,
+          "heading_2": 320
+        }
+      ],
+      "frequencies": {
+        "ctaf": "122.9"
+      },
+      "webcams": [],
+      "partners": [],
+      "metar_station": "KPFC",
+      "nearby_metar_stations": ["KTMK"]
+    },
     "custom-airport": {
       "name": "Custom Airport Without Standard Identifiers",
       "enabled": true,
