@@ -799,12 +799,18 @@ Best regards,
                     
                     return !empty($timestamps) ? max($timestamps) : null;
                 }
+                
+                // Load weather utilities once before the loop
+                require_once __DIR__ . '/../lib/weather/utils.php';
                 ?>
                 <div class="airports-list">
                     <?php foreach ($airportsOnPage as $airportId => $airport): 
                         $url = 'https://' . $airportId . '.aviationwx.org';
+                        $hasMetar = isMetarEnabled($airport);
                         $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-                        $weather = $hasWeatherSource ? getAirportWeather($airportId) : [];
+                        // Fetch weather if airport has either a primary weather source OR METAR
+                        $hasAnyWeather = $hasWeatherSource || $hasMetar;
+                        $weather = $hasAnyWeather ? getAirportWeather($airportId) : [];
                         $flightCategory = $weather['flight_category'] ?? null;
                         $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
                         if ($temperature !== null && $temperature < 50 && !isset($weather['temperature_f'])) {
@@ -812,8 +818,6 @@ Best regards,
                         }
                         $windSpeed = $weather['wind_speed'] ?? null;
                         $windDirection = $weather['wind_direction'] ?? null;
-                        require_once __DIR__ . '/../lib/weather/utils.php';
-                        $hasMetar = isMetarEnabled($airport);
                         $newestTimestamp = getNewestDataTimestamp($weather);
                     ?>
                     <div class="airport-card">
@@ -822,7 +826,7 @@ Best regards,
                             <div class="airport-name"><?= htmlspecialchars($airport['name']) ?></div>
                             <div class="airport-location"><?= htmlspecialchars($airport['address']) ?></div>
                             
-                            <?php if ($hasWeatherSource): ?>
+                            <?php if ($hasAnyWeather): ?>
                             <div class="airport-metrics">
                                 <?php if ($hasMetar): ?>
                                 <div class="metric">
