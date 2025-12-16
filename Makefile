@@ -1,7 +1,7 @@
 # AviationWX Docker Management
 # Quick commands for local development
 
-.PHONY: help init build build-force up down restart logs shell test test-local smoke clean config
+.PHONY: help init build build-force up down restart logs shell test test-local test-error-detector smoke clean config
 
 help: ## Show this help message
 	@echo 'AviationWX Docker Management'
@@ -57,6 +57,10 @@ test-local: build-force up ## Rebuild containers and run PHPUnit tests locally
 	@echo ""
 	@echo "Running PHPUnit tests..."
 	@TEST_API_URL=http://localhost:8080 vendor/bin/phpunit --testdox || (echo ""; echo "⚠️  Some tests failed. Check output above."; exit 1)
+
+test-error-detector: ## Test webcam error frame detector (requires running containers)
+	@echo "Testing webcam error frame detector..."
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec -T web php /var/www/html/scripts/test-error-detector.php || (echo ""; echo "⚠️  Error detector test failed. Check output above."; exit 1)
 
 smoke: ## Smoke test main endpoints (requires running containers)
 	@echo "Smoke testing..."
