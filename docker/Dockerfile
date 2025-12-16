@@ -46,7 +46,8 @@ COPY composer.json composer.lock* ./
 # Copy configuration files (rarely change)
 COPY config/crontab /etc/cron.d/aviationwx-cron
 COPY docker/docker-entrypoint.sh /usr/local/bin/
-COPY docker/vsftpd.conf /etc/vsftpd.conf
+# vsftpd dual-stack configuration (IPv4 and IPv6 instances)
+# Base config removed - using only dual configs for cleaner architecture
 COPY docker/vsftpd_ipv4.conf /etc/vsftpd/vsftpd_ipv4.conf
 COPY docker/vsftpd_ipv6.conf /etc/vsftpd/vsftpd_ipv6.conf
 COPY docker/pam-vsftpd /etc/pam.d/vsftpd
@@ -73,7 +74,6 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/enable-vsftpd-ssl.sh \
     && chmod +x /usr/local/bin/create-sftp-user.sh \
     && chmod +x /usr/local/bin/resolve-upload-ip.sh \
-    && chmod 644 /etc/vsftpd.conf \
     && chmod 644 /etc/vsftpd/vsftpd_ipv4.conf \
     && chmod 644 /etc/vsftpd/vsftpd_ipv6.conf \
     && chmod 644 /etc/ssh/sshd_config \

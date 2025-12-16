@@ -150,10 +150,8 @@ if [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
                 sed -i "s|^pasv_address=.*|pasv_address=$IPV4|" /etc/vsftpd/vsftpd_ipv4.conf
                 echo "✓ Updated IPv4 pasv_address to: $IPV4"
             else
-                cp /etc/vsftpd.conf /etc/vsftpd/vsftpd_ipv4.conf
-                sed -i 's/^listen_ipv6=.*/listen_ipv6=NO/' /etc/vsftpd/vsftpd_ipv4.conf || echo "listen_ipv6=NO" >> /etc/vsftpd/vsftpd_ipv4.conf
-                sed -i "s|^pasv_address=.*|pasv_address=$IPV4|" /etc/vsftpd/vsftpd_ipv4.conf
-                echo "✓ Created IPv4 config with pasv_address: $IPV4"
+                echo "Error: IPv4 config file not found at /etc/vsftpd/vsftpd_ipv4.conf"
+                exit 1
             fi
         else
             echo "⚠️  Warning: No IPv4 address resolved, skipping IPv4 instance"
@@ -165,11 +163,8 @@ if [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
                 sed -i "s|^pasv_address=.*|pasv_address=$IPV6|" /etc/vsftpd/vsftpd_ipv6.conf
                 echo "✓ Updated IPv6 pasv_address to: $IPV6"
             else
-                cp /etc/vsftpd.conf /etc/vsftpd/vsftpd_ipv6.conf
-                sed -i 's/^listen=.*/listen=NO/' /etc/vsftpd/vsftpd_ipv6.conf
-                sed -i 's/^listen_ipv6=.*/listen_ipv6=YES/' /etc/vsftpd/vsftpd_ipv6.conf || echo "listen_ipv6=YES" >> /etc/vsftpd/vsftpd_ipv6.conf
-                sed -i "s|^pasv_address=.*|pasv_address=$IPV6|" /etc/vsftpd/vsftpd_ipv6.conf
-                echo "✓ Created IPv6 config with pasv_address: $IPV6"
+                echo "Error: IPv6 config file not found at /etc/vsftpd/vsftpd_ipv6.conf"
+                exit 1
             fi
         else
             echo "⚠️  Warning: No IPv6 address resolved, skipping IPv6 instance"
@@ -183,7 +178,7 @@ else
 fi
 
 # Enable SSL in vsftpd configs if certificates are available
-# Apply to base config and dual configs (if they exist)
+# Apply to dual configs (IPv4 and IPv6)
 if [ -f "/etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem" ] && \
    [ -f "/etc/letsencrypt/live/upload.aviationwx.org/privkey.pem" ]; then
     CERT_DIR="/etc/letsencrypt/live/upload.aviationwx.org"
@@ -247,7 +242,6 @@ if [ -f "/etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem" ] && \
     }
     
     echo "SSL certificates found, enabling SSL in vsftpd configs..."
-    enable_ssl_in_config "/etc/vsftpd.conf"
     enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv4.conf"
     enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv6.conf"
     echo "✓ SSL enabled in vsftpd configs"
@@ -284,12 +278,24 @@ if [ "$IPV6_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
     echo "✓ vsftpd IPv6 started (PID: $VSFTPD_IPV6_PID)"
 fi
 
+# Fallback: If neither IP resolved, try IPv4 config (IPv4 is more likely to work)
 if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
-    echo "Starting vsftpd (single instance fallback)..."
-    if ! service vsftpd start 2>&1; then
-        echo "Error: vsftpd failed to start, checking configuration..."
-        vsftpd -olisten=NO /etc/vsftpd.conf 2>&1 || true
-        echo "Error: vsftpd failed to start"
+    echo "Starting vsftpd (fallback to IPv4 config)..."
+    if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
+        # Use placeholder IP for pasv_address (will be resolved by vsftpd or fail gracefully)
+        sed -i "s|^pasv_address=.*|pasv_address=0.0.0.0|" /etc/vsftpd/vsftpd_ipv4.conf
+        vsftpd /etc/vsftpd/vsftpd_ipv4.conf &
+        VSFTPD_IPV4_PID=$!
+        sleep 1
+        if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
+            echo "Error: vsftpd failed to start, checking configuration..."
+            vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 || true
+            echo "Error: vsftpd failed to start"
+            exit 1
+        fi
+        echo "✓ vsftpd started in fallback mode (PID: $VSFTPD_IPV4_PID)"
+    else
+        echo "Error: No vsftpd config files available"
         exit 1
     fi
 fi
@@ -319,9 +325,10 @@ if [ "$IPV6_RESOLVED" = "yes" ] && [ -n "$VSFTPD_IPV6_PID" ]; then
     fi
 fi
 
-if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
-    if ! pgrep -x vsftpd > /dev/null; then
-        echo "Error: vsftpd is not running"
+# Verify fallback instance if neither IP was resolved
+if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ] && [ -n "$VSFTPD_IPV4_PID" ]; then
+    if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
+        echo "Error: vsftpd fallback instance is not running"
         exit 1
     fi
 fi

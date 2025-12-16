@@ -15,35 +15,23 @@ echo "=== Testing FTPS TLS Configuration ==="
 echo "Mode: $MODE"
 echo ""
 
-echo "1. Checking if SSL is enabled (base config):"
-docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd.conf 2>/dev/null || echo "  Not found"
-echo ""
-
-echo "2. Checking if SSL is enabled (IPv4 config):"
+echo "1. Checking if SSL is enabled (IPv4 config):"
 docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf 2>/dev/null || echo "  Config not found or SSL not enabled"
 echo ""
 
-echo "3. Checking if SSL is enabled (IPv6 config):"
+echo "2. Checking if SSL is enabled (IPv6 config):"
 docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv6.conf 2>/dev/null || echo "  Config not found or SSL not enabled"
 echo ""
 
-echo "4. Checking TLS version settings (base config):"
-docker compose -f "$COMPOSE_FILE" exec -T web grep -E "^ssl_tlsv|^# ssl_tlsv" /etc/vsftpd.conf 2>/dev/null | head -5 || echo "  Not found"
+echo "3. Checking TLS version settings (IPv4 config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep -E "^ssl_tlsv|^# ssl_tlsv" /etc/vsftpd/vsftpd_ipv4.conf 2>/dev/null | head -5 || echo "  Not found"
 echo ""
 
-echo "5. Checking SSL/TLS configuration summary (base config):"
-docker compose -f "$COMPOSE_FILE" exec -T web grep -E "ssl_enable|ssl_tlsv|ssl_sslv|ssl_ciphers|rsa_cert" /etc/vsftpd.conf 2>/dev/null | grep -v "^#" | head -10 || echo "  No SSL settings found"
+echo "4. Checking SSL/TLS configuration summary (IPv4 config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep -E "ssl_enable|ssl_tlsv|ssl_sslv|ssl_ciphers|rsa_cert" /etc/vsftpd/vsftpd_ipv4.conf 2>/dev/null | grep -v "^#" | head -10 || echo "  No SSL settings found"
 echo ""
 
-echo "6. Testing vsftpd configuration syntax (base):"
-if docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd.conf >/dev/null 2>&1; then
-    echo "  ✓ Base configuration syntax is valid"
-else
-    echo "  ✗ Base configuration syntax error"
-    docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd.conf 2>&1 | head -5
-fi
-
-echo "7. Testing vsftpd configuration syntax (IPv4):"
+echo "5. Testing vsftpd configuration syntax (IPv4):"
 if docker compose -f "$COMPOSE_FILE" exec -T web test -f /etc/vsftpd/vsftpd_ipv4.conf; then
     if docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf >/dev/null 2>&1; then
         echo "  ✓ IPv4 configuration syntax is valid"
@@ -55,7 +43,7 @@ else
     echo "  ⚠ IPv4 config not found (may not be using dual-stack)"
 fi
 
-echo "8. Testing vsftpd configuration syntax (IPv6):"
+echo "6. Testing vsftpd configuration syntax (IPv6):"
 if docker compose -f "$COMPOSE_FILE" exec -T web test -f /etc/vsftpd/vsftpd_ipv6.conf; then
     if docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv6.conf >/dev/null 2>&1; then
         echo "  ✓ IPv6 configuration syntax is valid"
@@ -68,7 +56,7 @@ else
 fi
 echo ""
 
-echo "9. Checking if vsftpd is running:"
+echo "7. Checking if vsftpd is running:"
 VSFTPD_PIDS=$(docker compose -f "$COMPOSE_FILE" exec -T web pgrep -x vsftpd 2>/dev/null || true)
 if [ -n "$VSFTPD_PIDS" ]; then
     echo "  ✓ vsftpd is running"

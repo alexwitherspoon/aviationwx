@@ -6,10 +6,9 @@ set -euo pipefail
 
 DOMAIN="upload.aviationwx.org"
 CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
-VSFTPD_CONF="/etc/vsftpd.conf"
-VSFTPD_CONF_BACKUP="/etc/vsftpd.conf.backup"
 VSFTPD_IPV4_CONF="/etc/vsftpd/vsftpd_ipv4.conf"
 VSFTPD_IPV6_CONF="/etc/vsftpd/vsftpd_ipv6.conf"
+VSFTPD_IPV4_CONF_BACKUP="/etc/vsftpd/vsftpd_ipv4.conf.backup"
 
 log_message() {
     local message="$@"
@@ -81,9 +80,9 @@ enable_ssl_in_config() {
     fi
 }
 
-# Check if SSL is already enabled in base config
+# Check if SSL is already enabled in IPv4 config (used as reference)
 SSL_ALREADY_ENABLED=false
-if grep -q "^ssl_enable=YES" "$VSFTPD_CONF" 2>/dev/null; then
+if [ -f "$VSFTPD_IPV4_CONF" ] && grep -q "^ssl_enable=YES" "$VSFTPD_IPV4_CONF" 2>/dev/null; then
     SSL_ALREADY_ENABLED=true
     log_message "SSL is already enabled in vsftpd configuration"
     log_message "Updating TLS version settings for broad camera compatibility..."
@@ -91,22 +90,28 @@ fi
 
 if [ "$SSL_ALREADY_ENABLED" = false ]; then
     log_message "Enabling SSL in vsftpd configuration..."
-    cp "$VSFTPD_CONF" "$VSFTPD_CONF_BACKUP"
+    # Backup IPv4 config for rollback if needed
+    if [ -f "$VSFTPD_IPV4_CONF" ]; then
+        cp "$VSFTPD_IPV4_CONF" "$VSFTPD_IPV4_CONF_BACKUP"
+    fi
 fi
 
-# Enable SSL in all configs (base, IPv4, IPv6)
-enable_ssl_in_config "$VSFTPD_CONF"
+# Enable SSL in dual configs (IPv4 and IPv6)
 enable_ssl_in_config "$VSFTPD_IPV4_CONF"
 enable_ssl_in_config "$VSFTPD_IPV6_CONF"
 
-# Verify configuration syntax for base config
-CONFIG_TEST_OUTPUT=$(timeout 5 vsftpd -olisten=NO "$VSFTPD_CONF" 2>&1 || echo "CONFIG_TEST_FAILED")
-if ! echo "$CONFIG_TEST_OUTPUT" | grep -q "listening on"; then
-    log_message "ERROR: vsftpd configuration test failed"
-    log_message "Test output: $CONFIG_TEST_OUTPUT"
-    log_message "Restoring backup configuration..."
-    cp "$VSFTPD_CONF_BACKUP" "$VSFTPD_CONF"
-    exit 1
+# Verify configuration syntax using IPv4 config
+if [ -f "$VSFTPD_IPV4_CONF" ]; then
+    CONFIG_TEST_OUTPUT=$(timeout 5 vsftpd -olisten=NO "$VSFTPD_IPV4_CONF" 2>&1 || echo "CONFIG_TEST_FAILED")
+    if ! echo "$CONFIG_TEST_OUTPUT" | grep -q "listening on"; then
+        log_message "ERROR: vsftpd IPv4 configuration test failed"
+        log_message "Test output: $CONFIG_TEST_OUTPUT"
+        if [ -f "$VSFTPD_IPV4_CONF_BACKUP" ]; then
+            log_message "Restoring backup configuration..."
+            cp "$VSFTPD_IPV4_CONF_BACKUP" "$VSFTPD_IPV4_CONF"
+        fi
+        exit 1
+    fi
 fi
 
 if [ "$SSL_ALREADY_ENABLED" = false ]; then
@@ -138,11 +143,17 @@ if pgrep -x vsftpd > /dev/null 2>&1; then
             fi
             log_message "Both FTP and FTPS are now available on port 2121"
             log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
-        else
-            log_message "WARNING: Failed to restart vsftpd via service command"
-            log_message "SSL configuration has been updated and will be active on next container restart"
-            log_message "Or restart the container to apply changes immediately"
+    else
+        log_message "WARNING: Failed to restart vsftpd via service command"
+        log_message "SSL configuration has been updated and will be active on next container restart"
+        log_message "Or restart the container to apply changes immediately"
+        # Rollback on failure if backup exists
+        if [ -f "$VSFTPD_IPV4_CONF_BACKUP" ]; then
+            log_message "Rolling back SSL configuration changes..."
+            cp "$VSFTPD_IPV4_CONF_BACKUP" "$VSFTPD_IPV4_CONF"
+            # Note: IPv6 config rollback would require separate backup
         fi
+    fi
     fi
 else
     if [ "$SSL_ALREADY_ENABLED" = false ]; then
