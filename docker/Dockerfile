@@ -47,6 +47,8 @@ COPY composer.json composer.lock* ./
 COPY config/crontab /etc/cron.d/aviationwx-cron
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 COPY docker/vsftpd.conf /etc/vsftpd.conf
+COPY docker/vsftpd_ipv4.conf /etc/vsftpd/vsftpd_ipv4.conf
+COPY docker/vsftpd_ipv6.conf /etc/vsftpd/vsftpd_ipv6.conf
 COPY docker/pam-vsftpd /etc/pam.d/vsftpd
 COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
@@ -60,6 +62,7 @@ COPY scripts/service-watchdog.sh /usr/local/bin/
 COPY scripts/setup-letsencrypt.sh /usr/local/bin/
 COPY scripts/enable-vsftpd-ssl.sh /usr/local/bin/
 COPY scripts/create-sftp-user.sh /usr/local/bin/
+COPY scripts/resolve-upload-ip.sh /usr/local/bin/
 
 # Set permissions for copied files
 RUN chmod 0644 /etc/cron.d/aviationwx-cron \
@@ -69,7 +72,10 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/setup-letsencrypt.sh \
     && chmod +x /usr/local/bin/enable-vsftpd-ssl.sh \
     && chmod +x /usr/local/bin/create-sftp-user.sh \
+    && chmod +x /usr/local/bin/resolve-upload-ip.sh \
     && chmod 644 /etc/vsftpd.conf \
+    && chmod 644 /etc/vsftpd/vsftpd_ipv4.conf \
+    && chmod 644 /etc/vsftpd/vsftpd_ipv6.conf \
     && chmod 644 /etc/ssh/sshd_config \
     && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd \
     && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
@@ -95,6 +101,8 @@ RUN mkdir -p /var/www/html/uploads/webcams \
     && chmod 755 /var/www/html/uploads \
     && chown root:root /var/www/html/uploads/webcams \
     && chmod 755 /var/www/html/uploads/webcams
+# Note: getent is provided by glibc (already in base image)
+# dnsutils provides dig as fallback, but getent should be sufficient
 
 # Create webcam_users group
 RUN groupadd -f webcam_users
