@@ -15,32 +15,71 @@ echo "=== Testing FTPS TLS Configuration ==="
 echo "Mode: $MODE"
 echo ""
 
-echo "1. Checking if SSL is enabled:"
-docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd.conf || echo "  Not found"
+echo "1. Checking if SSL is enabled (base config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd.conf 2>/dev/null || echo "  Not found"
 echo ""
 
-echo "2. Checking TLS version settings:"
-docker compose -f "$COMPOSE_FILE" exec -T web grep -E "^ssl_tlsv|^# ssl_tlsv" /etc/vsftpd.conf || echo "  Not found"
+echo "2. Checking if SSL is enabled (IPv4 config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf 2>/dev/null || echo "  Config not found or SSL not enabled"
 echo ""
 
-echo "3. Checking SSL/TLS configuration summary:"
-docker compose -f "$COMPOSE_FILE" exec -T web grep -E "ssl_enable|ssl_tlsv|ssl_sslv|ssl_ciphers|rsa_cert" /etc/vsftpd.conf | grep -v "^#" | head -10
+echo "3. Checking if SSL is enabled (IPv6 config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv6.conf 2>/dev/null || echo "  Config not found or SSL not enabled"
 echo ""
 
-echo "4. Testing vsftpd configuration syntax:"
+echo "4. Checking TLS version settings (base config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep -E "^ssl_tlsv|^# ssl_tlsv" /etc/vsftpd.conf 2>/dev/null | head -5 || echo "  Not found"
+echo ""
+
+echo "5. Checking SSL/TLS configuration summary (base config):"
+docker compose -f "$COMPOSE_FILE" exec -T web grep -E "ssl_enable|ssl_tlsv|ssl_sslv|ssl_ciphers|rsa_cert" /etc/vsftpd.conf 2>/dev/null | grep -v "^#" | head -10 || echo "  No SSL settings found"
+echo ""
+
+echo "6. Testing vsftpd configuration syntax (base):"
 if docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd.conf >/dev/null 2>&1; then
-    echo "  ✓ Configuration syntax is valid"
+    echo "  ✓ Base configuration syntax is valid"
 else
-    echo "  ✗ Configuration syntax error"
+    echo "  ✗ Base configuration syntax error"
     docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd.conf 2>&1 | head -5
+fi
+
+echo "7. Testing vsftpd configuration syntax (IPv4):"
+if docker compose -f "$COMPOSE_FILE" exec -T web test -f /etc/vsftpd/vsftpd_ipv4.conf; then
+    if docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf >/dev/null 2>&1; then
+        echo "  ✓ IPv4 configuration syntax is valid"
+    else
+        echo "  ✗ IPv4 configuration syntax error"
+        docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 | head -5
+    fi
+else
+    echo "  ⚠ IPv4 config not found (may not be using dual-stack)"
+fi
+
+echo "8. Testing vsftpd configuration syntax (IPv6):"
+if docker compose -f "$COMPOSE_FILE" exec -T web test -f /etc/vsftpd/vsftpd_ipv6.conf; then
+    if docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv6.conf >/dev/null 2>&1; then
+        echo "  ✓ IPv6 configuration syntax is valid"
+    else
+        echo "  ✗ IPv6 configuration syntax error"
+        docker compose -f "$COMPOSE_FILE" exec -T web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv6.conf 2>&1 | head -5
+    fi
+else
+    echo "  ⚠ IPv6 config not found (may not be using dual-stack)"
 fi
 echo ""
 
-echo "5. Checking if vsftpd is running:"
-if docker compose -f "$COMPOSE_FILE" exec -T web pgrep -x vsftpd >/dev/null 2>&1; then
+echo "9. Checking if vsftpd is running:"
+VSFTPD_PIDS=$(docker compose -f "$COMPOSE_FILE" exec -T web pgrep -x vsftpd 2>/dev/null || true)
+if [ -n "$VSFTPD_PIDS" ]; then
     echo "  ✓ vsftpd is running"
-    VSFTPD_PID=$(docker compose -f "$COMPOSE_FILE" exec -T web pgrep -x vsftpd | head -1)
-    echo "  PID: $VSFTPD_PID"
+    echo "$VSFTPD_PIDS" | while read pid; do
+        echo "    PID: $pid"
+    done
+    # Check if multiple instances (dual-stack)
+    PID_COUNT=$(echo "$VSFTPD_PIDS" | wc -l)
+    if [ "$PID_COUNT" -gt 1 ]; then
+        echo "  ✓ Multiple vsftpd instances detected (dual-stack mode)"
+    fi
 else
     echo "  ✗ vsftpd is not running"
 fi

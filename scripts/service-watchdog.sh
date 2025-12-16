@@ -97,11 +97,35 @@ restart_counts["sshd"]=0
 last_restart_time["vsftpd"]=0
 last_restart_time["sshd"]=0
 
+# Custom restart function for vsftpd (handles dual-instance mode)
+restart_vsftpd() {
+    # Check if dual-instance configs exist (dual-stack mode)
+    if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ] || [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
+        log_message "WARN" "vsftpd is in dual-instance mode - restart requires container restart"
+        log_message "WARN" "Manual restart via watchdog not supported for dual-instance mode"
+        log_message "WARN" "Please restart the container to recover vsftpd service"
+        return 1
+    else
+        # Single instance mode - use service command
+        service vsftpd start
+        return $?
+    fi
+}
+
 # Main watchdog loop
 log_message "INFO" "Service watchdog started"
 
 while true; do
-    check_and_restart_service "vsftpd" "vsftpd" "service vsftpd start"
+    # For vsftpd, use custom restart function if dual-instance configs exist
+    if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ] || [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
+        # Dual-instance mode: check if running, but don't try to restart via service
+        if ! pgrep -x vsftpd > /dev/null; then
+            log_message "ERROR" "vsftpd is down in dual-instance mode - container restart required"
+        fi
+    else
+        # Single instance mode: use standard restart
+        check_and_restart_service "vsftpd" "vsftpd" "service vsftpd start"
+    fi
     check_and_restart_service "sshd" "sshd" "service ssh start"
     
     sleep 30

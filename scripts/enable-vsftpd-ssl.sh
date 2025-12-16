@@ -116,21 +116,33 @@ else
 fi
 
 # Restart vsftpd to apply changes (only if it's already running)
+# Note: With dual-stack support, vsftpd may be running as multiple instances
+# The entrypoint script handles dual-instance startup, so manual restart
+# via this script may not work correctly. Configuration changes will be
+# applied on next container restart.
 if pgrep -x vsftpd > /dev/null 2>&1; then
-    log_message "vsftpd is running, restarting to apply configuration changes..."
-    if service vsftpd restart 2>&1; then
-        if [ "$SSL_ALREADY_ENABLED" = false ]; then
-            log_message "vsftpd restarted successfully with SSL enabled"
-        else
-            log_message "vsftpd restarted successfully with updated TLS versions"
-        fi
-        log_message "Both FTP and FTPS are now available on port 2121"
-        log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
+    log_message "vsftpd is running"
+    VSFTPD_COUNT=$(pgrep -x vsftpd | wc -l)
+    if [ "$VSFTPD_COUNT" -gt 1 ]; then
+        log_message "Multiple vsftpd instances detected (dual-stack mode)"
+        log_message "Note: Manual restart via this script may not work correctly with dual instances"
+        log_message "SSL configuration has been updated and will be active on next container restart"
+        log_message "Or restart the container to apply changes immediately"
     else
-        log_message "ERROR: Failed to restart vsftpd, restoring backup"
-        cp "$VSFTPD_CONF_BACKUP" "$VSFTPD_CONF"
-        service vsftpd restart || true
-        exit 1
+        log_message "Restarting vsftpd to apply configuration changes..."
+        if service vsftpd restart 2>&1; then
+            if [ "$SSL_ALREADY_ENABLED" = false ]; then
+                log_message "vsftpd restarted successfully with SSL enabled"
+            else
+                log_message "vsftpd restarted successfully with updated TLS versions"
+            fi
+            log_message "Both FTP and FTPS are now available on port 2121"
+            log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
+        else
+            log_message "WARNING: Failed to restart vsftpd via service command"
+            log_message "SSL configuration has been updated and will be active on next container restart"
+            log_message "Or restart the container to apply changes immediately"
+        fi
     fi
 else
     if [ "$SSL_ALREADY_ENABLED" = false ]; then
