@@ -69,7 +69,7 @@ function getMockMETARResponse() {
         'wdir' => 180,  // Degrees (different from PWS sources - this is acceptable)
         'wspd' => 5,  // Knots (consistent with other mocks)
         'visib' => '10',  // Statute miles
-        'altim' => 30.12,  // inHg (consistent with other mocks)
+        'altim' => 1020.0,  // hPa (hectopascals) - API returns in hPa, converts to ~30.12 inHg (1020.0 / 33.8639 ≈ 30.12)
         'clouds' => [
             ['cover' => 'CLR', 'base' => null]
         ]

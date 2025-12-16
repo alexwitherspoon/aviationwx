@@ -129,10 +129,45 @@ function parseMETARResponse($response, $airport): ?array {
         $windSpeed = (int)round((float)$metarData['wspd']);
     }
     
+    // Parse gust speed from raw METAR string if present
+    // METAR format: "dddffGggKT" where ddd=direction, ff=speed, Ggg=gust speed, KT=units
+    // Example: "06009G19KT" = 060° at 9 knots, gusts to 19 knots
+    // Also handles variable wind: "VRBffGggKT" (e.g., VRB05G15KT)
+    $gustSpeed = null;
+    if (isset($metarData['rawOb'])) {
+        $rawOb = $metarData['rawOb'];
+        // Match wind pattern with gust: dddffGggKT or VRBffGggKT
+        // Pattern matches: direction (3 digits or VRB), wind speed (2-3 digits), G, gust speed (2-3 digits), KT
+        if (preg_match('/\b(?:VRB|\d{3})(\d{2,3})G(\d{2,3})KT\b/', $rawOb, $matches)) {
+            $gustSpeedKts = (int)$matches[2];
+            // Validate gust speed is reasonable (0-200 knots) and logically >= wind speed
+            // Note: Wind speed from JSON may differ slightly from raw string, so we validate range only
+            if ($gustSpeedKts >= 0 && $gustSpeedKts <= 200) {
+                $gustSpeed = $gustSpeedKts;
+            }
+        }
+    }
+    
     // Parse pressure (altimeter setting in inHg)
+    // METAR API returns altim in hectopascals (hPa/millibars), convert to inHg
+    // Conversion: inHg = hPa / 33.8639
+    // Normal range: 28.00-31.00 inHg corresponds to ~948-1050 hPa
     $pressure = null;
-    if (isset($metarData['altim'])) {
-        $pressure = (float)$metarData['altim'];
+    if (isset($metarData['altim']) && is_numeric($metarData['altim'])) {
+        $altimHpa = (float)$metarData['altim'];
+        // Convert from hPa to inHg
+        $pressure = $altimHpa / 33.8639;
+    }
+    
+    // Fallback: Parse from raw METAR string if altim field is missing or invalid
+    // METAR format: "A3012" means 30.12 inHg (A prefix + 4 digits in hundredths)
+    if ($pressure === null && isset($metarData['rawOb'])) {
+        $rawOb = $metarData['rawOb'];
+        // Match altimeter pattern: A followed by 4 digits (e.g., A3012 = 30.12 inHg)
+        if (preg_match('/\bA(\d{4})\b/', $rawOb, $matches)) {
+            $altimHundredths = (int)$matches[1];
+            $pressure = $altimHundredths / 100.0;
+        }
     }
     
     // Calculate humidity from temperature and dewpoint
@@ -237,7 +272,7 @@ function parseMETARResponse($response, $airport): ?array {
         'humidity' => $humidity,
         'wind_direction' => $windDirection,
         'wind_speed' => $windSpeed,
-        'gust_speed' => null, // METAR doesn't always include gusts
+        'gust_speed' => $gustSpeed, // Parsed from raw METAR string when present (e.g., "06009G19KT")
         'pressure' => $pressure,
         'visibility' => $visibility,
         'ceiling' => $ceiling,
@@ -245,7 +280,7 @@ function parseMETARResponse($response, $airport): ?array {
         'precip_accum' => $precip, // Precipitation if available
         'temp_high' => null,
         'temp_low' => null,
-        'peak_gust' => null,
+        'peak_gust' => $gustSpeed, // Use current gust as peak gust (METAR provides current observation only)
         'obs_time' => $obsTime, // Observation time when METAR was measured
     ];
 }

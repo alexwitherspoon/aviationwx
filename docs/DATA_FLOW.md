@@ -734,9 +734,9 @@ These conversions happen when parsing data from external APIs to standardize to 
 - Note: METAR provides wind in knots directly (no conversion)
 
 **Pressure**:
-- Millibars to inches of mercury: `inHg = mb / 33.8639`
-  - Used by: Tempest WeatherFlow API
-  - Note: Ambient Weather and METAR provide pressure in inHg directly
+- Millibars/hectopascals to inches of mercury: `inHg = mb / 33.8639`
+  - Used by: Tempest WeatherFlow API, METAR API (aviationweather.gov)
+  - Note: Ambient Weather provides pressure in inHg directly. METAR API returns altim in hPa (hectopascals/millibars) and requires conversion.
 
 **Precipitation**:
 - Millimeters to inches: `inches = mm × 0.0393701`
