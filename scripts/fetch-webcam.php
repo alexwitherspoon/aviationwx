@@ -106,6 +106,17 @@ function fetchStaticImage($url, $cacheFile) {
             // JPEG - write atomically to prevent corruption
             $tmpFile = getUniqueTmpFile($cacheFile);
             if (@file_put_contents($tmpFile, $data) !== false) {
+                // Validate image is not an error frame
+                $errorCheck = detectErrorFrame($tmpFile);
+                if ($errorCheck['is_error']) {
+                    aviationwx_log('warning', 'webcam error frame detected, rejecting', [
+                        'confidence' => $errorCheck['confidence'],
+                        'reasons' => $errorCheck['reasons']
+                    ], 'app');
+                    @unlink($tmpFile);
+                    return false;
+                }
+                
                 // Atomic rename
                 if (@rename($tmpFile, $cacheFile)) {
                     return true;
@@ -121,6 +132,18 @@ function fetchStaticImage($url, $cacheFile) {
                 $tmpFile = getUniqueTmpFile($cacheFile);
                 if (@imagejpeg($img, $tmpFile, 85)) {
                     imagedestroy($img);
+                    
+                    // Validate image is not an error frame
+                    $errorCheck = detectErrorFrame($tmpFile);
+                    if ($errorCheck['is_error']) {
+                        aviationwx_log('warning', 'webcam error frame detected, rejecting', [
+                            'confidence' => $errorCheck['confidence'],
+                            'reasons' => $errorCheck['reasons']
+                        ], 'app');
+                        @unlink($tmpFile);
+                        return false;
+                    }
+                    
                     // Atomic rename
                     if (@rename($tmpFile, $cacheFile)) {
                         return true;
@@ -325,15 +348,32 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         $errorOutput = implode("\n", $output);
         
         if ($code === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
-            if (@rename($jpegTmp, $cacheFile)) {
+            // Validate image is not an error frame
+            $errorCheck = detectErrorFrame($jpegTmp);
+            if ($errorCheck['is_error']) {
                 if ($isWeb) {
-                    echo "<span class='success'>✓ Captured frame via ffmpeg</span><br>\n";
+                    echo "<span class='error'>✗ Error frame detected (confidence: " . round($errorCheck['confidence'] * 100) . "%)</span><br>\n";
                 } else {
-                    echo "    ✓ Captured frame via ffmpeg\n";
+                    echo "    ✗ Error frame detected (confidence: " . round($errorCheck['confidence'] * 100) . "%)\n";
                 }
-                return true;
+                aviationwx_log('warning', 'webcam error frame detected from RTSP, rejecting', [
+                    'confidence' => $errorCheck['confidence'],
+                    'reasons' => $errorCheck['reasons'],
+                    'url' => preg_replace('/:[^:@]*@/', ':****@', $url)
+                ], 'app');
+                @unlink($jpegTmp);
+                // Continue to retry
+            } else {
+                if (@rename($jpegTmp, $cacheFile)) {
+                    if ($isWeb) {
+                        echo "<span class='success'>✓ Captured frame via ffmpeg</span><br>\n";
+                    } else {
+                        echo "    ✓ Captured frame via ffmpeg\n";
+                    }
+                    return true;
+                }
+                @unlink($jpegTmp);
             }
-            @unlink($jpegTmp);
         }
         
         $errorCode = classifyRTSPError($code, $errorOutput);
@@ -489,6 +529,17 @@ function fetchMJPEGStream($url, $cacheFile) {
         return false;
     }
     
+    // Validate image is not an error frame
+    $errorCheck = detectErrorFrame($tmpFile);
+    if ($errorCheck['is_error']) {
+        aviationwx_log('warning', 'webcam error frame detected from MJPEG, rejecting', [
+            'confidence' => $errorCheck['confidence'],
+            'reasons' => $errorCheck['reasons']
+        ], 'app');
+        @unlink($tmpFile);
+        return false;
+    }
+    
     if (@rename($tmpFile, $cacheFile)) {
         return true;
     }
@@ -500,6 +551,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
+require_once __DIR__ . '/../lib/webcam-error-detector.php';
 // VPN routing is optional - only required if VPN features are used
 $vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
 if (file_exists($vpnRoutingFile)) {

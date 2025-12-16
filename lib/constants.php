@@ -173,3 +173,71 @@ if (!defined('METAR_OBS_TIME_PAST_THRESHOLD_DAYS')) {
     define('METAR_OBS_TIME_PAST_THRESHOLD_DAYS', 25); // If observation is >25 days in past, try next month
 }
 
+// Webcam error frame detection thresholds
+if (!defined('WEBCAM_ERROR_MIN_WIDTH')) {
+    define('WEBCAM_ERROR_MIN_WIDTH', 100); // Minimum image width to be considered valid
+}
+if (!defined('WEBCAM_ERROR_MIN_HEIGHT')) {
+    define('WEBCAM_ERROR_MIN_HEIGHT', 100); // Minimum image height to be considered valid
+}
+if (!defined('WEBCAM_ERROR_SAMPLE_SIZE')) {
+    define('WEBCAM_ERROR_SAMPLE_SIZE', 10000); // Maximum pixels to sample for analysis
+}
+if (!defined('WEBCAM_ERROR_GREY_CHANNEL_DIFF')) {
+    define('WEBCAM_ERROR_GREY_CHANNEL_DIFF', 30); // RGB channels differ by < this = grey pixel
+}
+if (!defined('WEBCAM_ERROR_DARK_BRIGHTNESS')) {
+    define('WEBCAM_ERROR_DARK_BRIGHTNESS', 80); // Average brightness < this = dark pixel
+}
+if (!defined('WEBCAM_ERROR_GREY_RATIO_THRESHOLD')) {
+    define('WEBCAM_ERROR_GREY_RATIO_THRESHOLD', 0.6); // >60% grey pixels indicates error frame
+}
+if (!defined('WEBCAM_ERROR_DARK_RATIO_THRESHOLD')) {
+    define('WEBCAM_ERROR_DARK_RATIO_THRESHOLD', 0.4); // >40% dark pixels indicates error frame
+}
+if (!defined('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD', 500); // <500 variance indicates uniform/error frame
+}
+if (!defined('WEBCAM_ERROR_EDGE_DIFF_THRESHOLD')) {
+    define('WEBCAM_ERROR_EDGE_DIFF_THRESHOLD', 30); // Pixel difference > this = edge detected
+}
+if (!defined('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD')) {
+    define('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD', 0.05); // <5% edge pixels indicates error frame
+}
+if (!defined('WEBCAM_ERROR_BORDER_BRIGHTNESS')) {
+    define('WEBCAM_ERROR_BORDER_BRIGHTNESS', 120); // Border brightness < this = grey border
+}
+if (!defined('WEBCAM_ERROR_BORDER_RATIO_THRESHOLD')) {
+    define('WEBCAM_ERROR_BORDER_RATIO_THRESHOLD', 0.7); // >70% grey borders indicates error frame
+}
+if (!defined('WEBCAM_ERROR_SCORE_THRESHOLD')) {
+    define('WEBCAM_ERROR_SCORE_THRESHOLD', 0.5); // Error score >= this = error frame
+}
+if (!defined('WEBCAM_ERROR_GREY_SCORE_WEIGHT')) {
+    define('WEBCAM_ERROR_GREY_SCORE_WEIGHT', 0.3); // Weight for grey ratio in error score
+}
+if (!defined('WEBCAM_ERROR_DARK_SCORE_WEIGHT')) {
+    define('WEBCAM_ERROR_DARK_SCORE_WEIGHT', 0.2); // Weight for dark ratio in error score
+}
+if (!defined('WEBCAM_ERROR_VARIANCE_SCORE_WEIGHT')) {
+    define('WEBCAM_ERROR_VARIANCE_SCORE_WEIGHT', 0.3); // Weight for variance in error score
+}
+if (!defined('WEBCAM_ERROR_EDGE_SCORE_WEIGHT')) {
+    define('WEBCAM_ERROR_EDGE_SCORE_WEIGHT', 0.2); // Weight for edge density in error score
+}
+if (!defined('WEBCAM_ERROR_BORDER_SCORE_WEIGHT')) {
+    define('WEBCAM_ERROR_BORDER_SCORE_WEIGHT', 0.1); // Weight for border analysis in error score
+}
+if (!defined('WEBCAM_ERROR_QUICK_GREY_RATIO')) {
+    define('WEBCAM_ERROR_QUICK_GREY_RATIO', 0.7); // Quick check: >70% grey = likely error
+}
+if (!defined('WEBCAM_ERROR_QUICK_DARK_RATIO')) {
+    define('WEBCAM_ERROR_QUICK_DARK_RATIO', 0.5); // Quick check: >50% dark = likely error
+}
+if (!defined('WEBCAM_ERROR_EDGE_SAMPLE_SIZE')) {
+    define('WEBCAM_ERROR_EDGE_SAMPLE_SIZE', 5000); // Maximum pixels to sample for edge detection
+}
+if (!defined('WEBCAM_ERROR_BORDER_SAMPLE_SIZE')) {
+    define('WEBCAM_ERROR_BORDER_SAMPLE_SIZE', 50); // Number of border pixels to sample
+}
+
