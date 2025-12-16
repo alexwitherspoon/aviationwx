@@ -340,10 +340,7 @@ Add an entry to `airports.json` following this structure:
       "webcams": [
         {
           "name": "Camera Name",
-          "url": "https://camera-url.com/stream",
-          "username": "user",
-          "password": "pass",
-          "position": "north"
+          "url": "https://camera-url.com/stream"
         }
       ],
       "partners": [
@@ -782,12 +779,9 @@ The system automatically detects the source type from the URL:
 ### Required Fields
 - `name`: Display name for the webcam
 - `url`: Full URL to the stream/image
-- `position`: Direction the camera faces (for organization)
 
 ### Optional Fields
 - `type`: Explicit source type override (`rtsp`, `mjpeg`, `static_jpeg`, `static_png`) - useful when auto-detection is incorrect
-- `username`: For authenticated streams/images
-- `password`: For authenticated streams/images
 - `refresh_seconds`: Override refresh interval (seconds) - overrides airport `webcam_refresh_seconds` default
 - `rtsp_transport`: `tcp` (default, recommended) or `udp` for RTSP/RTSPS streams only
 // RTSP/RTSPS advanced options
@@ -801,8 +795,7 @@ The system automatically detects the source type from the URL:
 ```json
 {
   "name": "Main Field View",
-  "url": "https://example.com/mjpg/video.mjpg",
-  "position": "north"
+  "url": "https://example.com/mjpg/video.mjpg"
 }
 ```
 
@@ -816,10 +809,7 @@ The system automatically detects the source type from the URL:
   "refresh_seconds": 30,
   "rtsp_fetch_timeout": 10,
   "rtsp_max_runtime": 6,
-  "transcode_timeout": 8,
-  "username": "admin",
-  "password": "password123",
-  "position": "south"
+  "transcode_timeout": 8
 }
 ```
 
@@ -833,8 +823,7 @@ The system automatically detects the source type from the URL:
   "refresh_seconds": 60,
   "rtsp_fetch_timeout": 10,
   "rtsp_max_runtime": 6,
-  "transcode_timeout": 8,
-  "position": "north"
+  "transcode_timeout": 8
 }
 ```
 
@@ -849,8 +838,7 @@ The system automatically detects the source type from the URL:
 ```json
 {
   "name": "Weather Station Cam",
-  "url": "https://wx.example.com/webcam.jpg",
-  "position": "east"
+  "url": "https://wx.example.com/webcam.jpg"
 }
 ```
 
@@ -892,7 +880,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 {
   "name": "Runway Camera (Push)",
   "type": "push",
-  "position": "north",
   "refresh_seconds": 60,
   "push_config": {
     "protocol": "sftp",
@@ -909,7 +896,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 {
   "name": "Secure Camera (Push)",
   "type": "push",
-  "position": "south",
   "refresh_seconds": 120,
   "push_config": {
     "protocol": "ftps",
@@ -925,7 +911,6 @@ To configure a push webcam, set `"type": "push"` and include a `push_config` obj
 {
   "name": "Legacy Camera (Push)",
   "type": "push",
-  "position": "east",
   "push_config": {
     "protocol": "ftp",
     "username": "kspbCam2Push03",
@@ -1102,4 +1087,42 @@ Both jobs are configured in the `crontab` file that's built into the Docker imag
 - `/tmp/aviationwx-cache/peak_gusts.json` - Daily peak gust tracking (ephemeral, cleared on reboot)
 - `/tmp/aviationwx-cache/temp_extremes.json` - Daily temperature extremes (ephemeral, cleared on reboot)
 - `/tmp/aviationwx-cache/webcams/` - Cached webcam images (ephemeral, cleared on reboot)
+
+## Adding New Configuration Fields
+
+When adding new fields to the configuration schema, you **must** update the validator to explicitly allow them. The validator uses strict validation and will reject any unknown fields.
+
+### Process for Adding New Fields
+
+1. **Update Validator** (`lib/config.php`):
+   - Add new field to appropriate allowed fields list
+   - Add validation logic for the new field
+   - Update `validateAirportsJsonStructure()` function
+
+2. **Update Tests** (`tests/Unit/ConfigValidationTest.php`):
+   - Add test to verify new field is accepted
+   - Add test to verify validation logic works correctly
+
+3. **Update Documentation** (`docs/CONFIGURATION.md`):
+   - Document the new field
+   - Add examples showing the new field
+   - Update any relevant sections
+
+4. **Update Example Config** (`config/airports.json.example`):
+   - Add example showing the new field
+
+### Validator Locations
+
+- **Services fields**: `lib/config.php` - `allowedServiceFields` array (currently: `['fuel', 'repairs_available']`)
+- **Webcam fields**: `lib/config.php` - `allowedPullWebcamFields`, `allowedRtspWebcamFields`, `allowedPushWebcamFields` arrays
+- **Push config fields**: `lib/push-webcam-validator.php` - `allowedPushConfigFields` array (currently: `['protocol', 'username', 'password', 'port', 'max_file_size_mb', 'allowed_extensions']`)
+
+### Why Strict Validation?
+
+Strict validation ensures:
+- Configuration errors are caught early (fail-fast)
+- Schema is explicit and self-documenting
+- Typos in field names are caught immediately
+- New fields are intentionally added with proper validation
+- Prevents accidental use of deprecated or unused fields
 
