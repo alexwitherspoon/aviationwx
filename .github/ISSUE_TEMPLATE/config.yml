@@ -6,4 +6,7 @@ contact_links:
   - name: Ask a Question
     url: https://github.com/alexwitherspoon/aviationwx.org/discussions
     about: Use GitHub Discussions for general questions and community support
+  - name: Add an Airport
+    url: mailto:contact@aviationwx.org
+    about: Email us to add a new airport (do not share API keys in GitHub issues)
 
