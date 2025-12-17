@@ -2781,13 +2781,16 @@ function updateTimestampDisplay(elem, timestamp) {
     const maxStaleSeconds = MAX_STALE_HOURS * SECONDS_PER_HOUR;
     const isStale = diffSeconds >= maxStaleSeconds;
     
-    // Show/hide warning emoji for webcam timestamps
+    // Get camera index once and reuse it
     const camIndex = lastCamIndexForElem(elem);
     if (camIndex !== undefined) {
+        // Show/hide warning emoji for webcam timestamps
         const warningElem = document.getElementById(`webcam-timestamp-warning-${camIndex}`);
         if (warningElem) {
             warningElem.style.display = isStale ? 'inline' : 'none';
         }
+        // Update CAM_TS with timestamp
+        CAM_TS[camIndex] = timestampNum;
     }
     
     // Only show actual time if relative time is >= 1 hour
@@ -2823,11 +2826,6 @@ function updateTimestampDisplay(elem, timestamp) {
     }
     
     elem.dataset.timestamp = timestampNum.toString();
-    
-    const camIndex = lastCamIndexForElem(elem);
-    if (camIndex !== undefined) {
-        CAM_TS[camIndex] = timestampNum;
-    }
 }
 
 // Debounce timestamps per camera to avoid multiple fetches when all formats load
