@@ -743,10 +743,10 @@ jobs:
           # Read Cloudflare token from stdin (passed via SSH pipe) and email from command argument
           # These are needed for both renewal and generation
           read -r CLOUDFLARE_TOKEN
-          LETSENCRYPT_EMAIL="${1}"
+          LETSENCRYPT_EMAIL="${1:-}"
           
           # Validate Cloudflare token is provided
-          if [ -z "$CLOUDFLARE_TOKEN" ] || [ "$CLOUDFLARE_TOKEN" = "" ]; then
+          if [ -z "${CLOUDFLARE_TOKEN:-}" ] || [ "$CLOUDFLARE_TOKEN" = "" ]; then
             echo "❌ ERROR: Cloudflare API token not provided"
             echo "   Add CLOUDFLARE_API_TOKEN to GitHub repository secrets"
             echo "   See: https://github.com/${{ github.repository }}/settings/secrets/actions"
@@ -755,7 +755,7 @@ jobs:
           fi
           
           # Validate email is provided and is a valid email format
-          if [ -z "$LETSENCRYPT_EMAIL" ] || [ "$LETSENCRYPT_EMAIL" = "" ]; then
+          if [ -z "${LETSENCRYPT_EMAIL:-}" ] || [ "$LETSENCRYPT_EMAIL" = "" ]; then
             echo "❌ ERROR: Let's Encrypt email not provided"
             echo "   Add LETSENCRYPT_EMAIL to GitHub repository secrets"
             echo "   See: https://github.com/${{ github.repository }}/settings/secrets/actions"
@@ -841,7 +841,7 @@ jobs:
                 echo "✓ Certificate renewed successfully"
               else
                 echo "❌ ERROR: Certificate renewal failed"
-                if [ -n "$DAYS_UNTIL_EXPIRY" ] && [ $DAYS_UNTIL_EXPIRY -lt 0 ]; then
+                if [ -n "${DAYS_UNTIL_EXPIRY:-}" ] && [ "${DAYS_UNTIL_EXPIRY:-0}" -lt 0 ]; then
                   echo "   Certificate is expired and renewal failed"
                   echo "   Deployment cannot proceed with expired certificate"
                   rm -f "$CREDENTIALS_FILE"
