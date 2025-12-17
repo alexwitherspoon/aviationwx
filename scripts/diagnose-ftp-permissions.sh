@@ -16,25 +16,17 @@ fi
 
 UPLOADS_BASE="/var/www/html/uploads/webcams"
 CHROOT_DIR="${UPLOADS_BASE}/${AIRPORT_ID}_${CAM_INDEX}"
-INCOMING_DIR="${CHROOT_DIR}/incoming"
 
 echo "=== FTP Permissions Diagnostic for ${AIRPORT_ID}_${CAM_INDEX} ==="
 echo ""
 
-# Check if directories exist
+# Check if directory exists
 echo "1. Checking directory existence..."
 if [ ! -d "$CHROOT_DIR" ]; then
     echo "   ❌ ERROR: Chroot directory does not exist: $CHROOT_DIR"
     exit 1
 else
     echo "   ✓ Chroot directory exists: $CHROOT_DIR"
-fi
-
-if [ ! -d "$INCOMING_DIR" ]; then
-    echo "   ⚠️  WARNING: Incoming directory does not exist: $INCOMING_DIR"
-    echo "   → Not required - files can be uploaded directly to chroot root"
-else
-    echo "   ✓ Incoming directory exists: $INCOMING_DIR (backward compatibility only)"
 fi
 echo ""
 

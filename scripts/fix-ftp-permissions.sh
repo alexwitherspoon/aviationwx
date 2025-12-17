@@ -25,7 +25,6 @@ fi
 
 UPLOADS_BASE="/var/www/html/uploads/webcams"
 CHROOT_DIR="${UPLOADS_BASE}/${AIRPORT_ID}_${CAM_INDEX}"
-INCOMING_DIR="${CHROOT_DIR}/incoming"
 
 echo "=== Fixing FTP Permissions for ${AIRPORT_ID}_${CAM_INDEX} ==="
 echo ""

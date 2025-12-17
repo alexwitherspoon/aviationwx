@@ -664,11 +664,10 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null, $maxMtime = null) 
  * @return void
  */
 function processPushCamera($airportId, $camIndex, $cam, $airport) {
-    // Files uploaded directly to chroot root directory; fall back to incoming/ for backward compatibility
+    // Files uploaded directly to chroot root directory
     $chrootDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex;
-    $incomingDir = $chrootDir . '/incoming/';
     
-    $uploadDir = is_dir($chrootDir) && is_writable($chrootDir) ? $chrootDir . '/' : $incomingDir;
+    $uploadDir = $chrootDir . '/';
     
     // Quick check: if directory doesn't exist or has no files, exit immediately
     if (!is_dir($uploadDir)) {
