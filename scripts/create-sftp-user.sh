@@ -62,17 +62,19 @@ else
     
     # Ensure directory is still root-owned after useradd
     chown root:root "$UPLOAD_DIR"
-    chmod 755 "$UPLOAD_DIR"
 fi
 
-# Create incoming subdirectory
+# Make chroot directory writable by user for direct uploads to root
+# Keep root ownership (required for SSH chroot) but allow user write via 777 permissions
+chmod 777 "$UPLOAD_DIR"
+
+# Create incoming subdirectory for backward compatibility
 INCOMING_DIR="$UPLOAD_DIR/incoming"
 if [ ! -d "$INCOMING_DIR" ]; then
     mkdir -p "$INCOMING_DIR"
 fi
-# Always ensure correct ownership and permissions (even if directory exists)
 chown "$USERNAME:$USERNAME" "$INCOMING_DIR"
 chmod 755 "$INCOMING_DIR"
 
-echo "SFTP user setup complete: $USERNAME -> $UPLOAD_DIR"
+echo "SFTP user setup complete: $USERNAME -> $UPLOAD_DIR (writable root directory)"
 
