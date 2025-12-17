@@ -109,65 +109,14 @@ See the [Deployment Guide](docs/DEPLOYMENT.md) for:
 - Domain with wildcard DNS (A records for `@` and `*`)
 - Weather station API credentials (Tempest, Ambient, WeatherLink, or METAR)
 
-## Documentation
-
-### User Guides
-- **[Configuration Guide](docs/CONFIGURATION.md)** - Add airports, configure weather sources, set up webcams
-- **[Local Development](docs/LOCAL_SETUP.md)** - Set up development environment
-- **[Local Commands](docs/LOCAL_COMMANDS.md)** - Quick reference for minimal PHP setup
-
-### Technical Documentation
-- **[Architecture](docs/ARCHITECTURE.md)** - System design, components, data flow
-- **[API Documentation](docs/API.md)** - API endpoints, request/response formats
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment, CI/CD, maintenance
-- **[VPN Setup](docs/VPN.md)** - VPN configuration for remote sites (optional)
-- **[Operations](docs/OPERATIONS.md)** - Logging, monitoring, troubleshooting
-
-### Contributing & Security
-- **[Contributing](CONTRIBUTING.md)** - How to contribute code, report bugs, suggest features
-- **[Code Style Guide](CODE_STYLE.md)** - Coding standards, comment guidelines, and testing requirements
-- **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community guidelines
-- **[Security](docs/SECURITY.md)** - Security best practices and guidelines
-
 ## Weather Sources
 
-### Tempest Weather
-```json
-"weather_source": {
-  "type": "tempest",
-  "station_id": "YOUR_STATION_ID",
-  "api_key": "YOUR_API_KEY"
-}
-```
-
-### Ambient Weather
-```json
-"weather_source": {
-  "type": "ambient",
-  "api_key": "YOUR_API_KEY",
-  "application_key": "YOUR_APPLICATION_KEY"
-}
-```
-
-### Davis WeatherLink
-```json
-"weather_source": {
-  "type": "weatherlink",
-  "api_key": "YOUR_API_KEY",
-  "api_secret": "YOUR_API_SECRET",
-  "station_id": "YOUR_STATION_ID"
-}
-```
-
-### METAR
-```json
-"weather_source": {
-  "type": "metar"
-}
-```
-No API key required. Can supplement other sources for visibility/ceiling data.
-
-See [Configuration Guide](docs/CONFIGURATION.md) for detailed setup instructions.
+AviationWX supports multiple weather data sources. See the [Configuration Guide](docs/CONFIGURATION.md) for complete setup instructions and examples for:
+- Tempest Weather
+- Ambient Weather
+- Davis WeatherLink
+- PWSWeather.com (via AerisWeather API)
+- METAR (aviation weather data)
 
 ## Security Note
 
@@ -198,13 +147,11 @@ AviationWX uses the following external data sources:
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-**Quick start:**
-1. Fork the repository
-2. Set up local development (see [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md))
-3. Create a branch for your changes
-4. Submit a Pull Request
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for complete guidelines, including:
+- How to set up local development
+- Coding standards and testing requirements
+- Pull request process
+- Areas where help is needed
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 

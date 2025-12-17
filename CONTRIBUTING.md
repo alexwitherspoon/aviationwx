@@ -14,12 +14,9 @@ This project adheres to a Code of Conduct that all contributors are expected to 
    git clone https://github.com/YOUR_USERNAME/aviationwx.org.git
    cd aviationwx.org
    ```
-3. **Set up local development** - See [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for detailed instructions
+3. **Set up local development** - See [Local Development Setup](docs/LOCAL_SETUP.md) for complete instructions
 
-## Development Setup
-
-See [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for complete local development instructions. Quick start:
-
+Quick start:
 ```bash
 # Copy configuration template
 cp config/airports.json.example config/airports.json

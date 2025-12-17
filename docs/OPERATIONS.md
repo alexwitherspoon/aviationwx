@@ -171,7 +171,7 @@ A helper script is available for easy log filtering:
 
 ### Status Page
 
-Visit the [Status Page](../status.php) or `status.aviationwx.org` for real-time system health:
+Visit the status page (`/status.php` or `status.aviationwx.org` in production) for real-time system health:
 - System components (Configuration, Cache, APCu, Logging, Error Rate)
 - Per-airport status (Weather API, Webcams)
 - Status indicators (Green/Yellow/Red)
@@ -181,11 +181,13 @@ Visit the [Status Page](../status.php) or `status.aviationwx.org` for real-time 
 
 ```bash
 # Health check endpoint
-curl https://aviationwx.org/health.php
+curl http://localhost:8080/health/health.php
 
 # Diagnostics endpoint (shows detailed system info)
-curl https://aviationwx.org/diagnostics.php
+curl http://localhost:8080/admin/diagnostics.php
 ```
+
+**Note**: In production, replace `localhost:8080` with your domain (e.g., `https://aviationwx.org`).
 
 ### Container Health
 
@@ -258,19 +260,21 @@ docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep cron
 # Manually fetch webcam images
 docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php
 
-# Check cache directory
-ls -lh /tmp/aviationwx-cache/webcams/
+# Check cache directory (location depends on deployment)
+ls -lh cache/webcams/
 ```
 
 #### Configuration Issues
 
 ```bash
 # Clear configuration cache
-curl https://aviationwx.org/clear-cache.php
+curl http://localhost:8080/admin/cache-clear.php
 
-# Check configuration file
+# Check configuration file (production path)
 docker compose -f docker/docker-compose.prod.yml exec web cat /var/www/html/config/airports.json | jq .
 ```
+
+**Note**: In production, replace `localhost:8080` with your domain.
 
 ### Log Parsing Tools
 

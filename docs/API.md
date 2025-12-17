@@ -4,8 +4,11 @@ This document describes the API endpoints available in AviationWX.org.
 
 ## Base URL
 
-Production: `https://aviationwx.org`  
-Local: `http://localhost:8080`
+Examples:
+- Production: `https://aviationwx.org`
+- Local development: `http://localhost:8080`
+
+Replace with your own domain for production deployments.
 
 ## Endpoints
 

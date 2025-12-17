@@ -233,8 +233,8 @@ make restart
 ### Clear cache
 
 ```bash
-# Remove cache directory (cache is in /tmp/aviationwx-cache)
-rm -rf /tmp/aviationwx-cache/
+# Remove cache directory (location depends on deployment)
+rm -rf cache/
 
 # Restart
 make restart
@@ -257,7 +257,7 @@ make up
 aviationwx.org/
 ├── .env              # Your configuration (gitignored)
 ├── airports.json     # Your API config (gitignored)
-# Cache is in /tmp/aviationwx-cache (ephemeral, cleared on reboot)
+# Cache directory (location depends on deployment - see [Deployment Guide](DEPLOYMENT.md) for production paths)
 ├── docker-compose.yml
 ├── Dockerfile
 ├── Makefile          # Convenient commands

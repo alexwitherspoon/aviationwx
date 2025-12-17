@@ -205,19 +205,19 @@ if (!defined('WEBCAM_ERROR_DARK_BRIGHTNESS')) {
     define('WEBCAM_ERROR_DARK_BRIGHTNESS', 80); // Average brightness < this = dark pixel
 }
 if (!defined('WEBCAM_ERROR_GREY_RATIO_THRESHOLD')) {
-    define('WEBCAM_ERROR_GREY_RATIO_THRESHOLD', 0.85); // >85% grey pixels indicates error frame (was 0.6, too aggressive)
+    define('WEBCAM_ERROR_GREY_RATIO_THRESHOLD', 0.85); // >85% grey pixels indicates error frame
 }
 if (!defined('WEBCAM_ERROR_DARK_RATIO_THRESHOLD')) {
-    define('WEBCAM_ERROR_DARK_RATIO_THRESHOLD', 0.6); // >60% dark pixels indicates error frame (was 0.4, too aggressive)
+    define('WEBCAM_ERROR_DARK_RATIO_THRESHOLD', 0.6); // >60% dark pixels indicates error frame
 }
 if (!defined('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD')) {
-    define('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD', 200); // <200 variance indicates uniform/error frame (was 500, too high)
+    define('WEBCAM_ERROR_COLOR_VARIANCE_THRESHOLD', 200); // <200 variance indicates uniform/error frame
 }
 if (!defined('WEBCAM_ERROR_EDGE_DIFF_THRESHOLD')) {
     define('WEBCAM_ERROR_EDGE_DIFF_THRESHOLD', 30); // Pixel difference > this = edge detected
 }
 if (!defined('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD')) {
-    define('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD', 0.02); // <2% edge pixels indicates error frame (was 0.05, too high)
+    define('WEBCAM_ERROR_EDGE_RATIO_THRESHOLD', 0.02); // <2% edge pixels indicates error frame
 }
 if (!defined('WEBCAM_ERROR_BORDER_BRIGHTNESS')) {
     define('WEBCAM_ERROR_BORDER_BRIGHTNESS', 120); // Border brightness < this = grey border
@@ -226,7 +226,7 @@ if (!defined('WEBCAM_ERROR_BORDER_RATIO_THRESHOLD')) {
     define('WEBCAM_ERROR_BORDER_RATIO_THRESHOLD', 0.7); // >70% grey borders indicates error frame
 }
 if (!defined('WEBCAM_ERROR_SCORE_THRESHOLD')) {
-    define('WEBCAM_ERROR_SCORE_THRESHOLD', 0.7); // Error score >= this = error frame (was 0.5, too low)
+    define('WEBCAM_ERROR_SCORE_THRESHOLD', 0.7); // Error score >= this = error frame
 }
 if (!defined('WEBCAM_ERROR_GREY_SCORE_WEIGHT')) {
     define('WEBCAM_ERROR_GREY_SCORE_WEIGHT', 0.3); // Weight for grey ratio in error score

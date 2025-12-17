@@ -20,7 +20,7 @@ The `airports.json` file contains:
 ## What to Do Before Making Public
 
 ### ✅ What's Safe to Commit (Public Repo)
-- `airport-template.php`
+- `pages/airport.php`
 - `index.php`
 - `weather.php`
 - `webcam.php`

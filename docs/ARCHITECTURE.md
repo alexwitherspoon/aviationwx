@@ -9,32 +9,58 @@ aviationwx.org/
 ├── index.php                 # Main router - handles subdomain/query routing
 ├── pages/
 │   ├── airport.php           # Airport page template with weather display
-│   ├── homepage.php         # Homepage with airport list
-│   ├── status.php           # Status page
-│   └── config-generator.php # Configuration generator
+│   ├── homepage.php          # Homepage with airport list
+│   ├── status.php            # Status page
+│   ├── config-generator.php  # Configuration generator
+│   ├── error-404.php         # 404 error page
+│   └── error-404-airport.php # Airport-specific 404 page
 ├── api/
-│   ├── weather.php          # Weather API endpoint
-│   ├── webcam.php          # Webcam image server endpoint
-│   └── sitemap.php         # Dynamic XML sitemap generator
+│   ├── weather.php           # Weather API endpoint
+│   ├── webcam.php            # Webcam image server endpoint
+│   ├── sitemap.php           # Dynamic XML sitemap generator
+│   ├── outage-status.php     # Data outage status API
+│   └── partner-logo.php     # Partner logo caching endpoint
 ├── lib/
-│   ├── config.php          # Configuration loading and utilities
-│   ├── rate-limit.php      # Rate limiting utilities
-│   ├── logger.php          # Logging utilities
-│   ├── seo.php            # SEO utilities (structured data, meta tags)
-│   ├── constants.php      # Application constants
-│   └── circuit-breaker.php # Circuit breaker for API failures
+│   ├── config.php            # Configuration loading and utilities
+│   ├── rate-limit.php        # Rate limiting utilities
+│   ├── logger.php            # Logging utilities
+│   ├── seo.php               # SEO utilities (structured data, meta tags)
+│   ├── constants.php         # Application constants
+│   ├── circuit-breaker.php   # Circuit breaker for API failures
+│   ├── airport-identifiers.php # Airport code validation
+│   ├── address-formatter.php # Address formatting utilities
+│   ├── partner-logo-cache.php # Partner logo caching
+│   ├── push-webcam-validator.php # Push webcam validation
+│   ├── vpn-routing.php       # VPN routing utilities
+│   ├── webcam-error-detector.php # Webcam error frame detection
+│   └── weather/
+│       ├── fetcher.php       # Weather data fetching
+│       ├── calculator.php    # Aviation calculations
+│       ├── daily-tracking.php # Daily high/low tracking
+│       ├── staleness.php     # Data staleness handling
+│       ├── source-timestamps.php # Timestamp extraction
+│       └── adapter/          # Weather API adapters
 ├── scripts/
-│   ├── fetch-webcam.php    # Webcam fetcher (runs via cron inside container)
-│   ├── fetch-weather.php   # Weather fetcher (runs via cron)
+│   ├── fetch-webcam.php      # Webcam fetcher (runs via cron)
+│   ├── fetch-weather.php     # Weather fetcher (runs via cron)
 │   └── process-push-webcams.php # Push webcam processor
-├── diagnostics.php         # System diagnostics endpoint
-├── clear-cache.php        # Cache clearing endpoint
-├── health.php            # Health check endpoint
+├── admin/
+│   ├── diagnostics.php       # System diagnostics endpoint
+│   ├── cache-clear.php       # Cache clearing endpoint
+│   ├── cache-diagnostics.php # Cache diagnostics
+│   └── metrics.php           # Application metrics
+├── health/
+│   ├── health.php            # Health check endpoint
+│   └── ready.php             # Readiness check endpoint
 ├── config/
-│   └── airports.json.example # Configuration template
-├── styles.css            # Application styles
-├── sw.js                # Service worker for offline support
-└── tests/               # Test files
+│   ├── airports.json.example # Configuration template
+│   └── crontab               # Cron job definitions
+├── public/
+│   ├── css/styles.css        # Application styles
+│   ├── js/service-worker.js  # Service worker for offline support
+│   └── favicons/             # Favicon files
+├── docker/                   # Docker configuration files
+└── tests/                    # Test files
 ```
 
 ## Core Components
@@ -109,7 +135,7 @@ aviationwx.org/
   - Enhanced meta tags (keywords, author, description)
 - **Sitemap**: Automatically includes homepage, status page, and all airport subdomains
 
-### Frontend (`airport-template.php`)
+### Frontend (`pages/airport.php`)
 
 - **Structure**: Single-page template with embedded JavaScript
 - **Features**:
@@ -282,9 +308,9 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
 
 ### Adding New Weather Metrics
 
-1. Add calculation function in `weather.php`
+1. Add calculation function in `api/weather.php`
 2. Update `$weatherData` array with new field
-3. Update `airport-template.php` to display new metric
+3. Update `pages/airport.php` to display new metric
 4. Document in README.md
 
 ## Testing
