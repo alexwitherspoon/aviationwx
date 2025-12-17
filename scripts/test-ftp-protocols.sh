@@ -180,17 +180,17 @@ test_ftp() {
     echo "$test_content" > "/tmp/$test_file"
     
     # Use curl for FTP testing
-    # Upload to incoming/ subdirectory (FTP users are chrooted and can only write there)
-    local ftp_url="ftp://${username}:${password}@${HOST}:${FTP_PORT}/incoming/"
+    # Upload directly to chroot root (simplified - no subdirectory needed)
+    local ftp_url="ftp://${username}:${password}@${HOST}:${FTP_PORT}/"
     
     # Test upload
     if curl -s --ftp-create-dirs --upload-file "/tmp/$test_file" "$ftp_url$test_file" > /dev/null 2>&1; then
-        # Test download (from incoming/ subdirectory)
+        # Test download (from chroot root)
         if curl -s --fail "$ftp_url$test_file" -o "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
             # Verify content
             if diff -q "/tmp/$test_file" "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
-                    # Test delete (from incoming/ subdirectory)
-                    if curl -s --fail -X "DELE incoming/$test_file" "ftp://${username}:${password}@${HOST}:${FTP_PORT}/" > /dev/null 2>&1; then
+                    # Test delete (from chroot root)
+                    if curl -s --fail -X "DELE $test_file" "ftp://${username}:${password}@${HOST}:${FTP_PORT}/" > /dev/null 2>&1; then
                     log_success "FTP test passed (upload, download, delete)"
                     rm -f "/tmp/$test_file" "/tmp/${test_file}.downloaded"
                     return 0
@@ -239,12 +239,12 @@ test_ftps() {
     local curl_exit=$?
     
     if [ $curl_exit -eq 0 ]; then
-        # Test download with SSL (from incoming/ subdirectory)
+        # Test download with SSL (from chroot root)
         if curl -s --ftp-ssl --insecure --fail "$ftps_url$test_file" -o "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
             # Verify content
             if diff -q "/tmp/$test_file" "/tmp/${test_file}.downloaded" > /dev/null 2>&1; then
-                    # Test delete with SSL (from incoming/ subdirectory)
-                    if curl -s --ftp-ssl --insecure --fail -X "DELE incoming/$test_file" "ftps://${username}:${password}@${HOST}:${FTP_PORT}/" > /dev/null 2>&1; then
+                    # Test delete with SSL (from chroot root)
+                    if curl -s --ftp-ssl --insecure --fail -X "DELE $test_file" "ftps://${username}:${password}@${HOST}:${FTP_PORT}/" > /dev/null 2>&1; then
                     log_success "FTPS test passed (upload, download, delete)"
                     rm -f "/tmp/$test_file" "/tmp/${test_file}.downloaded"
                     return 0
