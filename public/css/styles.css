@@ -382,7 +382,8 @@ h3 {
     flex-shrink: 0;
     font-size: 0.7rem;
     color: #ccc;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .last-updated {
@@ -590,9 +591,20 @@ h3 {
         grid-template-columns: 1fr;
     }
     
+    .webcam-name-label {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
     .webcam-name-text {
         white-space: normal;
         word-break: break-word;
+        width: 100%;
+    }
+    
+    .webcam-timestamp {
+        width: 100%;
     }
     
     .info-grid, .freq-grid, .time-grid {

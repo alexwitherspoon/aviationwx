@@ -2260,8 +2260,8 @@ function updateTimestampDisplay(elem, timestamp) {
             
             const actualTime = updateDate.toLocaleTimeString('en-US', timeOptions);
             
-            // Show actual time with relative time in parentheses: "7:05:24 PM (1 hour 23 minutes ago)"
-            elem.textContent = `${actualTime} (${relativeTime})`;
+            // Zero-width space before parenthesis allows responsive wrapping when space is limited
+            elem.textContent = `${actualTime}\u200B (${relativeTime})`;
         } catch (error) {
             // Fallback to relative time only if formatting fails
             console.error('[WebcamTimestamp] Error formatting timestamp:', error);
