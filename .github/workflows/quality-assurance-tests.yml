@@ -716,7 +716,7 @@ jobs:
       
       - name: Wait for health check
         run: |
-          bash scripts/wait-for-service-health.sh 60 http://localhost
+          bash scripts/wait-for-service-health.sh 60 http://localhost:8080
       
       - name: Run E2E Tests
         run: |
@@ -732,7 +732,7 @@ jobs:
             exit $exit_code
           fi
         env:
-          TEST_API_URL: http://localhost
+          TEST_API_URL: http://localhost:8080
       
       - name: Cleanup
         if: always()
@@ -834,7 +834,7 @@ jobs:
       
       - name: Wait for health check
         run: |
-          bash scripts/wait-for-service-health.sh 60 http://localhost
+          bash scripts/wait-for-service-health.sh 60 http://localhost:8080
       
       - name: Run Smoke Tests (Local)
         run: |
@@ -850,7 +850,7 @@ jobs:
             exit $exit_code
           fi
         env:
-          TEST_API_URL: http://localhost
+          TEST_API_URL: http://localhost:8080
       
       - name: Cleanup
         if: always()
@@ -980,7 +980,7 @@ jobs:
       
       - name: Wait for service to be ready
         run: |
-          bash scripts/wait-for-service-health.sh 60 http://localhost
+          bash scripts/wait-for-service-health.sh 60 http://localhost:8080
       
       - name: Run Browser Tests
         working-directory: tests/Browser
@@ -988,7 +988,7 @@ jobs:
           npx playwright test tests/${{ matrix.test-file }} || [ $? -eq 1 ]
         continue-on-error: true
         env:
-          TEST_BASE_URL: http://localhost
+          TEST_BASE_URL: http://localhost:8080
           PLAYWRIGHT_WORKERS: 6
       
       - name: Upload Playwright Report
