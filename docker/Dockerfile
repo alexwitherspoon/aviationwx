@@ -20,6 +20,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     vsftpd \
     openssh-server \
     certbot \
+    openssl \
     logrotate \
     db-util \
     net-tools \

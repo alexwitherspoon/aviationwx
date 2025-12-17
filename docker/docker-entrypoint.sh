@@ -201,12 +201,14 @@ if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
         echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
     else
         # Validate private key - try multiple methods for compatibility
+        # Try openssl rsa first (most compatible), then pkey (newer OpenSSL)
+        # Note: openssl binary is already verified to exist (used in x509 check above)
         KEY_VALID=false
-        if openssl pkey -in "$KEY_FILE" -noout >/dev/null 2>&1; then
-            KEY_VALID=true
-        elif openssl rsa -in "$KEY_FILE" -check -noout >/dev/null 2>&1; then
+        if openssl rsa -in "$KEY_FILE" -check -noout >/dev/null 2>&1; then
             KEY_VALID=true
         elif openssl rsa -in "$KEY_FILE" -noout >/dev/null 2>&1; then
+            KEY_VALID=true
+        elif openssl pkey -in "$KEY_FILE" -noout >/dev/null 2>&1; then
             KEY_VALID=true
         fi
         
@@ -215,69 +217,70 @@ if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
             echo "   vsftpd will start without SSL - certificates can be enabled later"
             echo "   Key file: $KEY_FILE"
             echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
-    else
-        SSL_ENABLED=true
-        enable_ssl_in_config() {
-        local config_file="$1"
-        if [ ! -f "$config_file" ]; then
-            return 0
+        else
+            SSL_ENABLED=true
+            enable_ssl_in_config() {
+            local config_file="$1"
+            if [ ! -f "$config_file" ]; then
+                return 0
+            fi
+            
+            # Enable SSL
+            sed -i 's/^ssl_enable=NO/ssl_enable=YES/' "$config_file"
+            sed -i 's/^# ssl_enable=YES/ssl_enable=YES/' "$config_file"
+            
+            # Allow both FTP and FTPS (optional encryption)
+            sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
+            sed -i 's/^force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
+            sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
+            sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
+            
+            # Enable TLS versions for camera compatibility
+            sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$config_file"
+            sed -i 's/^ssl_tlsv1=NO/ssl_tlsv1=YES/' "$config_file"
+            sed -i 's/^# ssl_tlsv1_1=YES/ssl_tlsv1_1=YES/' "$config_file" 2>/dev/null || true
+            sed -i 's/^# ssl_tlsv1_2=YES/ssl_tlsv1_2=YES/' "$config_file" 2>/dev/null || true
+            sed -i 's/^ssl_tlsv1_1=NO/ssl_tlsv1_1=YES/' "$config_file" 2>/dev/null || true
+            sed -i 's/^ssl_tlsv1_2=NO/ssl_tlsv1_2=YES/' "$config_file" 2>/dev/null || true
+            
+            # Disable insecure SSL versions
+            sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$config_file"
+            sed -i 's/^ssl_sslv2=YES/ssl_sslv2=NO/' "$config_file"
+            sed -i 's/^# ssl_sslv3=NO/ssl_sslv3=NO/' "$config_file"
+            sed -i 's/^ssl_sslv3=YES/ssl_sslv3=NO/' "$config_file"
+            
+            # SSL/TLS settings
+            sed -i 's/^# require_ssl_reuse=NO/require_ssl_reuse=NO/' "$config_file"
+            sed -i 's/^require_ssl_reuse=YES/require_ssl_reuse=NO/' "$config_file"
+            sed -i 's/^# ssl_ciphers=HIGH/ssl_ciphers=HIGH/' "$config_file"
+            sed -i "s|^# rsa_cert_file=.*|rsa_cert_file=$CERT_DIR/fullchain.pem|" "$config_file"
+            sed -i "s|^# rsa_private_key_file=.*|rsa_private_key_file=$CERT_DIR/privkey.pem|" "$config_file"
+            
+            # Remove commented SSL lines
+            sed -i '/^# ssl_enable=/d' "$config_file"
+            sed -i '/^# force_local_data_ssl=/d' "$config_file"
+            sed -i '/^# force_local_logins_ssl=/d' "$config_file"
+            sed -i '/^# ssl_tlsv/d' "$config_file"
+            sed -i '/^# ssl_sslv/d' "$config_file"
+            sed -i '/^# require_ssl_reuse=/d' "$config_file"
+            sed -i '/^# ssl_ciphers=/d' "$config_file"
+            sed -i '/^# rsa_cert_file=/d' "$config_file"
+            sed -i '/^# rsa_private_key_file=/d' "$config_file"
+            
+            # Add TLS versions if they don't exist
+            if ! grep -q "^ssl_tlsv1_1=" "$config_file" 2>/dev/null; then
+                echo "ssl_tlsv1_1=YES" >> "$config_file"
+            fi
+            if ! grep -q "^ssl_tlsv1_2=" "$config_file" 2>/dev/null; then
+                echo "ssl_tlsv1_2=YES" >> "$config_file"
+            fi
+        }
+        
+            echo "SSL certificates found and validated, enabling SSL in vsftpd configs..."
+            enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv4.conf"
+            enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv6.conf"
+            echo "✓ SSL enabled in vsftpd configs"
         fi
-        
-        # Enable SSL
-        sed -i 's/^ssl_enable=NO/ssl_enable=YES/' "$config_file"
-        sed -i 's/^# ssl_enable=YES/ssl_enable=YES/' "$config_file"
-        
-        # Allow both FTP and FTPS (optional encryption)
-        sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
-        sed -i 's/^force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
-        sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
-        sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
-        
-        # Enable TLS versions for camera compatibility
-        sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$config_file"
-        sed -i 's/^ssl_tlsv1=NO/ssl_tlsv1=YES/' "$config_file"
-        sed -i 's/^# ssl_tlsv1_1=YES/ssl_tlsv1_1=YES/' "$config_file" 2>/dev/null || true
-        sed -i 's/^# ssl_tlsv1_2=YES/ssl_tlsv1_2=YES/' "$config_file" 2>/dev/null || true
-        sed -i 's/^ssl_tlsv1_1=NO/ssl_tlsv1_1=YES/' "$config_file" 2>/dev/null || true
-        sed -i 's/^ssl_tlsv1_2=NO/ssl_tlsv1_2=YES/' "$config_file" 2>/dev/null || true
-        
-        # Disable insecure SSL versions
-        sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$config_file"
-        sed -i 's/^ssl_sslv2=YES/ssl_sslv2=NO/' "$config_file"
-        sed -i 's/^# ssl_sslv3=NO/ssl_sslv3=NO/' "$config_file"
-        sed -i 's/^ssl_sslv3=YES/ssl_sslv3=NO/' "$config_file"
-        
-        # SSL/TLS settings
-        sed -i 's/^# require_ssl_reuse=NO/require_ssl_reuse=NO/' "$config_file"
-        sed -i 's/^require_ssl_reuse=YES/require_ssl_reuse=NO/' "$config_file"
-        sed -i 's/^# ssl_ciphers=HIGH/ssl_ciphers=HIGH/' "$config_file"
-        sed -i "s|^# rsa_cert_file=.*|rsa_cert_file=$CERT_DIR/fullchain.pem|" "$config_file"
-        sed -i "s|^# rsa_private_key_file=.*|rsa_private_key_file=$CERT_DIR/privkey.pem|" "$config_file"
-        
-        # Remove commented SSL lines
-        sed -i '/^# ssl_enable=/d' "$config_file"
-        sed -i '/^# force_local_data_ssl=/d' "$config_file"
-        sed -i '/^# force_local_logins_ssl=/d' "$config_file"
-        sed -i '/^# ssl_tlsv/d' "$config_file"
-        sed -i '/^# ssl_sslv/d' "$config_file"
-        sed -i '/^# require_ssl_reuse=/d' "$config_file"
-        sed -i '/^# ssl_ciphers=/d' "$config_file"
-        sed -i '/^# rsa_cert_file=/d' "$config_file"
-        sed -i '/^# rsa_private_key_file=/d' "$config_file"
-        
-        # Add TLS versions if they don't exist
-        if ! grep -q "^ssl_tlsv1_1=" "$config_file" 2>/dev/null; then
-            echo "ssl_tlsv1_1=YES" >> "$config_file"
-        fi
-        if ! grep -q "^ssl_tlsv1_2=" "$config_file" 2>/dev/null; then
-            echo "ssl_tlsv1_2=YES" >> "$config_file"
-        fi
-    }
-    
-        echo "SSL certificates found and validated, enabling SSL in vsftpd configs..."
-        enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv4.conf"
-        enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv6.conf"
-        echo "✓ SSL enabled in vsftpd configs"
     fi
 else
     echo "SSL certificates not found - vsftpd will run without SSL/TLS"

@@ -39,12 +39,14 @@ if ! openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -text >/dev/null 2>&1; th
 fi
 
 # Validate private key - try multiple methods for compatibility
+# Try openssl rsa first (most compatible), then pkey (newer OpenSSL)
+# Note: openssl binary is already verified to exist (used in x509 check above)
 KEY_VALID=false
-if openssl pkey -in "$CERT_DIR/privkey.pem" -noout >/dev/null 2>&1; then
-    KEY_VALID=true
-elif openssl rsa -in "$CERT_DIR/privkey.pem" -check -noout >/dev/null 2>&1; then
+if openssl rsa -in "$CERT_DIR/privkey.pem" -check -noout >/dev/null 2>&1; then
     KEY_VALID=true
 elif openssl rsa -in "$CERT_DIR/privkey.pem" -noout >/dev/null 2>&1; then
+    KEY_VALID=true
+elif openssl pkey -in "$CERT_DIR/privkey.pem" -noout >/dev/null 2>&1; then
     KEY_VALID=true
 fi
 
