@@ -236,12 +236,12 @@ if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
             sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
             
             # Enable TLS versions for camera compatibility
+            # Note: Only ssl_tlsv1 is widely supported; ssl_tlsv1_1 and ssl_tlsv1_2 are not supported by all vsftpd versions
             sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$config_file"
             sed -i 's/^ssl_tlsv1=NO/ssl_tlsv1=YES/' "$config_file"
-            sed -i 's/^# ssl_tlsv1_1=YES/ssl_tlsv1_1=YES/' "$config_file" 2>/dev/null || true
-            sed -i 's/^# ssl_tlsv1_2=YES/ssl_tlsv1_2=YES/' "$config_file" 2>/dev/null || true
-            sed -i 's/^ssl_tlsv1_1=NO/ssl_tlsv1_1=YES/' "$config_file" 2>/dev/null || true
-            sed -i 's/^ssl_tlsv1_2=NO/ssl_tlsv1_2=YES/' "$config_file" 2>/dev/null || true
+            # Remove unsupported TLS version settings if present
+            sed -i '/^ssl_tlsv1_1=/d' "$config_file" 2>/dev/null || true
+            sed -i '/^ssl_tlsv1_2=/d' "$config_file" 2>/dev/null || true
             
             # Disable insecure SSL versions
             sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$config_file"
@@ -267,12 +267,9 @@ if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
             sed -i '/^# rsa_cert_file=/d' "$config_file"
             sed -i '/^# rsa_private_key_file=/d' "$config_file"
             
-            # Add TLS versions if they don't exist
-            if ! grep -q "^ssl_tlsv1_1=" "$config_file" 2>/dev/null; then
-                echo "ssl_tlsv1_1=YES" >> "$config_file"
-            fi
-            if ! grep -q "^ssl_tlsv1_2=" "$config_file" 2>/dev/null; then
-                echo "ssl_tlsv1_2=YES" >> "$config_file"
+            # Ensure ssl_tlsv1 is set (only TLS version widely supported across vsftpd versions)
+            if ! grep -q "^ssl_tlsv1=" "$config_file" 2>/dev/null; then
+                echo "ssl_tlsv1=YES" >> "$config_file"
             fi
         }
         
