@@ -1544,21 +1544,6 @@ function updateWeatherTimestamp() {
     const now = new Date();
     const diffSeconds = Math.floor((now - weatherLastUpdated) / 1000);
     
-    function formatRelativeTime(seconds) {
-        if (seconds < 60) {
-            return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
-        } else if (seconds < 3600) {
-            const minutes = Math.floor(seconds / 60);
-            return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
-        } else if (seconds < 86400) {
-            const hours = Math.floor(seconds / 3600);
-            return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
-        } else {
-            const days = Math.floor(seconds / 86400);
-            return days + (days === 1 ? ' day' : ' days') + ' ago';
-        }
-    }
-    
     // Determine if using METAR-only source
     const isMetarOnly = AIRPORT_DATA && 
                         AIRPORT_DATA.weather_source && 
@@ -2176,25 +2161,47 @@ function reloadWebcamImages() {
     <?php endforeach; ?>
 }
 
-// Helper to format relative time
+// Format relative time with two-unit precision for better user context
+// Shows the two most significant units (e.g., "1 hour 23 minutes ago", "45 minutes 12 seconds ago")
 function formatRelativeTime(seconds) {
-    // Handle edge cases
     if (isNaN(seconds) || seconds < 0) {
         return '--';
     }
     
     if (seconds < 60) {
         return seconds + (seconds === 1 ? ' second' : ' seconds') + ' ago';
-    } else if (seconds < 3600) {
+    }
+    
+    if (seconds < 3600) {
         const minutes = Math.floor(seconds / 60);
-        return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
-    } else if (seconds < 86400) {
+        const remainingSeconds = seconds % 60;
+        
+        if (remainingSeconds === 0) {
+            return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
+        }
+        return minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ' +
+               remainingSeconds + (remainingSeconds === 1 ? ' second' : ' seconds') + ' ago';
+    }
+    
+    if (seconds < 86400) {
         const hours = Math.floor(seconds / 3600);
-        return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
-    } else {
-        const days = Math.floor(seconds / 86400);
+        const remainingMinutes = Math.floor((seconds % 3600) / 60);
+        
+        if (remainingMinutes === 0) {
+            return hours + (hours === 1 ? ' hour' : ' hours') + ' ago';
+        }
+        return hours + (hours === 1 ? ' hour' : ' hours') + ' ' +
+               remainingMinutes + (remainingMinutes === 1 ? ' minute' : ' minutes') + ' ago';
+    }
+    
+    const days = Math.floor(seconds / 86400);
+    const remainingHours = Math.floor((seconds % 86400) / 3600);
+    
+    if (remainingHours === 0) {
         return days + (days === 1 ? ' day' : ' days') + ' ago';
     }
+    return days + (days === 1 ? ' day' : ' days') + ' ' +
+           remainingHours + (remainingHours === 1 ? ' hour' : ' hours') + ' ago';
 }
 
 function lastCamIndexForElem(elem) {
@@ -2227,7 +2234,33 @@ function updateTimestampDisplay(elem, timestamp) {
         return;
     }
     
-    elem.textContent = formatRelativeTime(diffSeconds);
+    // Format actual time in airport's timezone
+    try {
+        // Get airport timezone, default to UTC if not available
+        const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
+        const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
+        const timeFormat = getTimeFormat();
+        
+        // Format time with seconds for precision (matches image timestamp format)
+        const timeOptions = {
+            timeZone: timezone,
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: timeFormat === '12hr'
+        };
+        
+        const actualTime = updateDate.toLocaleTimeString('en-US', timeOptions);
+        const relativeTime = formatRelativeTime(diffSeconds);
+        
+        // Show actual time with relative time in parentheses: "7:05:24 PM (1 hour ago)"
+        elem.textContent = `${actualTime} (${relativeTime})`;
+    } catch (error) {
+        // Fallback to relative time only if formatting fails
+        console.error('[WebcamTimestamp] Error formatting timestamp:', error);
+        elem.textContent = formatRelativeTime(diffSeconds);
+    }
+    
     elem.dataset.timestamp = timestampNum.toString();
     
     const camIndex = lastCamIndexForElem(elem);
