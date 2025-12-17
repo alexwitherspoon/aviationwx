@@ -1204,6 +1204,37 @@ docker compose -f docker/docker-compose.prod.yml exec web vsftpd -olisten=NO /et
 ./scripts/test-ftp-protocols.sh
 ```
 
+#### Production Diagnostic Commands
+
+If FTPS is not working, run these diagnostic commands on the production server:
+
+```bash
+# View diagnostic commands
+./scripts/diagnose-ftps-production.sh
+
+# Or run quick diagnostic
+docker compose -f docker/docker-compose.prod.yml exec web bash -c '
+  echo "=== SSL Config ==="
+  grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf
+  echo ""
+  echo "=== Certificate Paths ==="
+  grep "^rsa_cert_file=" /etc/vsftpd/vsftpd_ipv4.conf
+  grep "^rsa_private_key_file=" /etc/vsftpd/vsftpd_ipv4.conf
+  echo ""
+  echo "=== Certificate Files ==="
+  ls -la /etc/letsencrypt/live/aviationwx.org/ 2>&1
+  echo ""
+  echo "=== Certificate Validity ==="
+  openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -subject -dates 2>&1
+  echo ""
+  echo "=== vsftpd Process ==="
+  ps aux | grep vsftpd | grep -v grep
+  echo ""
+  echo "=== TLS Versions ==="
+  grep -E "^ssl_tlsv" /etc/vsftpd/vsftpd_ipv4.conf
+'
+```
+
 ### Manual Steps
 
 If automatic setup fails, you can manually enable SSL:
