@@ -33,16 +33,10 @@ class RelativeTimeFormatTest extends TestCase
             return $seconds . ($seconds === 1 ? ' second' : ' seconds') . ' ago';
         }
         
-        // Less than 1 hour: show minutes and seconds
+        // Less than 1 hour: show minutes only (single unit)
         if ($seconds < 3600) {
             $minutes = (int)floor($seconds / 60);
-            $remainingSeconds = $seconds % 60;
-            
-            if ($remainingSeconds === 0) {
-                return $minutes . ($minutes === 1 ? ' minute' : ' minutes') . ' ago';
-            }
-            return $minutes . ($minutes === 1 ? ' minute' : ' minutes') . ' ' .
-                   $remainingSeconds . ($remainingSeconds === 1 ? ' second' : ' seconds') . ' ago';
+            return $minutes . ($minutes === 1 ? ' minute' : ' minutes') . ' ago';
         }
         
         // Less than 1 day: show hours and minutes
@@ -98,22 +92,22 @@ class RelativeTimeFormatTest extends TestCase
         $this->assertEquals('1 minute ago', $result);
     }
     
-    public function testFormatRelativeTime_OneMinuteThirtySeconds_ReturnsTwoUnits(): void
+    public function testFormatRelativeTime_OneMinuteThirtySeconds_ReturnsSingleUnit(): void
     {
         $result = $this->formatRelativeTime(90);
-        $this->assertEquals('1 minute 30 seconds ago', $result);
+        $this->assertEquals('1 minute ago', $result);
     }
     
-    public function testFormatRelativeTime_TwoMinutesFiveSeconds_ReturnsTwoUnits(): void
+    public function testFormatRelativeTime_TwoMinutesFiveSeconds_ReturnsSingleUnit(): void
     {
         $result = $this->formatRelativeTime(125);
-        $this->assertEquals('2 minutes 5 seconds ago', $result);
+        $this->assertEquals('2 minutes ago', $result);
     }
     
-    public function testFormatRelativeTime_FiftyNineMinutesFiftyNineSeconds_ReturnsTwoUnits(): void
+    public function testFormatRelativeTime_FiftyNineMinutesFiftyNineSeconds_ReturnsSingleUnit(): void
     {
         $result = $this->formatRelativeTime(3599);
-        $this->assertEquals('59 minutes 59 seconds ago', $result);
+        $this->assertEquals('59 minutes ago', $result);
     }
     
     public function testFormatRelativeTime_ExactlyOneHour_ReturnsOneHour(): void
@@ -191,18 +185,20 @@ class RelativeTimeFormatTest extends TestCase
         $this->assertEquals('2 days ago', $this->formatRelativeTime(172800));
     }
     
-    public function testFormatRelativeTime_TwoUnitPrecision_ShowsBothUnits(): void
+    public function testFormatRelativeTime_TwoUnitPrecision_ShowsBothUnitsWhenOneHourOrMore(): void
     {
-        // Verify two-unit precision is working
+        // Verify two-unit precision is working for >= 1 hour
         $result = $this->formatRelativeTime(4983); // 1 hour 23 minutes 3 seconds
         $this->assertStringContainsString('hour', $result);
         $this->assertStringContainsString('minute', $result);
         $this->assertStringContainsString('ago', $result);
         
+        // Verify single unit for < 1 hour
         $result = $this->formatRelativeTime(125); // 2 minutes 5 seconds
         $this->assertStringContainsString('minute', $result);
-        $this->assertStringContainsString('second', $result);
+        $this->assertStringNotContainsString('second', $result);
         $this->assertStringContainsString('ago', $result);
     }
 }
+
 
