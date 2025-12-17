@@ -612,15 +612,36 @@ jobs:
           if ! command -v jq >/dev/null 2>&1; then
             echo "⚠️  jq is not installed. Installing..."
             if command -v apt-get >/dev/null 2>&1; then
-              sudo apt-get update -qq && sudo apt-get install -y jq
+              if sudo apt-get update -qq && sudo apt-get install -y jq; then
+                # Verify installation succeeded
+                if command -v jq >/dev/null 2>&1; then
+                  echo "✓ jq installed successfully"
+                else
+                  echo "❌ ERROR: jq installation failed - command not found after install"
+                  exit 1
+                fi
+              else
+                echo "❌ ERROR: Failed to install jq via apt-get"
+                exit 1
+              fi
             elif command -v yum >/dev/null 2>&1; then
-              sudo yum install -y jq
+              if sudo yum install -y jq; then
+                # Verify installation succeeded
+                if command -v jq >/dev/null 2>&1; then
+                  echo "✓ jq installed successfully"
+                else
+                  echo "❌ ERROR: jq installation failed - command not found after install"
+                  exit 1
+                fi
+              else
+                echo "❌ ERROR: Failed to install jq via yum"
+                exit 1
+              fi
             else
               echo "❌ ERROR: Cannot install jq - unsupported package manager"
               echo "Please install jq manually: apt-get install jq (Ubuntu/Debian) or yum install jq (CentOS/RHEL)"
               exit 1
             fi
-            echo "✓ jq installed successfully"
           else
             echo "✓ jq is already installed"
           fi

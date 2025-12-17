@@ -89,13 +89,14 @@ check_container_status() {
     
     # Check if we got valid JSON and extract state
     if [ -n "$json_output" ] && [ "$json_output" != "[]" ]; then
-      status=$(echo "$json_output" | jq -r 'if length > 0 then .[0].State // "unknown" else "unknown" end' 2>/dev/null || echo "unknown")
+      status=$(echo "$json_output" | jq -r '.[0].State // "unknown"' 2>/dev/null || echo "unknown")
     fi
   fi
   
-  # Fallback to grep if jq failed or returned unknown/empty
-  if [ "$status" = "unknown" ] || [ -z "$status" ]; then
-    if docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" 2>/dev/null | grep -qE "(Up|running)"; then
+  # Fallback to grep if jq failed or returned unknown
+  if [ "$status" = "unknown" ]; then
+    # Match "Up" in STATUS column (docker compose uses "Up X seconds" format)
+    if docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" 2>/dev/null | grep -qE '\bUp\b'; then
       status="running"
     fi
   fi
@@ -114,15 +115,17 @@ check_container_health() {
     
     # Check if we got valid JSON and extract health
     if [ -n "$json_output" ] && [ "$json_output" != "[]" ]; then
-      health=$(echo "$json_output" | jq -r 'if length > 0 then .[0].Health // "unknown" else "unknown" end' 2>/dev/null || echo "unknown")
+      health=$(echo "$json_output" | jq -r '.[0].Health // "unknown"' 2>/dev/null || echo "unknown")
     fi
   fi
   
-  # Fallback to grep if jq failed or returned unknown/empty
-  if [ "$health" = "unknown" ] || [ -z "$health" ]; then
+  # Fallback to grep if jq failed or returned unknown
+  # Note: Health status is only available in JSON format, not human-readable output
+  if [ "$health" = "unknown" ]; then
     local json_output
     json_output=$(docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null || echo "")
-    if [ -n "$json_output" ]; then
+    if [ -n "$json_output" ] && [ "$json_output" != "[]" ]; then
+      # Extract health status from JSON using grep (fallback when jq unavailable)
       health=$(echo "$json_output" | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "unknown")
     fi
   fi
