@@ -41,6 +41,9 @@ if (!defined('CURL_MULTI_OVERALL_TIMEOUT')) {
 if (!defined('MAX_STALE_HOURS')) {
     define('MAX_STALE_HOURS', 3);
 }
+if (!defined('DATA_OUTAGE_BANNER_HOURS')) {
+    define('DATA_OUTAGE_BANNER_HOURS', 1.5); // Show outage banner when all sources are stale for this duration
+}
 if (!defined('STALE_WHILE_REVALIDATE_SECONDS')) {
     define('STALE_WHILE_REVALIDATE_SECONDS', 300);
 }
