@@ -348,6 +348,29 @@ The system tracks daily extremes that reset at local midnight:
 3. Recalculate flight category if visibility/ceiling were nulled
 4. Daily tracking values preserved (always valid for the day)
 
+### Data Outage Detection
+
+**Purpose**: Warn users when all data sources are offline (complete site outage)
+
+**Outage Threshold**: 1.5 hours (configurable via `DATA_OUTAGE_BANNER_HOURS`)
+
+**Detection Logic**:
+- Checks all configured data sources (primary weather, METAR, webcams)
+- Banner appears only when **ALL** sources exceed the threshold
+- Banner shows newest timestamp among all stale sources to identify outage start time
+- Banner automatically hides when any source recovers
+
+**Display Behavior**:
+- Red banner at top of page (similar to maintenance banner)
+- Only shown when airport is **NOT** in maintenance mode
+- Message indicates data is stale and cannot be trusted
+- Includes newest data timestamp to help identify when outage started
+
+**Webcam Staleness Warning**:
+- Individual webcam timestamps show warning emoji (⚠️) when age exceeds `MAX_STALE_HOURS` (3 hours)
+- Warning appears before timestamp in "Last updated:" label
+- Provides immediate visual feedback for stale webcam data
+
 ### Data Merging with Fallback
 
 When new data is fetched but some fields are missing:
@@ -693,6 +716,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - **Last Updated**: Shows when image was captured
 - **Format**: Relative time ("2 minutes ago") or absolute time
 - **Update Frequency**: Checks timestamp periodically
+- **Staleness Warning**: Warning emoji (⚠️) appears when webcam age exceeds `MAX_STALE_HOURS` (3 hours)
 
 ### Data Refresh Behavior
 
