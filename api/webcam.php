@@ -292,16 +292,22 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     $size = 0;
     if ($existsJpg) { 
         // Use EXIF capture time if available, otherwise filemtime
+        // This represents the actual image capture time, not when it was downloaded
         $jpgMtime = getImageCaptureTime($cacheJpg);
         $jpgSize = @filesize($cacheJpg);
-        if ($jpgMtime > 0) { $mtime = max($mtime, $jpgMtime); }
+        if ($jpgMtime > 0) { 
+            $mtime = $jpgMtime; // Prefer JPG timestamp (EXIF capture time)
+        }
         if ($jpgSize !== false) { $size = max($size, (int)$jpgSize); }
     }
     if ($existsWebp) { 
         // WEBP doesn't preserve EXIF, use filemtime
+        // Only use WEBP timestamp if JPG doesn't exist (fallback)
         $webpMtime = @filemtime($cacheWebp);
         $webpSize = @filesize($cacheWebp);
-        if ($webpMtime !== false) { $mtime = max($mtime, (int)$webpMtime); }
+        if ($mtime === 0 && $webpMtime !== false) { 
+            $mtime = (int)$webpMtime; // Only use WEBP if JPG not available
+        }
         if ($webpSize !== false) { $size = max($size, (int)$webpSize); }
     }
     echo json_encode([
@@ -441,7 +447,23 @@ function findLatestValidImage($cacheJpg, $cacheWebp) {
     }
     
     // Return the most recent valid image
+    // Prefer JPG over WEBP when both exist, since JPG has EXIF capture time
     if (!empty($candidates)) {
+        // Find JPG candidate if it exists
+        $jpgCandidate = null;
+        foreach ($candidates as $candidate) {
+            if ($candidate['type'] === 'image/jpeg') {
+                $jpgCandidate = $candidate;
+                break;
+            }
+        }
+        
+        // If JPG exists, prefer it (has EXIF capture time)
+        if ($jpgCandidate !== null) {
+            return $jpgCandidate;
+        }
+        
+        // Otherwise, return the most recent (should only be WEBP at this point)
         usort($candidates, function($a, $b) {
             return $b['mtime'] - $a['mtime']; // Most recent first
         });
