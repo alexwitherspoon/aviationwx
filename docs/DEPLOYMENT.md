@@ -139,6 +139,20 @@ If using Cloudflare:
 
 ## SSL Certificates
 
+**Note**: If using GitHub Actions for deployment, wildcard certificate generation is **automated**. The deployment workflow will automatically generate certificates if they don't exist (see [GitHub Actions CI/CD](#github-actions-cicd-optional) section). Manual setup is only needed if deploying without GitHub Actions.
+
+### Automated Certificate Generation (GitHub Actions)
+
+When using GitHub Actions for deployment:
+- Certificates are **automatically generated** if they don't exist
+- Requires `CLOUDFLARE_API_TOKEN` GitHub secret (see [GitHub Secrets](#1-configure-github-secrets))
+- No manual certificate setup needed for first deployment
+- Certificates are automatically renewed by certbot timer (systemd)
+
+### Manual Certificate Setup (Without GitHub Actions)
+
+If deploying manually or if automated generation fails, follow these steps:
+
 ### Option A: Wildcard Certificate (Recommended)
 
 For wildcard certificates (`*.aviationwx.org`), use DNS challenge:
@@ -365,22 +379,88 @@ For automated deployments, set up GitHub Actions:
 
 ### 1. Configure GitHub Secrets
 
-In your GitHub repository (Settings → Secrets and variables → Actions):
+In your GitHub repository (Settings → Secrets and variables → Actions), add the following secrets:
 
-1. **SSH_PRIVATE_KEY**: Private SSH key for server access
-   ```bash
-   # On your local machine, generate SSH key pair
-   ssh-keygen -t ed25519 -C "github-actions"
-   
-   # Copy private key to GitHub Secrets (SSH_PRIVATE_KEY)
-   cat ~/.ssh/id_ed25519
-   
-   # Add public key to server
-   ssh-copy-id -i ~/.ssh/id_ed25519.pub aviationwx@YOUR_SERVER_IP
-   ```
+#### Required Secrets
 
-2. **USER**: Server username (`aviationwx`)
-3. **HOST**: Server IP address or hostname
+1. **`SSH_PRIVATE_KEY`** - Private SSH key for server access
+   - **Purpose**: Authenticates GitHub Actions to your server for deployment
+   - **How to create**:
+     ```bash
+     # On your local machine, generate SSH key pair
+     ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/github-actions
+     
+     # Copy private key content to GitHub Secrets (SSH_PRIVATE_KEY)
+     cat ~/.ssh/github-actions
+     
+     # Add public key to server
+     ssh-copy-id -i ~/.ssh/github-actions.pub aviationwx@YOUR_SERVER_IP
+     ```
+   - **Security**: Never commit this key to the repository. Store only in GitHub Secrets.
+
+2. **`USER`** - Server username
+   - **Value**: `aviationwx` (or your application user)
+   - **Purpose**: Username for SSH connections during deployment
+
+3. **`HOST`** - Server IP address or hostname
+   - **Value**: Your server's IP address or hostname (e.g., `123.45.67.89` or `server.example.com`)
+   - **Purpose**: Target server for deployment
+
+4. **`CLOUDFLARE_API_TOKEN`** - Cloudflare API token for DNS management
+   - **Purpose**: Automatically generates wildcard SSL certificates during deployment
+   - **How to create**:
+     1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com/)
+     2. Go to "My Profile" → "API Tokens"
+     3. Click "Create Token"
+     4. Use "Edit zone DNS" template or create custom token with:
+        - **Permissions**: 
+          - `Zone` → `DNS` → `Edit`
+          - `Zone` → `Zone` → `Read`
+        - **Zone Resources**: 
+          - `Include` → `Specific zone` → `aviationwx.org`
+     5. Click "Continue to summary" → "Create Token"
+     6. Copy the token immediately (it's only shown once)
+     7. Paste into GitHub Secrets as `CLOUDFLARE_API_TOKEN`
+   - **Security**: This token can modify DNS records. Keep it secure and rotate if compromised.
+   - **Scope**: Should be scoped only to your domain zone
+
+5. **`LETSENCRYPT_EMAIL`** - Email address for Let's Encrypt certificate generation
+   - **Purpose**: Required email address for Let's Encrypt certificate generation and expiration notifications
+   - **Value**: Your email address (e.g., `your-email@example.com`)
+   - **How to set**: Add as a GitHub Secret with your preferred email address
+   - **Note**: 
+     - This email is used by Let's Encrypt for certificate expiration warnings
+     - Let's Encrypt requires an email address when generating certificates
+     - Use an email address you monitor regularly to receive renewal reminders
+     - The email is not used for account management, only notifications
+
+### How to Add Secrets to GitHub
+
+1. Go to your repository on GitHub
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Click **"New repository secret"**
+4. Enter the secret name (e.g., `CLOUDFLARE_API_TOKEN`)
+5. Paste the secret value
+6. Click **"Add secret"**
+7. Repeat for all required secrets
+
+### Secret Security Best Practices
+
+- ✅ **DO**: Store all secrets in GitHub Secrets (encrypted at rest)
+- ✅ **DO**: Use minimal permissions for Cloudflare API token (zone-scoped only)
+- ✅ **DO**: Rotate secrets periodically or if compromised
+- ✅ **DO**: Use different SSH keys for different purposes
+- ❌ **DON'T**: Commit secrets to the repository (even in `.gitignore` files)
+- ❌ **DON'T**: Share secrets in chat, email, or documentation
+- ❌ **DON'T**: Use overly broad Cloudflare API tokens (use zone-scoped tokens)
+
+### Verifying Secrets Are Set
+
+After adding secrets, you can verify they're configured by checking the deployment workflow logs. The workflow will:
+- Use `SSH_PRIVATE_KEY` to connect to the server
+- Use `USER` and `HOST` to identify the deployment target
+- Use `CLOUDFLARE_API_TOKEN` to generate certificates (if needed)
+- Use `LETSENCRYPT_EMAIL` for certificate notifications (optional)
 
 ### 2. Push to Trigger Deployment
 

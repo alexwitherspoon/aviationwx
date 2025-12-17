@@ -994,6 +994,281 @@ FTP passive mode automatically uses the correct external IP address from DNS res
 - **Processing delays**: The system processes uploads every minute; allow up to 60 seconds for images to appear
 - **FTP passive mode errors**: The system automatically resolves the correct external IP. If issues persist, verify DNS resolution of `upload.aviationwx.org` returns the correct IPs
 
+## SSL Certificate Setup for FTPS
+
+FTPS (FTP over TLS/SSL) requires SSL certificates to be properly configured. This section explains the complete dependency chain and troubleshooting steps.
+
+### Dependency Chain
+
+The following steps must be completed in order for FTPS to work:
+
+1. **Let's Encrypt Certificate Generation**
+   - FTPS uses the **wildcard certificate** (`*.aviationwx.org`) which covers `upload.aviationwx.org`
+   - **Automated**: If using GitHub Actions with `CLOUDFLARE_API_TOKEN` configured, certificate is generated automatically during deployment
+   - **Manual**: If deploying manually, generate wildcard certificate (see DEPLOYMENT.md)
+   - The wildcard certificate is generated for `aviationwx.org` and `*.aviationwx.org`
+   - Certificates are stored at `/etc/letsencrypt/live/aviationwx.org/`
+   - Required files: `fullchain.pem` and `privkey.pem`
+   - **Note**: No separate certificate needed for `upload.aviationwx.org` - the wildcard covers it
+
+2. **Docker Volume Mount**
+   - Certificates must be mounted into the container
+   - In `docker-compose.prod.yml`, the volume mount is:
+     ```yaml
+     volumes:
+       - /etc/letsencrypt:/etc/letsencrypt:rw
+     ```
+   - This allows the container to access certificates at `/etc/letsencrypt/live/aviationwx.org/`
+
+3. **Certificate Validation**
+   - At container startup, `docker-entrypoint.sh` validates certificates:
+     - Checks if files exist
+     - Verifies files are readable
+     - Validates certificate format using `openssl x509`
+     - Validates private key using `openssl rsa`
+   - If validation fails, vsftpd starts without SSL (graceful degradation)
+
+4. **vsftpd SSL Configuration**
+   - If certificates are valid, `docker-entrypoint.sh` automatically enables SSL in vsftpd configs
+   - Alternatively, run `scripts/enable-vsftpd-ssl.sh` manually
+   - Updates both `/etc/vsftpd/vsftpd_ipv4.conf` and `/etc/vsftpd/vsftpd_ipv6.conf`
+   - Sets `ssl_enable=YES` and configures certificate paths
+
+5. **vsftpd Restart**
+   - vsftpd must be restarted to apply SSL configuration
+   - `enable-vsftpd-ssl.sh` automatically restarts vsftpd if it's running
+   - If vsftpd is not running, SSL will be enabled on next start
+
+### Common Issues and Solutions
+
+#### Issue: Certificates Not Found
+
+**Symptoms:**
+- Logs show "SSL certificates not found"
+- FTPS connections fail
+- vsftpd runs without SSL
+
+**Diagnosis:**
+```bash
+# Check wildcard certificate location
+ls -la /etc/letsencrypt/live/aviationwx.org/
+
+# Check certificate validity
+sudo openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -text
+
+# Check vsftpd SSL configuration
+docker compose -f docker/docker-compose.prod.yml exec web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf
+```
+
+**Solution:**
+1. **If using GitHub Actions**: Certificate should be generated automatically if `CLOUDFLARE_API_TOKEN` is configured. Check deployment logs for certificate generation status.
+
+2. **If deploying manually** or certificate generation failed:
+   ```bash
+   # Verify wildcard certificate exists
+   ls -la /etc/letsencrypt/live/aviationwx.org/fullchain.pem
+   ls -la /etc/letsencrypt/live/aviationwx.org/privkey.pem
+   ```
+   
+3. **If certificate doesn't exist**, generate wildcard certificate (see DEPLOYMENT.md):
+   ```bash
+   sudo certbot certonly \
+     --dns-cloudflare \
+     --dns-cloudflare-credentials ~/.secrets/cloudflare.ini \
+     -d aviationwx.org -d '*.aviationwx.org' \
+     --non-interactive --agree-tos -m your@email.com
+   ```
+3. Restart container or run enable script:
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml restart web
+   # OR
+   docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
+   ```
+
+#### Issue: Certificates Not Readable
+
+**Symptoms:**
+- Certificates exist but vsftpd can't read them
+- Logs show "Certificate files exist but are not readable"
+
+**Diagnosis:**
+```bash
+# Check permissions
+ls -la /etc/letsencrypt/live/aviationwx.org/
+```
+
+**Solution:**
+```bash
+# Fix permissions (inside container)
+chmod 644 /etc/letsencrypt/live/aviationwx.org/fullchain.pem
+chmod 600 /etc/letsencrypt/live/aviationwx.org/privkey.pem
+```
+
+#### Issue: Invalid Certificate Format
+
+**Symptoms:**
+- Logs show "SSL certificate file appears to be invalid or corrupted"
+- vsftpd starts without SSL
+
+**Diagnosis:**
+```bash
+# Test certificate validity
+openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -text
+
+# Test private key validity
+openssl rsa -in /etc/letsencrypt/live/aviationwx.org/privkey.pem -check -noout
+
+# Verify certificate covers upload.aviationwx.org
+openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -text | grep -i "DNS:"
+```
+
+**Solution:**
+Regenerate wildcard certificate (see DEPLOYMENT.md for full instructions):
+```bash
+sudo certbot certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials ~/.secrets/cloudflare.ini \
+  -d aviationwx.org -d '*.aviationwx.org' \
+  --non-interactive --agree-tos -m your@email.com
+```
+
+#### Issue: SSL Not Enabled in vsftpd Config
+
+**Symptoms:**
+- Certificates exist and are valid
+- But `ssl_enable=NO` in vsftpd config
+- FTPS connections fail
+
+**Diagnosis:**
+```bash
+# Check vsftpd config
+grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf
+```
+
+**Solution:**
+Enable SSL manually:
+```bash
+docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
+```
+
+#### Issue: Certificate Doesn't Cover upload.aviationwx.org
+
+**Symptoms:**
+- Certificates exist but don't include wildcard or upload.aviationwx.org
+- FTPS connections fail with certificate errors
+
+**Diagnosis:**
+```bash
+# Check certificate subject and SANs
+openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -text | grep -i "DNS:"
+```
+
+**Solution:**
+Ensure wildcard certificate includes `*.aviationwx.org`:
+```bash
+# Regenerate wildcard certificate with both base and wildcard domains
+sudo certbot certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials ~/.secrets/cloudflare.ini \
+  -d aviationwx.org -d '*.aviationwx.org' \
+  --non-interactive --agree-tos -m your@email.com
+```
+
+### Diagnostic Tools
+
+#### Run Full Diagnostic
+
+```bash
+# Check certificate existence and validity
+sudo ls -la /etc/letsencrypt/live/aviationwx.org/
+sudo openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -text
+
+# Check file permissions
+sudo ls -la /etc/letsencrypt/live/aviationwx.org/
+
+# Check vsftpd configuration
+docker compose -f docker/docker-compose.prod.yml exec web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf
+docker compose -f docker/docker-compose.prod.yml exec web grep "^rsa_cert_file=" /etc/vsftpd/vsftpd_ipv4.conf
+
+# Check vsftpd process status
+docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep vsftpd
+
+# Test configuration syntax
+docker compose -f docker/docker-compose.prod.yml exec web vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf
+```
+
+#### Test FTPS Connection
+
+```bash
+# Test actual FTPS connection (requires credentials)
+./scripts/test-ftp-protocols.sh
+```
+
+### Manual Steps
+
+If automatic setup fails, you can manually enable SSL:
+
+1. **Verify certificates exist:**
+   ```bash
+   ls -la /etc/letsencrypt/live/upload.aviationwx.org/
+   ```
+
+2. **Enable SSL in vsftpd:**
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
+   ```
+
+3. **Verify SSL is enabled:**
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf
+   ```
+
+4. **Restart vsftpd if needed:**
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml restart web
+   ```
+
+### Certificate Renewal
+
+Let's Encrypt certificates expire after 90 days. Automatic renewal is handled by certbot, but you may need to ensure vsftpd picks up renewed certificates:
+
+1. **Certificate renewal happens automatically** via certbot timer
+2. **After renewal**, run:
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
+   ```
+3. **Or restart container** to pick up new certificates:
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml restart web
+   ```
+
+### Summary
+
+**Complete Setup Checklist:**
+- [ ] Wildcard certificate generated for `aviationwx.org` and `*.aviationwx.org`
+- [ ] Certificates exist at `/etc/letsencrypt/live/aviationwx.org/`
+- [ ] Certificates mounted in Docker container (`/etc/letsencrypt` volume)
+- [ ] Certificates are readable and valid
+- [ ] Certificate includes wildcard (`*.aviationwx.org`) which covers `upload.aviationwx.org`
+- [ ] SSL enabled in vsftpd config (`ssl_enable=YES`)
+- [ ] Certificate paths configured in vsftpd (pointing to `aviationwx.org` directory)
+- [ ] vsftpd restarted after SSL configuration
+- [ ] FTPS connection tested and working
+
+**Quick Fix Command:**
+```bash
+# Check certificate status
+sudo ls -la /etc/letsencrypt/live/aviationwx.org/
+sudo openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -dates
+
+# If certificates missing, generate them (see DEPLOYMENT.md for automated generation)
+# Or manually:
+./scripts/setup-letsencrypt.sh
+
+# Enable SSL in vsftpd
+docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
+```
+
 ## Refresh Intervals
 
 Both `webcam_refresh_seconds` and `weather_refresh_seconds` can be configured per airport in `airports.json`. If not specified, the following defaults are used:
