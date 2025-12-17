@@ -199,11 +199,22 @@ if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
         echo "   vsftpd will start without SSL - certificates can be enabled later"
         echo "   Certificate file: $CERT_FILE"
         echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
-    elif ! openssl rsa -in "$KEY_FILE" -check -noout >/dev/null 2>&1; then
-        echo "⚠️  Warning: SSL private key file appears to be invalid or corrupted"
-        echo "   vsftpd will start without SSL - certificates can be enabled later"
-        echo "   Key file: $KEY_FILE"
-        echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
+    else
+        # Validate private key - try multiple methods for compatibility
+        KEY_VALID=false
+        if openssl pkey -in "$KEY_FILE" -noout >/dev/null 2>&1; then
+            KEY_VALID=true
+        elif openssl rsa -in "$KEY_FILE" -check -noout >/dev/null 2>&1; then
+            KEY_VALID=true
+        elif openssl rsa -in "$KEY_FILE" -noout >/dev/null 2>&1; then
+            KEY_VALID=true
+        fi
+        
+        if [ "$KEY_VALID" = false ]; then
+            echo "⚠️  Warning: SSL private key file appears to be invalid or corrupted"
+            echo "   vsftpd will start without SSL - certificates can be enabled later"
+            echo "   Key file: $KEY_FILE"
+            echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
     else
         SSL_ENABLED=true
         enable_ssl_in_config() {

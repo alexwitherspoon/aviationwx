@@ -38,9 +38,27 @@ if ! openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -text >/dev/null 2>&1; th
     exit 1
 fi
 
-if ! openssl rsa -in "$CERT_DIR/privkey.pem" -check -noout >/dev/null 2>&1; then
+# Validate private key - try multiple methods for compatibility
+KEY_VALID=false
+if openssl pkey -in "$CERT_DIR/privkey.pem" -noout >/dev/null 2>&1; then
+    KEY_VALID=true
+elif openssl rsa -in "$CERT_DIR/privkey.pem" -check -noout >/dev/null 2>&1; then
+    KEY_VALID=true
+elif openssl rsa -in "$CERT_DIR/privkey.pem" -noout >/dev/null 2>&1; then
+    KEY_VALID=true
+fi
+
+if [ "$KEY_VALID" = false ]; then
     log_message "ERROR: SSL private key file appears to be invalid or corrupted"
     log_message "Key file: $CERT_DIR/privkey.pem"
+    log_message "Attempting to read key file for debugging..."
+    if [ -r "$CERT_DIR/privkey.pem" ]; then
+        log_message "Key file is readable, but validation failed"
+        head -c 100 "$CERT_DIR/privkey.pem" | cat -A || true
+    else
+        log_message "Key file is NOT readable"
+        ls -la "$CERT_DIR/privkey.pem" || true
+    fi
     exit 1
 fi
 
