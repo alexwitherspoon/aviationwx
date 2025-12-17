@@ -1135,7 +1135,7 @@ jobs:
               --timeout 30 \
               --interval 2 \
               --compose-file docker/docker-compose.prod.yml \
-              --url http://localhost/; then
+              --url http://localhost:8080/; then
               echo "✓ Web container is ready and responding"
             else
               echo "⚠️  Warning: Web container did not become ready within timeout"
@@ -1695,7 +1695,7 @@ jobs:
               --timeout 15 \
               --interval 2 \
               --compose-file docker/docker-compose.prod.yml \
-              --url http://localhost/; then
+              --url http://localhost:8080/; then
               echo "✓ Web container is responding (internal check passed)"
             else
               HEALTH_CHECK_FAILED=true
@@ -1703,7 +1703,7 @@ jobs:
             fi
           else
             # Fallback to simple check if script not available
-            if ! docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost/ > /dev/null 2>&1; then
+            if ! docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s --max-time 5 http://localhost:8080/ > /dev/null 2>&1; then
               HEALTH_CHECK_FAILED=true
               FAILURE_REASONS+=("Homepage not accessible (internal check failed)")
             else
@@ -2018,7 +2018,7 @@ jobs:
           while [ $WAIT_TIME -lt $MAX_WAIT ]; do
             if docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
               # Check if container is actually responding
-              if docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s http://localhost/ > /dev/null 2>&1; then
+              if docker compose -f docker/docker-compose.prod.yml exec -T web curl -f -s http://localhost:8080/ > /dev/null 2>&1; then
                 echo "✓ Services are ready after ${WAIT_TIME}s"
                 break
               fi

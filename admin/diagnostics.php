@@ -260,7 +260,7 @@ if ($isHttps) {
 $apiTests = [];
 
 // Weather API test
-$weatherUrl = 'http://localhost/weather.php?airport=kspb';
+$weatherUrl = 'http://localhost:8080/weather.php?airport=kspb';
 $weatherResponse = @file_get_contents($weatherUrl, false, stream_context_create([
     'http' => ['timeout' => 5, 'ignore_errors' => true]
 ]));
@@ -284,7 +284,7 @@ if ($weatherResponse !== false) {
 }
 
 // Webcam fetch script test and analyze webcam configuration
-$webcamFetchUrl = 'http://localhost/scripts/fetch-webcam.php';
+$webcamFetchUrl = 'http://localhost:8080/scripts/fetch-webcam.php';
 $webcamResponse = @file_get_contents($webcamFetchUrl, false, stream_context_create([
     'http' => ['timeout' => 15, 'ignore_errors' => true]
 ]));

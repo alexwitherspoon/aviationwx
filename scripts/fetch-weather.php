@@ -39,7 +39,7 @@ function getWeatherBaseUrl() {
         $isDocker = file_exists('/.dockerenv') || 
                     (getenv('container') !== false) ||
                     (file_exists('/proc/self/cgroup') && strpos(@file_get_contents('/proc/self/cgroup'), 'docker') !== false);
-        $baseUrl = $isDocker ? "http://localhost" : "http://localhost:" . (getenv('APP_PORT') ?: getenv('PORT') ?: '8080');
+        $baseUrl = $isDocker ? "http://localhost:8080" : "http://localhost:" . (getenv('APP_PORT') ?: getenv('PORT') ?: '8080');
     }
     return rtrim($baseUrl, '/');
 }

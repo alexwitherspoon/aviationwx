@@ -23,7 +23,7 @@ TIMEOUT=60
 INTERVAL=2
 CHECK_TYPE="health"
 COMPOSE_FILE="docker/docker-compose.prod.yml"
-CHECK_URL="http://localhost/"
+CHECK_URL="http://localhost:8080/"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -60,7 +60,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --interval <seconds>   Polling interval (default: 2)"
       echo "  --check-type <type>    Check type: status, health, http, fail2ban (default: health)"
       echo "  --compose-file <file>  Docker compose file (default: docker/docker-compose.prod.yml)"
-      echo "  --url <url>            URL for http check (default: http://localhost/)"
+      echo "  --url <url>            URL for http check (default: http://localhost:8080/)"
       exit 0
       ;;
     *)
