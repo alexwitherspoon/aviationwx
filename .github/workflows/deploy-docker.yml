@@ -721,23 +721,139 @@ jobs:
           EOF
           # Note: PREVIOUS_COMMIT_SHA_FROM_RUNNER is passed via SSH heredoc substitution
 
-      - name: Ensure SSL certificates are in place
+      - name: Ensure SSL certificates are in place (with auto-generation)
         run: |
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          # Validate required secrets are present
+          if [ -z "${{ secrets.LETSENCRYPT_EMAIL }}" ]; then
+            echo "❌ ERROR: LETSENCRYPT_EMAIL secret is required"
+            echo "   Add LETSENCRYPT_EMAIL to GitHub repository secrets"
+            echo "   See DEPLOYMENT.md for detailed setup instructions"
+            exit 1
+          fi
+          
+          # Pass Cloudflare token via stdin and email as command argument
+          printf '%s\n' "${{ secrets.CLOUDFLARE_API_TOKEN }}" | \
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'bash -s' -- "${{ secrets.LETSENCRYPT_EMAIL }}" << 'CERT_SCRIPT'
           set -euo pipefail
           cd ~/aviationwx
           # Verify we're running as the correct user
           CURRENT_USER=$(whoami)
           echo "Running as user: $CURRENT_USER"
           
+          # Read Cloudflare token from stdin (passed via SSH pipe) and email from command argument
+          # These are needed for both renewal and generation
+          read -r CLOUDFLARE_TOKEN
+          LETSENCRYPT_EMAIL="${1}"
+          
+          # Validate Cloudflare token is provided
+          if [ -z "$CLOUDFLARE_TOKEN" ] || [ "$CLOUDFLARE_TOKEN" = "" ]; then
+            echo "❌ ERROR: Cloudflare API token not provided"
+            echo "   Add CLOUDFLARE_API_TOKEN to GitHub repository secrets"
+            echo "   See: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "   See DEPLOYMENT.md for detailed setup instructions"
+            exit 1
+          fi
+          
+          # Validate email is provided and is a valid email format
+          if [ -z "$LETSENCRYPT_EMAIL" ] || [ "$LETSENCRYPT_EMAIL" = "" ]; then
+            echo "❌ ERROR: Let's Encrypt email not provided"
+            echo "   Add LETSENCRYPT_EMAIL to GitHub repository secrets"
+            echo "   See: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "   See DEPLOYMENT.md for detailed setup instructions"
+            exit 1
+          fi
+          
+          # Basic email format validation
+          if ! echo "$LETSENCRYPT_EMAIL" | grep -qE '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then
+            echo "❌ ERROR: Invalid email format: $LETSENCRYPT_EMAIL"
+            echo "   Please provide a valid email address for LETSENCRYPT_EMAIL"
+            exit 1
+          fi
+          
           # Create SSL directory if it doesn't exist
           mkdir -p ssl
+          
+          # Install certbot if not installed (needed for both renewal and generation)
+          if ! command -v certbot >/dev/null 2>&1; then
+            echo "Installing certbot and Cloudflare DNS plugin..."
+            sudo apt update -qq
+            sudo apt install -y certbot python3-certbot-dns-cloudflare
+          fi
+          
+          # Create secrets directory
+          mkdir -p ~/.secrets
+          
+          # Create Cloudflare credentials file (used for both renewal and generation)
+          CREDENTIALS_FILE="$HOME/.secrets/cloudflare.ini"
+          printf 'dns_cloudflare_api_token = %s\n' "$CLOUDFLARE_TOKEN" > "$CREDENTIALS_FILE"
+          chmod 600 "$CREDENTIALS_FILE"
           
           # Copy SSL certificates from Let's Encrypt if they exist
           # This ensures certificates are available for Nginx container
           # All operations run as aviationwx user, using sudo for protected operations
           # Use sudo test to check if files exist (directory permissions are root-only)
           if sudo test -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem && sudo test -f /etc/letsencrypt/live/aviationwx.org/privkey.pem; then
+            echo "SSL certificates found - checking expiration..."
+            
+            # Check certificate expiration
+            CERT_EXPIRY=$(sudo openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -enddate 2>/dev/null | cut -d= -f2)
+            DAYS_UNTIL_EXPIRY=""
+            if [ -n "$CERT_EXPIRY" ]; then
+              # Calculate days until expiration
+              EXPIRY_EPOCH=$(date -d "$CERT_EXPIRY" +%s 2>/dev/null || echo "")
+              
+              if [ -n "$EXPIRY_EPOCH" ]; then
+                CURRENT_EPOCH=$(date +%s)
+                DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $CURRENT_EPOCH) / 86400 ))
+                
+                if [ $DAYS_UNTIL_EXPIRY -lt 0 ]; then
+                  echo "⚠️  Certificate expired $((-$DAYS_UNTIL_EXPIRY)) days ago"
+                  echo "   Attempting renewal before deployment..."
+                  CERT_NEEDS_RENEWAL=true
+                elif [ $DAYS_UNTIL_EXPIRY -lt 7 ]; then
+                  echo "⚠️  Certificate expires in $DAYS_UNTIL_EXPIRY days"
+                  echo "   Attempting renewal before deployment..."
+                  CERT_NEEDS_RENEWAL=true
+                else
+                  echo "✓ Certificate valid for $DAYS_UNTIL_EXPIRY more days"
+                  CERT_NEEDS_RENEWAL=false
+                fi
+              else
+                echo "⚠️  Could not parse certificate expiration date"
+                echo "   Proceeding with existing certificate..."
+                CERT_NEEDS_RENEWAL=false
+              fi
+            else
+              echo "⚠️  Could not read certificate expiration"
+              echo "   Proceeding with existing certificate..."
+              CERT_NEEDS_RENEWAL=false
+            fi
+            
+            # Attempt renewal if needed
+            if [ "${CERT_NEEDS_RENEWAL:-false}" = "true" ]; then
+              echo "Attempting certificate renewal..."
+              if sudo certbot renew \
+                --dns-cloudflare \
+                --dns-cloudflare-credentials "$CREDENTIALS_FILE" \
+                --cert-name aviationwx.org \
+                --non-interactive \
+                --quiet; then
+                echo "✓ Certificate renewed successfully"
+              else
+                echo "❌ ERROR: Certificate renewal failed"
+                if [ -n "$DAYS_UNTIL_EXPIRY" ] && [ $DAYS_UNTIL_EXPIRY -lt 0 ]; then
+                  echo "   Certificate is expired and renewal failed"
+                  echo "   Deployment cannot proceed with expired certificate"
+                  rm -f "$CREDENTIALS_FILE"
+                  exit 1
+                else
+                  echo "   Certificate expires in ${DAYS_UNTIL_EXPIRY:-unknown} days and renewal failed"
+                  echo "   Deployment will proceed with existing certificate"
+                  echo "   Manual renewal recommended before expiration"
+                fi
+              fi
+            fi
+            
             echo "Copying SSL certificates from Let's Encrypt..."
             # Copy certificates (requires sudo to read from /etc/letsencrypt/)
             if sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/; then
@@ -764,67 +880,84 @@ jobs:
             sudo chmod 644 ssl/fullchain.pem || true
             sudo chmod 600 ssl/privkey.pem || true
           else
-            echo "⚠️  SSL certificates not found in /etc/letsencrypt/live/aviationwx.org/ or ~/aviationwx/ssl/"
-            echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "SSL CERTIFICATES MISSING"
+            echo "⚠️  Wildcard certificate not found - attempting automatic generation"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "Nginx container will fail to start without SSL certificates."
-            echo "You need to generate certificates with Certbot first."
             echo ""
             
-            # Check if Certbot is installed
-            if command -v certbot >/dev/null 2>&1; then
-              echo "✓ Certbot is installed"
+            # Generate wildcard certificate
+            echo "Generating wildcard certificate for aviationwx.org and *.aviationwx.org..."
+            echo "Using DNS-01 challenge with Cloudflare API..."
+            echo ""
+            
+            if sudo certbot certonly \
+              --dns-cloudflare \
+              --dns-cloudflare-credentials "$CREDENTIALS_FILE" \
+              -d aviationwx.org \
+              -d '*.aviationwx.org' \
+              --non-interactive \
+              --agree-tos \
+              --email "$LETSENCRYPT_EMAIL" \
+              --no-eff-email; then
               echo ""
-              echo "To generate wildcard certificates (DNS-01 challenge):"
+              echo "✓ Wildcard certificate generated successfully"
+              
+              # Copy to deployment directory
+              sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ssl/
+              sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ssl/
+              sudo chown -R $CURRENT_USER:$CURRENT_USER ssl/
+              chmod 644 ssl/fullchain.pem
+              chmod 600 ssl/privkey.pem
+              
+              echo "✓ Certificate copied to deployment directory"
+              
+              # Show certificate details
               echo ""
-              echo "  1. Install Cloudflare DNS plugin:"
-              echo "     sudo apt install certbot python3-certbot-dns-cloudflare -y"
+              echo "Certificate details:"
+              sudo openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -subject -dates
+            else
               echo ""
-              echo "  2. Create Cloudflare API token (scoped to zone):"
-              echo "     - Permissions: Zone → DNS → Edit; Zone → Zone → Read"
-              echo "     - Resources: Include → Specific zone → aviationwx.org"
+              echo "❌ ERROR: Failed to generate wildcard certificate"
               echo ""
-              echo "  3. Store token:"
-              echo "     mkdir -p ~/.secrets"
-              echo "     printf 'dns_cloudflare_api_token = %s\\n' 'YOUR_TOKEN' > ~/.secrets/cloudflare.ini"
-              echo "     chmod 600 ~/.secrets/cloudflare.ini"
+              echo "Possible causes:"
+              echo "  - Invalid Cloudflare API token"
+              echo "  - DNS not properly configured (check A records for @ and *)"
+              echo "  - Let's Encrypt rate limits (max 50 certs/week per domain)"
+              echo "  - Network connectivity issues"
+              echo "  - Cloudflare API permissions insufficient"
               echo ""
-              echo "  4. Generate certificates:"
-              echo "     sudo certbot certonly \\"
-              echo "       --dns-cloudflare \\"
+              echo "Troubleshooting:"
+              echo "  1. Verify Cloudflare API token has correct permissions:"
+              echo "     - Zone → DNS → Edit"
+              echo "     - Zone → Zone → Read"
+              echo "     - Scoped to: aviationwx.org zone"
+              echo ""
+              echo "  2. Verify DNS is configured:"
+              echo "     dig aviationwx.org +short"
+              echo "     dig '*.aviationwx.org' +short"
+              echo ""
+              echo "  3. Test certificate generation manually:"
+              echo "     sudo certbot certonly --dns-cloudflare \\"
               echo "       --dns-cloudflare-credentials ~/.secrets/cloudflare.ini \\"
               echo "       -d aviationwx.org -d '*.aviationwx.org' \\"
-              echo "       --non-interactive --agree-tos -m your@email.com"
+              echo "       --non-interactive --agree-tos -m $LETSENCRYPT_EMAIL \\"
+              echo "       --dry-run"
               echo ""
-              echo "  5. Copy certificates:"
-              echo "     sudo cp /etc/letsencrypt/live/aviationwx.org/fullchain.pem ~/aviationwx/ssl/"
-              echo "     sudo cp /etc/letsencrypt/live/aviationwx.org/privkey.pem ~/aviationwx/ssl/"
-              echo "     sudo chown -R $CURRENT_USER:$CURRENT_USER ~/aviationwx/ssl"
-              echo "     sudo chmod 644 ~/aviationwx/ssl/fullchain.pem"
-              echo "     sudo chmod 600 ~/aviationwx/ssl/privkey.pem"
-            else
-              echo "⚠️  Certbot is not installed"
-              echo ""
-              echo "To install Certbot and generate certificates:"
-              echo ""
-              echo "  1. Install Certbot with Cloudflare DNS plugin:"
-              echo "     sudo apt update && sudo apt install -y certbot python3-certbot-dns-cloudflare"
-              echo ""
-              echo "  2. Follow steps 2-5 above (create Cloudflare token, generate certs, copy them)"
+              
+              # Clean up credentials file
+              rm -f "$CREDENTIALS_FILE"
+              exit 1
             fi
             
-            echo ""
-            echo "After certificates are in place, redeploy to continue."
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            # Fail the deployment since Nginx won't start without certificates
-            exit 1
+              # Clean up credentials file
+              rm -f "$CREDENTIALS_FILE"
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           fi
-          EOF
+          
+          # Clean up credentials file (if still exists)
+          rm -f "$CREDENTIALS_FILE"
+          CERT_SCRIPT
 
       - name: Configure firewall ports
         run: |
@@ -1196,52 +1329,11 @@ jobs:
             fi
           fi
           
-          # Verify container is running before attempting certificate operations
-          if ! docker compose -f docker/docker-compose.prod.yml ps web | grep -q "Up"; then
-            echo "⚠️  Warning: Web container is not running, skipping certificate generation"
-          else
-            # Generate FTPS SSL certificates (one-time setup)
-            # This runs after containers are started so the web server is available for HTTP-01 challenge
-            echo "Checking for upload.aviationwx.org SSL certificates..."
-            
-            # Check if certificates already exist in container
-            # This is a one-time setup that only runs if certificates don't exist
-            if docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem 2>/dev/null && \
-               docker compose -f docker/docker-compose.prod.yml exec -T web test -f /etc/letsencrypt/live/upload.aviationwx.org/privkey.pem 2>/dev/null; then
-            echo "✓ SSL certificates for upload.aviationwx.org already exist"
-            echo "  Skipping certificate generation (one-time setup already complete)"
-          else
-            echo "SSL certificates for upload.aviationwx.org not found"
-            echo "Attempting one-time certificate generation..."
-            echo ""
-            echo "Requirements:"
-            echo "  - Domain upload.aviationwx.org must resolve to this server"
-            echo "  - Port 80 must be accessible (for Let's Encrypt validation)"
-            echo "  - Web server must be running"
-            echo ""
-            
-            # Try to generate certificates inside the container
-            # Use LETSENCRYPT_EMAIL environment variable
-            if docker compose -f docker/docker-compose.prod.yml exec -T -e LETSENCRYPT_EMAIL=alex@alexwitherspoon.com web /usr/local/bin/setup-letsencrypt.sh 2>&1; then
-              echo "✓ SSL certificates generated successfully for upload.aviationwx.org"
-              echo "  FTPS will be automatically enabled on next container start"
-              # Restart container to pick up SSL configuration
-              docker compose -f docker/docker-compose.prod.yml restart web || true
-            else
-              echo "⚠️  Warning: Failed to generate SSL certificates for upload.aviationwx.org"
-              echo "  This may be due to:"
-              echo "    - Domain not resolving to this server"
-              echo "    - Port 80 not accessible"
-              echo "    - Let's Encrypt rate limits"
-              echo ""
-              echo "  Deployment will continue, but FTPS will not be available until certificates are generated."
-              echo "  You can manually generate certificates by running:"
-              echo "    docker compose -f docker/docker-compose.prod.yml exec web /usr/local/bin/setup-letsencrypt.sh"
-              echo ""
-              # Don't fail deployment - just warn
-            fi
-          fi
-          fi
+          # FTPS uses wildcard certificate (*.aviationwx.org) which is already managed
+          # The wildcard certificate covers upload.aviationwx.org, so no separate certificate generation needed
+          # Container entrypoint will automatically enable SSL if wildcard certificate exists
+          echo "✓ FTPS will use wildcard certificate (*.aviationwx.org) which covers upload.aviationwx.org"
+          echo "  Certificate is managed separately and should already exist at /etc/letsencrypt/live/aviationwx.org/"
           
           # Sync FTP/SFTP/FTPS configuration (runs on every deployment)
           # This ensures users and directories are created/updated immediately after deployment
