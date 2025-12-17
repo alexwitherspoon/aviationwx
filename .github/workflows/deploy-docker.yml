@@ -601,6 +601,31 @@ jobs:
           fi
           EOF
 
+      - name: Ensure required tools are installed on server
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          
+          echo "Checking for required tools on production server..."
+          
+          # Check and install jq if missing (required for JSON parsing in deployment scripts)
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "⚠️  jq is not installed. Installing..."
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update -qq && sudo apt-get install -y jq
+            elif command -v yum >/dev/null 2>&1; then
+              sudo yum install -y jq
+            else
+              echo "❌ ERROR: Cannot install jq - unsupported package manager"
+              echo "Please install jq manually: apt-get install jq (Ubuntu/Debian) or yum install jq (CentOS/RHEL)"
+              exit 1
+            fi
+            echo "✓ jq installed successfully"
+          else
+            echo "✓ jq is already installed"
+          fi
+          EOF
+
       - name: Tag current working deployment and save state
         run: |
           # Pass previous commit SHA to server

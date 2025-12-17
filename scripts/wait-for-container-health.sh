@@ -80,30 +80,54 @@ fi
 
 # Function to check container status
 check_container_status() {
+  local status="unknown"
+  
+  # Try jq first if available
   if command -v jq >/dev/null 2>&1; then
-    docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null | \
-      jq -r '.[0].State // "unknown"' 2>/dev/null || echo "unknown"
-  else
-    # Fallback: use grep to check if container is running
-    if docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" 2>/dev/null | grep -q "Up"; then
-      echo "running"
-    else
-      echo "unknown"
+    local json_output
+    json_output=$(docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null || echo "[]")
+    
+    # Check if we got valid JSON and extract state
+    if [ -n "$json_output" ] && [ "$json_output" != "[]" ]; then
+      status=$(echo "$json_output" | jq -r 'if length > 0 then .[0].State // "unknown" else "unknown" end' 2>/dev/null || echo "unknown")
     fi
   fi
+  
+  # Fallback to grep if jq failed or returned unknown/empty
+  if [ "$status" = "unknown" ] || [ -z "$status" ]; then
+    if docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" 2>/dev/null | grep -qE "(Up|running)"; then
+      status="running"
+    fi
+  fi
+  
+  echo "$status"
 }
 
 # Function to check container health
 check_container_health() {
+  local health="unknown"
+  
+  # Try jq first if available
   if command -v jq >/dev/null 2>&1; then
-    docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null | \
-      jq -r '.[0].Health // "unknown"' 2>/dev/null || echo "unknown"
-  else
-    # Fallback: use grep to extract health status
-    HEALTH=$(docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null | \
-      grep -o '"Health":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "unknown")
-    echo "$HEALTH"
+    local json_output
+    json_output=$(docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null || echo "[]")
+    
+    # Check if we got valid JSON and extract health
+    if [ -n "$json_output" ] && [ "$json_output" != "[]" ]; then
+      health=$(echo "$json_output" | jq -r 'if length > 0 then .[0].Health // "unknown" else "unknown" end' 2>/dev/null || echo "unknown")
+    fi
   fi
+  
+  # Fallback to grep if jq failed or returned unknown/empty
+  if [ "$health" = "unknown" ] || [ -z "$health" ]; then
+    local json_output
+    json_output=$(docker compose -f "$COMPOSE_FILE" ps "$CONTAINER_NAME" --format json 2>/dev/null || echo "")
+    if [ -n "$json_output" ]; then
+      health=$(echo "$json_output" | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "unknown")
+    fi
+  fi
+  
+  echo "$health"
 }
 
 # Function to check HTTP response
