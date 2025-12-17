@@ -288,7 +288,30 @@ function checkDataOutageStatus($airportId, $airport) {
             $outageStart = $newestTimestamp;
         }
         
-        // If still no timestamp, use current time as fallback
+        // Fallback: If still no timestamp, try webcam cache file modification times
+        if ($outageStart === 0 && isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0) {
+            $webcamNewestMtime = 0;
+            foreach ($airport['webcams'] as $index => $cam) {
+                $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
+                // Check both JPG and WebP files for modification time
+                foreach (['.jpg', '.webp'] as $ext) {
+                    $filePath = $base . $ext;
+                    if (file_exists($filePath)) {
+                        // Use @ to suppress errors for non-critical file operations
+                        // We handle failures explicitly with fallback mechanisms below
+                        $mtime = @filemtime($filePath);
+                        if ($mtime !== false && $mtime > 0 && $mtime > $webcamNewestMtime) {
+                            $webcamNewestMtime = $mtime;
+                        }
+                    }
+                }
+            }
+            if ($webcamNewestMtime > 0) {
+                $outageStart = $webcamNewestMtime;
+            }
+        }
+        
+        // Final fallback: use current time if no other timestamp available
         if ($outageStart === 0) {
             $outageStart = $now;
         }
