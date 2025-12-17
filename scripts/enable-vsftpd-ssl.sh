@@ -15,14 +15,36 @@ log_message() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $message"
 }
 
-# Check if certificates exist
+# Check if certificates exist and are valid
 if [ ! -d "$CERT_DIR" ] || [ ! -f "$CERT_DIR/fullchain.pem" ] || [ ! -f "$CERT_DIR/privkey.pem" ]; then
     log_message "Certificates not found at $CERT_DIR"
     log_message "SSL will remain disabled until certificates are available"
     exit 0
 fi
 
-# Function to enable SSL in a config file
+# Validate certificates before enabling SSL
+log_message "Validating SSL certificates..."
+if [ ! -r "$CERT_DIR/fullchain.pem" ] || [ ! -r "$CERT_DIR/privkey.pem" ]; then
+    log_message "ERROR: Certificate files exist but are not readable"
+    log_message "Certificate file: $CERT_DIR/fullchain.pem"
+    log_message "Key file: $CERT_DIR/privkey.pem"
+    exit 1
+fi
+
+if ! openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -text >/dev/null 2>&1; then
+    log_message "ERROR: SSL certificate file appears to be invalid or corrupted"
+    log_message "Certificate file: $CERT_DIR/fullchain.pem"
+    exit 1
+fi
+
+if ! openssl rsa -in "$CERT_DIR/privkey.pem" -check -noout >/dev/null 2>&1; then
+    log_message "ERROR: SSL private key file appears to be invalid or corrupted"
+    log_message "Key file: $CERT_DIR/privkey.pem"
+    exit 1
+fi
+
+log_message "✓ SSL certificates validated successfully"
+
 enable_ssl_in_config() {
     local config_file="$1"
     if [ ! -f "$config_file" ]; then
@@ -121,39 +143,109 @@ else
 fi
 
 # Restart vsftpd to apply changes (only if it's already running)
-# Note: With dual-stack support, vsftpd may be running as multiple instances
-# The entrypoint script handles dual-instance startup, so manual restart
-# via this script may not work correctly. Configuration changes will be
-# applied on next container restart.
+# Handle both single-instance and dual-instance (dual-stack) modes
 if pgrep -x vsftpd > /dev/null 2>&1; then
     log_message "vsftpd is running"
     VSFTPD_COUNT=$(pgrep -x vsftpd | wc -l)
+    
     if [ "$VSFTPD_COUNT" -gt 1 ]; then
+        # Dual-instance mode (IPv4 + IPv6)
         log_message "Multiple vsftpd instances detected (dual-stack mode)"
-        log_message "Note: Manual restart via this script may not work correctly with dual instances"
-        log_message "SSL configuration has been updated and will be active on next container restart"
-        log_message "Or restart the container to apply changes immediately"
+        log_message "Restarting dual-instance vsftpd processes..."
+        
+        # Get PIDs of running vsftpd processes
+        VSFTPD_PIDS=$(pgrep -x vsftpd)
+        RESTART_SUCCESS=true
+        
+        # Kill existing vsftpd processes
+        for pid in $VSFTPD_PIDS; do
+            log_message "Stopping vsftpd process (PID: $pid)..."
+            kill $pid 2>/dev/null || true
+        done
+        
+        # Wait for processes to stop
+        sleep 2
+        
+        # Verify processes are stopped
+        if pgrep -x vsftpd > /dev/null 2>&1; then
+            log_message "WARNING: Some vsftpd processes did not stop, forcing kill..."
+            pkill -9 vsftpd 2>/dev/null || true
+            sleep 1
+        fi
+        
+        # Start IPv4 instance if config exists
+        if [ -f "$VSFTPD_IPV4_CONF" ]; then
+            log_message "Starting vsftpd IPv4 instance..."
+            if vsftpd "$VSFTPD_IPV4_CONF" >/dev/null 2>&1 & then
+                sleep 1
+                if ! pgrep -x vsftpd > /dev/null 2>&1; then
+                    log_message "ERROR: Failed to start vsftpd IPv4 instance"
+                    RESTART_SUCCESS=false
+                else
+                    log_message "✓ vsftpd IPv4 instance started"
+                fi
+            else
+                log_message "ERROR: Failed to start vsftpd IPv4 instance"
+                RESTART_SUCCESS=false
+            fi
+        fi
+        
+        # Start IPv6 instance if config exists
+        if [ -f "$VSFTPD_IPV6_CONF" ]; then
+            log_message "Starting vsftpd IPv6 instance..."
+            if vsftpd "$VSFTPD_IPV6_CONF" >/dev/null 2>&1 & then
+                sleep 1
+                if ! pgrep -x vsftpd > /dev/null 2>&1 || [ $(pgrep -x vsftpd | wc -l) -lt 2 ]; then
+                    log_message "ERROR: Failed to start vsftpd IPv6 instance"
+                    RESTART_SUCCESS=false
+                else
+                    log_message "✓ vsftpd IPv6 instance started"
+                fi
+            else
+                log_message "ERROR: Failed to start vsftpd IPv6 instance"
+                RESTART_SUCCESS=false
+            fi
+        fi
+        
+        # Verify both instances are running
+        FINAL_COUNT=$(pgrep -x vsftpd | wc -l)
+        if [ "$FINAL_COUNT" -ge 2 ] && [ "$RESTART_SUCCESS" = true ]; then
+            if [ "$SSL_ALREADY_ENABLED" = false ]; then
+                log_message "✓ vsftpd dual-instance restarted successfully with SSL enabled"
+            else
+                log_message "✓ vsftpd dual-instance restarted successfully with updated TLS versions"
+            fi
+            log_message "Both FTP and FTPS are now available on port 2121 (IPv4 and IPv6)"
+        else
+            log_message "WARNING: vsftpd restart may have failed - only $FINAL_COUNT instance(s) running"
+            log_message "SSL configuration has been updated but may require container restart"
+            # Rollback on failure if backup exists
+            if [ -f "$VSFTPD_IPV4_CONF_BACKUP" ]; then
+                log_message "Rolling back SSL configuration changes..."
+                cp "$VSFTPD_IPV4_CONF_BACKUP" "$VSFTPD_IPV4_CONF"
+            fi
+        fi
     else
+        # Single instance mode
         log_message "Restarting vsftpd to apply configuration changes..."
         if service vsftpd restart 2>&1; then
             if [ "$SSL_ALREADY_ENABLED" = false ]; then
-                log_message "vsftpd restarted successfully with SSL enabled"
+                log_message "✓ vsftpd restarted successfully with SSL enabled"
             else
-                log_message "vsftpd restarted successfully with updated TLS versions"
+                log_message "✓ vsftpd restarted successfully with updated TLS versions"
             fi
             log_message "Both FTP and FTPS are now available on port 2121"
             log_message "Clients can choose to use encryption (FTPS) or not (FTP)"
-    else
-        log_message "WARNING: Failed to restart vsftpd via service command"
-        log_message "SSL configuration has been updated and will be active on next container restart"
-        log_message "Or restart the container to apply changes immediately"
-        # Rollback on failure if backup exists
-        if [ -f "$VSFTPD_IPV4_CONF_BACKUP" ]; then
-            log_message "Rolling back SSL configuration changes..."
-            cp "$VSFTPD_IPV4_CONF_BACKUP" "$VSFTPD_IPV4_CONF"
-            # Note: IPv6 config rollback would require separate backup
+        else
+            log_message "WARNING: Failed to restart vsftpd via service command"
+            log_message "SSL configuration has been updated and will be active on next container restart"
+            log_message "Or restart the container to apply changes immediately"
+            # Rollback on failure if backup exists
+            if [ -f "$VSFTPD_IPV4_CONF_BACKUP" ]; then
+                log_message "Rolling back SSL configuration changes..."
+                cp "$VSFTPD_IPV4_CONF_BACKUP" "$VSFTPD_IPV4_CONF"
+            fi
         fi
-    fi
     fi
 else
     if [ "$SSL_ALREADY_ENABLED" = false ]; then

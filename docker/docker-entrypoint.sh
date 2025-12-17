@@ -177,14 +177,35 @@ else
     echo "⚠️  Warning: resolve-upload-ip.sh not found, using single instance"
 fi
 
-# Enable SSL in vsftpd configs if certificates are available
-# Apply to dual configs (IPv4 and IPv6)
-if [ -f "/etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem" ] && \
-   [ -f "/etc/letsencrypt/live/upload.aviationwx.org/privkey.pem" ]; then
-    CERT_DIR="/etc/letsencrypt/live/upload.aviationwx.org"
-    
-    # Function to enable SSL in a config file
-    enable_ssl_in_config() {
+# Enable SSL in vsftpd configs if certificates are available and valid
+# Start without SSL if certs don't exist or are invalid to allow vsftpd to start
+# on first deployment; SSL can be enabled later via enable-vsftpd-ssl.sh
+CERT_DIR="/etc/letsencrypt/live/upload.aviationwx.org"
+CERT_FILE="${CERT_DIR}/fullchain.pem"
+KEY_FILE="${CERT_DIR}/privkey.pem"
+SSL_ENABLED=false
+
+if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
+    # Validate certificates before enabling SSL to prevent vsftpd from crashing
+    if [ ! -r "$CERT_FILE" ] || [ ! -r "$KEY_FILE" ]; then
+        echo "⚠️  Warning: SSL certificate files exist but are not readable"
+        echo "   vsftpd will start without SSL - certificates can be enabled later"
+        echo "   Certificate file: $CERT_FILE"
+        echo "   Key file: $KEY_FILE"
+        echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
+    elif ! openssl x509 -in "$CERT_FILE" -noout -text >/dev/null 2>&1; then
+        echo "⚠️  Warning: SSL certificate file appears to be invalid or corrupted"
+        echo "   vsftpd will start without SSL - certificates can be enabled later"
+        echo "   Certificate file: $CERT_FILE"
+        echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
+    elif ! openssl rsa -in "$KEY_FILE" -check -noout >/dev/null 2>&1; then
+        echo "⚠️  Warning: SSL private key file appears to be invalid or corrupted"
+        echo "   vsftpd will start without SSL - certificates can be enabled later"
+        echo "   Key file: $KEY_FILE"
+        echo "   Run enable-vsftpd-ssl.sh or restart container when certificates are fixed"
+    else
+        SSL_ENABLED=true
+        enable_ssl_in_config() {
         local config_file="$1"
         if [ ! -f "$config_file" ]; then
             return 0
@@ -241,49 +262,80 @@ if [ -f "/etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem" ] && \
         fi
     }
     
-    echo "SSL certificates found, enabling SSL in vsftpd configs..."
-    enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv4.conf"
-    enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv6.conf"
-    echo "✓ SSL enabled in vsftpd configs"
+        echo "SSL certificates found and validated, enabling SSL in vsftpd configs..."
+        enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv4.conf"
+        enable_ssl_in_config "/etc/vsftpd/vsftpd_ipv6.conf"
+        echo "✓ SSL enabled in vsftpd configs"
+    fi
+else
+    echo "SSL certificates not found - vsftpd will run without SSL/TLS"
+    echo "   Expected certificate: $CERT_FILE"
+    echo "   Expected key: $KEY_FILE"
+    echo "   vsftpd will start without SSL - SSL can be enabled later when certificates are available"
+    echo "   Run enable-vsftpd-ssl.sh or restart container after obtaining certificates"
+fi
+
+# Disable SSL in configs if certificates are invalid/missing to prevent vsftpd crashes
+if [ "$SSL_ENABLED" = false ]; then
+    for config_file in "/etc/vsftpd/vsftpd_ipv4.conf" "/etc/vsftpd/vsftpd_ipv6.conf"; do
+        if [ -f "$config_file" ]; then
+            sed -i 's/^ssl_enable=YES/ssl_enable=NO/' "$config_file" 2>/dev/null || true
+            sed -i 's|^rsa_cert_file=.*|# rsa_cert_file=|' "$config_file" 2>/dev/null || true
+            sed -i 's|^rsa_private_key_file=.*|# rsa_private_key_file=|' "$config_file" 2>/dev/null || true
+        fi
+    done
 fi
 
 # Start vsftpd instances (only if IPs were resolved)
 echo "Starting vsftpd..."
 
-if [ "$IPV4_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
-    echo "Starting vsftpd IPv4 instance..."
-    vsftpd /etc/vsftpd/vsftpd_ipv4.conf &
-    VSFTPD_IPV4_PID=$!
-    sleep 1
-    if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
-        echo "⚠️  Warning: vsftpd IPv4 failed to start, checking configuration..."
-        echo "   vsftpd configuration test output:"
-        vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 | sed 's/^/   /' || true
-        echo "⚠️  Warning: vsftpd IPv4 failed to start - continuing without FTP service"
-        echo "   Web service will continue to function, but FTP/FTPS will not be available"
-        echo "   This is non-fatal - container will continue to start"
-        VSFTPD_IPV4_PID=""
-    else
-        echo "✓ vsftpd IPv4 started (PID: $VSFTPD_IPV4_PID)"
+# Validate config before starting to catch errors early
+start_vsftpd_instance() {
+    local config_file="$1"
+    local instance_name="$2"
+    local pid_var="$3"
+    
+    if [ ! -f "$config_file" ]; then
+        echo "⚠️  Warning: Config file not found: $config_file"
+        return 1
     fi
+    
+    echo "Validating $instance_name configuration..."
+    if ! vsftpd -olisten=NO "$config_file" >/dev/null 2>&1; then
+        echo "⚠️  Warning: $instance_name configuration validation failed"
+        echo "   vsftpd configuration test output:"
+        vsftpd -olisten=NO "$config_file" 2>&1 | sed 's/^/   /' || true
+        echo "   vsftpd will not start for $instance_name - continuing without FTP service"
+        echo "   This is non-fatal - container will continue to start"
+        eval "$pid_var=\"\""
+        return 1
+    fi
+    
+    echo "Starting $instance_name instance..."
+    vsftpd "$config_file" &
+    local pid=$!
+    eval "$pid_var=$pid"
+    
+    sleep 1
+    if ! kill -0 $pid 2>/dev/null; then
+        echo "⚠️  Warning: $instance_name failed to start after validation passed"
+        echo "   This may indicate a runtime issue (e.g., port already in use)"
+        echo "   vsftpd will not be available for $instance_name"
+        echo "   This is non-fatal - container will continue to start"
+        eval "$pid_var=\"\""
+        return 1
+    else
+        echo "✓ $instance_name started (PID: $pid)"
+        return 0
+    fi
+}
+
+if [ "$IPV4_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
+    start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv4.conf" "vsftpd IPv4" "VSFTPD_IPV4_PID"
 fi
 
 if [ "$IPV6_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
-    echo "Starting vsftpd IPv6 instance..."
-    vsftpd /etc/vsftpd/vsftpd_ipv6.conf &
-    VSFTPD_IPV6_PID=$!
-    sleep 1
-    if ! kill -0 $VSFTPD_IPV6_PID 2>/dev/null; then
-        echo "⚠️  Warning: vsftpd IPv6 failed to start, checking configuration..."
-        echo "   vsftpd configuration test output:"
-        vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv6.conf 2>&1 | sed 's/^/   /' || true
-        echo "⚠️  Warning: vsftpd IPv6 failed to start - continuing without FTP service"
-        echo "   Web service will continue to function, but FTP/FTPS will not be available"
-        echo "   This is non-fatal - container will continue to start"
-        VSFTPD_IPV6_PID=""
-    else
-        echo "✓ vsftpd IPv6 started (PID: $VSFTPD_IPV6_PID)"
-    fi
+    start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv6.conf" "vsftpd IPv6" "VSFTPD_IPV6_PID"
 fi
 
 # Fallback: If neither IP resolved, try IPv4 config (IPv4 is more likely to work)
@@ -292,20 +344,7 @@ if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
     if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
         # Use placeholder IP for pasv_address (will be resolved by vsftpd or fail gracefully)
         sed -i "s|^pasv_address=.*|pasv_address=0.0.0.0|" /etc/vsftpd/vsftpd_ipv4.conf
-        vsftpd /etc/vsftpd/vsftpd_ipv4.conf &
-        VSFTPD_IPV4_PID=$!
-        sleep 1
-        if ! kill -0 $VSFTPD_IPV4_PID 2>/dev/null; then
-            echo "⚠️  Warning: vsftpd failed to start, checking configuration..."
-            echo "   vsftpd configuration test output:"
-            vsftpd -olisten=NO /etc/vsftpd/vsftpd_ipv4.conf 2>&1 | sed 's/^/   /' || true
-            echo "⚠️  Warning: vsftpd failed to start - continuing without FTP service"
-            echo "   Web service will continue to function, but FTP/FTPS will not be available"
-            echo "   This is non-fatal - container will continue to start"
-            VSFTPD_IPV4_PID=""
-        else
-            echo "✓ vsftpd started in fallback mode (PID: $VSFTPD_IPV4_PID)"
-        fi
+        start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv4.conf" "vsftpd (fallback)" "VSFTPD_IPV4_PID"
     else
         echo "⚠️  Warning: No vsftpd config files available - FTP service will not be available"
         echo "   Web service will continue to function normally"
