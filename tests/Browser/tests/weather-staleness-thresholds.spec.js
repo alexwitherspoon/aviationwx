@@ -103,15 +103,17 @@ test.describe('Weather Staleness Threshold Calculation', () => {
    * Get current timestamp display state (text, color, styling)
    * 
    * @param {Page} page - Playwright page object
-   * @returns {Promise<{text: string, color: string, fontWeight: string}>} Display state
+   * @returns {Promise<{text: string, color: string, fontWeight: string, hasWarning: boolean}>} Display state
    */
   async function getTimestampDisplay(page) {
     const timestampEl = await page.locator('#weather-last-updated');
+    const warningEl = await page.locator('#weather-timestamp-warning');
     const text = await timestampEl.textContent();
     const color = await timestampEl.evaluate(el => window.getComputedStyle(el).color);
     const fontWeight = await timestampEl.evaluate(el => window.getComputedStyle(el).fontWeight);
+    const hasWarning = await warningEl.isVisible();
     
-    return { text: text?.trim() || '', color, fontWeight };
+    return { text: text?.trim() || '', color, fontWeight, hasWarning };
   }
 
   /**
@@ -235,8 +237,8 @@ test.describe('Weather Staleness Threshold Calculation', () => {
     await setWeatherTimestamp(page, 30);
     const display = await getTimestampDisplay(page);
     
-    expect(display.text).not.toContain('⚠️');
-    expect(display.text).toMatch(/\d+\s+(second|minute)/);
+    expect(display.hasWarning).toBe(false);
+    expect(display.text).toMatch(/\d+\s+(second|minute|second ago|minute ago)/);
     expect(display.color).toMatch(/rgb\(102|rgb\(51|rgb\(85/);
   });
 
@@ -247,8 +249,9 @@ test.describe('Weather Staleness Threshold Calculation', () => {
     await setWeatherTimestamp(page, staleAge);
     const display = await getTimestampDisplay(page);
     
-    expect(display.text).toContain('⚠️');
-    expect(display.text).toContain('refreshing');
+    expect(display.hasWarning).toBe(true);
+    // Timestamp should show actual time (not stale message text)
+    expect(display.text).toMatch(/\d+:\d+:\d+\s*(AM|PM)|just now|\d+\s+(second|minute|hour|day)/);
     expect(display.color).toMatch(/rgb\(255,\s*136,\s*0\)|rgb\(255,\s*140,\s*0\)/);
   });
 
@@ -259,8 +262,9 @@ test.describe('Weather Staleness Threshold Calculation', () => {
     await setWeatherTimestamp(page, veryStaleAge);
     const display = await getTimestampDisplay(page);
     
-    expect(display.text).toContain('⚠️');
-    expect(display.text).toMatch(/stale|outdated/i);
+    expect(display.hasWarning).toBe(true);
+    // Timestamp should show actual time (not stale message text)
+    expect(display.text).toMatch(/\d+:\d+:\d+\s*(AM|PM)|\d+\s+(minute|hour|day)/);
     expect(display.color).toMatch(/rgb\(204,\s*0,\s*0\)|rgb\(220,\s*20,\s*60\)/);
     expect(parseInt(display.fontWeight)).toBeGreaterThanOrEqual(600);
   });
@@ -275,9 +279,10 @@ test.describe('Weather Staleness Threshold Calculation', () => {
     await setWeatherTimestamp(page, 2 * SECONDS_PER_HOUR + 60);
     const display = await getTimestampDisplay(page);
     
-    expect(display.text).toContain('⚠️');
-    expect(display.text).toContain('2 hours stale');
-    expect(display.text).toContain('outdated');
+    expect(display.hasWarning).toBe(true);
+    // Timestamp should show actual time (not stale message text)
+    expect(display.text).toMatch(/\d+:\d+:\d+\s*(AM|PM)|\d+\s+(hour|day)/);
+    expect(display.color).toMatch(/rgb\(204,\s*0,\s*0\)|rgb\(220,\s*20,\s*60\)/);
   });
 
   test('should display non-METAR-specific very stale message with calculated threshold', async ({ page }) => {
@@ -292,9 +297,10 @@ test.describe('Weather Staleness Threshold Calculation', () => {
     await setWeatherTimestamp(page, 10 * 60 + 30);
     const display = await getTimestampDisplay(page);
     
-    expect(display.text).toContain('⚠️');
-    expect(display.text).toMatch(/Over.*stale/i);
-    expect(display.text).not.toContain('2 hours stale');
+    expect(display.hasWarning).toBe(true);
+    // Timestamp should show actual time (not stale message text)
+    expect(display.text).toMatch(/\d+:\d+:\d+\s*(AM|PM)|\d+\s+(minute|hour)/);
+    expect(display.color).toMatch(/rgb\(204,\s*0,\s*0\)|rgb\(220,\s*20,\s*60\)/);
   });
 
   test('should handle missing AIRPORT_DATA gracefully', async ({ page }) => {
@@ -314,13 +320,13 @@ test.describe('Weather Staleness Threshold Calculation', () => {
   test('should update display when timestamp changes', async ({ page }) => {
     await setWeatherTimestamp(page, 30);
     const freshDisplay = await getTimestampDisplay(page);
-    expect(freshDisplay.text).not.toContain('⚠️');
+    expect(freshDisplay.hasWarning).toBe(false);
     
     const thresholdInfo = await getThresholdInfo(page);
     await setWeatherTimestamp(page, thresholdInfo.warningSeconds + 30);
     const staleDisplay = await getTimestampDisplay(page);
     
-    expect(staleDisplay.text).toContain('⚠️');
+    expect(staleDisplay.hasWarning).toBe(true);
     expect(staleDisplay.text).not.toBe(freshDisplay.text);
   });
 

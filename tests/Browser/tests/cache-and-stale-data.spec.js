@@ -327,8 +327,9 @@ test.describe('Cache and Stale Data Handling', () => {
     const color = await timestampEl.evaluate(el => window.getComputedStyle(el).color);
     
     // Should show warning indicator (⚠️) for data exceeding stale threshold
-    // The warning shows as "⚠️ X minutes ago - refreshing..." or "⚠️ Over X stale..."
-    expect(text).toMatch(/⚠️|warning|stale/i);
+    // Warning emoji is now in separate element, timestamp shows actual time
+    const warningEl = await page.locator('#weather-timestamp-warning');
+    const hasWarning = await warningEl.isVisible();
     
     // Color should be orange (#f80) or red (#c00) for stale data
     const isWarningColor = color.includes('rgb(255, 136, 0)') || // #f80
@@ -336,7 +337,7 @@ test.describe('Cache and Stale Data Handling', () => {
                           color.includes('rgb(255, 140, 0)') || // Orange variants
                           color.includes('rgb(220, 20, 60)');   // Red variants
     
-    expect(isWarningColor || text.includes('⚠️')).toBeTruthy();
+    expect(isWarningColor || hasWarning).toBeTruthy();
   });
 
   test('should prevent concurrent fetches', async ({ page }) => {
