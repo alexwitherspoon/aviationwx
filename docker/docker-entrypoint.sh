@@ -331,11 +331,11 @@ start_vsftpd_instance() {
 }
 
 if [ "$IPV4_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
-    start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv4.conf" "vsftpd IPv4" "VSFTPD_IPV4_PID"
+    start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv4.conf" "vsftpd IPv4" "VSFTPD_IPV4_PID" || true
 fi
 
 if [ "$IPV6_RESOLVED" = "yes" ] && [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
-    start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv6.conf" "vsftpd IPv6" "VSFTPD_IPV6_PID"
+    start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv6.conf" "vsftpd IPv6" "VSFTPD_IPV6_PID" || true
 fi
 
 # Fallback: If neither IP resolved, try IPv4 config (IPv4 is more likely to work)
@@ -344,7 +344,7 @@ if [ "$IPV4_RESOLVED" != "yes" ] && [ "$IPV6_RESOLVED" != "yes" ]; then
     if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ]; then
         # Use placeholder IP for pasv_address (will be resolved by vsftpd or fail gracefully)
         sed -i "s|^pasv_address=.*|pasv_address=0.0.0.0|" /etc/vsftpd/vsftpd_ipv4.conf
-        start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv4.conf" "vsftpd (fallback)" "VSFTPD_IPV4_PID"
+        start_vsftpd_instance "/etc/vsftpd/vsftpd_ipv4.conf" "vsftpd (fallback)" "VSFTPD_IPV4_PID" || true
     else
         echo "⚠️  Warning: No vsftpd config files available - FTP service will not be available"
         echo "   Web service will continue to function normally"
