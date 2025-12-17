@@ -131,6 +131,11 @@ RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/security.ini
 
+# Configure Apache to listen on port 8080 (internal, behind nginx proxy)
+# This avoids port conflict with nginx which listens on port 80
+RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf \
+    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf
+
 # Configure Apache to write error log to stderr (for Docker logging)
 # Add log format prefix to identify Apache access logs
 RUN echo "LogFormat \"[apache_access] %h %l %u %t \\\"%r\\\" %>s %O \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\"\" combined" >> /etc/apache2/apache2.conf \
@@ -140,13 +145,14 @@ RUN echo "LogFormat \"[apache_access] %h %l %u %t \\\"%r\\\" %>s %O \\\"%{Refere
 # Use custom entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
-# Expose port
-EXPOSE 80
+# Expose port 8080 (internal, behind nginx proxy on port 80)
+EXPOSE 8080
 
 # Health check
 # Note: start-period is 15s to allow time for all services to initialize
 # (cron, vsftpd, sshd, fail2ban, then Apache)
 # Production docker-compose.prod.yml overrides this to 20s for extra safety
+# Check Apache on port 8080 (internal port)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+    CMD curl -f http://localhost:8080/ || exit 1
 

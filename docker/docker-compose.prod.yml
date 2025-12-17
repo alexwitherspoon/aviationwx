@@ -12,7 +12,7 @@ services:
     restart: always
     network_mode: host  # Use host networking to eliminate port mapping overhead
     # Ports are now directly on host (no port mappings needed):
-    # - 80 (HTTP, Apache)
+    # - 8080 (HTTP, Apache, internal - behind nginx on port 80)
     # - 2121 (FTP/FTPS)
     # - 2222 (SFTP)
     # - 50000-50099 (FTP passive mode, 100 ports)
@@ -35,13 +35,14 @@ services:
       - CONFIG_PATH=/var/www/html/config/airports.json
       - WEBCAM_REFRESH_DEFAULT=${WEBCAM_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_DEFAULT=${WEATHER_REFRESH_DEFAULT:-60}
-      - WEATHER_REFRESH_URL=http://localhost
+      - WEATHER_REFRESH_URL=http://localhost:8080
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
     healthcheck:
       # Override Dockerfile healthcheck with longer start_period
       # Dockerfile has 5s which is too short for all services (cron, vsftpd, sshd, fail2ban, Apache)
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      # Check Apache on port 8080 (internal port, behind nginx on port 80)
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 3s
       retries: 3
