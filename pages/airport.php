@@ -5,6 +5,7 @@ require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/address-formatter.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/logger.php';
 
 // Normalize weather source for METAR-only airports (sets weather_source if metar_station is configured)
 normalizeWeatherSource($airport);
@@ -53,8 +54,12 @@ function getImageCaptureTimeForPage($filePath) {
  * Check if all configured data sources are stale (data outage condition)
  * 
  * Checks all configured sources (primary weather, METAR, webcams) and determines
- * if they are all stale (older than DATA_OUTAGE_BANNER_HOURS). Returns the newest timestamp
- * among all stale sources to help identify when the outage started.
+ * if they are all stale (older than DATA_OUTAGE_BANNER_HOURS). Uses outage state file
+ * to persist outage start time across cache loss and brief recoveries. Preserves original
+ * outage start time during grace period (1.5 hours) after recovery to handle back-to-back
+ * outages as a single continuous event.
+ * 
+ * Logs outage start when first detected and outage end when fully resolved (after grace period).
  * 
  * @param string $airportId Airport identifier
  * @param array $airport Airport configuration array
@@ -259,15 +264,95 @@ function checkDataOutageStatus($airportId, $airport) {
         return null;
     }
     
-    // Return newest timestamp if all sources are stale
-    if ($allStale && $newestTimestamp > 0) {
+    // Handle outage state file for persistence across cache loss
+    $outageStateFile = __DIR__ . '/../cache/outage_' . $airportId . '.json';
+    
+    if ($allStale) {
+        // All sources are stale - check/create outage state file
+        $outageStart = 0;
+        $isNewOutage = !file_exists($outageStateFile);
+        
+        // Check if outage file exists
+        if (!$isNewOutage) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with fallback mechanisms below
+            $outageState = @json_decode(@file_get_contents($outageStateFile), true);
+            if (is_array($outageState) && isset($outageState['outage_start']) && $outageState['outage_start'] > 0) {
+                // Use existing outage start time (preserves original across brief recoveries)
+                $outageStart = (int)$outageState['outage_start'];
+            }
+        }
+        
+        // If no existing outage start, use newest timestamp from stale sources
+        if ($outageStart === 0 && $newestTimestamp > 0) {
+            $outageStart = $newestTimestamp;
+        }
+        
+        // If still no timestamp, use current time as fallback
+        if ($outageStart === 0) {
+            $outageStart = $now;
+        }
+        
+        // Write/update outage state file
+        $outageState = [
+            'outage_start' => $outageStart,
+            'last_checked' => $now
+        ];
+        @file_put_contents($outageStateFile, json_encode($outageState), LOCK_EX);
+        
+        // Log outage start only for new outages
+        if ($isNewOutage) {
+            aviationwx_log('info', 'data outage detected', [
+                'airport' => $airportId,
+                'outage_start' => $outageStart,
+                'outage_start_iso' => date('c', $outageStart),
+                'sources_affected' => array_keys($sources)
+            ], 'app');
+        }
+        
         return [
-            'newest_timestamp' => $newestTimestamp,
+            'newest_timestamp' => $outageStart,
             'all_stale' => true
         ];
+    } else {
+        // At least one source is fresh - check for recovery and cleanup
+        if (file_exists($outageStateFile)) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with fallback mechanisms below
+            $outageState = @json_decode(@file_get_contents($outageStateFile), true);
+            if (is_array($outageState) && isset($outageState['last_checked']) && isset($outageState['outage_start'])) {
+                $lastChecked = (int)$outageState['last_checked'];
+                $outageStart = (int)$outageState['outage_start'];
+                $timeSinceLastCheck = $now - $lastChecked;
+                $gracePeriodSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
+                
+                // If more than grace period has passed, delete file (full recovery confirmed)
+                if ($timeSinceLastCheck >= $gracePeriodSeconds) {
+                    $duration = $now - $outageStart;
+                    aviationwx_log('info', 'data outage resolved', [
+                        'airport' => $airportId,
+                        'outage_start' => $outageStart,
+                        'outage_start_iso' => date('c', $outageStart),
+                        'outage_end' => $now,
+                        'outage_end_iso' => date('c', $now),
+                        'outage_duration_seconds' => $duration,
+                        'outage_duration_hours' => round($duration / 3600, 2)
+                    ], 'app');
+                    @unlink($outageStateFile);
+                } else {
+                    // Within grace period - update last_checked but keep file
+                    // This handles brief recoveries without resetting outage start time
+                    $outageState['last_checked'] = $now;
+                    @file_put_contents($outageStateFile, json_encode($outageState), LOCK_EX);
+                }
+            } else {
+                // Invalid outage state file - delete it
+                @unlink($outageStateFile);
+            }
+        }
+        
+        return null; // No banner when sources are fresh
     }
-    
-    return null;
 }
 
 // SEO variables - emphasize live webcams and runway conditions
