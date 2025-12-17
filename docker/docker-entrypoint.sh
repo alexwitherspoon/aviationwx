@@ -289,27 +289,23 @@ fi
 # Start vsftpd instances (only if IPs were resolved)
 echo "Starting vsftpd..."
 
-# Validate config before starting to catch errors early
+# Start vsftpd instance and verify it's healthy
+# Uses process check + port listening check instead of config validation
+# (config validation with vsftpd -olisten=NO hangs indefinitely)
 start_vsftpd_instance() {
     local config_file="$1"
     local instance_name="$2"
     local pid_var="$3"
+    local listen_port="${4:-2121}"  # Default to 2121, can be overridden
     
+    # Basic config file validation (exists and readable)
     if [ ! -f "$config_file" ]; then
         echo "⚠️  Warning: Config file not found: $config_file"
         return 1
     fi
     
-    echo "Validating $instance_name configuration..."
-    # Use timeout to prevent vsftpd -olisten=NO from hanging indefinitely
-    # vsftpd -olisten=NO should exit quickly, but may hang in some configurations
-    if ! timeout 5 vsftpd -olisten=NO "$config_file" >/dev/null 2>&1; then
-        echo "⚠️  Warning: $instance_name configuration validation failed or timed out"
-        echo "   vsftpd configuration test output:"
-        timeout 3 vsftpd -olisten=NO "$config_file" 2>&1 | sed 's/^/   /' || true
-        echo "   vsftpd will not start for $instance_name - continuing without FTP service"
-        echo "   This is non-fatal - container will continue to start"
-        eval "$pid_var=\"\""
+    if [ ! -r "$config_file" ]; then
+        echo "⚠️  Warning: Config file not readable: $config_file"
         return 1
     fi
     
@@ -318,17 +314,51 @@ start_vsftpd_instance() {
     local pid=$!
     eval "$pid_var=$pid"
     
-    sleep 1
-    if ! kill -0 $pid 2>/dev/null; then
-        echo "⚠️  Warning: $instance_name failed to start after validation passed"
-        echo "   This may indicate a runtime issue (e.g., port already in use)"
-        echo "   vsftpd will not be available for $instance_name"
+    # Wait for vsftpd to start and bind to port
+    # Poll up to 3 seconds (6 iterations of 0.5s)
+    local max_iterations=6
+    local iteration=0
+    local process_ok=false
+    local port_ok=false
+    
+    while [ $iteration -lt $max_iterations ]; do
+        # Check if process is still running
+        if kill -0 $pid 2>/dev/null; then
+            process_ok=true
+            
+            # Check if port is listening (more reliable than just process check)
+            if netstat -tuln 2>/dev/null | grep -q ":$listen_port " || \
+               ss -tuln 2>/dev/null | grep -q ":$listen_port "; then
+                port_ok=true
+                break
+            fi
+        else
+            # Process died - check why
+            echo "⚠️  Warning: $instance_name process exited during startup"
+            echo "   This may indicate a configuration error or port conflict"
+            eval "$pid_var=\"\""
+            return 1
+        fi
+        
+        sleep 0.5
+        iteration=$((iteration + 1))
+    done
+    
+    # Final verification
+    if [ "$process_ok" = true ] && [ "$port_ok" = true ]; then
+        echo "✓ $instance_name started and listening on port $listen_port (PID: $pid)"
+        return 0
+    elif [ "$process_ok" = true ]; then
+        echo "⚠️  Warning: $instance_name process is running but port $listen_port is not listening"
+        echo "   vsftpd may still be initializing, or there may be a port binding issue"
+        echo "   This is non-fatal - container will continue to start"
+        # Keep PID - process is running, may bind later
+        return 0
+    else
+        echo "⚠️  Warning: $instance_name failed to start"
         echo "   This is non-fatal - container will continue to start"
         eval "$pid_var=\"\""
         return 1
-    else
-        echo "✓ $instance_name started (PID: $pid)"
-        return 0
     fi
 }
 
