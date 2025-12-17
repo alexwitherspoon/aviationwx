@@ -68,13 +68,5 @@ fi
 # Keep root ownership (required for SSH chroot) but allow user write via 777 permissions
 chmod 777 "$UPLOAD_DIR"
 
-# Create incoming subdirectory for backward compatibility
-INCOMING_DIR="$UPLOAD_DIR/incoming"
-if [ ! -d "$INCOMING_DIR" ]; then
-    mkdir -p "$INCOMING_DIR"
-fi
-chown "$USERNAME:$USERNAME" "$INCOMING_DIR"
-chmod 755 "$INCOMING_DIR"
-
 echo "SFTP user setup complete: $USERNAME -> $UPLOAD_DIR (writable root directory)"
 

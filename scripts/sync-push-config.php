@@ -443,25 +443,20 @@ function ensureWebcamsBaseDirectory() {
 /**
  * Create upload directory for camera
  * 
- * Creates both parent directory and incoming subdirectory with correct permissions.
+ * Creates parent directory with correct permissions.
  * Sets ownership based on protocol: root:root for SFTP chroot, www-data for FTP/FTPS.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param string|null $protocol Protocol type: 'ftp', 'ftps', or null for SFTP
- * @return string Path to incoming directory (kept for backward compatibility)
+ * @return string Path to chroot directory
  */
 function createCameraDirectory($airportId, $camIndex, $protocol = null) {
     $webcamsBaseDir = ensureWebcamsBaseDirectory();
     $baseDir = $webcamsBaseDir . '/' . $airportId . '_' . $camIndex;
-    $incomingDir = $baseDir . '/incoming';
     
     if (!is_dir($baseDir)) {
         @mkdir($baseDir, 0775, true);
-    }
-    
-    if (!is_dir($incomingDir)) {
-        @mkdir($incomingDir, 0775, true);
     }
     
     $protocol = strtolower($protocol ?? '');
@@ -477,27 +472,13 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
                 0775,
                 "FTP chroot directory for {$airportId}_{$camIndex}"
             );
-            // Incoming directory kept for backward compatibility
-            if (is_dir($incomingDir)) {
-                setDirectoryPermissions(
-                    $incomingDir,
-                    $wwwDataInfo['uid'],
-                    'www-data',
-                    0775,
-                    "FTP incoming directory for {$airportId}_{$camIndex} (backward compatibility)"
-                );
-            }
         } else {
             @chmod($baseDir, 0775);
-            @chmod($incomingDir, 0775);
         }
-    } else {
-        // SFTP: Root ownership required for chroot (set by create-sftp-user.sh)
-        // Chroot directory made writable (777) by create-sftp-user.sh for direct uploads
-        @chmod($incomingDir, 0775);
     }
+    // SFTP: Root ownership and permissions set by create-sftp-user.sh
     
-    return $incomingDir;
+    return $baseDir;
 }
 
 /**
@@ -898,13 +879,9 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     
     $webcamsBaseDir = ensureWebcamsBaseDirectory();
     $chrootDir = $webcamsBaseDir . '/' . $airportId . '_' . $camIndex;
-    $incomingDir = $chrootDir . '/incoming';
     
     if (!is_dir($chrootDir)) {
         @mkdir($chrootDir, 0775, true);
-    }
-    if (!is_dir($incomingDir)) {
-        @mkdir($incomingDir, 0775, true);
     }
     
     // Make chroot directory writable by www-data (vsftpd guest user)
@@ -918,19 +895,8 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
             0775,
             "FTP chroot directory for {$airportId}_{$camIndex}"
         );
-        // Incoming directory kept for backward compatibility
-        if (is_dir($incomingDir)) {
-            setDirectoryPermissions(
-                $incomingDir,
-                $wwwDataInfo['uid'],
-                'www-data',
-                0775,
-                "FTP incoming directory for {$airportId}_{$camIndex} (backward compatibility)"
-            );
-        }
     } else {
         @chmod($chrootDir, 0775);
-        @chmod($incomingDir, 0775);
     }
     
     $userConfigFile = $userConfigDir . '/' . $username;
