@@ -298,6 +298,12 @@ start_vsftpd_instance() {
     local pid_var="$3"
     local listen_port="${4:-2121}"  # Default to 2121, can be overridden
     
+    # Validate port number (1-65535)
+    if ! [[ "$listen_port" =~ ^[0-9]+$ ]] || [ "$listen_port" -lt 1 ] || [ "$listen_port" -gt 65535 ]; then
+        echo "⚠️  Warning: Invalid port number: $listen_port, using default 2121"
+        listen_port=2121
+    fi
+    
     # Basic config file validation (exists and readable)
     if [ ! -f "$config_file" ]; then
         echo "⚠️  Warning: Config file not found: $config_file"
@@ -321,16 +327,29 @@ start_vsftpd_instance() {
     local process_ok=false
     local port_ok=false
     
+    # Determine which port check command to use (ss preferred, netstat fallback)
+    local port_check_cmd=""
+    if command -v ss >/dev/null 2>&1; then
+        port_check_cmd="ss -tuln"
+    elif command -v netstat >/dev/null 2>&1; then
+        port_check_cmd="netstat -tuln"
+    else
+        echo "⚠️  Warning: Neither ss nor netstat available, skipping port check"
+        port_ok=true  # Assume OK if we can't check
+    fi
+    
     while [ $iteration -lt $max_iterations ]; do
         # Check if process is still running
         if kill -0 $pid 2>/dev/null; then
             process_ok=true
             
             # Check if port is listening (more reliable than just process check)
-            if netstat -tuln 2>/dev/null | grep -q ":$listen_port " || \
-               ss -tuln 2>/dev/null | grep -q ":$listen_port "; then
-                port_ok=true
-                break
+            # Use flexible regex to match port at end of line or followed by space
+            if [ -n "$port_check_cmd" ]; then
+                if $port_check_cmd 2>/dev/null | grep -qE ":$listen_port[[:space:]]|:$listen_port\$"; then
+                    port_ok=true
+                    break
+                fi
             fi
         else
             # Process died - check why
