@@ -1,10 +1,11 @@
 #!/bin/bash
 # Enable SSL in vsftpd when Let's Encrypt certificates are available
 # This script should be run after certificates are obtained
+# Uses wildcard certificate (*.aviationwx.org) which covers upload.aviationwx.org
 
 set -euo pipefail
 
-DOMAIN="upload.aviationwx.org"
+DOMAIN="aviationwx.org"
 CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
 VSFTPD_IPV4_CONF="/etc/vsftpd/vsftpd_ipv4.conf"
 VSFTPD_IPV6_CONF="/etc/vsftpd/vsftpd_ipv6.conf"

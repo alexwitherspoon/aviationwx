@@ -180,7 +180,8 @@ fi
 # Enable SSL in vsftpd configs if certificates are available and valid
 # Start without SSL if certs don't exist or are invalid to allow vsftpd to start
 # on first deployment; SSL can be enabled later via enable-vsftpd-ssl.sh
-CERT_DIR="/etc/letsencrypt/live/upload.aviationwx.org"
+# Uses wildcard certificate (*.aviationwx.org) which covers upload.aviationwx.org
+CERT_DIR="/etc/letsencrypt/live/aviationwx.org"
 CERT_FILE="${CERT_DIR}/fullchain.pem"
 KEY_FILE="${CERT_DIR}/privkey.pem"
 SSL_ENABLED=false
