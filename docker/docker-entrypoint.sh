@@ -301,10 +301,12 @@ start_vsftpd_instance() {
     fi
     
     echo "Validating $instance_name configuration..."
-    if ! vsftpd -olisten=NO "$config_file" >/dev/null 2>&1; then
-        echo "⚠️  Warning: $instance_name configuration validation failed"
+    # Use timeout to prevent vsftpd -olisten=NO from hanging indefinitely
+    # vsftpd -olisten=NO should exit quickly, but may hang in some configurations
+    if ! timeout 5 vsftpd -olisten=NO "$config_file" >/dev/null 2>&1; then
+        echo "⚠️  Warning: $instance_name configuration validation failed or timed out"
         echo "   vsftpd configuration test output:"
-        vsftpd -olisten=NO "$config_file" 2>&1 | sed 's/^/   /' || true
+        timeout 3 vsftpd -olisten=NO "$config_file" 2>&1 | sed 's/^/   /' || true
         echo "   vsftpd will not start for $instance_name - continuing without FTP service"
         echo "   This is non-fatal - container will continue to start"
         eval "$pid_var=\"\""
