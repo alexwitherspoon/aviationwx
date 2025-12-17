@@ -49,6 +49,227 @@ function getImageCaptureTimeForPage($filePath) {
     return $mtime !== false ? (int)$mtime : 0;
 }
 
+/**
+ * Check if all configured data sources are stale (data outage condition)
+ * 
+ * Checks all configured sources (primary weather, METAR, webcams) and determines
+ * if they are all stale (older than DATA_OUTAGE_BANNER_HOURS). Returns the newest timestamp
+ * among all stale sources to help identify when the outage started.
+ * 
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport configuration array
+ * @return array|null Returns array with 'newest_timestamp' if all sources are stale, null otherwise
+ */
+function checkDataOutageStatus($airportId, $airport) {
+    // Don't show outage banner if airport is in maintenance mode
+    if (isAirportInMaintenance($airport)) {
+        return null;
+    }
+    
+    $outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
+    $now = time();
+    $sources = [];
+    $newestTimestamp = 0;
+    
+    // Check primary weather source (if configured)
+    if (isset($airport['weather_source']) && !empty($airport['weather_source'])) {
+        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+        if (file_exists($weatherCacheFile)) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with fallback mechanisms below
+            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
+            if (is_array($weatherData)) {
+                // Check primary source timestamp
+                $primaryTimestamp = 0;
+                if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
+                    $primaryTimestamp = (int)$weatherData['obs_time_primary'];
+                } elseif (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
+                    $primaryTimestamp = (int)$weatherData['last_updated_primary'];
+                }
+                
+                if ($primaryTimestamp > 0) {
+                    $age = $now - $primaryTimestamp;
+                    $sources['primary'] = [
+                        'timestamp' => $primaryTimestamp,
+                        'age' => $age,
+                        'stale' => $age >= $outageThresholdSeconds
+                    ];
+                    if ($primaryTimestamp > $newestTimestamp) {
+                        $newestTimestamp = $primaryTimestamp;
+                    }
+                } else {
+                    // No timestamp available - treat as stale
+                    $sources['primary'] = [
+                        'timestamp' => 0,
+                        'age' => PHP_INT_MAX,
+                        'stale' => true
+                    ];
+                }
+            } else {
+                // Cache file exists but invalid - treat as stale
+                $sources['primary'] = [
+                    'timestamp' => 0,
+                    'age' => PHP_INT_MAX,
+                    'stale' => true
+                ];
+            }
+        } else {
+            // No cache file - treat as stale
+            $sources['primary'] = [
+                'timestamp' => 0,
+                'age' => PHP_INT_MAX,
+                'stale' => true
+            ];
+        }
+    }
+    
+    // Check METAR source (if configured)
+    // METAR is configured if metar_station exists OR weather_source.type === 'metar'
+    $hasMetar = false;
+    if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
+        $hasMetar = true;
+    } elseif (isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar') {
+        $hasMetar = true;
+    }
+    
+    if ($hasMetar) {
+        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+        if (file_exists($weatherCacheFile)) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with fallback mechanisms below
+            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
+            if (is_array($weatherData)) {
+                // Check METAR source timestamp
+                $metarTimestamp = 0;
+                if (isset($weatherData['obs_time_metar']) && $weatherData['obs_time_metar'] > 0) {
+                    $metarTimestamp = (int)$weatherData['obs_time_metar'];
+                } elseif (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
+                    $metarTimestamp = (int)$weatherData['last_updated_metar'];
+                }
+                
+                if ($metarTimestamp > 0) {
+                    $age = $now - $metarTimestamp;
+                    $sources['metar'] = [
+                        'timestamp' => $metarTimestamp,
+                        'age' => $age,
+                        'stale' => $age >= $outageThresholdSeconds
+                    ];
+                    if ($metarTimestamp > $newestTimestamp) {
+                        $newestTimestamp = $metarTimestamp;
+                    }
+                } else {
+                    // No timestamp available - treat as stale
+                    $sources['metar'] = [
+                        'timestamp' => 0,
+                        'age' => PHP_INT_MAX,
+                        'stale' => true
+                    ];
+                }
+            } else {
+                // Cache file exists but invalid - treat as stale
+                $sources['metar'] = [
+                    'timestamp' => 0,
+                    'age' => PHP_INT_MAX,
+                    'stale' => true
+                ];
+            }
+        } else {
+            // No cache file - treat as stale
+            $sources['metar'] = [
+                'timestamp' => 0,
+                'age' => PHP_INT_MAX,
+                'stale' => true
+            ];
+        }
+    }
+    
+    // Check all webcams (if configured)
+    if (isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0) {
+        $webcamStaleCount = 0;
+        $webcamNewestTimestamp = 0;
+        
+        foreach ($airport['webcams'] as $index => $cam) {
+            $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
+            $webcamTimestamp = 0;
+            
+            // Try to get timestamp from JPG or WebP file
+            foreach (['.jpg', '.webp'] as $ext) {
+                $filePath = $base . $ext;
+                if (file_exists($filePath)) {
+                    $webcamTimestamp = getImageCaptureTimeForPage($filePath);
+                    if ($webcamTimestamp > 0) {
+                        break;
+                    }
+                }
+            }
+            
+            if ($webcamTimestamp > 0) {
+                $age = $now - $webcamTimestamp;
+                $isStale = $age >= $outageThresholdSeconds;
+                
+                if ($isStale) {
+                    $webcamStaleCount++;
+                }
+                
+                if ($webcamTimestamp > $webcamNewestTimestamp) {
+                    $webcamNewestTimestamp = $webcamTimestamp;
+                }
+            } else {
+                // No webcam file or timestamp - treat as stale
+                $webcamStaleCount++;
+            }
+        }
+        
+        // All webcams must be stale for outage condition
+        $allWebcamsStale = ($webcamStaleCount === count($airport['webcams']));
+        
+        if ($allWebcamsStale && $webcamNewestTimestamp > 0) {
+            if ($webcamNewestTimestamp > $newestTimestamp) {
+                $newestTimestamp = $webcamNewestTimestamp;
+            }
+        }
+        
+        $sources['webcams'] = [
+            'stale' => $allWebcamsStale,
+            'total' => count($airport['webcams']),
+            'stale_count' => $webcamStaleCount
+        ];
+    }
+    
+    // Check if ALL configured sources are stale
+    $allStale = true;
+    foreach ($sources as $sourceName => $sourceData) {
+        if ($sourceName === 'webcams') {
+            // For webcams, check if all are stale
+            if (!$sourceData['stale']) {
+                $allStale = false;
+                break;
+            }
+        } else {
+            // For weather sources, check stale flag
+            if (!$sourceData['stale']) {
+                $allStale = false;
+                break;
+            }
+        }
+    }
+    
+    // If no sources configured, don't show banner
+    if (empty($sources)) {
+        return null;
+    }
+    
+    // Return newest timestamp if all sources are stale
+    if ($allStale && $newestTimestamp > 0) {
+        return [
+            'newest_timestamp' => $newestTimestamp,
+            'all_stale' => true
+        ];
+    }
+    
+    return null;
+}
+
 // SEO variables - emphasize live webcams and runway conditions
 $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
 $webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') . ' and ' : '';
@@ -285,6 +506,16 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         ⚠️ This airport is currently under maintenance. Data may be missing or unreliable.
     </div>
     <?php endif; ?>
+    <?php 
+    $outageStatus = checkDataOutageStatus($airportId, $airport);
+    if ($outageStatus !== null): 
+    ?>
+    <div id="data-outage-banner" class="data-outage-banner" data-newest-timestamp="<?= $outageStatus['newest_timestamp'] ?>">
+        ⚠️ Data Outage Detected: All local data sources are currently offline due to a local outage.<br>
+        The latest information shown is from <span id="outage-newest-time">--</span> and may not reflect current conditions.<br>
+        Data will automatically update once the local site is back online.
+    </div>
+    <?php endif; ?>
     <main>
     <div class="container">
         <!-- Header -->
@@ -339,7 +570,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
-                        <span class="webcam-timestamp">Last updated: <span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
+                        <span class="webcam-timestamp">Last updated: <span id="webcam-timestamp-warning-<?= $index ?>" class="webcam-timestamp-warning" style="display: none;">⚠️ </span><span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -841,6 +1072,8 @@ const WEATHER_STALENESS_WARNING_HOURS_METAR = <?= WEATHER_STALENESS_WARNING_HOUR
 const WEATHER_STALENESS_ERROR_HOURS_METAR = <?= WEATHER_STALENESS_ERROR_HOURS_METAR ?>;
 const WEATHER_STALENESS_WARNING_MULTIPLIER = <?= WEATHER_STALENESS_WARNING_MULTIPLIER ?>;
 const WEATHER_STALENESS_ERROR_MULTIPLIER = <?= WEATHER_STALENESS_ERROR_MULTIPLIER ?>;
+const MAX_STALE_HOURS = <?= MAX_STALE_HOURS ?>;
+const DATA_OUTAGE_BANNER_HOURS = <?= DATA_OUTAGE_BANNER_HOURS ?>;
 const SECONDS_PER_HOUR = 3600;
 
 // Production logging removed - only log errors in console
@@ -1612,6 +1845,234 @@ function updateWeatherTimestamp() {
     });
 }
 
+/**
+ * Check if all configured data sources are stale and update outage banner
+ * Called after weather data updates and webcam updates
+ */
+function checkAndUpdateOutageBanner() {
+    const banner = document.getElementById('data-outage-banner');
+    if (!banner) {
+        return; // Banner doesn't exist (not in outage state)
+    }
+    
+    const outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * SECONDS_PER_HOUR;
+    const now = Math.floor(Date.now() / 1000);
+    const sources = [];
+    let newestTimestamp = 0;
+    
+    // Check primary weather source (if configured and not METAR-only)
+    // METAR-only airports are handled separately below
+    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && AIRPORT_DATA.weather_source.type === 'metar';
+    const hasPrimarySource = AIRPORT_DATA && AIRPORT_DATA.weather_source && !isMetarOnly;
+    
+    if (hasPrimarySource) {
+        if (weatherLastUpdated) {
+            const timestamp = Math.floor(weatherLastUpdated.getTime() / 1000);
+            const age = now - timestamp;
+            const isStale = age >= outageThresholdSeconds;
+            
+            sources.push({
+                name: 'primary',
+                timestamp: timestamp,
+                age: age,
+                stale: isStale
+            });
+            
+            if (timestamp > newestTimestamp) {
+                newestTimestamp = timestamp;
+            }
+        } else {
+            // No weather data - treat as stale
+            sources.push({
+                name: 'primary',
+                timestamp: 0,
+                age: Infinity,
+                stale: true
+            });
+        }
+    }
+    
+    // Check METAR source (if configured)
+    // METAR is configured if metar_station exists OR weather_source.type === 'metar'
+    const hasMetar = (AIRPORT_DATA && AIRPORT_DATA.metar_station) || isMetarOnly;
+    
+    if (hasMetar) {
+        // METAR timestamp comes from weather data
+        if (currentWeatherData) {
+            let metarTimestamp = 0;
+            if (currentWeatherData.obs_time_metar && currentWeatherData.obs_time_metar > 0) {
+                metarTimestamp = currentWeatherData.obs_time_metar;
+            } else if (currentWeatherData.last_updated_metar && currentWeatherData.last_updated_metar > 0) {
+                metarTimestamp = currentWeatherData.last_updated_metar;
+            }
+            
+            if (metarTimestamp > 0) {
+                const age = now - metarTimestamp;
+                const isStale = age >= outageThresholdSeconds;
+                
+                sources.push({
+                    name: 'metar',
+                    timestamp: metarTimestamp,
+                    age: age,
+                    stale: isStale
+                });
+                
+                if (metarTimestamp > newestTimestamp) {
+                    newestTimestamp = metarTimestamp;
+                }
+            } else {
+                // No METAR timestamp - treat as stale
+                sources.push({
+                    name: 'metar',
+                    timestamp: 0,
+                    age: Infinity,
+                    stale: true
+                });
+            }
+        } else {
+            // No weather data - treat as stale
+            sources.push({
+                name: 'metar',
+                timestamp: 0,
+                age: Infinity,
+                stale: true
+            });
+        }
+    }
+    
+    // Check all webcams (if configured)
+    if (AIRPORT_DATA && AIRPORT_DATA.webcams && Array.isArray(AIRPORT_DATA.webcams) && AIRPORT_DATA.webcams.length > 0) {
+        let webcamStaleCount = 0;
+        let webcamNewestTimestamp = 0;
+        
+        AIRPORT_DATA.webcams.forEach((cam, index) => {
+            const timestamp = CAM_TS[index] || 0;
+            
+            if (timestamp > 0) {
+                const age = now - timestamp;
+                const isStale = age >= outageThresholdSeconds;
+                
+                if (isStale) {
+                    webcamStaleCount++;
+                }
+                
+                if (timestamp > webcamNewestTimestamp) {
+                    webcamNewestTimestamp = timestamp;
+                }
+            } else {
+                // No timestamp - treat as stale
+                webcamStaleCount++;
+            }
+        });
+        
+        const allWebcamsStale = (webcamStaleCount === AIRPORT_DATA.webcams.length);
+        
+        sources.push({
+            name: 'webcams',
+            stale: allWebcamsStale,
+            total: AIRPORT_DATA.webcams.length,
+            stale_count: webcamStaleCount
+        });
+        
+        if (allWebcamsStale && webcamNewestTimestamp > 0) {
+            if (webcamNewestTimestamp > newestTimestamp) {
+                newestTimestamp = webcamNewestTimestamp;
+            }
+        }
+    }
+    
+    // Check if ALL configured sources are stale
+    let allStale = true;
+    for (const source of sources) {
+        if (!source.stale) {
+            allStale = false;
+            break;
+        }
+    }
+    
+    // If no sources configured, hide banner
+    if (sources.length === 0) {
+        banner.style.display = 'none';
+        return;
+    }
+    
+    // Show or hide banner based on all-stale status
+    if (allStale && newestTimestamp > 0) {
+        banner.style.display = 'block';
+        banner.dataset.newestTimestamp = newestTimestamp.toString();
+        updateOutageBannerTimestamp();
+    } else {
+        // At least one source is fresh - hide banner
+        banner.style.display = 'none';
+    }
+}
+
+/**
+ * Update the timestamp display in the outage banner
+ */
+function updateOutageBannerTimestamp() {
+    const banner = document.getElementById('data-outage-banner');
+    if (!banner) {
+        return;
+    }
+    
+    const timestampElem = document.getElementById('outage-newest-time');
+    if (!timestampElem) {
+        return;
+    }
+    
+    const newestTimestamp = parseInt(banner.dataset.newestTimestamp || '0');
+    if (!newestTimestamp || newestTimestamp <= 0) {
+        timestampElem.textContent = 'unknown time';
+        return;
+    }
+    
+    // Format timestamp similar to other timestamp displays on the page
+    try {
+        const timestampDate = new Date(newestTimestamp * 1000);
+        const now = new Date();
+        const diffSeconds = Math.floor((now - timestampDate) / 1000);
+        
+        // Get airport timezone
+        const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
+        const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
+        
+        // Format: "December 19, 2024 at 2:30 PM PST" or relative if < 24 hours
+        let formattedTime;
+        if (diffSeconds < 86400) {
+            // Less than 24 hours: show relative time
+            const hours = Math.floor(diffSeconds / 3600);
+            const minutes = Math.floor((diffSeconds % 3600) / 60);
+            
+            if (hours === 0) {
+                formattedTime = minutes + (minutes === 1 ? ' minute' : ' minutes') + ' ago';
+            } else {
+                const minStr = minutes > 0 ? ' ' + minutes + (minutes === 1 ? ' minute' : ' minutes') : '';
+                formattedTime = hours + (hours === 1 ? ' hour' : ' hours') + minStr + ' ago';
+            }
+        } else {
+            // 24 hours or more: show absolute time with timezone
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: timezone,
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+            
+            const tzAbbr = getTimezoneAbbreviation(timestampDate);
+            formattedTime = formatter.format(timestampDate) + ' ' + tzAbbr;
+        }
+        
+        timestampElem.textContent = formattedTime;
+    } catch (error) {
+        console.error('[OutageBanner] Error formatting timestamp:', error);
+        timestampElem.textContent = 'unknown time';
+    }
+}
+
 // Track fetching state for visual indicators
 let isFetchingWeather = false;
 
@@ -1702,6 +2163,7 @@ async function fetchWeather(forceRefresh = false) {
             updateWindVisual(data.weather);
             weatherLastUpdated = serverTimestamp || new Date();
             updateWeatherTimestamp(); // Update the timestamp
+            checkAndUpdateOutageBanner(); // Check if outage banner should be shown/hidden
             
             // If server indicates data is stale, schedule a fresh fetch soon (30 seconds)
             if (isStale) {
@@ -2156,6 +2618,9 @@ function updateWebcamTimestamps() {
         }
     }
     <?php endforeach; ?>
+    
+    // Check outage banner after webcam timestamp updates
+    checkAndUpdateOutageBanner();
 }
 
 // Function to reload webcam images with cache busting
@@ -2239,6 +2704,19 @@ function updateTimestampDisplay(elem, timestamp) {
     
     // Format relative time
     const relativeTime = formatRelativeTime(diffSeconds);
+    
+    // Check if webcam is stale (exceeds MAX_STALE_HOURS) and show warning emoji
+    const maxStaleSeconds = MAX_STALE_HOURS * SECONDS_PER_HOUR;
+    const isStale = diffSeconds >= maxStaleSeconds;
+    
+    // Show/hide warning emoji for webcam timestamps
+    const camIndex = lastCamIndexForElem(elem);
+    if (camIndex !== undefined) {
+        const warningElem = document.getElementById(`webcam-timestamp-warning-${camIndex}`);
+        if (warningElem) {
+            warningElem.style.display = isStale ? 'inline' : 'none';
+        }
+    }
     
     // Only show actual time if relative time is >= 1 hour
     if (diffSeconds >= 3600) {
@@ -2466,6 +2944,18 @@ setInterval(() => {
 
 updateWeatherTimestamp();
 setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds
+
+// Initialize and update outage banner
+if (document.getElementById('data-outage-banner')) {
+    // Initial update
+    updateOutageBannerTimestamp();
+    checkAndUpdateOutageBanner();
+    
+    // Update timestamp display periodically
+    setInterval(updateOutageBannerTimestamp, 60000); // Update every minute
+    // Check outage status periodically (every 30 seconds) to show/hide banner as data recovers
+    setInterval(checkAndUpdateOutageBanner, 30000);
+}
 
 <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
 // Batched timestamp refresh for all webcams (debounced to reduce requests)
