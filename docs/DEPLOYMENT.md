@@ -328,8 +328,10 @@ docker compose -f docker/docker-compose.prod.yml logs -f
 
 ```bash
 # Test from server
-curl -I http://localhost:8080
-curl -I https://aviationwx.org
+# Note: Port 8080 is internal (Apache behind nginx proxy)
+# External access should go through nginx on port 80/443
+curl -I http://localhost:8080  # Internal Apache check
+curl -I https://aviationwx.org  # External access via nginx
 
 # Test airport subdomain
 curl -I https://kspb.aviationwx.org  # Replace with your airport code
