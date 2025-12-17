@@ -734,7 +734,7 @@ jobs:
           # Pass Cloudflare token via stdin and email as command argument
           printf '%s\n' "${{ secrets.CLOUDFLARE_API_TOKEN }}" | \
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'bash -s' -- "${{ secrets.LETSENCRYPT_EMAIL }}" << 'CERT_SCRIPT'
-          set -euo pipefail
+          set -eo pipefail
           cd ~/aviationwx
           # Verify we're running as the correct user
           CURRENT_USER=$(whoami)
@@ -743,7 +743,11 @@ jobs:
           # Read Cloudflare token from stdin (passed via SSH pipe) and email from command argument
           # These are needed for both renewal and generation
           read -r CLOUDFLARE_TOKEN
+          # Capture email argument before enabling -u flag to avoid unbound variable errors
           LETSENCRYPT_EMAIL="${1:-}"
+          
+          # Re-enable strict mode now that we've captured arguments
+          set -euo pipefail
           
           # Validate Cloudflare token is provided
           if [ -z "${CLOUDFLARE_TOKEN:-}" ] || [ "$CLOUDFLARE_TOKEN" = "" ]; then
