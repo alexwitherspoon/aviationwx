@@ -28,6 +28,22 @@ body {
     z-index: 1000;
 }
 
+/* Data Outage Banner */
+.data-outage-banner {
+    background-color: #dc3545;
+    color: white;
+    padding: 12px 20px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1000;
+    line-height: 1.5;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
