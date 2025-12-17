@@ -503,6 +503,68 @@ SYNC_PID=$!
 # Don't wait for sync to complete - Apache can start immediately
 # The sync will complete in background, and if it fails, it will retry on next startup
 
+# Configure Apache port and bind address based on environment
+# Production (APP_ENV=production): Listen on 127.0.0.1:8080 (internal, behind nginx)
+# Local/CI: Listen on 0.0.0.0:80 (bridge networking with port mapping)
+if [ "${APP_ENV:-}" = "production" ]; then
+    echo "Configuring Apache for production (127.0.0.1:8080)..."
+    # Configure Apache to listen on 127.0.0.1:8080 (localhost only, not 0.0.0.0)
+    # This ensures port 8080 is only accessible from localhost (nginx can proxy)
+    # Try exact match first, then fallback to more specific pattern
+    if grep -q "^Listen 80$" /etc/apache2/ports.conf 2>/dev/null; then
+        sed -i 's/^Listen 80$/Listen 127.0.0.1:8080/' /etc/apache2/ports.conf
+    elif grep -q "^Listen " /etc/apache2/ports.conf 2>/dev/null; then
+        # Only replace the first Listen directive (default one)
+        sed -i '0,/^Listen /s/^Listen .*/Listen 127.0.0.1:8080/' /etc/apache2/ports.conf
+    else
+        echo "Listen 127.0.0.1:8080" >> /etc/apache2/ports.conf
+    fi
+    
+    # Configure VirtualHost - try exact match first
+    if grep -q "<VirtualHost \*:80>" /etc/apache2/sites-available/000-default.conf 2>/dev/null; then
+        sed -i 's/<VirtualHost \*:80>/<VirtualHost 127.0.0.1:8080>/' /etc/apache2/sites-available/000-default.conf
+    elif grep -q "<VirtualHost \*:" /etc/apache2/sites-available/000-default.conf 2>/dev/null; then
+        # Only replace the first VirtualHost directive (default one)
+        sed -i '0,/<VirtualHost \*:/s/<VirtualHost \*:[0-9]*>/<VirtualHost 127.0.0.1:8080>/' /etc/apache2/sites-available/000-default.conf
+    fi
+    
+    # Validate configuration
+    if apache2ctl configtest > /dev/null 2>&1; then
+        echo "✓ Apache configured for production (127.0.0.1:8080)"
+    else
+        echo "⚠️  Warning: Apache configuration test failed, but continuing..."
+        apache2ctl configtest 2>&1 | head -5 || true
+    fi
+else
+    echo "Configuring Apache for local/CI (0.0.0.0:80)..."
+    # Ensure Apache listens on 0.0.0.0:80 for bridge networking
+    # Try exact match first (from production config)
+    if grep -q "^Listen 127\.0\.0\.1:8080$" /etc/apache2/ports.conf 2>/dev/null; then
+        sed -i 's/^Listen 127\.0\.0\.1:8080$/Listen 80/' /etc/apache2/ports.conf
+    elif grep -q "^Listen " /etc/apache2/ports.conf 2>/dev/null; then
+        # Only replace the first Listen directive
+        sed -i '0,/^Listen /s/^Listen .*/Listen 80/' /etc/apache2/ports.conf
+    else
+        echo "Listen 80" >> /etc/apache2/ports.conf
+    fi
+    
+    # Configure VirtualHost - try exact match first (from production config)
+    if grep -q "<VirtualHost 127\.0\.0\.1:8080>" /etc/apache2/sites-available/000-default.conf 2>/dev/null; then
+        sed -i 's/<VirtualHost 127\.0\.0\.1:8080>/<VirtualHost *:80>/' /etc/apache2/sites-available/000-default.conf
+    elif grep -q "<VirtualHost \*:" /etc/apache2/sites-available/000-default.conf 2>/dev/null; then
+        # Only replace the first VirtualHost directive
+        sed -i '0,/<VirtualHost \*:/s/<VirtualHost \*:[0-9]*>/<VirtualHost *:80>/' /etc/apache2/sites-available/000-default.conf
+    fi
+    
+    # Validate configuration
+    if apache2ctl configtest > /dev/null 2>&1; then
+        echo "✓ Apache configured for local/CI (0.0.0.0:80)"
+    else
+        echo "⚠️  Warning: Apache configuration test failed, but continuing..."
+        apache2ctl configtest 2>&1 | head -5 || true
+    fi
+fi
+
 # Execute Apache entrypoint (starts Apache in foreground)
 # Use docker-php-entrypoint if available, otherwise call apache2-foreground directly
 if command -v docker-php-entrypoint >/dev/null 2>&1; then
