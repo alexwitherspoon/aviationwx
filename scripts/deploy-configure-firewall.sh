@@ -18,6 +18,11 @@ PORTS=(
     "4500:udp:IPsec NAT-T (VPN)"
 )
 
+# Ports to explicitly deny (internal services that should not be publicly accessible)
+DENY_PORTS=(
+    "8080:tcp:Apache (internal, behind nginx - should only be accessible from localhost)"
+)
+
 echo "Configuring firewall ports for production services..."
 echo ""
 
@@ -76,6 +81,26 @@ for port_config in "${PORTS[@]}"; do
             $SUDO ufw allow ${port}/${protocol} comment "${description}"
             echo "✓ Port ${port}/${protocol} added"
         fi
+    fi
+done
+
+# Configure ports to deny (internal services)
+echo ""
+echo "Configuring firewall to deny internal ports from external access..."
+for deny_config in "${DENY_PORTS[@]}"; do
+    # Split by colon
+    IFS=':' read -ra parts <<< "$deny_config"
+    port="${parts[0]}"
+    protocol="${parts[1]}"
+    description="${parts[2]}"
+    
+    # Check if deny rule already exists
+    if $SUDO ufw status | grep -qE "^${port}/${protocol}.*DENY"; then
+        echo "✓ Port ${port}/${protocol} (${description}) already denied"
+    else
+        echo "Denying port ${port}/${protocol} (${description})..."
+        $SUDO ufw deny ${port}/${protocol} comment "${description}"
+        echo "✓ Port ${port}/${protocol} denied"
     fi
 done
 
