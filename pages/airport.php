@@ -613,7 +613,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         </button>
                     </div>
                 </div>
-                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-last-updated">--</span></p>
+                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
             </div>
             <div id="weather-data" class="weather-grid">
                 <div class="weather-item loading">
@@ -631,7 +631,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         <span id="wind-speed-unit-display">kts</span>
                     </button>
                 </div>
-                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-last-updated">--</span></p>
+                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="wind-last-updated">--</span></p>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: center;">
                 <div id="wind-visual" class="wind-visual-container">
@@ -1520,7 +1520,7 @@ function formatAltitude(ft) {
 
 // Format rainfall (inches) based on current unit preference
 function formatRainfall(inches) {
-    if (inches === null || inches === undefined) return '0.00';
+    if (inches === null || inches === undefined) return '--';
     const unit = getDistanceUnit();
     if (unit === 'm') {
         return inToCm(inches);
@@ -1827,18 +1827,46 @@ function updateWeatherTimestamp() {
     const isStale = diffSeconds >= staleThresholdSeconds;
     const isVeryStale = diffSeconds >= veryStaleThresholdSeconds;
     
+    // Show/hide warning elements based on staleness
+    const weatherWarningEl = document.getElementById('weather-timestamp-warning');
+    const windWarningEl = document.getElementById('wind-timestamp-warning');
+    if (weatherWarningEl) {
+        weatherWarningEl.style.display = (isStale || isVeryStale) ? 'inline' : 'none';
+    }
+    if (windWarningEl) {
+        windWarningEl.style.display = (isStale || isVeryStale) ? 'inline' : 'none';
+    }
+    
+    // Format timestamp: show actual time with relative time in parentheses if >= 1 hour, otherwise relative time only
     let timeStr;
-    if (isVeryStale) {
-        if (isMetarOnly) {
-            timeStr = '⚠️ Over 2 hours stale - data may be outdated';
-        } else {
-            // For non-METAR sources, show the actual threshold time
-            const veryStaleTimeStr = formatRelativeTime(veryStaleThresholdSeconds);
-            timeStr = '⚠️ Over ' + veryStaleTimeStr + ' stale - data may be outdated';
+    if (diffSeconds < 0) {
+        timeStr = 'just now';
+    } else if (diffSeconds >= 3600) {
+        // Show actual time with relative time in parentheses (>= 1 hour)
+        try {
+            const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
+            const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
+            const timeFormat = getTimeFormat();
+            
+            const timeOptions = {
+                timeZone: timezone,
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: timeFormat === '12hr'
+            };
+            
+            const actualTime = weatherLastUpdated.toLocaleTimeString('en-US', timeOptions);
+            const relativeTime = formatRelativeTime(diffSeconds);
+            
+            // Zero-width space before parenthesis allows responsive wrapping
+            timeStr = `${actualTime}\u200B (${relativeTime})`;
+        } catch (error) {
+            console.error('[WeatherTimestamp] Error formatting timestamp:', error);
+            timeStr = formatRelativeTime(diffSeconds);
         }
-    } else if (isStale) {
-        timeStr = '⚠️ ' + formatRelativeTime(diffSeconds) + ' - refreshing...';
     } else {
+        // Show only relative time for recent updates (< 1 hour)
         timeStr = formatRelativeTime(diffSeconds);
     }
     
@@ -2347,9 +2375,24 @@ function displayWeather(weather) {
         <!-- Aviation Conditions (METAR-required data) -->
         ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '---'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
-            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
-            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null ? formatCeiling(weather.ceiling) : (weather.visibility !== null ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null || weather.visibility !== null) && (weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) ? formatTempTimestamp(weather.obs_time_metar || weather.obs_time || weather.last_updated_metar) : ''}</div>
+            ${(() => {
+                // Check if METAR data is actually available (has METAR timestamp)
+                const hasMetarData = (weather.obs_time_metar && weather.obs_time_metar > 0) || (weather.last_updated_metar && weather.last_updated_metar > 0);
+                if (!hasMetarData) {
+                    // METAR is unavailable - show all fields as '--'
+                    return `
+                    <div class="weather-item"><span class="label">Condition</span><span class="weather-value">--</span></div>
+                    <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">--</span></div>
+                    <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">--</span></div>
+                    `;
+                }
+                // METAR data is available - show values
+                return `
+                <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '--'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
+                <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null && weather.visibility !== undefined ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && weather.visibility !== undefined ? formatTempTimestamp(weather.obs_time_metar || weather.last_updated_metar) : ''}</div>
+                <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null && weather.ceiling !== undefined ? formatCeiling(weather.ceiling) : (weather.visibility !== null && weather.visibility !== undefined ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null && weather.ceiling !== undefined ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null && weather.ceiling !== undefined || (weather.visibility !== null && weather.visibility !== undefined)) ? formatTempTimestamp(weather.obs_time_metar || weather.last_updated_metar) : ''}</div>
+                `;
+            })()}
         </div>
         ` : ''}
         
@@ -2563,7 +2606,7 @@ function updateWindVisual(weather) {
     });
     
     // Draw wind only if speed > 0
-    const ws = weather.wind_speed || 0;
+    const ws = weather.wind_speed ?? null;
     const wd = weather.wind_direction;
     const isVariableWind = wd === 'VRB' || wd === 'vrb';
     const windDirNumeric = typeof wd === 'number' && wd > 0 ? wd : null;
@@ -2573,13 +2616,13 @@ function updateWindVisual(weather) {
     
     // Populate wind details section
     const windDetails = document.getElementById('wind-details');
-    const gustFactor = weather.gust_factor || 0;
+    const gustFactor = weather.gust_factor ?? null;
     
     const windUnitLabel = getWindSpeedUnitLabel();
     windDetails.innerHTML = `
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Speed:</span>
-            <span style="font-weight: bold;">${ws > 0 ? formatWindSpeed(ws) + ' ' + windUnitLabel : 'Calm'}</span>
+            <span style="font-weight: bold;">${ws === null || ws === undefined ? '--' : (ws > 0 ? formatWindSpeed(ws) + ' ' + windUnitLabel : 'Calm')}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Direction:</span>
@@ -2587,7 +2630,7 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Gust Factor:</span>
-            <span style="font-weight: bold;">${gustFactor > 0 ? formatWindSpeed(gustFactor) + ' ' + windUnitLabel : '0'}</span>
+            <span style="font-weight: bold;">${gustFactor === null || gustFactor === undefined ? '--' : (gustFactor > 0 ? formatWindSpeed(gustFactor) + ' ' + windUnitLabel : '0')}</span>
         </div>
         <div style="padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
@@ -2609,14 +2652,14 @@ function updateWindVisual(weather) {
         </div>
     `;
     
-    if (ws > 1 && !isVariableWind && windDirNumeric !== null) {
+    if (ws !== null && ws !== undefined && ws > 1 && !isVariableWind && windDirNumeric !== null) {
         // Store for animation (only if we have a valid numeric direction)
         windDirection = (windDirNumeric * Math.PI) / 180;
         windSpeed = ws;
         
         // Draw wind arrow
         drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
-    } else if (ws > 1 && isVariableWind) {
+    } else if (ws !== null && ws !== undefined && ws > 1 && isVariableWind) {
         // Variable wind - draw "VRB" text
         ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
