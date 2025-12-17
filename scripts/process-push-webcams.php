@@ -560,14 +560,17 @@ function generateWebp($cacheFile, $airportId, $camIndex) {
 /**
  * Clean up upload directory
  * 
- * Removes old files from upload directory, keeping only the specified file.
- * Validates directory exists and is writable before attempting cleanup.
+ * Removes old files from upload directory. Only deletes files with modification time
+ * older than or equal to the specified cutoff time. This prevents race conditions where
+ * new files might be deleted while still being uploaded.
  * 
  * @param string $uploadDir Upload directory path
- * @param string|null $keepFile File to keep (optional, all others deleted)
+ * @param string|null $keepFile File to keep by name (optional, legacy parameter)
+ * @param int|null $maxMtime Maximum modification time for files to delete (optional)
+ *                           Files with mtime > maxMtime will be preserved
  * @return void
  */
-function cleanupUploadDirectory($uploadDir, $keepFile = null) {
+function cleanupUploadDirectory($uploadDir, $keepFile = null, $maxMtime = null) {
     // Validate directory exists and is writable
     if (!is_dir($uploadDir)) {
         aviationwx_log('warning', 'cleanupUploadDirectory: directory does not exist', [
@@ -592,6 +595,8 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null) {
     }
     
     $keepBasename = $keepFile ? basename($keepFile) : null;
+    $deletedCount = 0;
+    $skippedCount = 0;
     
     foreach ($files as $file) {
         if (!is_file($file)) {
@@ -599,9 +604,28 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null) {
         }
         
         $basename = basename($file);
-        // Keep the processed file if specified
+        // Keep the processed file if specified (legacy behavior)
         if ($keepBasename && $basename === $keepBasename) {
             continue;
+        }
+        
+        // If maxMtime is specified, only delete files with mtime <= maxMtime
+        // This prevents deleting files that started uploading after processing began
+        if ($maxMtime !== null) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly by preserving files when mtime can't be read
+            $fileMtime = @filemtime($file);
+            if ($fileMtime !== false && $fileMtime > $maxMtime) {
+                // File is newer than processed file - skip deletion
+                $skippedCount++;
+                continue;
+            }
+            // If filemtime() returns false, we can't determine file age
+            // Conservatively preserve the file to avoid deleting files that might be new
+            if ($fileMtime === false) {
+                $skippedCount++;
+                continue;
+            }
         }
         
         // Delete file with error handling
@@ -611,7 +635,18 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null) {
                 'file' => $file,
                 'error' => $error['message'] ?? 'unknown'
             ], 'app');
+        } else {
+            $deletedCount++;
         }
+    }
+    
+    if ($deletedCount > 0 || $skippedCount > 0) {
+        aviationwx_log('debug', 'cleanupUploadDirectory: cleanup completed', [
+            'dir' => $uploadDir,
+            'deleted' => $deletedCount,
+            'skipped_newer' => $skippedCount,
+            'max_mtime' => $maxMtime
+        ], 'app');
     }
 }
 
@@ -682,12 +717,24 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         return false;
     }
     
+    // Capture processed file's modification time before moving it
+    // This ensures cleanup only deletes files older than or equal to the processed file
+    // Use @ to suppress errors for non-critical file operations
+    // We handle failures explicitly with fallback mechanism below
+    $processedFileMtime = @filemtime($newestFile);
+    if ($processedFileMtime === false) {
+        // Fallback to current time if mtime unavailable
+        // This is conservative - preserves files if we can't determine their age
+        $processedFileMtime = time();
+    }
+    
     // Move to cache
     $cacheFile = moveToCache($newestFile, $airportId, $camIndex);
     
     if ($cacheFile) {
-        // Clean up upload directory (delete all files)
-        cleanupUploadDirectory($uploadDir);
+        // Clean up upload directory (delete only files older than or equal to processed file)
+        // This prevents deleting files that started uploading after processing began
+        cleanupUploadDirectory($uploadDir, null, $processedFileMtime);
         
         // Update last processed time
         updateLastProcessedTime($airportId, $camIndex);
