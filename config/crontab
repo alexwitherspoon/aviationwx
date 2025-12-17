@@ -25,7 +25,8 @@ MAILTO=""
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php 2>&1
 
 # Let's Encrypt Certificate Renewal - Runs weekly (Sunday at 3 AM)
-# Renews SSL certificates for upload.aviationwx.org if they're expiring soon.
+# Renews wildcard SSL certificates (aviationwx.org, *.aviationwx.org) if they're expiring soon.
 # After renewal, enables SSL/TLS in vsftpd if certificates are available.
+# Note: This is a fallback mechanism. Primary renewal should be via systemd timer on host.
 # Errors are logged but don't fail the container (|| true).
-0 3 * * 0 root certbot renew --quiet --no-self-upgrade && /usr/local/bin/enable-vsftpd-ssl.sh || true
+0 3 * * 0 root certbot renew --quiet --no-self-upgrade --cert-name aviationwx.org && /usr/local/bin/enable-vsftpd-ssl.sh || true
