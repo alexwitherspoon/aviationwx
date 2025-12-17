@@ -942,6 +942,7 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
   - Username: From `push_config.username`
   - Password: From `push_config.password`
   - Directory: Automatically chrooted to the camera's upload directory
+  - **Note**: Upload files directly to `/` (the chroot root) - no subdirectory needed
 
 - **FTPS (Secure FTP with TLS/SSL)**:
   - Host: `upload.aviationwx.org`
@@ -950,7 +951,7 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
   - Password: From `push_config.password`
   - Encryption: TLS/SSL (negotiated via `AUTH SSL` or `AUTH TLS`)
   - Directory: Automatically chrooted to the camera's upload directory
-  - **Note**: FTPS and FTP share the same port (2121). The client negotiates encryption during connection.
+  - **Note**: FTPS and FTP share the same port (2121). The client negotiates encryption during connection. Upload files directly to `/` (the chroot root) - no subdirectory needed.
 
 - **FTP (Plain, unencrypted)**:
   - Host: `upload.aviationwx.org`
@@ -958,7 +959,7 @@ After configuration, the system automatically creates SFTP/FTP users. Cameras sh
   - Username: From `push_config.username`
   - Password: From `push_config.password`
   - Directory: Automatically chrooted to the camera's upload directory
-  - **Note**: Both FTP and FTPS work on port 2121. FTPS requires SSL certificates to be configured (see SSL Setup below).
+  - **Note**: Both FTP and FTPS work on port 2121. FTPS requires SSL certificates to be configured (see SSL Setup below). Upload files directly to `/` (the chroot root) - no subdirectory needed.
 
 #### Passive Mode Configuration
 
