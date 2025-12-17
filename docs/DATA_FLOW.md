@@ -348,6 +348,35 @@ The system tracks daily extremes that reset at local midnight:
 3. Recalculate flight category if visibility/ceiling were nulled
 4. Daily tracking values preserved (always valid for the day)
 
+### Source Timestamp Extraction
+
+**Purpose**: Centralized timestamp extraction for consistency across outage detection and status page
+
+**Function**: `getSourceTimestamps($airportId, $airport)` in `lib/weather/source-timestamps.php`
+
+**Extraction Logic**:
+- **Primary Weather**: Reads from `cache/weather_{airport_id}.json`
+  - Prefers `obs_time_primary`, falls back to `last_updated_primary`
+  - Returns timestamp, age, and availability status
+- **METAR**: Reads from same cache file
+  - Prefers `obs_time_metar`, falls back to `last_updated_metar`
+  - Detected if `metar_station` exists OR `weather_source.type === 'metar'`
+- **Webcams**: Checks each configured webcam
+  - Tries EXIF data first (via `getImageCaptureTimeForPage()`), falls back to `filemtime()`
+  - Returns newest timestamp, total count, and stale count
+  - Handles both JPG and WebP formats
+
+**Error Handling**:
+- Missing files: Returns timestamp 0, age PHP_INT_MAX
+- Corrupted JSON: Returns timestamp 0, age PHP_INT_MAX
+- Missing timestamps: Returns timestamp 0, age PHP_INT_MAX
+- All errors suppressed with `@` and documented rationale
+
+**Used By**:
+- `checkDataOutageStatus()` - Outage banner detection
+- `checkAirportHealth()` - Status page health checks
+- Ensures consistent timestamp extraction across both features
+
 ### Data Outage Detection
 
 **Purpose**: Warn users when all data sources are offline (complete site outage)
@@ -355,16 +384,36 @@ The system tracks daily extremes that reset at local midnight:
 **Outage Threshold**: 1.5 hours (configurable via `DATA_OUTAGE_BANNER_HOURS`)
 
 **Detection Logic**:
+- Uses shared `getSourceTimestamps()` function to extract timestamps from all configured sources
 - Checks all configured data sources (primary weather, METAR, webcams)
 - Banner appears only when **ALL** sources exceed the threshold
 - Banner shows newest timestamp among all stale sources to identify outage start time
 - Banner automatically hides when any source recovers
+
+**Outage State File Persistence**:
+- Creates `cache/outage_{airport_id}.json` when outage is first detected
+- Preserves original outage start time across brief recoveries (grace period: 1.5 hours)
+- Handles back-to-back outages as single continuous event
+- Automatically cleans up after full recovery (grace period expires)
+- Logs outage start and end events for operational visibility
+
+**Fallback Chain for Outage Start Time**:
+1. Existing outage state file (preserves original start time)
+2. Newest timestamp from stale sources (via `getSourceTimestamps()`)
+3. Webcam cache file modification times (if weather cache is lost)
+4. Current time (final fallback)
 
 **Display Behavior**:
 - Red banner at top of page (similar to maintenance banner)
 - Only shown when airport is **NOT** in maintenance mode
 - Message indicates data is stale and cannot be trusted
 - Includes newest data timestamp to help identify when outage started
+
+**Frontend Updates**:
+- Client-side checks every 30 seconds for immediate feedback
+- Server-side API checks every 2.5 minutes (`/api/outage-status.php`) to sync with backend state
+- Banner updates automatically when data recovers
+- Timestamp display updates every 60 seconds
 
 **Webcam Staleness Warning**:
 - Individual webcam timestamps show warning emoji (⚠️) when age exceeds `MAX_STALE_HOURS` (3 hours)

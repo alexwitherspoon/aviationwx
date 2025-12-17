@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/address-formatter.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
+require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 
@@ -73,172 +74,80 @@ function checkDataOutageStatus($airportId, $airport) {
     
     $outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
     $now = time();
+    
+    // Get timestamps from all configured sources using shared helper
+    $sourceTimestamps = getSourceTimestamps($airportId, $airport);
+    
+    // Build sources array and determine staleness
     $sources = [];
     $newestTimestamp = 0;
     
-    // Check primary weather source (if configured)
-    if (isset($airport['weather_source']) && !empty($airport['weather_source'])) {
-        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
-        if (file_exists($weatherCacheFile)) {
-            // Use @ to suppress errors for non-critical file operations
-            // We handle failures explicitly with fallback mechanisms below
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-            if (is_array($weatherData)) {
-                // Check primary source timestamp
-                $primaryTimestamp = 0;
-                if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
-                    $primaryTimestamp = (int)$weatherData['obs_time_primary'];
-                } elseif (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
-                    $primaryTimestamp = (int)$weatherData['last_updated_primary'];
-                }
-                
-                if ($primaryTimestamp > 0) {
-                    $age = $now - $primaryTimestamp;
-                    $sources['primary'] = [
-                        'timestamp' => $primaryTimestamp,
-                        'age' => $age,
-                        'stale' => $age >= $outageThresholdSeconds
-                    ];
-                    if ($primaryTimestamp > $newestTimestamp) {
-                        $newestTimestamp = $primaryTimestamp;
-                    }
-                } else {
-                    // No timestamp available - treat as stale
-                    $sources['primary'] = [
-                        'timestamp' => 0,
-                        'age' => PHP_INT_MAX,
-                        'stale' => true
-                    ];
-                }
-            } else {
-                // Cache file exists but invalid - treat as stale
-                $sources['primary'] = [
-                    'timestamp' => 0,
-                    'age' => PHP_INT_MAX,
-                    'stale' => true
-                ];
-            }
-        } else {
-            // No cache file - treat as stale
-            $sources['primary'] = [
-                'timestamp' => 0,
-                'age' => PHP_INT_MAX,
-                'stale' => true
-            ];
-        }
-    }
-    
-    // Check METAR source (if configured)
-    // METAR is configured if metar_station exists OR weather_source.type === 'metar'
-    $hasMetar = false;
-    if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-        $hasMetar = true;
-    } elseif (isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar') {
-        $hasMetar = true;
-    }
-    
-    if ($hasMetar) {
-        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
-        if (file_exists($weatherCacheFile)) {
-            // Use @ to suppress errors for non-critical file operations
-            // We handle failures explicitly with fallback mechanisms below
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-            if (is_array($weatherData)) {
-                // Check METAR source timestamp
-                $metarTimestamp = 0;
-                if (isset($weatherData['obs_time_metar']) && $weatherData['obs_time_metar'] > 0) {
-                    $metarTimestamp = (int)$weatherData['obs_time_metar'];
-                } elseif (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
-                    $metarTimestamp = (int)$weatherData['last_updated_metar'];
-                }
-                
-                if ($metarTimestamp > 0) {
-                    $age = $now - $metarTimestamp;
-                    $sources['metar'] = [
-                        'timestamp' => $metarTimestamp,
-                        'age' => $age,
-                        'stale' => $age >= $outageThresholdSeconds
-                    ];
-                    if ($metarTimestamp > $newestTimestamp) {
-                        $newestTimestamp = $metarTimestamp;
-                    }
-                } else {
-                    // No timestamp available - treat as stale
-                    $sources['metar'] = [
-                        'timestamp' => 0,
-                        'age' => PHP_INT_MAX,
-                        'stale' => true
-                    ];
-                }
-            } else {
-                // Cache file exists but invalid - treat as stale
-                $sources['metar'] = [
-                    'timestamp' => 0,
-                    'age' => PHP_INT_MAX,
-                    'stale' => true
-                ];
-            }
-        } else {
-            // No cache file - treat as stale
-            $sources['metar'] = [
-                'timestamp' => 0,
-                'age' => PHP_INT_MAX,
-                'stale' => true
-            ];
-        }
-    }
-    
-    // Check all webcams (if configured)
-    if (isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0) {
-        $webcamStaleCount = 0;
-        $webcamNewestTimestamp = 0;
+    // Check primary weather source
+    if ($sourceTimestamps['primary']['available']) {
+        $primaryTimestamp = $sourceTimestamps['primary']['timestamp'];
+        $primaryAge = $sourceTimestamps['primary']['age'];
+        $isStale = ($primaryTimestamp === 0) || ($primaryAge >= $outageThresholdSeconds);
         
-        foreach ($airport['webcams'] as $index => $cam) {
-            $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
-            $webcamTimestamp = 0;
-            
-            // Try to get timestamp from JPG or WebP file
-            foreach (['.jpg', '.webp'] as $ext) {
-                $filePath = $base . $ext;
-                if (file_exists($filePath)) {
-                    $webcamTimestamp = getImageCaptureTimeForPage($filePath);
-                    if ($webcamTimestamp > 0) {
-                        break;
-                    }
-                }
-            }
-            
-            if ($webcamTimestamp > 0) {
-                $age = $now - $webcamTimestamp;
-                $isStale = $age >= $outageThresholdSeconds;
-                
-                if ($isStale) {
-                    $webcamStaleCount++;
-                }
-                
-                if ($webcamTimestamp > $webcamNewestTimestamp) {
-                    $webcamNewestTimestamp = $webcamTimestamp;
-                }
-            } else {
-                // No webcam file or timestamp - treat as stale
-                $webcamStaleCount++;
-            }
+        $sources['primary'] = [
+            'timestamp' => $primaryTimestamp,
+            'age' => $primaryAge,
+            'stale' => $isStale
+        ];
+        
+        if ($primaryTimestamp > $newestTimestamp) {
+            $newestTimestamp = $primaryTimestamp;
+        }
+    }
+    
+    // Check METAR source
+    if ($sourceTimestamps['metar']['available']) {
+        $metarTimestamp = $sourceTimestamps['metar']['timestamp'];
+        $metarAge = $sourceTimestamps['metar']['age'];
+        $isStale = ($metarTimestamp === 0) || ($metarAge >= $outageThresholdSeconds);
+        
+        $sources['metar'] = [
+            'timestamp' => $metarTimestamp,
+            'age' => $metarAge,
+            'stale' => $isStale
+        ];
+        
+        if ($metarTimestamp > $newestTimestamp) {
+            $newestTimestamp = $metarTimestamp;
+        }
+    }
+    
+    // Check webcams
+    if ($sourceTimestamps['webcams']['available']) {
+        $webcamNewestTimestamp = $sourceTimestamps['webcams']['newest_timestamp'];
+        $webcamStaleCount = $sourceTimestamps['webcams']['stale_count'];
+        $webcamTotal = $sourceTimestamps['webcams']['total'];
+        
+        // Determine if all webcams are stale
+        // A webcam is stale if it has no timestamp OR its age exceeds threshold
+        $allWebcamsStale = false;
+        if ($webcamStaleCount === $webcamTotal) {
+            // All webcams are missing or have no timestamp - all are stale
+            $allWebcamsStale = true;
+        } elseif ($webcamNewestTimestamp > 0) {
+            // Check if newest timestamp is stale
+            $webcamAge = $now - $webcamNewestTimestamp;
+            $allWebcamsStale = ($webcamAge >= $outageThresholdSeconds);
+        } else {
+            // No timestamps available but some webcams exist - treat as stale
+            $allWebcamsStale = true;
         }
         
-        // All webcams must be stale for outage condition
-        $allWebcamsStale = ($webcamStaleCount === count($airport['webcams']));
+        $sources['webcams'] = [
+            'stale' => $allWebcamsStale,
+            'total' => $webcamTotal,
+            'stale_count' => $webcamStaleCount
+        ];
         
         if ($allWebcamsStale && $webcamNewestTimestamp > 0) {
             if ($webcamNewestTimestamp > $newestTimestamp) {
                 $newestTimestamp = $webcamNewestTimestamp;
             }
         }
-        
-        $sources['webcams'] = [
-            'stale' => $allWebcamsStale,
-            'total' => count($airport['webcams']),
-            'stale_count' => $webcamStaleCount
-        ];
     }
     
     // Check if ALL configured sources are stale
@@ -1954,8 +1863,63 @@ function updateWeatherTimestamp() {
 }
 
 /**
+ * Fetch outage status from server and update banner
+ * Called periodically to sync with server state
+ */
+async function fetchOutageStatus() {
+    const banner = document.getElementById('data-outage-banner');
+    if (!banner && !AIRPORT_ID) {
+        return; // No banner and no airport ID
+    }
+    
+    try {
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        const url = `${baseUrl}/api/outage-status.php?airport=${AIRPORT_ID}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            console.warn('[OutageBanner] Failed to fetch outage status:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.warn('[OutageBanner] Server returned error:', data.error);
+            return;
+        }
+        
+        // Update banner based on server state
+        if (data.in_outage && data.newest_timestamp > 0) {
+            // Show banner if it exists, or create it if needed
+            if (banner) {
+                banner.style.display = 'block';
+                banner.dataset.newestTimestamp = data.newest_timestamp.toString();
+                updateOutageBannerTimestamp();
+            }
+        } else {
+            // Hide banner if server says no outage
+            if (banner) {
+                banner.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.warn('[OutageBanner] Error fetching outage status:', error);
+        // Silently fail - client-side checks will continue
+    }
+}
+
+/**
  * Check if all configured data sources are stale and update outage banner
  * Called after weather data updates and webcam updates
+ * Uses client-side data for immediate feedback
  */
 function checkAndUpdateOutageBanner() {
     const banner = document.getElementById('data-outage-banner');
@@ -2915,6 +2879,11 @@ function initializeWebcamTimestampsAndStartUpdates() {
     // Update relative timestamps every 10 seconds for better responsiveness
     updateWebcamTimestamps();
     setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
+    
+    // Check outage banner after webcam timestamp updates
+    if (typeof checkAndUpdateOutageBanner === 'function') {
+        checkAndUpdateOutageBanner();
+    }
 }
 
 if (document.readyState === 'loading') {
@@ -3063,6 +3032,16 @@ if (document.getElementById('data-outage-banner')) {
     setInterval(updateOutageBannerTimestamp, 60000); // Update every minute
     // Check outage status periodically (every 30 seconds) to show/hide banner as data recovers
     setInterval(checkAndUpdateOutageBanner, 30000);
+    
+    // Fetch outage status from server periodically (every 2.5 minutes) to sync with backend state
+    // This ensures banner reflects server-side outage detection and state file persistence
+    fetchOutageStatus(); // Initial fetch
+    setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
+} else if (AIRPORT_ID) {
+    // Banner doesn't exist yet, but check server periodically in case outage starts
+    // This handles cases where outage begins after page load
+    fetchOutageStatus(); // Initial fetch
+    setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
 }
 
 <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>

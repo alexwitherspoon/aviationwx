@@ -8,6 +8,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 
 // VPN routing is optional - only required if VPN features are used
 // The checkVpnStatus function below doesn't actually use any functions from vpn-routing.php
@@ -425,19 +426,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
     ];
     
     // Check weather sources - per-source status
-    // Cache is at root level, not in pages directory
-    $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
-    $weatherCacheExists = file_exists($weatherCacheFile);
-    $weatherData = null;
-    
-    if ($weatherCacheExists) {
-        // Use @ to suppress errors for non-critical file operations
-        // We handle failures explicitly with fallback mechanisms below
-        $weatherData = @json_decode(file_get_contents($weatherCacheFile), true);
-        if (!is_array($weatherData)) {
-            $weatherData = null; // Treat as missing if corrupted
-        }
-    }
+    // Use shared helper to get timestamps
+    $sourceTimestamps = getSourceTimestamps($airportId, $airport);
     
     $weatherRefresh = isset($airport['weather_refresh_seconds']) 
         ? intval($airport['weather_refresh_seconds']) 
@@ -461,57 +451,51 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     // Check primary weather source
     $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
-    if ($sourceType) {
+    if ($sourceType && $sourceTimestamps['primary']['available']) {
         $sourceName = $getSourceName($sourceType);
         $primaryStatus = 'down';
         $primaryMessage = 'No data available';
-        $primaryLastChanged = 0;
+        $primaryLastChanged = $sourceTimestamps['primary']['timestamp'];
         
-        if ($weatherData !== null) {
-            // Check primary source timestamps
-            $primaryTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? null;
+        if ($primaryLastChanged > 0) {
+            $primaryAge = $sourceTimestamps['primary']['age'];
             
-            if ($primaryTimestamp && $primaryTimestamp > 0) {
-                $primaryAge = time() - $primaryTimestamp;
-                $primaryLastChanged = $primaryTimestamp;
-                
-                // METAR uses hourly thresholds (not multipliers) since updates are hourly at source
-                if ($sourceType === 'metar') {
-                    // Use METAR-specific thresholds (same as supplement METAR logic)
-                    if ($primaryAge < $weatherRefresh) {
-                        $primaryStatus = 'operational';
-                        $primaryMessage = 'Fresh';
-                    } elseif ($primaryAge < $maxStaleSecondsMetar) {
-                        $primaryStatus = 'operational';
-                        $primaryMessage = 'Recent';
-                    } elseif ($primaryAge < $maxStaleSeconds) {
-                        $primaryStatus = 'degraded';
-                        $primaryMessage = 'Stale (but usable)';
-                    } else {
-                        $primaryStatus = 'down';
-                        $primaryMessage = 'Expired';
-                    }
+            // METAR uses hourly thresholds (not multipliers) since updates are hourly at source
+            if ($sourceType === 'metar') {
+                // Use METAR-specific thresholds (same as supplement METAR logic)
+                if ($primaryAge < $weatherRefresh) {
+                    $primaryStatus = 'operational';
+                    $primaryMessage = 'Fresh';
+                } elseif ($primaryAge < $maxStaleSecondsMetar) {
+                    $primaryStatus = 'operational';
+                    $primaryMessage = 'Recent';
+                } elseif ($primaryAge < $maxStaleSeconds) {
+                    $primaryStatus = 'degraded';
+                    $primaryMessage = 'Stale (but usable)';
                 } else {
-                    // Use multiplier-based thresholds for non-METAR sources (Tempest, Ambient, WeatherLink)
-                    // Operational from 0 to 5x refresh interval, degraded from 5x to 10x, down after 10x
-                    $warningThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
-                    $errorThreshold = $weatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER;
-                    
-                    if ($primaryAge < $warningThreshold) {
-                        $primaryStatus = 'operational';
-                        $primaryMessage = 'Operational';
-                    } elseif ($primaryAge < min($errorThreshold, $maxStaleSeconds)) {
-                        $primaryStatus = 'degraded';
-                        $primaryMessage = 'Stale (warning)';
-                    } else {
-                        $primaryStatus = 'down';
-                        $primaryMessage = ($primaryAge >= $maxStaleSeconds) ? 'Expired' : 'Stale (error)';
-                    }
+                    $primaryStatus = 'down';
+                    $primaryMessage = 'Expired';
                 }
             } else {
-                $primaryStatus = 'down';
-                $primaryMessage = 'No timestamp available';
+                // Use multiplier-based thresholds for non-METAR sources (Tempest, Ambient, WeatherLink)
+                // Operational from 0 to 5x refresh interval, degraded from 5x to 10x, down after 10x
+                $warningThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+                $errorThreshold = $weatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER;
+                
+                if ($primaryAge < $warningThreshold) {
+                    $primaryStatus = 'operational';
+                    $primaryMessage = 'Operational';
+                } elseif ($primaryAge < min($errorThreshold, $maxStaleSeconds)) {
+                    $primaryStatus = 'degraded';
+                    $primaryMessage = 'Stale (warning)';
+                } else {
+                    $primaryStatus = 'down';
+                    $primaryMessage = ($primaryAge >= $maxStaleSeconds) ? 'Expired' : 'Stale (error)';
+                }
             }
+        } else {
+            $primaryStatus = 'down';
+            $primaryMessage = 'No timestamp available';
         }
         
         $weatherSources[] = [
@@ -532,40 +516,34 @@ function checkAirportHealth(string $airportId, array $airport): array {
     // 2. It's configured as supplement (metar_station set and primary is not metar)
     if ($isMetarPrimary) {
         // Already added above, skip
-    } elseif ($isMetarEnabled) {
+    } elseif ($isMetarEnabled && $sourceTimestamps['metar']['available']) {
         $metarStatus = 'down';
         $metarMessage = 'No data available';
-        $metarLastChanged = 0;
+        $metarLastChanged = $sourceTimestamps['metar']['timestamp'];
         
-        if ($weatherData !== null) {
-            // Check METAR source timestamps
-            $metarTimestamp = $weatherData['obs_time_metar'] ?? $weatherData['last_updated_metar'] ?? null;
+        if ($metarLastChanged > 0) {
+            $metarAge = $sourceTimestamps['metar']['age'];
             
-            if ($metarTimestamp && $metarTimestamp > 0) {
-                $metarAge = time() - $metarTimestamp;
-                $metarLastChanged = $metarTimestamp;
-                
-                // METAR status thresholds:
-                // - Operational until 2 hours (WEATHER_STALENESS_ERROR_HOURS_METAR)
-                // - Degraded from 2-3 hours (between WEATHER_STALENESS_ERROR_HOURS_METAR and MAX_STALE_HOURS)
-                // - Down after 3 hours (MAX_STALE_HOURS)
-                if ($metarAge < $weatherRefresh) {
-                    $metarStatus = 'operational';
-                    $metarMessage = 'Fresh';
-                } elseif ($metarAge < $maxStaleSecondsMetar) {
-                    $metarStatus = 'operational';
-                    $metarMessage = 'Recent';
-                } elseif ($metarAge < $maxStaleSeconds) {
-                    $metarStatus = 'degraded';
-                    $metarMessage = 'Stale (but usable)';
-                } else {
-                    $metarStatus = 'down';
-                    $metarMessage = 'Expired';
-                }
+            // METAR status thresholds:
+            // - Operational until 2 hours (WEATHER_STALENESS_ERROR_HOURS_METAR)
+            // - Degraded from 2-3 hours (between WEATHER_STALENESS_ERROR_HOURS_METAR and MAX_STALE_HOURS)
+            // - Down after 3 hours (MAX_STALE_HOURS)
+            if ($metarAge < $weatherRefresh) {
+                $metarStatus = 'operational';
+                $metarMessage = 'Fresh';
+            } elseif ($metarAge < $maxStaleSecondsMetar) {
+                $metarStatus = 'operational';
+                $metarMessage = 'Recent';
+            } elseif ($metarAge < $maxStaleSeconds) {
+                $metarStatus = 'degraded';
+                $metarMessage = 'Stale (but usable)';
             } else {
                 $metarStatus = 'down';
-                $metarMessage = 'No timestamp available';
+                $metarMessage = 'Expired';
             }
+        } else {
+            $metarStatus = 'down';
+            $metarMessage = 'No timestamp available';
         }
         
         $weatherSources[] = [
@@ -585,8 +563,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     }
     
     // Check webcam caches - per-camera status
-    // Cache is at root level, not in pages directory
-    // Use same path resolution as webcam API
+    // Use shared helper for timestamps, but we still need per-camera status
     $webcamCacheDir = __DIR__ . '/../cache/webcams';
     $webcamCacheDirResolved = @realpath($webcamCacheDir) ?: $webcamCacheDir;
     $webcams = $airport['webcams'] ?? [];

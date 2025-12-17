@@ -297,5 +297,90 @@ test.describe('Data Outage Banner', () => {
     // Warning should now be hidden
     await expect(warningElem).not.toBeVisible({ timeout: 2000 });
   });
+
+  test('should fetch outage status from API endpoint', async ({ page }) => {
+    // Wait for page to load
+    await page.waitForLoadState('networkidle');
+    
+    // Intercept API calls to verify endpoint is called
+    let apiCalled = false;
+    await page.route('**/api/outage-status.php*', async (route) => {
+      apiCalled = true;
+      // Return mock response indicating no outage
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          in_outage: false,
+          newest_timestamp: 0,
+          sources: {}
+        })
+      });
+    });
+    
+    // Trigger API call manually
+    await page.evaluate(() => {
+      if (typeof fetchOutageStatus === 'function') {
+        fetchOutageStatus();
+      }
+    });
+    
+    // Wait a moment for the API call
+    await page.waitForTimeout(1000);
+    
+    // Verify API was called
+    expect(apiCalled).toBe(true);
+  });
+
+  test('should update banner based on API response', async ({ page }) => {
+    // Wait for page to load
+    await page.waitForLoadState('networkidle');
+    
+    // First, set up banner to exist (simulate outage state)
+    await page.evaluate(() => {
+      // Create banner if it doesn't exist
+      let banner = document.getElementById('data-outage-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'data-outage-banner';
+        banner.className = 'data-outage-banner';
+        banner.style.display = 'block';
+        banner.innerHTML = '⚠️ Data Outage Detected: All local data sources are currently offline due to a local outage. The latest information shown is from <span id="outage-newest-time">--</span>. Data will automatically update once the local site is back online.';
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
+    });
+    
+    // Intercept API call and return recovery response
+    await page.route('**/api/outage-status.php*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          in_outage: false,
+          newest_timestamp: 0,
+          sources: {
+            primary: { timestamp: Math.floor(Date.now() / 1000) - 60, stale: false }
+          }
+        })
+      });
+    });
+    
+    // Trigger API call
+    await page.evaluate(() => {
+      if (typeof fetchOutageStatus === 'function') {
+        fetchOutageStatus();
+      }
+    });
+    
+    // Wait for banner to be hidden
+    await page.waitForTimeout(1000);
+    
+    // Verify banner is hidden
+    const banner = page.locator('#data-outage-banner');
+    const display = await banner.evaluate((el) => window.getComputedStyle(el).display);
+    expect(display).toBe('none');
+  });
 });
 
