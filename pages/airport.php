@@ -3023,25 +3023,36 @@ updateWeatherTimestamp();
 setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds
 
 // Initialize and update outage banner
-if (document.getElementById('data-outage-banner')) {
-    // Initial update
-    updateOutageBannerTimestamp();
-    checkAndUpdateOutageBanner();
-    
-    // Update timestamp display periodically
-    setInterval(updateOutageBannerTimestamp, 60000); // Update every minute
-    // Check outage status periodically (every 30 seconds) to show/hide banner as data recovers
-    setInterval(checkAndUpdateOutageBanner, 30000);
-    
-    // Fetch outage status from server periodically (every 2.5 minutes) to sync with backend state
-    // This ensures banner reflects server-side outage detection and state file persistence
-    fetchOutageStatus(); // Initial fetch
-    setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
-} else if (AIRPORT_ID) {
-    // Banner doesn't exist yet, but check server periodically in case outage starts
-    // This handles cases where outage begins after page load
-    fetchOutageStatus(); // Initial fetch
-    setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
+function initializeOutageBanner() {
+    const banner = document.getElementById('data-outage-banner');
+    if (banner) {
+        // Initial update - read from data attribute set by server
+        updateOutageBannerTimestamp();
+        checkAndUpdateOutageBanner();
+        
+        // Update timestamp display periodically
+        setInterval(updateOutageBannerTimestamp, 60000); // Update every minute
+        // Check outage status periodically (every 30 seconds) to show/hide banner as data recovers
+        setInterval(checkAndUpdateOutageBanner, 30000);
+        
+        // Fetch outage status from server periodically (every 2.5 minutes) to sync with backend state
+        // This ensures banner reflects server-side outage detection and state file persistence
+        fetchOutageStatus(); // Initial fetch
+        setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
+    } else if (AIRPORT_ID) {
+        // Banner doesn't exist yet, but check server periodically in case outage starts
+        // This handles cases where outage begins after page load
+        fetchOutageStatus(); // Initial fetch
+        setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
+    }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeOutageBanner);
+} else {
+    // DOM already loaded
+    initializeOutageBanner();
 }
 
 <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
