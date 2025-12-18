@@ -1521,11 +1521,36 @@ function validateAirportsJsonStructure(array $config): array {
                strpos($url, 'rtsps://') === 0;
     };
     
-    $validateIcaoFormat = function($icao) {
-        if (!is_string($icao)) {
+    // Helper to validate METAR station - must be a valid ICAO code
+    // Valid formats:
+    //   - Standard ICAO: 4 uppercase letters (e.g., KSEA, EGLL, CYYZ)
+    //   - US pseudo-ICAO: K + 3 alphanumeric (e.g., K56S, K03S) for small US airports
+    $validateMetarStation = function($station, $airportCode) use (&$errors) {
+        if (!is_string($station) || empty($station)) {
             return false;
         }
-        return preg_match('/^[A-Z]{3,4}$/', $icao) === 1;
+        
+        $station = strtoupper(trim($station));
+        
+        // Standard ICAO: exactly 4 uppercase letters
+        $isStandardIcao = preg_match('/^[A-Z]{4}$/', $station) === 1;
+        // US pseudo-ICAO: K prefix + 3 alphanumeric (for small US airports like K56S)
+        $isUsPseudoIcao = preg_match('/^K[A-Z0-9]{3}$/', $station) === 1;
+        
+        if (!$isStandardIcao && !$isUsPseudoIcao) {
+            $detectedType = detectIdentifierType($station);
+            
+            if ($detectedType === 'iata') {
+                $errors[] = "Airport '{$airportCode}' has invalid metar_station: '{$station}' is an IATA code (3 letters). METAR stations require ICAO codes (e.g., KSEA)";
+            } elseif (strlen($station) === 3 && preg_match('/^[A-Z0-9]{3}$/', $station)) {
+                $errors[] = "Airport '{$airportCode}' has invalid metar_station: '{$station}' appears to be an FAA identifier. Use the ICAO equivalent (e.g., K{$station} for US airports)";
+            } else {
+                $errors[] = "Airport '{$airportCode}' has invalid metar_station: '{$station}' is not a valid ICAO code (must be 4 letters, or K + 3 alphanumeric for US)";
+            }
+            return false;
+        }
+        
+        return true;
     };
     
     // Track identifiers for uniqueness checks (case-insensitive)
@@ -1657,9 +1682,9 @@ function validateAirportsJsonStructure(array $config): array {
             }
         }
         
-        // Validate METAR station
-        if (isset($airport['metar_station']) && !$validateIcaoFormat($airport['metar_station'])) {
-            $errors[] = "Airport '{$airportCode}' has invalid metar_station: '{$airport['metar_station']}' (must be 3-4 uppercase letters)";
+        // Validate METAR station (must be valid ICAO code)
+        if (isset($airport['metar_station'])) {
+            $validateMetarStation($airport['metar_station'], $airportCode);
         }
         
         // Validate runways
