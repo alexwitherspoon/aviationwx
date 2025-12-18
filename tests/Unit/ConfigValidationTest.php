@@ -2169,5 +2169,225 @@ class ConfigValidationTest extends TestCase
         $this->assertFalse($result['valid'], 'Global config with invalid default_timezone should fail validation');
         $this->assertStringContainsString('default_timezone must be a string', implode(' ', $result['errors']));
     }
+
+    /**
+     * Test metar_station validation - Valid ICAO codes
+     * 
+     * METAR stations must be 4-character ICAO codes:
+     * - Standard ICAO: 4 uppercase letters (e.g., KSEA, EGLL)
+     * - US pseudo-ICAO: K + 3 alphanumeric (e.g., K56S for small US airports)
+     */
+    public function testMetarStation_ValidStandardIcao()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'KSEA'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Standard 4-letter ICAO code should pass validation');
+    }
+
+    public function testMetarStation_ValidInternationalIcao()
+    {
+        $config = [
+            'airports' => [
+                'egll' => [
+                    'name' => 'London Heathrow',
+                    'lat' => 51.47,
+                    'lon' => -0.46,
+                    'metar_station' => 'EGLL'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'International 4-letter ICAO code should pass validation');
+    }
+
+    public function testMetarStation_ValidUsPseudoIcao()
+    {
+        $config = [
+            'airports' => [
+                'k56s' => [
+                    'name' => 'Seaside Municipal Airport',
+                    'lat' => 46.0,
+                    'lon' => -123.9,
+                    'metar_station' => 'K56S'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'US pseudo-ICAO code (K + alphanumeric) should pass validation');
+    }
+
+    public function testMetarStation_ValidUsPseudoIcaoStartingWithNumber()
+    {
+        $config = [
+            'airports' => [
+                'k03s' => [
+                    'name' => 'Small Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'K03S'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'US pseudo-ICAO code starting with number should pass validation');
+    }
+
+    /**
+     * Test metar_station validation - Invalid codes
+     */
+    public function testMetarStation_InvalidFaaIdentifier()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => '56S'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'FAA identifier without K prefix should fail validation');
+        $this->assertStringContainsString('FAA identifier', implode(' ', $result['errors']));
+        $this->assertStringContainsString('K56S', implode(' ', $result['errors']));
+    }
+
+    public function testMetarStation_InvalidIataCode()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'SEA'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'IATA code (3 letters) should fail validation');
+        $this->assertStringContainsString('IATA code', implode(' ', $result['errors']));
+    }
+
+    public function testMetarStation_InvalidTooShort()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'KS'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], '2-character code should fail validation');
+        $this->assertStringContainsString('not a valid ICAO code', implode(' ', $result['errors']));
+    }
+
+    public function testMetarStation_InvalidTooLong()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'KSEAA'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], '5-character code should fail validation');
+        $this->assertStringContainsString('not a valid ICAO code', implode(' ', $result['errors']));
+    }
+
+    public function testMetarStation_InvalidNonKPrefixWithNumbers()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'A1B2'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Non-K prefix with numbers should fail validation');
+        $this->assertStringContainsString('not a valid ICAO code', implode(' ', $result['errors']));
+    }
+
+    public function testMetarStation_InvalidAllNumbers()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => '1234'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'All-numeric code should fail validation');
+        $this->assertStringContainsString('not a valid ICAO code', implode(' ', $result['errors']));
+    }
+
+    public function testMetarStation_ValidLowerCaseConverted()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'metar_station' => 'ksea'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Lowercase ICAO code should be accepted (converted to uppercase)');
+    }
+
+    public function testMetarStation_NotSet()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport without metar_station should pass validation');
+    }
 }
 
