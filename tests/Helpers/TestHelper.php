@@ -21,7 +21,7 @@ function createTestAirport($overrides = []) {
             'api_key' => 'test_key'
         ],
         'webcams' => [],
-        'metar_station' => 'TEST'
+        'metar_station' => 'KSPB'
     ], $overrides);
 }
 
