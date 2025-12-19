@@ -210,6 +210,43 @@ function getWorkerTimeout(): int {
 }
 
 /**
+ * Check if WebP generation is enabled globally
+ * 
+ * @return bool True if WebP generation enabled, false otherwise
+ */
+function isWebpGenerationEnabled(): bool {
+    return (bool)getGlobalConfig('webcam_generate_webp', false);
+}
+
+/**
+ * Check if AVIF generation is enabled globally
+ * 
+ * @return bool True if AVIF generation enabled, false otherwise
+ */
+function isAvifGenerationEnabled(): bool {
+    return (bool)getGlobalConfig('webcam_generate_avif', false);
+}
+
+/**
+ * Get list of enabled formats for webcam generation
+ * 
+ * @return array Array of enabled format strings: ['jpg', 'webp', 'avif']
+ */
+function getEnabledWebcamFormats(): array {
+    $formats = ['jpg']; // Always enabled
+    
+    if (isWebpGenerationEnabled()) {
+        $formats[] = 'webp';
+    }
+    
+    if (isAvifGenerationEnabled()) {
+        $formats[] = 'avif';
+    }
+    
+    return $formats;
+}
+
+/**
  * Load airport configuration with caching
  * 
  * Uses APCu cache if available, falls back to static variable for request lifetime.
@@ -1482,6 +1519,19 @@ function validateAirportsJsonStructure(array $config): array {
             if (isset($cfg['weather_refresh_default'])) {
                 if (!is_int($cfg['weather_refresh_default']) || $cfg['weather_refresh_default'] < 1) {
                     $errors[] = "config.weather_refresh_default must be a positive integer";
+                }
+            }
+            
+            // Validate format generation flags
+            if (isset($cfg['webcam_generate_webp'])) {
+                if (!is_bool($cfg['webcam_generate_webp'])) {
+                    $errors[] = "config.webcam_generate_webp must be a boolean (true or false)";
+                }
+            }
+            
+            if (isset($cfg['webcam_generate_avif'])) {
+                if (!is_bool($cfg['webcam_generate_avif'])) {
+                    $errors[] = "config.webcam_generate_avif must be a boolean (true or false)";
                 }
             }
         }
