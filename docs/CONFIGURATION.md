@@ -799,7 +799,7 @@ The system automatically detects the source type from the URL:
 // RTSP/RTSPS advanced options
 - `rtsp_fetch_timeout`: Timeout in seconds for capturing a single frame from RTSP (default: 10)
 - `rtsp_max_runtime`: Max ffmpeg runtime in seconds for the RTSP capture (default: 6)
-- `transcode_timeout`: Max seconds allowed to generate WEBP (default: 8)
+- `transcode_timeout`: Max seconds allowed to generate WebP/AVIF (default: 8, deprecated - generation is now fully async)
 
 ### Webcam Examples
 
@@ -867,7 +867,7 @@ Push webcams allow cameras to upload images directly to the server via SFTP, FTP
 1. **Camera Uploads**: The camera uploads images to a dedicated directory via SFTP/FTP/FTPS
 2. **Automatic Processing**: A background process (runs every minute) checks for new uploads
 3. **Image Validation**: Uploaded images are validated for format, size, and integrity
-4. **Cache Generation**: Valid images are moved to the cache and WEBP versions are generated
+4. **Cache Generation**: Valid images are moved to the cache and WebP/AVIF versions are generated automatically
 5. **Website Display**: Images appear on the airport dashboard automatically
 
 #### Configuration
@@ -982,8 +982,13 @@ FTP passive mode automatically uses the correct external IP address from DNS res
 - **Refresh Interval**: Controlled by `refresh_seconds` (minimum 60 seconds)
 - **File Detection**: System checks for new files every minute
 - **File Stability**: Waits for files to be fully written before processing
-- **Format Support**: JPEG and PNG images are supported
-- **Automatic WEBP**: WEBP versions are generated automatically for faster loading
+- **Format Support**: JPEG, PNG, WebP, and AVIF images are supported for uploads
+- **Format Processing**:
+  - PNG images are automatically converted to JPEG (we don't serve PNG)
+  - Original format preserved for JPEG, WebP, and AVIF (no redundant conversion)
+  - Missing formats generated automatically: JPEG, WebP, and AVIF
+  - Format generation runs asynchronously (non-blocking)
+  - Mtime automatically synced to match source image's capture time
 - **Ephemeral Storage**: Upload directories are ephemeral (inside container only). Files are automatically processed and moved to cache, then removed from the upload directory. No persistent storage required for uploads.
 
 #### Troubleshooting

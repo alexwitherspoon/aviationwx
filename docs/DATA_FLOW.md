@@ -557,6 +557,12 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 #### 5. Push Type (Not Fetched)
 - **Type**: `type: 'push'` or has `push_config`
 - **Behavior**: Skipped by fetch script (images pushed by external system)
+- **Supported Upload Formats**: JPEG, PNG, WebP, AVIF
+- **Processing**:
+  - PNG always converted to JPEG (we don't serve PNG)
+  - Original format preserved for JPEG, WebP, AVIF (no redundant conversion)
+  - Missing formats generated in background (JPEG, WebP, AVIF)
+  - Mtime synced to match source image's capture time
 
 ### Source Type Detection
 
@@ -598,11 +604,12 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
    - Checks file size > 0
    - Validates JPEG format (if GD available)
 
-7. **Transcoding** (if successful)
-   - Converts JPEG to WebP format for modern browsers
-   - Uses ffmpeg with quality setting
-   - Timeout: Configurable (default: 2 seconds)
-   - Both formats cached: `.jpg` and `.webp`
+7. **Format Generation** (if successful)
+   - Generates WebP and AVIF formats for modern browsers
+   - Uses ffmpeg with quality settings
+   - Runs asynchronously (non-blocking) using `exec() &`
+   - Automatically syncs mtime to match source image's capture time
+   - All formats cached: `.jpg`, `.webp`, and `.avif`
 
 8. **Lock Release**
    - Releases file lock
@@ -630,10 +637,11 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 
 ### Image Caching
 
-**Cache Location**: `cache/webcams/{airport_id}_{cam_index}.jpg` (and `.webp`)
+**Cache Location**: `cache/webcams/{airport_id}_{cam_index}.{ext}`
 
 **File Naming**: `{airport_id}_{cam_index}.{ext}`
-- Example: `kspb_0.jpg`, `kspb_0.webp`
+- Example: `kspb_0.jpg`, `kspb_0.webp`, `kspb_0.avif`
+- Formats: JPEG (`.jpg`), WebP (`.webp`), AVIF (`.avif`)
 
 **Atomic Writes**:
 - Writes to temporary file first: `{cache_file}.tmp.{pid}.{timestamp}.{random}`
@@ -641,19 +649,32 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Atomic rename to final filename
 - Prevents corruption from concurrent writes
 
-### Format Conversion
+### Format Generation
+
+**Multi-Format Support**:
+- System generates JPEG, WebP, and AVIF formats from source images
+- All generation runs asynchronously (non-blocking) using `exec() &`
+- Mtime automatically synced to match source image's capture time (EXIF or filemtime)
+- Formats generated in background, may not be immediately available
 
 **JPEG to WebP**:
-- Performed after successful JPEG fetch
 - Uses ffmpeg: `ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
 - Quality: 30 (0-100 scale, higher = better quality)
 - Compression: Level 6 (0-6 scale)
-- Timeout: Configurable per camera (default: 2 seconds)
+- Mtime sync: `touch -t {timestamp} output.webp` (chained after generation)
+
+**JPEG to AVIF**:
+- Uses ffmpeg: `ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 output.avif`
+- Quality: CRF 30 (similar quality to WebP's -q:v 30)
+- Codec: libaom-av1 (AV1 codec for AVIF format)
+- Speed: cpu-used 4 (balanced speed vs quality, 0-8 scale)
+- Mtime sync: `touch -t {timestamp} output.avif` (chained after generation)
 
 **Purpose**: 
-- WebP provides better compression (smaller file size)
-- Served to browsers that support WebP
+- AVIF provides best compression (smallest file size, best quality)
+- WebP provides good compression (smaller than JPEG)
 - JPEG served as fallback for older browsers
+- Format priority: AVIF → WebP → JPEG (based on browser support)
 
 ### Cache Serving
 
@@ -664,9 +685,17 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 2. **Timestamp Request**: `?mtime=1` returns JSON with file modification time
 
 **Serving Logic**:
-1. Check if WebP exists and client supports it → serve WebP
-2. Else check if JPEG exists → serve JPEG
-3. Else serve placeholder
+1. Check explicit format parameter (`?fmt=avif|webp|jpg`) → serve if available
+2. Check Accept header for AVIF support → serve AVIF if available
+3. Check Accept header for WebP support → serve WebP if available
+4. Fallback to JPEG (always available)
+5. If no formats available → serve placeholder
+
+**Format Priority**:
+- Explicit `fmt` parameter (highest priority)
+- AVIF (if browser supports via Accept header)
+- WebP (if browser supports via Accept header)
+- JPEG (fallback, always available)
 
 **Cache Headers**:
 - Fresh cache: `Cache-Control: public, max-age={remaining_seconds}`

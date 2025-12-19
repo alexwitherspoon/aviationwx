@@ -33,6 +33,7 @@ aviationwx.org/
 │   ├── push-webcam-validator.php # Push webcam validation
 │   ├── vpn-routing.php       # VPN routing utilities
 │   ├── webcam-error-detector.php # Webcam error frame detection
+│   ├── webcam-format-generation.php # Shared format generation (WebP, AVIF, JPEG)
 │   └── weather/
 │       ├── fetcher.php       # Weather data fetching
 │       ├── calculator.php    # Aviation calculations
@@ -98,14 +99,17 @@ aviationwx.org/
 **`api/webcam.php`**: Serves cached webcam images
 - Handles image requests with cache headers
 - Returns placeholder if image missing
-- Supports multiple formats (WEBP, JPEG)
+- Supports multiple formats (AVIF, WebP, JPEG) with content negotiation
+- Format priority: explicit fmt parameter → AVIF → WebP → JPEG
 - **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
 
 **`scripts/fetch-webcam.php`**: Fetches and caches webcam images
 - Runs via cron inside Docker container (every minute, automatically configured)
 - Safe memory usage (stops after first frame)
 - Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), push uploads (SFTP/FTP/FTPS)
-- Generates multiple formats per image
+- Generates multiple formats per image (JPEG, WebP, AVIF)
+- Format generation runs asynchronously (non-blocking)
+- Mtime automatically synced to match source image's capture time
 - Can be included by `api/webcam.php` for background refresh functionality
 - **Reliability features**:
   - File locking for backoff state (prevents race conditions)
@@ -190,7 +194,7 @@ For each webcam:
   ↓
 Fetch image (HTTP/MJPEG/RTSP)
   ↓
-Generate formats (WEBP/JPEG)
+Generate formats (JPEG, WebP, AVIF) - async, non-blocking
   ↓
 Save to cache/webcams/
   ↓
@@ -238,8 +242,11 @@ Next request gets fresh image
 ### 5. Multiple Image Formats
 
 - **Why**: Browser compatibility and performance
-- **Implementation**: Generate WEBP/JPEG, serve via `<picture>` element
-- **Benefit**: Best format per browser, smaller file sizes
+- **Implementation**: Generate JPEG, WebP, and AVIF formats, serve via content negotiation
+- **Format Priority**: AVIF (best compression) → WebP (good compression) → JPEG (fallback)
+- **Generation**: Fully async (non-blocking) using `exec() &`
+- **Mtime Sync**: Automatically synced to match source image's capture time
+- **Benefit**: Best format per browser, smaller file sizes, better quality
 
 ## Security Considerations
 
