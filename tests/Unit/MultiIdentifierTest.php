@@ -600,6 +600,8 @@ class MultiIdentifierTest extends TestCase
         // We just check it's either null or a valid ICAO format
         if ($result !== null) {
             $this->assertMatchesRegularExpression('/^[A-Z0-9]{3,4}$/', $result, 'If found, should be valid ICAO format');
+        } else {
+            $this->assertNull($result, 'Non-existent IATA code should return null');
         }
     }
     
@@ -663,6 +665,8 @@ class MultiIdentifierTest extends TestCase
         // We just check it's either null or a valid ICAO format
         if ($result !== null) {
             $this->assertMatchesRegularExpression('/^[A-Z0-9]{3,4}$/', $result, 'If found, should be valid ICAO format');
+        } else {
+            $this->assertNull($result, 'Non-existent FAA code should return null');
         }
     }
     
