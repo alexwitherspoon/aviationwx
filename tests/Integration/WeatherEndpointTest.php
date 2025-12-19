@@ -260,6 +260,19 @@ class WeatherEndpointTest extends TestCase
     }
     
     /**
+     * Test that parse functions are available (smoke test)
+     * This verifies the endpoint structure is correct
+     */
+    public function testWeatherEndpoint_ParseFunctionsAvailable()
+    {
+        // Verify that parse functions are available (they're moved outside the conditional)
+        $this->assertTrue(function_exists('parseTempestResponse'), 'parseTempestResponse should be available');
+        $this->assertTrue(function_exists('parseAmbientResponse'), 'parseAmbientResponse should be available');
+        $this->assertTrue(function_exists('parseWeatherLinkResponse'), 'parseWeatherLinkResponse should be available');
+        $this->assertTrue(function_exists('parseMETARResponse'), 'parseMETARResponse should be available');
+    }
+    
+    /**
      * Helper method to make HTTP request with retry logic
      */
     private function makeRequest(string $path, bool $includeHeaders = true, int $maxRetries = 3): array

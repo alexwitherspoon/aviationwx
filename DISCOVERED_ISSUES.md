@@ -2,10 +2,10 @@
 
 ## Issue #1: False Positive in JavaScriptStaticAnalysisTest
 **File:** `tests/Unit/JavaScriptStaticAnalysisTest.php`  
-**Status:** Needs investigation  
-**Description:** Test is detecting `preg_match` in JavaScript code, but it appears to be in a PHP comment within JavaScript. The context shows: `if (preg_match('/^\s*<script[^>]*>(.*)$/s', $js, $matc`  
-**Impact:** Test failure, but may be a false positive  
-**Action Required:** Investigate if this is actually PHP code in JavaScript or just a comment
+**Status:** False positive - test needs improvement  
+**Description:** Test is detecting `preg_match` in JavaScript code, but it's actually in PHP code that processes JavaScript strings (lines 3599, 3609, 3700, 3705 in `pages/airport.php`). The PHP code uses `preg_match` to extract JavaScript from strings, which is valid PHP code, not JavaScript.  
+**Impact:** Test failure - false positive  
+**Action Required:** Improve test to better distinguish PHP code that processes JavaScript strings vs actual JavaScript code. This is a test logic issue, not an app issue.
 
 ---
 
