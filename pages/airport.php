@@ -1952,6 +1952,10 @@ function checkAndUpdateOutageBanner() {
         // At least one source is fresh - hide banner
         banner.style.display = 'none';
     }
+    } catch (error) {
+        console.error('[Weather] Error in checkAndUpdateOutageBanner:', error);
+        // Silently fail - don't break weather display
+    }
 }
 
 /**
@@ -2017,10 +2021,6 @@ function updateOutageBannerTimestamp() {
     } catch (error) {
         console.error('[OutageBanner] Error formatting timestamp:', error);
         timestampElem.textContent = 'unknown time';
-    }
-    } catch (error) {
-        console.error('[Weather] Error in checkAndUpdateOutageBanner:', error);
-        // Silently fail - don't break weather display
     }
 }
 
