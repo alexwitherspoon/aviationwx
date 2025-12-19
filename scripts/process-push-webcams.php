@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/webcam-format-generation.php';
 
 // Set up invocation tracking
 $invocationId = aviationwx_get_invocation_id();
@@ -223,7 +224,7 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
         return null;
     }
     
-    $files = glob($uploadDir . '*.{jpg,jpeg,png}', GLOB_BRACE);
+    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp,avif}', GLOB_BRACE);
     if (empty($files)) {
         return null; // No files - exit immediately
     }
@@ -377,42 +378,21 @@ function validateImageFile($file, $pushConfig = null) {
     
     // Check MIME type
     $mime = @mime_content_type($file);
-    $validMimes = ['image/jpeg', 'image/jpg', 'image/png'];
+    $validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/avif'];
     if (!in_array($mime, $validMimes)) {
         return false;
     }
     
-    // Check image headers
-    $handle = @fopen($file, 'rb');
-    if (!$handle) {
-        return false;
-    }
-    
-    $header = @fread($handle, 12);
-    @fclose($handle);
-    
-    if (!$header) {
-        return false;
-    }
-    
-    // JPEG: FF D8 FF
-    if (substr($header, 0, 3) === "\xFF\xD8\xFF") {
-        return true;
-    }
-    
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (substr($header, 0, 8) === "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A") {
-        return true;
-    }
-    
-    return false;
+    // Check image headers using shared format detection
+    $format = detectImageFormat($file);
+    return $format !== null;
 }
 
 /**
- * Move image to cache
+ * Move image to cache and generate missing formats
  * 
- * Atomically moves a validated image file from upload directory to cache directory.
- * Validates source file before moving and triggers WEBP generation in background.
+ * Keeps original format as primary, generates missing formats.
+ * PNG is always converted to JPEG (we don't serve PNG).
  * 
  * @param string $sourceFile Source file path in upload directory
  * @param string $airportId Airport ID (e.g., 'kspb')
@@ -420,7 +400,7 @@ function validateImageFile($file, $pushConfig = null) {
  * @return string|false Cache file path on success, false on failure
  */
 function moveToCache($sourceFile, $airportId, $camIndex) {
-    // Validate source file exists and is readable
+    // Validate source file
     if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
         aviationwx_log('error', 'moveToCache: source file invalid', [
             'source' => $sourceFile,
@@ -430,7 +410,6 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    // Validate file size is reasonable
     $fileSize = filesize($sourceFile);
     if ($fileSize === false || $fileSize === 0) {
         aviationwx_log('error', 'moveToCache: source file has invalid size', [
@@ -450,7 +429,6 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         }
     }
     
-    // Validate cache directory is writable
     if (!is_writable($cacheDir)) {
         aviationwx_log('error', 'moveToCache: cache directory not writable', [
             'dir' => $cacheDir
@@ -458,133 +436,76 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    $cacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
+    // Detect format
+    $format = detectImageFormat($sourceFile);
+    if ($format === null) {
+        aviationwx_log('error', 'moveToCache: unable to detect image format', [
+            'source' => $sourceFile,
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+        return false;
+    }
     
-    // Atomic move
-    if (@rename($sourceFile, $cacheFile)) {
-        // Verify move succeeded
-        if (file_exists($cacheFile) && filesize($cacheFile) > 0) {
-            // Generate WEBP in background (non-blocking)
-            generateWebp($cacheFile, $airportId, $camIndex);
-            return $cacheFile;
-        } else {
-            aviationwx_log('error', 'moveToCache: move appeared to succeed but file invalid', [
-                'cache_file' => $cacheFile
+    // Determine primary cache file
+    // PNG is always converted to JPEG (we don't serve PNG)
+    if ($format === 'png') {
+        $primaryFormat = 'jpg';
+        $primaryCacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
+        
+        // Convert PNG to JPEG
+        if (!convertPngToJpeg($sourceFile, $primaryCacheFile)) {
+            aviationwx_log('error', 'moveToCache: PNG to JPEG conversion failed', [
+                'source' => $sourceFile,
+                'airport' => $airportId,
+                'cam' => $camIndex
             ], 'app');
             return false;
         }
-    } else {
-        $error = error_get_last();
-        aviationwx_log('error', 'moveToCache: rename failed', [
-            'source' => $sourceFile,
-            'dest' => $cacheFile,
-            'error' => $error['message'] ?? 'unknown'
-        ], 'app');
-    }
-    
-    return false;
-}
-
-/**
- * Generate WEBP version of image (non-blocking)
- * 
- * Converts JPG cache file to WEBP format using ffmpeg. Runs in background
- * when possible to avoid blocking. Falls back to synchronous generation with
- * timeout if exec() is unavailable.
- * 
- * @param string $cacheFile JPG cache file path
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @return bool True if WEBP generation started/succeeded, false on failure
- */
-function generateWebp($cacheFile, $airportId, $camIndex) {
-    // Validate source file exists and is readable
-    if (!file_exists($cacheFile) || !is_readable($cacheFile)) {
-        return false;
-    }
-    
-    $cacheDir = __DIR__ . '/../cache/webcams';
-    if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
-        return false;
-    }
-    
-    $cacheWebp = $cacheDir . '/' . $airportId . '_' . $camIndex . '.webp';
-    
-    // Build ffmpeg command
-    $cmdWebp = sprintf(
-        "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
-        escapeshellarg($cacheFile),
-        escapeshellarg($cacheWebp)
-    );
-    
-    // Run in background (non-blocking)
-    if (function_exists('exec')) {
-        $cmd = $cmdWebp . ' > /dev/null 2>&1 &';
-        @exec($cmd);
-        return true;
-    }
-    
-    // Fallback: synchronous with timeout
-    $processWebp = @proc_open($cmdWebp . ' 2>&1', [
-        0 => ['pipe', 'r'],
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w']
-    ], $pipesWebp);
-    
-    if (is_resource($processWebp)) {
-        fclose($pipesWebp[0]);
-        $startTime = microtime(true);
-        $timeout = 8; // 8 second timeout
         
-        while (true) {
-            $status = proc_get_status($processWebp);
-            if (!$status['running']) {
-                proc_close($processWebp);
-                if (file_exists($cacheWebp) && filesize($cacheWebp) > 0) {
-                    // Sync WebP file mtime to match JPG's EXIF capture time
-                    $jpgCaptureTime = 0;
-                    if (function_exists('exif_read_data') && file_exists($cacheFile)) {
-                        $exif = @exif_read_data($cacheFile, 'EXIF', true);
-                        if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
-                            $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
-                            if ($timestamp !== false && $timestamp > 0) {
-                                $jpgCaptureTime = (int)$timestamp;
-                            }
-                        } elseif (isset($exif['DateTimeOriginal'])) {
-                            $dateTime = $exif['DateTimeOriginal'];
-                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
-                            if ($timestamp !== false && $timestamp > 0) {
-                                $jpgCaptureTime = (int)$timestamp;
-                            }
-                        }
-                    }
-                    // Fallback to filemtime if EXIF not available
-                    if ($jpgCaptureTime === 0) {
-                        $mtime = @filemtime($cacheFile);
-                        if ($mtime !== false) {
-                            $jpgCaptureTime = (int)$mtime;
-                        }
-                    }
-                    // Set WebP file mtime to match JPG's capture time
-                    if ($jpgCaptureTime > 0) {
-                        @touch($cacheWebp, $jpgCaptureTime);
-                    }
-                    return true;
-                }
-                return false;
-            }
-            if ((microtime(true) - $startTime) > $timeout) {
-                @proc_terminate($processWebp);
-                @proc_close($processWebp);
-                return false;
-            }
-            usleep(50000); // 50ms
+        // Remove source PNG after successful conversion
+        @unlink($sourceFile);
+    } else {
+        // Keep original format (JPEG, WebP, or AVIF)
+        $primaryFormat = $format;
+        $primaryCacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $primaryFormat;
+        
+        // Atomic move
+        if (!@rename($sourceFile, $primaryCacheFile)) {
+            $error = error_get_last();
+            aviationwx_log('error', 'moveToCache: rename failed', [
+                'source' => $sourceFile,
+                'dest' => $primaryCacheFile,
+                'error' => $error['message'] ?? 'unknown'
+            ], 'app');
+            return false;
         }
     }
     
-    return false;
+    // Verify primary file exists
+    if (!file_exists($primaryCacheFile) || filesize($primaryCacheFile) === 0) {
+        aviationwx_log('error', 'moveToCache: primary cache file invalid', [
+            'cache_file' => $primaryCacheFile
+        ], 'app');
+        return false;
+    }
+    
+    // Generate missing formats in background (non-blocking)
+    // Only generate formats that don't already exist
+    // Mtime sync happens automatically during generation
+    if ($primaryFormat !== 'jpg') {
+        generateJpeg($primaryCacheFile, $airportId, $camIndex);
+    }
+    if ($primaryFormat !== 'webp') {
+        generateWebp($primaryCacheFile, $airportId, $camIndex);
+    }
+    if ($primaryFormat !== 'avif') {
+        generateAvif($primaryCacheFile, $airportId, $camIndex);
+    }
+    
+    return $primaryCacheFile;
 }
+
 
 /**
  * Clean up upload directory
@@ -704,7 +625,7 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     }
     
     // Quick check: if no image files exist, exit immediately (no waiting)
-    $hasFiles = !empty(glob($uploadDir . '*.{jpg,jpeg,png}', GLOB_BRACE));
+    $hasFiles = !empty(glob($uploadDir . '*.{jpg,jpeg,png,webp,avif}', GLOB_BRACE));
     if (!$hasFiles) {
         return false; // No files - exit immediately
     }
