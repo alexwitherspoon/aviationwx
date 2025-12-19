@@ -541,6 +541,35 @@ function generateWebp($cacheFile, $airportId, $camIndex) {
             if (!$status['running']) {
                 proc_close($processWebp);
                 if (file_exists($cacheWebp) && filesize($cacheWebp) > 0) {
+                    // Sync WebP file mtime to match JPG's EXIF capture time
+                    $jpgCaptureTime = 0;
+                    if (function_exists('exif_read_data') && file_exists($cacheFile)) {
+                        $exif = @exif_read_data($cacheFile, 'EXIF', true);
+                        if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
+                            $dateTime = $exif['EXIF']['DateTimeOriginal'];
+                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                            if ($timestamp !== false && $timestamp > 0) {
+                                $jpgCaptureTime = (int)$timestamp;
+                            }
+                        } elseif (isset($exif['DateTimeOriginal'])) {
+                            $dateTime = $exif['DateTimeOriginal'];
+                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                            if ($timestamp !== false && $timestamp > 0) {
+                                $jpgCaptureTime = (int)$timestamp;
+                            }
+                        }
+                    }
+                    // Fallback to filemtime if EXIF not available
+                    if ($jpgCaptureTime === 0) {
+                        $mtime = @filemtime($cacheFile);
+                        if ($mtime !== false) {
+                            $jpgCaptureTime = (int)$mtime;
+                        }
+                    }
+                    // Set WebP file mtime to match JPG's capture time
+                    if ($jpgCaptureTime > 0) {
+                        @touch($cacheWebp, $jpgCaptureTime);
+                    }
                     return true;
                 }
                 return false;

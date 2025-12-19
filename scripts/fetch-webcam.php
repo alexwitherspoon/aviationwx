@@ -874,6 +874,40 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         
         $transcodeDuration = round((microtime(true) - $transcodeStartTime) * 1000, 2);
         $webpSuccess = isset($results['webp']) && $results['webp'];
+        
+        // Sync WebP file mtime to match JPG's EXIF capture time if WebP was generated successfully
+        if ($webpSuccess && file_exists($cacheWebp) && file_exists($cacheFile)) {
+            // Get JPG's EXIF capture time
+            $jpgCaptureTime = 0;
+            if (function_exists('exif_read_data') && file_exists($cacheFile)) {
+                $exif = @exif_read_data($cacheFile, 'EXIF', true);
+                if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
+                    $dateTime = $exif['EXIF']['DateTimeOriginal'];
+                    $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                    if ($timestamp !== false && $timestamp > 0) {
+                        $jpgCaptureTime = (int)$timestamp;
+                    }
+                } elseif (isset($exif['DateTimeOriginal'])) {
+                    $dateTime = $exif['DateTimeOriginal'];
+                    $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                    if ($timestamp !== false && $timestamp > 0) {
+                        $jpgCaptureTime = (int)$timestamp;
+                    }
+                }
+            }
+            // Fallback to filemtime if EXIF not available
+            if ($jpgCaptureTime === 0) {
+                $mtime = @filemtime($cacheFile);
+                if ($mtime !== false) {
+                    $jpgCaptureTime = (int)$mtime;
+                }
+            }
+            // Set WebP file mtime to match JPG's capture time
+            if ($jpgCaptureTime > 0) {
+                @touch($cacheWebp, $jpgCaptureTime);
+            }
+        }
+        
         aviationwx_log('info', 'webcam transcode completed', [
             'invocation_id' => $invocationId,
             'trigger' => $triggerType,

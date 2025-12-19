@@ -332,10 +332,32 @@ if ($rl !== null) {
     header('X-RateLimit-Reset: ' . (int)$rl['reset']);
 }
 
-// Optional format parameter: jpg (default), webp
-$fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
-if (!in_array($fmt, ['jpg', 'jpeg', 'webp'])) { 
-    $fmt = 'jpg'; 
+// Parse format parameter (if specified)
+$fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : null;
+if ($fmt !== null && !in_array($fmt, ['jpg', 'jpeg', 'webp'])) {
+    $fmt = null; // Invalid fmt, treat as unspecified
+}
+
+// Check Accept header for WebP support if fmt not specified
+$acceptsWebp = false;
+if ($fmt === null) {
+    $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+    $acceptsWebp = (stripos($acceptHeader, 'image/webp') !== false);
+}
+
+// Determine preferred format based on priority:
+// 1. Explicit fmt parameter (if file exists)
+// 2. Accept header (if WebP supported and available)
+// 3. Fallback to JPG
+$preferredFormat = null;
+if ($fmt === 'webp') {
+    $preferredFormat = 'webp';
+} elseif ($fmt === 'jpg' || $fmt === 'jpeg') {
+    $preferredFormat = 'jpg';
+} elseif ($acceptsWebp) {
+    $preferredFormat = 'webp';
+} else {
+    $preferredFormat = 'jpg'; // Default fallback
 }
 
 // Determine refresh threshold
@@ -387,16 +409,17 @@ function getImageCaptureTime($filePath) {
  * Find the latest valid image file (JPG or WEBP)
  * 
  * Scans both JPG and WEBP cache files, validates they are actual image files,
- * and returns the most recent valid image. Validates file headers to ensure
- * files are not corrupted. Uses EXIF capture time when available, otherwise
- * falls back to file modification time.
+ * and returns the preferred or most recent valid image. Validates file headers
+ * to ensure files are not corrupted. Uses EXIF capture time when available,
+ * otherwise falls back to file modification time.
  * 
  * @param string $cacheJpg Path to JPG cache file
  * @param string $cacheWebp Path to WEBP cache file
+ * @param string|null $preferredFormat Preferred format: 'webp', 'jpg', or null for auto-select
  * @return array|null Array with keys: 'file' (string path), 'mtime' (int timestamp),
  *   'size' (int bytes), 'type' (string MIME type), or null if no valid image found
  */
-function findLatestValidImage($cacheJpg, $cacheWebp) {
+function findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat = null) {
     $candidates = [];
     
     // Check JPG file
@@ -446,38 +469,50 @@ function findLatestValidImage($cacheJpg, $cacheWebp) {
         }
     }
     
-    // Return the most recent valid image
-    // Prefer JPG over WEBP when both exist, since JPG has EXIF capture time
-    if (!empty($candidates)) {
-        // Find JPG candidate if it exists
-        $jpgCandidate = null;
-        foreach ($candidates as $candidate) {
-            if ($candidate['type'] === 'image/jpeg') {
-                $jpgCandidate = $candidate;
-                break;
-            }
-        }
-        
-        // If JPG exists, prefer it (has EXIF capture time)
-        if ($jpgCandidate !== null) {
-            return $jpgCandidate;
-        }
-        
-        // Otherwise, return the most recent (should only be WEBP at this point)
-        usort($candidates, function($a, $b) {
-            return $b['mtime'] - $a['mtime']; // Most recent first
-        });
-        return $candidates[0];
+    if (empty($candidates)) {
+        return null;
     }
     
-    return null;
+    // If preferred format is specified, return it if available
+    if ($preferredFormat === 'webp') {
+        foreach ($candidates as $candidate) {
+            if ($candidate['type'] === 'image/webp') {
+                return $candidate;
+            }
+        }
+    } elseif ($preferredFormat === 'jpg' || $preferredFormat === 'jpeg') {
+        foreach ($candidates as $candidate) {
+            if ($candidate['type'] === 'image/jpeg') {
+                return $candidate;
+            }
+        }
+    }
+    
+    // No preferred format or preferred format not available: prefer JPG for EXIF capture time
+    $jpgCandidate = null;
+    foreach ($candidates as $candidate) {
+        if ($candidate['type'] === 'image/jpeg') {
+            $jpgCandidate = $candidate;
+            break;
+        }
+    }
+    
+    if ($jpgCandidate !== null) {
+        return $jpgCandidate;
+    }
+    
+    // Only WEBP available, return most recent
+    usort($candidates, function($a, $b) {
+        return $b['mtime'] - $a['mtime'];
+    });
+    return $candidates[0];
 }
 
 // Find latest valid image (even if old)
 // Only try to find images if cache directory exists and is accessible
 $validImage = null;
 if (is_dir($cacheDir) && is_readable($cacheDir)) {
-    $validImage = findLatestValidImage($cacheJpg, $cacheWebp);
+    $validImage = findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat);
 } else {
     // Cache directory doesn't exist or isn't accessible
     aviationwx_log('warning', 'webcam cache directory not accessible', [
@@ -528,11 +563,11 @@ if ($isRateLimited) {
     // Only check if cache directory is accessible
     $rateLimitImage = null;
     if (is_dir($cacheDir) && is_readable($cacheDir)) {
-        $rateLimitImage = findLatestValidImage($cacheJpg, $cacheWebp);
+        $rateLimitImage = findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat);
     }
     
     if ($rateLimitImage !== null) {
-        aviationwx_log('warning', 'webcam rate-limited, serving cached', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt], 'app');
+        aviationwx_log('warning', 'webcam rate-limited, serving cached', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt ?? 'auto', 'preferred' => $preferredFormat], 'app');
         $mtime = $rateLimitImage['mtime'];
         $rateLimitCtype = $rateLimitImage['type'];
         $rateLimitFile = $rateLimitImage['file'];
@@ -601,7 +636,7 @@ if ((time() - $fileMtime) < $perCamRefresh) {
     
     // No need to re-validate - we already validated in findLatestValidImage()
     
-    aviationwx_log('info', 'webcam serve fresh', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt, 'age' => $age], 'user');
+    aviationwx_log('info', 'webcam serve fresh', ['airport' => $airportId, 'cam' => $camIndex, 'fmt' => $fmt ?? 'auto', 'preferred' => $preferredFormat, 'age' => $age], 'user');
     aviationwx_maybe_log_alert();
     
     if (!serveFile($targetFile, $ctype)) {
@@ -695,6 +730,9 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
         // Build ffmpeg command without 2>&1 in the base command (we'll handle redirects separately)
         $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
         
+        // Get JPG's EXIF capture time for timestamp sync
+        $jpgCaptureTime = getImageCaptureTime($cacheFile);
+        
         // Run WEBP generation in background (non-blocking)
         if (function_exists('exec')) {
             // Use exec with background process via shell
@@ -703,6 +741,7 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
             @exec($cmd);
             // Note: exec() returns immediately when using &, so we can't check success here
             // The background process will complete asynchronously
+            // Timestamp sync will happen on next access when WebP file is validated
         } else {
             // Fallback: synchronous generation with timeout
             $transcodeStartTime = microtime(true);
@@ -729,6 +768,9 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
                                 'exit_code' => $exitCode,
                                 'file_exists' => file_exists($cacheWebp)
                             ], 'app');
+                        } elseif ($jpgCaptureTime > 0) {
+                            // Sync WebP file mtime to match JPG's EXIF capture time
+                            @touch($cacheWebp, $jpgCaptureTime);
                         }
                         break;
                     }
@@ -810,7 +852,8 @@ header('X-Image-Timestamp: ' . $mtime); // Custom header for timestamp
 aviationwx_log('info', 'webcam serve stale', [
     'airport' => $airportId,
     'cam' => $camIndex,
-    'fmt' => $fmt,
+    'fmt' => $fmt ?? 'auto',
+    'preferred' => $preferredFormat,
     'cache_age' => $cacheAge
 ], 'user');
 
