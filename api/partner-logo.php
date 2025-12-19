@@ -6,6 +6,11 @@
  * Falls back to placeholder if logo unavailable.
  */
 
+// Clean any output buffering that might interfere
+if (ob_get_level() > 0) {
+    @ob_end_clean();
+}
+
 require_once __DIR__ . '/../lib/partner-logo-cache.php';
 require_once __DIR__ . '/../lib/constants.php';
 

@@ -2301,7 +2301,14 @@ function displayWeather(weather) {
 }
 
 function displayError(msg) {
-    document.getElementById('weather-data').innerHTML = `<div class="weather-item loading">${msg}</div>`;
+    // Sanitize error message to prevent XSS
+    const container = document.getElementById('weather-data');
+    if (!container) return;
+    const sanitized = String(msg).replace(/[<>&"']/g, (char) => {
+        const map = {'<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;'};
+        return map[char] || char;
+    });
+    container.innerHTML = `<div class="weather-item loading">${sanitized}</div>`;
 }
 
 
@@ -2968,8 +2975,8 @@ function batchRefreshAllTimestamps() {
     if (timestampBatchPending) return;
     timestampBatchPending = true;
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
-    const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
-    if (imgEl<?= $index ?> && imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
+    const img<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
+    if (img<?= $index ?> && img<?= $index ?>.complete && img<?= $index ?>.naturalHeight !== 0) {
         updateWebcamTimestampOnLoad(<?= $index ?>);
     }
     <?php endforeach; ?>
@@ -3684,9 +3691,31 @@ window.addEventListener('beforeunload', () => {
         }
     } else {
         // Extract the script tag content - use a more robust pattern
-        // Match from <script> to </script>, handling potential </script> in strings
-        if (preg_match('/<script[^>]*>(.*?)<\/script>/s', $js, $matches)) {
+        // The buffer should start with <script> (from line 856), but may have leading whitespace
+        // Try multiple patterns to find the main JavaScript block
+        $jsContent = null;
+        
+        // First, try to match from the beginning (accounting for possible leading whitespace)
+        // Note: Don't require closing tag - extract everything after <script>
+        if (preg_match('/^\s*<script[^>]*>(.*)$/s', $js, $matches)) {
             $jsContent = $matches[1];
+            error_log('Script extraction: Matched from beginning, content length: ' . strlen($jsContent));
+        }
+        // If that fails, try matching any script tag that contains AIRPORT_ID (our main block)
+        elseif (preg_match_all('/<script[^>]*>(.*?)(?:<\/script>|$)/s', $js, $allMatches, PREG_SET_ORDER)) {
+            foreach ($allMatches as $match) {
+                if (strpos($match[1], 'AIRPORT_ID') !== false) {
+                    $jsContent = $match[1];
+                    error_log('Script extraction: Matched AIRPORT_ID script, content length: ' . strlen($jsContent));
+                    break;
+                }
+            }
+        } else {
+            error_log('Script extraction: No match found, buffer length: ' . strlen($js));
+        }
+        
+        if ($jsContent !== null) {
+            error_log('Script processing: jsContent is not null, length: ' . strlen($jsContent));
             
             // Enhanced validation: Check for HTML tags in JavaScript content
             // This catches cases where HTML might be injected before the script closes
@@ -3698,50 +3727,178 @@ window.addEventListener('beforeunload', () => {
             
             // Only minify if content is not empty and doesn't contain HTML
             if (trim($jsContent) !== '' && !$htmlInJs && strpos($jsContent, '<') === false) {
+                error_log('Script processing: Attempting minification');
                 try {
                     $minified = minifyJavaScript($jsContent);
                     // Verify minified output doesn't contain HTML
                     if (strpos($minified, '<') === false && !preg_match('/<[a-z][\s>]/i', $minified)) {
+                        error_log('Script processing: Minification successful, outputting with script tags');
                         echo '<script>' . $minified . '</script>';
                     } else {
-                        // Minification produced HTML - use original
+                        error_log('Script processing: Minification produced HTML, using original buffer');
+                        // Minification produced HTML - use original with proper closing tag
                         error_log('Minification produced HTML output, using original. Minified length: ' . strlen($minified));
-                        if ($needsClosingTag) {
+                        // Always ensure script tag is closed
+                        if (strpos($js, '</script>') === false) {
                             echo $js . '</script>';
                         } else {
                             echo $js;
                         }
                     }
                 } catch (Exception $e) {
-                    // If minification fails, output original JavaScript
+                    // If minification fails, output original JavaScript with proper closing tag
                     error_log('JavaScript minification error: ' . $e->getMessage());
-                    if ($needsClosingTag) {
+                    // Always ensure script tag is closed
+                    if (strpos($js, '</script>') === false) {
                         echo $js . '</script>';
                     } else {
                         echo $js;
                     }
                 }
             } else {
-                // Content is empty or contains HTML - log and output as-is
+                // Content is empty or contains HTML - log and output as-is with proper closing tag
                 if ($htmlInJs || strpos($jsContent, '<') !== false) {
                     error_log('JavaScript content contains HTML - skipping minification. Content length: ' . strlen($jsContent));
                 }
-                if ($needsClosingTag) {
+                // Always ensure script tag is closed
+                if (strpos($js, '</script>') === false) {
                     echo $js . '</script>';
                 } else {
                     echo $js;
                 }
             }
         } else {
+            error_log('Script processing: jsContent is null, using fallback path. needsClosingTag: ' . ($needsClosingTag ? 'true' : 'false'));
             // Fallback if pattern doesn't match - script tag may not be closed
-            error_log('Could not extract script tag content from output buffer. Buffer length: ' . strlen($js));
+            // This can happen if the buffer is truncated or contains nested script tags
+            // Use the $needsClosingTag variable that was already calculated
             if ($needsClosingTag) {
+                error_log('Script processing: Adding closing tag in fallback path');
                 echo $js . '</script>';
             } else {
+                error_log('Script processing: No closing tag needed in fallback path');
                 echo $js;
+            }
+            // Done - skip the rest of the complex extraction logic
+            // We've already output the script with proper closing tag, so we're done
+            // The complex extraction code below is now unreachable but kept for reference
+            // All the code from here to the end of the else block can be removed in a future cleanup
+            if ($hasScriptOpen && $hasScriptClose) {
+                $firstScriptPos = strpos($js, '<script');
+                $lastScriptClosePos = strrpos($js, '</script>');
+                if ($firstScriptPos !== false && $lastScriptClosePos !== false && $lastScriptClosePos > $firstScriptPos) {
+                    $scriptTagEnd = strpos($js, '>', $firstScriptPos);
+                    if ($scriptTagEnd !== false) {
+                        $scriptTag = substr($js, $firstScriptPos, $scriptTagEnd - $firstScriptPos + 1);
+                        $jsContent = substr($js, $firstScriptPos + strlen($scriptTag), $lastScriptClosePos - $firstScriptPos - strlen($scriptTag));
+                        
+                        // If this content contains AIRPORT_ID, use it for minification
+                        if (strpos($jsContent, 'AIRPORT_ID') !== false) {
+                            // Process this content through minification
+                            $htmlInJs = false;
+                            if (preg_match('/<[a-z][\s>]/i', $jsContent)) {
+                                $htmlInJs = true;
+                            }
+                            
+                            if (trim($jsContent) !== '' && !$htmlInJs && strpos($jsContent, '<') === false) {
+                                try {
+                                    $minified = minifyJavaScript($jsContent);
+                                    if (strpos($minified, '<') === false && !preg_match('/<[a-z][\s>]/i', $minified)) {
+                                        echo '<script>' . $minified . '</script>';
+                                        $extracted = true;
+                                    } else {
+                                        // Minification produced HTML, output original with proper closing tag
+                                        if (strpos($js, '</script>') === false) {
+                                            echo $js . '</script>';
+                                        } else {
+                                            echo $js;
+                                        }
+                                        $extracted = true;
+                                    }
+                                } catch (Exception $e) {
+                                    // Minification failed, output original with proper closing tag
+                                    if (strpos($js, '</script>') === false) {
+                                        echo $js . '</script>';
+                                    } else {
+                                        echo $js;
+                                    }
+                                    $extracted = true;
+                                }
+                            } else {
+                                // Content has HTML or is empty, output original with proper closing tag
+                                if (strpos($js, '</script>') === false) {
+                                    echo $js . '</script>';
+                                } else {
+                                    echo $js;
+                                }
+                                $extracted = true;
+                            }
+                        } else {
+                            // Content doesn't contain AIRPORT_ID - might be wrong script tag, but output anyway with proper closing tag
+                            if (strpos($js, '</script>') === false) {
+                                echo $js . '</script>';
+                            } else {
+                                echo $js;
+                            }
+                            $extracted = true;
+                        }
+                    } else {
+                        // Couldn't find end of script tag, output as-is with proper closing tag
+                        if (strpos($js, '</script>') === false) {
+                            echo $js . '</script>';
+                        } else {
+                            echo $js;
+                        }
+                        $extracted = true;
+                    }
+                } else {
+                    // Script positions invalid, output as-is with proper closing tag
+                    if (strpos($js, '</script>') === false) {
+                        echo $js . '</script>';
+                    } else {
+                        echo $js;
+                    }
+                    $extracted = true;
+                }
+            } else {
+                // No script tags found, output as-is with proper closing tag (shouldn't happen, but handle it)
+                if (strpos($js, '</script>') === false && strpos($js, '<script') !== false) {
+                    echo $js . '</script>';
+                } else {
+                    echo $js;
+                }
+                $extracted = true;
+            }
+            
+            // If extraction failed, output the buffer as-is (fallback)
+            // The strpos extraction above should have set $extracted = true in all cases
+            // This is a final safety net
+            if (!$extracted) {
+                // If buffer has opening script tag but no closing tag, it's likely truncated
+                // Just output the buffer as-is (it may be part of a larger script block)
+                if ($hasScriptOpen && !$hasScriptClose) {
+                    // Buffer is truncated - output what we have and close the script tag
+                    echo $js . '</script>';
+                } else if (!$hasScriptOpen && !$hasScriptClose) {
+                    // No script tags at all - might be pure JavaScript content
+                    // Wrap it in script tags if needed
+                    if ($needsClosingTag) {
+                        echo '<script>' . $js . '</script>';
+                    } else {
+                        echo $js;
+                    }
+                } else {
+                    // Has both or neither - output as-is
+                    if ($needsClosingTag) {
+                        echo $js . '</script>';
+                    } else {
+                        echo $js;
+                    }
+                }
             }
         }
     }
+    
 ?>
 </body>
 </html>

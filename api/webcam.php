@@ -84,7 +84,7 @@ if (!headers_sent()) {
 function servePlaceholder() {
     // Clean output buffer if active and headers not sent
     if (ob_get_level() > 0 && !headers_sent()) {
-        ob_end_clean();
+        @ob_end_clean();
     }
     
     // Only set headers if they haven't been sent yet
@@ -158,7 +158,7 @@ function serveFile($filePath, $contentType) {
     
     // Clear output buffer and send file
     if (ob_get_level() > 0) {
-        ob_end_clean();
+        @ob_end_clean();
     }
     
     // Stream file in chunks to handle large files efficiently
@@ -1094,7 +1094,7 @@ if (!$formatStatus['jpg']['valid']) {
     exit;
 }
 
-$jpegMtime = getImageCaptureTime($formatStatus['jpg']['file']);
+$jpegMtime = getImageCaptureTime(getCacheFile($airportId, $camIndex, 'jpg'));
 $isCurrentCycle = isFromCurrentRefreshCycle($jpegMtime, $refreshInterval);
 
 // Determine if this is an explicit format request (fmt=webp or fmt=avif)
@@ -1199,7 +1199,7 @@ if (!$isCurrentCycle && areAllFormatsFromSameCycle($formatStatus, $jpegMtime, $r
         exit;
     }
     // Fallback to JPEG
-    serve200Response($formatStatus['jpg']['file'], 'image/jpeg', $jpegMtime, $refreshInterval);
+    serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtime, $refreshInterval);
     exit;
 }
 
@@ -1236,7 +1236,7 @@ if ($mostEfficient) {
 }
 
 // Fallback to JPEG
-serve200Response($formatStatus['jpg']['file'], 'image/jpeg', $jpegMtime, $refreshInterval);
+serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtime, $refreshInterval);
 exit;
 
 /**
@@ -1389,7 +1389,7 @@ $shouldRefresh = !$circuit['skip'];
 
 // Serve stale cache immediately (already validated as valid image above)
 if (ob_get_level() > 0) {
-    ob_end_clean(); // Clear buffer before sending file (consistent with fresh cache path)
+    @ob_end_clean(); // Clear buffer before sending file (consistent with fresh cache path)
 }
 
 if (!serveFile($targetFile, $ctype)) {
