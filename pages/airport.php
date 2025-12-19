@@ -1624,11 +1624,20 @@ if (document.getElementById('wind-speed-unit-toggle')) {
 
 // Set weather last updated time to relative
 function updateWeatherTimestamp() {
-    if (weatherLastUpdated === null) {
-        document.getElementById('weather-last-updated').textContent = '--';
-        document.getElementById('wind-last-updated').textContent = '--';
-        return;
-    }
+    try {
+        const weatherEl = document.getElementById('weather-last-updated');
+        const windEl = document.getElementById('wind-last-updated');
+        
+        if (!weatherEl || !windEl) {
+            console.warn('[Weather] Timestamp elements not found');
+            return;
+        }
+        
+        if (weatherLastUpdated === null) {
+            weatherEl.textContent = '--';
+            windEl.textContent = '--';
+            return;
+        }
     
     const now = new Date();
     const diffSeconds = Math.floor((now - weatherLastUpdated) / 1000);
@@ -1705,24 +1714,26 @@ function updateWeatherTimestamp() {
         timeStr = formatRelativeTime(diffSeconds);
     }
     
-    const weatherEl = document.getElementById('weather-last-updated');
-    const windEl = document.getElementById('wind-last-updated');
-    weatherEl.textContent = timeStr;
-    windEl.textContent = timeStr;
-    
-    // Apply visual styling based on staleness
-    [weatherEl, windEl].forEach(el => {
-        if (isVeryStale) {
-            el.style.color = '#c00'; // Red for very stale
-            el.style.fontWeight = 'bold';
-        } else if (isStale) {
-            el.style.color = '#f80'; // Orange for stale
-            el.style.fontWeight = '500';
-        } else {
-            el.style.color = '#666'; // Gray for fresh
-            el.style.fontWeight = 'normal';
-        }
-    });
+        weatherEl.textContent = timeStr;
+        windEl.textContent = timeStr;
+        
+        // Apply visual styling based on staleness
+        [weatherEl, windEl].forEach(el => {
+            if (isVeryStale) {
+                el.style.color = '#c00'; // Red for very stale
+                el.style.fontWeight = 'bold';
+            } else if (isStale) {
+                el.style.color = '#f80'; // Orange for stale
+                el.style.fontWeight = '500';
+            } else {
+                el.style.color = '#666'; // Gray for fresh
+                el.style.fontWeight = 'normal';
+            }
+        });
+    } catch (error) {
+        console.error('[Weather] Error updating weather timestamp:', error);
+        // Silently fail - don't break weather display
+    }
 }
 
 /**
@@ -1785,10 +1796,11 @@ async function fetchOutageStatus() {
  * Uses client-side data for immediate feedback
  */
 function checkAndUpdateOutageBanner() {
-    const banner = document.getElementById('data-outage-banner');
-    if (!banner) {
-        return; // Banner doesn't exist (not in outage state)
-    }
+    try {
+        const banner = document.getElementById('data-outage-banner');
+        if (!banner) {
+            return; // Banner doesn't exist (not in outage state)
+        }
     
     const outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * SECONDS_PER_HOUR;
     const now = Math.floor(Date.now() / 1000);
@@ -2006,6 +2018,10 @@ function updateOutageBannerTimestamp() {
         console.error('[OutageBanner] Error formatting timestamp:', error);
         timestampElem.textContent = 'unknown time';
     }
+    } catch (error) {
+        console.error('[Weather] Error in checkAndUpdateOutageBanner:', error);
+        // Silently fail - don't break weather display
+    }
 }
 
 // Track fetching state for visual indicators
@@ -2079,6 +2095,13 @@ async function fetchWeather(forceRefresh = false) {
         }
         
         if (data.success) {
+            // Validate weather data structure
+            if (!data.weather || typeof data.weather !== 'object') {
+                console.error('[Weather] Invalid weather data structure:', data);
+                displayError('Invalid weather data received from server');
+                return;
+            }
+            
             const isStale = data.stale === true || false;
             const serverTimestamp = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : null;
             
@@ -2205,6 +2228,10 @@ function displayWeather(weather) {
     const weatherEmojis = getWeatherEmojis(weather);
     
     const container = document.getElementById('weather-data');
+    if (!container) {
+        console.error('[Weather] Container element not found: weather-data');
+        return;
+    }
     
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
@@ -2358,6 +2385,10 @@ function calculateRunwayOffset(heading, groupIndex, groupSize, maxOffset) {
 
 function updateWindVisual(weather) {
     const canvas = document.getElementById('windCanvas');
+    if (!canvas) {
+        console.warn('[Weather] Wind canvas element not found: windCanvas');
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 20;
     
