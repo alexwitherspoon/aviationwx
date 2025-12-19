@@ -2888,39 +2888,41 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
 
 <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
 // Reload webcam images using per-camera intervals
-<?php foreach ($airport['webcams'] as $index => $cam): 
-    // Get webcam refresh from config with global config fallback
-    $defaultWebcamRefresh = getDefaultWebcamRefresh();
-    $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
-    $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
-?>
-// Setup image load handlers for camera <?= $index ?>
-const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
-if (imgEl<?= $index ?>) {
-    // Check timestamp on initial load (images may already be cached)
-    // For first webcam (LCP element), delay timestamp check to avoid competing with LCP load
-    const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
-    if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
-        // Image already loaded, check timestamp after delay
-        setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
-    } else {
-        // Image not loaded yet, wait for load event, then delay timestamp check
-        imgEl<?= $index ?>.addEventListener('load', () => {
+(function() {
+    <?php foreach ($airport['webcams'] as $index => $cam): 
+        // Get webcam refresh from config with global config fallback
+        $defaultWebcamRefresh = getDefaultWebcamRefresh();
+        $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
+        $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
+    ?>
+    // Setup image load handlers for camera <?= $index ?>
+    const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
+    if (imgEl<?= $index ?>) {
+        // Check timestamp on initial load (images may already be cached)
+        // For first webcam (LCP element), delay timestamp check to avoid competing with LCP load
+        const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
+        if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
+            // Image already loaded, check timestamp after delay
             setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
-        }, { once: false }); // Allow multiple calls as images refresh
+        } else {
+            // Image not loaded yet, wait for load event, then delay timestamp check
+            imgEl<?= $index ?>.addEventListener('load', () => {
+                setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
+            }, { once: false }); // Allow multiple calls as images refresh
+        }
+        
+        // Also listen for error events - show placeholder if image failed
+        imgEl<?= $index ?>.addEventListener('error', function() {
+            handleWebcamError(<?= $index ?>, this);
+        });
     }
-    
-    // Also listen for error events - show placeholder if image failed
-    imgEl<?= $index ?>.addEventListener('error', function() {
-        handleWebcamError(<?= $index ?>, this);
-    });
-}
 
-// Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
-// Debounced: batched across all cameras to reduce requests
+    // Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
+    // Debounced: batched across all cameras to reduce requests
 
-setupStaggeredWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
-<?php endforeach; ?>
+    setupStaggeredWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
+    <?php endforeach; ?>
+})();
 <?php endif; ?>
 
 updateWeatherTimestamp();
@@ -2974,12 +2976,17 @@ function batchRefreshAllTimestamps() {
     setTimeout(() => { timestampBatchPending = false; }, 1000);
 }
 // Refresh all timestamps every 30 seconds (batched)
-setInterval(batchRefreshAllTimestamps, 30000);
+// Delay initial call to ensure DOM is ready
+setTimeout(() => {
+    setInterval(batchRefreshAllTimestamps, 30000);
+}, 1000);
 <?php endif; ?>
 
 // Fetch weather data using airport's configured refresh interval
-// Only fetch if weather_source is configured
-if (AIRPORT_DATA && AIRPORT_DATA.weather_source && Object.keys(AIRPORT_DATA.weather_source).length > 0) {
+// Fetch if weather_source is configured OR if metar_station is configured
+const hasWeatherSource = AIRPORT_DATA && AIRPORT_DATA.weather_source && Object.keys(AIRPORT_DATA.weather_source).length > 0;
+const hasMetarStation = AIRPORT_DATA && AIRPORT_DATA.metar_station;
+if (hasWeatherSource || hasMetarStation) {
     // Calculate weather refresh interval from airport config
     const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds * 1000 
