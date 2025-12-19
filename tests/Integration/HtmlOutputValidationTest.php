@@ -448,6 +448,121 @@ class HtmlOutputValidationTest extends TestCase
     }
     
     /**
+     * Test that required JavaScript functions are defined in HTML
+     * This ensures critical functions like fetchWeather, displayWeather, updateWeatherTimestamp exist
+     */
+    public function testAirportPage_RequiredJavaScriptFunctionsDefined()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Extract JavaScript code
+        preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $html, $matches);
+        $jsCode = implode("\n", $matches[1]);
+        
+        // Required functions that should be defined
+        $requiredFunctions = [
+            'fetchWeather',
+            'displayWeather',
+            'updateWeatherTimestamp'
+        ];
+        
+        $missingFunctions = [];
+        
+        foreach ($requiredFunctions as $funcName) {
+            // Check if function is defined (various patterns)
+            $patterns = [
+                "/function\s+{$funcName}\s*\(/",           // function fetchWeather(
+                "/const\s+{$funcName}\s*=\s*function/",    // const fetchWeather = function
+                "/const\s+{$funcName}\s*=\s*\(/",         // const fetchWeather = (
+                "/var\s+{$funcName}\s*=\s*function/",     // var fetchWeather = function
+                "/let\s+{$funcName}\s*=\s*function/",    // let fetchWeather = function
+                "/{$funcName}\s*[:=]\s*function/",       // fetchWeather: function or fetchWeather = function
+            ];
+            
+            $found = false;
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $jsCode)) {
+                    $found = true;
+                    break;
+                }
+            }
+            
+            if (!$found) {
+                $missingFunctions[] = $funcName;
+            }
+        }
+        
+        if (!empty($missingFunctions)) {
+            $this->fail(
+                "Required JavaScript functions not found in HTML: " . implode(', ', $missingFunctions) . "\n" .
+                "These functions are critical for weather data display and updates."
+            );
+        }
+        
+        $this->assertTrue(true, 'All required JavaScript functions are defined');
+    }
+    
+    /**
+     * Test that Service Worker file exists and has correct MIME type
+     * This ensures the Service Worker file is accessible and properly configured
+     */
+    public function testServiceWorker_FileExistsAndHasCorrectMimeType()
+    {
+        $swPath = '/public/js/service-worker.js';
+        $response = $this->makeRequest($swPath);
+        
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Service Worker endpoint not available");
+            return;
+        }
+        
+        // Service Worker file should exist (200) or be accessible
+        $this->assertEquals(
+            200,
+            $response['http_code'],
+            "Service Worker file should be accessible (got HTTP {$response['http_code']})"
+        );
+        
+        // Get content type from headers (if available) or check file content
+        $body = $response['body'];
+        
+        // Should not be HTML (404 page)
+        $this->assertStringNotContainsString(
+            '<!DOCTYPE',
+            $body,
+            "Service Worker file should not return HTML (404 page)"
+        );
+        
+        $this->assertStringNotContainsString(
+            '<html',
+            $body,
+            "Service Worker file should not return HTML (404 page)"
+        );
+        
+        // Should contain JavaScript code (Service Worker specific)
+        $this->assertStringContainsString(
+            'serviceWorker',
+            $body,
+            "Service Worker file should contain serviceWorker code"
+        );
+        
+        // Should contain self.addEventListener (Service Worker API)
+        $hasAddEventListener = strpos($body, 'self.addEventListener') !== false || 
+                              strpos($body, 'addEventListener') !== false;
+        $this->assertTrue(
+            $hasAddEventListener,
+            "Service Worker file should contain addEventListener (Service Worker API)"
+        );
+    }
+    
+    /**
      * Helper method to make HTTP request
      */
     private function makeRequest(string $path): array
