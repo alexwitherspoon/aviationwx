@@ -14,11 +14,13 @@ require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 // The checkVpnStatus function below doesn't actually use any functions from vpn-routing.php
 // It just reads the cache file directly, so we don't need to require it
 
-// Prevent caching
-header('Content-Type: text/html; charset=utf-8');
-header('Cache-Control: no-cache, no-store, must-revalidate');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Prevent caching (only in web context, not CLI)
+if (php_sapi_name() !== 'cli' && !headers_sent()) {
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
 
 /**
  * Determine status color
@@ -817,6 +819,13 @@ usort($airportHealth, function($a, $b) {
     $statusOrder = ['down' => 0, 'maintenance' => 1, 'degraded' => 2, 'operational' => 3];
     return $statusOrder[$a['status']] <=> $statusOrder[$b['status']];
 });
+
+// Prevent HTML output in CLI mode (tests, scripts)
+// Functions are still available for testing, but HTML output is skipped
+if (php_sapi_name() === 'cli') {
+    // In CLI mode, just return - functions are already defined and can be tested
+    return;
+}
 
 ?>
 <!DOCTYPE html>
