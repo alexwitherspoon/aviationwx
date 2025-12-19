@@ -136,6 +136,11 @@ h3 {
     text-decoration: underline;
 }
 
+.address-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
 /* Frequencies */
 .frequencies {
     margin-top: 1.5rem;

@@ -435,41 +435,49 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <section class="airport-info">
             <div class="info-grid">
                 <?php
-                // Build Google Maps URL - prefer coordinates for accuracy, fallback to address text
-                $mapsUrl = '';
+                // Build geo: URI for location - uses standard geo URI scheme (RFC 5870)
+                // Browser/OS will handle opening in default mapping application
+                $geoUrl = '';
                 $addressText = '';
                 $formattedAddress = '';
-                if (isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon'])) {
-                    // Use coordinates for precise location
-                    $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['lat'] . ',' . $airport['lon']);
-                    // Use address text if available, otherwise show coordinates
+                $hasCoordinates = isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon']);
+                
+                if ($hasCoordinates) {
+                    // Build geo: URI with coordinates (required per RFC 5870)
+                    $lat = (float)$airport['lat'];
+                    $lon = (float)$airport['lon'];
+                    $geoUrl = 'geo:' . $lat . ',' . $lon;
+                    
+                    // Add address as query parameter if available
                     if (!empty($airport['address'])) {
                         $addressText = $airport['address'];
                         $formattedAddress = formatAddressEnvelope($airport['address']);
+                        $geoUrl .= '?q=' . urlencode($airport['address']);
                     } else {
-                        $addressText = $airport['lat'] . ', ' . $airport['lon'];
+                        $addressText = $lat . ', ' . $lon;
                         $formattedAddress = htmlspecialchars($addressText);
                     }
                 } else if (!empty($airport['address'])) {
-                    // Fallback to address text
-                    $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode($airport['address']);
+                    // Address only - display as semantic text (geo: requires coordinates)
                     $addressText = $airport['address'];
                     $formattedAddress = formatAddressEnvelope($airport['address']);
                 }
                 
                 // Only show location if we have either coordinates or address
-                if (!empty($mapsUrl) && !empty($addressText)):
+                if ((!empty($geoUrl) || !empty($addressText)) && !empty($addressText)):
                 ?>
                 <div class="info-item">
                     <span class="label">Location:</span>
                     <span class="value">
-                        <a href="<?= htmlspecialchars($mapsUrl) ?>" 
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           title="Open in Google Maps"
-                           class="address-link">
+                        <?php if (!empty($geoUrl)): ?>
+                        <a href="<?= htmlspecialchars($geoUrl) ?>" 
+                           class="address-link"
+                           title="Open location in maps">
                             <?= $formattedAddress ?>
                         </a>
+                        <?php else: ?>
+                        <span class="address-text"><?= $formattedAddress ?></span>
+                        <?php endif; ?>
                     </span>
                 </div>
                 <?php endif; ?>

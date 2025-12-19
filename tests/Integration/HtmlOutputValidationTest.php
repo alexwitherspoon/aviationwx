@@ -691,5 +691,141 @@ class HtmlOutputValidationTest extends TestCase
             "Repairs should show 'Not Available' when services are missing"
         );
     }
+    
+    /**
+     * Test that Location field uses geo: URI scheme when coordinates are available
+     */
+    public function testAirportPage_LocationUsesGeoUriWithCoordinates()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Load test config to verify coordinates
+        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        if (!file_exists($configPath)) {
+            $this->markTestSkipped("Test configuration not found");
+            return;
+        }
+        
+        $config = json_decode(file_get_contents($configPath), true);
+        $airport = $config['airports']['kspb'] ?? null;
+        
+        if ($airport === null || empty($airport['lat']) || empty($airport['lon'])) {
+            $this->markTestSkipped("Airport coordinates not available in test fixture");
+            return;
+        }
+        
+        // Verify geo: URI is present (format: geo:lat,lon or geo:lat,lon?q=address)
+        $lat = (float)$airport['lat'];
+        $lon = (float)$airport['lon'];
+        $geoPattern = '/href=["\']geo:' . preg_quote($lat, '/') . ',' . preg_quote($lon, '/') . '/';
+        
+        $this->assertMatchesRegularExpression(
+            $geoPattern,
+            $html,
+            "Location field should use geo: URI scheme with coordinates"
+        );
+        
+        // Verify it's not using Google Maps URL
+        $this->assertStringNotContainsString(
+            'maps.google.com',
+            $html,
+            "Location field should not use Google Maps URL"
+        );
+        
+        // Verify address-link class is present
+        $this->assertStringContainsString(
+            'class="address-link"',
+            $html,
+            "Location link should have address-link class"
+        );
+    }
+    
+    /**
+     * Test that Location field displays address text correctly
+     */
+    public function testAirportPage_LocationDisplaysAddressText()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Load test config to verify address
+        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        if (!file_exists($configPath)) {
+            $this->markTestSkipped("Test configuration not found");
+            return;
+        }
+        
+        $config = json_decode(file_get_contents($configPath), true);
+        $airport = $config['airports']['kspb'] ?? null;
+        
+        if ($airport === null || empty($airport['address'])) {
+            $this->markTestSkipped("Airport address not available in test fixture");
+            return;
+        }
+        
+        // Verify address text is displayed (should contain city name)
+        $addressParts = explode(',', $airport['address']);
+        $cityName = trim($addressParts[0]);
+        
+        $this->assertStringContainsString(
+            htmlspecialchars($cityName, ENT_QUOTES, 'UTF-8'),
+            $html,
+            "Location field should display address text"
+        );
+    }
+    
+    /**
+     * Test that geo: URI includes address query parameter when address is available
+     */
+    public function testAirportPage_GeoUriIncludesAddressQuery()
+    {
+        $response = $this->makeRequest('?airport=kspb');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+        
+        $html = $response['body'];
+        
+        // Load test config
+        $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
+        if (!file_exists($configPath)) {
+            $this->markTestSkipped("Test configuration not found");
+            return;
+        }
+        
+        $config = json_decode(file_get_contents($configPath), true);
+        $airport = $config['airports']['kspb'] ?? null;
+        
+        if ($airport === null || empty($airport['lat']) || empty($airport['lon']) || empty($airport['address'])) {
+            $this->markTestSkipped("Required airport data not available in test fixture");
+            return;
+        }
+        
+        // Verify geo: URI includes ?q= parameter with address
+        $lat = (float)$airport['lat'];
+        $lon = (float)$airport['lon'];
+        $geoPattern = '/href=["\']geo:' . preg_quote($lat, '/') . ',' . preg_quote($lon, '/') . '\?q=/';
+        
+        $this->assertMatchesRegularExpression(
+            $geoPattern,
+            $html,
+            "geo: URI should include address query parameter when address is available"
+        );
+    }
 }
 
