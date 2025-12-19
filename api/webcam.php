@@ -859,7 +859,11 @@ function serve202Response(string $preferredFormat, int $jpegMtime, int $refreshI
  * @return void
  */
 function serve200Response(string $filePath, string $contentType, ?int $mtime = null, ?int $refreshInterval = null): void {
-    global $airportId, $camIndex, $isRateLimited;
+    // Access global variables for logging
+    global $airportId, $camIndex;
+    
+    // Check rate limiting (re-check since we can't easily pass the variable)
+    $isRateLimited = !checkRateLimit('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
     
     // Get file metadata if not provided
     if ($mtime === null) {
