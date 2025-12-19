@@ -14,6 +14,8 @@ use PHPUnit\Framework\TestCase;
 class HtmlOutputValidationTest extends TestCase
 {
     private $baseUrl;
+    private $cachedHtml = null;
+    private $cachedHtmlAirport = null;
     
     protected function setUp(): void
     {
@@ -27,19 +29,41 @@ class HtmlOutputValidationTest extends TestCase
     }
     
     /**
+     * Get cached HTML for airport page (cache per test run)
+     * This reduces HTTP requests from 19 to 1 for tests that use the same airport
+     */
+    private function getCachedHtml(string $airport = 'kspb'): ?string
+    {
+        // Return cached HTML if available and for same airport
+        if ($this->cachedHtml !== null && $this->cachedHtmlAirport === $airport) {
+            return $this->cachedHtml;
+        }
+        
+        // Fetch and cache HTML
+        $response = $this->makeRequest("?airport={$airport}");
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            return null; // Return null if request failed (test will skip)
+        }
+        
+        $this->cachedHtml = $response['body'];
+        $this->cachedHtmlAirport = $airport;
+        
+        return $this->cachedHtml;
+    }
+    
+    /**
      * Test that all script tags are properly closed in airport page output
      * This catches the bug where script tags were opened but not closed
      */
     public function testAirportPage_AllScriptTagsAreClosed()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Count opening and closing script tags
         preg_match_all('/<script[^>]*>/i', $html, $openingTags);
@@ -60,14 +84,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_NoUnclosedScriptTags()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Find all script tags and verify each has a closing tag
         preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $html, $matchedScripts);
@@ -89,14 +111,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_ScriptTagsDontContainHtml()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Extract all script tag contents
         preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $html, $matches);
@@ -161,14 +181,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_MainJavaScriptScriptTagIsClosed()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Find the main JavaScript script tag (contains AIRPORT_ID)
         if (preg_match('/<script[^>]*>.*?AIRPORT_ID.*?<\/script>/is', $html, $matches)) {
@@ -189,14 +207,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_HtmlStructureIsValid()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Check for basic HTML structure
         $this->assertStringContainsString('<html', strtolower($html), "HTML should contain <html> tag");
@@ -232,14 +248,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_CustomLinksAreRendered()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Load test config to check if links are configured
         $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
@@ -308,14 +322,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_NoPhpErrorsInOutput()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Check for common PHP error patterns
         $phpErrorPatterns = [
@@ -343,14 +355,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_JavaScriptNoPhpFunctions()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] != 200) {
-            $this->markTestSkipped("Page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Extract JavaScript code
         preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $html, $matches);
@@ -399,14 +409,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_JavaScriptApiEndpointsAreCorrect()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] != 200) {
-            $this->markTestSkipped("Page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Check for incorrect weather.php calls (should be /api/weather.php)
         // Look for patterns like: "/weather.php?" or "weather.php?" but not "/api/weather.php"
@@ -453,14 +461,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_RequiredJavaScriptFunctionsDefined()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Required functions that should be defined
         // Search directly in HTML (functions are in inline script tags)
@@ -599,14 +605,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_PartnershipsSectionRendered()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Check for partnerships section
         $this->assertStringContainsString(
@@ -628,14 +632,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_PartnershipsContainLinks()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Check for partner-link class (indicates partner items are rendered)
         // Note: This test will pass even if no partners are configured (section exists but empty)
@@ -659,14 +661,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_DataSourcesSectionRendered()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Check for data sources content
         $this->assertStringContainsString(
@@ -688,14 +688,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_FuelAndRepairsAlwaysDisplayed()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Both fields should always be present
         $this->assertStringContainsString(
@@ -716,14 +714,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_FuelAndRepairsShowConfiguredValues()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Load test config to check services configuration
         $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
@@ -819,14 +815,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_LocationUsesGeoUriWithCoordinates()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Load test config to verify coordinates
         $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
@@ -888,14 +882,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_LocationDisplaysAddressText()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Load test config to verify address
         $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
@@ -928,14 +920,12 @@ class HtmlOutputValidationTest extends TestCase
      */
     public function testAirportPage_GeoUriIncludesAddressQuery()
     {
-        $response = $this->makeRequest('?airport=kspb');
+        $html = $this->getCachedHtml('kspb');
         
-        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
-            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+        if ($html === null) {
+            $this->markTestSkipped("Airport page not available");
             return;
         }
-        
-        $html = $response['body'];
         
         // Load test config
         $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../Fixtures/airports.json.test';
