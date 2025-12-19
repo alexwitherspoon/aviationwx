@@ -8,25 +8,11 @@
 
 use PHPUnit\Framework\TestCase;
 
-// Define variables before including airport.php to avoid top-level code errors
-$airport = ['name' => 'Test Airport', 'address' => 'Test City'];
-$airportId = 'test';
-
 require_once __DIR__ . '/../../lib/config.php';
-require_once __DIR__ . '/../../lib/seo.php';
-require_once __DIR__ . '/../../lib/address-formatter.php';
-require_once __DIR__ . '/../../lib/weather/utils.php';
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/logger.php';
-
-// Suppress HTML output from airport.php during tests
-if (ob_get_level() === 0) {
-    ob_start();
-}
-require_once __DIR__ . '/../../pages/airport.php';
-if (ob_get_level() > 0) {
-    ob_end_clean();
-}
+require_once __DIR__ . '/../../lib/weather/source-timestamps.php';
+require_once __DIR__ . '/../../lib/weather/outage-detection.php';
 
 class OutageDetectionTest extends TestCase
 {

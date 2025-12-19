@@ -13,7 +13,8 @@ header('Expires: 0');
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/constants.php';
-require_once __DIR__ . '/../pages/airport.php';
+require_once __DIR__ . '/../lib/weather/outage-detection.php';
+require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 
 // Get airport parameter
 $airportId = isset($_GET['airport']) ? trim($_GET['airport']) : '';
