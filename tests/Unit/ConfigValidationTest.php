@@ -2150,6 +2150,127 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('weather_refresh_default must be a positive integer', implode(' ', $result['errors']));
     }
 
+    /**
+     * Test format generation flags validation - Valid booleans
+     */
+    public function testGlobalConfig_FormatFlags_ValidBooleans()
+    {
+        $config = [
+            'config' => [
+                'webcam_generate_webp' => true,
+                'webcam_generate_avif' => false
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid boolean flags should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test format generation flags validation - Invalid types
+     */
+    public function testGlobalConfig_FormatFlags_InvalidTypes()
+    {
+        $config = [
+            'config' => [
+                'webcam_generate_webp' => 'true',  // String, not boolean
+                'webcam_generate_avif' => 1        // Integer, not boolean
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Invalid type flags should fail validation');
+        $this->assertCount(2, $result['errors']);
+        $this->assertStringContainsString('webcam_generate_webp must be a boolean', implode(' ', $result['errors']));
+        $this->assertStringContainsString('webcam_generate_avif must be a boolean', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test format generation flags validation - Optional (can be omitted)
+     */
+    public function testGlobalConfig_FormatFlags_Optional()
+    {
+        $config = [
+            'config' => [
+                // Format flags omitted - should default to false
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Omitted format flags should pass validation (defaults to false)');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test format generation flags validation - Both true
+     */
+    public function testGlobalConfig_FormatFlags_BothTrue()
+    {
+        $config = [
+            'config' => [
+                'webcam_generate_webp' => true,
+                'webcam_generate_avif' => true
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Both flags true should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test format generation flags validation - Both false
+     */
+    public function testGlobalConfig_FormatFlags_BothFalse()
+    {
+        $config = [
+            'config' => [
+                'webcam_generate_webp' => false,
+                'webcam_generate_avif' => false
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Both flags false should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
     public function testGlobalConfig_InvalidDefaultTimezone()
     {
         $config = [

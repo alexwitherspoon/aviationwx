@@ -43,6 +43,7 @@ services:
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
+      - MOCK_WEATHER=${MOCK_WEATHER:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

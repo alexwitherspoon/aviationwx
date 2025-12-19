@@ -36,8 +36,23 @@ The `config` section (optional) contains application-wide defaults:
 - **`max_stale_hours`** - Maximum stale data threshold in hours (default: `3`)
 - **`webcam_refresh_default`** - Default webcam refresh interval in seconds (default: `60`)
 - **`weather_refresh_default`** - Default weather refresh interval in seconds (default: `60`)
+- **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
+- **`webcam_generate_avif`** - Enable AVIF generation globally (default: `false`)
 
 If the `config` section is omitted, sensible defaults are used.
+
+### Webcam Format Generation
+
+**Global Configuration:**
+- `webcam_generate_webp` - Enable WebP generation (default: `false`)
+- `webcam_generate_avif` - Enable AVIF generation (default: `false`)
+
+**Note:** JPEG is always generated and always available as fallback.
+
+**Format Request Behavior:**
+- Requests with explicit `fmt=webp` or `fmt=avif` parameter may return HTTP 202 if format is generating
+- Requests without `fmt=` parameter always return HTTP 200 immediately with best available format
+- Server respects `Accept` header for format selection when no explicit format is requested
 
 ## Supported Weather Sources
 

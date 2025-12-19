@@ -335,42 +335,41 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <div class="webcam-item">
                     <div class="webcam-container">
                         <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: 16/9; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
-                        <picture style="position: relative; z-index: 2;">
-                            <?php
-                            // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
-                            // Cache is at root level, not in pages directory
-                            // Use EXIF capture time when available for accurate timestamp display
-                            $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
-                            $mtimeJpg = 0;
-                            $sizeJpg = 0;
-                            foreach (['.jpg', '.webp'] as $ext) {
-                                $filePath = $base . $ext;
-                                if (file_exists($filePath)) {
-                                    // Use EXIF capture time if available, otherwise filemtime
-                                    $mtimeJpg = getImageCaptureTimeForPage($filePath);
-                                    $sizeJpg = filesize($filePath);
-                                    break;
-                                }
+                        <?php
+                        // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
+                        // Cache is at root level, not in pages directory
+                        // Use EXIF capture time when available for accurate timestamp display
+                        // HTML images do NOT use fmt= parameter - server respects Accept header, always returns 200
+                        $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
+                        $mtimeJpg = 0;
+                        $sizeJpg = 0;
+                        foreach (['.jpg', '.webp'] as $ext) {
+                            $filePath = $base . $ext;
+                            if (file_exists($filePath)) {
+                                // Use EXIF capture time if available, otherwise filemtime
+                                $mtimeJpg = getImageCaptureTimeForPage($filePath);
+                                $sizeJpg = filesize($filePath);
+                                break;
                             }
-                            // Match webcam.php hash generation: airport_id + cam_index + fmt + mtime + size
-                            $imgHash = substr(md5($airportId . '_' . $index . '_jpg_' . $mtimeJpg . '_' . $sizeJpg), 0, 8);
-                            ?>
-                            <source id="webcam-webp-<?= $index ?>" type="image/webp" srcset="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=webp&v=<?= $imgHash ?>">
-                            <img id="webcam-<?= $index ?>" 
-                                 src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&fmt=jpg&v=<?= $imgHash ?>"
-                                 data-initial-timestamp="<?= $mtimeJpg ?>" 
-                                 alt="<?= htmlspecialchars($cam['name']) ?>"
-                                 title="<?= htmlspecialchars($cam['name']) ?>"
-                                 class="webcam-image"
-                                 width="1600"
-                                 height="900"
-                                 style="aspect-ratio: 16/9; width: 100%; height: auto;"
-                                 fetchpriority="high"
-                                 decoding="async"
-                                 onerror="handleWebcamError(<?= $index ?>, this)"
-                                 onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
-                                 onclick="openLiveStream(this.src)">
-                        </picture>
+                        }
+                        // Match webcam.php hash generation: airport_id + cam_index + fmt + mtime + size
+                        // Use 'jpg' for hash since HTML image doesn't specify format (server decides)
+                        $imgHash = substr(md5($airportId . '_' . $index . '_jpg_' . $mtimeJpg . '_' . $sizeJpg), 0, 8);
+                        ?>
+                        <img id="webcam-<?= $index ?>" 
+                             src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&v=<?= $imgHash ?>"
+                             data-initial-timestamp="<?= $mtimeJpg ?>" 
+                             alt="<?= htmlspecialchars($cam['name']) ?>"
+                             title="<?= htmlspecialchars($cam['name']) ?>"
+                             class="webcam-image"
+                             width="1600"
+                             height="900"
+                             style="aspect-ratio: 16/9; width: 100%; height: auto; position: relative; z-index: 2;"
+                             fetchpriority="high"
+                             decoding="async"
+                             onerror="handleWebcamError(<?= $index ?>, this)"
+                             onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
+                             onclick="openLiveStream(this.src)">
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
@@ -1625,11 +1624,20 @@ if (document.getElementById('wind-speed-unit-toggle')) {
 
 // Set weather last updated time to relative
 function updateWeatherTimestamp() {
-    if (weatherLastUpdated === null) {
-        document.getElementById('weather-last-updated').textContent = '--';
-        document.getElementById('wind-last-updated').textContent = '--';
-        return;
-    }
+    try {
+        const weatherEl = document.getElementById('weather-last-updated');
+        const windEl = document.getElementById('wind-last-updated');
+        
+        if (!weatherEl || !windEl) {
+            console.warn('[Weather] Timestamp elements not found');
+            return;
+        }
+        
+        if (weatherLastUpdated === null) {
+            weatherEl.textContent = '--';
+            windEl.textContent = '--';
+            return;
+        }
     
     const now = new Date();
     const diffSeconds = Math.floor((now - weatherLastUpdated) / 1000);
@@ -1706,24 +1714,26 @@ function updateWeatherTimestamp() {
         timeStr = formatRelativeTime(diffSeconds);
     }
     
-    const weatherEl = document.getElementById('weather-last-updated');
-    const windEl = document.getElementById('wind-last-updated');
-    weatherEl.textContent = timeStr;
-    windEl.textContent = timeStr;
-    
-    // Apply visual styling based on staleness
-    [weatherEl, windEl].forEach(el => {
-        if (isVeryStale) {
-            el.style.color = '#c00'; // Red for very stale
-            el.style.fontWeight = 'bold';
-        } else if (isStale) {
-            el.style.color = '#f80'; // Orange for stale
-            el.style.fontWeight = '500';
-        } else {
-            el.style.color = '#666'; // Gray for fresh
-            el.style.fontWeight = 'normal';
-        }
-    });
+        weatherEl.textContent = timeStr;
+        windEl.textContent = timeStr;
+        
+        // Apply visual styling based on staleness
+        [weatherEl, windEl].forEach(el => {
+            if (isVeryStale) {
+                el.style.color = '#c00'; // Red for very stale
+                el.style.fontWeight = 'bold';
+            } else if (isStale) {
+                el.style.color = '#f80'; // Orange for stale
+                el.style.fontWeight = '500';
+            } else {
+                el.style.color = '#666'; // Gray for fresh
+                el.style.fontWeight = 'normal';
+            }
+        });
+    } catch (error) {
+        console.error('[Weather] Error updating weather timestamp:', error);
+        // Silently fail - don't break weather display
+    }
 }
 
 /**
@@ -1786,10 +1796,11 @@ async function fetchOutageStatus() {
  * Uses client-side data for immediate feedback
  */
 function checkAndUpdateOutageBanner() {
-    const banner = document.getElementById('data-outage-banner');
-    if (!banner) {
-        return; // Banner doesn't exist (not in outage state)
-    }
+    try {
+        const banner = document.getElementById('data-outage-banner');
+        if (!banner) {
+            return; // Banner doesn't exist (not in outage state)
+        }
     
     const outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * SECONDS_PER_HOUR;
     const now = Math.floor(Date.now() / 1000);
@@ -2007,6 +2018,10 @@ function updateOutageBannerTimestamp() {
         console.error('[OutageBanner] Error formatting timestamp:', error);
         timestampElem.textContent = 'unknown time';
     }
+    } catch (error) {
+        console.error('[Weather] Error in checkAndUpdateOutageBanner:', error);
+        // Silently fail - don't break weather display
+    }
 }
 
 // Track fetching state for visual indicators
@@ -2080,6 +2095,13 @@ async function fetchWeather(forceRefresh = false) {
         }
         
         if (data.success) {
+            // Validate weather data structure
+            if (!data.weather || typeof data.weather !== 'object') {
+                console.error('[Weather] Invalid weather data structure:', data);
+                displayError('Invalid weather data received from server');
+                return;
+            }
+            
             const isStale = data.stale === true || false;
             const serverTimestamp = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : null;
             
@@ -2206,6 +2228,10 @@ function displayWeather(weather) {
     const weatherEmojis = getWeatherEmojis(weather);
     
     const container = document.getElementById('weather-data');
+    if (!container) {
+        console.error('[Weather] Container element not found: weather-data');
+        return;
+    }
     
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
@@ -2359,6 +2385,10 @@ function calculateRunwayOffset(heading, groupIndex, groupSize, maxOffset) {
 
 function updateWindVisual(weather) {
     const canvas = document.getElementById('windCanvas');
+    if (!canvas) {
+        console.warn('[Weather] Wind canvas element not found: windCanvas');
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 20;
     
@@ -2865,7 +2895,6 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
     $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 ?>
 // Setup image load handlers for camera <?= $index ?>
-// Note: For picture elements, only the final <img> fires load events
 const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
 if (imgEl<?= $index ?>) {
     // Check timestamp on initial load (images may already be cached)
@@ -2890,9 +2919,7 @@ if (imgEl<?= $index ?>) {
 // Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
 // Debounced: batched across all cameras to reduce requests
 
-setInterval(() => {
-    safeSwapCameraImage(<?= $index ?>);
-}, <?= max(1, $perCam) * 1000 ?>);
+setupStaggeredWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
 <?php endforeach; ?>
 <?php endif; ?>
 
@@ -2978,6 +3005,513 @@ function handleWebcamError(camIndex, img) {
     img.onerror = null; // Prevent infinite loop if placeholder also fails
 }
 
+/**
+ * Get random stagger offset for camera
+ * 
+ * Random offset per client (better distribution, avoids clustering).
+ * No sessionStorage needed - each page load gets new random offset.
+ * 
+ * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
+ * @returns {number} Stagger offset in seconds (20-30% of interval)
+ */
+function getStaggerOffset(baseInterval) {
+    // Random offset 20-30% of interval (accounts for format generation + buffer)
+    // For 60s: 12-18 seconds
+    // For 30s: 6-9 seconds  
+    // For 120s: 24-36 seconds
+    const minPercent = 0.20;
+    const maxPercent = 0.30;
+    const percent = minPercent + Math.random() * (maxPercent - minPercent);
+    return Math.floor(baseInterval * percent);
+}
+
+/**
+ * Setup staggered webcam refresh
+ * 
+ * First refresh: Immediate (user gets data quickly, handles stale images)
+ * Subsequent refreshes: Staggered (avoids cron spike at :00)
+ * 
+ * @param {number} camIndex Camera index
+ * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
+ */
+function setupStaggeredWebcamRefresh(camIndex, baseInterval) {
+    // FIRST refresh: Immediate (no stagger)
+    // This ensures user gets fresh data quickly on initial load
+    safeSwapCameraImage(camIndex);
+    
+    // Calculate stagger for subsequent refreshes
+    const staggerOffset = getStaggerOffset(baseInterval);
+    
+    // Calculate delay until next staggered refresh
+    // Use client time (accept some drift - randomness still distributes load)
+    const now = new Date();
+    const secondsPastMinute = now.getSeconds();
+    
+    // Next refresh: next minute + stagger offset
+    const secondsUntilNextMinute = 60 - secondsPastMinute;
+    const nextRefreshDelay = (secondsUntilNextMinute + staggerOffset) * 1000;
+    
+    // Schedule first staggered refresh
+    const staggeredTimeout = setTimeout(() => {
+        safeSwapCameraImage(camIndex);
+        
+        // Then continue with normal interval
+        setInterval(() => {
+            safeSwapCameraImage(camIndex);
+        }, baseInterval * 1000);
+    }, nextRefreshDelay);
+    
+    // Store timeout ID for cleanup
+    if (!window.webcamRefreshTimeouts) {
+        window.webcamRefreshTimeouts = new Map();
+    }
+    window.webcamRefreshTimeouts.set(camIndex, staggeredTimeout);
+}
+
+/**
+ * Determine preferred format based on browser support
+ * 
+ * @returns {string} Preferred format: 'avif', 'webp', or 'jpg'
+ */
+function determinePreferredFormat() {
+    // Check browser support (simple detection)
+    const canvas = document.createElement('canvas');
+    if (canvas.toDataURL('image/avif').indexOf('data:image/avif') === 0) {
+        return 'avif';
+    }
+    if (canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0) {
+        return 'webp';
+    }
+    return 'jpg';
+}
+
+/**
+ * Check if image is already rendered on page
+ * 
+ * @param {number} camIndex Camera index
+ * @returns {boolean} True if image is loaded and visible
+ */
+function hasExistingImage(camIndex) {
+    const img = document.getElementById(`webcam-${camIndex}`);
+    if (!img) return false;
+    
+    // Image is loaded and visible
+    if (img.complete && img.naturalHeight > 0) {
+        return true;
+    }
+    
+    // We have a timestamp (image was loaded before)
+    if (CAM_TS[camIndex] && CAM_TS[camIndex] > 0) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Calculate image hash for cache busting
+ * 
+ * @param {string} airportId Airport ID
+ * @param {number} camIndex Camera index
+ * @param {string} format Format: 'jpg', 'webp', or 'avif'
+ * @param {number} timestamp Image timestamp
+ * @param {number} size Image size
+ * @returns {string} 8-character hex hash
+ */
+function calculateImageHash(airportId, camIndex, format, timestamp, size) {
+    const hashInput = `${airportId}_${camIndex}_${format}_${timestamp}_${size || 0}`;
+    let hash = 0;
+    for (let i = 0; i < hashInput.length; i++) {
+        const char = hashInput.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+    // Convert to hex string and take first 8 chars
+    return Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
+}
+
+/**
+ * Update image silently (no user alerts)
+ * 
+ * @param {number} camIndex Camera index
+ * @param {string} blobUrl Blob URL of image
+ * @param {number} timestamp Image timestamp
+ */
+function updateImageSilently(camIndex, blobUrl, timestamp) {
+    const img = document.getElementById(`webcam-${camIndex}`);
+    if (img) {
+        const oldSrc = img.src;
+        img.src = blobUrl;
+        if (timestamp) {
+            img.dataset.initialTimestamp = timestamp.toString();
+            CAM_TS[camIndex] = timestamp;
+        }
+        
+        // Cleanup old blob URL if it was a blob
+        if (oldSrc.startsWith('blob:')) {
+            URL.revokeObjectURL(oldSrc);
+        }
+        
+        // Update timestamp display silently
+        const timestampElem = document.getElementById(`webcam-timestamp-${camIndex}`);
+        if (timestampElem && timestamp) {
+            updateTimestampDisplay(timestampElem, timestamp);
+        }
+        
+        // Hide skeleton
+        const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
+        if (skeleton) skeleton.style.display = 'none';
+    }
+}
+
+/**
+ * Load image from URL
+ * 
+ * @param {string} url Image URL
+ * @param {number} camIndex Camera index
+ * @param {number} timestamp Image timestamp
+ */
+async function loadImageFromUrl(url, camIndex, timestamp) {
+    try {
+        const response = await fetch(url, {
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+        
+        if (response.status === 200) {
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            updateImageSilently(camIndex, blobUrl, timestamp);
+        }
+    } catch (error) {
+        // Silent error - user already has image or placeholder
+    }
+}
+
+/**
+ * Handle JPEG generating (aggressive backoff)
+ * 
+ * @param {number} camIndex Camera index
+ * @param {boolean} hasExisting Whether image is already rendered
+ * @param {object} data 202 response data
+ */
+async function handleJpegGenerating(camIndex, hasExisting, data) {
+    const { fallback_url } = data;
+    
+    if (!hasExisting) {
+        // Initial load: wait briefly (0.2s, 0.5s, 1s) then show placeholder
+        const backoffs = [200, 500, 1000];
+        let attempt = 0;
+        
+        const tryLoad = async () => {
+            if (attempt >= backoffs.length) {
+                // Show placeholder
+                const img = document.getElementById(`webcam-${camIndex}`);
+                if (img) {
+                    img.src = '/public/images/placeholder.jpg';
+                }
+                return;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, backoffs[attempt]));
+            attempt++;
+            
+            try {
+                const response = await fetch(fallback_url, {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                
+                if (response.status === 200) {
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    updateImageSilently(camIndex, blobUrl);
+                    return;
+                }
+                
+                if (response.status === 202) {
+                    // Still generating - retry
+                    tryLoad();
+                    return;
+                }
+            } catch (error) {
+                // Retry
+                tryLoad();
+            }
+        };
+        
+        tryLoad();
+    } else {
+        // Refresh: wait briefly (0.5s, 1s, 2s) then show last known image
+        const backoffs = [500, 1000, 2000];
+        let attempt = 0;
+        
+        const tryLoad = async () => {
+            if (attempt >= backoffs.length) {
+                // Keep existing image (already rendered)
+                return;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, backoffs[attempt]));
+            attempt++;
+            
+            try {
+                const response = await fetch(fallback_url, {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                
+                if (response.status === 200) {
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    updateImageSilently(camIndex, blobUrl);
+                    return;
+                }
+                
+                if (response.status === 202) {
+                    // Still generating - retry
+                    tryLoad();
+                    return;
+                }
+            } catch (error) {
+                // Retry
+                tryLoad();
+            }
+        };
+        
+        tryLoad();
+    }
+}
+
+/**
+ * Cancel format retry for camera
+ * 
+ * @param {number} camIndex Camera index
+ */
+function cancelFormatRetry(camIndex) {
+    if (!window.formatRetries) return;
+    
+    const retry = window.formatRetries.get(camIndex);
+    if (retry) {
+        if (retry.abortController) {
+            retry.abortController.abort();
+        }
+        if (retry.timeoutId) {
+            clearTimeout(retry.timeoutId);
+        }
+        window.formatRetries.delete(camIndex);
+    }
+}
+
+/**
+ * Start format retry with lightweight checks
+ * 
+ * Uses mtime endpoint to check format availability before requesting image.
+ * Reduces unnecessary image requests.
+ * 
+ * @param {number} camIndex Camera index
+ * @param {object} data 202 response data
+ */
+function startFormatRetry(camIndex, data) {
+    // Cancel any existing retry for this camera
+    cancelFormatRetry(camIndex);
+    
+    const { preferred_url, format, jpeg_timestamp, estimated_ready_seconds } = data;
+    const abortController = new AbortController();
+    const maxWait = 10000; // 10 seconds max
+    const startTime = Date.now();
+    let retryCount = 0;
+    
+    if (!window.formatRetries) {
+        window.formatRetries = new Map();
+    }
+    window.formatRetries.set(camIndex, { abortController, jpegTimestamp: jpeg_timestamp });
+    
+    const attemptRetry = async () => {
+        // Check timeout
+        if (Date.now() - startTime > maxWait) {
+            window.formatRetries.delete(camIndex);
+            return; // Silent timeout - user already has fallback
+        }
+        
+        // Check if new cycle started (timestamp changed)
+        try {
+            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+            const host = window.location.host;
+            const mtimeResponse = await fetch(
+                `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`,
+                { 
+                    signal: abortController.signal,
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                }
+            );
+            
+            if (!mtimeResponse.ok) {
+                throw new Error('mtime check failed');
+            }
+            
+            const mtimeData = await mtimeResponse.json();
+            
+            // New cycle started - cancel this retry
+            if (mtimeData.timestamp && mtimeData.timestamp !== jpeg_timestamp) {
+                window.formatRetries.delete(camIndex);
+                return; // Silent cancellation
+            }
+            
+            // Check if format is now available (lightweight check)
+            if (mtimeData.formatReady && mtimeData.formatReady[format]) {
+                // Format ready! Request the image
+                try {
+                    const imageResponse = await fetch(preferred_url, {
+                        signal: abortController.signal,
+                        cache: 'no-store',
+                        credentials: 'same-origin'
+                    });
+                    
+                    if (imageResponse.status === 200) {
+                        // Success - upgrade image silently
+                        const blob = await imageResponse.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        updateImageSilently(camIndex, blobUrl, mtimeData.timestamp);
+                        window.formatRetries.delete(camIndex);
+                        return;
+                    }
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        // Network error - retry with backoff
+                        scheduleNextRetry();
+                    }
+                    return;
+                }
+            }
+            
+            // Format not ready yet - schedule next check
+            scheduleNextRetry();
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                return; // Cancelled
+            }
+            // Error checking mtime - retry with backoff
+            scheduleNextRetry();
+        }
+        
+        function scheduleNextRetry() {
+            // Fixed 5 second backoff
+            const backoff = 5000;
+            retryCount++;
+            
+            // Check if we'd exceed max wait
+            if (Date.now() - startTime + backoff > maxWait) {
+                window.formatRetries.delete(camIndex);
+                return; // Silent timeout
+            }
+            
+            const timeoutId = setTimeout(attemptRetry, backoff);
+            const retry = window.formatRetries.get(camIndex);
+            if (retry) {
+                retry.timeoutId = timeoutId;
+            }
+        }
+    };
+    
+    // Start first check after initial delay (5 seconds)
+    const initialDelay = 5000;
+    const timeoutId = setTimeout(attemptRetry, initialDelay);
+    const retry = window.formatRetries.get(camIndex);
+    if (retry) {
+        retry.timeoutId = timeoutId;
+    }
+}
+
+/**
+ * Handle HTTP 202 response (format generating)
+ * 
+ * @param {number} camIndex Camera index
+ * @param {object} data 202 response data
+ * @param {boolean} hasExisting Whether image is already rendered
+ * @param {number} jpegTimestamp JPEG timestamp
+ */
+async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
+    const { format, fallback_url, preferred_url, estimated_ready_seconds } = data;
+    
+    // Special case: JPEG is generating (our fallback)
+    if (format === 'jpg') {
+        await handleJpegGenerating(camIndex, hasExisting, data);
+        return;
+    }
+    
+    // Preferred format (WebP/AVIF) is generating
+    if (!hasExisting) {
+        // Initial load: use fallback immediately, no waiting
+        await loadImageFromUrl(fallback_url, camIndex, jpegTimestamp);
+        return;
+    }
+    
+    // Refresh: load fallback immediately, retry preferred format in background
+    await loadImageFromUrl(fallback_url, camIndex, jpegTimestamp);
+    startFormatRetry(camIndex, data);
+}
+
+/**
+ * Load webcam image with 202 handling
+ * 
+ * @param {number} camIndex Camera index
+ * @param {string} url Image URL (with explicit fmt= parameter)
+ * @param {string} preferredFormat Preferred format
+ * @param {boolean} hasExisting Whether image is already rendered
+ * @param {number} jpegTimestamp JPEG timestamp from mtime endpoint
+ */
+async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {
+    try {
+        const response = await fetch(url, {
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+        
+        if (response.status === 200) {
+            // Format ready - load immediately
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            updateImageSilently(camIndex, blobUrl, jpegTimestamp);
+            return;
+        }
+        
+        if (response.status === 202) {
+            // Format generating
+            const data = await response.json();
+            await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
+            return;
+        }
+        
+        throw new Error(`Unexpected status: ${response.status}`);
+        
+    } catch (error) {
+        // Network error - use fallback
+        handleRequestError(error, camIndex, hasExisting);
+    }
+}
+
+/**
+ * Handle request error
+ * 
+ * @param {Error} error Error object
+ * @param {number} camIndex Camera index
+ * @param {boolean} hasExisting Whether image is already rendered
+ */
+function handleRequestError(error, camIndex, hasExisting) {
+    // Silent error handling - user already has image or placeholder
+    if (!hasExisting) {
+        // Initial load failed - show placeholder
+        const img = document.getElementById(`webcam-${camIndex}`);
+        if (img) {
+            img.src = '/public/images/placeholder.jpg';
+        }
+    }
+    // If has existing image, keep it (silent failure)
+}
+
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
 function safeSwapCameraImage(camIndex) {
     // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
@@ -3008,85 +3542,39 @@ function safeSwapCameraImage(camIndex) {
             }
 
             const ready = json.formatReady || {};
-            // Match server-side hash calculation: md5(airportId + '_' + camIndex + '_' + fmt + '_' + mtime + '_' + size)
-            // Server uses: substr(md5($airportId . '_' . $camIndex . '_' . $fmt . '_' . $fileMtime . '_' . $fileSize), 0, 8)
-            // For cache-busting, we use a simple hash that changes with timestamp and size
-            // Since MD5 isn't available in browser JS, use a simple hash for cache-busting
-            const hashInput = `${AIRPORT_ID}_${camIndex}_jpg_${newTs}_${json.size || 0}`;
-            // Simple hash function for cache-busting (doesn't need to match MD5 exactly)
-            let hash = 0;
-            for (let i = 0; i < hashInput.length; i++) {
-                const char = hashInput.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; // Convert to 32-bit integer
-            }
-            // Convert to hex string and take first 8 chars
-            const hashHex = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
+            const hasExisting = hasExistingImage(camIndex);
             
-            // For webp, use webp format in hash
-            const hashInputWebp = `${AIRPORT_ID}_${camIndex}_webp_${newTs}_${json.size || 0}`;
-            let hashWebp = 0;
-            for (let i = 0; i < hashInputWebp.length; i++) {
-                const char = hashInputWebp.charCodeAt(i);
-                hashWebp = ((hashWebp << 5) - hashWebp) + char;
-                hashWebp = hashWebp & hashWebp;
-            }
-            const hashHexWebp = Math.abs(hashWebp).toString(16).padStart(8, '0').substring(0, 8);
+            // Determine preferred format based on browser support
+            const preferredFormat = determinePreferredFormat();
             
-            const jpgUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=jpg&v=${hashHex}`;
-            const webpUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=webp&v=${hashHexWebp}`;
-
-            // Show skeleton placeholder while loading
-            const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
-            if (skeleton) skeleton.style.display = 'block';
-
-            // Helper to preload an image URL, resolve on load, reject on error
-            const preloadUrl = (url) => new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(true);
-                img.onerror = () => reject(new Error('preload_failed'));
-                img.src = url;
-            });
-
-            // Progressive fallback: ensure JPG first, then upgrade sources independently
-            const jpgPromise = ready.jpg ? preloadUrl(jpgUrl) : Promise.reject(new Error('jpg_not_ready'));
-            jpgPromise.then(() => {
-                const img = document.getElementById(`webcam-${camIndex}`);
-                if (img) {
-                    img.src = jpgUrl;
-                    // Update data attribute to keep it in sync with CAM_TS
-                    img.dataset.initialTimestamp = newTs.toString();
-                    if (skeleton) skeleton.style.display = 'none';
-                }
-                CAM_TS[camIndex] = newTs;
-                // Update timestamp display in label
-                const timestampElem = document.getElementById(`webcam-timestamp-${camIndex}`);
-                if (timestampElem) {
-                    updateTimestampDisplay(timestampElem, newTs);
-                }
-                updateWebcamTimestampOnLoad(camIndex);
-            }).catch((error) => {
-                // Hide skeleton on failure
-                if (skeleton) skeleton.style.display = 'none';
-                // If image fails to load, show placeholder
-                const img = document.getElementById(`webcam-${camIndex}`);
-                if (img) {
-                    handleWebcamError(camIndex, img);
-                }
-            });
-
-            // Upgrade WEBP if available; do not block on it
-            if (ready.webp) {
-                preloadUrl(webpUrl).then(() => {
-                    const srcWebp = document.getElementById(`webcam-webp-${camIndex}`);
-                    if (srcWebp) srcWebp.setAttribute('srcset', webpUrl);
-                }).catch(() => {});
-            }
+            // Build image URL with explicit fmt parameter (triggers 202 logic if generating)
+            const hash = calculateImageHash(AIRPORT_ID, camIndex, preferredFormat, newTs, json.size || 0);
+            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;
+            
+            // Request preferred format (explicit fmt= triggers 202 if generating)
+            loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);
         })
         .catch(() => {
             // Silently ignore; will retry on next interval
         });
 }
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    // Cancel all format retries
+    if (window.formatRetries) {
+        for (const camIndex of window.formatRetries.keys()) {
+            cancelFormatRetry(camIndex);
+        }
+    }
+    
+    // Clear webcam refresh timeouts
+    if (window.webcamRefreshTimeouts) {
+        for (const timeoutId of window.webcamRefreshTimeouts.values()) {
+            clearTimeout(timeoutId);
+        }
+    }
+});
 <?php
     // Capture and minify JavaScript
     $js = ob_get_clean();

@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/config.php';
 
 /**
  * Detect image format from file headers
@@ -161,6 +162,11 @@ function convertPngToJpeg($pngFile, $jpegFile) {
  * @return bool True if WEBP generation started, false on failure
  */
 function generateWebp($sourceFile, $airportId, $camIndex) {
+    // Check if format generation is enabled
+    if (!isWebpGenerationEnabled()) {
+        return false; // Format disabled, don't generate
+    }
+    
     if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
         return false;
     }
@@ -172,12 +178,22 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
     
     $cacheWebp = $cacheDir . '/' . $airportId . '_' . $camIndex . '.webp';
     
+    // Log job start
+    aviationwx_log('info', 'webcam format generation job started', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'format' => 'webp',
+        'source_file' => basename($sourceFile),
+        'source_size' => filesize($sourceFile),
+        'timestamp' => time()
+    ], 'app');
+    
     // Get source capture time before starting generation
     $captureTime = getSourceCaptureTime($sourceFile);
     
-    // Build ffmpeg command
+    // Build ffmpeg command with nice -1
     $cmdWebp = sprintf(
-        "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
+        "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
         escapeshellarg($sourceFile),
         escapeshellarg($cacheWebp)
     );
@@ -192,11 +208,21 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
     }
     
     // Run in background (non-blocking)
+    // Result will be logged when format status is checked (in getFormatStatus or isFormatGenerating)
     if (function_exists('exec')) {
         $cmd = $cmd . ' > /dev/null 2>&1 &';
         @exec($cmd);
         return true;
     }
+    
+    // Log failure if exec not available
+    aviationwx_log('error', 'webcam format generation job failed - exec not available', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'format' => 'webp',
+        'error' => 'exec_function_not_available',
+        'troubleshooting' => 'PHP exec() function is disabled or not available'
+    ], 'app');
     
     return false;
 }
@@ -213,6 +239,11 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
  * @return bool True if AVIF generation started, false on failure
  */
 function generateAvif($sourceFile, $airportId, $camIndex) {
+    // Check if format generation is enabled
+    if (!isAvifGenerationEnabled()) {
+        return false; // Format disabled, don't generate
+    }
+    
     if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
         return false;
     }
@@ -224,16 +255,26 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
     
     $cacheAvif = $cacheDir . '/' . $airportId . '_' . $camIndex . '.avif';
     
+    // Log job start
+    aviationwx_log('info', 'webcam format generation job started', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'format' => 'avif',
+        'source_file' => basename($sourceFile),
+        'source_size' => filesize($sourceFile),
+        'timestamp' => time()
+    ], 'app');
+    
     // Get source capture time before starting generation
     $captureTime = getSourceCaptureTime($sourceFile);
     
-    // Build ffmpeg command for AVIF encoding
+    // Build ffmpeg command for AVIF encoding with nice -1
     // -c:v libaom-av1: Use AV1 codec (AVIF uses AV1)
     // -crf 30: Quality setting (similar to WebP's -q:v 30)
     // -b:v 0: Use CRF mode (quality-based, not bitrate)
     // -cpu-used 4: Speed vs quality balance (0-8, 4 is balanced)
     $cmdAvif = sprintf(
-        "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+        "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
         escapeshellarg($sourceFile),
         escapeshellarg($cacheAvif)
     );
@@ -248,11 +289,21 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
     }
     
     // Run in background (non-blocking)
+    // Result will be logged when format status is checked (in getFormatStatus or isFormatGenerating)
     if (function_exists('exec')) {
         $cmd = $cmd . ' > /dev/null 2>&1 &';
         @exec($cmd);
         return true;
     }
+    
+    // Log failure if exec not available
+    aviationwx_log('error', 'webcam format generation job failed - exec not available', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'format' => 'avif',
+        'error' => 'exec_function_not_available',
+        'troubleshooting' => 'PHP exec() function is disabled or not available'
+    ], 'app');
     
     return false;
 }

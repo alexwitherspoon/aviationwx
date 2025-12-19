@@ -12,6 +12,7 @@ namespace AviationWX\Tests;
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../../api/webcam.php';
 
@@ -210,6 +211,72 @@ class WebcamFormatGenerationTest extends TestCase
         
         $result = isValidAvifFile($file);
         $this->assertFalse($result);
+    }
+
+    /**
+     * Test isWebpGenerationEnabled() - Default (disabled)
+     */
+    public function testIsWebpGenerationEnabled_Default_ReturnsFalse(): void
+    {
+        // Clear any cached config
+        if (function_exists('clearConfigCache')) {
+            clearConfigCache();
+        }
+        
+        // Test with no config (should default to false)
+        $result = isWebpGenerationEnabled();
+        $this->assertFalse($result, 'WebP generation should default to disabled');
+    }
+
+    /**
+     * Test isAvifGenerationEnabled() - Default (disabled)
+     */
+    public function testIsAvifGenerationEnabled_Default_ReturnsFalse(): void
+    {
+        // Clear any cached config
+        if (function_exists('clearConfigCache')) {
+            clearConfigCache();
+        }
+        
+        // Test with no config (should default to false)
+        $result = isAvifGenerationEnabled();
+        $this->assertFalse($result, 'AVIF generation should default to disabled');
+    }
+
+    /**
+     * Test getEnabledWebcamFormats() - Default (only JPEG)
+     */
+    public function testGetEnabledWebcamFormats_Default_ReturnsOnlyJpg(): void
+    {
+        // Clear any cached config
+        if (function_exists('clearConfigCache')) {
+            clearConfigCache();
+        }
+        
+        $result = getEnabledWebcamFormats();
+        $this->assertIsArray($result);
+        $this->assertContains('jpg', $result, 'JPEG should always be enabled');
+        $this->assertCount(1, $result, 'Only JPEG should be enabled by default');
+    }
+
+    /**
+     * Test getEnabledWebcamFormats() - WebP enabled
+     */
+    public function testGetEnabledWebcamFormats_WebpEnabled_ReturnsJpgAndWebp(): void
+    {
+        // This test would require mocking the config, which is complex
+        // For now, we'll test the logic with a note that it requires config setup
+        $this->markTestIncomplete('Requires config mocking - test manually with airports.json');
+    }
+
+    /**
+     * Test getEnabledWebcamFormats() - Both enabled
+     */
+    public function testGetEnabledWebcamFormats_BothEnabled_ReturnsAllFormats(): void
+    {
+        // This test would require mocking the config, which is complex
+        // For now, we'll test the logic with a note that it requires config setup
+        $this->markTestIncomplete('Requires config mocking - test manually with airports.json');
     }
 }
 

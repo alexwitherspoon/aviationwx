@@ -652,29 +652,37 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 ### Format Generation
 
 **Multi-Format Support**:
-- System generates JPEG, WebP, and AVIF formats from source images
-- All generation runs asynchronously (non-blocking) using `exec() &`
+- System generates JPEG, WebP, and AVIF formats from source images (if enabled in config)
+- Format generation is globally configurable via `webcam_generate_webp` and `webcam_generate_avif` flags
+- Default: Formats disabled (only JPEG generated) to control resource usage
+- All generation runs asynchronously (non-blocking) using `exec() &` with `nice -n -1` priority
 - Mtime automatically synced to match source image's capture time (EXIF or filemtime)
 - Formats generated in background, may not be immediately available
+- Generation jobs are logged (start and result) for monitoring and troubleshooting
 
 **JPEG to WebP**:
-- Uses ffmpeg: `ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
+- Uses ffmpeg: `nice -n -1 ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
 - Quality: 30 (0-100 scale, higher = better quality)
 - Compression: Level 6 (0-6 scale)
+- Priority: `nice -n -1` (background job, doesn't interfere with main site rendering)
 - Mtime sync: `touch -t {timestamp} output.webp` (chained after generation)
+- Only runs if `webcam_generate_webp` is enabled in config
 
 **JPEG to AVIF**:
-- Uses ffmpeg: `ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 output.avif`
+- Uses ffmpeg: `nice -n -1 ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 output.avif`
 - Quality: CRF 30 (similar quality to WebP's -q:v 30)
 - Codec: libaom-av1 (AV1 codec for AVIF format)
 - Speed: cpu-used 4 (balanced speed vs quality, 0-8 scale)
+- Priority: `nice -n -1` (background job, doesn't interfere with main site rendering)
 - Mtime sync: `touch -t {timestamp} output.avif` (chained after generation)
+- Only runs if `webcam_generate_avif` is enabled in config
+- Note: AVIF generation can take 15+ seconds; may timeout on slow systems
 
 **Purpose**: 
 - AVIF provides best compression (smallest file size, best quality)
 - WebP provides good compression (smaller than JPEG)
 - JPEG served as fallback for older browsers
-- Format priority: AVIF → WebP → JPEG (based on browser support)
+- Format priority: AVIF → WebP → JPEG (based on browser support and availability)
 
 ### Cache Serving
 
@@ -685,22 +693,45 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 2. **Timestamp Request**: `?mtime=1` returns JSON with file modification time
 
 **Serving Logic**:
-1. Check explicit format parameter (`?fmt=avif|webp|jpg`) → serve if available
-2. Check Accept header for AVIF support → serve AVIF if available
-3. Check Accept header for WebP support → serve WebP if available
-4. Fallback to JPEG (always available)
-5. If no formats available → serve placeholder
+1. Check if explicit format parameter (`?fmt=webp|avif`) → if generating, return HTTP 202
+2. Check explicit format parameter → if ready, serve immediately (HTTP 200)
+3. Check if format disabled but explicitly requested → return HTTP 400
+4. Check Accept header for format preference (if no explicit `fmt=`) → serve best available (HTTP 200)
+5. Check if all formats from same stale cycle → serve most efficient available (HTTP 200)
+6. Fallback to JPEG (always available, HTTP 200)
+7. If no formats available → serve placeholder (HTTP 200)
+
+**HTTP 202 Response (Format Generating)**:
+- Only returned for explicit `fmt=webp` or `fmt=avif` requests
+- Indicates format is actively generating in current refresh cycle
+- Includes `Retry-After` header (5 seconds)
+- Client can wait briefly or use fallback immediately
+- Not returned for old cycles (generation failed) or no explicit format requests
 
 **Format Priority**:
-- Explicit `fmt` parameter (highest priority)
-- AVIF (if browser supports via Accept header)
-- WebP (if browser supports via Accept header)
-- JPEG (fallback, always available)
+- Explicit `fmt` parameter (highest priority, may return 202 if generating)
+- AVIF (if browser supports via Accept header and enabled)
+- WebP (if browser supports via Accept header and enabled)
+- JPEG (fallback, always available, always enabled)
+
+**Refresh Cycle Detection**:
+- Uses JPEG mtime vs refresh interval to determine if image is from current cycle
+- Current cycle + format missing = generating (return 202)
+- Old cycle + format missing = generation failed (return 200 with fallback)
+- All formats from same stale cycle = serve most efficient available
 
 **Cache Headers**:
 - Fresh cache: `Cache-Control: public, max-age={remaining_seconds}`
 - Stale cache: `Cache-Control: public, max-age={refresh_interval}, stale-while-revalidate={seconds}`
 - Placeholder: `Cache-Control: public, max-age={placeholder_ttl}`
+- 202 response: `Cache-Control: no-cache, no-store, must-revalidate, max-age=0`
+
+**Client-Side Behavior**:
+- HTML images: No `fmt=` parameter → always get HTTP 200 immediately (server respects Accept header)
+- JavaScript refreshes: Explicit `fmt=` parameter → can get HTTP 202 if format generating
+- Staggered refreshes: Random 20-30% offset to distribute load away from cron spike
+- Format retry: Fixed 5-second backoff, max 10-second wait, silent timeout
+- Cleanup: Cancels retries and timeouts on page unload
 
 ### Background Refresh
 

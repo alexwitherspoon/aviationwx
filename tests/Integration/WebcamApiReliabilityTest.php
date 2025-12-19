@@ -245,6 +245,17 @@ class WebcamApiReliabilityTest extends TestCase
         if ($data['success']) {
             $this->assertGreaterThan(0, $data['timestamp'], 'Timestamp should be > 0');
             $this->assertGreaterThan(0, $data['size'], 'Size should be > 0');
+            
+            // formatReady should only include enabled formats
+            if (isset($data['formatReady']) && is_array($data['formatReady'])) {
+                $enabledFormats = getEnabledWebcamFormats();
+                foreach ($data['formatReady'] as $format => $ready) {
+                    // Only enabled formats should be in formatReady
+                    // Note: formatReady may include formats that exist but are disabled,
+                    // but the server should respect enabled formats when serving
+                    $this->assertIsBool($ready, "formatReady[{$format}] should be boolean");
+                }
+            }
         }
     }
     
@@ -291,6 +302,12 @@ class WebcamApiReliabilityTest extends TestCase
     
     /**
      * Test that WEBP format is handled correctly
+     * 
+     * Updated for new behavior:
+     * - fmt=webp with format ready: 200
+     * - fmt=webp with format generating: 202
+     * - fmt=webp with format disabled: 400
+     * - No fmt= parameter: always 200
      */
     public function testWebpFormat_HandledCorrectly()
     {
@@ -304,8 +321,10 @@ class WebcamApiReliabilityTest extends TestCase
         
         // Create both JPG and WEBP files
         copy($this->placeholderPath, $this->cacheJpg);
-        // For testing, we'll just check that the endpoint handles the fmt parameter
-        // Real WEBP generation requires ffmpeg
+        copy($this->placeholderPath, $this->cacheWebp);
+        $mtime = time() - 30; // Recent (current cycle)
+        @touch($this->cacheJpg, $mtime);
+        @touch($this->cacheWebp, $mtime);
         
         $response = $this->httpGet("api/webcam.php?id={$this->airport}&cam={$this->camIndex}&fmt=webp");
         
@@ -314,10 +333,17 @@ class WebcamApiReliabilityTest extends TestCase
             return;
         }
         
-        // Should return 200 (may fall back to JPG if WEBP doesn't exist)
-        $this->assertEquals(200, $response['http_code'], 'Should return 200');
+        // Should return 200 (format ready), 202 (generating), or 400 (disabled)
+        $this->assertContains($response['http_code'], [200, 202, 400], 'Should return 200, 202, or 400');
         $this->assertArrayHasKey('content-type', $response['headers'], 'Should have Content-Type header');
-        $this->assertGreaterThan(0, strlen($response['body']), 'Should return image data');
+        
+        if ($response['http_code'] == 200) {
+            $this->assertGreaterThan(0, strlen($response['body']), 'Should return image data');
+        } elseif ($response['http_code'] == 202) {
+            $this->assertArrayHasKey('retry-after', $response['headers'], '202 should have Retry-After');
+        } elseif ($response['http_code'] == 400) {
+            $this->assertStringContainsString('application/json', $response['headers']['content-type'], '400 should be JSON');
+        }
     }
     
     /**

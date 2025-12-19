@@ -86,26 +86,60 @@ Returns weather data for the specified airport.
 
 ### Webcam Images
 
-#### `GET /webcam.php?id={airport_id}&cam={camera_index}`
+#### `GET /webcam.php?id={airport_id}&cam={camera_index}[&fmt={format}][&v={hash}][&mtime=1]`
 
 Returns a cached webcam image for the specified airport and camera.
 
 **Parameters:**
 - `id` (required): Airport ID (e.g., `kspb`)
 - `cam` (required): Camera index (0-based, e.g., `0`, `1`)
+- `fmt` (optional): Explicit format request (`jpg`, `webp`, or `avif`)
+  - If specified: May return HTTP 202 if format is generating
+  - If omitted: Always returns HTTP 200 immediately (server respects `Accept` header)
+- `v` (optional): Cache-busting hash (8-character hex string)
+- `mtime` (optional): Set to `1` to get JSON timestamp response instead of image
 
 **Response:**
-- Content-Type: `image/jpeg` or `image/webp` (depending on browser support)
-- Binary image data
+- Content-Type: `image/jpeg`, `image/webp`, `image/avif`, or `application/json` (for `mtime=1`)
+- Binary image data (for image requests) or JSON (for `mtime=1`)
 
 **HTTP Status Codes:**
 - `200`: Success (image returned)
-- `404`: Image not found (returns placeholder image)
-- `400`: Invalid parameters
+- `202`: Format generating (only for explicit `fmt=webp` or `fmt=avif` requests)
+  - Response body: JSON with `status: "generating"`, `format`, `estimated_ready_seconds`, `fallback_url`, `preferred_url`, `jpeg_timestamp`, `refresh_interval`
+  - Headers: `Retry-After: 5`, `X-Format-Generating: {format}`, `X-Fallback-URL: {url}`, `X-Preferred-Format-URL: {url}`
+- `400`: Format disabled but explicitly requested, or invalid format parameter
+- `404`: Airport or camera not found (returns placeholder image)
+- `503`: Service unavailable (cache directory not accessible)
+
+**Format Selection:**
+- Explicit `fmt=` parameter: Highest priority, may return 202 if generating
+- `Accept` header (no `fmt=`): Server respects browser preference, always returns 200
+- Fallback: JPEG (always available, always enabled)
 
 **Rate Limiting:** 100 requests per minute per IP
 
-**Caching:** Images are cached on disk and served with appropriate cache headers.
+**Caching:** Images are cached on disk and served with appropriate cache headers. 202 responses are not cached.
+
+**Timestamp Endpoint (`mtime=1`):**
+
+Returns JSON with image timestamp and format availability status.
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "timestamp": 1699123456,
+  "size": 123456,
+  "formatReady": {
+    "jpg": true,
+    "webp": true,
+    "avif": false
+  }
+}
+```
+
+**Note:** Only includes formats that are enabled in configuration. Format availability is checked via optimized file I/O (single `stat()` call per format).
 
 ---
 

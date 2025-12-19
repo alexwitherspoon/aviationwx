@@ -156,11 +156,13 @@ function generateMockWeatherData($airportId, $airport) {
         exit;
     }
 
-    // Check if we're using test config - if so, return mock weather data
+    // Check if we're using test config or local dev mode - if so, return mock weather data
     $envConfigPath = getenv('CONFIG_PATH');
     $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false);
+    $isLocalDev = (getenv('APP_ENV') !== 'production' && !isProduction());
+    $useMockWeather = $isTestConfig || (getenv('MOCK_WEATHER') === 'true') || ($isLocalDev && getenv('MOCK_WEATHER') !== 'false');
     
-    if ($isTestConfig) {
+    if ($useMockWeather) {
         // Generate mock weather data for local testing
         $mockWeather = generateMockWeatherData($airportId, $airport);
         
