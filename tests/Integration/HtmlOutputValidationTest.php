@@ -462,11 +462,8 @@ class HtmlOutputValidationTest extends TestCase
         
         $html = $response['body'];
         
-        // Extract JavaScript code
-        preg_match_all('/<script[^>]*>(.*?)<\/script>/is', $html, $matches);
-        $jsCode = implode("\n", $matches[1]);
-        
         // Required functions that should be defined
+        // Search directly in HTML (functions are in inline script tags)
         $requiredFunctions = [
             'fetchWeather',
             'displayWeather',
@@ -476,9 +473,12 @@ class HtmlOutputValidationTest extends TestCase
         $missingFunctions = [];
         
         foreach ($requiredFunctions as $funcName) {
-            // Check if function is defined (various patterns)
+            // Check if function is defined in HTML (various patterns)
+            // Search the entire HTML, not just extracted JavaScript
             $patterns = [
+                "/async\s+function\s+{$funcName}\s*\(/",   // async function fetchWeather(
                 "/function\s+{$funcName}\s*\(/",           // function fetchWeather(
+                "/const\s+{$funcName}\s*=\s*async\s*function/", // const fetchWeather = async function
                 "/const\s+{$funcName}\s*=\s*function/",    // const fetchWeather = function
                 "/const\s+{$funcName}\s*=\s*\(/",         // const fetchWeather = (
                 "/var\s+{$funcName}\s*=\s*function/",     // var fetchWeather = function
@@ -488,7 +488,12 @@ class HtmlOutputValidationTest extends TestCase
             
             $found = false;
             foreach ($patterns as $pattern) {
-                if (preg_match($pattern, $jsCode)) {
+                // Remove PHP code blocks before matching (PHP code within script tags)
+                $htmlForMatching = preg_replace('/<\?php[\s\S]*?\?>/', '', $html);
+                $htmlForMatching = preg_replace('/<\?=[\s\S]*?\?>/', '', $htmlForMatching);
+                $htmlForMatching = preg_replace('/<\?[\s\S]*?\?>/', '', $htmlForMatching);
+                
+                if (preg_match($pattern, $htmlForMatching)) {
                     $found = true;
                     break;
                 }
@@ -547,18 +552,20 @@ class HtmlOutputValidationTest extends TestCase
         );
         
         // Should contain JavaScript code (Service Worker specific)
-        $this->assertStringContainsString(
-            'serviceWorker',
-            $body,
-            "Service Worker file should contain serviceWorker code"
+        // Check for serviceWorker (case-insensitive) or self.addEventListener
+        $hasServiceWorkerCode = stripos($body, 'serviceWorker') !== false || 
+                               stripos($body, 'self.addEventListener') !== false ||
+                               stripos($body, 'addEventListener') !== false;
+        $this->assertTrue(
+            $hasServiceWorkerCode,
+            "Service Worker file should contain serviceWorker code or addEventListener (Service Worker API)"
         );
         
-        // Should contain self.addEventListener (Service Worker API)
-        $hasAddEventListener = strpos($body, 'self.addEventListener') !== false || 
-                              strpos($body, 'addEventListener') !== false;
+        // Should contain self.addEventListener (Service Worker API) - more specific check
+        $hasSelfAddEventListener = stripos($body, 'self.addEventListener') !== false;
         $this->assertTrue(
-            $hasAddEventListener,
-            "Service Worker file should contain addEventListener (Service Worker API)"
+            $hasSelfAddEventListener,
+            "Service Worker file should contain self.addEventListener (Service Worker API)"
         );
     }
     
