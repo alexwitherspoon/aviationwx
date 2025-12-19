@@ -437,25 +437,28 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <?php
                 // Build geo: URI for location - uses standard geo URI scheme (RFC 5870)
                 // Browser/OS will handle opening in default mapping application
+                // Safari doesn't handle geo: URIs, so we provide Apple Maps URL as fallback
                 $geoUrl = '';
+                $appleMapsUrl = '';
                 $addressText = '';
                 $formattedAddress = '';
                 $hasCoordinates = isset($airport['lat']) && isset($airport['lon']) && is_numeric($airport['lat']) && is_numeric($airport['lon']);
                 
                 if ($hasCoordinates) {
-                    // Build geo: URI with coordinates (required per RFC 5870)
                     $lat = (float)$airport['lat'];
                     $lon = (float)$airport['lon'];
                     $geoUrl = 'geo:' . $lat . ',' . $lon;
                     
-                    // Add address as query parameter if available
+                    // Build Apple Maps URL for Safari compatibility
                     if (!empty($airport['address'])) {
                         $addressText = $airport['address'];
                         $formattedAddress = formatAddressEnvelope($airport['address']);
                         $geoUrl .= '?q=' . urlencode($airport['address']);
+                        $appleMapsUrl = 'https://maps.apple.com/?q=' . urlencode($airport['address']) . '&ll=' . $lat . ',' . $lon;
                     } else {
                         $addressText = $lat . ', ' . $lon;
                         $formattedAddress = htmlspecialchars($addressText);
+                        $appleMapsUrl = 'https://maps.apple.com/?ll=' . $lat . ',' . $lon;
                     }
                 } else if (!empty($airport['address'])) {
                     // Address only - display as semantic text (geo: requires coordinates)
@@ -471,6 +474,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     <span class="value">
                         <?php if (!empty($geoUrl)): ?>
                         <a href="<?= htmlspecialchars($geoUrl) ?>" 
+                           <?php if (!empty($appleMapsUrl)): ?>data-apple-maps="<?= htmlspecialchars($appleMapsUrl) ?>"<?php endif; ?>
                            class="address-link"
                            title="Open location in maps">
                             <?= $formattedAddress ?>
@@ -908,6 +912,43 @@ function isMobileDevice() {
     
     return isMobileUA || (hasTouchScreen && isSmallScreen);
 }
+
+/**
+ * Detect if browser is Safari (desktop or mobile)
+ * Safari doesn't handle geo: URIs, so we need to use Apple Maps URLs instead
+ * @returns {boolean} True if browser is Safari
+ */
+function isSafari() {
+    const userAgent = navigator.userAgent || '';
+    // Safari detection: Safari has "Safari" in UA but not "Chrome" or "Chromium"
+    // Also check for Safari-specific properties
+    const hasSafariUA = /safari/i.test(userAgent) && !/chrome|chromium|crios|fxios/i.test(userAgent);
+    const hasSafariProperty = typeof window.safari !== 'undefined';
+    return hasSafariUA || hasSafariProperty;
+}
+
+// Fix address links for Safari - replace geo: URI with Apple Maps URL
+(function() {
+    function fixAddressLinksForSafari() {
+        if (!isSafari()) {
+            return; // Not Safari, geo: URI will work
+        }
+        
+        const addressLinks = document.querySelectorAll('.address-link[data-apple-maps]');
+        addressLinks.forEach(link => {
+            const appleMapsUrl = link.getAttribute('data-apple-maps');
+            if (appleMapsUrl) {
+                link.href = appleMapsUrl;
+            }
+        });
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fixAddressLinksForSafari);
+    } else {
+        fixAddressLinksForSafari();
+    }
+})();
 
 // Show ForeFlight link only on mobile devices
 (function() {

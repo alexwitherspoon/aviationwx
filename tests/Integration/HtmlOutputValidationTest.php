@@ -732,6 +732,20 @@ class HtmlOutputValidationTest extends TestCase
             "Location field should use geo: URI scheme with coordinates"
         );
         
+        // Verify Apple Maps URL is present in data attribute for Safari fallback
+        if (!empty($airport['address'])) {
+            $this->assertStringContainsString(
+                'data-apple-maps=',
+                $html,
+                "Location link should have Apple Maps URL in data attribute for Safari fallback"
+            );
+            $this->assertStringContainsString(
+                'maps.apple.com',
+                $html,
+                "Apple Maps URL should be present for Safari compatibility"
+            );
+        }
+        
         // Verify it's not using Google Maps URL
         $this->assertStringNotContainsString(
             'maps.google.com',
