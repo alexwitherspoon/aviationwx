@@ -12,6 +12,7 @@ if (file_exists(__DIR__ . '/../lib/test-mocks.php')) {
 // Load error detector early (needed by fetch functions)
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
+require_once __DIR__ . '/../lib/webcam-format-generation.php';
 
 /**
  * Detect webcam source type from URL
@@ -830,91 +831,16 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             'fetch_duration_ms' => $fetchDuration
         ], 'app');
         
-        $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : DEFAULT_TRANSCODE_TIMEOUT;
-        $transcodeStartTime = microtime(true);
-        $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
+        // Generate WEBP and AVIF in background (non-blocking with mtime sync)
+        // Mtime sync happens automatically during generation via shell command chaining
+        generateWebp($cacheFile, $airportId, $camIndex);
+        generateAvif($cacheFile, $airportId, $camIndex);
         
-        $pipesWebp = [];
-        $processes = [];
-        
-        $processWebp = proc_open($cmdWebp . ' 2>&1', [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w']
-        ], $pipesWebp);
-        
-        if (is_resource($processWebp)) {
-            fclose($pipesWebp[0]);
-            $processes[] = ['proc' => $processWebp, 'type' => 'webp', 'pipes' => $pipesWebp, 'cache' => $cacheWebp];
-        }
-        
-        $results = [];
-        $startTs = microtime(true);
-        while (!empty($processes)) {
-            foreach ($processes as $key => $procData) {
-                $status = proc_get_status($procData['proc']);
-                
-                if (!$status['running']) {
-                    proc_close($procData['proc']);
-                    $success = file_exists($procData['cache']) && filesize($procData['cache']) > 0;
-                    $results[$procData['type']] = $success;
-                    unset($processes[$key]);
-                }
-            }
-            
-            if (!empty($processes)) {
-                if ((microtime(true) - $startTs) > $transcodeTimeout) {
-                    foreach ($processes as $pk => $pd) {
-                        @proc_terminate($pd['proc']);
-                    }
-                }
-                usleep(50000); // 50ms
-            }
-        }
-        
-        $transcodeDuration = round((microtime(true) - $transcodeStartTime) * 1000, 2);
-        $webpSuccess = isset($results['webp']) && $results['webp'];
-        
-        // Sync WebP file mtime to match JPG's EXIF capture time if WebP was generated successfully
-        if ($webpSuccess && file_exists($cacheWebp) && file_exists($cacheFile)) {
-            // Get JPG's EXIF capture time
-            $jpgCaptureTime = 0;
-            if (function_exists('exif_read_data') && file_exists($cacheFile)) {
-                $exif = @exif_read_data($cacheFile, 'EXIF', true);
-                if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
-                    $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                    $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
-                    if ($timestamp !== false && $timestamp > 0) {
-                        $jpgCaptureTime = (int)$timestamp;
-                    }
-                } elseif (isset($exif['DateTimeOriginal'])) {
-                    $dateTime = $exif['DateTimeOriginal'];
-                    $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
-                    if ($timestamp !== false && $timestamp > 0) {
-                        $jpgCaptureTime = (int)$timestamp;
-                    }
-                }
-            }
-            // Fallback to filemtime if EXIF not available
-            if ($jpgCaptureTime === 0) {
-                $mtime = @filemtime($cacheFile);
-                if ($mtime !== false) {
-                    $jpgCaptureTime = (int)$mtime;
-                }
-            }
-            // Set WebP file mtime to match JPG's capture time
-            if ($jpgCaptureTime > 0) {
-                @touch($cacheWebp, $jpgCaptureTime);
-            }
-        }
-        
-        aviationwx_log('info', 'webcam transcode completed', [
+        aviationwx_log('info', 'webcam format generation started', [
             'invocation_id' => $invocationId,
             'trigger' => $triggerType,
             'airport' => $airportId,
-            'cam' => $camIndex,
-            'webp_success' => $webpSuccess,
-            'transcode_duration_ms' => $transcodeDuration
+            'cam' => $camIndex
         ], 'app');
         
         $lockFile = "/tmp/webcam_lock_{$airportId}_{$camIndex}.lock";
