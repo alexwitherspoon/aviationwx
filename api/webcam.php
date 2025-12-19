@@ -12,7 +12,13 @@
  */
 
 // Start output buffering IMMEDIATELY to catch any output from included files
-ob_start();
+// Handle case where buffering may already be active or output already sent
+if (!ob_get_level()) {
+    ob_start();
+} else {
+    // If buffering already active, clean it to remove any unwanted output
+    ob_clean();
+}
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
@@ -35,21 +41,35 @@ if (file_exists($vpnRoutingFile)) {
 
 // Include circuit breaker functions
 require_once __DIR__ . '/../lib/circuit-breaker.php';
+// Include webcam format generation functions
+require_once __DIR__ . '/../lib/webcam-format-generation.php';
 // Include webcam fetch functions for background refresh
 require_once __DIR__ . '/../scripts/fetch-webcam.php';
 
 // Clear any output that may have been captured from included files
-ob_clean();
+// Only clean if we have an active buffer and headers haven't been sent
+if (ob_get_level() > 0 && !headers_sent()) {
+    ob_clean();
+}
 
 // Determine if we're serving JSON (mtime=1) or image early - check BEFORE any other processing
 $isJsonRequest = isset($_GET['mtime']) && $_GET['mtime'] === '1';
 
 // Set Content-Type IMMEDIATELY based on request type to prevent Nginx/Cloudflare override
-if ($isJsonRequest) {
-    header('Content-Type: application/json', true);
+// Only set headers if they haven't been sent yet (defensive check)
+if (!headers_sent()) {
+    if ($isJsonRequest) {
+        header('Content-Type: application/json', true);
+    } else {
+        // Set image/jpeg immediately - will be adjusted for WEBP later if needed
+        header('Content-Type: image/jpeg', true);
+    }
 } else {
-    // Set image/jpeg immediately - will be adjusted for WEBP later if needed
-    header('Content-Type: image/jpeg', true);
+    // Log warning but don't fail - might be in test mode or output already started
+    // Only log in non-CLI mode to avoid cluttering test output
+    if (php_sapi_name() !== 'cli') {
+        error_log('Warning: Headers already sent, cannot set Content-Type in webcam.php');
+    }
 }
 
 /**
@@ -62,29 +82,47 @@ if ($isJsonRequest) {
  * @return void
  */
 function servePlaceholder() {
-    ob_end_clean(); // Ensure no output before headers (end and clean in one call)
-    if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
-        header('Content-Type: image/jpeg');
-        header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
-        header('X-Cache-Status: MISS'); // Placeholder served - no cache
-        $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
-        $size = @filesize($placeholderPath);
-        if ($size > 0) {
-            header('Content-Length: ' . $size);
-        }
-        $result = @readfile($placeholderPath);
-        if ($result === false) {
-            // Fallback to base64 if readfile fails
+    // Clean output buffer if active and headers not sent
+    if (ob_get_level() > 0 && !headers_sent()) {
+        ob_end_clean();
+    }
+    
+    // Only set headers if they haven't been sent yet
+    if (!headers_sent()) {
+        if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
+            header('Content-Type: image/jpeg');
+            header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+            header('X-Cache-Status: MISS'); // Placeholder served - no cache
+            $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
+            $size = @filesize($placeholderPath);
+            if ($size > 0) {
+                header('Content-Length: ' . $size);
+            }
+            $result = @readfile($placeholderPath);
+            if ($result === false) {
+                // Fallback to base64 if readfile fails
+                header('Content-Type: image/png');
+                header('Content-Length: 95');
+                echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+            }
+        } else {
             header('Content-Type: image/png');
+            header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+            header('X-Cache-Status: MISS'); // Placeholder served - no cache
             header('Content-Length: 95');
             echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
         }
     } else {
-        header('Content-Type: image/png');
-        header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
-        header('X-Cache-Status: MISS'); // Placeholder served - no cache
-        header('Content-Length: 95');
-        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        // Headers already sent - log warning in non-CLI mode
+        if (php_sapi_name() !== 'cli') {
+            error_log('Warning: Headers already sent, cannot serve placeholder image in webcam.php');
+        }
+        // Still try to output placeholder image data if possible
+        if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
+            @readfile(__DIR__ . '/../public/images/placeholder.jpg');
+        } else {
+            echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        }
     }
     exit;
 }
@@ -119,7 +157,9 @@ function serveFile($filePath, $contentType) {
     header('Content-Length: ' . $size);
     
     // Clear output buffer and send file
-    ob_end_clean();
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     
     // Stream file in chunks to handle large files efficiently
     $chunkSize = 8192; // 8KB chunks
@@ -207,6 +247,7 @@ $cacheDir = __DIR__ . '/../cache/webcams';
 $base = $cacheDir . '/' . $airportId . '_' . $camIndex;
 $cacheJpg = $base . '.jpg';
 $cacheWebp = $base . '.webp';
+$cacheAvif = $base . '.avif';
 
 // Create cache directory if it doesn't exist
 // Check parent directory first, then create with proper error handling
@@ -288,6 +329,7 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     }
     $existsJpg = file_exists($cacheJpg);
     $existsWebp = file_exists($cacheWebp);
+    $existsAvif = file_exists($cacheAvif);
     $mtime = 0;
     $size = 0;
     if ($existsJpg) { 
@@ -310,13 +352,24 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
         }
         if ($webpSize !== false) { $size = max($size, (int)$webpSize); }
     }
+    if ($existsAvif) { 
+        // AVIF doesn't preserve EXIF, use filemtime
+        // Only use AVIF timestamp if JPG doesn't exist (fallback)
+        $avifMtime = @filemtime($cacheAvif);
+        $avifSize = @filesize($cacheAvif);
+        if ($mtime === 0 && $avifMtime !== false) { 
+            $mtime = (int)$avifMtime; // Only use AVIF if JPG not available
+        }
+        if ($avifSize !== false) { $size = max($size, (int)$avifSize); }
+    }
     echo json_encode([
         'success' => $mtime > 0,
         'timestamp' => $mtime,
         'size' => $size,
         'formatReady' => [
             'jpg' => $existsJpg,
-            'webp' => $existsWebp
+            'webp' => $existsWebp,
+            'avif' => $existsAvif
         ]
     ]);
     exit;
@@ -332,28 +385,69 @@ if ($rl !== null) {
     header('X-RateLimit-Reset: ' . (int)$rl['reset']);
 }
 
+/**
+ * Validate AVIF file by checking headers
+ * 
+ * @param string $filePath Path to AVIF file
+ * @return bool True if valid AVIF, false otherwise
+ */
+function isValidAvifFile($filePath) {
+    $fp = @fopen($filePath, 'rb');
+    if (!$fp) {
+        return false;
+    }
+    
+    $header = @fread($fp, 12);
+    if (!$header || strlen($header) < 12) {
+        @fclose($fp);
+        return false;
+    }
+    
+    // AVIF: ftyp box with avif/avis
+    // AVIF structure: [4 bytes size][4 bytes 'ftyp'][4 bytes major brand][...]
+    // Major brand at bytes 8-11 should be 'avif' or 'avis'
+    if (substr($header, 4, 4) === 'ftyp') {
+        // Check major brand at bytes 8-11 (already read in header)
+        $majorBrand = substr($header, 8, 4);
+        @fclose($fp);
+        if ($majorBrand === 'avif' || $majorBrand === 'avis') {
+            return true;
+        }
+    } else {
+        @fclose($fp);
+    }
+    
+    return false;
+}
+
 // Parse format parameter (if specified)
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : null;
-if ($fmt !== null && !in_array($fmt, ['jpg', 'jpeg', 'webp'])) {
+if ($fmt !== null && !in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) {
     $fmt = null; // Invalid fmt, treat as unspecified
 }
 
-// Check Accept header for WebP support if fmt not specified
+// Check Accept header for format support if fmt not specified
 $acceptsWebp = false;
+$acceptsAvif = false;
 if ($fmt === null) {
     $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
     $acceptsWebp = (stripos($acceptHeader, 'image/webp') !== false);
+    $acceptsAvif = (stripos($acceptHeader, 'image/avif') !== false);
 }
 
 // Determine preferred format based on priority:
 // 1. Explicit fmt parameter (if file exists)
-// 2. Accept header (if WebP supported and available)
+// 2. Accept header (AVIF > WebP > JPEG)
 // 3. Fallback to JPG
 $preferredFormat = null;
-if ($fmt === 'webp') {
+if ($fmt === 'avif') {
+    $preferredFormat = 'avif';
+} elseif ($fmt === 'webp') {
     $preferredFormat = 'webp';
 } elseif ($fmt === 'jpg' || $fmt === 'jpeg') {
     $preferredFormat = 'jpg';
+} elseif ($acceptsAvif) {
+    $preferredFormat = 'avif';
 } elseif ($acceptsWebp) {
     $preferredFormat = 'webp';
 } else {
@@ -406,20 +500,21 @@ function getImageCaptureTime($filePath) {
 }
 
 /**
- * Find the latest valid image file (JPG or WEBP)
+ * Find the latest valid image file (JPG, WEBP, or AVIF)
  * 
- * Scans both JPG and WEBP cache files, validates they are actual image files,
+ * Scans JPG, WEBP, and AVIF cache files, validates they are actual image files,
  * and returns the preferred or most recent valid image. Validates file headers
  * to ensure files are not corrupted. Uses EXIF capture time when available,
  * otherwise falls back to file modification time.
  * 
  * @param string $cacheJpg Path to JPG cache file
  * @param string $cacheWebp Path to WEBP cache file
- * @param string|null $preferredFormat Preferred format: 'webp', 'jpg', or null for auto-select
+ * @param string $cacheAvif Path to AVIF cache file
+ * @param string|null $preferredFormat Preferred format: 'avif', 'webp', 'jpg', or null for auto-select
  * @return array|null Array with keys: 'file' (string path), 'mtime' (int timestamp),
  *   'size' (int bytes), 'type' (string MIME type), or null if no valid image found
  */
-function findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat = null) {
+function findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredFormat = null) {
     $candidates = [];
     
     // Check JPG file
@@ -469,12 +564,35 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat = null) {
         }
     }
     
+    // Check AVIF file
+    if (file_exists($cacheAvif) && @filesize($cacheAvif) > 0) {
+        if (isValidAvifFile($cacheAvif)) {
+            $mtime = @filemtime($cacheAvif);
+            $size = @filesize($cacheAvif);
+            // Validate mtime and size
+            if ($mtime !== false && $size !== false && $size > 0) {
+                $candidates[] = [
+                    'file' => $cacheAvif,
+                    'mtime' => (int)$mtime,
+                    'size' => (int)$size,
+                    'type' => 'image/avif'
+                ];
+            }
+        }
+    }
+    
     if (empty($candidates)) {
         return null;
     }
     
     // If preferred format is specified, return it if available
-    if ($preferredFormat === 'webp') {
+    if ($preferredFormat === 'avif') {
+        foreach ($candidates as $candidate) {
+            if ($candidate['type'] === 'image/avif') {
+                return $candidate;
+            }
+        }
+    } elseif ($preferredFormat === 'webp') {
         foreach ($candidates as $candidate) {
             if ($candidate['type'] === 'image/webp') {
                 return $candidate;
@@ -489,11 +607,18 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat = null) {
     }
     
     // No preferred format or preferred format not available: prefer JPG for EXIF capture time
+    // If JPG not available, prefer AVIF > WebP > most recent
     $jpgCandidate = null;
+    $avifCandidate = null;
+    $webpCandidate = null;
     foreach ($candidates as $candidate) {
         if ($candidate['type'] === 'image/jpeg') {
             $jpgCandidate = $candidate;
             break;
+        } elseif ($candidate['type'] === 'image/avif' && $avifCandidate === null) {
+            $avifCandidate = $candidate;
+        } elseif ($candidate['type'] === 'image/webp' && $webpCandidate === null) {
+            $webpCandidate = $candidate;
         }
     }
     
@@ -501,7 +626,15 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat = null) {
         return $jpgCandidate;
     }
     
-    // Only WEBP available, return most recent
+    if ($avifCandidate !== null) {
+        return $avifCandidate;
+    }
+    
+    if ($webpCandidate !== null) {
+        return $webpCandidate;
+    }
+    
+    // Fallback: return most recent
     usort($candidates, function($a, $b) {
         return $b['mtime'] - $a['mtime'];
     });
@@ -512,7 +645,7 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat = null) {
 // Only try to find images if cache directory exists and is accessible
 $validImage = null;
 if (is_dir($cacheDir) && is_readable($cacheDir)) {
-    $validImage = findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat);
+    $validImage = findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredFormat);
 } else {
     // Cache directory doesn't exist or isn't accessible
     aviationwx_log('warning', 'webcam cache directory not accessible', [
@@ -563,7 +696,7 @@ if ($isRateLimited) {
     // Only check if cache directory is accessible
     $rateLimitImage = null;
     if (is_dir($cacheDir) && is_readable($cacheDir)) {
-        $rateLimitImage = findLatestValidImage($cacheJpg, $cacheWebp, $preferredFormat);
+        $rateLimitImage = findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredFormat);
     }
     
     if ($rateLimitImage !== null) {
@@ -616,7 +749,7 @@ if ((time() - $fileMtime) < $perCamRefresh) {
         exit;
     }
 
-    // Update Content-Type if serving WEBP (already set to image/jpeg at top)
+    // Update Content-Type if serving WEBP or AVIF (already set to image/jpeg at top)
     if ($ctype !== 'image/jpeg') {
         header('Content-Type: ' . $ctype, true);
     }
@@ -723,77 +856,10 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
             'fetch_duration_ms' => $fetchDuration
         ], 'app');
         
-        // Generate WEBP in background (non-blocking)
-        // Use constant for transcode timeout
-        $transcodeTimeout = isset($cam['transcode_timeout']) ? max(2, intval($cam['transcode_timeout'])) : DEFAULT_TRANSCODE_TIMEOUT;
-        
-        // Build ffmpeg command without 2>&1 in the base command (we'll handle redirects separately)
-        $cmdWebp = sprintf("ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s", escapeshellarg($cacheFile), escapeshellarg($cacheWebp));
-        
-        // Get JPG's EXIF capture time for timestamp sync
-        $jpgCaptureTime = getImageCaptureTime($cacheFile);
-        
-        // Run WEBP generation in background (non-blocking)
-        if (function_exists('exec')) {
-            // Use exec with background process via shell
-            // Redirect both stdout and stderr to /dev/null and run in background
-            $cmd = $cmdWebp . ' > /dev/null 2>&1 &';
-            @exec($cmd);
-            // Note: exec() returns immediately when using &, so we can't check success here
-            // The background process will complete asynchronously
-            // Timestamp sync will happen on next access when WebP file is validated
-        } else {
-            // Fallback: synchronous generation with timeout
-            $transcodeStartTime = microtime(true);
-            $processWebp = @proc_open($cmdWebp . ' 2>&1', [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w']
-            ], $pipesWebp);
-            
-            if (is_resource($processWebp)) {
-                fclose($pipesWebp[0]);
-                $startTs = microtime(true);
-                $timedOut = false;
-                while (true) {
-                    $status = proc_get_status($processWebp);
-                    if (!$status['running']) {
-                        $exitCode = $status['exitcode'];
-                        proc_close($processWebp);
-                        // Verify WEBP was created successfully
-                        if ($exitCode !== 0 || !file_exists($cacheWebp) || filesize($cacheWebp) === 0) {
-                            aviationwx_log('warning', 'webcam WEBP generation failed', [
-                                'airport' => $airportId,
-                                'cam' => $camIndex,
-                                'exit_code' => $exitCode,
-                                'file_exists' => file_exists($cacheWebp)
-                            ], 'app');
-                        } elseif ($jpgCaptureTime > 0) {
-                            // Sync WebP file mtime to match JPG's EXIF capture time
-                            @touch($cacheWebp, $jpgCaptureTime);
-                        }
-                        break;
-                    }
-                    if ((microtime(true) - $startTs) > $transcodeTimeout) {
-                        $timedOut = true;
-                        @proc_terminate($processWebp);
-                        @proc_close($processWebp);
-                        aviationwx_log('warning', 'webcam WEBP generation timed out', [
-                            'airport' => $airportId,
-                            'cam' => $camIndex,
-                            'timeout' => $transcodeTimeout
-                        ], 'app');
-                        break;
-                    }
-                    usleep(50000); // 50ms
-                }
-            } else {
-                aviationwx_log('warning', 'webcam WEBP generation proc_open failed', [
-                    'airport' => $airportId,
-                    'cam' => $camIndex
-                ], 'app');
-            }
-        }
+        // Generate WEBP and AVIF in background (non-blocking with mtime sync)
+        // Mtime sync happens automatically during generation via shell command chaining
+        generateWebp($cacheFile, $airportId, $camIndex);
+        generateAvif($cacheFile, $airportId, $camIndex);
         
         return true;
     } else {
@@ -833,7 +899,7 @@ if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)
     exit;
 }
 
-// Update Content-Type if serving WEBP (already set to image/jpeg earlier)
+// Update Content-Type if serving WEBP or AVIF (already set to image/jpeg earlier)
 if ($ctype !== 'image/jpeg') {
     header('Content-Type: ' . $ctype, true);
 }
@@ -862,7 +928,9 @@ $circuit = checkCircuitBreaker($airportId, $camIndex);
 $shouldRefresh = !$circuit['skip'];
 
 // Serve stale cache immediately (already validated as valid image above)
-ob_end_clean(); // Clear buffer before sending file (consistent with fresh cache path)
+if (ob_get_level() > 0) {
+    ob_end_clean(); // Clear buffer before sending file (consistent with fresh cache path)
+}
 
 if (!serveFile($targetFile, $ctype)) {
     aviationwx_log('error', 'webcam failed to serve stale file', ['airport' => $airportId, 'cam' => $camIndex, 'file' => $targetFile], 'app');
@@ -974,8 +1042,7 @@ try {
     
     // Fetch fresh image
     $freshCacheFile = $cacheJpg; // Always fetch JPG first
-    $freshCacheWebp = $cacheWebp;
-    $success = fetchWebcamImageBackground($airportId, $camIndex, $cam, $freshCacheFile, $freshCacheWebp);
+    $success = fetchWebcamImageBackground($airportId, $camIndex, $cam, $freshCacheFile, $cacheWebp);
     
     // Check if client disconnected (only if not using fastcgi_finish_request)
     if (!function_exists('fastcgi_finish_request') && function_exists('connection_status')) {
