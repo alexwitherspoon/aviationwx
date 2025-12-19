@@ -16,6 +16,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     git \
     unzip \
     ffmpeg \
+    libavif-dev \
+    libaom-dev \
     cron \
     vsftpd \
     openssh-server \
