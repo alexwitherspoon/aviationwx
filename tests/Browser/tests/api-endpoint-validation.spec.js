@@ -3,8 +3,10 @@ const { test, expect } = require('@playwright/test');
 /**
  * API Endpoint Validation Tests
  * 
- * Validates that JavaScript code calls the correct API endpoints.
- * This catches bugs like calling /weather.php instead of /api/weather.php
+ * Validates that JavaScript code calls the correct API endpoints via network requests.
+ * This catches bugs like calling /weather.php instead of /api/weather.php.
+ * 
+ * Note: Source code validation is covered by JavaScriptStaticAnalysisTest.php (unit test).
  */
 test.describe('API Endpoint Validation', () => {
   const baseUrl = process.env.TEST_BASE_URL || 'http://localhost:8080';
@@ -116,49 +118,5 @@ test.describe('API Endpoint Validation', () => {
       
       expect(invalidRequests).toHaveLength(0);
     }
-  });
-
-  test('should validate API endpoint in JavaScript source code', async ({ page }) => {
-    // Get all JavaScript code from the page
-    const jsCode = await page.evaluate(() => {
-      const scripts = Array.from(document.querySelectorAll('script'));
-      return scripts.map(s => s.textContent).join('\n');
-    });
-    
-    // Check for incorrect weather.php calls (should be /api/weather.php)
-    // Look for patterns like: weather.php? or /weather.php? but not /api/weather.php
-    const incorrectPatterns = [
-      /['"]\/weather\.php\?/g,  // "/weather.php?"
-      /['"]weather\.php\?/g,     // "weather.php?" (relative)
-      /`\/weather\.php\?/g,      // `/weather.php?` (template literal)
-      /`weather\.php\?/g         // `weather.php?` (template literal, relative)
-    ];
-    
-    const errors = [];
-    incorrectPatterns.forEach((pattern, index) => {
-      const matches = jsCode.match(pattern);
-      if (matches) {
-        // Check if it's actually /api/weather.php (which is correct)
-        matches.forEach(match => {
-          // Get context around the match
-          const matchIndex = jsCode.indexOf(match);
-          const context = jsCode.substring(Math.max(0, matchIndex - 50), matchIndex + 100);
-          
-          // If it's not part of /api/weather.php, it's an error
-          if (!context.includes('/api/weather.php') && !context.includes('api/weather.php')) {
-            errors.push(`Found incorrect weather API call: ${match} (context: ${context.substring(0, 80)}...)`);
-          }
-        });
-      }
-    });
-    
-    if (errors.length > 0) {
-      console.error('Incorrect API endpoint calls found:', errors);
-    }
-    
-    expect(errors).toHaveLength(0);
-    
-    // Verify correct endpoint is used
-    expect(jsCode).toMatch(/\/api\/weather\.php/);
   });
 });
