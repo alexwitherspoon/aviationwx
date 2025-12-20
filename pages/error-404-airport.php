@@ -47,8 +47,15 @@ if (!$isRealAirport && !empty($requestedAirportId) && $config !== null) {
 
 $baseUrl = getBaseUrl();
 
-// SEO variables
-$pageTitle = 'Airport Not Found - AviationWX.org';
+// SEO variables - dynamic title with airport code when available
+if ($isRealAirport && !empty($displayAirportId)) {
+    $pageTitle = htmlspecialchars($displayAirportId) . ' Not Found - AviationWX.org';
+} elseif ($isValidIcaoFormat && !empty($requestedAirportId)) {
+    $pageTitle = htmlspecialchars($requestedAirportId) . ' Not Found - AviationWX.org';
+} else {
+    $pageTitle = 'Airport Not Found - AviationWX.org';
+}
+
 $pageDescription = $isValidIcaoFormat 
     ? "{$requestedAirportId} isn't part of the AviationWX network yet. Help bring weather dashboards to this airport!"
     : 'This airport isn\'t part of the AviationWX network yet. Help bring weather dashboards to more airports!';
