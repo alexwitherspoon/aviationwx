@@ -119,6 +119,37 @@ function getSunsetTime($airport) {
 }
 
 /**
+ * Add cache-busting parameter to URL
+ * 
+ * Adds a cache-busting query parameter (`_cb`) to a URL to force fresh requests.
+ * This is used client-side to bypass Service Worker and browser caches.
+ * 
+ * The parameter value is a timestamp (milliseconds since epoch) to ensure uniqueness.
+ * 
+ * @param string $url Base URL (may already have query parameters)
+ * @param int|null $timestamp Optional timestamp in milliseconds (defaults to current time)
+ * @return string URL with cache-busting parameter added
+ */
+function addCacheBustingParameter($url, $timestamp = null) {
+    if ($timestamp === null) {
+        $timestamp = round(microtime(true) * 1000); // Milliseconds, matching JavaScript Date.now()
+    }
+    
+    // Handle fragment identifier - cache-busting should come before fragment
+    $fragment = '';
+    $fragmentPos = strpos($url, '#');
+    if ($fragmentPos !== false) {
+        $fragment = substr($url, $fragmentPos);
+        $url = substr($url, 0, $fragmentPos);
+    }
+    
+    // Check if URL already has query parameters
+    $separator = (strpos($url, '?') !== false) ? '&' : '?';
+    
+    return $url . $separator . '_cb=' . $timestamp . $fragment;
+}
+
+/**
  * Check if METAR is enabled for a specific airport
  * 
  * METAR is enabled if metar_station is configured (exists and is not empty).
