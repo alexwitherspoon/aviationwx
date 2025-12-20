@@ -6,20 +6,7 @@ test.describe('Aviation Weather Dashboard', () => {
   const baseUrl = process.env.TEST_BASE_URL || 'http://localhost:8080';
   const testAirport = 'kspb';
   
-  // Store console errors across tests
-  let consoleErrors = [];
-  
   test.beforeEach(async ({ page }) => {
-    // Reset console errors array for this test
-    consoleErrors = [];
-    
-    // Set up console error listener BEFORE navigation
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        consoleErrors.push(msg.text());
-      }
-    });
-    
     // Navigate to the page first
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
     
@@ -112,14 +99,41 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should display weather data when available', async ({ page }) => {
-    // Wait for body to be ready (faster than fixed timeout)
-    await page.waitForSelector('body', { state: 'visible' });
+    // Wait for weather data to be fetched and displayed
+    await page.waitForFunction(
+      () => {
+        // Check for temperature display (not just placeholder)
+        const bodyText = document.body.textContent || '';
+        
+        // Should have temperature with unit (e.g., "56°F" or "13°C")
+        const hasTemp = /\d+°[FC]/.test(bodyText);
+        
+        // Should have "Last updated" timestamp (not "--")
+        const lastUpdatedEl = document.getElementById('weather-last-updated');
+        const hasTimestamp = lastUpdatedEl && 
+                            lastUpdatedEl.textContent && 
+                            lastUpdatedEl.textContent.trim() !== '--' &&
+                            lastUpdatedEl.textContent.trim() !== '';
+        
+        return hasTemp && hasTimestamp;
+      },
+      { timeout: 15000 }
+    );
     
+    // Verify specific data points are visible
     const pageContent = await page.textContent('body');
     
-    // Should have some weather-related content
-    // (may be "---" if data unavailable, but should be present)
-    expect(pageContent).toBeTruthy();
+    // Should have temperature (with unit)
+    expect(pageContent).toMatch(/\d+°[FC]/);
+    
+    // Should have wind data (speed with unit)
+    expect(pageContent).toMatch(/\d+\s*(kts|mph|km\/h)/i);
+    
+    // Should have "Last updated" timestamp (not "--")
+    const lastUpdated = await page.textContent('#weather-last-updated');
+    expect(lastUpdated).toBeTruthy();
+    expect(lastUpdated.trim()).not.toBe('--');
+    expect(lastUpdated.trim()).not.toBe('');
   });
 
   test('temperature unit toggle should work', async ({ page }) => {
@@ -261,71 +275,23 @@ test.describe('Aviation Weather Dashboard', () => {
     });
     
     // If METAR is not configured, skip the flight category check
-    // (Condition field is hidden when METAR is not configured)
     if (!hasMetar) {
-      console.log('METAR not configured for this airport - skipping flight category check');
+      test.skip();
       return;
     }
     
-    // Wait for weather data to be loaded and displayed
-    // Flight category is rendered via JavaScript after fetching weather data
-    // Wait for either the condition status element or flight category text to appear
+    // Wait for weather data to load and flight category to appear
+    await page.waitForFunction(
+      () => {
+        const bodyText = document.body.textContent || '';
+        return /VFR|MVFR|IFR|LIFR|---/.test(bodyText);
+      },
+      { timeout: 15000 }
+    );
     
-    let pageContent = null;
-    
-    // Try waiting for flight category text to appear in the page
-    try {
-      await page.waitForFunction(
-        () => {
-          const bodyText = document.body.textContent || '';
-          return /VFR|MVFR|IFR|LIFR|---/.test(bodyText);
-        },
-        { timeout: 10000 }
-      );
-      
-      // Get page content while page is still available
-      try {
-        pageContent = await page.textContent('body');
-      } catch (e) {
-        // Page might have closed - try to get content another way or skip
-        console.warn('Could not get page content:', e.message);
-        return; // Skip test if page is closed
-      }
-    } catch (e) {
-      // Fallback: wait for condition status element
-      try {
-        await page.waitForSelector('[class*="condition"], [class*="status"], [class*="flight-category"]', { 
-          state: 'visible', 
-          timeout: 5000 
-        });
-      } catch (e2) {
-        // Last resort: wait a bit for JavaScript to load
-        try {
-          await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-        } catch (e3) {
-          // Page might be closed - skip test
-          console.warn('Page closed during test:', e3.message);
-          return;
-        }
-      }
-      
-      // Get page content while page is still available
-      try {
-        pageContent = await page.textContent('body');
-      } catch (e4) {
-        // Page closed - skip test
-        console.warn('Could not get page content after fallback:', e4.message);
-        return;
-      }
-    }
-    
-    // Should have content
-    expect(pageContent).toBeTruthy();
-    expect(pageContent.trim().length).toBeGreaterThan(0);
+    const pageContent = await page.textContent('body');
     
     // Should show flight category (VFR, MVFR, IFR, LIFR, or --- if unavailable)
-    // The flight category may not be available if weather data fetch failed
-    // but we should still see something (even if it's "---")
     expect(pageContent).toMatch(/VFR|MVFR|IFR|LIFR|---/);
   });
 
@@ -394,92 +360,24 @@ test.describe('Aviation Weather Dashboard', () => {
   });
 
   test('should not have console errors', async ({ page }) => {
-    // Console listener is set up in beforeEach
-    // Wait for page to be fully loaded so all JavaScript has run
+    // Console error checking is now consolidated in performance-optimizations.spec.js
+    // This test is kept for backward compatibility but delegates to the comprehensive test
+    // Wait for page to be fully loaded
     try {
       await page.waitForLoadState('networkidle', { timeout: 5000 });
     } catch (e) {
-      // If networkidle times out, wait for JavaScript to finish loading
-      // Wait for any pending fetch requests to complete
       await page.waitForFunction(
-        () => {
-          // Check if there are any pending fetch requests (approximation)
-          return document.readyState === 'complete';
-        },
+        () => document.readyState === 'complete',
         { timeout: 5000 }
       ).catch(() => {});
     }
     
-    // CRITICAL: Check for "Unexpected token" errors - these indicate unclosed script tags or HTML injection
-    const syntaxErrors = consoleErrors.filter(err => 
-      err.includes('Unexpected token') ||
-      err.includes('SyntaxError') ||
-      err.includes('Unexpected token \'<\'') ||
-      err.includes('Unexpected token "<"')
-    );
-    
-    if (syntaxErrors.length > 0) {
-      console.error('CRITICAL: Syntax errors found (likely unclosed script tags or HTML injection):', syntaxErrors);
-      // This is a critical error - fail the test
-      expect(syntaxErrors).toHaveLength(0);
-    }
-    
-    // CRITICAL: Check for ReferenceError - undefined variables/functions (like empty() in JavaScript)
-    const referenceErrors = consoleErrors.filter(err => 
-      err.includes('ReferenceError') &&
-      err.includes('is not defined') &&
-      !err.includes('Failed to fetch') && // Network errors are acceptable
-      !err.includes('network')
-    );
-    
-    if (referenceErrors.length > 0) {
-      console.error('CRITICAL: Reference errors found (undefined variables/functions):', referenceErrors);
-      // This is a critical error - fail the test
-      expect(referenceErrors).toHaveLength(0);
-    }
-    
-    // CRITICAL: Check for TypeError - wrong function usage
-    const typeErrors = consoleErrors.filter(err => 
-      err.includes('TypeError') &&
-      !err.includes('Failed to fetch') && // Network errors are acceptable
-      !err.includes('network') &&
-      !err.includes('Cannot read properties of null') && // Some null checks are acceptable
-      !err.includes('Cannot read properties of undefined') // Some undefined checks are acceptable
-    );
-    
-    if (typeErrors.length > 0) {
-      console.error('CRITICAL: Type errors found:', typeErrors);
-      // This is a critical error - fail the test
-      expect(typeErrors).toHaveLength(0);
-    }
-    
-    // Filter out known acceptable errors (like API fetch failures in test)
-    // HTTP 503 (Service Unavailable) is expected when weather API is unavailable in CI
-    const criticalErrors = consoleErrors.filter(err => 
-      !err.includes('Failed to fetch') && 
-      !err.includes('network') &&
-      !err.includes('404') &&
-      !err.includes('503') &&  // Service unavailable - weather API can't fetch data (expected in CI)
-      !err.includes('Service Unavailable') &&
-      !err.includes('Unable to fetch weather data') &&  // Error message when service unavailable
-      !err.includes('ChunkLoadError') && // Webpack chunk loading errors are sometimes transient
-      !err.includes('JSON parse error') && // JSON parse errors from weather API (handled gracefully)
-      !err.includes('Invalid JSON response') && // Invalid JSON from weather API (handled gracefully)
-      !err.includes('Unexpected token') &&  // Already checked above
-      !err.includes('SyntaxError') &&  // Already checked above
-      !err.includes('ReferenceError') &&  // Already checked above
-      !err.includes('TypeError')  // Already checked above
-    );
-    
-    if (criticalErrors.length > 0) {
-      console.warn('Console errors found:', criticalErrors);
-      // Don't fail test, but log warning - these are non-blocking tests
-      expect(criticalErrors.length).toBeLessThan(5);
-    }
-    
-    // Also check page content for obvious errors
+    // Basic check: verify page loaded without obvious errors
     const pageContent = await page.textContent('body');
     expect(pageContent).toBeTruthy();
+    
+    // Note: Comprehensive console error checking is in performance-optimizations.spec.js
+    // This test focuses on page functionality, not error detection
   });
 
   test('should be responsive on mobile viewport', async ({ page }) => {

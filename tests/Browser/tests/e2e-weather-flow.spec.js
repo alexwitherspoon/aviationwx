@@ -147,6 +147,31 @@ test.describe('End-to-End Weather Data Flow', () => {
     expect(updatedTempMatch[1]).toBeTruthy();
   });
 
+  test('should display weather data in correct format', async ({ page }) => {
+    await page.waitForFunction(
+      () => {
+        const bodyText = document.body.textContent || '';
+        return /\d+°[FC]/.test(bodyText);
+      },
+      { timeout: 15000 }
+    );
+    
+    const pageContent = await page.textContent('body');
+    
+    // Temperature should be formatted correctly (number + unit)
+    expect(pageContent).toMatch(/\d+°[FC]/);
+    
+    // Wind should be formatted correctly (number + unit)
+    expect(pageContent).toMatch(/\d+\s*(kts|mph|km\/h)/i);
+    
+    // Timestamp should be formatted (not raw timestamp number)
+    const lastUpdated = await page.textContent('#weather-last-updated');
+    if (lastUpdated && lastUpdated.trim() !== '--') {
+      // Should be human-readable (not a Unix timestamp)
+      expect(lastUpdated).not.toMatch(/^\d{10,}$/); // Not just digits
+    }
+  });
+
   test('should preserve data during unit toggles', async ({ page }) => {
     // Wait for weather data to load
     await page.waitForFunction(
