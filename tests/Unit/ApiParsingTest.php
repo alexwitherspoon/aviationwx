@@ -1206,5 +1206,311 @@ class ApiParsingTest extends TestCase
         $result = parsePWSWeatherResponse($response);
         $this->assertNull($result);
     }
+    
+    /**
+     * Test parseSynopticDataResponse - Valid complete response
+     */
+    public function testParseSynopticDataResponse_ValidCompleteResponse()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = getMockSynopticDataResponse();
+        $result = parseSynopticDataResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('temperature', $result);
+        $this->assertArrayHasKey('humidity', $result);
+        $this->assertArrayHasKey('pressure', $result);
+        $this->assertArrayHasKey('wind_speed', $result);
+        $this->assertArrayHasKey('wind_direction', $result);
+        $this->assertArrayHasKey('gust_speed', $result);
+        $this->assertArrayHasKey('precip_accum', $result);
+        $this->assertArrayHasKey('dewpoint', $result);
+        $this->assertArrayHasKey('obs_time', $result);
+        
+        // Verify values are reasonable
+        $this->assertIsFloat($result['temperature']);
+        $this->assertIsNumeric($result['humidity']);
+        $this->assertIsFloat($result['pressure']);
+        $this->assertIsInt($result['wind_speed']);
+        $this->assertIsInt($result['wind_direction']);
+        $this->assertIsInt($result['gust_speed']);
+        $this->assertIsFloat($result['precip_accum']);
+        $this->assertIsFloat($result['dewpoint']);
+        $this->assertIsInt($result['obs_time']);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Missing optional fields
+     */
+    public function testParseSynopticDataResponse_MissingOptionalFields()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => [[
+                'STID' => 'AT297',
+                'OBSERVATIONS' => [
+                    'air_temp_value_1' => [
+                        'value' => 15.0,
+                        'date_time' => date('c', time())
+                    ],
+                    'relative_humidity_value_1' => [
+                        'value' => 70.0,
+                        'date_time' => date('c', time())
+                    ]
+                    // Missing wind, pressure, precip, dewpoint
+                ]
+            ]]
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertEquals(15.0, $result['temperature']);
+        $this->assertEquals(70.0, $result['humidity']);
+        // Missing fields should be null or default values
+        $this->assertNull($result['wind_speed']);
+        $this->assertNull($result['pressure']);
+        $this->assertEquals(0, $result['precip_accum']); // Defaults to 0
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Empty STATION array
+     */
+    public function testParseSynopticDataResponse_EmptyStationArray()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => []
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Null response
+     */
+    public function testParseSynopticDataResponse_NullResponse()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $result = parseSynopticDataResponse(null);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Invalid structure
+     */
+    public function testParseSynopticDataResponse_InvalidStructure()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode(['invalid' => 'structure']);
+        $result = parseSynopticDataResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Invalid JSON
+     */
+    public function testParseSynopticDataResponse_InvalidJson()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = 'invalid json string';
+        $result = parseSynopticDataResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - API error response
+     */
+    public function testParseSynopticDataResponse_ApiError()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => -1,
+                'RESPONSE_MESSAGE' => 'Error: Invalid station ID'
+            ],
+            'STATION' => []
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Unit conversions (wind m/s to knots)
+     */
+    public function testParseSynopticDataResponse_WindSpeedConversion()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => [[
+                'STID' => 'AT297',
+                'OBSERVATIONS' => [
+                    'air_temp_value_1' => [
+                        'value' => 15.0,
+                        'date_time' => date('c', time())
+                    ],
+                    'wind_speed_value_1' => [
+                        'value' => 5.144,  // 10 knots in m/s (10 / 1.943844)
+                        'date_time' => date('c', time())
+                    ],
+                    'wind_gust_value_1' => [
+                        'value' => 7.716,  // 15 knots in m/s
+                        'date_time' => date('c', time())
+                    ]
+                ]
+            ]]
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        
+        // Should convert m/s to knots (round to int)
+        $this->assertEquals(10, $result['wind_speed']);
+        $this->assertEquals(15, $result['gust_speed']);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Pressure conversion (mb to inHg)
+     */
+    public function testParseSynopticDataResponse_PressureConversion()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => [[
+                'STID' => 'AT297',
+                'OBSERVATIONS' => [
+                    'air_temp_value_1' => [
+                        'value' => 15.0,
+                        'date_time' => date('c', time())
+                    ],
+                    'sea_level_pressure_value_1d' => [
+                        'value' => 1013.25,  // Standard atmospheric pressure in mb
+                        'date_time' => date('c', time())
+                    ]
+                ]
+            ]]
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        
+        // 1013.25 mb = 29.92 inHg (standard atmospheric pressure)
+        $this->assertIsFloat($result['pressure']);
+        $this->assertEqualsWithDelta(29.92, $result['pressure'], 0.1);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Altimeter handling (already in inHg, no conversion)
+     */
+    public function testParseSynopticDataResponse_AltimeterHandling()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => [[
+                'STID' => 'AT297',
+                'OBSERVATIONS' => [
+                    'air_temp_value_1' => [
+                        'value' => 15.0,
+                        'date_time' => date('c', time())
+                    ],
+                    'altimeter_value_1' => [
+                        'value' => 29.92,  // Already in inHg, should not convert
+                        'date_time' => date('c', time())
+                    ]
+                ]
+            ]]
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        
+        // Altimeter is already in inHg, should use directly without conversion
+        $this->assertIsFloat($result['pressure']);
+        $this->assertEqualsWithDelta(29.92, $result['pressure'], 0.01);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Precipitation conversion (mm to inches)
+     */
+    public function testParseSynopticDataResponse_PrecipitationConversion()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => [[
+                'STID' => 'AT297',
+                'OBSERVATIONS' => [
+                    'air_temp_value_1' => [
+                        'value' => 15.0,
+                        'date_time' => date('c', time())
+                    ],
+                    'precip_accum_since_local_midnight_value_1' => [
+                        'value' => 25.4,  // 1 inch in mm
+                        'date_time' => date('c', time())
+                    ]
+                ]
+            ]]
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        
+        // 25.4 mm = 1.0 inches
+        $this->assertIsFloat($result['precip_accum']);
+        $this->assertEqualsWithDelta(1.0, $result['precip_accum'], 0.01);
+    }
+    
+    /**
+     * Test parseSynopticDataResponse - Observation time parsing
+     */
+    public function testParseSynopticDataResponse_ObservationTime()
+    {
+        require_once __DIR__ . '/../../lib/weather/adapter/synopticdata-v1.php';
+        $expectedTime = time() - 300; // 5 minutes ago
+        $dateTime = date('c', $expectedTime);
+        
+        $response = json_encode([
+            'SUMMARY' => [
+                'RESPONSE_CODE' => 1,
+                'RESPONSE_MESSAGE' => 'OK'
+            ],
+            'STATION' => [[
+                'STID' => 'AT297',
+                'OBSERVATIONS' => [
+                    'air_temp_value_1' => [
+                        'value' => 15.0,
+                        'date_time' => $dateTime
+                    ]
+                ]
+            ]]
+        ]);
+        
+        $result = parseSynopticDataResponse($response);
+        
+        // Should parse ISO 8601 timestamp to Unix seconds
+        $this->assertIsInt($result['obs_time']);
+        $this->assertEqualsWithDelta($expectedTime, $result['obs_time'], 1); // Allow 1 second difference
+    }
 }
 

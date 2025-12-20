@@ -1149,6 +1149,27 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid metar weather source should pass validation');
     }
 
+    public function testWeatherSource_ValidSynopticdata()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'weather_source' => [
+                        'type' => 'synopticdata',
+                        'station_id' => 'AT297',
+                        'api_token' => 'test-api-token'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid synopticdata weather source should pass validation');
+    }
+
     /**
      * Test weather source validation - Invalid configurations
      */
@@ -1406,6 +1427,48 @@ class ConfigValidationTest extends TestCase
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Pwsweather missing client_secret should fail validation');
         $this->assertStringContainsString("missing 'client_secret'", implode(' ', $result['errors']));
+    }
+
+    public function testWeatherSource_SynopticdataMissingStationId()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'weather_source' => [
+                        'type' => 'synopticdata',
+                        'api_token' => 'test-api-token'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Synopticdata missing station_id should fail validation');
+        $this->assertStringContainsString("missing 'station_id'", implode(' ', $result['errors']));
+    }
+
+    public function testWeatherSource_SynopticdataMissingApiToken()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'weather_source' => [
+                        'type' => 'synopticdata',
+                        'station_id' => 'AT297'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Synopticdata missing api_token should fail validation');
+        $this->assertStringContainsString("missing 'api_token'", implode(' ', $result['errors']));
     }
 
     public function testWeatherSource_NotAnObject()

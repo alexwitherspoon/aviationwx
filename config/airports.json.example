@@ -265,7 +265,12 @@
       "webcams": [],
       "partners": [],
       "metar_station": "KPFC",
-      "nearby_metar_stations": ["KTMK"]
+      "nearby_metar_stations": ["KTMK"],
+      "weather_source": {
+        "type": "synopticdata",
+        "station_id": "YOUR_SYNOPTICDATA_STATION_ID",
+        "api_token": "your-synopticdata-api-token"
+      }
     },
     "custom-airport": {
       "name": "Custom Airport Without Standard Identifiers",

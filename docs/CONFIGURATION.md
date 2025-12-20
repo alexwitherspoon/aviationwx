@@ -108,7 +108,27 @@ PWSWeather.com stations upload data to pwsweather.com, and station owners receiv
 }
 ```
 
-### 5. METAR (Fallback/Primary)
+### 5. SynopticData.com
+**Requires:** `station_id` and `api_token`
+
+SynopticData.com provides access to over 170,000 weather stations worldwide with comprehensive weather observations. This source is typically used selectively on airports where other primary sources (Tempest, Ambient, WeatherLink, PWSWeather) aren't available. Get your API token from your [SynopticData account](https://synopticdata.com/weather-api-help/).
+
+**Finding Station IDs:**
+- Use the [SynopticData Query Builder](https://demos.synopticdata.com/query-builder/) to search for stations near your airport
+- Use the metadata service to find stations by location, network, or other criteria
+- Station IDs (STID) are unique identifiers for each weather station
+
+**Note**: SynopticData stations may report data in different units. The adapter automatically converts common units (m/s to knots, mb/hPa to inHg, mm to inches) to standard aviation units.
+
+```json
+"weather_source": {
+    "type": "synopticdata",
+    "station_id": "YOUR_STATION_ID",
+    "api_token": "your-synopticdata-api-token"
+}
+```
+
+### 6. METAR (Fallback/Primary)
 **No API key required** - Uses public METAR data
 
 METAR can be configured in two ways:

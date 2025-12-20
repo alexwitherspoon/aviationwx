@@ -18,6 +18,8 @@ require_once __DIR__ . '/../lib/weather/fetcher.php';
 require_once __DIR__ . '/../lib/weather/adapter/tempest-v1.php';
 require_once __DIR__ . '/../lib/weather/adapter/ambient-v1.php';
 require_once __DIR__ . '/../lib/weather/adapter/weatherlink-v1.php';
+require_once __DIR__ . '/../lib/weather/adapter/pwsweather-v1.php';
+require_once __DIR__ . '/../lib/weather/adapter/synopticdata-v1.php';
 require_once __DIR__ . '/../lib/weather/adapter/metar-v1.php';
 require_once __DIR__ . '/../lib/weather/daily-tracking.php';
 

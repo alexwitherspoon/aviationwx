@@ -1818,7 +1818,7 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!isset($ws['type'])) {
                     $errors[] = "Airport '{$airportCode}' weather_source missing 'type' field";
                 } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'metar'];
+                    $validTypes = ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'synopticdata', 'metar'];
                     if (!in_array($ws['type'], $validTypes)) {
                         $errors[] = "Airport '{$airportCode}' weather_source has invalid type: '{$ws['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
                     } else {
@@ -1856,6 +1856,13 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                             if (!isset($ws['client_secret'])) {
                                 $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'client_secret'";
+                            }
+                        } elseif ($wsType === 'synopticdata') {
+                            if (!isset($ws['station_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source (synopticdata) missing 'station_id'";
+                            }
+                            if (!isset($ws['api_token'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source (synopticdata) missing 'api_token'";
                             }
                         }
                     }

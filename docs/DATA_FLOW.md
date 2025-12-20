@@ -20,7 +20,7 @@ This document describes how weather and webcam data is fetched, processed, calcu
 ### Overview
 
 Weather data is fetched from multiple sources and combined to provide a complete picture:
-- **Primary Source**: Tempest, Ambient Weather, WeatherLink, PWSWeather.com, or METAR-only
+- **Primary Source**: Tempest, Ambient Weather, WeatherLink, PWSWeather.com, SynopticData.com, or METAR-only
 - **METAR Supplement**: Aviation weather data (visibility, ceiling, cloud cover) from aviationweather.gov
 
 ### Fetching Strategy
@@ -31,7 +31,7 @@ The system uses two fetching strategies:
    - Used when both primary source and METAR are needed
    - Fetches both sources simultaneously using `curl_multi`
    - Faster overall response time
-   - Used for: Tempest, Ambient Weather, PWSWeather.com sources
+   - Used for: Tempest, Ambient Weather, PWSWeather.com, SynopticData.com sources
 
 2. **Synchronous Fetching** (Sequential Requests)
    - Used when async is not applicable
@@ -95,6 +95,27 @@ The system uses two fetching strategies:
 - **Unit Conversions**:
   - None required (data already in standard units)
 - **Note**: PWSWeather.com stations upload data to pwsweather.com, and station owners receive AerisWeather API access to retrieve observations. Supports async fetching.
+
+#### SynopticData.com Weather API
+- **Endpoint**: `https://api.synopticdata.com/v2/stations/latest?stid={station_id}&token={api_token}&vars={variables}`
+- **Data Provided**:
+  - Temperature (Celsius)
+  - Humidity (%)
+  - Pressure (mb/hPa, converted to inHg) or Altimeter (inHg, used directly)
+  - Wind speed (m/s, converted to knots)
+  - Wind direction (degrees)
+  - Gust speed (m/s, converted to knots)
+  - Dewpoint (Celsius)
+  - Precipitation accumulation (mm, converted to inches)
+  - Visibility (meters or miles, converted to statute miles if needed)
+  - Observation timestamp (ISO 8601, parsed to Unix seconds)
+- **Unit Conversions** (see [Server-Side Conversions](#server-side-conversions-api-adapters) for formulas):
+  - Wind: m/s → knots (`kts = m/s × 1.943844`)
+  - Pressure: mb/hPa → inHg (`inHg = mb / 33.8639`)
+  - Precipitation: mm → inches (`inches = mm × 0.0393701`)
+  - Altimeter: Already in inHg (no conversion needed)
+  - Visibility: meters → statute miles (`SM = m / 1609.344`) if value > 10
+- **Note**: SynopticData provides access to over 170,000 weather stations worldwide. Typically used selectively on airports where other primary sources (Tempest, Ambient, WeatherLink, PWSWeather) aren't available. Supports async fetching. Pressure may be provided as altimeter (inHg, no conversion) or sea_level_pressure/pressure (mb/hPa, requires conversion).
 
 #### METAR-Only Source
 - **Endpoint**: `https://aviationweather.gov/api/data/metar?ids={station}&format=json&taf=false&hours=0`

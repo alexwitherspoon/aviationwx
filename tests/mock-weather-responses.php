@@ -192,3 +192,69 @@ function getMockPWSWeatherResponse() {
     ]);
 }
 
+/**
+ * Get a mock SynopticData API response
+ * Based on actual API structure from documentation and sample responses
+ * SynopticData uses: { "SUMMARY": { "RESPONSE_CODE": 1 }, "STATION": [ { "OBSERVATIONS": { "field_value_1": { "value": ..., "date_time": ... } } } ] }
+ * 
+ * Units: Temperature (C), Wind Speed (m/s), Pressure (mb/hPa), Precipitation (mm), Altimeter (inHg)
+ * Note: All mock APIs use consistent values for cross-source testing
+ * Wind: 2.5 m/s = ~4.9 knots (consistent with other mocks)
+ * Pressure: 1019.2 mb = ~30.08 inHg (consistent with other mocks)
+ * Precipitation: 11.94 mm = 0.47 inches (consistent with other mocks)
+ */
+function getMockSynopticDataResponse() {
+    $timestamp = time();
+    $dateTime = date('c', $timestamp);
+    
+    return json_encode([
+        'SUMMARY' => [
+            'RESPONSE_CODE' => 1,
+            'RESPONSE_MESSAGE' => 'OK',
+            'NUMBER_OF_OBJECTS' => 1
+        ],
+        'STATION' => [[
+            'STID' => 'AT297',
+            'NAME' => 'Test Station',
+            'ELEVATION' => '28.0',
+            'LATITUDE' => '45.19683',
+            'LONGITUDE' => '-123.96733',
+            'STATUS' => 'ACTIVE',
+            'OBSERVATIONS' => [
+                'air_temp_value_1' => [
+                    'value' => 5.6,  // Celsius - consistent with other mocks (~42.8°F)
+                    'date_time' => $dateTime
+                ],
+                'relative_humidity_value_1' => [
+                    'value' => 93.0,  // Percentage - consistent with other mocks
+                    'date_time' => $dateTime
+                ],
+                'wind_speed_value_1' => [
+                    'value' => 2.5,  // m/s (converts to ~4.9 knots) - consistent with other mocks
+                    'date_time' => $dateTime
+                ],
+                'wind_direction_value_1' => [
+                    'value' => 89.0,  // Degrees - consistent with other mocks
+                    'date_time' => $dateTime
+                ],
+                'wind_gust_value_1' => [
+                    'value' => 3.2,  // m/s (converts to ~6.2 knots) - consistent with other mocks
+                    'date_time' => $dateTime
+                ],
+                'dew_point_temperature_value_1d' => [
+                    'value' => 4.6,  // Celsius - consistent with other mocks
+                    'date_time' => $dateTime
+                ],
+                'precip_accum_since_local_midnight_value_1' => [
+                    'value' => 11.94,  // mm (converts to 0.47 inches) - consistent with other mocks
+                    'date_time' => $dateTime
+                ],
+                'sea_level_pressure_value_1d' => [
+                    'value' => 1019.2,  // mb/hPa (converts to ~30.08 inHg) - consistent with other mocks
+                    'date_time' => $dateTime
+                ]
+            ]
+        ]]
+    ]);
+}
+

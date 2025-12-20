@@ -14,6 +14,7 @@ require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
 require_once __DIR__ . '/adapter/weatherlink-v1.php';
 require_once __DIR__ . '/adapter/pwsweather-v1.php';
+require_once __DIR__ . '/adapter/synopticdata-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
 require_once __DIR__ . '/utils.php';
 
@@ -88,6 +89,12 @@ function fetchWeatherAsync($airport, $airportId = null) {
                 $clientId = $airport['weather_source']['client_id'];
                 $clientSecret = $airport['weather_source']['client_secret'];
                 $primaryUrl = "https://api.aerisapi.com/observations/{$stationId}?client_id=" . urlencode($clientId) . "&client_secret=" . urlencode($clientSecret);
+                break;
+            case 'synopticdata':
+                $stationId = $airport['weather_source']['station_id'];
+                $apiToken = $airport['weather_source']['api_token'];
+                $vars = 'air_temp,relative_humidity,pressure,sea_level_pressure,altimeter,wind_speed,wind_direction,wind_gust,dew_point_temperature,precip_accum_since_local_midnight,precip_accum_24_hour,visibility';
+                $primaryUrl = "https://api.synopticdata.com/v2/stations/latest?stid=" . urlencode($stationId) . "&token=" . urlencode($apiToken) . "&vars=" . urlencode($vars);
                 break;
             default:
                 // Not async-able (METAR-only or unsupported)
@@ -320,6 +327,9 @@ function fetchWeatherAsync($airport, $airportId = null) {
                 case 'pwsweather':
                     $weatherData = parsePWSWeatherResponse($primaryResponse);
                     break;
+                case 'synopticdata':
+                    $weatherData = parseSynopticDataResponse($primaryResponse);
+                    break;
             }
             if ($weatherData !== null) {
                 $primaryTimestamp = time(); // Track when primary data was fetched
@@ -479,6 +489,7 @@ function fetchWeatherSync($airport, $airportId = null) {
         case 'ambient':
         case 'weatherlink':
         case 'pwsweather':
+        case 'synopticdata':
             if ($primaryCircuit['skip']) {
                 aviationwx_log('warning', 'primary weather API circuit breaker open - skipping sync fetch', [
                     'airport' => $airportId,
@@ -495,6 +506,8 @@ function fetchWeatherSync($airport, $airportId = null) {
                     $weatherData = fetchWeatherLinkWeather($airport['weather_source']);
                 } elseif ($sourceType === 'pwsweather') {
                     $weatherData = fetchPWSWeather($airport['weather_source']);
+                } elseif ($sourceType === 'synopticdata') {
+                    $weatherData = fetchSynopticDataWeather($airport['weather_source']);
                 }
                 // Record success/failure for primary source
                 if ($weatherData !== null) {
