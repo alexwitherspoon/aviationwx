@@ -33,8 +33,13 @@ up: build ## Start containers (local development)
 down: ## Stop containers
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml down
 
-restart: ## Restart containers
+restart: ## Restart containers (quick restart, doesn't pick up env var changes)
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml restart
+
+restart-env: ## Restart containers and recreate to pick up environment variable changes
+	@echo "Recreating containers to pick up environment variable changes..."
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml up -d --force-recreate
+	@echo "✓ Containers recreated - environment variables updated"
 
 logs: ## View container logs
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml logs -f
@@ -98,7 +103,7 @@ minify: ## Minify CSS (requires perl or sed)
 	fi
 
 # Configuration update
-update-config: ## Update configuration and restart
+update-config: ## Update configuration and restart (recreates containers to pick up env var changes)
 	@bash config/docker-config.sh
-	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml restart
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml up -d --force-recreate
 
