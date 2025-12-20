@@ -82,7 +82,8 @@ make config      # Generate config from .env
 make build       # Build Docker images
 make up          # Start containers
 make down        # Stop containers
-make restart     # Restart containers
+make restart     # Restart containers (quick restart)
+make restart-env # Restart and recreate containers (picks up env var changes)
 make logs        # View logs (Ctrl+C to exit)
 make shell       # Open shell in container
 make test        # Test the application
@@ -121,7 +122,10 @@ make down            # Stop containers
 
 ```bash
 # After making code changes
-docker compose restart    # Restart to pick up changes
+make restart              # Quick restart (for code changes)
+
+# After changing environment variables in docker-compose.local.yml
+make restart-env           # Recreate containers to pick up env var changes
 
 # Or rebuild if Dockerfile changed
 make build && make up
@@ -160,7 +164,7 @@ Default port is `8080`. To change:
 
 2. Restart:
    ```bash
-   make restart
+   make restart-env  # Use restart-env for environment variable changes
    ```
 
 3. Access: http://localhost:3000
@@ -181,7 +185,7 @@ Default port is `8080`. To change:
 
 2. Restart container:
    ```bash
-   docker compose restart
+   make restart-env  # Recreate to pick up config changes
    ```
 
 3. Test:
