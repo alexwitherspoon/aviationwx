@@ -158,11 +158,15 @@ function generateMockWeatherData($airportId, $airport) {
         exit;
     }
 
-    // Check if we're using test config or local dev mode - if so, return mock weather data
+    // Check if we should use mock weather data (only during tests or when explicitly enabled)
+    // Mock weather is enabled when:
+    // 1. Using test config (CONFIG_PATH contains airports.json.test), OR
+    // 2. Running in test environment (APP_ENV=testing, set by PHPUnit), OR
+    // 3. Explicitly enabled via MOCK_WEATHER=true (manual override)
     $envConfigPath = getenv('CONFIG_PATH');
     $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false);
-    $isLocalDev = (getenv('APP_ENV') !== 'production' && !isProduction());
-    $useMockWeather = $isTestConfig || (getenv('MOCK_WEATHER') === 'true') || ($isLocalDev && getenv('MOCK_WEATHER') !== 'false');
+    $isTestEnvironment = (getenv('APP_ENV') === 'testing');
+    $useMockWeather = $isTestConfig || $isTestEnvironment || (getenv('MOCK_WEATHER') === 'true');
     
     if ($useMockWeather) {
         // Generate mock weather data for local testing

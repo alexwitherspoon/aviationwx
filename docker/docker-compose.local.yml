@@ -25,10 +25,14 @@ services:
       - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
       - "12222:2222"  # SFTP (mapped to avoid conflicts)
     volumes:
-      # Mount config directory for local development (writable so entrypoint can create airports.json from fallback)
-      # Entrypoint will handle fallback: airports.json (if exists) > airports.json.example > airports.json.test
-      # For local development with real airports.json, create config/airports.json or use docker-compose.override.yml
-      - ../config:/var/www/html/config
+      # Mount production airports.json from secrets repository (configurable via PRODUCTION_AIRPORTS_JSON env var)
+      # Default path: /Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json
+      # To override: export PRODUCTION_AIRPORTS_JSON=/path/to/airports.json
+      # Note: File mount must come before directory mount - file mount takes precedence for airports.json
+      - ${PRODUCTION_AIRPORTS_JSON:-/Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json}:/var/www/html/config/airports.json:ro
+      # Mount config directory for other config files (read-only to prevent overwriting airports.json)
+      # This provides other config files while airports.json comes from the file mount above
+      - ../config:/var/www/html/config:ro
       # Also mount tests directory so test fixture is available as fallback
       - ../tests:/var/www/html/tests:ro
       # Mount cache directory from /tmp (ephemeral, cleared on reboot)
@@ -43,7 +47,8 @@ services:
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
-      - MOCK_WEATHER=${MOCK_WEATHER:-true}
+      # MOCK_WEATHER is auto-detected: enabled when APP_ENV=testing (set by PHPUnit) or when explicitly set to 'true'
+      # To manually enable mock weather for testing, set: MOCK_WEATHER=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
