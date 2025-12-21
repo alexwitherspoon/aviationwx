@@ -410,9 +410,26 @@ function generateMockWeatherData($airportId, $airport) {
     try {
     // Use async fetch when METAR supplementation is needed, otherwise sync
     if ($airport['weather_source']['type'] !== 'metar') {
-        $weatherData = fetchWeatherAsync($airport, $airportId);
+        // Load existing cache for backup fetching logic
+        $existingCache = null;
+        if (file_exists($weatherCacheFile)) {
+            $existingCacheJson = @file_get_contents($weatherCacheFile);
+            if ($existingCacheJson !== false) {
+                $existingCache = json_decode($existingCacheJson, true);
+            }
+        }
+        
+        $weatherData = fetchWeatherAsync($airport, $airportId, $airportWeatherRefresh, $existingCache);
     } else {
-        $weatherData = fetchWeatherSync($airport, $airportId);
+        // Load existing cache for backup fetching logic (sync path)
+        $existingCacheSync = null;
+        if (file_exists($weatherCacheFile)) {
+            $existingCacheJson = @file_get_contents($weatherCacheFile);
+            if ($existingCacheJson !== false) {
+                $existingCacheSync = json_decode($existingCacheJson, true);
+            }
+        }
+        $weatherData = fetchWeatherSync($airport, $airportId, $airportWeatherRefresh, $existingCacheSync);
     }
     
     } catch (Throwable $e) {
@@ -532,13 +549,23 @@ function generateMockWeatherData($airportId, $airport) {
     // Staleness checks are only applied to cached data before serving (see lines 686, 705)
     // This prevents the bug where fresh data was incorrectly nulled, causing merge to preserve old cache values
 
-    // Merge with existing cache to preserve last known good values for missing/invalid fields
+    // Load existing cache for merging and recovery cycle tracking
     $existingCache = null;
     if (file_exists($weatherCacheFile)) {
         $existingCacheJson = @file_get_contents($weatherCacheFile);
         if ($existingCacheJson !== false) {
             $existingCache = json_decode($existingCacheJson, true);
         }
+    }
+    
+    // Merge with backup source using field-level fallback (if backup data exists)
+    $backupData = null;
+    if (isset($weatherData['_backup_data']) && is_array($weatherData['_backup_data'])) {
+        $backupData = $weatherData['_backup_data'];
+        // Remove internal backup data key before merging
+        unset($weatherData['_backup_data']);
+        // Merge primary and backup on field-by-field basis
+        $weatherData = mergeWeatherDataWithFieldLevelFallback($weatherData, $backupData, $existingCache, $airportWeatherRefresh);
     }
     
     // If we have existing cache, merge it with new data to preserve good values
@@ -553,6 +580,75 @@ function generateMockWeatherData($airportId, $airport) {
         // without this recalculation, causing blank condition field on dashboard
         calculateAndSetFlightCategory($weatherData);
     }
+    
+    // Recovery cycle tracking: track primary source recovery (5 cycles before switching back)
+    require_once __DIR__ . '/../lib/weather/validation.php';
+    $staleThresholdSeconds = $airportWeatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+    $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
+        ? time() - $weatherData['last_updated_primary']
+        : PHP_INT_MAX;
+    $primaryStale = $primaryAge >= $staleThresholdSeconds;
+    
+    // Check if primary is providing data (check field_source_map if available, otherwise check if primary has data)
+    $primaryProvidingData = false;
+    $fieldSourceMap = $weatherData['_field_source_map'] ?? [];
+    if (!empty($fieldSourceMap)) {
+        // Check if any fields are using primary
+        foreach ($fieldSourceMap as $field => $source) {
+            if ($source === 'primary') {
+                $primaryProvidingData = true;
+                break;
+            }
+        }
+    } else {
+        // Fallback: check if primary has any data
+        $primarySourceFields = ['temperature', 'wind_speed', 'wind_direction', 'pressure', 'humidity'];
+        foreach ($primarySourceFields as $field) {
+            if (isset($weatherData[$field]) && $weatherData[$field] !== null) {
+                $primaryProvidingData = true;
+                break;
+            }
+        }
+    }
+    
+    // Check if primary fields are valid (not stale and pass validation)
+    $primaryFieldsValid = true;
+    if ($primaryProvidingData) {
+        $primarySourceFields = ['temperature', 'wind_speed', 'wind_direction', 'pressure', 'humidity'];
+        foreach ($primarySourceFields as $field) {
+            $value = $weatherData[$field] ?? null;
+            if ($value !== null) {
+                $context = [];
+                if ($field === 'dewpoint' || $field === 'dewpoint_f') {
+                    $context['temperature'] = $weatherData['temperature'] ?? null;
+                }
+                if ($field === 'gust_speed' || $field === 'peak_gust') {
+                    $context['wind_speed'] = $weatherData['wind_speed'] ?? null;
+                }
+                $validation = validateWeatherField($field, $value, null, $context);
+                if (!$validation['valid']) {
+                    $primaryFieldsValid = false;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Get current recovery cycles from cache or initialize
+    $recoveryCycles = 0;
+    if (is_array($existingCache) && isset($existingCache['primary_recovery_cycles'])) {
+        $recoveryCycles = (int)$existingCache['primary_recovery_cycles'];
+    }
+    
+    // Update recovery cycles: increment if primary is fresh, providing data, and valid; reset if stale or invalid
+    if (!$primaryStale && $primaryProvidingData && $primaryFieldsValid) {
+        $recoveryCycles++;
+    } else {
+        $recoveryCycles = 0;
+    }
+    
+    // Store recovery cycles in weather data (for cache persistence)
+    $weatherData['primary_recovery_cycles'] = $recoveryCycles;
     
     // Set overall last_updated to most recent observation time from ALL data sources
     // This ensures we pick the latest observation time even if METAR is hourly (low frequency)
@@ -577,6 +673,13 @@ function generateMockWeatherData($airportId, $airport) {
         $allTimes[] = $weatherData['last_updated_metar'];
     }
     
+    // Backup source: prefer observation time, fallback to fetch time
+    if (isset($weatherData['obs_time_backup']) && $weatherData['obs_time_backup'] > 0) {
+        $allTimes[] = $weatherData['obs_time_backup'];
+    } elseif (isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
+        $allTimes[] = $weatherData['last_updated_backup'];
+    }
+    
     // Use the latest (most recent) time from all sources
     $lastUpdated = !empty($allTimes) ? max($allTimes) : time();
     if ($lastUpdated > 0) {
@@ -587,6 +690,38 @@ function generateMockWeatherData($airportId, $airport) {
     $weatherData['last_updated'] = time();
     $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
     }
+
+    // Determine backup status before removing internal fields
+    // Backup is active if it's providing data for any fields
+    $backupStatus = 'standby'; // Default: configured but not active
+    $fieldSourceMap = $weatherData['_field_source_map'] ?? [];
+    if (!empty($fieldSourceMap)) {
+        // Check if backup is providing any fields
+        $backupProvidingFields = false;
+        foreach ($fieldSourceMap as $field => $source) {
+            if ($source === 'backup') {
+                $backupProvidingFields = true;
+                break;
+            }
+        }
+        
+        if ($backupProvidingFields) {
+            $backupStatus = 'active';
+        }
+    }
+    
+    // Check if backup circuit breaker is open (failed state)
+    require_once __DIR__ . '/../lib/circuit-breaker.php';
+    $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
+    if ($backupCircuit['skip']) {
+        $backupStatus = 'failed';
+    }
+    
+    // Store backup status in cache (for status page and weather credits)
+    $weatherData['backup_status'] = $backupStatus;
+    
+    // Remove internal fields before caching and sending response
+    unset($weatherData['_field_source_map']);
 
     $cacheWriteResult = @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
     

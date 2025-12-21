@@ -20,6 +20,11 @@
  *     'age' => int,            // Seconds since timestamp (PHP_INT_MAX if unavailable)
  *     'available' => bool       // Whether source is configured
  *   },
+ *   'backup' => array{
+ *     'timestamp' => int,
+ *     'age' => int,
+ *     'available' => bool
+ *   },
  *   'metar' => array{
  *     'timestamp' => int,
  *     'age' => int,
@@ -38,6 +43,11 @@ function getSourceTimestamps(string $airportId, array $airport): array {
     $now = time();
     $result = [
         'primary' => [
+            'timestamp' => 0,
+            'age' => PHP_INT_MAX,
+            'available' => false
+        ],
+        'backup' => [
             'timestamp' => 0,
             'age' => PHP_INT_MAX,
             'available' => false
@@ -77,6 +87,32 @@ function getSourceTimestamps(string $airportId, array $airport): array {
                 if ($primaryTimestamp > 0) {
                     $result['primary']['timestamp'] = $primaryTimestamp;
                     $result['primary']['age'] = $now - $primaryTimestamp;
+                }
+            }
+        }
+    }
+    
+    // Check backup weather source (if configured)
+    if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup'])) {
+        $result['backup']['available'] = true;
+        $weatherCacheFile = __DIR__ . '/../../cache/weather_' . $airportId . '.json';
+        
+        if (file_exists($weatherCacheFile)) {
+            // Use @ to suppress errors for non-critical file operations
+            // We handle failures explicitly with fallback mechanisms below
+            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
+            if (is_array($weatherData)) {
+                // Check backup source timestamp
+                $backupTimestamp = 0;
+                if (isset($weatherData['obs_time_backup']) && $weatherData['obs_time_backup'] > 0) {
+                    $backupTimestamp = (int)$weatherData['obs_time_backup'];
+                } elseif (isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
+                    $backupTimestamp = (int)$weatherData['last_updated_backup'];
+                }
+                
+                if ($backupTimestamp > 0) {
+                    $result['backup']['timestamp'] = $backupTimestamp;
+                    $result['backup']['age'] = $now - $backupTimestamp;
                 }
             }
         }
