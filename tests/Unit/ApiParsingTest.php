@@ -271,6 +271,38 @@ class ApiParsingTest extends TestCase
     }
     
     /**
+     * Test parseAmbientResponse - Single device object response (when MAC address specified)
+     */
+    public function testParseAmbientResponse_SingleDeviceObject()
+    {
+        // Single device object response (returned when querying specific device by MAC)
+        $response = json_encode([
+            'macAddress' => 'AA:BB:CC:DD:EE:FF',
+            'lastData' => [
+                'dateutc' => time() * 1000,
+                'tempf' => 70.0,
+                'humidity' => 65.0,
+                'baromrelin' => 30.10,
+                'windspeedmph' => 5.0,
+                'winddir' => 270,
+                'windgustmph' => 7.0,
+                'dailyrainin' => 0.1,
+                'dewPoint' => 60.0
+            ]
+        ]);
+        
+        $result = parseAmbientResponse($response);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('temperature', $result);
+        $this->assertArrayHasKey('humidity', $result);
+        $this->assertNotNull($result['temperature']);
+        $this->assertNotNull($result['humidity']);
+        // Verify temperature conversion (70°F = ~21.1°C)
+        $this->assertEqualsWithDelta(21.1, $result['temperature'], 0.5);
+    }
+    
+    /**
      * Test parseMETARResponse - Valid response with all fields
      */
     public function testParseMETARResponse_ValidCompleteResponse()

@@ -98,7 +98,8 @@
       "weather_source": {
         "type": "ambient",
         "api_key": "test_ambient_api_key",
-        "application_key": "test_ambient_app_key"
+        "application_key": "test_ambient_app_key",
+        "mac_address": "AA:BB:CC:DD:EE:FF"
       },
       "metar_station": "KSEA",
       "webcams": [

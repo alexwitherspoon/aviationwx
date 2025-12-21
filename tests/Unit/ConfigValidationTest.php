@@ -1086,6 +1086,28 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid ambient weather source should pass validation');
     }
 
+    public function testWeatherSource_ValidAmbientWithMacAddress()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'weather_source' => [
+                        'type' => 'ambient',
+                        'api_key' => 'test-api-key',
+                        'application_key' => 'test-app-key',
+                        'mac_address' => 'AA:BB:CC:DD:EE:FF'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid ambient weather source with mac_address should pass validation');
+    }
+
     public function testWeatherSource_ValidWeatherlink()
     {
         $config = [
