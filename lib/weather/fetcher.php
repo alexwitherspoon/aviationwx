@@ -288,7 +288,9 @@ function fetchWeatherAsync($airport, $airportId = null) {
             recordWeatherSuccess($airportId, 'primary');
         } elseif (!$primaryCircuit['skip']) {
             // Only record failure if we actually attempted the request (not in backoff)
-            recordWeatherFailure($airportId, 'primary', $primarySeverity);
+            // Pass HTTP code if it's 4xx/5xx, otherwise null
+            $httpCodeForBackoff = ($primaryCode >= 400 && $primaryCode < 600) ? $primaryCode : null;
+            recordWeatherFailure($airportId, 'primary', $primarySeverity, $httpCodeForBackoff);
             aviationwx_log('warning', 'primary weather API error', [
                 'airport' => $airportId,
                 'source' => $sourceType,
@@ -307,7 +309,9 @@ function fetchWeatherAsync($airport, $airportId = null) {
             recordWeatherSuccess($airportId, 'metar');
         } elseif (!$metarCircuit['skip']) {
             // Only record failure if we actually attempted the request (not in backoff)
-            recordWeatherFailure($airportId, 'metar', $metarSeverity);
+            // Pass HTTP code if it's 4xx/5xx, otherwise null
+            $httpCodeForBackoff = ($metarCode >= 400 && $metarCode < 600) ? $metarCode : null;
+            recordWeatherFailure($airportId, 'metar', $metarSeverity, $httpCodeForBackoff);
             aviationwx_log('warning', 'METAR API error', [
                 'airport' => $airportId,
                 'station' => $stationId ?? ($airport['metar_station'] ?? 'unknown'),
