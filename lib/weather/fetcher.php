@@ -19,16 +19,84 @@ require_once __DIR__ . '/adapter/metar-v1.php';
 require_once __DIR__ . '/utils.php';
 
 /**
+ * Determine if backup weather source should be fetched
+ * 
+ * Backup is fetched when primary source exceeds 4x refresh interval (warm-up period: x5 - 1),
+ * or when primary has missing/null fields, or when existing cache shows primary fields are stale.
+ * This ensures backup data is ready when primary exceeds 5x threshold.
+ * 
+ * @param array $airport Airport configuration array
+ * @param array|null $primaryData Primary weather data (from current fetch, if available)
+ * @param array|null $existingCache Existing cached weather data
+ * @param int $refreshIntervalSeconds Weather refresh interval in seconds
+ * @return bool True if backup should be fetched, false otherwise
+ */
+function shouldFetchBackup(array $airport, ?array $primaryData, ?array $existingCache, int $refreshIntervalSeconds): bool {
+    // Check if backup is configured
+    if (!isset($airport['weather_source_backup']) || !is_array($airport['weather_source_backup'])) {
+        return false;
+    }
+    
+    // Calculate 4x threshold (warm-up period: x5 - 1)
+    $warmupThresholdSeconds = $refreshIntervalSeconds * (WEATHER_STALENESS_WARNING_MULTIPLIER - 1);
+    
+    $now = time();
+    
+    // Check if primary data is stale (age >= 4x refresh interval)
+    if ($primaryData !== null && isset($primaryData['last_updated_primary']) && $primaryData['last_updated_primary'] > 0) {
+        $primaryAge = $now - $primaryData['last_updated_primary'];
+        if ($primaryAge >= $warmupThresholdSeconds) {
+            return true;
+        }
+    }
+    
+    // Check existing cache for staleness
+    if ($existingCache !== null && isset($existingCache['last_updated_primary']) && $existingCache['last_updated_primary'] > 0) {
+        $cachePrimaryAge = $now - $existingCache['last_updated_primary'];
+        if ($cachePrimaryAge >= $warmupThresholdSeconds) {
+            return true;
+        }
+    }
+    
+    // Check if primary has missing/null fields for expected primary-source fields
+    $primarySourceFields = [
+        'temperature', 'wind_speed', 'wind_direction', 'pressure', 'humidity'
+    ];
+    
+    $hasMissingFields = false;
+    if ($primaryData !== null) {
+        foreach ($primarySourceFields as $field) {
+            if (!isset($primaryData[$field]) || $primaryData[$field] === null) {
+                $hasMissingFields = true;
+                break;
+            }
+        }
+    } elseif ($existingCache !== null) {
+        foreach ($primarySourceFields as $field) {
+            if (!isset($existingCache[$field]) || $existingCache[$field] === null) {
+                $hasMissingFields = true;
+                break;
+            }
+        }
+    }
+    
+    return $hasMissingFields;
+}
+
+/**
  * Fetch weather data asynchronously using curl_multi (parallel requests)
  * 
- * Fetches primary weather source and METAR in parallel when both are needed.
+ * Fetches primary weather source, backup source (if needed), and METAR in parallel when needed.
  * Uses circuit breaker logic to skip sources in backoff period.
+ * Backup is fetched when primary exceeds 4x refresh interval (warm-up period).
  * 
  * @param array $airport Airport configuration array
  * @param string|null $airportId Airport identifier (optional, defaults to 'unknown')
+ * @param int|null $refreshIntervalSeconds Weather refresh interval in seconds (optional, for backup fetching logic)
+ * @param array|null $existingCache Existing cached weather data (optional, for backup fetching logic)
  * @return array|null Weather data array with standard keys, or null on failure
  */
-function fetchWeatherAsync($airport, $airportId = null) {
+function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds = null, $existingCache = null) {
     // Normalize weather source configuration (handle airports with metar_station but no weather_source)
     if (!normalizeWeatherSource($airport)) {
         aviationwx_log('error', 'no weather source configured in fetchWeatherAsync', ['airport' => $airportId ?? 'unknown'], 'app');
@@ -130,7 +198,70 @@ function fetchWeatherAsync($airport, $airportId = null) {
         }
     }
     
-    // If both are skipped, return null
+    // Check if backup should be fetched (4x threshold warm-up period)
+    $backupUrl = null;
+    $backupSourceType = null;
+    $backupCircuit = ['skip' => true]; // Default to skip
+    if (isset($airport['weather_source_backup']) && is_array($airport['weather_source_backup'])) {
+        $backupSourceType = $airport['weather_source_backup']['type'];
+        $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
+        
+        // Check if backup should be fetched (4x threshold)
+        if (!$backupCircuit['skip'] && $refreshIntervalSeconds !== null) {
+            // Get primary data if available (from existing cache or will be fetched)
+            $primaryDataForCheck = null;
+            if ($existingCache !== null) {
+                $primaryDataForCheck = $existingCache;
+            }
+            
+            if (shouldFetchBackup($airport, $primaryDataForCheck, $existingCache, $refreshIntervalSeconds)) {
+                // Build backup URL based on source type
+                switch ($backupSourceType) {
+                    case 'tempest':
+                        $backupApiKey = $airport['weather_source_backup']['api_key'];
+                        $backupStationId = $airport['weather_source_backup']['station_id'];
+                        $backupUrl = "https://swd.weatherflow.com/swd/rest/observations/station/{$backupStationId}?token={$backupApiKey}";
+                        break;
+                    case 'ambient':
+                        $backupApiKey = $airport['weather_source_backup']['api_key'];
+                        $backupAppKey = $airport['weather_source_backup']['application_key'];
+                        $backupMacAddress = isset($airport['weather_source_backup']['mac_address']) ? trim($airport['weather_source_backup']['mac_address']) : null;
+                        if ($backupMacAddress) {
+                            $backupMacAddress = preg_replace('/\s+/', '', $backupMacAddress);
+                            if (empty($backupMacAddress)) {
+                                $backupMacAddress = null;
+                            }
+                        }
+                        if ($backupMacAddress) {
+                            $backupUrl = "https://api.ambientweather.net/v1/devices/{$backupMacAddress}?applicationKey={$backupAppKey}&apiKey={$backupApiKey}";
+                        } else {
+                            $backupUrl = "https://api.ambientweather.net/v1/devices?applicationKey={$backupAppKey}&apiKey={$backupApiKey}";
+                        }
+                        break;
+                    case 'pwsweather':
+                        $backupStationId = $airport['weather_source_backup']['station_id'];
+                        $backupClientId = $airport['weather_source_backup']['client_id'];
+                        $backupClientSecret = $airport['weather_source_backup']['client_secret'];
+                        $backupUrl = "https://api.aerisapi.com/observations/{$backupStationId}?client_id=" . urlencode($backupClientId) . "&client_secret=" . urlencode($backupClientSecret);
+                        break;
+                    case 'synopticdata':
+                        $backupStationId = $airport['weather_source_backup']['station_id'];
+                        $backupApiToken = $airport['weather_source_backup']['api_token'];
+                        $vars = 'air_temp,relative_humidity,pressure,sea_level_pressure,altimeter,wind_speed,wind_direction,wind_gust,dew_point_temperature,precip_accum_since_local_midnight,precip_accum_24_hour,visibility';
+                        $backupUrl = "https://api.synopticdata.com/v2/stations/latest?stid=" . urlencode($backupStationId) . "&token=" . urlencode($backupApiToken) . "&vars=" . urlencode($vars);
+                        break;
+                    case 'weatherlink':
+                        // WeatherLink requires sync fetch (custom headers), skip for async
+                        break;
+                    case 'metar':
+                        // METAR is handled separately, skip here
+                        break;
+                }
+            }
+        }
+    }
+    
+    // If both primary and METAR are skipped, return null
     if ($primaryCircuit['skip'] && $metarCircuit['skip']) {
         return null;
     }
@@ -138,17 +269,22 @@ function fetchWeatherAsync($airport, $airportId = null) {
     // Check for mock responses in test mode before making real requests
     $primaryMockResponse = $primaryUrl !== null ? getMockHttpResponse($primaryUrl) : null;
     $metarMockResponse = $metarUrl !== null ? getMockHttpResponse($metarUrl) : null;
+    $backupMockResponse = $backupUrl !== null ? getMockHttpResponse($backupUrl) : null;
     
-    // If both are mocked, skip curl entirely and process mock responses directly
-    if ($primaryMockResponse !== null && $metarMockResponse !== null) {
+    // If all are mocked, skip curl entirely and process mock responses directly
+    if ($primaryMockResponse !== null && $metarMockResponse !== null && ($backupUrl === null || $backupMockResponse !== null)) {
         $primaryResponse = $primaryMockResponse;
         $metarResponse = $metarMockResponse;
+        $backupResponse = $backupMockResponse;
         $primaryCode = 200;
         $metarCode = 200;
+        $backupCode = $backupUrl !== null ? 200 : 0;
         $primaryError = '';
         $metarError = '';
+        $backupError = '';
         $primaryErrno = 0;
         $metarErrno = 0;
+        $backupErrno = 0;
         // Skip curl execution and jump to response processing
         goto process_responses;
     }
@@ -162,6 +298,7 @@ function fetchWeatherAsync($airport, $airportId = null) {
     
     $ch1 = null;
     $ch2 = null;
+    $ch3 = null;
     
     // Initialize primary curl handle if not in backoff and not mocked
     if ($primaryUrl !== null && $primaryMockResponse === null) {
@@ -205,6 +342,34 @@ function fetchWeatherAsync($airport, $airportId = null) {
         curl_multi_add_handle($mh, $ch2);
     }
     
+    // Initialize backup curl handle if not in backoff and not mocked
+    if ($backupUrl !== null && $backupMockResponse === null) {
+        $ch3 = curl_init($backupUrl);
+        if ($ch3 === false) {
+            if ($ch1 !== null) {
+                curl_multi_remove_handle($mh, $ch1);
+                curl_close($ch1);
+            }
+            if ($ch2 !== null) {
+                curl_multi_remove_handle($mh, $ch2);
+                curl_close($ch2);
+            }
+            curl_multi_close($mh);
+            aviationwx_log('error', 'failed to init backup curl handle', ['airport' => $airportId], 'app');
+            recordWeatherFailure($airportId, 'backup', 'transient');
+            // Don't return null - continue with primary and METAR
+        } else {
+            curl_setopt_array($ch3, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => CURL_TIMEOUT,
+                CURLOPT_CONNECTTIMEOUT => CURL_CONNECT_TIMEOUT,
+                CURLOPT_USERAGENT => 'AviationWX/1.0',
+                CURLOPT_FAILONERROR => false, // Don't fail on HTTP error codes, we'll check them
+            ]);
+            curl_multi_add_handle($mh, $ch3);
+        }
+    }
+    
     // Execute both requests in parallel with overall timeout protection
     $running = null;
     $startTime = microtime(true);
@@ -236,14 +401,18 @@ function fetchWeatherAsync($airport, $airportId = null) {
     // Get responses and error information
     $primaryResponse = $ch1 !== null ? curl_multi_getcontent($ch1) : null;
     $metarResponse = $ch2 !== null ? curl_multi_getcontent($ch2) : null;
+    $backupResponse = $ch3 !== null ? curl_multi_getcontent($ch3) : null;
     
     // Get HTTP codes and curl error info
     $primaryCode = $ch1 !== null ? curl_getinfo($ch1, CURLINFO_HTTP_CODE) : 0;
     $metarCode = $ch2 !== null ? curl_getinfo($ch2, CURLINFO_HTTP_CODE) : 0;
+    $backupCode = $ch3 !== null ? curl_getinfo($ch3, CURLINFO_HTTP_CODE) : 0;
     $primaryError = $ch1 !== null ? curl_error($ch1) : '';
     $metarError = $ch2 !== null ? curl_error($ch2) : '';
+    $backupError = $ch3 !== null ? curl_error($ch3) : '';
     $primaryErrno = $ch1 !== null ? curl_errno($ch1) : 0;
     $metarErrno = $ch2 !== null ? curl_errno($ch2) : 0;
+    $backupErrno = $ch3 !== null ? curl_errno($ch3) : 0;
     
     // Override with mock responses if available (for mixed mock/real case)
     if ($primaryMockResponse !== null) {
@@ -257,6 +426,12 @@ function fetchWeatherAsync($airport, $airportId = null) {
         $metarCode = 200;
         $metarError = '';
         $metarErrno = 0;
+    }
+    if ($backupMockResponse !== null) {
+        $backupResponse = $backupMockResponse;
+        $backupCode = 200;
+        $backupError = '';
+        $backupErrno = 0;
     }
     
     process_responses:
@@ -279,6 +454,16 @@ function fetchWeatherAsync($airport, $airportId = null) {
             $metarSeverity = 'transient';
         } else {
             $metarSeverity = 'permanent'; // Other 4xx errors are likely permanent
+        }
+    }
+    
+    $backupSeverity = 'transient';
+    if ($backupCode !== 0 && $backupCode >= 400 && $backupCode < 500) {
+        // HTTP 429 (rate limiting) should be treated as transient - it's temporary
+        if ($backupCode === 429) {
+            $backupSeverity = 'transient';
+        } else {
+            $backupSeverity = 'permanent'; // Other 4xx errors are likely permanent
         }
     }
     
@@ -324,6 +509,27 @@ function fetchWeatherAsync($airport, $airportId = null) {
         }
     }
     
+    // Check backup response and record success/failure
+    if ($ch3 !== null) {
+        if ($backupResponse !== false && $backupCode == 200 && empty($backupError)) {
+            recordWeatherSuccess($airportId, 'backup');
+        } elseif (!$backupCircuit['skip']) {
+            // Only record failure if we actually attempted the request (not in backoff)
+            // Pass HTTP code if it's 4xx/5xx, otherwise null
+            $httpCodeForBackoff = ($backupCode >= 400 && $backupCode < 600) ? $backupCode : null;
+            recordWeatherFailure($airportId, 'backup', $backupSeverity, $httpCodeForBackoff);
+            aviationwx_log('warning', 'backup weather API error', [
+                'airport' => $airportId,
+                'source' => $backupSourceType ?? 'unknown',
+                'http_code' => $backupCode,
+                'curl_error' => $backupError ?: null,
+                'curl_errno' => $backupErrno !== 0 ? $backupErrno : null,
+                'response_received' => $backupResponse !== false,
+                'severity' => $backupSeverity
+            ], 'app');
+        }
+    }
+    
     // Cleanup
     if ($ch1 !== null) {
         curl_multi_remove_handle($mh, $ch1);
@@ -332,6 +538,10 @@ function fetchWeatherAsync($airport, $airportId = null) {
     if ($ch2 !== null) {
         curl_multi_remove_handle($mh, $ch2);
         curl_close($ch2);
+    }
+    if ($ch3 !== null) {
+        curl_multi_remove_handle($mh, $ch3);
+        curl_close($ch3);
     }
     curl_multi_close($mh);
     
@@ -396,6 +606,61 @@ function fetchWeatherAsync($airport, $airportId = null) {
     
     if ($weatherData === null) {
         return null;
+    }
+    
+    // Parse backup weather data (if fetched)
+    $backupData = null;
+    $backupTimestamp = null;
+    if ($backupResponse !== false && $backupCode == 200 && $backupSourceType !== null) {
+        try {
+            switch ($backupSourceType) {
+                case 'tempest':
+                    $backupData = parseTempestResponse($backupResponse);
+                    break;
+                case 'ambient':
+                    $backupData = parseAmbientResponse($backupResponse);
+                    break;
+                case 'pwsweather':
+                    $backupData = parsePWSWeatherResponse($backupResponse);
+                    break;
+                case 'synopticdata':
+                    $backupData = parseSynopticDataResponse($backupResponse);
+                    break;
+            }
+            if ($backupData !== null) {
+                $backupTimestamp = time();
+                $weatherData['last_updated_backup'] = $backupTimestamp;
+                // Preserve observation time from backup source
+                if (isset($backupData['obs_time']) && $backupData['obs_time'] !== null) {
+                    $weatherData['obs_time_backup'] = $backupData['obs_time'];
+                }
+                // Store backup data for later field-level merging
+                $weatherData['_backup_data'] = $backupData;
+            } else {
+                aviationwx_log('warning', 'backup weather response parse failed', [
+                    'airport' => $airportId,
+                    'source' => $backupSourceType,
+                    'http_code' => $backupCode,
+                    'response_length' => strlen($backupResponse)
+                ], 'app');
+            }
+        } catch (Exception $e) {
+            aviationwx_log('error', 'backup weather parse exception', [
+                'airport' => $airportId,
+                'source' => $backupSourceType ?? 'unknown',
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 'app');
+            $backupData = null;
+        } catch (Throwable $e) {
+            aviationwx_log('error', 'backup weather parse throwable', [
+                'airport' => $airportId,
+                'source' => $backupSourceType ?? 'unknown',
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 'app');
+            $backupData = null;
+        }
     }
     
     // Parse and merge METAR data (non-blocking: use what we got)
@@ -493,12 +758,15 @@ function fetchWeatherAsync($airport, $airportId = null) {
  * 
  * Used when async fetch is not applicable (METAR-only source, WeatherLink with custom headers).
  * Handles circuit breaker logic and error recording.
+ * Supports backup source fetching when primary exceeds 4x threshold.
  * 
  * @param array $airport Airport configuration array
  * @param string|null $airportId Airport identifier (optional, defaults to 'unknown')
+ * @param int|null $refreshIntervalSeconds Weather refresh interval in seconds (optional, for backup fetching logic)
+ * @param array|null $existingCache Existing cached weather data (optional, for backup fetching logic)
  * @return array|null Weather data array with standard keys, or null on failure
  */
-function fetchWeatherSync($airport, $airportId = null) {
+function fetchWeatherSync($airport, $airportId = null, $refreshIntervalSeconds = null, $existingCache = null) {
     // Normalize weather source configuration (handle airports with metar_station but no weather_source)
     if (!normalizeWeatherSource($airport)) {
         aviationwx_log('error', 'no weather source configured in fetchWeatherSync', ['airport' => $airportId ?? 'unknown'], 'app');
@@ -587,6 +855,58 @@ function fetchWeatherSync($airport, $airportId = null) {
         // This is critical for accurate timestamps in temperature/gust tracking
         if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
             $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+        }
+        
+        // Check if backup should be fetched (4x threshold warm-up period)
+        $backupData = null;
+        if (isset($airport['weather_source_backup']) && is_array($airport['weather_source_backup'])) {
+            $backupSourceType = $airport['weather_source_backup']['type'];
+            $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
+            
+            // Check if backup should be fetched
+            if (!$backupCircuit['skip'] && $refreshIntervalSeconds !== null) {
+                if (shouldFetchBackup($airport, $weatherData, $existingCache, $refreshIntervalSeconds)) {
+                    // Fetch backup synchronously (sequential for sync path)
+                    try {
+                        switch ($backupSourceType) {
+                            case 'tempest':
+                                $backupData = fetchTempestWeather($airport['weather_source_backup']);
+                                break;
+                            case 'ambient':
+                                $backupData = fetchAmbientWeather($airport['weather_source_backup']);
+                                break;
+                            case 'weatherlink':
+                                $backupData = fetchWeatherLinkWeather($airport['weather_source_backup']);
+                                break;
+                            case 'pwsweather':
+                                $backupData = fetchPWSWeather($airport['weather_source_backup']);
+                                break;
+                            case 'synopticdata':
+                                $backupData = fetchSynopticDataWeather($airport['weather_source_backup']);
+                                break;
+                        }
+                        
+                        if ($backupData !== null) {
+                            $backupTimestamp = time();
+                            $weatherData['last_updated_backup'] = $backupTimestamp;
+                            if (isset($backupData['obs_time']) && $backupData['obs_time'] !== null) {
+                                $weatherData['obs_time_backup'] = $backupData['obs_time'];
+                            }
+                            $weatherData['_backup_data'] = $backupData;
+                            recordWeatherSuccess($airportId, 'backup');
+                        } else {
+                            recordWeatherFailure($airportId, 'backup', 'transient');
+                        }
+                    } catch (Exception $e) {
+                        aviationwx_log('error', 'backup weather fetch exception', [
+                            'airport' => $airportId,
+                            'source' => $backupSourceType,
+                            'err' => $e->getMessage()
+                        ], 'app');
+                        recordWeatherFailure($airportId, 'backup', 'transient');
+                    }
+                }
+            }
         }
         
         // Try to fetch METAR for visibility/ceiling if not already present
