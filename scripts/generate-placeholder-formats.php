@@ -11,8 +11,8 @@
  *   php scripts/generate-placeholder-formats.php
  */
 
-$placeholderSource = __DIR__ . '/../public/images/placeholder.jpg';
-$outputDir = __DIR__ . '/../public/images';
+$imagesDir = __DIR__ . '/../public/images';
+$placeholderSource = $imagesDir . '/placeholder.jpg';
 
 if (!file_exists($placeholderSource)) {
     echo "Error: Placeholder source file not found: $placeholderSource\n";
@@ -30,11 +30,13 @@ if (empty($ffmpegCheck)) {
 echo "Generating optimized placeholder formats from: $placeholderSource\n\n";
 
 // Generate JPEG (always needed as fallback)
-$jpegOutput = $outputDir . '/placeholder.jpg';
+// Write to temp file first, then rename to avoid ffmpeg "same as input" error
+$jpegTemp = $imagesDir . '/placeholder.jpg.tmp';
+$jpegOutput = $imagesDir . '/placeholder.jpg';
 $cmdJpeg = sprintf(
     "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 %s",
     escapeshellarg($placeholderSource),
-    escapeshellarg($jpegOutput)
+    escapeshellarg($jpegTemp)
 );
 echo "Generating JPEG...\n";
 exec($cmdJpeg, $output, $returnCode);
@@ -42,14 +44,25 @@ if ($returnCode !== 0) {
     echo "Error: Failed to generate JPEG placeholder\n";
     exit(1);
 }
+if (!file_exists($jpegTemp) || filesize($jpegTemp) === 0) {
+    echo "Error: Generated JPEG file is invalid\n";
+    @unlink($jpegTemp);
+    exit(1);
+}
+// Atomic rename to replace original
+if (!@rename($jpegTemp, $jpegOutput)) {
+    echo "Error: Failed to replace placeholder.jpg with optimized version\n";
+    @unlink($jpegTemp);
+    exit(1);
+}
 $jpegSize = filesize($jpegOutput);
 echo "  ✓ JPEG created: " . number_format($jpegSize) . " bytes\n\n";
 
 // Generate WebP
-$webpOutput = $outputDir . '/placeholder.webp';
+$webpOutput = $imagesDir . '/placeholder.webp';
 $cmdWebp = sprintf(
     "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
-    escapeshellarg($placeholderSource),
+    escapeshellarg($jpegOutput), // Use optimized JPEG as source
     escapeshellarg($webpOutput)
 );
 echo "Generating WebP...\n";
@@ -60,14 +73,14 @@ if ($returnCode !== 0) {
     $webpSize = filesize($webpOutput);
     echo "  ✓ WebP created: " . number_format($webpSize) . " bytes\n";
     $savings = round((1 - $webpSize / $jpegSize) * 100, 1);
-    echo "    (${savings}% smaller than JPEG)\n\n";
+    echo "    ({$savings}% smaller than JPEG)\n\n";
 }
 
 // Generate AVIF
-$avifOutput = $outputDir . '/placeholder.avif';
+$avifOutput = $imagesDir . '/placeholder.avif';
 $cmdAvif = sprintf(
     "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
-    escapeshellarg($placeholderSource),
+    escapeshellarg($jpegOutput), // Use optimized JPEG as source
     escapeshellarg($avifOutput)
 );
 echo "Generating AVIF...\n";
@@ -78,7 +91,7 @@ if ($returnCode !== 0) {
     $avifSize = filesize($avifOutput);
     echo "  ✓ AVIF created: " . number_format($avifSize) . " bytes\n";
     $savings = round((1 - $avifSize / $jpegSize) * 100, 1);
-    echo "    (${savings}% smaller than JPEG)\n\n";
+    echo "    ({$savings}% smaller than JPEG)\n\n";
 }
 
 echo "✓ Placeholder format generation complete!\n";
