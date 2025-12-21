@@ -605,6 +605,104 @@ function checkAirportHealth(string $airportId, array $airport): array {
         ];
     }
     
+    // Check backup weather source (if configured)
+    $backupSourceType = isset($airport['weather_source_backup']['type']) ? $airport['weather_source_backup']['type'] : null;
+    if ($backupSourceType && $sourceTimestamps['backup']['available']) {
+        $backupSourceName = getWeatherSourceDisplayName($backupSourceType) . ' (Backup)';
+        $backupStatus = 'standby';
+        $backupMessage = 'Standby';
+        $backupLastChanged = $sourceTimestamps['backup']['timestamp'];
+        
+        // Check if backup is active (providing data for any fields)
+        // Use backup_status from cache if available (more accurate than calculating)
+        $backupActive = false;
+        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+        if (file_exists($weatherCacheFile)) {
+            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
+            if (is_array($weatherData)) {
+                // Use backup_status from cache if available (set during merge)
+                if (isset($weatherData['backup_status'])) {
+                    $backupActive = ($weatherData['backup_status'] === 'active');
+                } else {
+                    // Fallback: calculate based on timestamps (for backward compatibility)
+                    $backupAge = isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0
+                        ? time() - $weatherData['last_updated_backup']
+                        : PHP_INT_MAX;
+                    $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
+                        ? time() - $weatherData['last_updated_primary']
+                        : PHP_INT_MAX;
+                    $staleThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+                    
+                    // Backup is active if it has fresh data and primary is stale
+                    $backupActive = ($backupAge < $staleThreshold) && ($primaryAge >= $staleThreshold);
+                }
+            }
+        }
+        
+        if ($backupLastChanged > 0) {
+            $backupAge = $sourceTimestamps['backup']['age'];
+            $warningThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+            $errorThreshold = $weatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER;
+            
+            // Check circuit breaker for backup
+            require_once __DIR__ . '/../lib/circuit-breaker.php';
+            $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
+            
+            if ($backupCircuit['skip']) {
+                $backupStatus = 'failed';
+                $backupMessage = 'Circuit breaker open';
+            } elseif ($backupActive) {
+                // Backup is active (providing data)
+                if ($backupAge < $warningThreshold) {
+                    $backupStatus = 'operational';
+                    $backupMessage = 'Active';
+                } elseif ($backupAge < min($errorThreshold, $maxStaleSeconds)) {
+                    $backupStatus = 'degraded';
+                    $backupMessage = 'Active (stale)';
+                } else {
+                    $backupStatus = 'down';
+                    $backupMessage = 'Active (expired)';
+                }
+            } else {
+                // Backup is in standby (configured but not active)
+                if ($backupAge < $warningThreshold) {
+                    $backupStatus = 'operational';
+                    $backupMessage = 'Standby (ready)';
+                } elseif ($backupAge < min($errorThreshold, $maxStaleSeconds)) {
+                    $backupStatus = 'degraded';
+                    $backupMessage = 'Standby (stale)';
+                } else {
+                    $backupStatus = 'down';
+                    $backupMessage = 'Standby (expired)';
+                }
+            }
+        } else {
+            // Check circuit breaker even if no timestamp
+            require_once __DIR__ . '/../lib/circuit-breaker.php';
+            $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
+            if ($backupCircuit['skip']) {
+                $backupStatus = 'failed';
+                $backupMessage = 'Circuit breaker open';
+            } else {
+                $backupStatus = $backupActive ? 'operational' : 'standby';
+                $backupMessage = $backupActive ? 'Active (no timestamp)' : 'Standby (no timestamp)';
+            }
+        }
+        
+        // Check for HTTP error code to append to message
+        $httpErrorInfo = $getHttpErrorInfo($airportId, 'backup');
+        if ($httpErrorInfo !== null && ($backupStatus === 'down' || $backupStatus === 'degraded' || $backupStatus === 'failed' || $httpErrorInfo['in_backoff'])) {
+            $backupMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+        }
+        
+        $weatherSources[] = [
+            'name' => $backupSourceName,
+            'status' => $backupStatus,
+            'message' => $backupMessage,
+            'lastChanged' => $backupLastChanged
+        ];
+    }
+    
     // Store weather sources (similar to webcam cameras) - only if we have sources
     if (!empty($weatherSources)) {
         $health['components']['weather'] = [
