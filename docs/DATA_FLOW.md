@@ -32,11 +32,34 @@ The system uses two fetching strategies:
    - Fetches both sources simultaneously using `curl_multi`
    - Faster overall response time
    - Used for: Tempest, Ambient Weather, PWSWeather.com, SynopticData.com sources
+   - **Backup Source**: Fetched in parallel when primary exceeds 4x refresh interval (warm-up period)
 
 2. **Synchronous Fetching** (Sequential Requests)
    - Used when async is not applicable
    - Fetches primary source first, then METAR if needed
    - Used for: WeatherLink (requires custom headers), METAR-only sources
+
+### Backup Weather Source
+
+**Purpose**: Provides redundancy when primary weather source becomes stale or fails.
+
+**Activation Logic**:
+- **4x Threshold (Warm-up)**: Backup fetching begins when primary age >= 4x refresh interval
+- **5x Threshold (Activation)**: Backup data is ready when primary exceeds 5x refresh interval
+- **Continuous Fetching**: Backup continues fetching on every cycle while primary is stale
+- **Field-Level Fallback**: Each weather field uses the best available data from primary or backup
+
+**Fetching Flow**:
+1. Check if backup should be fetched (4x threshold or missing fields)
+2. Fetch backup in parallel with primary and METAR (if applicable)
+3. Parse backup data using same adapters as primary
+4. Store backup timestamps (`last_updated_backup`, `obs_time_backup`)
+5. Merge with primary on field-by-field basis
+
+**Recovery Logic**:
+- Primary must be healthy (fresh and valid) for 5 consecutive cycles before switching back
+- Recovery counter resets to 0 on any staleness or invalid field
+- Prevents rapid switching between sources (hysteresis)
 
 ### Primary Weather Sources
 
@@ -190,8 +213,10 @@ Both primary and METAR sources have independent circuit breakers:
 
 **Timestamps Tracked**:
 - `obs_time_primary`: When primary source weather was measured
+- `obs_time_backup`: When backup source weather was measured
 - `obs_time_metar`: When METAR observation was made
 - `last_updated_primary`: When primary data was fetched from API
+- `last_updated_backup`: When backup data was fetched from API
 - `last_updated_metar`: When METAR data was fetched
 - `last_updated`: Most recent observation time from all sources
 
@@ -199,7 +224,7 @@ Both primary and METAR sources have independent circuit breakers:
 
 ### Data Merging
 
-When both primary and METAR data are available:
+When primary, backup, and METAR data are available:
 
 1. **Primary Source Provides**:
    - Temperature, dewpoint, humidity
@@ -207,15 +232,24 @@ When both primary and METAR data are available:
    - Pressure
    - Precipitation
 
-2. **METAR Source Provides**:
+2. **Backup Source Provides** (when primary is stale):
+   - Same fields as primary source
+   - Activated when primary exceeds 5x refresh interval
+   - Field-level fallback: each field uses best available data
+
+3. **METAR Source Provides**:
    - Visibility (overwrites if present)
    - Ceiling (overwrites if present)
    - Cloud cover (overwrites if present)
 
-3. **Merge Rules**:
+4. **Merge Rules**:
+   - **Field-Level Fallback**: Each primary-source field uses the best available data from primary or backup
+   - **Validation**: All data validated against climate bounds (earth extremes + 10% margin)
+   - **Preference**: Newest observation time when both sources have valid data
+   - **Recovery**: Primary must be healthy for 5 consecutive cycles before switching back
    - METAR visibility/ceiling explicitly overwrite (even if null = unlimited)
-   - Primary source fields preserved if METAR doesn't provide them
-   - Both timestamps preserved separately for staleness checking
+   - Primary/backup source fields preserved if METAR doesn't provide them
+   - All timestamps preserved separately for staleness checking
 
 ---
 
@@ -251,10 +285,19 @@ When both primary and METAR data are available:
 
 ### Wind Calculations
 
-**Gust Factor**:
-- Formula: `gust_factor = gust_speed - wind_speed`
-- Represents additional wind speed from gusts
+**Peak Gust**:
+- Live peak gust value measured through sampling within the last 10-20 minute period
+- Provided directly by weather sources (no calculation needed)
+- Displayed in runway wind section as "Peak Gust:"
+- Validation: Must be >= wind_speed (gusts cannot be less than steady wind)
+- Range: 0 to 242 knots (earth wind max + 10% margin)
+
+**Gust Factor** (Gust Spread):
+- Formula: `gust_factor = peak_gust - wind_speed`
+- Represents the difference between peak gust and steady wind
+- Allows pilots to apply "add half the gust factor to your approach speed" rule
 - Displayed in knots
+- Validation: 0 to 50 knots (reasonable gust spread range), or null if no gust factor
 
 **Variable Wind Direction**:
 - METAR may report "VRB" (variable) instead of numeric direction

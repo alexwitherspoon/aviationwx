@@ -195,6 +195,44 @@ When `metar_station` is configured but `weather_source` is not present, the syst
 **Fallback Behavior:**
 - The system attempts to fetch METAR data from the primary `metar_station` first
 - If the primary station fails (network error, station unavailable, etc.), the system automatically tries each station in `nearby_metar_stations` in order
+
+### 7. Backup Weather Source
+
+**Purpose**: Provides redundancy when primary weather source becomes stale or fails. Backup source activates automatically when primary exceeds 5x refresh interval threshold.
+
+**Configuration:**
+```json
+"weather_source_backup": {
+    "type": "ambient",
+    "api_key": "YOUR_BACKUP_API_KEY",
+    "application_key": "YOUR_BACKUP_APPLICATION_KEY"
+}
+```
+
+**Supported Types**: Same as primary source (`tempest`, `ambient`, `weatherlink`, `pwsweather`, `synopticdata`, `metar`)
+
+**Activation Logic:**
+- Backup fetching begins at 4x refresh interval (warm-up period: x5 - 1)
+- Backup data is ready when primary exceeds 5x refresh interval
+- Backup continues fetching on every cycle while primary is stale
+- Field-level fallback: Each weather field uses the best available data from primary or backup
+- Recovery: Primary must be healthy for 5 consecutive cycles before switching back
+
+**Field-Level Merging:**
+- System validates all data against climate bounds (earth extremes + 10% margin)
+- Prefers newest observation time when both sources have valid data
+- If all configured sources are missing a field, shows null (fail closed)
+- Tracks which source provides each field (internal only, not exposed in API)
+
+**Status Indicators:**
+- **Standby**: Configured but not active (primary is healthy)
+- **Active**: Providing data for one or more fields
+- **Failed**: Circuit breaker open (too many failures)
+
+**Weather Credits:**
+- Primary source credit shown only if primary is healthy
+- Backup source credit shown only if backup is active
+- METAR credit shown if METAR is configured (existing logic)
 - The first successful fetch is used; remaining stations are not attempted
 - If all stations fail, the system logs a warning and continues without METAR data
 - This fallback only occurs when `metar_station` is configured

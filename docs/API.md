@@ -35,6 +35,7 @@ Returns weather data for the specified airport.
     "wind_speed": 8,
     "wind_direction": 230,
     "gust_speed": 12,
+    "peak_gust": 12,
     "gust_factor": 4,
     "pressure": 30.12,
     "visibility": 10.0,
@@ -56,7 +57,11 @@ Returns weather data for the specified airport.
     "last_updated": 1699123456,
     "last_updated_iso": "2024-11-04T12:34:56+00:00",
     "last_updated_primary": 1699123456,
-    "last_updated_metar": 1699123400
+    "last_updated_backup": null,
+    "last_updated_metar": 1699123400,
+    "obs_time_primary": 1699123450,
+    "obs_time_backup": null,
+    "obs_time_metar": 1699123400
   }
 }
 ```
@@ -322,11 +327,13 @@ Returns an HTML status page displaying system and airport health status.
 
 ## Stale Data Handling
 
-All weather data elements are checked for staleness (3-hour threshold):
+All weather data elements are checked for staleness (5x refresh interval threshold for primary/backup, 2-hour threshold for METAR):
 
 - **Stale Primary Source**: Temperature, dewpoint, humidity, wind, pressure, precipitation are nulled
+- **Stale Backup Source**: Fields using backup data are nulled when backup exceeds 5x refresh interval
 - **Stale METAR Source**: Visibility, ceiling, cloud cover, flight category are nulled
 - **Preserved**: Daily tracking values (`temp_high_today`, `temp_low_today`, `peak_gust_today`) are never nulled
+- **Field-Level Fallback**: When primary is stale, backup source provides data for individual fields on a per-field basis
 
 See [README.md](README.md#stale-data-safety-check) for complete details.
 
