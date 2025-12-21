@@ -1,0 +1,16 @@
+{
+  "name": "aviationwx",
+  "version": "1.0.0",
+  "description": "Aviation Weather Application",
+  "scripts": {
+    "lint:js": "node scripts/lint-javascript.js",
+    "lint:js:fix": "node scripts/lint-javascript.js --fix"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
+
