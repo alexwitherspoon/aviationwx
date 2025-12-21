@@ -294,20 +294,76 @@ function generateMockWeatherData($airportId, $airport) {
             if (function_exists('fastcgi_finish_request')) {
                 // FastCGI - finish request but keep script running
                 fastcgi_finish_request();
-                // Set time limit for background refresh (increased to handle slow APIs)
-                set_time_limit(45);
-                aviationwx_log('info', 'background refresh started', [
-                    'airport' => $airportId,
-                    'cache_age' => $age,
-                    'refresh_interval' => $airportWeatherRefresh
-                ], 'app');
             } else {
                 // Regular PHP - flush output and continue in background
                 if (ob_get_level() > 0) {
                     ob_end_flush();
                 }
                 flush();
-                
+            }
+            
+            // Use file-based locking to prevent concurrent refreshes from multiple clients
+            $lockFile = $weatherCacheDir . '/refresh_' . $airportId . '.lock';
+            
+            // Clean up stale locks (older than 5 minutes) - use atomic check-and-delete
+            if (file_exists($lockFile)) {
+                $lockMtime = @filemtime($lockFile);
+                if ($lockMtime !== false && (time() - $lockMtime) > FILE_LOCK_STALE_SECONDS) {
+                    // Try to delete only if still old (race condition protection)
+                    $currentMtime = @filemtime($lockFile);
+                    if ($currentMtime !== false && (time() - $currentMtime) > FILE_LOCK_STALE_SECONDS) {
+                        @unlink($lockFile);
+                    }
+                }
+            }
+            
+            $lockFp = @fopen($lockFile, 'c+');
+            $lockAcquired = false;
+            $lockCleanedUp = false; // Track if lock has been cleaned up to prevent double cleanup
+            
+            if ($lockFp !== false) {
+                // Try to acquire exclusive lock (non-blocking)
+                if (@flock($lockFp, LOCK_EX | LOCK_NB)) {
+                    $lockAcquired = true;
+                    // Write PID and timestamp to lock file for debugging
+                    @fwrite($lockFp, json_encode([
+                        'pid' => getmypid(),
+                        'started' => time(),
+                        'airport' => $airportId
+                    ]));
+                    @fflush($lockFp);
+                    
+                    // Register shutdown function to clean up lock on script exit
+                    register_shutdown_function(function() use ($lockFp, $lockFile, &$lockCleanedUp) {
+                        if ($lockCleanedUp) {
+                            return; // Already cleaned up
+                        }
+                        if (is_resource($lockFp)) {
+                            @flock($lockFp, LOCK_UN);
+                            @fclose($lockFp);
+                        }
+                        if (file_exists($lockFile)) {
+                            @unlink($lockFile);
+                        }
+                        $lockCleanedUp = true;
+                    });
+                } else {
+                    // Another refresh is already in progress
+                    @fclose($lockFp);
+                    aviationwx_log('info', 'weather background refresh skipped - already in progress', [
+                        'airport' => $airportId
+                    ], 'app');
+                    exit; // Exit silently - another process is handling the refresh
+                }
+            } else {
+                // Couldn't create lock file, but continue anyway (non-critical)
+                aviationwx_log('warning', 'weather background refresh lock file creation failed', [
+                    'airport' => $airportId
+                ], 'app');
+            }
+            
+            // Only continue with background refresh if we acquired the lock
+            if ($lockAcquired) {
                 // Set time limit for background refresh (increased to handle slow APIs)
                 set_time_limit(45);
                 aviationwx_log('info', 'background refresh started', [
@@ -315,9 +371,12 @@ function generateMockWeatherData($airportId, $airport) {
                     'cache_age' => $age,
                     'refresh_interval' => $airportWeatherRefresh
                 ], 'app');
+                
+                // Continue to refresh in background (don't exit here)
+            } else {
+                // Lock not acquired, exit silently
+                exit;
             }
-            
-            // Continue to refresh in background (don't exit here)
         }
     }
     // If forceRefresh is true or no cache file exists, continue to fetch fresh weather
