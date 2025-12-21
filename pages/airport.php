@@ -105,7 +105,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                 enumerable: false
                             });
                             delete window.styleMedia;
-                        } catch (e) {
+                        } catch {
                             Object.defineProperty(window, 'styleMedia', {
                                 get: function() { return undefined; },
                                 set: function() {},
@@ -115,7 +115,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         }
                     }
                 }
-            } catch (e) {}
+            } catch {}
         })();
     </script>
     <title><?= $pageTitle ?></title>
@@ -1281,7 +1281,7 @@ function syncPreferencesFromCookies() {
             // Cookie exists - use it as source of truth, sync to localStorage
             try {
                 localStorage.setItem(pref, cookieValue);
-            } catch (e) {
+            } catch {
                 // localStorage may be disabled - continue
             }
         } else if (localValue) {

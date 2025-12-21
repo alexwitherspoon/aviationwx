@@ -999,7 +999,7 @@ self.addEventListener('fetch', (event) => {
     let url;
     try {
         url = new URL(requestUrl);
-    } catch (err) {
+    } catch {
         // Invalid URL, let browser handle it
         return;
     }

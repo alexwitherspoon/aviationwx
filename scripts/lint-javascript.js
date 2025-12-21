@@ -211,9 +211,12 @@ function extractJavaScriptFromPHP(filePath) {
 async function lintJavaScript() {
   console.log('🔍 Linting JavaScript code...\n');
   
-  // Initialize ESLint
+  // Initialize ESLint (ESLint 9 uses flat config)
+  // ESLint 9 auto-detects eslint.config.js from the project root
+  // Set cwd to project root so ESLint can find the config
+  const projectRoot = path.resolve(__dirname, '..');
   const eslint = new ESLint({
-    useEslintrc: true,
+    cwd: projectRoot,
     fix: fixMode
   });
   
@@ -225,19 +228,20 @@ async function lintJavaScript() {
     const fullPath = path.resolve(filePath);
     const extracted = extractJavaScriptFromPHP(fullPath);
     
-    for (const { file, code, lineOffset, scriptIndex } of extracted) {
-      // Create a virtual file path for ESLint
-      const virtualPath = scriptIndex > 0 
-        ? `${file}[script-${scriptIndex}]`
-        : file;
-      
-      allFiles.push({
-        filePath: virtualPath,
-        text: code,
-        file: file,
-        lineOffset: lineOffset
-      });
-    }
+      for (const { file, code, lineOffset, scriptIndex } of extracted) {
+        // Use actual file path for ESLint 9 (it needs real paths to find config)
+        // For PHP files, use the PHP file path so ESLint can find the config
+        // ESLint 9 flat config matches files by pattern, so .php files need to match the pattern
+        const actualFilePath = path.resolve(file);
+        
+        allFiles.push({
+          filePath: actualFilePath,
+          text: code,
+          file: file,
+          lineOffset: lineOffset,
+          scriptIndex: scriptIndex
+        });
+      }
   }
   
   if (allFiles.length === 0) {
@@ -335,8 +339,13 @@ async function lintJavaScript() {
     if (fixableCount > 0 && !fixMode) {
       console.log(`   Auto-fixable: ${fixableCount} (run with --fix)`);
     }
-    console.log('\n❌ Linting failed. Please fix the errors above.');
-    return errorCount > 0 ? 1 : 0;
+    if (errorCount > 0) {
+      console.log('\n❌ Linting failed. Please fix the errors above.');
+      return 1;
+    } else {
+      console.log('\n⚠️  Linting passed with warnings (warnings do not fail the build).');
+      return 0;
+    }
   }
 }
 
