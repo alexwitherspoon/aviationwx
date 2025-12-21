@@ -1,14 +1,25 @@
 #!/bin/bash
 set -e
 
-# Ensure config directory exists (needed for airports.json mount)
+# Ensure config directory exists (needed for other config files)
 CONFIG_DIR="/var/www/html/config"
-CONFIG_FILE="${CONFIG_DIR}/airports.json"
 if [ ! -d "${CONFIG_DIR}" ]; then
     echo "Creating config directory: ${CONFIG_DIR}"
     mkdir -p "${CONFIG_DIR}"
     chown www-data:www-data "${CONFIG_DIR}" 2>/dev/null || true
 fi
+
+# Ensure secrets directory exists (needed for airports.json mount via CONFIG_PATH)
+SECRETS_DIR="/var/www/html/secrets"
+if [ ! -d "${SECRETS_DIR}" ]; then
+    echo "Creating secrets directory: ${SECRETS_DIR}"
+    mkdir -p "${SECRETS_DIR}"
+    chown www-data:www-data "${SECRETS_DIR}" 2>/dev/null || true
+fi
+
+# For backward compatibility, check if airports.json exists in config directory
+# (fallback for environments that don't use CONFIG_PATH)
+CONFIG_FILE="${CONFIG_DIR}/airports.json"
 
 # Handle airports.json fallback for local development
 # Production: airports.json is mounted from /home/aviationwx/airports.json (must exist)

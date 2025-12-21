@@ -25,13 +25,14 @@ services:
       - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
       - "12222:2222"  # SFTP (mapped to avoid conflicts)
     volumes:
-      # Mount production airports.json from secrets repository (configurable via PRODUCTION_AIRPORTS_JSON env var)
+      # Mount production airports.json from secrets repository to a separate location
+      # (configurable via PRODUCTION_AIRPORTS_JSON env var)
       # Default path: /Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json
       # To override: export PRODUCTION_AIRPORTS_JSON=/path/to/airports.json
-      # Note: File mount must come before directory mount - file mount takes precedence for airports.json
-      - ${PRODUCTION_AIRPORTS_JSON:-/Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json}:/var/www/html/config/airports.json:ro
-      # Mount config directory for other config files (read-only to prevent overwriting airports.json)
-      # This provides other config files while airports.json comes from the file mount above
+      # Mount to /var/www/html/secrets/airports.json to avoid conflict with config directory mount
+      - ${PRODUCTION_AIRPORTS_JSON:-/Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json}:/var/www/html/secrets/airports.json:ro
+      # Mount config directory for other config files (read-only)
+      # airports.json is loaded via CONFIG_PATH environment variable pointing to secrets location
       - ../config:/var/www/html/config:ro
       # Also mount tests directory so test fixture is available as fallback
       - ../tests:/var/www/html/tests:ro
@@ -43,7 +44,7 @@ services:
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-localhost}
-      - CONFIG_PATH=/var/www/html/config/airports.json
+      - CONFIG_PATH=/var/www/html/secrets/airports.json
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
