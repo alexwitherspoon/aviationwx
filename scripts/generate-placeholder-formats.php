@@ -31,10 +31,10 @@ echo "Generating optimized placeholder formats from: $placeholderSource\n\n";
 
 // Generate JPEG (always needed as fallback)
 // Write to temp file first, then rename to avoid ffmpeg "same as input" error
-$jpegTemp = $imagesDir . '/placeholder.jpg.tmp';
+$jpegTemp = $imagesDir . '/placeholder.tmp.jpg';
 $jpegOutput = $imagesDir . '/placeholder.jpg';
 $cmdJpeg = sprintf(
-    "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 %s",
+    "ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -f image2 %s",
     escapeshellarg($placeholderSource),
     escapeshellarg($jpegTemp)
 );
