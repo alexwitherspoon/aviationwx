@@ -68,9 +68,10 @@ function checkCircuitBreakerBase($key, $backoffFile) {
  * @param string $severity 'transient' or 'permanent' (default: 'transient')
  *   - transient: Normal backoff scaling
  *   - permanent: 2x multiplier (for auth errors, config issues, etc.)
+ * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
  * @return void
  */
-function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transient') {
+function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transient', $httpCode = null) {
     $cacheDir = dirname($backoffFile);
     if (!file_exists($cacheDir)) {
         if (!@mkdir($cacheDir, 0755, true)) {
@@ -90,20 +91,27 @@ function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transi
             $backoffData = @json_decode(@file_get_contents($backoffFile), true) ?: [];
         }
         
-        if (!isset($backoffData[$key])) {
-            $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
-        }
-        
-        $state = &$backoffData[$key];
-        $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
-        $state['last_attempt'] = $now;
-        $failures = $state['failures'];
-        $base = max(BACKOFF_BASE_SECONDS, pow(2, min($failures - 1, BACKOFF_MAX_FAILURES)) * BACKOFF_BASE_SECONDS);
-        $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
-        $cap = ($severity === 'permanent') ? BACKOFF_MAX_PERMANENT : BACKOFF_MAX_TRANSIENT;
-        $backoffSeconds = min($cap, (int)round($base * $multiplier));
-        $state['backoff_seconds'] = $backoffSeconds;
-        $state['next_allowed_time'] = $now + $backoffSeconds;
+    if (!isset($backoffData[$key])) {
+        $backoffData[$key] = ['failures' => 0, 'next_allowed_time' => 0, 'last_attempt' => 0, 'backoff_seconds' => 0];
+    }
+    
+    $state = &$backoffData[$key];
+    $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
+    $state['last_attempt'] = $now;
+    
+    // Store HTTP code if provided and is 4xx/5xx
+    if ($httpCode !== null && $httpCode >= 400 && $httpCode < 600) {
+        $state['last_http_code'] = (int)$httpCode;
+        $state['last_error_time'] = $now;
+    }
+    
+    $failures = $state['failures'];
+    $base = max(BACKOFF_BASE_SECONDS, pow(2, min($failures - 1, BACKOFF_MAX_FAILURES)) * BACKOFF_BASE_SECONDS);
+    $multiplier = ($severity === 'permanent') ? 2.0 : 1.0;
+    $cap = ($severity === 'permanent') ? BACKOFF_MAX_PERMANENT : BACKOFF_MAX_TRANSIENT;
+    $backoffSeconds = min($cap, (int)round($base * $multiplier));
+    $state['backoff_seconds'] = $backoffSeconds;
+    $state['next_allowed_time'] = $now + $backoffSeconds;
         
         @file_put_contents($backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
         return;
@@ -137,6 +145,12 @@ function recordCircuitBreakerFailureBase($key, $backoffFile, $severity = 'transi
     $state = &$backoffData[$key];
     $state['failures'] = ((int)($state['failures'] ?? 0)) + 1;
     $state['last_attempt'] = $now;
+    
+    // Store HTTP code if provided and is 4xx/5xx
+    if ($httpCode !== null && $httpCode >= 400 && $httpCode < 600) {
+        $state['last_http_code'] = (int)$httpCode;
+        $state['last_error_time'] = $now;
+    }
     
     // Exponential backoff with severity scaling
     $failures = $state['failures'];
@@ -213,13 +227,16 @@ function recordCircuitBreakerSuccessBase($key, $backoffFile) {
         return; // No previous state to reset
     }
     
-    // Reset on success
+    // Reset on success - clear HTTP code tracking
     $backoffData[$key] = [
         'failures' => 0,
         'next_allowed_time' => 0,
         'last_attempt' => $now,
         'backoff_seconds' => 0
     ];
+    // Explicitly remove HTTP error tracking on success
+    unset($backoffData[$key]['last_http_code']);
+    unset($backoffData[$key]['last_error_time']);
     
     if (isset($fp) && $fp !== false) {
         if (@flock($fp, LOCK_EX)) {
@@ -272,9 +289,10 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param string $sourceType Weather source type: 'primary' or 'metar'
  * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
  * @return void
  */
-function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') {
+function recordWeatherFailure($airportId, $sourceType, $severity = 'transient', $httpCode = null) {
     $cacheDir = __DIR__ . '/../cache';
     if (!file_exists($cacheDir)) {
         if (!@mkdir($cacheDir, 0755, true)) {
@@ -284,7 +302,7 @@ function recordWeatherFailure($airportId, $sourceType, $severity = 'transient') 
     }
     $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
-    recordCircuitBreakerFailureBase($key, $backoffFile, $severity);
+    recordCircuitBreakerFailureBase($key, $backoffFile, $severity, $httpCode);
 }
 
 /**
