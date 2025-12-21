@@ -27,19 +27,23 @@ function parseAmbientResponse($response): ?array {
     }
     $data = json_decode($response, true);
     
-    // Handle both array response (multiple devices) and single device object
-    $device = null;
+    // Handle multiple response formats:
+    // 1. Array of devices: [{"lastData": {...}}, ...] - use first device's lastData
+    // 2. Single device object: {"lastData": {...}} - use lastData
+    // 3. Array of observations: [{observation}, ...] - use first observation (most recent)
+    $obs = null;
     if (isset($data[0]) && isset($data[0]['lastData'])) {
-        // Array response: multiple devices, use first one
-        $device = $data[0];
+        // Array response: multiple devices, use first one's lastData
+        $obs = $data[0]['lastData'];
     } elseif (isset($data['lastData'])) {
         // Single device object response
-        $device = $data;
+        $obs = $data['lastData'];
+    } elseif (isset($data[0]) && is_array($data[0]) && isset($data[0]['dateutc'])) {
+        // Array of observations directly (no device wrapper) - use first observation (most recent)
+        $obs = $data[0];
     } else {
         return null;
     }
-    
-    $obs = $device['lastData'];
     
     // Parse observation time (when the weather was actually measured)
     // Ambient Weather provides dateutc in milliseconds (Unix timestamp * 1000)
