@@ -68,15 +68,48 @@ If the `config` section is omitted, sensible defaults are used.
 ```
 
 ### 2. Ambient Weather
-**Requires:** `api_key` and `application_key`
+**Requires:** `api_key` and `application_key`  
+**Optional:** `mac_address` (to specify a specific device if you have multiple)
+
+#### Getting Your API Keys
+
+1. **API Key** (grants access to your weather station data):
+   - Log in to your [AmbientWeather.net account](https://dashboard.ambientweather.net/account)
+   - Navigate to **Account Settings** → **API Keys** section
+   - Click **"Create API Key"** to generate a new key
+   - Copy and save this key securely
+
+2. **Application Key** (identifies your application):
+   - On the same Account Settings page, scroll to the bottom of the **API Keys** section
+   - Click the link: **"Developers: An Application Key is also required for each application that you develop. Click here to create one."**
+   - Provide a brief description of your application (e.g., "Aviation Weather Display")
+   - Click **"Create Application Key"**
+   - Copy and save this key securely
+
+#### Finding Your Device MAC Address (Optional)
+
+If you have multiple Ambient Weather devices and want to specify which one to use:
+
+- **Dashboard Method**: Visit [dashboard.ambientweather.net/devices](https://dashboard.ambientweather.net/devices) - the MAC address is displayed for each device
+- **Mobile App**: Open the *awnet* app and check the Device List - MAC addresses are shown there
+- **WS-50 Series**: Access the console's web interface at `http://192.168.5.1` to find the MAC address
+
+If you don't specify a MAC address, the system will use the first device returned by the API.
+
+#### Configuration
 
 ```json
 "weather_source": {
     "type": "ambient",
     "api_key": "your-api-key-here",
-    "application_key": "your-application-key-here"
+    "application_key": "your-application-key-here",
+    "mac_address": "AA:BB:CC:DD:EE:FF"
 }
 ```
+
+**Note:** The `mac_address` field is optional. If omitted, the first device from your account will be used.
+
+**API Documentation:** [Ambient Weather API Docs](https://ambientweather.docs.apiary.io/)
 
 ### 3. Davis WeatherLink
 **Requires:** `api_key`, `api_secret`, and `station_id`

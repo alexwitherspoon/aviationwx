@@ -58,7 +58,10 @@ The system uses two fetching strategies:
   - Precipitation: mm → inches (`inches = mm × 0.0393701`)
 
 #### Ambient Weather API
-- **Endpoint**: `https://api.ambientweather.net/v1/devices?applicationKey={app_key}&apiKey={api_key}`
+- **Endpoint**: 
+  - All devices: `https://api.ambientweather.net/v1/devices?applicationKey={app_key}&apiKey={api_key}`
+  - Specific device: `https://api.ambientweather.net/v1/devices/{mac_address}?applicationKey={app_key}&apiKey={api_key}`
+- **Device Selection**: If `mac_address` is provided in config, uses specific device endpoint. Otherwise, uses device list endpoint and selects first device.
 - **Data Provided**:
   - Temperature (Fahrenheit, converted to Celsius)
   - Humidity (%)
