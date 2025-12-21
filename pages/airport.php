@@ -2091,7 +2091,10 @@ async function fetchWeather(forceRefresh = false) {
             fetchOptions.cache = 'reload';
             // Strategy 3: Add Cache-Control header to bypass Service Worker cache
             fetchOptions.headers['Cache-Control'] = 'no-cache';
-            console.log('[Weather] Forcing refresh - bypassing cache due to stale data');
+            // Only log in development/debug mode to reduce production log noise
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                console.log('[Weather] Forcing refresh - bypassing cache due to stale data');
+            }
         }
         
         const response = await fetch(url, fetchOptions);
@@ -3052,9 +3055,13 @@ function handleWebcamError(camIndex, img) {
     if (skeleton) skeleton.style.display = 'none';
     
     // Show placeholder image instead of broken image
+    // Use webcam.php endpoint with invalid cam index to trigger placeholder serving
+    // This ensures placeholder is served via the same endpoint with proper fallbacks
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
-            img.src = `${protocol}//${host}/public/images/placeholder.jpg`;
+    const airportId = AIRPORT_ID || '';
+    // Use cam index 999 which will be out of bounds and trigger servePlaceholder()
+    img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(airportId)}&cam=999`;
     img.onerror = null; // Prevent infinite loop if placeholder also fails
 }
 
@@ -3258,10 +3265,12 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
         
         const tryLoad = async () => {
             if (attempt >= backoffs.length) {
-                // Show placeholder
+                // Show placeholder via webcam.php endpoint
                 const img = document.getElementById(`webcam-${camIndex}`);
                 if (img) {
-                    img.src = '/public/images/placeholder.jpg';
+                    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                    const host = window.location.host;
+                    img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
                 }
                 return;
             }
@@ -3556,10 +3565,12 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
 function handleRequestError(error, camIndex, hasExisting) {
     // Silent error handling - user already has image or placeholder
     if (!hasExisting) {
-        // Initial load failed - show placeholder
+        // Initial load failed - show placeholder via webcam.php endpoint
         const img = document.getElementById(`webcam-${camIndex}`);
         if (img) {
-            img.src = '/public/images/placeholder.jpg';
+            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+            const host = window.location.host;
+            img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
         }
     }
     // If has existing image, keep it (silent failure)
