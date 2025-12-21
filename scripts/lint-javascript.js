@@ -46,7 +46,8 @@ function extractJavaScriptFromPHP(filePath) {
   const results = [];
   
   // Match <script> tags (with or without attributes)
-  const scriptTagRegex = /<script(?:\s+[^>]*)?>([\s\S]*?)<\/script>/gi;
+  // Allow optional whitespace before closing > to handle cases like </script >
+  const scriptTagRegex = /<script(?:\s+[^>]*)?>([\s\S]*?)<\/script\s*>/gi;
   let match;
   let scriptIndex = 0;
   
