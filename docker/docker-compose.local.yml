@@ -25,12 +25,13 @@ services:
       - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
       - "12222:2222"  # SFTP (mapped to avoid conflicts)
     volumes:
-      # Mount production airports.json from secrets repository to a separate location
-      # (configurable via PRODUCTION_AIRPORTS_JSON env var)
-      # Default path: /Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json
-      # To override: export PRODUCTION_AIRPORTS_JSON=/path/to/airports.json
-      # Mount to /var/www/html/secrets/airports.json to avoid conflict with config directory mount
-      - ${PRODUCTION_AIRPORTS_JSON:-/Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json}:/var/www/html/secrets/airports.json:ro
+      # Mount source code directories for local development (allows code changes without rebuild)
+      - ../lib:/var/www/html/lib:ro
+      - ../pages:/var/www/html/pages:ro
+      - ../api:/var/www/html/api:ro
+      - ../admin:/var/www/html/admin:ro
+      - ../scripts:/var/www/html/scripts:ro
+      - ../public:/var/www/html/public:ro
       # Mount config directory for other config files (read-only)
       # airports.json is loaded via CONFIG_PATH environment variable pointing to secrets location
       - ../config:/var/www/html/config:ro
@@ -38,6 +39,12 @@ services:
       - ../tests:/var/www/html/tests:ro
       # Mount cache directory from /tmp (ephemeral, cleared on reboot)
       - /tmp/aviationwx-cache:/var/www/html/cache
+      # Mount production airports.json from secrets repository to a separate location
+      # (configurable via PRODUCTION_AIRPORTS_JSON env var)
+      # Default path: /Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json
+      # To override: export PRODUCTION_AIRPORTS_JSON=/path/to/airports.json
+      # Mount to /var/www/html/secrets/airports.json to avoid conflict with config directory mount
+      - ${PRODUCTION_AIRPORTS_JSON:-/Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json}:/var/www/html/secrets/airports.json:ro
     cap_add:
       - NET_ADMIN
       - NET_RAW
