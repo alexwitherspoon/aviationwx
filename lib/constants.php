@@ -277,3 +277,122 @@ if (!defined('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD')) {
     define('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD', 200); // Variance <200 in borders = uniform/error frame
 }
 
+// Climate bounds for weather data validation (Earth extremes + 10% margin)
+// Used to validate weather data quality and reject clearly invalid values
+// Temperature: -89.2°C to 56.7°C (Vostok Station, Antarctica to Death Valley, USA)
+if (!defined('CLIMATE_TEMP_MIN_C')) {
+    define('CLIMATE_TEMP_MIN_C', -98.12); // -89.2 * 1.1
+}
+if (!defined('CLIMATE_TEMP_MAX_C')) {
+    define('CLIMATE_TEMP_MAX_C', 62.37); // 56.7 * 1.1
+}
+
+// Wind Speed: 0 to 220 knots (113.2 m/s = ~220 kts, Mount Washington, USA)
+if (!defined('CLIMATE_WIND_SPEED_MAX_KTS')) {
+    define('CLIMATE_WIND_SPEED_MAX_KTS', 242); // 220 * 1.1
+}
+
+// Wind Direction: 0 to 360 degrees (no margin needed)
+if (!defined('CLIMATE_WIND_DIRECTION_MIN')) {
+    define('CLIMATE_WIND_DIRECTION_MIN', 0);
+}
+if (!defined('CLIMATE_WIND_DIRECTION_MAX')) {
+    define('CLIMATE_WIND_DIRECTION_MAX', 360);
+}
+
+// Pressure: 25.68 to 32.00 inHg (870 to 1084 hPa)
+if (!defined('CLIMATE_PRESSURE_MIN_INHG')) {
+    define('CLIMATE_PRESSURE_MIN_INHG', 23.11); // 25.68 * 0.9
+}
+if (!defined('CLIMATE_PRESSURE_MAX_INHG')) {
+    define('CLIMATE_PRESSURE_MAX_INHG', 35.20); // 32.00 * 1.1
+}
+
+// Humidity: 0 to 100% (no margin needed)
+if (!defined('CLIMATE_HUMIDITY_MIN')) {
+    define('CLIMATE_HUMIDITY_MIN', 0);
+}
+if (!defined('CLIMATE_HUMIDITY_MAX')) {
+    define('CLIMATE_HUMIDITY_MAX', 100);
+}
+
+// Dewpoint: Same bounds as temperature, but must be <= temperature
+if (!defined('CLIMATE_DEWPOINT_MIN_C')) {
+    define('CLIMATE_DEWPOINT_MIN_C', -98.12); // Same as temperature
+}
+if (!defined('CLIMATE_DEWPOINT_MAX_C')) {
+    define('CLIMATE_DEWPOINT_MAX_C', 62.37); // Same as temperature
+}
+
+// Dewpoint Spread: -20 to 50°C (allows sensor error, super-saturation)
+if (!defined('CLIMATE_DEWPOINT_SPREAD_MIN_C')) {
+    define('CLIMATE_DEWPOINT_SPREAD_MIN_C', -20.0);
+}
+if (!defined('CLIMATE_DEWPOINT_SPREAD_MAX_C')) {
+    define('CLIMATE_DEWPOINT_SPREAD_MAX_C', 50.0);
+}
+
+// Precipitation: 0 to 71.85 inches/day (1825 mm/day, Foc-Foc, Réunion)
+if (!defined('CLIMATE_PRECIP_MIN_INCHES_DAY')) {
+    define('CLIMATE_PRECIP_MIN_INCHES_DAY', 0.0);
+}
+if (!defined('CLIMATE_PRECIP_MAX_INCHES_DAY')) {
+    define('CLIMATE_PRECIP_MAX_INCHES_DAY', 79.04); // 71.85 * 1.1
+}
+
+// Visibility: 0 to 50 SM (reasonable aviation maximum)
+if (!defined('CLIMATE_VISIBILITY_MIN_SM')) {
+    define('CLIMATE_VISIBILITY_MIN_SM', 0.0);
+}
+if (!defined('CLIMATE_VISIBILITY_MAX_SM')) {
+    define('CLIMATE_VISIBILITY_MAX_SM', 50.0);
+}
+
+// Ceiling: 0 to 50,000 ft AGL (reasonable aviation maximum)
+if (!defined('CLIMATE_CEILING_MIN_FT')) {
+    define('CLIMATE_CEILING_MIN_FT', 0);
+}
+if (!defined('CLIMATE_CEILING_MAX_FT')) {
+    define('CLIMATE_CEILING_MAX_FT', 50000);
+}
+
+// Peak Gust (live): Must be >= wind_speed, max same as wind speed
+if (!defined('CLIMATE_PEAK_GUST_MIN_KTS')) {
+    define('CLIMATE_PEAK_GUST_MIN_KTS', 0);
+}
+if (!defined('CLIMATE_PEAK_GUST_MAX_KTS')) {
+    define('CLIMATE_PEAK_GUST_MAX_KTS', 242); // Same as wind speed max
+}
+
+// Peak Gust Today: 0 to 242 knots (earth wind max + 10%)
+if (!defined('CLIMATE_PEAK_GUST_TODAY_MIN_KTS')) {
+    define('CLIMATE_PEAK_GUST_TODAY_MIN_KTS', 0);
+}
+if (!defined('CLIMATE_PEAK_GUST_TODAY_MAX_KTS')) {
+    define('CLIMATE_PEAK_GUST_TODAY_MAX_KTS', 242);
+}
+
+// Gust Factor: 0 to 50 knots (reasonable gust spread range), null is acceptable
+if (!defined('CLIMATE_GUST_FACTOR_MIN_KTS')) {
+    define('CLIMATE_GUST_FACTOR_MIN_KTS', 0);
+}
+if (!defined('CLIMATE_GUST_FACTOR_MAX_KTS')) {
+    define('CLIMATE_GUST_FACTOR_MAX_KTS', 50);
+}
+
+// Pressure Altitude: -2,200 to 33,000 ft (Earth extremes: -2,000 to 30,000 ft + 10%)
+if (!defined('CLIMATE_PRESSURE_ALTITUDE_MIN_FT')) {
+    define('CLIMATE_PRESSURE_ALTITUDE_MIN_FT', -2200); // -2000 * 1.1
+}
+if (!defined('CLIMATE_PRESSURE_ALTITUDE_MAX_FT')) {
+    define('CLIMATE_PRESSURE_ALTITUDE_MAX_FT', 33000); // 30000 * 1.1
+}
+
+// Density Altitude: -5,500 to 38,500 ft (Earth extremes: -5,000 to 35,000 ft + 10%)
+if (!defined('CLIMATE_DENSITY_ALTITUDE_MIN_FT')) {
+    define('CLIMATE_DENSITY_ALTITUDE_MIN_FT', -5500); // -5000 * 1.1
+}
+if (!defined('CLIMATE_DENSITY_ALTITUDE_MAX_FT')) {
+    define('CLIMATE_DENSITY_ALTITUDE_MAX_FT', 38500); // 35000 * 1.1
+}
+
