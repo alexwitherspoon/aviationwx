@@ -207,8 +207,10 @@ function generateMockWeatherData($airportId, $airport) {
         
         // Set cache headers (use config default for consistency)
         $defaultWeatherRefresh = getDefaultWeatherRefresh();
-        header('Cache-Control: public, max-age=' . $defaultWeatherRefresh);
+        $cloudflareMaxAge = max(30, intval($defaultWeatherRefresh / 2));
+        header('Cache-Control: public, max-age=' . $defaultWeatherRefresh . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
         header('ETag: ' . $etag);
+        header('Vary: Accept');
         header('X-Cache-Status: MOCK');
         
         ob_clean();
@@ -260,9 +262,14 @@ function generateMockWeatherData($airportId, $airport) {
             nullStaleFieldsBySource($cached, $maxStaleSeconds, $maxStaleSecondsMetar);
             
             // Set cache headers for cached responses
+            // Use s-maxage to control Cloudflare cache separately from browser cache
+            // Cloudflare cache expires faster (half of refresh interval, min 30s) to reduce stale cache issues
+            // Browser cache can be longer for better offline experience
             $remainingTime = $airportWeatherRefresh - $age;
-            header('Cache-Control: public, max-age=' . $remainingTime);
+            $cloudflareMaxAge = max(30, min($remainingTime, intval($airportWeatherRefresh / 2)));
+            header('Cache-Control: public, max-age=' . $remainingTime . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
             header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $remainingTime) . ' GMT');
+            header('Vary: Accept');
             header('X-Cache-Status: HIT');
             
             ob_clean();
@@ -282,8 +289,12 @@ function generateMockWeatherData($airportId, $airport) {
             $hasStaleCache = true;
             
             // Set stale-while-revalidate headers (serve stale, but allow background refresh)
-            header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
+            // Use s-maxage to limit Cloudflare cache - shorter TTL to prevent serving stale data too long
+            // Cloudflare cache expires faster (half of refresh interval, min 30s) to reduce stale cache issues
+            $cloudflareMaxAge = max(30, intval($airportWeatherRefresh / 2));
+            header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
             header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
+            header('Vary: Accept');
             header('X-Cache-Status: STALE');
             
             // Serve stale data immediately with flush
@@ -608,17 +619,25 @@ function generateMockWeatherData($airportId, $airport) {
     // Conditional requests support
     $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
     if ($ifNoneMatch === $etag) {
-    header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+    // Use s-maxage to control Cloudflare cache separately from browser cache
+    $cloudflareMaxAge = max(30, intval($airportWeatherRefresh / 2));
+    header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
     header('ETag: ' . $etag);
+    header('Vary: Accept');
     header('X-Cache-Status: MISS');
     http_response_code(304);
     exit;
     }
 
     // Set cache headers for fresh data (short-lived)
-    header('Cache-Control: public, max-age=' . $airportWeatherRefresh);
+    // Use s-maxage to control Cloudflare cache separately from browser cache
+    // Cloudflare cache expires faster (half of refresh interval, min 30s) to reduce stale cache issues
+    // Browser cache can be longer for better offline experience
+    $cloudflareMaxAge = max(30, intval($airportWeatherRefresh / 2));
+    header('Cache-Control: public, max-age=' . $airportWeatherRefresh . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
     header('ETag: ' . $etag);
     header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
+    header('Vary: Accept');
     header('X-Cache-Status: MISS');
 
     ob_clean();

@@ -78,7 +78,16 @@ Returns weather data for the specified airport.
 
 **Rate Limiting:** 60 requests per minute per IP
 
-**Caching:** Responses are cached. Check `Cache-Control` and `Expires` headers.
+**Caching:** 
+- Responses are cached with multi-layer cache control
+- **Browser Cache:** Controlled by `max-age` (typically 60 seconds, per-airport configurable)
+- **Cloudflare CDN Cache:** Controlled by `s-maxage` (typically 30 seconds, half of refresh interval)
+- **Vary Header:** `Vary: Accept` ensures proper content negotiation
+- **Stale-While-Revalidate:** Supports `stale-while-revalidate` for background cache updates
+- Check `Cache-Control`, `Expires`, and `Vary` headers for cache behavior
+
+**Cloudflare Configuration:**
+The API uses `s-maxage` to limit Cloudflare cache TTL separately from browser cache. This prevents Cloudflare from serving stale data longer than intended. Cloudflare automatically varies cache by query string parameters (e.g., `airport`), so each airport's data is cached separately.
 
 **Stale Data:** Data older than 3 hours is automatically nulled (displays as `null`). See [README.md](README.md#stale-data-safety-check) for details.
 
