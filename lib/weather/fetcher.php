@@ -264,12 +264,22 @@ function fetchWeatherAsync($airport, $airportId = null) {
     // Determine failure severity based on HTTP code
     $primarySeverity = 'transient';
     if ($primaryCode !== 0 && $primaryCode >= 400 && $primaryCode < 500) {
-        $primarySeverity = 'permanent'; // 4xx errors are likely permanent (bad API key, etc.)
+        // HTTP 429 (rate limiting) should be treated as transient - it's temporary
+        if ($primaryCode === 429) {
+            $primarySeverity = 'transient';
+        } else {
+            $primarySeverity = 'permanent'; // Other 4xx errors are likely permanent (bad API key, etc.)
+        }
     }
     
     $metarSeverity = 'transient';
     if ($metarCode !== 0 && $metarCode >= 400 && $metarCode < 500) {
-        $metarSeverity = 'permanent'; // 4xx errors are likely permanent
+        // HTTP 429 (rate limiting) should be treated as transient - it's temporary
+        if ($metarCode === 429) {
+            $metarSeverity = 'transient';
+        } else {
+            $metarSeverity = 'permanent'; // Other 4xx errors are likely permanent
+        }
     }
     
     // Check primary response and record success/failure
