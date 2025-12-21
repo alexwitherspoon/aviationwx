@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/calculator.php';
+require_once __DIR__ . '/validation.php';
 
 /**
  * Merge new weather data with existing cache, preserving last known good values
@@ -115,6 +116,136 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds,
 }
 
 /**
+ * Merge weather data with field-level fallback from backup source
+ * 
+ * Merges primary and backup weather data on a field-by-field basis, selecting the best
+ * available data for each field. Validates data against climate bounds and prefers
+ * newest observation time when both sources have valid data.
+ * 
+ * @param array $primaryData Primary weather data from API (contains backup timestamps if backup exists)
+ * @param array|null $backupData Backup weather data from API (optional)
+ * @param array|null $existingCache Existing cached weather data (optional)
+ * @param int $refreshIntervalSeconds Weather refresh interval in seconds
+ * @return array Merged weather data array with field_source_map tracking
+ */
+function mergeWeatherDataWithFieldLevelFallback(array $primaryData, ?array $backupData, ?array $existingCache, int $refreshIntervalSeconds): array {
+    require_once __DIR__ . '/../constants.php';
+    
+    $result = $primaryData;
+    $fieldSourceMap = [];
+    $staleThresholdSeconds = $refreshIntervalSeconds * WEATHER_STALENESS_WARNING_MULTIPLIER;
+    $now = time();
+    
+    // Primary source fields that can use backup fallback
+    $primarySourceFields = [
+        'temperature', 'temperature_f',
+        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+        'pressure', 'precip_accum',
+        'pressure_altitude', 'density_altitude'
+    ];
+    
+    // If no backup data, return primary data as-is
+    if ($backupData === null || !is_array($backupData)) {
+        // Still track source for all fields
+        foreach ($primarySourceFields as $field) {
+            if (isset($result[$field])) {
+                $fieldSourceMap[$field] = 'primary';
+            }
+        }
+        $result['_field_source_map'] = $fieldSourceMap;
+        return $result;
+    }
+    
+    // Check staleness for primary and backup (timestamps are in primaryData)
+    $primaryAge = isset($primaryData['last_updated_primary']) && $primaryData['last_updated_primary'] > 0
+        ? $now - $primaryData['last_updated_primary']
+        : PHP_INT_MAX;
+    $primaryStale = $primaryAge >= $staleThresholdSeconds;
+    
+    $backupAge = isset($primaryData['last_updated_backup']) && $primaryData['last_updated_backup'] > 0
+        ? $now - $primaryData['last_updated_backup']
+        : PHP_INT_MAX;
+    $backupStale = $backupAge >= $staleThresholdSeconds;
+    
+    // Get observation times for comparison (from primaryData where backup timestamps are stored)
+    $primaryObsTime = $primaryData['obs_time_primary'] ?? $primaryData['last_updated_primary'] ?? 0;
+    $backupObsTime = $primaryData['obs_time_backup'] ?? $primaryData['last_updated_backup'] ?? 0;
+    
+    // Process each field
+    foreach ($primarySourceFields as $field) {
+        $primaryValue = $primaryData[$field] ?? null;
+        $backupValue = $backupData[$field] ?? null;
+        
+        // Check primary value (with its own context)
+        $primaryValid = false;
+        if ($primaryValue !== null && !$primaryStale) {
+            $primaryContext = [];
+            if ($field === 'dewpoint' || $field === 'dewpoint_f') {
+                $primaryContext['temperature'] = $primaryData['temperature'] ?? null;
+            }
+            if ($field === 'gust_speed' || $field === 'peak_gust') {
+                $primaryContext['wind_speed'] = $primaryData['wind_speed'] ?? null;
+            }
+            $primaryValidation = validateWeatherField($field, $primaryValue, null, $primaryContext);
+            $primaryValid = $primaryValidation['valid'];
+        }
+        
+        // Check backup value (with its own context)
+        $backupValid = false;
+        if ($backupValue !== null && !$backupStale) {
+            $backupContext = [];
+            if ($field === 'dewpoint' || $field === 'dewpoint_f') {
+                $backupContext['temperature'] = $backupData['temperature'] ?? null;
+            }
+            if ($field === 'gust_speed' || $field === 'peak_gust') {
+                $backupContext['wind_speed'] = $backupData['wind_speed'] ?? null;
+            }
+            $backupValidation = validateWeatherField($field, $backupValue, null, $backupContext);
+            $backupValid = $backupValidation['valid'];
+        }
+        
+        // Select best value: prefer newest obs_time when both are valid
+        // Use recovery cycles to prevent rapid switching back to primary
+        $recoveryCycles = $primaryData['primary_recovery_cycles'] ?? 0;
+        $currentSource = $existingCache['_field_source_map'][$field] ?? null;
+        
+        if ($primaryValid && $backupValid) {
+            // Both valid - check recovery cycles before switching back to primary
+            if ($currentSource === 'backup' && $recoveryCycles < WEATHER_STALENESS_WARNING_MULTIPLIER) {
+                // Still in recovery - prefer backup if it was previously used
+                $result[$field] = $backupValue;
+                $fieldSourceMap[$field] = 'backup';
+            } elseif ($primaryObsTime >= $backupObsTime) {
+                // Prefer newest observation time (or primary if recovery complete)
+                $result[$field] = $primaryValue;
+                $fieldSourceMap[$field] = 'primary';
+            } else {
+                $result[$field] = $backupValue;
+                $fieldSourceMap[$field] = 'backup';
+            }
+        } elseif ($primaryValid) {
+            // Only primary valid
+            $result[$field] = $primaryValue;
+            $fieldSourceMap[$field] = 'primary';
+        } elseif ($backupValid) {
+            // Only backup valid
+            $result[$field] = $backupValue;
+            $fieldSourceMap[$field] = 'backup';
+        } else {
+            // Neither valid - set to null (fail closed)
+            $result[$field] = null;
+            $fieldSourceMap[$field] = null;
+        }
+    }
+    
+    // Store field source map (internal only, not exposed in API)
+    $result['_field_source_map'] = $fieldSourceMap;
+    
+    return $result;
+}
+
+/**
  * Helper function to null out stale fields based on source timestamps
  * 
  * Nulls out weather fields that are too stale based on their source timestamps.
@@ -167,6 +298,22 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar
         if ($metarStale) {
             foreach ($metarSourceFields as $field) {
                 if (isset($data[$field])) {
+                    $data[$field] = null;
+                }
+            }
+        }
+    }
+    
+    // Check backup source staleness (if backup was used for any fields)
+    $backupStale = false;
+    if (isset($data['last_updated_backup']) && $data['last_updated_backup'] > 0) {
+        $backupAge = time() - $data['last_updated_backup'];
+        $backupStale = ($backupAge >= $maxStaleSeconds);
+        
+        // If backup is stale, null out fields that came from backup
+        if ($backupStale && isset($data['_field_source_map']) && is_array($data['_field_source_map'])) {
+            foreach ($data['_field_source_map'] as $field => $source) {
+                if ($source === 'backup' && isset($data[$field])) {
                     $data[$field] = null;
                 }
             }
