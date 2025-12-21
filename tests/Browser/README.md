@@ -165,6 +165,7 @@ Browser tests are **implemented** using Playwright.
 
 ### Test Files
 
+- `tests/javascript-smoke-test.spec.js` - **Simple blocking smoke test** - Verifies JavaScript loads, executes, and displays data (fastest test to catch basic failures)
 - `tests/aviationwx.spec.js` - Core functionality tests (weather display, toggles, responsiveness)
 - `tests/cache-and-stale-data.spec.js` - Cache-busting and stale data detection tests (added for mobile client improvements)
 
@@ -176,6 +177,7 @@ npm install
 npx playwright test
 
 # Run specific test file
+npx playwright test javascript-smoke-test.spec.js  # Fast smoke test
 npx playwright test cache-and-stale-data.spec.js
 
 # Run in headed mode (see browser)
