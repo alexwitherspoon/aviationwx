@@ -266,14 +266,25 @@ function loadConfig(bool $useCache = true): ?array {
     
     // Get config file path
     $envConfigPath = getenv('CONFIG_PATH');
+    
     // Check if CONFIG_PATH is set and is a file (not a directory)
     if ($envConfigPath && file_exists($envConfigPath) && is_file($envConfigPath)) {
         $configFile = $envConfigPath;
     } else {
         // Fall back to default path
         $configFile = __DIR__ . '/../config/airports.json';
-        // If default path doesn't exist, try /var/www/html/airports.json (production mount point)
-        if (!file_exists($configFile) || is_dir($configFile)) {
+        // If default path doesn't exist and not in production, try secrets path (for local dev)
+        if ((!file_exists($configFile) || is_dir($configFile)) && !isProduction()) {
+            $secretsPath = __DIR__ . '/../../aviationwx.org-secrets/airports.json';
+            $secretsPathAlt = __DIR__ . '/../../aviationwx-secrets/airports.json';
+            if (file_exists($secretsPath)) {
+                $configFile = $secretsPath;
+            } elseif (file_exists($secretsPathAlt)) {
+                $configFile = $secretsPathAlt;
+            }
+        }
+        // Last resort: try /var/www/html/airports.json (production mount point)
+        if ((!file_exists($configFile) || is_dir($configFile))) {
             $configFile = '/var/www/html/airports.json';
         }
     }
