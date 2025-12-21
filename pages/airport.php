@@ -93,7 +93,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             'use strict';
             try {
                 if ('styleMedia' in window) {
-                    var descriptor = Object.getOwnPropertyDescriptor(window, 'styleMedia');
+                    const descriptor = Object.getOwnPropertyDescriptor(window, 'styleMedia');
                     if (descriptor && descriptor.configurable) {
                         delete window.styleMedia;
                     } else {
@@ -213,7 +213,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             window.addEventListener('load', () => {
                 // Unregister any old service workers at incorrect paths (e.g., /sw.js)
                 navigator.serviceWorker.getRegistrations().then((registrations) => {
-                    for (let registration of registrations) {
+                    for (const registration of registrations) {
                         // Check if this is an old registration at wrong path
                         if (registration.scope && (registration.active?.scriptURL?.includes('/sw.js') || registration.waiting?.scriptURL?.includes('/sw.js') || registration.installing?.scriptURL?.includes('/sw.js'))) {
                             console.log('[SW] Unregistering old service worker:', registration.scope);
@@ -248,7 +248,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         registration.addEventListener('updatefound', () => {
                             console.log('[SW] Update found, new service worker installing...');
                             const newWorker = registration.installing;
-                            if (!newWorker) return;
+                            if (!newWorker) {
+                                return;
+                            }
                             
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed') {
@@ -2725,6 +2727,7 @@ function openLiveStream(url) { window.open(url, '_blank'); }
 function updateWebcamTimestamps() {
     <?php foreach ($airport['webcams'] as $index => $cam): ?>
     // Update webcam timestamp in label
+    // eslint-disable-next-line -- PHP generates variable names (e.g., timestampElem0, timestampElem1) - this is intentional
     const timestampElem<?= $index ?> = document.getElementById('webcam-timestamp-<?= $index ?>');
     if (timestampElem<?= $index ?>) {
         // Try to get timestamp from data attribute first, then from CAM_TS
