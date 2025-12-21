@@ -1881,6 +1881,67 @@ function validateAirportsJsonStructure(array $config): array {
             }
         }
         
+        // Validate backup weather source (same structure as primary)
+        if (isset($airport['weather_source_backup'])) {
+            $wsBackup = $airport['weather_source_backup'];
+            if (!is_array($wsBackup)) {
+                $errors[] = "Airport '{$airportCode}' weather_source_backup must be an object";
+            } else {
+                if (!isset($wsBackup['type'])) {
+                    $errors[] = "Airport '{$airportCode}' weather_source_backup missing 'type' field";
+                } else {
+                    $validTypes = ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'synopticdata', 'metar'];
+                    if (!in_array($wsBackup['type'], $validTypes)) {
+                        $errors[] = "Airport '{$airportCode}' weather_source_backup has invalid type: '{$wsBackup['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
+                    } else {
+                        $wsBackupType = $wsBackup['type'];
+                        if ($wsBackupType === 'tempest') {
+                            if (!isset($wsBackup['station_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (tempest) missing 'station_id'";
+                            }
+                            if (!isset($wsBackup['api_key'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (tempest) missing 'api_key'";
+                            }
+                        } elseif ($wsBackupType === 'ambient') {
+                            if (!isset($wsBackup['api_key'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (ambient) missing 'api_key'";
+                            }
+                            if (!isset($wsBackup['application_key'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (ambient) missing 'application_key'";
+                            }
+                        } elseif ($wsBackupType === 'weatherlink') {
+                            if (!isset($wsBackup['api_key'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink) missing 'api_key'";
+                            }
+                            if (!isset($wsBackup['api_secret'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink) missing 'api_secret'";
+                            }
+                            if (!isset($wsBackup['station_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink) missing 'station_id'";
+                            }
+                        } elseif ($wsBackupType === 'pwsweather') {
+                            if (!isset($wsBackup['station_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (pwsweather) missing 'station_id'";
+                            }
+                            if (!isset($wsBackup['client_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (pwsweather) missing 'client_id'";
+                            }
+                            if (!isset($wsBackup['client_secret'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (pwsweather) missing 'client_secret'";
+                            }
+                        } elseif ($wsBackupType === 'synopticdata') {
+                            if (!isset($wsBackup['station_id'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (synopticdata) missing 'station_id'";
+                            }
+                            if (!isset($wsBackup['api_token'])) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (synopticdata) missing 'api_token'";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // Validate webcams
         if (isset($airport['webcams'])) {
             if (!is_array($airport['webcams'])) {

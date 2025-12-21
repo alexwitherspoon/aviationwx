@@ -49,6 +49,11 @@
         "station_id": "YOUR_STATION_ID",
         "api_key": "YOUR_TEMPEST_API_KEY"
       },
+      "weather_source_backup": {
+        "type": "ambient",
+        "api_key": "YOUR_BACKUP_API_KEY",
+        "application_key": "YOUR_BACKUP_APPLICATION_KEY"
+      },
       "webcams": [
         {
           "name": "North Runway Camera (MJPEG)",
