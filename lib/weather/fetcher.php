@@ -76,8 +76,20 @@ function fetchWeatherAsync($airport, $airportId = null) {
             case 'ambient':
                 $apiKey = $airport['weather_source']['api_key'];
                 $appKey = $airport['weather_source']['application_key'];
-                // Ambient uses device list endpoint, not individual device endpoint
-                $primaryUrl = "https://api.ambientweather.net/v1/devices?applicationKey={$appKey}&apiKey={$apiKey}";
+                $macAddress = isset($airport['weather_source']['mac_address']) ? trim($airport['weather_source']['mac_address']) : null;
+                // Sanitize MAC address (remove whitespace)
+                if ($macAddress) {
+                    $macAddress = preg_replace('/\s+/', '', $macAddress);
+                    if (empty($macAddress)) {
+                        $macAddress = null;
+                    }
+                }
+                // Use specific device endpoint if MAC address provided, otherwise device list endpoint
+                if ($macAddress) {
+                    $primaryUrl = "https://api.ambientweather.net/v1/devices/{$macAddress}?applicationKey={$appKey}&apiKey={$apiKey}";
+                } else {
+                    $primaryUrl = "https://api.ambientweather.net/v1/devices?applicationKey={$appKey}&apiKey={$apiKey}";
+                }
                 break;
             case 'weatherlink':
                 // WeatherLink requires special handling for header auth, so we'll use sync fetch

@@ -16,6 +16,8 @@ require_once __DIR__ . '/../../test-mocks.php';
  * Handles unit conversions (Fahrenheit to Celsius, mph to knots).
  * Observation time is converted from milliseconds to seconds.
  * 
+ * Supports both array response (multiple devices) and single device object response.
+ * 
  * @param string $response JSON response from Ambient Weather API
  * @return array|null Weather data array with standard keys, or null on parse error
  */
@@ -25,11 +27,19 @@ function parseAmbientResponse($response): ?array {
     }
     $data = json_decode($response, true);
     
-    if (!isset($data[0]) || !isset($data[0]['lastData'])) {
+    // Handle both array response (multiple devices) and single device object
+    $device = null;
+    if (isset($data[0]) && isset($data[0]['lastData'])) {
+        // Array response: multiple devices, use first one
+        $device = $data[0];
+    } elseif (isset($data['lastData'])) {
+        // Single device object response
+        $device = $data;
+    } else {
         return null;
     }
     
-    $obs = $data[0]['lastData'];
+    $obs = $device['lastData'];
     
     // Parse observation time (when the weather was actually measured)
     // Ambient Weather provides dateutc in milliseconds (Unix timestamp * 1000)
@@ -73,7 +83,10 @@ function parseAmbientResponse($response): ?array {
  * Makes HTTP request to Ambient Weather API to fetch current weather observations.
  * Requires both API key and application key. Used as fallback when async fetch fails.
  * 
- * @param array $source Weather source configuration (must contain 'api_key' and 'application_key')
+ * If mac_address is provided, fetches data for that specific device.
+ * Otherwise, fetches all devices and uses the first one.
+ * 
+ * @param array $source Weather source configuration (must contain 'api_key' and 'application_key', optionally 'mac_address')
  * @return array|null Weather data array with standard keys, or null on failure
  */
 function fetchAmbientWeather($source): ?array {
@@ -84,9 +97,24 @@ function fetchAmbientWeather($source): ?array {
     
     $apiKey = $source['api_key'];
     $applicationKey = $source['application_key'];
+    $macAddress = isset($source['mac_address']) ? trim($source['mac_address']) : null;
     
-    // Fetch current conditions (uses device list endpoint)
-    $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
+    // Sanitize MAC address if provided (remove extra whitespace, normalize)
+    if ($macAddress) {
+        $macAddress = preg_replace('/\s+/', '', $macAddress); // Remove all whitespace
+        if (empty($macAddress)) {
+            $macAddress = null; // Treat empty after sanitization as no MAC address
+        }
+    }
+    
+    // Build URL: use specific device endpoint if MAC address provided, otherwise device list endpoint
+    if ($macAddress) {
+        // Fetch specific device by MAC address (MAC address used directly in path, no encoding needed)
+        $url = "https://api.ambientweather.net/v1/devices/{$macAddress}?applicationKey={$applicationKey}&apiKey={$apiKey}";
+    } else {
+        // Fetch all devices (uses first device in response)
+        $url = "https://api.ambientweather.net/v1/devices?applicationKey={$applicationKey}&apiKey={$apiKey}";
+    }
     
     // Check for mock response in test mode
     $mockResponse = getMockHttpResponse($url);
