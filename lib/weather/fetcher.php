@@ -369,7 +369,10 @@ function fetchWeatherAsync($airport, $airportId = null) {
                 aviationwx_log('warning', 'primary weather response parse failed', [
                     'airport' => $airportId,
                     'source' => $sourceType,
-                    'response_length' => strlen($primaryResponse)
+                    'http_code' => $primaryCode,
+                    'response_length' => strlen($primaryResponse),
+                    'json_error' => $jsonErrorMsg,
+                    'response_preview' => substr($primaryResponse, 0, 200)
                 ], 'app');
             }
         } catch (Exception $e) {
