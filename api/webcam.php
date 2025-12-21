@@ -89,23 +89,49 @@ function servePlaceholder() {
     
     // Only set headers if they haven't been sent yet
     if (!headers_sent()) {
-        if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
-            header('Content-Type: image/jpeg');
-            header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
-            header('X-Cache-Status: MISS'); // Placeholder served - no cache
-            $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
+        $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
+        if (file_exists($placeholderPath)) {
+            // Detect actual image type (file is PNG despite .jpg extension)
             $size = @filesize($placeholderPath);
             if ($size > 0) {
+                // Read first bytes to detect image type
+                $handle = @fopen($placeholderPath, 'rb');
+                if ($handle !== false) {
+                    $header = @fread($handle, 8);
+                    @fclose($handle);
+                    
+                    // Check for PNG signature
+                    if ($header !== false && substr($header, 0, 8) === "\x89PNG\r\n\x1a\n") {
+                        header('Content-Type: image/png');
+                    } else {
+                        // Default to JPEG if not PNG
+                        header('Content-Type: image/jpeg');
+                    }
+                } else {
+                    // Fallback to JPEG if can't read file
+                    header('Content-Type: image/jpeg');
+                }
+                
+                header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+                header('X-Cache-Status: MISS'); // Placeholder served - no cache
                 header('Content-Length: ' . $size);
-            }
-            $result = @readfile($placeholderPath);
-            if ($result === false) {
-                // Fallback to base64 if readfile fails
+                $result = @readfile($placeholderPath);
+                if ($result === false) {
+                    // Fallback to base64 if readfile fails
+                    header('Content-Type: image/png');
+                    header('Content-Length: 95');
+                    echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+                }
+            } else {
+                // File exists but has zero size - use fallback
                 header('Content-Type: image/png');
+                header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+                header('X-Cache-Status: MISS');
                 header('Content-Length: 95');
                 echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
             }
         } else {
+            // Placeholder file doesn't exist - use base64 fallback
             header('Content-Type: image/png');
             header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
             header('X-Cache-Status: MISS'); // Placeholder served - no cache
