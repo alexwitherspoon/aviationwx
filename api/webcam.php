@@ -75,8 +75,9 @@ if (!headers_sent()) {
 /**
  * Serve placeholder image
  * 
- * Serves a placeholder image when webcam is unavailable or invalid.
- * Attempts to serve placeholder.jpg if available, otherwise serves a 1x1 transparent PNG.
+ * Serves an optimized placeholder image when webcam is unavailable or invalid.
+ * Selects format based on browser Accept header (AVIF > WebP > JPEG).
+ * Falls back to JPEG if optimized formats unavailable, or 1x1 transparent PNG if all fail.
  * Sets appropriate cache headers for placeholder images.
  * 
  * @return void
@@ -89,63 +90,77 @@ function servePlaceholder() {
     
     // Only set headers if they haven't been sent yet
     if (!headers_sent()) {
-        $placeholderPath = __DIR__ . '/../public/images/placeholder.jpg';
-        if (file_exists($placeholderPath)) {
-            // Detect actual image type (file is PNG despite .jpg extension)
+        $imagesDir = __DIR__ . '/../public/images';
+        
+        // Determine preferred format based on Accept header (same logic as webcam images)
+        $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+        $preferredFormat = 'jpg'; // Default fallback
+        if (stripos($acceptHeader, 'image/avif') !== false) {
+            $preferredFormat = 'avif';
+        } elseif (stripos($acceptHeader, 'image/webp') !== false) {
+            $preferredFormat = 'webp';
+        }
+        
+        // Try to serve preferred format, fallback to JPEG if not available
+        $placeholderPath = null;
+        $contentType = 'image/jpeg';
+        
+        if ($preferredFormat === 'avif') {
+            $avifPath = $imagesDir . '/placeholder.avif';
+            if (file_exists($avifPath) && filesize($avifPath) > 0) {
+                $placeholderPath = $avifPath;
+                $contentType = 'image/avif';
+            }
+        }
+        
+        if ($placeholderPath === null && $preferredFormat === 'webp') {
+            $webpPath = $imagesDir . '/placeholder.webp';
+            if (file_exists($webpPath) && filesize($webpPath) > 0) {
+                $placeholderPath = $webpPath;
+                $contentType = 'image/webp';
+            }
+        }
+        
+        // Fallback to JPEG (always available)
+        if ($placeholderPath === null) {
+            $jpegPath = $imagesDir . '/placeholder.jpg';
+            if (file_exists($jpegPath) && filesize($jpegPath) > 0) {
+                $placeholderPath = $jpegPath;
+                $contentType = 'image/jpeg';
+            }
+        }
+        
+        // Serve placeholder if found
+        if ($placeholderPath !== null && file_exists($placeholderPath)) {
             $size = @filesize($placeholderPath);
             if ($size > 0) {
-                // Read first bytes to detect image type
-                $handle = @fopen($placeholderPath, 'rb');
-                if ($handle !== false) {
-                    $header = @fread($handle, 8);
-                    @fclose($handle);
-                    
-                    // Check for PNG signature
-                    if ($header !== false && substr($header, 0, 8) === "\x89PNG\r\n\x1a\n") {
-                        header('Content-Type: image/png');
-                    } else {
-                        // Default to JPEG if not PNG
-                        header('Content-Type: image/jpeg');
-                    }
-                } else {
-                    // Fallback to JPEG if can't read file
-                    header('Content-Type: image/jpeg');
-                }
-                
+                header('Content-Type: ' . $contentType);
                 header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
                 header('X-Cache-Status: MISS'); // Placeholder served - no cache
                 header('Content-Length: ' . $size);
                 $result = @readfile($placeholderPath);
-                if ($result === false) {
-                    // Fallback to base64 if readfile fails
-                    header('Content-Type: image/png');
-                    header('Content-Length: 95');
-                    echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+                if ($result !== false) {
+                    exit;
                 }
-            } else {
-                // File exists but has zero size - use fallback
-                header('Content-Type: image/png');
-                header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
-                header('X-Cache-Status: MISS');
-                header('Content-Length: 95');
-                echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
             }
-        } else {
-            // Placeholder file doesn't exist - use base64 fallback
-            header('Content-Type: image/png');
-            header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
-            header('X-Cache-Status: MISS'); // Placeholder served - no cache
-            header('Content-Length: 95');
-            echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
         }
+        
+        // Fallback to base64 1x1 transparent PNG if all else fails
+        header('Content-Type: image/png');
+        header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
+        header('X-Cache-Status: MISS');
+        header('Content-Length: 95');
+        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
     } else {
         // Headers already sent - log warning in non-CLI mode
         if (php_sapi_name() !== 'cli') {
             error_log('Warning: Headers already sent, cannot serve placeholder image in webcam.php');
         }
         // Still try to output placeholder image data if possible
-        if (file_exists(__DIR__ . '/../public/images/placeholder.jpg')) {
-            @readfile(__DIR__ . '/../public/images/placeholder.jpg');
+        $imagesDir = __DIR__ . '/../public/images';
+        $jpegPath = $imagesDir . '/placeholder.jpg';
+        if (file_exists($jpegPath)) {
+            @readfile($jpegPath);
         } else {
             echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
         }
