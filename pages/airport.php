@@ -3048,8 +3048,18 @@ if (hasWeatherSource || hasMetarStation) {
     setInterval(fetchWeather, weatherRefreshMs);
 }
 
+// Track which images have already been handled to prevent infinite loops
+const webcamErrorHandled = new Set();
+
 // Handle webcam image load errors - show placeholder image
 function handleWebcamError(camIndex, img) {
+    // Prevent infinite loops - if we've already handled this error or it's a placeholder URL, stop
+    const errorKey = `${camIndex}-${img.src}`;
+    if (webcamErrorHandled.has(errorKey) || img.src.includes('cam=999')) {
+        return; // Already handled or is placeholder - prevent infinite loop
+    }
+    
+    webcamErrorHandled.add(errorKey);
     console.error('Webcam image failed to load:', img.src);
     const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
     if (skeleton) skeleton.style.display = 'none';
@@ -3061,8 +3071,27 @@ function handleWebcamError(camIndex, img) {
     const host = window.location.host;
     const airportId = AIRPORT_ID || '';
     // Use cam index 999 which will be out of bounds and trigger servePlaceholder()
-    img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(airportId)}&cam=999`;
-    img.onerror = null; // Prevent infinite loop if placeholder also fails
+    const placeholderUrl = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(airportId)}&cam=999`;
+    
+    // Remove onerror attribute to prevent infinite loop
+    img.onerror = null;
+    // Remove all error event listeners by cloning the node (preserves other attributes)
+    const newImg = img.cloneNode(false);
+    // Copy over important attributes
+    if (img.id) newImg.id = img.id;
+    if (img.className) newImg.className = img.className;
+    if (img.dataset) {
+        Object.keys(img.dataset).forEach(key => {
+            newImg.dataset[key] = img.dataset[key];
+        });
+    }
+    // Replace the node to remove all event listeners
+    if (img.parentNode) {
+        img.parentNode.replaceChild(newImg, img);
+        newImg.src = placeholderUrl;
+        // Mark placeholder URL as handled immediately
+        webcamErrorHandled.add(`${camIndex}-${placeholderUrl}`);
+    }
 }
 
 /**
@@ -3262,15 +3291,20 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
         // Initial load: wait briefly (0.2s, 0.5s, 1s) then show placeholder
         const backoffs = [200, 500, 1000];
         let attempt = 0;
+        let isComplete = false; // Guard to prevent multiple completions
         
         const tryLoad = async () => {
-            if (attempt >= backoffs.length) {
-                // Show placeholder via webcam.php endpoint
-                const img = document.getElementById(`webcam-${camIndex}`);
-                if (img) {
-                    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-                    const host = window.location.host;
-                    img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+            // Check if we've exceeded attempts or already completed
+            if (isComplete || attempt >= backoffs.length) {
+                if (!isComplete) {
+                    isComplete = true;
+                    // Show placeholder via webcam.php endpoint
+                    const img = document.getElementById(`webcam-${camIndex}`);
+                    if (img) {
+                        const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                        const host = window.location.host;
+                        img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                    }
                 }
                 return;
             }
@@ -3285,6 +3319,7 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
                 });
                 
                 if (response.status === 200) {
+                    isComplete = true;
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
                     updateImageSilently(camIndex, blobUrl);
@@ -3292,13 +3327,35 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
                 }
                 
                 if (response.status === 202) {
-                    // Still generating - retry
-                    tryLoad();
+                    // Still generating - retry only if we haven't exceeded attempts
+                    if (attempt < backoffs.length) {
+                        tryLoad();
+                    } else {
+                        isComplete = true;
+                        // Show placeholder
+                        const img = document.getElementById(`webcam-${camIndex}`);
+                        if (img) {
+                            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                            const host = window.location.host;
+                            img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                        }
+                    }
                     return;
                 }
             } catch (error) {
-                // Retry
-                tryLoad();
+                // Retry only if we haven't exceeded attempts
+                if (attempt < backoffs.length) {
+                    tryLoad();
+                } else {
+                    isComplete = true;
+                    // Show placeholder after all attempts failed
+                    const img = document.getElementById(`webcam-${camIndex}`);
+                    if (img) {
+                        const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                        const host = window.location.host;
+                        img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                    }
+                }
             }
         };
         
@@ -3307,9 +3364,11 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
         // Refresh: wait briefly (0.5s, 1s, 2s) then show last known image
         const backoffs = [500, 1000, 2000];
         let attempt = 0;
+        let isComplete = false; // Guard to prevent multiple completions
         
         const tryLoad = async () => {
-            if (attempt >= backoffs.length) {
+            // Check if we've exceeded attempts or already completed
+            if (isComplete || attempt >= backoffs.length) {
                 // Keep existing image (already rendered)
                 return;
             }
@@ -3324,6 +3383,7 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
                 });
                 
                 if (response.status === 200) {
+                    isComplete = true;
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
                     updateImageSilently(camIndex, blobUrl);
@@ -3331,13 +3391,18 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
                 }
                 
                 if (response.status === 202) {
-                    // Still generating - retry
-                    tryLoad();
+                    // Still generating - retry only if we haven't exceeded attempts
+                    if (attempt < backoffs.length) {
+                        tryLoad();
+                    }
                     return;
                 }
             } catch (error) {
-                // Retry
-                tryLoad();
+                // Retry only if we haven't exceeded attempts
+                if (attempt < backoffs.length) {
+                    tryLoad();
+                }
+                // If all attempts failed, keep existing image (silent failure)
             }
         };
         
