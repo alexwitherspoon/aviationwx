@@ -1267,24 +1267,31 @@ if (php_sapi_name() === 'cli') {
     </div>
     
     <script>
-        function toggleAirport(airportId) {
-            const header = document.querySelector(`[onclick="toggleAirport('${airportId}')"]`);
-            const body = document.getElementById(`airport-${airportId}-body`);
+        (function() {
+            'use strict';
             
-            if (header && body) {
-                const isExpanded = header.classList.contains('expanded');
+            function toggleAirport(airportId) {
+                const header = document.querySelector(`[onclick="toggleAirport('${airportId}')"]`);
+                const body = document.getElementById(`airport-${airportId}-body`);
                 
-                if (isExpanded) {
-                    header.classList.remove('expanded');
-                    body.classList.remove('expanded');
-                    body.classList.add('collapsed');
-                } else {
-                    header.classList.add('expanded');
-                    body.classList.remove('collapsed');
-                    body.classList.add('expanded');
+                if (header && body) {
+                    const isExpanded = header.classList.contains('expanded');
+                    
+                    if (isExpanded) {
+                        header.classList.remove('expanded');
+                        body.classList.remove('expanded');
+                        body.classList.add('collapsed');
+                    } else {
+                        header.classList.add('expanded');
+                        body.classList.remove('collapsed');
+                        body.classList.add('expanded');
+                    }
                 }
             }
-        }
+            
+            // Expose to global scope for onclick handlers
+            window.toggleAirport = toggleAirport;
+        })();
     </script>
 </body>
 </html>

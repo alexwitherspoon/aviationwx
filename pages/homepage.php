@@ -701,11 +701,18 @@ Best regards,
         </section>
 
         <script>
-        function changePage(page) {
-            const url = new URL(window.location);
-            url.searchParams.set('page', page);
-            window.location.href = url.toString();
-        }
+        (function() {
+            'use strict';
+            
+            function changePage(page) {
+                const url = new URL(window.location);
+                url.searchParams.set('page', page);
+                window.location.href = url.toString();
+            }
+            
+            // Expose to global scope for onclick handlers
+            window.changePage = changePage;
+        })();
         </script>
 
         <!-- For Pilots -->
