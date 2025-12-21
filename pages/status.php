@@ -451,6 +451,52 @@ function checkAirportHealth(string $airportId, array $airport): array {
         }
     };
     
+    // Helper function to get HTTP error code from backoff state
+    $getHttpErrorInfo = function($airportId, $sourceType) {
+        $backoffFile = __DIR__ . '/../cache/backoff.json';
+        if (!file_exists($backoffFile)) {
+            return null;
+        }
+        
+        // Use @ to suppress errors for non-critical file operations
+        // We handle failures explicitly with fallback mechanisms below
+        $backoffData = @json_decode(@file_get_contents($backoffFile), true);
+        if (!is_array($backoffData)) {
+            return null;
+        }
+        
+        $key = $airportId . '_weather_' . $sourceType;
+        if (!isset($backoffData[$key])) {
+            return null;
+        }
+        
+        $state = $backoffData[$key];
+        $httpCode = isset($state['last_http_code']) ? (int)$state['last_http_code'] : null;
+        $errorTime = isset($state['last_error_time']) ? (int)$state['last_error_time'] : 0;
+        $nextAllowed = isset($state['next_allowed_time']) ? (int)$state['next_allowed_time'] : 0;
+        
+        // Only return HTTP code if:
+        // 1. Code exists and is 4xx/5xx
+        // 2. Source is in backoff (circuit open), OR
+        // 3. Error occurred within last hour
+        if ($httpCode !== null && $httpCode >= 400 && $httpCode < 600) {
+            $now = time();
+            $inBackoff = $nextAllowed > $now;
+            $errorAge = $errorTime > 0 ? ($now - $errorTime) : 0;
+            $oneHour = 3600;
+            
+            if ($inBackoff || $errorAge < $oneHour) {
+                return [
+                    'http_code' => $httpCode,
+                    'error_time' => $errorTime,
+                    'in_backoff' => $inBackoff
+                ];
+            }
+        }
+        
+        return null;
+    };
+    
     // Check primary weather source
     $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
     if ($sourceType && $sourceTimestamps['primary']['available']) {
@@ -500,6 +546,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $primaryMessage = 'No timestamp available';
         }
         
+        // Check for HTTP error code to append to message
+        $httpErrorInfo = $getHttpErrorInfo($airportId, 'primary');
+        if ($httpErrorInfo !== null && ($primaryStatus === 'down' || $primaryStatus === 'degraded' || $httpErrorInfo['in_backoff'])) {
+            $primaryMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+        }
+        
         $weatherSources[] = [
             'name' => $sourceName,
             'status' => $primaryStatus,
@@ -546,6 +598,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
         } else {
             $metarStatus = 'down';
             $metarMessage = 'No timestamp available';
+        }
+        
+        // Check for HTTP error code to append to message
+        $httpErrorInfo = $getHttpErrorInfo($airportId, 'metar');
+        if ($httpErrorInfo !== null && ($metarStatus === 'down' || $metarStatus === 'degraded' || $httpErrorInfo['in_backoff'])) {
+            $metarMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
         }
         
         $weatherSources[] = [
