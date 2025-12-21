@@ -7,7 +7,7 @@
     "lint:js:fix": "node scripts/lint-javascript.js --fix"
   },
   "devDependencies": {
-    "eslint": "^8.57.0"
+    "eslint": "^9.0.0"
   },
   "engines": {
     "node": ">=16.0.0"
