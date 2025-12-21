@@ -130,6 +130,28 @@ function validateAirportConfig($formData) {
         }
     }
     
+    // Weather source validation
+    $weatherType = $formData['weather_type'] ?? '';
+    if ($weatherType === 'ambient') {
+        // All 3 fields are required for Ambient Weather
+        if (empty(trim($formData['ambient_api_key'] ?? ''))) {
+            $errors[] = 'Ambient Weather API Key is required';
+        }
+        if (empty(trim($formData['ambient_application_key'] ?? ''))) {
+            $errors[] = 'Ambient Weather Application Key is required';
+        }
+        $macAddress = trim($formData['ambient_mac_address'] ?? '');
+        if (empty($macAddress)) {
+            $errors[] = 'Ambient Weather Device MAC Address is required';
+        } else {
+            // Basic MAC address format validation (allows colons, hyphens, or no separators)
+            $macAddressClean = preg_replace('/[:\-]/', '', $macAddress);
+            if (!preg_match('/^[0-9A-Fa-f]{12}$/', $macAddressClean)) {
+                $errors[] = 'Ambient Weather MAC Address must be a valid format (e.g., AA:BB:CC:DD:EE:FF)';
+            }
+        }
+    }
+    
     return [
         'valid' => empty($errors),
         'errors' => $errors
@@ -183,12 +205,13 @@ function generateConfigSnippet($formData) {
             }
         } elseif ($weatherType === 'ambient') {
             $airport['weather_source']['type'] = 'ambient';
-            if (!empty($formData['ambient_api_key'] ?? '')) {
-                $airport['weather_source']['api_key'] = trim($formData['ambient_api_key']);
-            }
-            if (!empty($formData['ambient_application_key'] ?? '')) {
-                $airport['weather_source']['application_key'] = trim($formData['ambient_application_key']);
-            }
+            // All 3 fields are required and validated
+            $airport['weather_source']['api_key'] = trim($formData['ambient_api_key'] ?? '');
+            $airport['weather_source']['application_key'] = trim($formData['ambient_application_key'] ?? '');
+            $macAddress = trim($formData['ambient_mac_address'] ?? '');
+            // Sanitize MAC address (remove whitespace, normalize)
+            $macAddress = preg_replace('/\s+/', '', $macAddress);
+            $airport['weather_source']['mac_address'] = $macAddress;
         } elseif ($weatherType === 'metar') {
             $airport['weather_source']['type'] = 'metar';
             if (!empty($formData['metar_station_id'] ?? '')) {
@@ -708,11 +731,22 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                             <label for="ambient_api_key">API Key <span class="required">*</span></label>
                             <input type="text" id="ambient_api_key" name="ambient_api_key"
                                    value="<?= htmlspecialchars($_POST['ambient_api_key'] ?? '') ?>" required>
+                            <small class="form-text text-muted">Get from <a href="https://dashboard.ambientweather.net/account" target="_blank">AmbientWeather.net Account Settings</a> → API Keys → Create API Key</small>
                         </div>
                         <div class="form-group">
                             <label for="ambient_application_key">Application Key <span class="required">*</span></label>
                             <input type="text" id="ambient_application_key" name="ambient_application_key"
                                    value="<?= htmlspecialchars($_POST['ambient_application_key'] ?? '') ?>" required>
+                            <small class="form-text text-muted">Get from <a href="https://dashboard.ambientweather.net/account" target="_blank">AmbientWeather.net Account Settings</a> → API Keys → Create Application Key (scroll to bottom)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="ambient_mac_address">Device MAC Address <span class="required">*</span></label>
+                            <input type="text" id="ambient_mac_address" name="ambient_mac_address"
+                                   value="<?= htmlspecialchars($_POST['ambient_mac_address'] ?? '') ?>"
+                                   placeholder="AA:BB:CC:DD:EE:FF" required
+                                   pattern="([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})|[0-9A-Fa-f]{12}"
+                                   title="MAC address format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF or AABBCCDDEEFF">
+                            <small class="form-text text-muted">Find your device MAC address at <a href="https://dashboard.ambientweather.net/devices" target="_blank">dashboard.ambientweather.net/devices</a></small>
                         </div>
                     </div>
                 </div>
