@@ -330,6 +330,133 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <header class="header">
             <h1><?= htmlspecialchars($airport['name']) ?> (<?= htmlspecialchars($primaryIdentifier) ?>)</h1>
         </header>
+        
+        <?php
+        // Check if we should show the airport navigation menu (only if multiple airports configured)
+        $config = loadConfig();
+        $enabledAirports = $config ? getEnabledAirports($config) : [];
+        $showMenu = count($enabledAirports) > 1;
+        
+        if ($showMenu && isset($airport['lat']) && isset($airport['lon'])):
+            // Calculate nearby airports (within 200 miles)
+            $currentLat = (float)$airport['lat'];
+            $currentLon = (float)$airport['lon'];
+            $nearbyAirports = [];
+            
+            foreach ($enabledAirports as $otherAirportId => $otherAirport) {
+                // Skip current airport
+                if ($otherAirportId === $airportId) {
+                    continue;
+                }
+                
+                // Skip if missing coordinates
+                if (!isset($otherAirport['lat']) || !isset($otherAirport['lon'])) {
+                    continue;
+                }
+                
+                $otherLat = (float)$otherAirport['lat'];
+                $otherLon = (float)$otherAirport['lon'];
+                
+                // Haversine formula to calculate distance in statute miles
+                $earthRadiusMiles = 3959; // Earth radius in statute miles
+                $dLat = deg2rad($otherLat - $currentLat);
+                $dLon = deg2rad($otherLon - $currentLon);
+                $a = sin($dLat / 2) * sin($dLat / 2) +
+                     cos(deg2rad($currentLat)) * cos(deg2rad($otherLat)) *
+                     sin($dLon / 2) * sin($dLon / 2);
+                $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+                $distanceMiles = $earthRadiusMiles * $c;
+                
+                // Only include airports within 200 miles
+                if ($distanceMiles <= 200) {
+                    $otherPrimaryIdentifier = getPrimaryIdentifier($otherAirportId, $otherAirport);
+                    $nearbyAirports[] = [
+                        'id' => $otherAirportId,
+                        'name' => $otherAirport['name'] ?? '',
+                        'identifier' => $otherPrimaryIdentifier,
+                        'distance_miles' => $distanceMiles
+                    ];
+                }
+            }
+            
+            // Sort by distance and take top 5
+            usort($nearbyAirports, function($a, $b) {
+                return $a['distance_miles'] <=> $b['distance_miles'];
+            });
+            $nearbyAirports = array_slice($nearbyAirports, 0, 5);
+            
+            // Prepare all airports for search (for autocomplete)
+            $allAirportsForSearch = [];
+            foreach ($enabledAirports as $searchAirportId => $searchAirport) {
+                if ($searchAirportId === $airportId) {
+                    continue; // Skip current airport
+                }
+                $searchPrimaryIdentifier = getPrimaryIdentifier($searchAirportId, $searchAirport);
+                
+                // Calculate distance if coordinates are available
+                $distanceMiles = null;
+                if (isset($searchAirport['lat']) && isset($searchAirport['lon'])) {
+                    $otherLat = (float)$searchAirport['lat'];
+                    $otherLon = (float)$searchAirport['lon'];
+                    
+                    // Haversine formula to calculate distance in statute miles
+                    $earthRadiusMiles = 3959; // Earth radius in statute miles
+                    $dLat = deg2rad($otherLat - $currentLat);
+                    $dLon = deg2rad($otherLon - $currentLon);
+                    $a = sin($dLat / 2) * sin($dLat / 2) +
+                         cos(deg2rad($currentLat)) * cos(deg2rad($otherLat)) *
+                         sin($dLon / 2) * sin($dLon / 2);
+                    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+                    $distanceMiles = $earthRadiusMiles * $c;
+                }
+                
+                $allAirportsForSearch[] = [
+                    'id' => $searchAirportId,
+                    'name' => $searchAirport['name'] ?? '',
+                    'identifier' => $searchPrimaryIdentifier,
+                    'icao' => $searchAirport['icao'] ?? '',
+                    'iata' => $searchAirport['iata'] ?? '',
+                    'faa' => $searchAirport['faa'] ?? '',
+                    'lat' => $searchAirport['lat'] ?? null,
+                    'lon' => $searchAirport['lon'] ?? null,
+                    'distance_miles' => $distanceMiles
+                ];
+            }
+        ?>
+        <!-- Airport Navigation Menu -->
+        <div class="airport-nav-container">
+            <div class="airport-nav-menu">
+                <div class="airport-search-container">
+                    <input type="text" 
+                           id="airport-search" 
+                           class="airport-search-input" 
+                           placeholder="Search airports..." 
+                           autocomplete="off"
+                           aria-label="Search airports">
+                </div>
+                <div class="nearby-airports-container">
+                    <button id="nearby-airports-btn" class="nearby-airports-btn" aria-label="Show nearby airports">
+                        <span>Nearby Airports</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                </div>
+                <!-- Unified dropdown for both search and nearby airports -->
+                <div id="airport-dropdown" class="airport-dropdown">
+                    <!-- Content populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+        <script>
+            // Pass airport data to JavaScript
+            window.AIRPORT_NAV_DATA = {
+                currentAirportId: <?= json_encode($airportId) ?>,
+                currentIdentifier: <?= json_encode($primaryIdentifier) ?>,
+                baseDomain: <?= json_encode(getBaseDomain()) ?>,
+                nearbyAirports: <?= json_encode($nearbyAirports) ?>,
+                allAirports: <?= json_encode($allAirportsForSearch) ?>
+            };
+        </script>
+        <?php endif; ?>
 
         <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
         <!-- Webcams -->
@@ -667,51 +794,21 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         $weatherSources = [];
         
         // Add primary weather source (only if configured)
+        // Use centralized helper for source name and URL mapping
+        require_once __DIR__ . '/../lib/weather/utils.php';
         if (isset($airport['weather_source']) && !empty($airport['weather_source']) && isset($airport['weather_source']['type'])) {
-            switch ($airport['weather_source']['type']) {
-                case 'tempest':
-                    $weatherSources[] = [
-                        'name' => 'Tempest Weather',
-                        'url' => 'https://tempestwx.com'
-                    ];
-                    break;
-                case 'ambient':
-                    $weatherSources[] = [
-                        'name' => 'Ambient Weather',
-                        'url' => 'https://ambientweather.net'
-                    ];
-                    break;
-                case 'weatherlink':
-                    $weatherSources[] = [
-                        'name' => 'Davis WeatherLink',
-                        'url' => 'https://weatherlink.com'
-                    ];
-                    break;
-                case 'pwsweather':
-                    $weatherSources[] = [
-                        'name' => 'PWSWeather.com',
-                        'url' => 'https://pwsweather.com'
-                    ];
-                    break;
-                case 'synopticdata':
-                    $weatherSources[] = [
-                        'name' => 'SynopticData',
-                        'url' => 'https://synopticdata.com'
-                    ];
-                    break;
-                case 'metar':
-                    $weatherSources[] = [
-                        'name' => 'Aviation Weather',
-                        'url' => 'https://aviationweather.gov'
-                    ];
-                    break;
+            $sourceInfo = getWeatherSourceInfo($airport['weather_source']['type']);
+            if ($sourceInfo !== null) {
+                $weatherSources[] = $sourceInfo;
             }
             
             // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
             // Only add if not already using METAR as primary source AND metar_station is configured
+            $metarInfo = getWeatherSourceInfo('metar');
+            $metarDisplayName = $metarInfo !== null ? $metarInfo['name'] : 'Aviation Weather';
             $hasAviationWeather = false;
             foreach ($weatherSources as $source) {
-                if ($source['name'] === 'Aviation Weather') {
+                if ($source['name'] === $metarDisplayName) {
                     $hasAviationWeather = true;
                     break;
                 }
@@ -721,10 +818,10 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 in_array($airport['weather_source']['type'], ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'synopticdata'])) {
                 // Show METAR source if metar_station is configured
                 if (isMetarEnabled($airport)) {
-                    $weatherSources[] = [
-                        'name' => 'Aviation Weather',
-                        'url' => 'https://aviationweather.gov'
-                    ];
+                    $metarInfo = getWeatherSourceInfo('metar');
+                    if ($metarInfo !== null) {
+                        $weatherSources[] = $metarInfo;
+                    }
                 }
             }
         }
@@ -3704,6 +3801,318 @@ window.addEventListener('beforeunload', () => {
         }
     }
 });
+
+// Airport Navigation Menu Functionality
+(function() {
+    'use strict';
+    
+    // Only initialize if airport nav data is available
+    if (!window.AIRPORT_NAV_DATA) {
+        return;
+    }
+    
+    const navData = window.AIRPORT_NAV_DATA;
+    const searchInput = document.getElementById('airport-search');
+    const nearbyBtn = document.getElementById('nearby-airports-btn');
+    const airportDropdown = document.getElementById('airport-dropdown');
+    
+    if (!searchInput || !nearbyBtn || !airportDropdown) {
+        return;
+    }
+    
+    // Track which mode we're in: 'search' or 'nearby'
+    let currentMode = null;
+    
+    // Format distance based on user's distance unit preference
+    function formatDistance(miles) {
+        const unit = getDistanceUnit();
+        if (unit === 'm') {
+            // Convert miles to kilometers
+            const km = miles * 1.609344;
+            return km.toFixed(1) + ' km';
+        } else {
+            return miles.toFixed(1) + ' mi';
+        }
+    }
+    
+    // Update distance displays when unit changes
+    function updateDistanceDisplays() {
+        const distanceElements = document.querySelectorAll('.airport-distance[data-distance-miles]');
+        distanceElements.forEach(el => {
+            const miles = parseFloat(el.dataset.distanceMiles);
+            if (!isNaN(miles)) {
+                el.textContent = formatDistance(miles);
+            }
+        });
+    }
+    
+    // Navigate to airport subdomain
+    function navigateToAirport(airportId) {
+        const protocol = window.location.protocol;
+        const baseDomain = navData.baseDomain;
+        const newUrl = `${protocol}//${airportId.toLowerCase()}.${baseDomain}`;
+        window.location.href = newUrl;
+    }
+    
+    // Unified function to populate dropdown with results from any source
+    // Accepts an array of airport objects with: id, name, identifier, distance_miles (optional)
+    function populateDropdown(items, mode) {
+        currentMode = mode;
+        airportDropdown.innerHTML = '';
+        
+        if (items.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'nearby-airport-item no-results';
+            noResults.textContent = mode === 'search' ? 'No airports found' : 'No airports within 200 miles';
+            airportDropdown.appendChild(noResults);
+        } else {
+            items.forEach((item, index) => {
+                const airportItem = document.createElement('a');
+                airportItem.href = '#';
+                airportItem.className = 'nearby-airport-item';
+                airportItem.dataset.airportId = item.id || item.airportId;
+                airportItem.dataset.index = index;
+                
+                const name = document.createElement('span');
+                name.className = 'airport-name';
+                name.textContent = item.name;
+                
+                const identifier = document.createElement('span');
+                identifier.className = 'airport-identifier';
+                identifier.textContent = item.identifier;
+                
+                airportItem.appendChild(name);
+                airportItem.appendChild(identifier);
+                
+                // Add distance if available (works for both nearby airports and search results)
+                if (item.distance_miles !== null && item.distance_miles !== undefined) {
+                    const distance = document.createElement('span');
+                    distance.className = 'airport-distance';
+                    distance.dataset.distanceMiles = item.distance_miles;
+                    distance.textContent = formatDistance(item.distance_miles);
+                    airportItem.appendChild(distance);
+                }
+                
+                airportItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const airportId = airportItem.dataset.airportId;
+                    if (airportId) {
+                        navigateToAirport(airportId);
+                    }
+                });
+                
+                airportItem.addEventListener('mouseenter', () => {
+                    selectedIndex = index;
+                    updateSelection();
+                });
+                
+                airportDropdown.appendChild(airportItem);
+            });
+        }
+        
+        airportDropdown.classList.add('show');
+        selectedIndex = -1;
+    }
+    
+    // Prepare data from nearby airports source
+    function getNearbyAirportsData() {
+        return navData.nearbyAirports.map(airport => ({
+            id: airport.id,
+            name: airport.name,
+            identifier: airport.identifier,
+            distance_miles: airport.distance_miles
+        }));
+    }
+    
+    // Prepare data from search source
+    function getSearchResultsData(query) {
+        if (!query || query.length < 2) {
+            return [];
+        }
+        
+        const queryLower = query.toLowerCase().trim();
+        const results = [];
+        
+        for (const airport of navData.allAirports) {
+            const nameMatch = airport.name.toLowerCase().includes(queryLower);
+            const icaoMatch = airport.icao && airport.icao.toLowerCase().includes(queryLower);
+            const iataMatch = airport.iata && airport.iata.toLowerCase().includes(queryLower);
+            const faaMatch = airport.faa && airport.faa.toLowerCase().includes(queryLower);
+            const identifierMatch = airport.identifier.toLowerCase().includes(queryLower);
+            
+            if (nameMatch || icaoMatch || iataMatch || faaMatch || identifierMatch) {
+                results.push({
+                    id: airport.id,
+                    name: airport.name,
+                    identifier: airport.identifier,
+                    distance_miles: airport.distance_miles || null,
+                    icao: airport.icao || null,
+                    iata: airport.iata || null
+                });
+            }
+        }
+        
+        // Sort: exact matches first, then by distance (if available), then by name
+        results.sort((a, b) => {
+            const aExact = a.identifier.toLowerCase() === queryLower || 
+                          (a.icao && a.icao.toLowerCase() === queryLower) ||
+                          (a.iata && a.iata.toLowerCase() === queryLower);
+            const bExact = b.identifier.toLowerCase() === queryLower || 
+                          (b.icao && b.icao.toLowerCase() === queryLower) ||
+                          (b.iata && b.iata.toLowerCase() === queryLower);
+            
+            if (aExact && !bExact) return -1;
+            if (!aExact && bExact) return 1;
+            
+            // If both have distances, sort by distance
+            if (a.distance_miles !== null && a.distance_miles !== undefined &&
+                b.distance_miles !== null && b.distance_miles !== undefined) {
+                return a.distance_miles - b.distance_miles;
+            }
+            
+            // Otherwise sort by name
+            return a.name.localeCompare(b.name);
+        });
+        
+        return results.slice(0, 10);
+    }
+    
+    // Search functionality
+    let searchTimeout = null;
+    let selectedIndex = -1;
+    
+    // Search functionality - uses unified data preparation and display
+    function performSearch(query) {
+        if (!query || query.length < 2) {
+            airportDropdown.classList.remove('show');
+            currentMode = null;
+            return;
+        }
+        
+        const results = getSearchResultsData(query);
+        populateDropdown(results, 'search');
+    }
+    
+    function updateSelection() {
+        const items = airportDropdown.querySelectorAll('.nearby-airport-item');
+        items.forEach((item, index) => {
+            if (index === selectedIndex) {
+                item.style.background = '#3a3a3a';
+            } else {
+                item.style.background = '';
+            }
+        });
+    }
+    
+    // Display nearby airports - uses unified data preparation and display
+    function displayNearbyAirports() {
+        const nearby = getNearbyAirportsData();
+        populateDropdown(nearby, 'nearby');
+    }
+    
+    // Search input event handlers
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            performSearch(e.target.value);
+        }, 200);
+    });
+    
+    searchInput.addEventListener('focus', () => {
+        // If there's a search query, show results
+        if (searchInput.value.length >= 2) {
+            performSearch(searchInput.value);
+        }
+    });
+    
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const items = airportDropdown.querySelectorAll('.nearby-airport-item');
+            if (items.length > 0) {
+                selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                updateSelection();
+                items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const items = airportDropdown.querySelectorAll('.nearby-airport-item');
+            if (items.length > 0) {
+                selectedIndex = Math.max(selectedIndex - 1, 0);
+                updateSelection();
+                items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const items = airportDropdown.querySelectorAll('.nearby-airport-item');
+            if (selectedIndex >= 0 && selectedIndex < items.length) {
+                const airportId = items[selectedIndex].dataset.airportId;
+                if (airportId) {
+                    navigateToAirport(airportId);
+                }
+            } else if (items.length === 1) {
+                const airportId = items[0].dataset.airportId;
+                if (airportId) {
+                    navigateToAirport(airportId);
+                }
+            }
+        } else if (e.key === 'Escape') {
+            airportDropdown.classList.remove('show');
+            searchInput.blur();
+        }
+    });
+    
+    // Nearby airports button functionality
+    nearbyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isActive = nearbyBtn.classList.contains('active');
+        
+        if (isActive) {
+            nearbyBtn.classList.remove('active');
+            airportDropdown.classList.remove('show');
+            currentMode = null;
+        } else {
+            nearbyBtn.classList.add('active');
+            displayNearbyAirports();
+            // Update distances in case unit changed
+            updateDistanceDisplays();
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && 
+            !nearbyBtn.contains(e.target) && 
+            !airportDropdown.contains(e.target)) {
+            airportDropdown.classList.remove('show');
+            nearbyBtn.classList.remove('active');
+            currentMode = null;
+        }
+    });
+    
+    // Update distances on page load
+    updateDistanceDisplays();
+    
+    // Listen for distance unit changes (if the toggle exists)
+    const distanceUnitToggle = document.getElementById('distance-unit-toggle');
+    if (distanceUnitToggle) {
+        // Use MutationObserver to detect when the toggle updates the display
+        const observer = new MutationObserver(() => {
+            updateDistanceDisplays();
+        });
+        
+        const distanceUnitDisplay = document.getElementById('distance-unit-display');
+        if (distanceUnitDisplay) {
+            observer.observe(distanceUnitDisplay, { childList: true, characterData: true });
+        }
+        
+        // Also listen for click events on the toggle
+        distanceUnitToggle.addEventListener('click', () => {
+            // Small delay to allow the unit to update
+            setTimeout(updateDistanceDisplays, 100);
+        });
+    }
+})();
 <?php
     // Capture and minify JavaScript
     $js = ob_get_clean();
