@@ -8,6 +8,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../pages/status.php';
+require_once __DIR__ . '/../../lib/weather/utils.php';
 
 class StatusPageTest extends TestCase
 {
@@ -128,9 +129,10 @@ class StatusPageTest extends TestCase
         
         // Find METAR source in weather sources
         $metarSource = null;
+        $metarDisplayName = getWeatherSourceDisplayName('metar');
         if (isset($health['components']['weather']['sources'])) {
             foreach ($health['components']['weather']['sources'] as $source) {
-                if ($source['name'] === 'Aviation Weather') {
+                if ($source['name'] === $metarDisplayName) {
                     $metarSource = $source;
                     break;
                 }
@@ -177,9 +179,10 @@ class StatusPageTest extends TestCase
         
         // Find METAR source in weather sources
         $metarSource = null;
+        $metarDisplayName = getWeatherSourceDisplayName('metar');
         if (isset($health['components']['weather']['sources'])) {
             foreach ($health['components']['weather']['sources'] as $source) {
-                if ($source['name'] === 'Aviation Weather') {
+                if ($source['name'] === $metarDisplayName) {
                     $metarSource = $source;
                     break;
                 }
@@ -226,9 +229,10 @@ class StatusPageTest extends TestCase
         
         // Find METAR source in weather sources
         $metarSource = null;
+        $metarDisplayName = getWeatherSourceDisplayName('metar');
         if (isset($health['components']['weather']['sources'])) {
             foreach ($health['components']['weather']['sources'] as $source) {
-                if ($source['name'] === 'Aviation Weather') {
+                if ($source['name'] === $metarDisplayName) {
                     $metarSource = $source;
                     break;
                 }

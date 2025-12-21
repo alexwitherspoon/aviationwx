@@ -440,16 +440,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     $weatherSources = [];
     
-    // Helper function to get source name from type
-    $getSourceName = function($sourceType) {
-        switch ($sourceType) {
-            case 'tempest': return 'Tempest Weather';
-            case 'ambient': return 'Ambient Weather';
-            case 'weatherlink': return 'Davis WeatherLink';
-            case 'metar': return 'Aviation Weather';
-            default: return 'Unknown Source';
-        }
-    };
+    // Use centralized helper for source name mapping
+    require_once __DIR__ . '/../lib/weather/utils.php';
     
     // Helper function to get HTTP error code from backoff state
     $getHttpErrorInfo = function($airportId, $sourceType) {
@@ -500,7 +492,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     // Check primary weather source
     $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
     if ($sourceType && $sourceTimestamps['primary']['available']) {
-        $sourceName = $getSourceName($sourceType);
+        $sourceName = getWeatherSourceDisplayName($sourceType);
         $primaryStatus = 'down';
         $primaryMessage = 'No data available';
         $primaryLastChanged = $sourceTimestamps['primary']['timestamp'];
@@ -561,7 +553,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
     }
     
     // Check METAR source (if configured separately or as supplement)
-    require_once __DIR__ . '/../lib/weather/utils.php';
     $isMetarEnabled = isMetarEnabled($airport);
     $isMetarPrimary = ($sourceType === 'metar');
     

@@ -184,3 +184,62 @@ function normalizeWeatherSource(array &$airport): bool {
     
     return false;
 }
+
+/**
+ * Get weather source display information
+ * 
+ * Returns human-readable name and URL for a weather source type.
+ * This is the centralized mapping of weather source types to display names.
+ * 
+ * @param string $sourceType Weather source type (e.g., 'tempest', 'ambient', 'metar')
+ * @return array{name: string, url: string}|null Returns array with 'name' and 'url' keys, or null if source type is unknown
+ */
+function getWeatherSourceInfo(string $sourceType): ?array {
+    switch ($sourceType) {
+        case 'tempest':
+            return [
+                'name' => 'Tempest Weather',
+                'url' => 'https://tempestwx.com'
+            ];
+        case 'ambient':
+            return [
+                'name' => 'Ambient Weather',
+                'url' => 'https://ambientweather.net'
+            ];
+        case 'weatherlink':
+            return [
+                'name' => 'Davis WeatherLink',
+                'url' => 'https://weatherlink.com'
+            ];
+        case 'pwsweather':
+            return [
+                'name' => 'PWSWeather.com',
+                'url' => 'https://pwsweather.com'
+            ];
+        case 'synopticdata':
+            return [
+                'name' => 'SynopticData',
+                'url' => 'https://synopticdata.com'
+            ];
+        case 'metar':
+            return [
+                'name' => 'Aviation Weather',
+                'url' => 'https://aviationweather.gov'
+            ];
+        default:
+            return null;
+    }
+}
+
+/**
+ * Get weather source display name
+ * 
+ * Returns only the human-readable name for a weather source type.
+ * 
+ * @param string $sourceType Weather source type (e.g., 'tempest', 'ambient', 'metar')
+ * @return string Display name, or 'Unknown Source' if source type is unknown
+ */
+function getWeatherSourceDisplayName(string $sourceType): string {
+    $info = getWeatherSourceInfo($sourceType);
+    return $info !== null ? $info['name'] : 'Unknown Source';
+}
