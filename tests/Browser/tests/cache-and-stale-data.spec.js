@@ -225,6 +225,73 @@ test.describe('Cache and Stale Data Handling', () => {
     expect(hasStaleDetection).toBeTruthy();
   });
 
+  /**
+   * Set weather timestamp to simulate stale data and trigger display update
+   * 
+   * @param {Page} page - Playwright page object
+   * @param {number} ageSeconds - Age of data in seconds
+   */
+  async function setWeatherTimestamp(page, ageSeconds) {
+    await page.evaluate((ageSeconds) => {
+      if (typeof weatherLastUpdated !== 'undefined') {
+        weatherLastUpdated = new Date(Date.now() - ageSeconds * 1000);
+        if (typeof updateWeatherTimestamp === 'function') {
+          updateWeatherTimestamp();
+        }
+      }
+    }, ageSeconds);
+    await page.waitForTimeout(500);
+  }
+
+  /**
+   * Get current timestamp display state (text, color, styling)
+   * 
+   * @param {Page} page - Playwright page object
+   * @returns {Promise<{text: string, color: string, fontWeight: string, hasWarning: boolean}>} Display state
+   */
+  async function getTimestampDisplay(page) {
+    const timestampEl = await page.locator('#weather-last-updated');
+    const warningEl = await page.locator('#weather-timestamp-warning');
+    const text = await timestampEl.textContent();
+    const color = await timestampEl.evaluate(el => window.getComputedStyle(el).color);
+    const fontWeight = await timestampEl.evaluate(el => window.getComputedStyle(el).fontWeight);
+    const hasWarning = await warningEl.isVisible();
+    
+    return { text: text?.trim() || '', color, fontWeight, hasWarning };
+  }
+
+  /**
+   * Get threshold info for current airport configuration
+   * 
+   * @param {Page} page - Playwright page object
+   * @returns {Promise<{isMetarOnly: boolean, warningSeconds: number, errorSeconds: number}>}
+   */
+  async function getThresholdInfo(page) {
+    return await page.evaluate(() => {
+      if (typeof AIRPORT_DATA === 'undefined' || !AIRPORT_DATA) {
+        return { isMetarOnly: false, warningSeconds: 300, errorSeconds: 600 };
+      }
+      
+      const isMetarOnly = AIRPORT_DATA.weather_source && 
+                          AIRPORT_DATA.weather_source.type === 'metar';
+      const refreshSeconds = Math.max(1, AIRPORT_DATA.weather_refresh_seconds || 60);
+      
+      if (isMetarOnly) {
+        return {
+          isMetarOnly: true,
+          warningSeconds: WEATHER_STALENESS_WARNING_HOURS_METAR * 3600,
+          errorSeconds: WEATHER_STALENESS_ERROR_HOURS_METAR * 3600
+        };
+      } else {
+        return {
+          isMetarOnly: false,
+          warningSeconds: refreshSeconds * WEATHER_STALENESS_WARNING_MULTIPLIER,
+          errorSeconds: refreshSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER
+        };
+      }
+    });
+  }
+
   test('should show visual indicators for stale data', async ({ page }) => {
     // Wait for weather data to load and weatherLastUpdated to be set
     // This may take longer if weather data needs to be fetched

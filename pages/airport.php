@@ -385,7 +385,12 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         </section>
         <?php endif; ?>
 
-        <?php if (isset($airport['weather_source']) && !empty($airport['weather_source'])): ?>
+        <?php 
+        // Show weather section if weather_source is configured OR if metar_station is configured
+        // This matches the JavaScript condition that determines whether to fetch weather
+        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
+        $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
+        if ($hasWeatherSource || $hasMetarStation): ?>
         <!-- Weather Data -->
         <section class="weather-section">
             <div class="weather-header-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -2122,14 +2127,28 @@ async function fetchWeather(forceRefresh = false) {
             const serverTimestamp = data.weather.last_updated ? new Date(data.weather.last_updated * 1000) : null;
             
             // Solution C: Detect if server data is older than client data (indicates stale cache was served)
+            // But don't force immediate refresh if we already have a stale refresh scheduled
+            // This prevents rapid-fire requests that interrupt server's background refresh
             const serverDataIsStale = serverTimestamp && weatherLastUpdated && 
                 serverTimestamp.getTime() < weatherLastUpdated.getTime();
             
             if (serverDataIsStale) {
-                console.warn('[Weather] Server data is older than client data - stale cache detected, forcing immediate refresh');
-                // Force immediate refresh with cache bypass
-                setTimeout(() => fetchWeather(true), 100);
-                return; // Don't update UI with stale data
+                const hasStaleRefreshScheduled = window.staleRefreshTimer !== null && window.staleRefreshTimer !== undefined;
+                
+                if (!hasStaleRefreshScheduled) {
+                    // Only force immediate refresh if no stale refresh is already scheduled
+                    // Give server time to complete background refresh (wait 5 seconds)
+                    console.warn('[Weather] Server data is older than client data - stale cache detected, scheduling refresh in 5 seconds to allow server background refresh');
+                    window.staleRefreshTimer = setTimeout(() => {
+                        fetchWeather(true);
+                        window.staleRefreshTimer = null;
+                    }, 5000); // Wait 5 seconds for server background refresh to complete
+                    return; // Don't update UI with stale data
+                } else {
+                    // Stale refresh already scheduled, just log and return
+                    console.warn('[Weather] Server data is older than client data, but stale refresh already scheduled - waiting for scheduled refresh');
+                    return; // Don't update UI with stale data
+                }
             }
             
             currentWeatherData = data.weather; // Store globally for toggle re-rendering
@@ -2140,6 +2159,7 @@ async function fetchWeather(forceRefresh = false) {
             checkAndUpdateOutageBanner(); // Check if outage banner should be shown/hidden
             
             // If server indicates data is stale, schedule a fresh fetch soon (30 seconds)
+            // This gives the server's background refresh time to complete
             if (isStale) {
                 console.log('[Weather] Received stale data from server - scheduling refresh in 30 seconds');
                 // Clear any existing stale refresh timer
@@ -2148,12 +2168,14 @@ async function fetchWeather(forceRefresh = false) {
                 }
                 // Schedule a refresh with cache bypass
                 // Use half of weather refresh interval, minimum 30 seconds
+                // This delay allows server's background refresh to complete
                 const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
                     ? AIRPORT_DATA.weather_refresh_seconds * 1000 
                     : 60000; // Default 60 seconds
                 const staleRefreshDelay = Math.max(30000, weatherRefreshMs / 2);
                 window.staleRefreshTimer = setTimeout(() => {
                     fetchWeather(true); // Force refresh
+                    window.staleRefreshTimer = null;
                 }, staleRefreshDelay);
             } else {
                 // Clear stale refresh timer if we got fresh data
@@ -2918,27 +2940,28 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
         $airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) ? intval($airport['webcam_refresh_seconds']) : $defaultWebcamRefresh;
         $perCam = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
     ?>
-    // Setup image load handlers for camera <?= $index ?>
-    const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
-    if (imgEl<?= $index ?>) {
-        // Check timestamp on initial load (images may already be cached)
-        // For first webcam (LCP element), delay timestamp check to avoid competing with LCP load
-        const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
-        if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
-            // Image already loaded, check timestamp after delay
-            setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
-        } else {
-            // Image not loaded yet, wait for load event, then delay timestamp check
-            imgEl<?= $index ?>.addEventListener('load', () => {
+    (function() {
+        const imgEl<?= $index ?> = document.getElementById('webcam-<?= $index ?>');
+        if (imgEl<?= $index ?>) {
+            // Check timestamp on initial load (images may already be cached)
+            // For first webcam (LCP element), delay timestamp check to avoid competing with LCP load
+            const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
+            if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
+                // Image already loaded, check timestamp after delay
                 setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
-            }, { once: false }); // Allow multiple calls as images refresh
+            } else {
+                // Image not loaded yet, wait for load event, then delay timestamp check
+                imgEl<?= $index ?>.addEventListener('load', () => {
+                    setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
+                }, { once: false }); // Allow multiple calls as images refresh
+            }
+            
+            // Also listen for error events - show placeholder if image failed
+            imgEl<?= $index ?>.addEventListener('error', function() {
+                handleWebcamError(<?= $index ?>, this);
+            });
         }
-        
-        // Also listen for error events - show placeholder if image failed
-        imgEl<?= $index ?>.addEventListener('error', function() {
-            handleWebcamError(<?= $index ?>, this);
-        });
-    }
+    })();
 
     // Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
     // Debounced: batched across all cameras to reduce requests

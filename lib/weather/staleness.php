@@ -179,3 +179,38 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar
     }
 }
 
+/**
+ * Calculate staleness thresholds for weather data
+ * 
+ * Returns warning and error thresholds in seconds based on whether the source is METAR-only
+ * or a primary source (Tempest, Ambient, WeatherLink, etc.).
+ * 
+ * For METAR-only sources: Uses hour-based thresholds (METARs are published hourly)
+ * For primary sources: Uses multiplier-based thresholds (similar to webcams)
+ * 
+ * @param bool $isMetarOnly True if weather source is METAR-only, false for primary sources
+ * @param int $refreshIntervalSeconds Refresh interval in seconds (defaults to 60 if not provided)
+ * @return array Array with 'warning' and 'error' keys, both in seconds
+ */
+function calculateWeatherStalenessThresholds($isMetarOnly, $refreshIntervalSeconds = 60) {
+    require_once __DIR__ . '/../constants.php';
+    
+    // Ensure minimum refresh interval to prevent invalid thresholds
+    $refreshIntervalSeconds = max(1, $refreshIntervalSeconds);
+    
+    if ($isMetarOnly) {
+        // METAR thresholds: warning at 1 hour, error at 2 hours
+        return [
+            'warning' => WEATHER_STALENESS_WARNING_HOURS_METAR * 3600,
+            'error' => WEATHER_STALENESS_ERROR_HOURS_METAR * 3600
+        ];
+    } else {
+        // Primary source thresholds: use multiplier-based approach (like webcams)
+        // Warning at 5x refresh interval, error at 10x refresh interval
+        return [
+            'warning' => $refreshIntervalSeconds * WEATHER_STALENESS_WARNING_MULTIPLIER,
+            'error' => $refreshIntervalSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER
+        ];
+    }
+}
+
