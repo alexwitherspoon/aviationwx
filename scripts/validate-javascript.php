@@ -65,8 +65,9 @@ foreach ($files as $file) {
             continue;
         }
         
-        // Skip server-side PHP code blocks (contain function definitions with $ variables)
-        if (preg_match('/function\s+\w+\s*\([^)]*\$|^\s*\$[a-zA-Z_]/m', $jsCodeCleaned)) {
+        // Skip server-side PHP code blocks (contain function definitions with $ variables or PHP function calls)
+        // Also skip blocks that contain PHP-specific patterns like preg_, file_, array_, etc. after PHP tag removal
+        if (preg_match('/function\s+\w+\s*\([^)]*\$|^\s*\$[a-zA-Z_]|preg_|file_|array_|str_|isset\(|empty\(/m', $jsCodeCleaned)) {
             continue;
         }
         

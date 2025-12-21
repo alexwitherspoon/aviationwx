@@ -135,7 +135,7 @@ jobs:
         run: |
           echo "Running webcam refresh initialization tests..."
           echo "Testing CAM_TS initialization and data attributes..."
-          vendor/bin/phpunit tests/Unit/WebcamRefreshInitializationTest.php --testdox --stop-on-failure || exit_code=$?
+          vendor/bin/phpunit tests/Integration/WebcamRefreshInitializationTest.php --testdox --stop-on-failure || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
             echo "❌ WebcamRefreshInitializationTest failed"
