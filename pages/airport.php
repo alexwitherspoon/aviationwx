@@ -3806,67 +3806,76 @@ window.addEventListener('beforeunload', () => {
 (function() {
     'use strict';
     
-    // Only initialize if airport nav data is available
-    if (!window.AIRPORT_NAV_DATA) {
-        return;
-    }
-    
-    const navData = window.AIRPORT_NAV_DATA;
-    const searchInput = document.getElementById('airport-search');
-    const nearbyBtn = document.getElementById('nearby-airports-btn');
-    const airportDropdown = document.getElementById('airport-dropdown');
-    
-    if (!searchInput || !nearbyBtn || !airportDropdown) {
-        return;
-    }
-    
     // Track which mode we're in: 'search' or 'nearby'
     let currentMode = null;
+    let selectedIndex = -1;
+    let searchTimeout = null;
     
-    // Format distance based on user's distance unit preference
-    function formatDistance(miles) {
-        const unit = getDistanceUnit();
-        if (unit === 'm') {
-            // Convert miles to kilometers
-            const km = miles * 1.609344;
-            return km.toFixed(1) + ' km';
-        } else {
-            return miles.toFixed(1) + ' mi';
+    // Wait for DOM to be ready and AIRPORT_NAV_DATA to be available
+    function initAirportNavigation() {
+        // Only initialize if airport nav data is available
+        if (!window.AIRPORT_NAV_DATA) {
+            return;
         }
-    }
-    
-    // Update distance displays when unit changes
-    function updateDistanceDisplays() {
-        const distanceElements = document.querySelectorAll('.airport-distance[data-distance-miles]');
-        distanceElements.forEach(el => {
-            const miles = parseFloat(el.dataset.distanceMiles);
-            if (!isNaN(miles)) {
-                el.textContent = formatDistance(miles);
-            }
-        });
-    }
-    
-    // Navigate to airport subdomain
-    function navigateToAirport(airportId) {
-        const protocol = window.location.protocol;
-        const baseDomain = navData.baseDomain;
-        const newUrl = `${protocol}//${airportId.toLowerCase()}.${baseDomain}`;
-        window.location.href = newUrl;
-    }
-    
-    // Unified function to populate dropdown with results from any source
-    // Accepts an array of airport objects with: id, name, identifier, distance_miles (optional)
-    function populateDropdown(items, mode) {
-        currentMode = mode;
-        airportDropdown.innerHTML = '';
         
-        if (items.length === 0) {
-            const noResults = document.createElement('div');
-            noResults.className = 'nearby-airport-item no-results';
-            noResults.textContent = mode === 'search' ? 'No airports found' : 'No airports within 200 miles';
-            airportDropdown.appendChild(noResults);
-        } else {
-            items.forEach((item, index) => {
+        const navData = window.AIRPORT_NAV_DATA;
+        const searchInput = document.getElementById('airport-search');
+        const nearbyBtn = document.getElementById('nearby-airports-btn');
+        const airportDropdown = document.getElementById('airport-dropdown');
+        
+        if (!searchInput || !nearbyBtn || !airportDropdown) {
+            return;
+        }
+        
+        // Format distance based on user's distance unit preference
+        function formatDistance(miles) {
+            // Defensive check - ensure getDistanceUnit is available
+            if (typeof getDistanceUnit !== 'function') {
+                // Fallback to miles if getDistanceUnit isn't available yet
+                return miles.toFixed(1) + ' mi';
+            }
+            const unit = getDistanceUnit();
+            if (unit === 'm') {
+                // Convert miles to kilometers
+                const km = miles * 1.609344;
+                return km.toFixed(1) + ' km';
+            } else {
+                return miles.toFixed(1) + ' mi';
+            }
+        }
+        
+        // Update distance displays when unit changes
+        function updateDistanceDisplays() {
+            const distanceElements = document.querySelectorAll('.airport-distance[data-distance-miles]');
+            distanceElements.forEach(el => {
+                const miles = parseFloat(el.dataset.distanceMiles);
+                if (!isNaN(miles)) {
+                    el.textContent = formatDistance(miles);
+                }
+            });
+        }
+        
+        // Navigate to airport subdomain
+        function navigateToAirport(airportId) {
+            const protocol = window.location.protocol;
+            const baseDomain = navData.baseDomain;
+            const newUrl = `${protocol}//${airportId.toLowerCase()}.${baseDomain}`;
+            window.location.href = newUrl;
+        }
+        
+        // Unified function to populate dropdown with results from any source
+        // Accepts an array of airport objects with: id, name, identifier, distance_miles (optional)
+        function populateDropdown(items, mode) {
+            currentMode = mode;
+            airportDropdown.innerHTML = '';
+            
+            if (items.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.className = 'nearby-airport-item no-results';
+                noResults.textContent = mode === 'search' ? 'No airports found' : 'No airports within 200 miles';
+                airportDropdown.appendChild(noResults);
+            } else {
+                items.forEach((item, index) => {
                 const airportItem = document.createElement('a');
                 airportItem.href = '#';
                 airportItem.className = 'nearby-airport-item';
@@ -3906,26 +3915,26 @@ window.addEventListener('beforeunload', () => {
                     updateSelection();
                 });
                 
-                airportDropdown.appendChild(airportItem);
-            });
+                    airportDropdown.appendChild(airportItem);
+                });
+            }
+            
+            airportDropdown.classList.add('show');
+            selectedIndex = -1;
         }
         
-        airportDropdown.classList.add('show');
-        selectedIndex = -1;
-    }
-    
-    // Prepare data from nearby airports source
-    function getNearbyAirportsData() {
-        return navData.nearbyAirports.map(airport => ({
-            id: airport.id,
-            name: airport.name,
-            identifier: airport.identifier,
-            distance_miles: airport.distance_miles
-        }));
-    }
-    
-    // Prepare data from search source
-    function getSearchResultsData(query) {
+        // Prepare data from nearby airports source
+        function getNearbyAirportsData() {
+            return navData.nearbyAirports.map(airport => ({
+                id: airport.id,
+                name: airport.name,
+                identifier: airport.identifier,
+                distance_miles: airport.distance_miles
+            }));
+        }
+        
+        // Prepare data from search source
+        function getSearchResultsData(query) {
         if (!query || query.length < 2) {
             return [];
         }
@@ -3974,43 +3983,39 @@ window.addEventListener('beforeunload', () => {
             return a.name.localeCompare(b.name);
         });
         
-        return results.slice(0, 10);
-    }
-    
-    // Search functionality
-    let searchTimeout = null;
-    let selectedIndex = -1;
-    
-    // Search functionality - uses unified data preparation and display
-    function performSearch(query) {
-        if (!query || query.length < 2) {
-            airportDropdown.classList.remove('show');
-            currentMode = null;
-            return;
+            return results.slice(0, 10);
         }
         
-        const results = getSearchResultsData(query);
-        populateDropdown(results, 'search');
-    }
-    
-    function updateSelection() {
-        const items = airportDropdown.querySelectorAll('.nearby-airport-item');
-        items.forEach((item, index) => {
-            if (index === selectedIndex) {
-                item.style.background = '#3a3a3a';
-            } else {
-                item.style.background = '';
+        // Search functionality - uses unified data preparation and display
+        function performSearch(query) {
+            if (!query || query.length < 2) {
+                airportDropdown.classList.remove('show');
+                currentMode = null;
+                return;
             }
-        });
-    }
-    
-    // Display nearby airports - uses unified data preparation and display
-    function displayNearbyAirports() {
-        const nearby = getNearbyAirportsData();
-        populateDropdown(nearby, 'nearby');
-    }
-    
-    // Search input event handlers
+            
+            const results = getSearchResultsData(query);
+            populateDropdown(results, 'search');
+        }
+        
+        function updateSelection() {
+            const items = airportDropdown.querySelectorAll('.nearby-airport-item');
+            items.forEach((item, index) => {
+                if (index === selectedIndex) {
+                    item.style.background = '#3a3a3a';
+                } else {
+                    item.style.background = '';
+                }
+            });
+        }
+        
+        // Display nearby airports - uses unified data preparation and display
+        function displayNearbyAirports() {
+            const nearby = getNearbyAirportsData();
+            populateDropdown(nearby, 'nearby');
+        }
+        
+        // Search input event handlers
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
@@ -4111,6 +4116,15 @@ window.addEventListener('beforeunload', () => {
             // Small delay to allow the unit to update
             setTimeout(updateDistanceDisplays, 100);
         });
+    }
+    }
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAirportNavigation);
+    } else {
+        // DOM is already ready
+        initAirportNavigation();
     }
 })();
 <?php
