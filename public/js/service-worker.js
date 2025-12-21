@@ -44,6 +44,12 @@ const IN_FLIGHT_REQUEST_MAX_AGE = Math.max(
     TIMEOUT_SLOW_CONNECTION * 2
 );
 
+// Retry configuration constants (must be defined before use)
+const MAX_RETRIES = 2; // Maximum number of retries for transient failures
+const INITIAL_RETRY_DELAY = 1000; // Initial retry delay in milliseconds (1 second)
+const MAX_RETRY_DELAY = 5000; // Maximum retry delay in milliseconds (5 seconds)
+const RETRY_JITTER_FACTOR = 0.2; // Jitter factor (0-20% random variation) to prevent thundering herd
+
 // Cache version tracking for cleanup optimization
 const CLEANUP_VERSION_KEY = 'sw-cleanup-version';
 const CLEANUP_VERSION_CACHE = 'sw-metadata';
@@ -63,7 +69,7 @@ const CACHE_ACCESS_TIME_KEY = 'sw-cache-access-times';
  * @param {boolean} useCache Whether to use cached connection info (default: true)
  * @returns {Object|null} Connection object or null if unavailable/error
  */
-function getConnectionInfo(useCache = true) {
+self.getConnectionInfo = function(useCache = true) {
     // First check request-scoped cache (fastest)
     if (useCache && requestConnectionInfo !== null) {
         return requestConnectionInfo;
@@ -95,7 +101,7 @@ function getConnectionInfo(useCache = true) {
         console.warn('[SW] Error accessing connection API:', err);
         return null;
     }
-}
+};
 
 /**
  * Clear request-scoped connection info cache
@@ -103,9 +109,9 @@ function getConnectionInfo(useCache = true) {
  * Should be called at the end of request handling to allow fresh
  * connection detection for subsequent requests.
  */
-function clearConnectionInfoCache() {
+self.clearConnectionInfoCache = function() {
     requestConnectionInfo = null;
-}
+};
 
 /**
  * Check if connection is slow based on effective type or save data preference
@@ -114,8 +120,8 @@ function clearConnectionInfoCache() {
  * 
  * @returns {boolean} True if connection is considered slow
  */
-function isSlowConnection() {
-    const connection = getConnectionInfo();
+self.isSlowConnection = function() {
+    const connection = self.getConnectionInfo();
     if (!connection) {
         return false;
     }
@@ -125,7 +131,7 @@ function isSlowConnection() {
         connection.effectiveType === '2g' ||
         connection.saveData === true
     );
-}
+};
 
 /**
  * Get appropriate timeout based on connection quality and refresh type
@@ -135,15 +141,15 @@ function isSlowConnection() {
  * @param {boolean} isForcedRefresh Whether this is a forced refresh request
  * @returns {number} Timeout in milliseconds
  */
-function getNetworkTimeout(isForcedRefresh = false) {
-    const slow = isSlowConnection();
+self.getNetworkTimeout = function(isForcedRefresh = false) {
+    const slow = self.isSlowConnection();
     
     if (isForcedRefresh) {
         return slow ? TIMEOUT_FORCED_REFRESH_SLOW : TIMEOUT_FORCED_REFRESH_NORMAL;
     }
     
     return slow ? TIMEOUT_SLOW_CONNECTION : TIMEOUT_NORMAL;
-}
+};
 
 /**
  * Check if cached weather response is stale
@@ -155,7 +161,7 @@ function getNetworkTimeout(isForcedRefresh = false) {
  * @param {Response} cachedResponse Cached response to check
  * @returns {Promise<boolean|null>} True if stale, false if fresh, null if cannot determine
  */
-async function isCachedResponseStale(cachedResponse) {
+self.isCachedResponseStale = async function(cachedResponse) {
     if (!cachedResponse) {
         return null;
     }
@@ -193,7 +199,7 @@ async function isCachedResponseStale(cachedResponse) {
         console.warn('[SW] Could not parse cached response for staleness check:', parseErr);
         return null;
     }
-}
+};
 
 /**
  * Normalize weather request URL by removing cache-busting parameters
@@ -205,7 +211,7 @@ async function isCachedResponseStale(cachedResponse) {
  * @param {URL} url Original URL to normalize
  * @returns {string} Normalized URL string for use as cache key
  */
-function normalizeWeatherRequestUrl(url) {
+self.normalizeWeatherRequestUrl = function(url) {
     const normalizedUrl = new URL(url);
     
     // Remove cache-busting parameters
@@ -221,7 +227,7 @@ function normalizeWeatherRequestUrl(url) {
     });
     
     return normalizedUrl.toString();
-}
+};
 
 /**
  * Create normalized request for cache operations
@@ -234,8 +240,8 @@ function normalizeWeatherRequestUrl(url) {
  * @param {URL} url Parsed URL from original request
  * @returns {Request} Normalized request for cache operations
  */
-function createNormalizedCacheRequest(request, url) {
-    const normalizedUrl = normalizeWeatherRequestUrl(url);
+self.createNormalizedCacheRequest = function(request, url) {
+    const normalizedUrl = self.normalizeWeatherRequestUrl(url);
     return new Request(normalizedUrl, {
         method: request.method,
         headers: request.headers,
@@ -246,7 +252,7 @@ function createNormalizedCacheRequest(request, url) {
         referrerPolicy: request.referrerPolicy,
         integrity: request.integrity
     });
-}
+};
 
 /**
  * Extract timestamp from weather response and create response with header
@@ -258,7 +264,7 @@ function createNormalizedCacheRequest(request, url) {
  * @param {Response} response Original response to process
  * @returns {Promise<Response>} Response with timestamp header or original response
  */
-async function extractAndCacheWithTimestamp(response) {
+self.extractAndCacheWithTimestamp = async function(response) {
     // Clone response once to read JSON without consuming original body
     const clonedForParsing = response.clone();
     let lastUpdated = null;
@@ -296,7 +302,7 @@ async function extractAndCacheWithTimestamp(response) {
             return headers;
         })()
     });
-}
+};
 
 /**
  * Create standardized error response for weather API failures
@@ -304,7 +310,7 @@ async function extractAndCacheWithTimestamp(response) {
  * @param {string} errorMessage Error message to include in response
  * @returns {Response} Standardized error response
  */
-function createErrorResponse(errorMessage) {
+self.createErrorResponse = function(errorMessage) {
     return new Response(
         JSON.stringify({ success: false, error: errorMessage }),
         { 
@@ -312,7 +318,7 @@ function createErrorResponse(errorMessage) {
             headers: { 'Content-Type': 'application/json' } 
         }
     );
-}
+};
 
 /**
  * Handle forced refresh request - bypass cache and fetch fresh data
@@ -325,11 +331,11 @@ function createErrorResponse(errorMessage) {
  * @param {URL} url Parsed URL
  * @returns {Promise<Response>} Network response or error response
  */
-async function handleForcedRefresh(request, url) {
+self.handleForcedRefresh = async function(request, _url) {
     console.log('[SW] Forced refresh detected - bypassing cache entirely');
     
     try {
-        const timeout = getNetworkTimeout(true);
+        const timeout = self.getNetworkTimeout(true);
         
         // Create a new request with cache-busting headers for forced refresh
         const newHeaders = new Headers(request.headers);
@@ -340,19 +346,19 @@ async function handleForcedRefresh(request, url) {
         });
         
         // Use retry logic for forced refresh (but don't cache the response)
-        const networkResponse = await fetchWithRetry(newRequest, timeout, MAX_RETRIES);
+        const networkResponse = await self.fetchWithRetry(newRequest, timeout, MAX_RETRIES);
         
         if (networkResponse && networkResponse.ok) {
             return networkResponse;
         }
         
         // For forced refresh, don't fall back to cache - return error
-        return networkResponse || createErrorResponse('Weather data unavailable - please try again');
+        return networkResponse || self.createErrorResponse('Weather data unavailable - please try again');
     } finally {
         // Clear connection info cache at end of request
-        clearConnectionInfoCache();
+        self.clearConnectionInfoCache();
     }
-}
+};
 
 /**
  * Check if error is retryable (transient failure)
@@ -364,7 +370,7 @@ async function handleForcedRefresh(request, url) {
  * @param {Error|null} error Error from fetch (null if no error)
  * @returns {boolean} True if error is retryable
  */
-function isRetryableError(response, error) {
+self.isRetryableError = function(response, error) {
     // Network errors are retryable
     if (error || !response) {
         return true;
@@ -382,7 +388,7 @@ function isRetryableError(response, error) {
     
     // Other errors are not retryable
     return false;
-}
+};
 
 /**
  * Calculate exponential backoff delay
@@ -392,7 +398,7 @@ function isRetryableError(response, error) {
  * @param {number} attemptNumber Current attempt number (0-based)
  * @returns {number} Delay in milliseconds
  */
-function calculateRetryDelay(attemptNumber) {
+self.calculateRetryDelay = function(attemptNumber) {
     // Exponential backoff: delay = initial * 2^attempt
     const exponentialDelay = INITIAL_RETRY_DELAY * Math.pow(2, attemptNumber);
     
@@ -403,7 +409,7 @@ function calculateRetryDelay(attemptNumber) {
     const jitter = cappedDelay * RETRY_JITTER_FACTOR * Math.random();
     
     return Math.floor(cappedDelay + jitter);
-}
+};
 
 /**
  * Fetch with retry logic and exponential backoff
@@ -419,10 +425,9 @@ function calculateRetryDelay(attemptNumber) {
  * @param {number} maxRetries Maximum number of retries
  * @returns {Promise<Response|null>} Response or null on failure
  */
-async function fetchWithRetry(request, timeout, maxRetries = MAX_RETRIES) {
-    let lastError = null;
+self.fetchWithRetry = async function(request, timeout, maxRetries = MAX_RETRIES) {
     let lastResponse = null;
-    const isSlow = isSlowConnection();
+    const isSlow = self.isSlowConnection();
     
     // On slow connections, don't retry timeouts (timeouts are expected on slow connections)
     // Still retry actual network errors and server errors
@@ -433,8 +438,8 @@ async function fetchWithRetry(request, timeout, maxRetries = MAX_RETRIES) {
         let timeoutId = null;
         
         try {
-            const networkPromise = fetch(request).catch((err) => {
-                lastError = err;
+            const networkPromise = fetch(request).catch((_err) => {
+                // Error handled in outer catch block
                 // Clear timeout if network error occurs before timeout
                 if (timeoutId !== null) {
                     clearTimeout(timeoutId);
@@ -462,7 +467,7 @@ async function fetchWithRetry(request, timeout, maxRetries = MAX_RETRIES) {
                 lastResponse = response;
                 
                 // Success or non-retryable error - return immediately
-                if (response.ok || !isRetryableError(response, null)) {
+                if (response.ok || !self.isRetryableError(response, null)) {
                     return response;
                 }
                 
@@ -493,11 +498,12 @@ async function fetchWithRetry(request, timeout, maxRetries = MAX_RETRIES) {
             }
             
             // Calculate delay and wait before retry
-            const delay = calculateRetryDelay(attempt);
+            const delay = self.calculateRetryDelay(attempt);
             await new Promise(resolve => setTimeout(resolve, delay));
             
         } catch (err) {
-            lastError = err;
+            // Error occurred during retry - log for debugging
+            console.error('[SW] Fetch retry error:', err);
             
             // Clear timeout if still active
             if (timeoutId !== null) {
@@ -510,13 +516,13 @@ async function fetchWithRetry(request, timeout, maxRetries = MAX_RETRIES) {
             }
             
             // Calculate delay and wait before retry
-            const delay = calculateRetryDelay(attempt);
+            const delay = self.calculateRetryDelay(attempt);
             await new Promise(resolve => setTimeout(resolve, delay));
         }
     }
     
     return lastResponse;
-}
+};
 
 /**
  * Get or create in-flight fetch promise for request deduplication
@@ -530,7 +536,7 @@ async function fetchWithRetry(request, timeout, maxRetries = MAX_RETRIES) {
  * @param {number} timeout Timeout in milliseconds
  * @returns {Promise<Response|null>} Network response promise or null on timeout
  */
-function getOrCreateFetchPromise(request, normalizedUrl, timeout) {
+self.getOrCreateFetchPromise = function(request, normalizedUrl, timeout) {
     // Check if request is already in flight
     if (inFlightRequests.has(normalizedUrl)) {
         console.log('[SW] Reusing in-flight request:', normalizedUrl);
@@ -538,7 +544,7 @@ function getOrCreateFetchPromise(request, normalizedUrl, timeout) {
     }
     
     // Create fetch promise with retry logic
-    const fetchPromise = fetchWithRetry(request, timeout);
+    const fetchPromise = self.fetchWithRetry(request, timeout);
     
     // Track the promise
     inFlightRequests.set(normalizedUrl, fetchPromise);
@@ -558,7 +564,7 @@ function getOrCreateFetchPromise(request, normalizedUrl, timeout) {
     }, IN_FLIGHT_REQUEST_MAX_AGE);
     
     return fetchPromise;
-}
+};
 
 /**
  * Handle normal weather request - network-first with cache fallback
@@ -572,16 +578,16 @@ function getOrCreateFetchPromise(request, normalizedUrl, timeout) {
  * @param {URL} url Parsed URL from request
  * @returns {Promise<Response>} Network response, cached response, or error response
  */
-async function handleNormalWeatherRequest(request, url) {
+self.handleNormalWeatherRequest = async function(request, url) {
     try {
-        const timeout = getNetworkTimeout(false);
+        const timeout = self.getNetworkTimeout(false);
         
         // Create normalized request for cache operations (removes cache-busting params)
-        const normalizedRequest = createNormalizedCacheRequest(request, url);
+        const normalizedRequest = self.createNormalizedCacheRequest(request, url);
         const normalizedUrl = normalizedRequest.url;
         
         // Use deduplication to avoid multiple simultaneous requests for same URL
-        const networkResponse = await getOrCreateFetchPromise(request, normalizedUrl, timeout);
+        const networkResponse = await self.getOrCreateFetchPromise(request, normalizedUrl, timeout);
         
         // If network succeeds, cache the response using normalized key
         // Store timestamp in custom header for fast staleness checking
@@ -590,7 +596,7 @@ async function handleNormalWeatherRequest(request, url) {
                 const cache = await caches.open(WEATHER_CACHE);
                 
                 // Extract timestamp and create response with header
-                const responseToCache = await extractAndCacheWithTimestamp(networkResponse);
+                const responseToCache = await self.extractAndCacheWithTimestamp(networkResponse);
                 
                 await cache.put(normalizedRequest, responseToCache).catch(() => {
                     // Cache put failed, but continue serving response
@@ -598,10 +604,10 @@ async function handleNormalWeatherRequest(request, url) {
                 });
                 
                 // Update access time for LRU tracking
-                await updateCacheAccessTime(normalizedRequest.url);
+                await self.updateCacheAccessTime(normalizedRequest.url);
                 
                 // Evict old entries if cache exceeds limit
-                await evictLRUCacheEntries(cache);
+                await self.evictLRUCacheEntries(cache);
             } catch (err) {
                 // Cache operation failed, but continue serving response
                 console.warn('[SW] Error caching weather response:', err);
@@ -613,14 +619,14 @@ async function handleNormalWeatherRequest(request, url) {
         const cachedResponse = await caches.match(normalizedRequest);
         if (cachedResponse) {
             // Update access time for LRU tracking (cache hit)
-            await updateCacheAccessTime(normalizedRequest.url);
+            await self.updateCacheAccessTime(normalizedRequest.url);
             
-            const isStale = await isCachedResponseStale(cachedResponse);
+            const isStale = await self.isCachedResponseStale(cachedResponse);
             
             if (isStale === true) {
                 // Cache is stale, don't serve it
                 console.log('[SW] Cached weather data is too stale - not serving');
-                return networkResponse || createErrorResponse('Weather data unavailable - please refresh');
+                return networkResponse || self.createErrorResponse('Weather data unavailable - please refresh');
             }
             
             // Cache is fresh or we can't determine staleness - serve it
@@ -634,12 +640,12 @@ async function handleNormalWeatherRequest(request, url) {
         }
         
         // No cache available - return network response or error
-        return networkResponse || createErrorResponse('Offline - no cached data');
+        return networkResponse || self.createErrorResponse('Offline - no cached data');
     } finally {
         // Clear connection info cache at end of request
-        clearConnectionInfoCache();
+        self.clearConnectionInfoCache();
     }
-}
+};
 
 /**
  * Handle weather API request with appropriate strategy
@@ -651,7 +657,7 @@ async function handleNormalWeatherRequest(request, url) {
  * @param {URL} url Parsed URL
  * @returns {Promise<Response>} Response from appropriate handler
  */
-async function handleWeatherRequest(request, url) {
+self.handleWeatherRequest = async function(request, url) {
     // Detect forced refresh requests
     const hasCacheBusting = url.searchParams.has('_cb');
     const hasNoCacheHeader = request.headers.get('Cache-Control') === 'no-cache' ||
@@ -659,11 +665,11 @@ async function handleWeatherRequest(request, url) {
     const isForcedRefresh = hasCacheBusting || hasNoCacheHeader;
     
     if (isForcedRefresh) {
-        return handleForcedRefresh(request, url);
+        return self.handleForcedRefresh(request, url);
     }
     
-    return handleNormalWeatherRequest(request, url);
-}
+    return self.handleNormalWeatherRequest(request, url);
+};
 
 /**
  * Get the last cache version that was cleaned up
@@ -673,7 +679,7 @@ async function handleWeatherRequest(request, url) {
  * 
  * @returns {Promise<string|null>} Last cleaned cache version or null if not found
  */
-async function getLastCleanedVersion() {
+self.getLastCleanedVersion = async function() {
     try {
         const metadataCache = await caches.open(CLEANUP_VERSION_CACHE);
         const response = await metadataCache.match(CLEANUP_VERSION_KEY);
@@ -684,7 +690,7 @@ async function getLastCleanedVersion() {
         console.warn('[SW] Could not read last cleaned version:', err);
     }
     return null;
-}
+};
 
 /**
  * Store the current cache version as the last cleaned version
@@ -694,19 +700,18 @@ async function getLastCleanedVersion() {
  * @param {string} version Cache version to store
  * @returns {Promise<void>}
  */
-async function setLastCleanedVersion(version) {
+self.setLastCleanedVersion = async function(version) {
     try {
         const metadataCache = await caches.open(CLEANUP_VERSION_CACHE);
         await metadataCache.put(
             CLEANUP_VERSION_KEY,
             new Response(version, {
                 headers: { 'Content-Type': 'text/plain' }
-            })
-        );
+            }));
     } catch (err) {
         console.warn('[SW] Could not store last cleaned version:', err);
     }
-}
+};
 
 /**
  * Get cache access times for LRU eviction
@@ -715,7 +720,7 @@ async function setLastCleanedVersion(version) {
  * 
  * @returns {Promise<Object>} Map of URL to access timestamp
  */
-async function getCacheAccessTimes() {
+self.getCacheAccessTimes = async function() {
     try {
         const metadataCache = await caches.open(CLEANUP_VERSION_CACHE);
         const response = await metadataCache.match(CACHE_ACCESS_TIME_KEY);
@@ -727,7 +732,7 @@ async function getCacheAccessTimes() {
         console.warn('[SW] Could not read cache access times:', err);
     }
     return {};
-}
+};
 
 /**
  * Update cache access time for LRU tracking
@@ -737,9 +742,9 @@ async function getCacheAccessTimes() {
  * @param {string} url Cache entry URL
  * @returns {Promise<void>}
  */
-async function updateCacheAccessTime(url) {
+self.updateCacheAccessTime = async function(url) {
     try {
-        const accessTimes = await getCacheAccessTimes();
+        const accessTimes = await self.getCacheAccessTimes();
         accessTimes[url] = Date.now();
         
         const metadataCache = await caches.open(CLEANUP_VERSION_CACHE);
@@ -752,7 +757,7 @@ async function updateCacheAccessTime(url) {
     } catch (err) {
         console.warn('[SW] Could not update cache access time:', err);
     }
-}
+};
 
 /**
  * Evict least recently used cache entries
@@ -763,7 +768,7 @@ async function updateCacheAccessTime(url) {
  * @param {Cache} cache Cache instance to evict from
  * @returns {Promise<void>}
  */
-async function evictLRUCacheEntries(cache) {
+self.evictLRUCacheEntries = async function(cache) {
     try {
         const requests = await cache.keys();
         
@@ -772,7 +777,7 @@ async function evictLRUCacheEntries(cache) {
             return;
         }
         
-        const accessTimes = await getCacheAccessTimes();
+        const accessTimes = await self.getCacheAccessTimes();
         const entriesToEvict = requests.length - WEATHER_CACHE_MAX_ENTRIES;
         
         // Sort by access time (oldest first)
@@ -802,7 +807,7 @@ async function evictLRUCacheEntries(cache) {
     } catch (err) {
         console.error('[SW] Error during LRU eviction:', err);
     }
-}
+};
 
 /**
  * Check if cache cleanup is needed based on version change
@@ -812,10 +817,10 @@ async function evictLRUCacheEntries(cache) {
  * 
  * @returns {Promise<boolean>} True if cleanup is needed, false otherwise
  */
-async function isCleanupNeeded() {
-    const lastCleanedVersion = await getLastCleanedVersion();
+self.isCleanupNeeded = async function() {
+    const lastCleanedVersion = await self.getLastCleanedVersion();
     return lastCleanedVersion !== CACHE_VERSION;
-}
+};
 
 /**
  * Clean up bad cached responses from a cache
@@ -827,7 +832,7 @@ async function isCleanupNeeded() {
  * @param {string} cacheName Name of cache for logging
  * @returns {Promise<void>}
  */
-async function cleanBadCachedResponses(cache, cacheName) {
+self.cleanBadCachedResponses = async function(cache, cacheName) {
     try {
         const requests = await cache.keys();
         
@@ -870,7 +875,7 @@ async function cleanBadCachedResponses(cache, cacheName) {
     } catch (err) {
         console.error(`[SW] Error cleaning ${cacheName}:`, err);
     }
-}
+};
 
 // Allow page to message the SW (skip waiting, clear caches)
 self.addEventListener('message', (event) => {
@@ -948,7 +953,7 @@ self.addEventListener('activate', (event) => {
                 
                 // Only clean up bad responses if cache version has changed
                 // This optimization avoids expensive cleanup on every activation
-                const needsCleanup = await isCleanupNeeded();
+                const needsCleanup = await self.isCleanupNeeded();
                 
                 if (needsCleanup) {
                     console.log('[SW] Cache version changed, running cleanup...');
@@ -960,11 +965,11 @@ self.addEventListener('activate', (event) => {
                     
                     // Clean caches in parallel, but don't wait for completion
                     Promise.all([
-                        cleanBadCachedResponses(staticCache, 'static'),
-                        cleanBadCachedResponses(weatherCache, 'weather')
+                        self.cleanBadCachedResponses(staticCache, 'static'),
+                        self.cleanBadCachedResponses(weatherCache, 'weather')
                     ]).then(() => {
                         // Mark this version as cleaned
-                        return setLastCleanedVersion(CACHE_VERSION);
+                        return self.setLastCleanedVersion(CACHE_VERSION);
                     }).catch((err) => {
                         console.error('[SW] Error during cache cleanup:', err);
                     });
@@ -1010,20 +1015,20 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             (async () => {
                 try {
-                    return await handleWeatherRequest(event.request, url);
+                    return await self.handleWeatherRequest(event.request, url);
                 } catch (err) {
                     console.error('[SW] Fetch error:', err);
                     
                     // Try cache as last resort (only if relatively fresh)
                     // Use normalized request for cache matching
-                    const normalizedRequest = createNormalizedCacheRequest(event.request, url);
+                    const normalizedRequest = self.createNormalizedCacheRequest(event.request, url);
                     const cachedResponse = await caches.match(normalizedRequest);
                     if (cachedResponse) {
-                        const isStale = await isCachedResponseStale(cachedResponse);
+                        const isStale = await self.isCachedResponseStale(cachedResponse);
                         
                         if (isStale === true) {
                             // Too stale, don't serve
-                            return createErrorResponse('Weather data unavailable');
+                            return self.createErrorResponse('Weather data unavailable');
                         }
                         
                         // Serve cache if fresh or if we can't determine staleness
@@ -1031,7 +1036,7 @@ self.addEventListener('fetch', (event) => {
                     }
                     
                     // Return offline error
-                    return createErrorResponse('Offline');
+                    return self.createErrorResponse('Offline');
                 }
             })()
         );
@@ -1092,18 +1097,12 @@ self.addEventListener('fetch', (event) => {
 // Background sync - periodically refresh weather cache
 self.addEventListener('sync', (event) => {
     if (event.tag === 'weather-refresh') {
-        event.waitUntil(refreshWeatherCache());
+        event.waitUntil(self.refreshWeatherCache());
     }
 });
 
 // Background sync concurrency limit
 const BACKGROUND_SYNC_CONCURRENCY = 3;
-
-// Retry configuration for transient failures
-const MAX_RETRIES = 2; // Maximum number of retries for transient failures
-const INITIAL_RETRY_DELAY = 1000; // Initial retry delay in milliseconds (1 second)
-const MAX_RETRY_DELAY = 5000; // Maximum retry delay in milliseconds (5 seconds)
-const RETRY_JITTER_FACTOR = 0.2; // Jitter factor (0-20% random variation) to prevent thundering herd
 
 /**
  * Process a single weather cache refresh request
@@ -1115,7 +1114,7 @@ const RETRY_JITTER_FACTOR = 0.2; // Jitter factor (0-20% random variation) to pr
  * @param {Cache} cache Cache instance
  * @returns {Promise<void>}
  */
-async function refreshSingleWeatherRequest(request, cache) {
+self.refreshSingleWeatherRequest = async function(request, cache) {
     if (!request.url.includes('/weather.php')) {
         return;
     }
@@ -1124,25 +1123,25 @@ async function refreshSingleWeatherRequest(request, cache) {
         // Create a fresh fetch request (without cache-busting params)
         // Use retry logic for transient failures, respecting connection speed
         const fetchRequest = new Request(request.url);
-        const timeout = getNetworkTimeout(false);
-        const response = await fetchWithRetry(fetchRequest, timeout, MAX_RETRIES);
+        const timeout = self.getNetworkTimeout(false);
+        const response = await self.fetchWithRetry(fetchRequest, timeout, MAX_RETRIES);
         
         if (response && response.ok) {
             // Extract timestamp and create response with header
-            const responseToCache = await extractAndCacheWithTimestamp(response);
+            const responseToCache = await self.extractAndCacheWithTimestamp(response);
             
             // Use the same normalized request key for storage
             await cache.put(request, responseToCache);
             
             // Update access time for LRU tracking
-            await updateCacheAccessTime(request.url);
+            await self.updateCacheAccessTime(request.url);
             
             console.log('[SW] Refreshed weather cache:', request.url);
         }
     } catch (err) {
         console.warn('[SW] Failed to refresh:', request.url, err);
     }
-}
+};
 
 /**
  * Process requests in parallel with concurrency limit
@@ -1152,15 +1151,15 @@ async function refreshSingleWeatherRequest(request, cache) {
  * @param {number} concurrency Maximum number of concurrent operations
  * @returns {Promise<void>}
  */
-async function processRequestsInParallel(requests, cache, concurrency) {
+self.processRequestsInParallel = async function(requests, cache, concurrency) {
     const weatherRequests = requests.filter(req => req.url.includes('/weather.php'));
     
     // Process in batches with concurrency limit
     for (let i = 0; i < weatherRequests.length; i += concurrency) {
         const batch = weatherRequests.slice(i, i + concurrency);
-        await Promise.all(batch.map(request => refreshSingleWeatherRequest(request, cache)));
+        await Promise.all(batch.map(request => self.refreshSingleWeatherRequest(request, cache)));
     }
-}
+};
 
 /**
  * Refresh weather cache in background
@@ -1172,15 +1171,15 @@ async function processRequestsInParallel(requests, cache, concurrency) {
  * 
  * @returns {Promise<void>}
  */
-async function refreshWeatherCache() {
+self.refreshWeatherCache = async function() {
     try {
         // Get all cached weather requests
         const cache = await caches.open(WEATHER_CACHE);
         const requests = await cache.keys();
         
         // Process requests in parallel with concurrency limit
-        await processRequestsInParallel(requests, cache, BACKGROUND_SYNC_CONCURRENCY);
+        await self.processRequestsInParallel(requests, cache, BACKGROUND_SYNC_CONCURRENCY);
     } catch (err) {
         console.error('[SW] Background sync error:', err);
     }
-}
+};
