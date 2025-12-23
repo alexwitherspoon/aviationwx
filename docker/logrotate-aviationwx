@@ -1,0 +1,60 @@
+# Logrotate configuration for AviationWX application logs
+# Rotates cron job logs and Apache logs
+# Keeps 7 days of logs, compresses old logs, max 100MB per file
+
+/var/log/aviationwx/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 www-data www-data
+    sharedscripts
+    postrotate
+        # Reload services if needed (optional)
+        # Apache doesn't need reload for log rotation
+        # Cron jobs will continue writing to new file automatically
+    endscript
+}
+
+# Apache access and error logs
+/var/log/aviationwx/apache-access.log
+/var/log/aviationwx/apache-error.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 www-data www-data
+    sharedscripts
+    postrotate
+        # Apache will continue writing to new file automatically
+        # No reload needed for log rotation
+    endscript
+}
+
+# Service watchdog log
+/var/log/aviationwx/service-watchdog.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
+
+# PHP application logs (if file-based logging is enabled)
+/var/log/aviationwx/app.log
+/var/log/aviationwx/user.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 www-data www-data
+}
+

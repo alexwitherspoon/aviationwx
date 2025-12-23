@@ -4,7 +4,7 @@
 
 set -e
 
-LOG_FILE="/var/log/service-watchdog.log"
+LOG_FILE="/var/log/aviationwx/service-watchdog.log"
 MAX_RESTART_ATTEMPTS=5
 RESTART_BACKOFF_BASE=60  # Start with 60 seconds
 
@@ -94,8 +94,10 @@ check_and_restart_service() {
 # Initialize restart counters
 restart_counts["vsftpd"]=0
 restart_counts["sshd"]=0
+restart_counts["cron"]=0
 last_restart_time["vsftpd"]=0
 last_restart_time["sshd"]=0
+last_restart_time["cron"]=0
 
 # Custom restart function for vsftpd (handles dual-instance mode)
 restart_vsftpd() {
@@ -127,6 +129,12 @@ while true; do
         check_and_restart_service "vsftpd" "vsftpd" "service vsftpd start"
     fi
     check_and_restart_service "sshd" "sshd" "service ssh start"
+    # Check and restart cron - use check_and_restart_service which handles pgrep internally
+    # Add explicit check for debugging
+    if ! pgrep -x cron > /dev/null 2>&1; then
+        log_message "WARN" "Cron process not found via pgrep -x cron, calling check_and_restart_service"
+    fi
+    check_and_restart_service "cron" "cron" "cron"
     
     sleep 30
 done

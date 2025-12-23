@@ -10,7 +10,9 @@ AllowTcpForwarding no
 PermitTunnel no
 
 # Logging (must be before Match blocks)
-SyslogFacility AUTH
+# Configure sshd to use a dedicated log file
+# We'll configure rsyslog to route sshd logs to /var/log/aviationwx/sshd.log
+SyslogFacility LOCAL0
 LogLevel INFO
 
 # SFTP subsystem

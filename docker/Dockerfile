@@ -24,6 +24,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     certbot \
     openssl \
     logrotate \
+    rsyslog \
     db-util \
     net-tools \
     fail2ban \
@@ -57,6 +58,7 @@ COPY docker/pam-vsftpd /etc/pam.d/vsftpd
 COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
 COPY docker/logrotate-sshd /etc/logrotate.d/sshd
+COPY docker/logrotate-aviationwx /etc/logrotate.d/aviationwx
 COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
 COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
 COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
@@ -80,7 +82,7 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod 644 /etc/vsftpd/vsftpd_ipv4.conf \
     && chmod 644 /etc/vsftpd/vsftpd_ipv6.conf \
     && chmod 644 /etc/ssh/sshd_config \
-    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd \
+    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx \
     && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
     && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
@@ -143,11 +145,14 @@ RUN if ! grep -q "^Listen 80" /etc/apache2/ports.conf 2>/dev/null; then \
         echo "Listen 80" >> /etc/apache2/ports.conf; \
     fi
 
-# Configure Apache to write error log to stderr (for Docker logging)
+# Configure Apache for dual logging: both Docker logs and file-based logs
+# Docker logs: stdout/stderr for immediate access and log aggregation
+# File logs: Persistent logs with rotation (7 days, 100MB max per file)
 # Add log format prefix to identify Apache access logs
 RUN echo "LogFormat \"[apache_access] %h %l %u %t \\\"%r\\\" %>s %O \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\"\" combined" >> /etc/apache2/apache2.conf \
-    && echo "ErrorLog /proc/self/fd/2" >> /etc/apache2/apache2.conf \
-    && echo "CustomLog /proc/self/fd/1 combined" >> /etc/apache2/apache2.conf
+    && echo "# Dual logging: Docker logs (stdout/stderr) and file-based logs" >> /etc/apache2/apache2.conf \
+    && echo "ErrorLog \"|/usr/bin/tee -a /var/log/aviationwx/apache-error.log /proc/self/fd/2\"" >> /etc/apache2/apache2.conf \
+    && echo "CustomLog \"|/usr/bin/tee -a /var/log/aviationwx/apache-access.log /proc/self/fd/1\" combined" >> /etc/apache2/apache2.conf
 
 # Use custom entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

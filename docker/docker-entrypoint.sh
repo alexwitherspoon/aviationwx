@@ -66,6 +66,17 @@ fi
 echo "Starting cron daemon..."
 cron
 
+# Reload cron configuration to ensure it picks up crontab files
+# This is especially important on macOS Docker where cron may not auto-reload
+sleep 2
+if pgrep -x cron > /dev/null; then
+    # Send SIGHUP to reload cron configuration
+    pkill -HUP cron 2>/dev/null || true
+    echo "✓ Cron daemon started and configuration reloaded"
+else
+    echo "⚠️  Warning: Cron daemon may not have started properly"
+fi
+
 # Initialize cache directory with correct permissions
 # This is critical after reboots when /tmp is cleared and the mount point
 # may be created with wrong ownership/permissions
@@ -111,6 +122,56 @@ if [ -d "${CACHE_DIR}" ]; then
     echo "✓ Cache directory initialized"
 else
     echo "⚠️  Warning: Cache directory does not exist and could not be created"
+fi
+
+# Initialize log directory with correct permissions
+# This directory stores file-based logs for cron jobs and Apache
+echo "Initializing log directory..."
+LOG_DIR="/var/log/aviationwx"
+
+# Create log directory if it doesn't exist
+if [ ! -d "${LOG_DIR}" ]; then
+    echo "Creating log directory: ${LOG_DIR}"
+    mkdir -p "${LOG_DIR}"
+fi
+
+# Set ownership to www-data:www-data for most logs
+# Some cron jobs run as root, but we'll allow both to write
+if [ -d "${LOG_DIR}" ]; then
+    # Try to change ownership - may fail if not running as root, but that's OK
+    chown -R www-data:www-data "${LOG_DIR}" 2>/dev/null || {
+        echo "Warning: Could not change ownership of log directory (may already be correct)"
+    }
+    
+    # Set permissions: 755 for directory, allow group write for cron (root) and www-data
+    chmod 755 "${LOG_DIR}" 2>/dev/null || true
+    
+    # Create initial log files with proper permissions
+    touch "${LOG_DIR}/cron-webcam.log" \
+          "${LOG_DIR}/cron-weather.log" \
+          "${LOG_DIR}/cron-push-webcams.log" \
+          "${LOG_DIR}/cron-heartbeat.log" \
+          "${LOG_DIR}/apache-access.log" \
+          "${LOG_DIR}/apache-error.log" \
+          "${LOG_DIR}/sshd.log" \
+          "${LOG_DIR}/service-watchdog.log" \
+          "${LOG_DIR}/app.log" \
+          "${LOG_DIR}/user.log" 2>/dev/null || true
+    
+    # Set ownership: www-data for most logs, root for system logs
+    # Use 775 permissions on directory to allow both www-data and root to write
+    chmod 775 "${LOG_DIR}" 2>/dev/null || true
+    chown www-data:www-data "${LOG_DIR}"/*.log 2>/dev/null || true
+    chmod 644 "${LOG_DIR}"/*.log 2>/dev/null || true
+    # System logs owned by root
+    chown root:root "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
+    chmod 644 "${LOG_DIR}/sshd.log" "${LOG_DIR}/service-watchdog.log" 2>/dev/null || true
+    # Ensure heartbeat log is writable by both www-data and root
+    chmod 666 "${LOG_DIR}/cron-heartbeat.log" 2>/dev/null || true
+    
+    echo "✓ Log directory initialized"
+else
+    echo "⚠️  Warning: Log directory does not exist and could not be created"
 fi
 
 # Initialize uploads directory (ephemeral, inside container only)
@@ -427,6 +488,35 @@ fi
 
 # Give vsftpd a moment to start
 sleep 1
+
+# Configure and start rsyslog for sshd dedicated logging
+if command -v rsyslogd >/dev/null 2>&1; then
+    # Ensure rsyslog config directory exists
+    mkdir -p /etc/rsyslog.d
+    # Create rsyslog config for sshd if it doesn't exist
+    if [ ! -f /etc/rsyslog.d/20-sshd.conf ]; then
+        cat > /etc/rsyslog.d/20-sshd.conf << 'EOF'
+# rsyslog configuration for sshd
+# Routes sshd logs (LOCAL0 facility) to dedicated log file
+if $programname == 'sshd' or $syslogfacility-text == 'local0' then /var/log/aviationwx/sshd.log
+& stop
+EOF
+    fi
+    # Ensure log directory exists for sshd logs (should already exist from earlier init)
+    mkdir -p /var/log/aviationwx
+    touch /var/log/aviationwx/sshd.log
+    chown root:root /var/log/aviationwx/sshd.log
+    chmod 644 /var/log/aviationwx/sshd.log
+    # Start rsyslog in background (non-blocking)
+    echo "Starting rsyslog for sshd logging..."
+    rsyslogd -n &
+    sleep 1
+    if pgrep -x rsyslogd > /dev/null; then
+        echo "✓ rsyslog started for sshd logging"
+    else
+        echo "⚠️  Warning: rsyslog failed to start, sshd will log to auth.log"
+    fi
+fi
 
 # Start sshd (if not already running)
 echo "Starting sshd..."

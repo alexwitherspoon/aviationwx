@@ -1,4 +1,6 @@
-/var/log/auth.log {
+# sshd now logs to dedicated file (configured via rsyslog)
+# Old auth.log entry kept for backward compatibility, but sshd uses its own log
+/var/log/aviationwx/sshd.log {
     daily
     rotate 7
     compress
@@ -8,7 +10,19 @@
     create 0644 root root
     sharedscripts
     postrotate
-        /usr/bin/systemctl reload sshd > /dev/null 2>&1 || true
+        # Reload rsyslog to pick up log rotation
+        pkill -HUP rsyslogd 2>/dev/null || true
     endscript
+}
+
+# Keep auth.log rotation for any other services that might use it
+/var/log/auth.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
 }
 
