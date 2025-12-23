@@ -95,6 +95,26 @@ if (!defined('RATE_LIMIT_WEBCAM_MAX')) {
 if (!defined('RATE_LIMIT_WEBCAM_WINDOW')) {
     define('RATE_LIMIT_WEBCAM_WINDOW', 60);
 }
+
+// NOTAM constants
+if (!defined('NOTAM_REFRESH_DEFAULT')) {
+    define('NOTAM_REFRESH_DEFAULT', 600); // 10 minutes
+}
+if (!defined('NOTAM_CACHE_TTL_DEFAULT')) {
+    define('NOTAM_CACHE_TTL_DEFAULT', 3600); // 1 hour
+}
+if (!defined('NOTAM_TOKEN_EXPIRY_BUFFER')) {
+    define('NOTAM_TOKEN_EXPIRY_BUFFER', 60); // Refresh token 1 min before expiry
+}
+if (!defined('NOTAM_STALE_THRESHOLD')) {
+    define('NOTAM_STALE_THRESHOLD', 900); // 15 minutes (consider stale)
+}
+if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
+    define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius
+}
+if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
+    define('NOTAM_RATE_LIMIT_SECONDS', 1); // 1 request per second
+}
 if (!defined('RATE_LIMIT_CONFIG_GENERATOR_MAX')) {
     define('RATE_LIMIT_CONFIG_GENERATOR_MAX', 10);
 }

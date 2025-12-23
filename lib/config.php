@@ -210,6 +210,121 @@ function getWorkerTimeout(): int {
 }
 
 /**
+ * Get NOTAM refresh interval from global config
+ * @return int Refresh interval in seconds (default: 600 = 10 minutes)
+ */
+function getNotamRefreshSeconds(): int {
+    return (int)getGlobalConfig('notam_refresh_seconds', 600);
+}
+
+/**
+ * Get NOTAM cache TTL from global config
+ * @return int Cache TTL in seconds (default: 3600 = 1 hour)
+ */
+function getNotamCacheTtlSeconds(): int {
+    return (int)getGlobalConfig('notam_cache_ttl_seconds', 3600);
+}
+
+/**
+ * Get NOTAM worker pool size from global config
+ * @return int Number of concurrent workers (default: 1)
+ */
+function getNotamWorkerPoolSize(): int {
+    return (int)getGlobalConfig('notam_worker_pool_size', 1);
+}
+
+/**
+ * Get NOTAM API client ID from global config
+ * @return string Client ID or empty string if not configured
+ */
+function getNotamApiClientId(): string {
+    return (string)getGlobalConfig('notam_api_client_id', '');
+}
+
+/**
+ * Get NOTAM API client secret from global config
+ * @return string Client secret or empty string if not configured
+ */
+function getNotamApiClientSecret(): string {
+    return (string)getGlobalConfig('notam_api_client_secret', '');
+}
+
+/**
+ * Get NOTAM API base URL from global config
+ * @return string Base URL (default: staging URL)
+ */
+function getNotamApiBaseUrl(): string {
+    return (string)getGlobalConfig('notam_api_base_url', 'https://api-staging.cgifederal-aim.com');
+}
+
+/**
+ * Validate refresh interval
+ * 
+ * Validates that a refresh interval meets minimum requirements.
+ * Refresh intervals must be integers >= minimum (default: 5 seconds).
+ * 
+ * @param mixed $interval Refresh interval to validate
+ * @param int $minimum Minimum allowed interval in seconds (default: 5)
+ * @return bool True if valid, false otherwise
+ */
+function validateRefreshInterval($interval, int $minimum = 5): bool {
+    if (!is_int($interval) && !is_numeric($interval)) {
+        return false;
+    }
+    $interval = (int)$interval;
+    return $interval >= $minimum;
+}
+
+/**
+ * Get minimum refresh interval from global config
+ * 
+ * Returns the minimum allowed refresh interval for any data source.
+ * This is a safety limit to prevent excessive update frequency.
+ * 
+ * @return int Minimum refresh interval in seconds (default: 5)
+ */
+function getMinimumRefreshInterval(): int {
+    return (int)getGlobalConfig('minimum_refresh_seconds', 5);
+}
+
+/**
+ * Get scheduler config reload interval from global config
+ * 
+ * Returns how often the scheduler should check for config changes.
+ * 
+ * @return int Config reload check interval in seconds (default: 60)
+ */
+function getSchedulerConfigReloadInterval(): int {
+    return (int)getGlobalConfig('scheduler_config_reload_seconds', 60);
+}
+
+/**
+ * Get METAR refresh interval from config
+ * 
+ * Returns the global METAR refresh interval from config section.
+ * METAR data is updated hourly, so this should always be >= 60 seconds.
+ * 
+ * @param array|null $config Config array (if already loaded, pass to avoid reload)
+ * @return int METAR refresh interval in seconds (default: 60, minimum: 60)
+ */
+function getMetarRefreshInterval(?array $config = null): int {
+    if ($config === null) {
+        $config = loadConfig();
+    }
+    
+    if ($config === null || !isset($config['config'])) {
+        return 60;
+    }
+    
+    $interval = isset($config['config']['metar_refresh_seconds'])
+        ? intval($config['config']['metar_refresh_seconds'])
+        : 60;
+    
+    // Enforce minimum of 60 seconds (METAR updates are hourly)
+    return max(60, $interval);
+}
+
+/**
  * Check if WebP generation is enabled globally
  * 
  * @return bool True if WebP generation enabled, false otherwise
@@ -1533,6 +1648,12 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
             
+            if (isset($cfg['metar_refresh_seconds'])) {
+                if (!is_int($cfg['metar_refresh_seconds']) || $cfg['metar_refresh_seconds'] < 60) {
+                    $errors[] = "config.metar_refresh_seconds must be an integer >= 60 (METAR updates are hourly)";
+                }
+            }
+            
             // Validate format generation flags
             if (isset($cfg['webcam_generate_webp'])) {
                 if (!is_bool($cfg['webcam_generate_webp'])) {
@@ -1705,12 +1826,27 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Validate numeric fields
-        foreach (['elevation_ft', 'webcam_refresh_seconds', 'weather_refresh_seconds'] as $field) {
+        foreach (['elevation_ft'] as $field) {
             if (isset($airport[$field])) {
                 $val = $airport[$field];
                 if (!is_numeric($val) || $val < 0) {
                     $errors[] = "Airport '{$airportCode}' has invalid {$field}: {$val} (must be non-negative number)";
                 }
+            }
+        }
+        
+        // Validate refresh intervals (must be integer >= 5 seconds)
+        if (isset($airport['weather_refresh_seconds'])) {
+            $val = $airport['weather_refresh_seconds'];
+            if (!validateRefreshInterval($val, 5)) {
+                $errors[] = "Airport '{$airportCode}' has invalid weather_refresh_seconds: {$val} (must be integer >= 5 seconds)";
+            }
+        }
+        
+        if (isset($airport['webcam_refresh_seconds'])) {
+            $val = $airport['webcam_refresh_seconds'];
+            if (!validateRefreshInterval($val, 5)) {
+                $errors[] = "Airport '{$airportCode}' has invalid webcam_refresh_seconds: {$val} (must be integer >= 5 seconds)";
             }
         }
         
