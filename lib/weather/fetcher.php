@@ -37,28 +37,8 @@ function shouldFetchBackup(array $airport, ?array $primaryData, ?array $existing
         return false;
     }
     
-    // Calculate 4x threshold (warm-up period: x5 - 1)
-    $warmupThresholdSeconds = $refreshIntervalSeconds * (WEATHER_STALENESS_WARNING_MULTIPLIER - 1);
-    
-    $now = time();
-    
-    // Check if primary data is stale (age >= 4x refresh interval)
-    if ($primaryData !== null && isset($primaryData['last_updated_primary']) && $primaryData['last_updated_primary'] > 0) {
-        $primaryAge = $now - $primaryData['last_updated_primary'];
-        if ($primaryAge >= $warmupThresholdSeconds) {
-            return true;
-        }
-    }
-    
-    // Check existing cache for staleness
-    if ($existingCache !== null && isset($existingCache['last_updated_primary']) && $existingCache['last_updated_primary'] > 0) {
-        $cachePrimaryAge = $now - $existingCache['last_updated_primary'];
-        if ($cachePrimaryAge >= $warmupThresholdSeconds) {
-            return true;
-        }
-    }
-    
-    // Check if primary has missing/null fields for expected primary-source fields
+    // PRIORITY 1: Check if primary has missing/null fields for expected primary-source fields
+    // This triggers backup immediately when any field fails, without waiting for staleness threshold
     $primarySourceFields = [
         'temperature', 'wind_speed', 'wind_direction', 'pressure', 'humidity'
     ];
@@ -80,7 +60,35 @@ function shouldFetchBackup(array $airport, ?array $primaryData, ?array $existing
         }
     }
     
-    return $hasMissingFields;
+    // If any field is missing/null, trigger backup immediately (don't wait for staleness)
+    if ($hasMissingFields) {
+        return true;
+    }
+    
+    // PRIORITY 2: Check if primary data is stale (age >= 1x refresh interval)
+    // Trigger backup immediately when data is stale, don't wait for 4x threshold
+    // This ensures backup is used as soon as primary data becomes outdated
+    $now = time();
+    
+    // Check if primary data is stale (age >= 1x refresh interval)
+    if ($primaryData !== null && isset($primaryData['last_updated_primary']) && $primaryData['last_updated_primary'] > 0) {
+        $primaryAge = $now - $primaryData['last_updated_primary'];
+        // If data is older than refresh interval, trigger backup immediately
+        if ($primaryAge >= $refreshIntervalSeconds) {
+            return true;
+        }
+    }
+    
+    // Check existing cache for staleness
+    if ($existingCache !== null && isset($existingCache['last_updated_primary']) && $existingCache['last_updated_primary'] > 0) {
+        $cachePrimaryAge = $now - $existingCache['last_updated_primary'];
+        // If cache is older than refresh interval, trigger backup immediately
+        if ($cachePrimaryAge >= $refreshIntervalSeconds) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 /**
@@ -374,9 +382,23 @@ function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds 
     $running = null;
     $startTime = microtime(true);
     $maxOverallTimeout = CURL_MULTI_OVERALL_TIMEOUT;
-    
+    // #region agent log
+    $curlStartLogEntry = json_encode(['id'=>'log_'.time().'_curl_start','timestamp'=>round(microtime(true)*1000),'location'=>'fetcher.php:375','message'=>'Starting curl_multi loop','data'=>['airport'=>$airportId,'max_timeout'=>$maxOverallTimeout],'sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'H'])."\n";
+    @error_log('[DEBUG] '.trim($curlStartLogEntry));
+    @file_put_contents('/Users/alexwitherspoon/GitHub/aviationwx.org/.cursor/debug.log', $curlStartLogEntry, FILE_APPEND | LOCK_EX);
+    // #endregion
+    $loopIterations = 0;
     do {
         $status = curl_multi_exec($mh, $running);
+        $loopIterations++;
+        // #region agent log
+        if ($loopIterations % 50 === 0) {
+            $elapsed = microtime(true) - $startTime;
+            $curlLoopLogEntry = json_encode(['id'=>'log_'.time().'_curl_loop','timestamp'=>round(microtime(true)*1000),'location'=>'fetcher.php:378','message'=>'curl_multi loop iteration','data'=>['iterations'=>$loopIterations,'running'=>$running,'elapsed'=>$elapsed,'status'=>$status],'sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'H'])."\n";
+            @error_log('[DEBUG] '.trim($curlLoopLogEntry));
+            @file_put_contents('/Users/alexwitherspoon/GitHub/aviationwx.org/.cursor/debug.log', $curlLoopLogEntry, FILE_APPEND | LOCK_EX);
+        }
+        // #endregion
         if ($status !== CURLM_OK && $status !== CURLM_CALL_MULTI_PERFORM) {
             break;
         }
@@ -384,6 +406,11 @@ function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds 
         // Check for overall timeout
         $elapsed = microtime(true) - $startTime;
         if ($elapsed > $maxOverallTimeout) {
+            // #region agent log
+            $curlTimeoutLogEntry = json_encode(['id'=>'log_'.time().'_curl_timeout','timestamp'=>round(microtime(true)*1000),'location'=>'fetcher.php:386','message'=>'curl_multi timeout exceeded','data'=>['elapsed'=>$elapsed,'max_timeout'=>$maxOverallTimeout,'iterations'=>$loopIterations],'sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'I'])."\n";
+            @error_log('[DEBUG] '.trim($curlTimeoutLogEntry));
+            @file_put_contents('/Users/alexwitherspoon/GitHub/aviationwx.org/.cursor/debug.log', $curlTimeoutLogEntry, FILE_APPEND | LOCK_EX);
+            // #endregion
             aviationwx_log('warning', 'curl_multi overall timeout exceeded', [
                 'airport' => $airportId,
                 'elapsed' => round($elapsed, 2),
@@ -397,6 +424,12 @@ function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds 
             curl_multi_select($mh, 0.1);
         }
     } while ($running > 0);
+    // #region agent log
+    $curlElapsed = microtime(true) - $startTime;
+    $curlEndLogEntry = json_encode(['id'=>'log_'.time().'_curl_end','timestamp'=>round(microtime(true)*1000),'location'=>'fetcher.php:399','message'=>'curl_multi loop completed','data'=>['elapsed'=>$curlElapsed,'iterations'=>$loopIterations],'sessionId'=>'debug-session','runId'=>'run1','hypothesisId'=>'H'])."\n";
+    @error_log('[DEBUG] '.trim($curlEndLogEntry));
+    @file_put_contents('/Users/alexwitherspoon/GitHub/aviationwx.org/.cursor/debug.log', $curlEndLogEntry, FILE_APPEND | LOCK_EX);
+    // #endregion
     
     // Get responses and error information
     $primaryResponse = $ch1 !== null ? curl_multi_getcontent($ch1) : null;
@@ -574,7 +607,30 @@ function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds 
                 // This is critical for accurate timestamps in temperature/gust tracking
                 if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
                     $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+                    
+                    // Set _field_obs_time_map for all primary source fields to match obs_time_primary
+                    // This ensures field-level observation times match source-level observation time
+                    if (!isset($weatherData['_field_obs_time_map'])) {
+                        $weatherData['_field_obs_time_map'] = [];
+                    }
+                    $primarySourceFields = [
+                        'temperature', 'temperature_f',
+                        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+                        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+                        'pressure', 'precip_accum',
+                        'pressure_altitude', 'density_altitude'
+                    ];
+                    foreach ($primarySourceFields as $field) {
+                        if (isset($weatherData[$field]) && $weatherData[$field] !== null) {
+                            $weatherData['_field_obs_time_map'][$field] = $weatherData['obs_time_primary'];
+                        }
+                    }
                 }
+                // Add HTTP status code to quality metadata
+                if (!isset($weatherData['_quality_metadata'])) {
+                    $weatherData['_quality_metadata'] = [];
+                }
+                $weatherData['_quality_metadata']['http_status'] = $primaryCode;
             } else {
                 aviationwx_log('warning', 'primary weather response parse failed', [
                     'airport' => $airportId,
@@ -633,7 +689,30 @@ function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds 
                 // Preserve observation time from backup source
                 if (isset($backupData['obs_time']) && $backupData['obs_time'] !== null) {
                     $weatherData['obs_time_backup'] = $backupData['obs_time'];
+                    
+                    // Set _field_obs_time_map for all backup source fields to match obs_time_backup
+                    // This ensures field-level observation times match source-level observation time
+                    if (!isset($backupData['_field_obs_time_map'])) {
+                        $backupData['_field_obs_time_map'] = [];
+                    }
+                    $primarySourceFields = [
+                        'temperature', 'temperature_f',
+                        'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+                        'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+                        'pressure', 'precip_accum',
+                        'pressure_altitude', 'density_altitude'
+                    ];
+                    foreach ($primarySourceFields as $field) {
+                        if (isset($backupData[$field]) && $backupData[$field] !== null) {
+                            $backupData['_field_obs_time_map'][$field] = $weatherData['obs_time_backup'];
+                        }
+                    }
                 }
+                // Add HTTP status code to backup quality metadata
+                if (!isset($backupData['_quality_metadata'])) {
+                    $backupData['_quality_metadata'] = [];
+                }
+                $backupData['_quality_metadata']['http_status'] = $backupCode;
                 // Store backup data for later field-level merging
                 $weatherData['_backup_data'] = $backupData;
             } else {
@@ -725,19 +804,43 @@ function fetchWeatherAsync($airport, $airportId = null, $refreshIntervalSeconds 
                 $weatherData['obs_time'] = $metarData['obs_time'];
             }
             
+            // Add HTTP status code to METAR quality metadata (if not already set)
+            if (!isset($metarData['_quality_metadata'])) {
+                $metarData['_quality_metadata'] = [];
+            }
+            $metarData['_quality_metadata']['http_status'] = $metarCode;
+            
             // Safely merge METAR data - only update if new value is valid
+            // Track observation time for each METAR field in _field_obs_time_map
+            if (!isset($weatherData['_field_obs_time_map'])) {
+                $weatherData['_field_obs_time_map'] = [];
+            }
+            $metarObsTime = $weatherData['obs_time_metar'] ?? $metarTimestamp ?? null;
+            
             // For ceiling: explicitly set null when METAR data indicates unlimited (no BKN/OVC clouds)
             // This ensures unlimited ceiling overwrites old cached values
             if ($metarData['visibility'] !== null && $metarData['visibility'] !== false) {
                 $weatherData['visibility'] = $metarData['visibility'];
+                // Track observation time for visibility field
+                if ($metarObsTime !== null && $metarObsTime > 0) {
+                    $weatherData['_field_obs_time_map']['visibility'] = $metarObsTime;
+                }
             }
             // Ceiling: explicitly set to null if METAR parsing returned null (unlimited ceiling)
             // This ensures unlimited ceiling (FEW/SCT clouds) overwrites old cached values
             if (isset($metarData['ceiling'])) {
                 $weatherData['ceiling'] = $metarData['ceiling']; // Can be null (unlimited) or a number
+                // Track observation time for ceiling field (even if null/unlimited - sentinel value)
+                if ($metarObsTime !== null && $metarObsTime > 0) {
+                    $weatherData['_field_obs_time_map']['ceiling'] = $metarObsTime;
+                }
             }
             if ($metarData['cloud_cover'] !== null && $metarData['cloud_cover'] !== false) {
                 $weatherData['cloud_cover'] = $metarData['cloud_cover'];
+                // Track observation time for cloud_cover field
+                if ($metarObsTime !== null && $metarObsTime > 0) {
+                    $weatherData['_field_obs_time_map']['cloud_cover'] = $metarObsTime;
+                }
             }
         } else {
             // Log if METAR fetch failed (after trying all stations)
@@ -855,6 +958,24 @@ function fetchWeatherSync($airport, $airportId = null, $refreshIntervalSeconds =
         // This is critical for accurate timestamps in temperature/gust tracking
         if (isset($weatherData['obs_time']) && $weatherData['obs_time'] !== null) {
             $weatherData['obs_time_primary'] = $weatherData['obs_time'];
+            
+            // Set _field_obs_time_map for all primary source fields to match obs_time_primary
+            // This ensures field-level observation times match source-level observation time
+            if (!isset($weatherData['_field_obs_time_map'])) {
+                $weatherData['_field_obs_time_map'] = [];
+            }
+            $primarySourceFields = [
+                'temperature', 'temperature_f',
+                'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+                'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+                'pressure', 'precip_accum',
+                'pressure_altitude', 'density_altitude'
+            ];
+            foreach ($primarySourceFields as $field) {
+                if (isset($weatherData[$field]) && $weatherData[$field] !== null) {
+                    $weatherData['_field_obs_time_map'][$field] = $weatherData['obs_time_primary'];
+                }
+            }
         }
         
         // Check if backup should be fetched (4x threshold warm-up period)
@@ -864,7 +985,10 @@ function fetchWeatherSync($airport, $airportId = null, $refreshIntervalSeconds =
             $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
             
             // Check if backup should be fetched
+            // Priority: Check freshly parsed primary data for missing fields (immediate trigger)
+            // Fallback: Check staleness threshold (4x refresh interval)
             if (!$backupCircuit['skip'] && $refreshIntervalSeconds !== null) {
+                // Check if backup should be fetched based on freshly parsed primary data
                 if (shouldFetchBackup($airport, $weatherData, $existingCache, $refreshIntervalSeconds)) {
                     // Fetch backup synchronously (sequential for sync path)
                     try {
@@ -891,6 +1015,24 @@ function fetchWeatherSync($airport, $airportId = null, $refreshIntervalSeconds =
                             $weatherData['last_updated_backup'] = $backupTimestamp;
                             if (isset($backupData['obs_time']) && $backupData['obs_time'] !== null) {
                                 $weatherData['obs_time_backup'] = $backupData['obs_time'];
+                                
+                                // Set _field_obs_time_map for all backup source fields to match obs_time_backup
+                                // This ensures field-level observation times match source-level observation time
+                                if (!isset($backupData['_field_obs_time_map'])) {
+                                    $backupData['_field_obs_time_map'] = [];
+                                }
+                                $primarySourceFields = [
+                                    'temperature', 'temperature_f',
+                                    'dewpoint', 'dewpoint_f', 'dewpoint_spread', 'humidity',
+                                    'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
+                                    'pressure', 'precip_accum',
+                                    'pressure_altitude', 'density_altitude'
+                                ];
+                                foreach ($primarySourceFields as $field) {
+                                    if (isset($backupData[$field]) && $backupData[$field] !== null) {
+                                        $backupData['_field_obs_time_map'][$field] = $weatherData['obs_time_backup'];
+                                    }
+                                }
                             }
                             $weatherData['_backup_data'] = $backupData;
                             recordWeatherSuccess($airportId, 'backup');

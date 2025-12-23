@@ -430,6 +430,7 @@ function generateMockWeatherData($airportId, $airport) {
             }
         }
         $weatherData = fetchWeatherSync($airport, $airportId, $airportWeatherRefresh, $existingCacheSync);
+        
     }
     
     } catch (Throwable $e) {
@@ -478,19 +479,51 @@ function generateMockWeatherData($airportId, $airport) {
     exit;
     }
 
+    // CRITICAL: Populate _field_obs_time_map IMMEDIATELY after fetch, before any calculations
+    // All downstream logic (calculations, validations, merges) depends on knowing when each field was measured
+    require_once __DIR__ . '/../lib/weather/observation-times.php';
+    populateFieldObservationTimes($weatherData);
+
     // Calculate additional aviation-specific metrics
-    $weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
-    $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
+    // Calculate pressure altitude - only if pressure is valid
+    if (isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
+        $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
+    } else {
+        $weatherData['pressure_altitude'] = null;
+    }
+    
+    // Calculate density altitude - only if temp/pressure within 1 minute
+    // Density altitude requires temperature and pressure from same observation time (within 1 minute)
+    $densityTempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+    $densityPressureObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+    $densityValid = false;
+    if ($densityTempObsTime !== null && $densityPressureObsTime !== null) {
+        $timeDiff = abs($densityTempObsTime - $densityPressureObsTime);
+        $densityValid = ($timeDiff <= 60); // Within 1 minute
+    }
+    
+    if ($densityValid && 
+        isset($weatherData['temperature']) && $weatherData['temperature'] !== null &&
+        isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
+        $weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
+    } else {
+        $weatherData['density_altitude'] = null;
+    }
     $weatherData['sunrise'] = getSunriseTime($airport);
     $weatherData['sunset'] = getSunsetTime($airport);
 
     // Track and update today's peak gust (store value and timestamp)
-    $currentGust = $weatherData['gust_speed'] ?? 0;
+    // Use peak_gust field if available (set by adapters), otherwise gust_speed, otherwise 0
+    // peak_gust is set by adapters and might survive merge better than gust_speed
+    $currentGust = $weatherData['peak_gust'] ?? $weatherData['gust_speed'] ?? 0;
     // Use explicit observation time from primary source (when weather was actually observed)
     // This is critical for pilot safety - must show accurate observation times
     // Prefer obs_time_primary (explicit observation time from API), fall back to last_updated_primary (fetch time), then current time
     $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
-    updatePeakGust($airportId, $currentGust, $airport, $obsTimestamp);
+    // Only update if we have a valid gust value (> 0)
+    if ($currentGust > 0) {
+        updatePeakGust($airportId, $currentGust, $airport, $obsTimestamp);
+    }
     $peakGustInfo = getPeakGust($airportId, $currentGust, $airport);
     if (is_array($peakGustInfo)) {
     $weatherData['peak_gust_today'] = $peakGustInfo['value'] ?? $currentGust;
@@ -531,17 +564,90 @@ function generateMockWeatherData($airportId, $airport) {
 
     // Format temperatures to °F for display
     $weatherData['temperature_f'] = $weatherData['temperature'] !== null ? round(($weatherData['temperature'] * 9/5) + 32) : null;
+    
+    // Calculate dewpoint from temperature and humidity if dewpoint is missing
+    // This ensures we have dewpoint data when the sensor doesn't provide it directly
+    require_once __DIR__ . '/../lib/weather/calculator.php';
+    if (($weatherData['dewpoint'] ?? null) === null && 
+        $weatherData['temperature'] !== null && 
+        $weatherData['humidity'] !== null) {
+        $calculatedDewpoint = calculateDewpoint($weatherData['temperature'], $weatherData['humidity']);
+        if ($calculatedDewpoint !== null) {
+            $weatherData['dewpoint'] = round($calculatedDewpoint, 1);
+            // Track observation time for calculated dewpoint (use temperature's obs_time)
+            if (!isset($weatherData['_field_obs_time_map'])) {
+                $weatherData['_field_obs_time_map'] = [];
+            }
+            $dewpointObsTime = $weatherData['_field_obs_time_map']['temperature'] 
+                ?? $weatherData['obs_time_primary'] 
+                ?? $weatherData['obs_time_backup'] 
+                ?? null;
+            if ($dewpointObsTime !== null) {
+                $weatherData['_field_obs_time_map']['dewpoint'] = $dewpointObsTime;
+            }
+        }
+    }
+    
     $weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
 
-    // Calculate gust factor
-    $weatherData['gust_factor'] = ($weatherData['gust_speed'] && $weatherData['wind_speed']) ? 
-    round($weatherData['gust_speed'] - $weatherData['wind_speed']) : 0;
-
-    // Calculate dewpoint spread (temperature - dewpoint)
-    if ($weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
-    $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
+    // Calculate gust factor - only if wind fields have same obs_time
+    // Wind group: wind_speed, wind_direction, gust_speed must be from same observation time
+    // Use per-field observation times from _field_obs_time_map (more accurate than source-level times)
+    $fieldObsTimeMap = $weatherData['_field_obs_time_map'] ?? [];
+    $windObsTime = null;
+    $windFieldsPresent = 0;
+    if (isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
+        // Use per-field obs_time if available, fallback to source-level
+        $windObsTime = $fieldObsTimeMap['wind_speed'] 
+            ?? $weatherData['obs_time_primary'] 
+            ?? $weatherData['obs_time_backup'] 
+            ?? null;
+        $windFieldsPresent++;
+    }
+    if (isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
+        // Use per-field obs_time if available, fallback to source-level
+        $gustObsTime = $fieldObsTimeMap['gust_speed'] 
+            ?? $weatherData['obs_time_primary'] 
+            ?? $weatherData['obs_time_backup'] 
+            ?? null;
+        if ($windObsTime === null) {
+            $windObsTime = $gustObsTime;
+        } elseif ($windObsTime !== $gustObsTime) {
+            // Different observation times - invalid for wind group
+            $windObsTime = null;
+        }
+        $windFieldsPresent++;
+    }
+    
+    // Only calculate gust_factor if wind fields have same obs_time
+    if ($windObsTime !== null && $windFieldsPresent >= 2 && 
+        isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null &&
+        isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
+        $weatherData['gust_factor'] = round($weatherData['gust_speed'] - $weatherData['wind_speed']);
+        // Track observation time for gust_factor (use the common wind obs_time)
+        if (!isset($weatherData['_field_obs_time_map'])) {
+            $weatherData['_field_obs_time_map'] = [];
+        }
+        $weatherData['_field_obs_time_map']['gust_factor'] = $windObsTime;
     } else {
-    $weatherData['dewpoint_spread'] = null;
+        $weatherData['gust_factor'] = null;
+    }
+
+    // Calculate dewpoint spread - only if temp/dewpoint within 1 minute
+    // Temperature group: temperature, dewpoint, humidity must be within 1 minute
+    $tempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+    $dewpointObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+    $tempDewpointValid = false;
+    if ($tempObsTime !== null && $dewpointObsTime !== null) {
+        $timeDiff = abs($tempObsTime - $dewpointObsTime);
+        $tempDewpointValid = ($timeDiff <= 60); // Within 1 minute
+    }
+    
+    if ($tempDewpointValid && 
+        $weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
+        $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
+    } else {
+        $weatherData['dewpoint_spread'] = null;
     }
 
     // NOTE: Staleness check for fresh data has been removed (Option 2 fix)
@@ -558,15 +664,18 @@ function generateMockWeatherData($airportId, $airport) {
         }
     }
     
-    // Merge with backup source using field-level fallback (if backup data exists)
+    // Always merge to track primary field observation times in _field_obs_time_map
+    // This is critical for frontend fail-closed staleness validation
+    // mergeWeatherDataWithFieldLevelFallback() handles the no-backup case (tracks primary fields)
     $backupData = null;
     if (isset($weatherData['_backup_data']) && is_array($weatherData['_backup_data'])) {
         $backupData = $weatherData['_backup_data'];
         // Remove internal backup data key before merging
         unset($weatherData['_backup_data']);
-        // Merge primary and backup on field-by-field basis
-        $weatherData = mergeWeatherDataWithFieldLevelFallback($weatherData, $backupData, $existingCache, $airportWeatherRefresh);
     }
+    // Always call mergeWeatherDataWithFieldLevelFallback() to track primary field observation times
+    // Even when no backup exists, this ensures _field_obs_time_map is populated for frontend validation
+    $weatherData = mergeWeatherDataWithFieldLevelFallback($weatherData, $backupData, $existingCache, $airportWeatherRefresh);
     
     // If we have existing cache, merge it with new data to preserve good values
     // Use separate thresholds for primary source and METAR
@@ -579,9 +688,55 @@ function generateMockWeatherData($airportId, $airport) {
         // If fresh fetch didn't include METAR data but cache has it, flight_category would be null
         // without this recalculation, causing blank condition field on dashboard
         calculateAndSetFlightCategory($weatherData);
+        
+        // Recalculate gust_factor after merge - wind fields may have been restored from cache
+        // Use per-field observation times from _field_obs_time_map (now fully populated)
+        $fieldObsTimeMap = $weatherData['_field_obs_time_map'] ?? [];
+        $windObsTime = null;
+        $windFieldsPresent = 0;
+        if (isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
+            $windObsTime = $fieldObsTimeMap['wind_speed'] 
+                ?? $weatherData['obs_time_primary'] 
+                ?? $weatherData['obs_time_backup'] 
+                ?? null;
+            $windFieldsPresent++;
+        }
+        if (isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
+            $gustObsTime = $fieldObsTimeMap['gust_speed'] 
+                ?? $weatherData['obs_time_primary'] 
+                ?? $weatherData['obs_time_backup'] 
+                ?? null;
+            if ($windObsTime === null) {
+                $windObsTime = $gustObsTime;
+            } elseif ($gustObsTime !== null && $windObsTime !== $gustObsTime) {
+                // Different observation times - invalid for wind group
+                $windObsTime = null;
+            }
+            $windFieldsPresent++;
+        }
+        
+        // Only calculate gust_factor if wind fields have same obs_time
+        if ($windObsTime !== null && $windFieldsPresent >= 2 && 
+            isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null &&
+            isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
+            $weatherData['gust_factor'] = round($weatherData['gust_speed'] - $weatherData['wind_speed']);
+            // Track observation time for gust_factor (use the common wind obs_time)
+            if (!isset($weatherData['_field_obs_time_map'])) {
+                $weatherData['_field_obs_time_map'] = [];
+            }
+            $weatherData['_field_obs_time_map']['gust_factor'] = $windObsTime;
+        } else {
+            $weatherData['gust_factor'] = null;
+        }
+        
+        // Ensure peak_gust is set from gust_speed if it's null (adapters set this, but merge might have cleared it)
+        if (($weatherData['peak_gust'] ?? null) === null && isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
+            $weatherData['peak_gust'] = $weatherData['gust_speed'];
+        }
     }
     
-    // Recovery cycle tracking: track primary source recovery (5 cycles before switching back)
+    // Recovery cycle tracking: track primary source recovery (requires both cycles and time duration)
+    require_once __DIR__ . '/../lib/constants.php';
     require_once __DIR__ . '/../lib/weather/validation.php';
     $staleThresholdSeconds = $airportWeatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
     $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
@@ -634,21 +789,42 @@ function generateMockWeatherData($airportId, $airport) {
         }
     }
     
-    // Get current recovery cycles from cache or initialize
+    // Get current recovery cycles and recovery start time from cache or initialize
     $recoveryCycles = 0;
-    if (is_array($existingCache) && isset($existingCache['primary_recovery_cycles'])) {
-        $recoveryCycles = (int)$existingCache['primary_recovery_cycles'];
+    $recoveryStartTime = null;
+    if (is_array($existingCache)) {
+        if (isset($existingCache['primary_recovery_cycles'])) {
+            $recoveryCycles = (int)$existingCache['primary_recovery_cycles'];
+        }
+        if (isset($existingCache['primary_recovery_start']) && $existingCache['primary_recovery_start'] > 0) {
+            $recoveryStartTime = (int)$existingCache['primary_recovery_start'];
+        }
     }
     
-    // Update recovery cycles: increment if primary is fresh, providing data, and valid; reset if stale or invalid
+    // Update recovery tracking: increment cycles and track start time if primary is fresh, providing data, and valid
+    $now = time();
     if (!$primaryStale && $primaryProvidingData && $primaryFieldsValid) {
+        // Primary is healthy - increment recovery cycles
         $recoveryCycles++;
+        
+        // If this is the first successful cycle, set recovery start time
+        if ($recoveryStartTime === null && $recoveryCycles === 1) {
+            $recoveryStartTime = $now;
+        }
     } else {
+        // Primary is not healthy - reset recovery tracking
         $recoveryCycles = 0;
+        $recoveryStartTime = null;
     }
     
-    // Store recovery cycles in weather data (for cache persistence)
+    // Store recovery cycles and start time in weather data (for cache persistence)
     $weatherData['primary_recovery_cycles'] = $recoveryCycles;
+    if ($recoveryStartTime !== null) {
+        $weatherData['primary_recovery_start'] = $recoveryStartTime;
+    } else {
+        // Explicitly unset if null to clear old recovery start time from cache
+        unset($weatherData['primary_recovery_start']);
+    }
     
     // Set overall last_updated to most recent observation time from ALL data sources
     // This ensures we pick the latest observation time even if METAR is hourly (low frequency)
@@ -721,7 +897,11 @@ function generateMockWeatherData($airportId, $airport) {
     $weatherData['backup_status'] = $backupStatus;
     
     // Remove internal fields before caching and sending response
+    // Strip internal fields before API response
     unset($weatherData['_field_source_map']);
+    // Keep _field_obs_time_map for frontend fail-closed staleness validation
+    // Frontend uses per-field observation times to hide stale data when offline
+    unset($weatherData['_quality_metadata']);
 
     $cacheWriteResult = @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
     
