@@ -35,19 +35,18 @@ aviationwx.org/
 │   ├── webcam-error-detector.php # Webcam error frame detection
 │   ├── webcam-format-generation.php # Shared format generation (WebP, AVIF, JPEG)
 │   └── weather/
-│       ├── UnifiedFetcher.php # New unified weather pipeline
+│       ├── UnifiedFetcher.php # Unified weather fetch pipeline
 │       ├── WeatherAggregator.php # Multi-source aggregation logic
 │       ├── AggregationPolicy.php # Aggregation rules and preferences
-│       ├── fetcher.php       # Legacy weather data fetching
 │       ├── calculator.php    # Aviation calculations
 │       ├── daily-tracking.php # Daily high/low tracking
-│       ├── staleness.php     # Legacy staleness handling
+│       ├── cache-utils.php   # Cache staleness utilities
 │       ├── source-timestamps.php # Timestamp extraction
 │       ├── data/             # Data classes
 │       │   ├── WeatherSnapshot.php # Complete weather state from source
 │       │   ├── WeatherReading.php  # Single field measurement
 │       │   └── WindGroup.php       # Grouped wind fields
-│       └── adapter/          # Weather API adapters (self-describing)
+│       └── adapter/          # Weather API adapters
 ├── scripts/
 │   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM)
 │   ├── scheduler-health-check.php # Scheduler health check (runs via cron)

@@ -260,34 +260,6 @@ The new unified weather pipeline uses `WeatherAggregator` with `AggregationPolic
    - SynopticData: 900 seconds (15 minutes)
    - METAR: 7200 seconds (2 hours)
 
-### Legacy Data Merging (deprecated, available via ?legacy=1)
-
-When primary, backup, and METAR data are available:
-
-1. **Primary Source Provides**:
-   - Temperature, dewpoint, humidity
-   - Wind speed, direction, gusts
-   - Pressure
-   - Precipitation
-
-2. **Backup Source Provides** (when primary is stale):
-   - Same fields as primary source
-   - Activated when primary exceeds 5x refresh interval
-   - Field-level fallback: each field uses best available data
-
-3. **METAR Source Provides**:
-   - Visibility (overwrites if present)
-   - Ceiling (overwrites if present)
-   - Cloud cover (overwrites if present)
-
-4. **Merge Rules**:
-   - **Field-Level Fallback**: Each primary-source field uses the best available data from primary or backup
-   - **Validation**: All data validated against climate bounds (earth extremes + 10% margin)
-   - **Preference**: Newest observation time when both sources have valid data
-   - **Recovery**: Primary must be healthy for 5 consecutive cycles before switching back
-   - METAR visibility/ceiling explicitly overwrite (even if null = unlimited)
-   - Primary/backup source fields preserved if METAR doesn't provide them
-   - All timestamps preserved separately for staleness checking
 
 ---
 
