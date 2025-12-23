@@ -357,20 +357,32 @@ curl https://aviationwx.org/health.php
 curl https://aviationwx.org/diagnostics.php
 ```
 
-### 5. Cron Jobs (Automatic)
+### 5. Scheduler Daemon (Automatic)
 
-**Cron jobs are automatically configured inside the Docker container** - no host-side setup required!
+**The scheduler daemon is automatically started on container boot** - no host-side setup required!
 
 The Docker container includes:
-- **Webcam refresh**: Runs every minute via cron inside the container
-- **Weather refresh**: Runs every minute via cron inside the container
+- **Scheduler daemon**: Starts automatically on container boot, handles all data refresh tasks
+- **Scheduler health check**: Runs every minute via cron to ensure scheduler stays running
+- **Push webcam processing**: Runs every minute via cron to process uploaded images
 
-Both jobs run as the `www-data` user inside the container and are configured in the `crontab` file that's built into the Docker image.
+The scheduler supports:
+- **Sub-minute refresh intervals**: Minimum 5 seconds, 1-second granularity
+- **Configurable intervals**: Per-airport or global defaults via `airports.json`
+- **Automatic config reload**: Configuration changes take effect without restart
+- **Weather, webcam, and NOTAM updates**: All handled by the scheduler
 
-**Verification**: To verify cron is running inside the container:
+**Verification**: To verify scheduler is running:
 
 ```bash
-docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep cron
+# Check scheduler process
+docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep scheduler
+
+# Check scheduler lock file
+docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock
+
+# Check scheduler status via status page
+curl https://aviationwx.org/status.php
 ```
 
 ## GitHub Actions CI/CD (Optional)

@@ -207,11 +207,18 @@ Verify cron jobs are running inside the container:
 # Check cron is running
 docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep cron
 
-# Manually test webcam fetcher
-docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php
+# Check scheduler status
+docker compose -f docker/docker-compose.prod.yml exec web cat /tmp/scheduler.lock | jq
 
-# Manually test weather fetcher
-docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-weather.php
+# Manually test webcam fetcher (worker mode - single airport/camera)
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php --worker kspb 0
+
+# Manually test weather fetcher (worker mode - single airport)
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-weather.php --worker kspb
+
+# Restart scheduler if needed
+docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
+# Scheduler will be restarted automatically by health check within 60 seconds
 ```
 
 ## Troubleshooting
@@ -257,8 +264,11 @@ docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source"
 # Check cron is running
 docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep cron
 
-# Manually fetch webcam images
-docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php
+# Check scheduler is running
+docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep scheduler
+
+# Manually trigger webcam update for specific airport/camera (worker mode)
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php --worker kspb 0
 
 # Check cache directory (location depends on deployment)
 ls -lh cache/webcams/

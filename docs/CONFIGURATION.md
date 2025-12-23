@@ -19,7 +19,18 @@ The `airports.json` file has two main sections:
     "base_domain": "aviationwx.org",
     "max_stale_hours": 3,
     "webcam_refresh_default": 60,
-    "weather_refresh_default": 60
+    "weather_refresh_default": 60,
+    "metar_refresh_seconds": 60,
+    "notam_refresh_seconds": 600,
+    "minimum_refresh_seconds": 5,
+    "scheduler_config_reload_seconds": 60,
+    "weather_worker_pool_size": 5,
+    "webcam_worker_pool_size": 5,
+    "notam_worker_pool_size": 1,
+    "worker_timeout_seconds": 45,
+    "webcam_generate_webp": false,
+    "webcam_generate_avif": false,
+    "notam_cache_ttl_seconds": 3600
   },
   "airports": {
     "airportid": { ... }
@@ -31,13 +42,33 @@ The `airports.json` file has two main sections:
 
 The `config` section (optional) contains application-wide defaults:
 
+#### Basic Settings
 - **`default_timezone`** - Default timezone for airports without timezone specified (default: `UTC`)
 - **`base_domain`** - Base domain for airport subdomains (default: `aviationwx.org`)
 - **`max_stale_hours`** - Maximum stale data threshold in hours (default: `3`)
+
+#### Refresh Intervals
 - **`webcam_refresh_default`** - Default webcam refresh interval in seconds (default: `60`)
 - **`weather_refresh_default`** - Default weather refresh interval in seconds (default: `60`)
+- **`metar_refresh_seconds`** - Global METAR refresh interval in seconds (default: `60`, minimum: `60`)
+- **`notam_refresh_seconds`** - Global NOTAM refresh interval in seconds (default: `600` = 10 minutes)
+- **`minimum_refresh_seconds`** - Minimum allowed refresh interval for any data source in seconds (default: `5`)
+- **`scheduler_config_reload_seconds`** - How often the scheduler checks for config changes in seconds (default: `60`)
+
+#### Worker Pool Configuration
+- **`weather_worker_pool_size`** - Maximum concurrent weather worker processes (default: `5`)
+- **`webcam_worker_pool_size`** - Maximum concurrent webcam worker processes (default: `5`)
+- **`notam_worker_pool_size`** - Maximum concurrent NOTAM worker processes (default: `1`)
+- **`worker_timeout_seconds`** - Timeout for worker processes in seconds (default: `45`)
+
+#### Webcam Format Generation
 - **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
 - **`webcam_generate_avif`** - Enable AVIF generation globally (default: `false`)
+
+#### NOTAM Configuration
+- **`notam_cache_ttl_seconds`** - NOTAM cache time-to-live in seconds (default: `3600` = 1 hour)
+- **`notam_api_client_id`** - NOTAM API client ID (required for NOTAM functionality)
+- **`notam_api_client_secret`** - NOTAM API client secret (required for NOTAM functionality)
 
 If the `config` section is omitted, sensible defaults are used.
 
@@ -1413,10 +1444,16 @@ docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
 
 ## Refresh Intervals
 
+Refresh intervals can be configured per airport or globally. The scheduler supports sub-minute refresh intervals (minimum 5 seconds) for weather and webcam data.
+
+### Per-Airport Configuration
+
 Both `webcam_refresh_seconds` and `weather_refresh_seconds` can be configured per airport in `airports.json`. If not specified, the following defaults are used:
 
 - **Webcam Refresh:** 60 seconds (from `config.webcam_refresh_default`)
 - **Weather Refresh:** 60 seconds (from `config.weather_refresh_default`)
+
+### Global Refresh Configuration
 
 These defaults are set in the global `config` section:
 
@@ -1424,11 +1461,29 @@ These defaults are set in the global `config` section:
 {
   "config": {
     "webcam_refresh_default": 60,
-    "weather_refresh_default": 60
+    "weather_refresh_default": 60,
+    "metar_refresh_seconds": 60,
+    "notam_refresh_seconds": 600,
+    "minimum_refresh_seconds": 5,
+    "scheduler_config_reload_seconds": 60
   },
   "airports": { ... }
 }
 ```
+
+**Refresh Interval Hierarchy:**
+1. Per-airport setting (e.g., `airport.webcam_refresh_seconds`)
+2. Global default (e.g., `config.webcam_refresh_default`)
+3. Function default (60 seconds for weather/webcam, 600 seconds for NOTAM)
+
+**Minimum Refresh Interval:**
+- All refresh intervals are enforced to be at least `minimum_refresh_seconds` (default: 5 seconds)
+- This prevents excessive update frequency and server load
+- METAR refresh has an additional minimum of 60 seconds (METAR data is published hourly)
+
+**Scheduler Configuration:**
+- The scheduler daemon checks for configuration changes every `scheduler_config_reload_seconds` (default: 60 seconds)
+- Configuration changes take effect automatically without restarting the scheduler
 
 ## Dynamic Features
 ### Configuration Cache (Automatic)
@@ -1461,11 +1516,33 @@ All application defaults are configured in the `config` section of `airports.jso
 
 ### Configuration Options
 
+#### Basic Settings
 - **`default_timezone`** - Default timezone for airports without timezone specified (default: `UTC`)
 - **`base_domain`** - Base domain for airport subdomains (default: `aviationwx.org`)
 - **`max_stale_hours`** - Maximum stale data threshold in hours (default: `3`)
+
+#### Refresh Intervals
 - **`webcam_refresh_default`** - Default webcam refresh interval in seconds (default: `60`)
 - **`weather_refresh_default`** - Default weather refresh interval in seconds (default: `60`)
+- **`metar_refresh_seconds`** - Global METAR refresh interval in seconds (default: `60`, minimum: `60`)
+- **`notam_refresh_seconds`** - Global NOTAM refresh interval in seconds (default: `600` = 10 minutes)
+- **`minimum_refresh_seconds`** - Minimum allowed refresh interval for any data source in seconds (default: `5`)
+- **`scheduler_config_reload_seconds`** - How often the scheduler checks for config changes in seconds (default: `60`)
+
+#### Worker Pool Configuration
+- **`weather_worker_pool_size`** - Maximum concurrent weather worker processes (default: `5`)
+- **`webcam_worker_pool_size`** - Maximum concurrent webcam worker processes (default: `5`)
+- **`notam_worker_pool_size`** - Maximum concurrent NOTAM worker processes (default: `1`)
+- **`worker_timeout_seconds`** - Timeout for worker processes in seconds (default: `45`)
+
+#### Webcam Format Generation
+- **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
+- **`webcam_generate_avif`** - Enable AVIF generation globally (default: `false`)
+
+#### NOTAM Configuration
+- **`notam_cache_ttl_seconds`** - NOTAM cache time-to-live in seconds (default: `3600` = 1 hour)
+- **`notam_api_client_id`** - NOTAM API client ID (required for NOTAM functionality)
+- **`notam_api_client_secret`** - NOTAM API client secret (required for NOTAM functionality)
 
 ### Example Global Configuration
 
@@ -1476,7 +1553,18 @@ All application defaults are configured in the `config` section of `airports.jso
     "base_domain": "aviationwx.org",
     "max_stale_hours": 3,
     "webcam_refresh_default": 60,
-    "weather_refresh_default": 60
+    "weather_refresh_default": 60,
+    "metar_refresh_seconds": 60,
+    "notam_refresh_seconds": 600,
+    "minimum_refresh_seconds": 5,
+    "scheduler_config_reload_seconds": 60,
+    "weather_worker_pool_size": 5,
+    "webcam_worker_pool_size": 5,
+    "notam_worker_pool_size": 1,
+    "worker_timeout_seconds": 45,
+    "webcam_generate_webp": false,
+    "webcam_generate_avif": false,
+    "notam_cache_ttl_seconds": 3600
   },
   "airports": { ... }
 }
@@ -1499,8 +1587,11 @@ open http://localhost:8080/?airport=kspb
 # Test weather API
 curl http://localhost:8080/weather.php?airport=kspb
 
-# Cache webcam images
-php fetch-webcam.php
+# Test webcam fetcher (worker mode - requires airport ID and camera index)
+php scripts/fetch-webcam.php --worker kspb 0
+
+# Test weather fetcher (worker mode - requires airport ID)
+php scripts/fetch-weather.php --worker kspb
 ```
 
 ## Production Deployment
@@ -1512,14 +1603,18 @@ Each airport requires a subdomain DNS entry pointing to the same server:
 
 The `.htaccess` file automatically routes subdomains to `index.php` which loads the appropriate airport template.
 
-### Cron Jobs (Automatic)
+### Scheduler Daemon (Automatic)
 
-Cron jobs are automatically configured inside the Docker container - no setup required!
+The scheduler daemon automatically handles all data refresh tasks - no setup required!
 
-- **Webcam refresh**: Runs every minute via cron inside the container
-- **Weather refresh**: Runs every minute via cron inside the container
+- **Scheduler daemon**: Starts automatically on container boot
+- **Health check**: Runs every minute via cron to ensure scheduler stays running
+- **Weather refresh**: Handled by scheduler with configurable intervals (default: 60 seconds, minimum: 5 seconds)
+- **Webcam refresh**: Handled by scheduler with configurable intervals (default: 60 seconds, minimum: 5 seconds)
+- **NOTAM refresh**: Handled by scheduler with configurable intervals (default: 600 seconds = 10 minutes)
+- **Push webcam processing**: Runs every minute via cron to process uploaded images
 
-Both jobs are configured in the `crontab` file that's built into the Docker image and start automatically when the container starts.
+The scheduler supports sub-minute refresh intervals and automatically reloads configuration changes without restart. All refresh intervals are configurable via `airports.json`.
 
 ## Configuration Files
 

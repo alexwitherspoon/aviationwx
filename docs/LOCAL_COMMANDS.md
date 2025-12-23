@@ -125,11 +125,12 @@ php -S localhost:8080
 
 ## 🎯 For Production (Docker Droplet)
 
-**Cron jobs run automatically inside the Docker container** - no setup required!
+**The scheduler daemon runs automatically inside the Docker container** - no setup required!
 
-The Docker container includes cron jobs that run:
-- Webcam refresh every minute
-- Weather refresh every minute
+The Docker container includes:
+- **Scheduler daemon**: Starts automatically on container boot, handles all data refresh tasks
+- **Scheduler health check**: Runs every minute via cron to ensure scheduler stays running
+- **Push webcam processing**: Runs every minute via cron to process uploaded images
 
-Both jobs are configured in the `crontab` file that's built into the Docker image and start automatically when the container starts.
+The scheduler supports sub-minute refresh intervals (minimum 5 seconds) and automatically reloads configuration changes without restart. All refresh intervals are configurable via `airports.json`.
 

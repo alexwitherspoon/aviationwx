@@ -42,9 +42,12 @@ aviationwx.org/
 │       ├── source-timestamps.php # Timestamp extraction
 │       └── adapter/          # Weather API adapters
 ├── scripts/
-│   ├── fetch-webcam.php      # Webcam fetcher (runs via cron)
-│   ├── fetch-weather.php     # Weather fetcher (runs via cron)
-│   └── process-push-webcams.php # Push webcam processor
+│   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM)
+│   ├── scheduler-health-check.php # Scheduler health check (runs via cron)
+│   ├── fetch-webcam.php      # Webcam fetcher (worker mode for scheduler)
+│   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
+│   ├── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
+│   └── process-push-webcams.php # Push webcam processor (runs via cron)
 ├── admin/
 │   ├── diagnostics.php       # System diagnostics endpoint
 │   ├── cache-clear.php       # Cache clearing endpoint
@@ -103,8 +106,16 @@ aviationwx.org/
 - Format priority: explicit fmt parameter → AVIF → WebP → JPEG
 - **Background refresh**: Serves stale cache immediately, refreshes in background (similar to weather)
 
-**`scripts/fetch-webcam.php`**: Fetches and caches webcam images
-- Runs via cron inside Docker container (every minute, automatically configured)
+**`scripts/scheduler.php`**: Combined scheduler daemon for data refresh
+- Runs continuously as background process (started on container boot)
+- Handles weather, webcam, and NOTAM updates with sub-minute granularity
+- Supports configurable refresh intervals (minimum 5 seconds, 1-second granularity)
+- Non-blocking main loop with ProcessPool integration
+- Automatically reloads configuration changes without restart
+
+**`scripts/fetch-webcam.php`**: Fetches and caches webcam images (worker mode)
+- Called by scheduler in `--worker` mode for individual airport/camera updates
+- Can also be run manually for testing
 - Safe memory usage (stops after first frame)
 - Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), push uploads (SFTP/FTP/FTPS)
 - Generates multiple formats per image (JPEG, WebP, AVIF)
@@ -188,7 +199,8 @@ Response (JSON) + Cache
 ### Webcam Data Flow
 
 ```
-Cron (inside container) → scripts/fetch-webcam.php
+Scheduler Daemon (background process) → scripts/fetch-webcam.php (worker mode)
+Cron (every 60s) → scripts/scheduler-health-check.php (monitors scheduler)
   ↓
 For each webcam:
   ↓
