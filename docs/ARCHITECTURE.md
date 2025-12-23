@@ -35,12 +35,19 @@ aviationwx.org/
 │   ├── webcam-error-detector.php # Webcam error frame detection
 │   ├── webcam-format-generation.php # Shared format generation (WebP, AVIF, JPEG)
 │   └── weather/
-│       ├── fetcher.php       # Weather data fetching
+│       ├── UnifiedFetcher.php # New unified weather pipeline
+│       ├── WeatherAggregator.php # Multi-source aggregation logic
+│       ├── AggregationPolicy.php # Aggregation rules and preferences
+│       ├── fetcher.php       # Legacy weather data fetching
 │       ├── calculator.php    # Aviation calculations
 │       ├── daily-tracking.php # Daily high/low tracking
-│       ├── staleness.php     # Data staleness handling
+│       ├── staleness.php     # Legacy staleness handling
 │       ├── source-timestamps.php # Timestamp extraction
-│       └── adapter/          # Weather API adapters
+│       ├── data/             # Data classes
+│       │   ├── WeatherSnapshot.php # Complete weather state from source
+│       │   ├── WeatherReading.php  # Single field measurement
+│       │   └── WindGroup.php       # Grouped wind fields
+│       └── adapter/          # Weather API adapters (self-describing)
 ├── scripts/
 │   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM)
 │   ├── scheduler-health-check.php # Scheduler health check (runs via cron)
@@ -82,20 +89,29 @@ aviationwx.org/
 
 - **Purpose**: Fetches and serves weather data as JSON API
 - **Key Features**:
-  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, METAR)
-  - Parallel fetching via `curl_multi` (when supported by source)
-  - Per-source staleness checking (3-hour threshold)
+  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, PWSWeather, SynopticData, METAR)
+  - **Unified Fetcher** (default): Clean aggregation pipeline with predictable behavior
+  - Parallel fetching via `curl_multi` for all sources
+  - Field-level source tracking and observation times
+  - Per-source staleness checking (3-hour threshold for sensors, METAR has own threshold)
   - Caching with stale-while-revalidate
   - Rate limiting
-  - Comprehensive logging
+  - Debug endpoint (`?debug=1`) for troubleshooting
+  - Legacy fallback (`?legacy=1`) for backward compatibility
 
-**Data Flow**:
+**Data Flow** (Unified Fetcher):
 1. Request validation (airport ID, rate limiting)
 2. Cache check (fresh/stale/expired)
-3. Data fetching (parallel primary + METAR)
-4. Data merging and processing
-5. Staleness checking (per-source)
-6. Response with appropriate cache headers
+3. Build source list (primary + backup + METAR)
+4. Fetch all sources in parallel via `curl_multi`
+5. Parse responses into `WeatherSnapshot` objects
+6. Aggregate using `WeatherAggregator` with defined policies:
+   - Wind fields must come from single source (complete group)
+   - METAR preferred for visibility/ceiling/cloud_cover
+   - Freshest valid data wins for other fields
+7. Add calculated fields (flight category, altitudes, dewpoint spread)
+8. Daily tracking (temp extremes, peak gust)
+9. Cache and serve response
 
 ### Webcam System
 
@@ -251,6 +267,17 @@ Next request gets fresh image
 - **Implementation**: `curl_multi` for parallel HTTP requests
 - **Benefit**: Faster responses, better user experience
 
+### 5. Multi-Source Aggregation (Unified Fetcher)
+
+- **Why**: Combine data from multiple sources for best coverage and accuracy
+- **Implementation**: `WeatherAggregator` applies `AggregationPolicy` rules
+- **Key Rules**:
+  - Wind fields (speed, direction, gust) must come from single source as a group
+  - METAR is preferred for visibility, ceiling, and cloud cover
+  - For other fields, freshest valid data wins among configured sources
+  - Stale data (beyond max acceptable age) is excluded from aggregation
+- **Benefit**: Best available data from all sources, clear field-level attribution
+
 ### 5. Multiple Image Formats
 
 - **Why**: Browser compatibility and performance
@@ -312,11 +339,14 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details.
 
 ### Adding a New Weather Source
 
-1. Add parser function (e.g., `parseNewSourceResponse()`)
-2. Add fetch function (e.g., `fetchNewSourceWeather()`)
-3. Update `fetchWeatherAsync()` or `fetchWeatherSync()` to use new source
-4. Update configuration documentation
-5. Add to `CONFIGURATION.md`
+1. Create new adapter class extending the adapter pattern (see existing adapters in `lib/weather/adapter/`)
+2. Implement required methods:
+   - `parseResponse()`: Parse API response into standardized format
+   - `getMaxAcceptableAge()`: Return max age in seconds before data is stale
+   - `buildUrl()`: Construct API URL from config
+3. Add adapter to `buildSourceList()` in `lib/weather/UnifiedFetcher.php`
+4. Add source type to `parseSourceResponse()` switch statement
+5. Update configuration documentation in `CONFIGURATION.md`
 
 ### Adding a New Airport
 

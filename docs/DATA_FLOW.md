@@ -222,7 +222,45 @@ Both primary and METAR sources have independent circuit breakers:
 
 **Priority**: Observation time is preferred over fetch time for display, as it represents actual weather conditions.
 
-### Data Merging
+### Data Aggregation (Unified Fetcher)
+
+The new unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` to combine data from all configured sources:
+
+1. **Source Priority** (highest to lowest):
+   - Tempest
+   - Ambient
+   - WeatherLink
+   - PWSWeather
+   - SynopticData
+   - METAR
+
+2. **Field-Specific Rules**:
+   - **Wind Group** (speed, direction, gust): Must come from single source as a complete unit
+   - **Visibility, Ceiling, Cloud Cover**: METAR is always preferred when available
+   - **Other Fields**: Freshest valid data wins among all configured sources
+
+3. **Aggregation Process**:
+   1. Fetch all configured sources in parallel
+   2. Parse each response into `WeatherSnapshot` with per-field observation times
+   3. For each field, select best value based on:
+      - Is field from preferred source type?
+      - Is data within max acceptable age for this source?
+      - Is observation time newer than other sources?
+   4. Build aggregated result with `_field_source_map` and `_field_obs_time_map`
+
+4. **Data Classes**:
+   - `WeatherSnapshot`: Complete weather state from one source
+   - `WeatherReading`: Single field value with source and observation time
+   - `WindGroup`: Grouped wind fields ensuring consistency
+
+5. **Max Acceptable Ages** (per source type):
+   - Tempest: 300 seconds (5 minutes)
+   - Ambient/WeatherLink: 300 seconds (5 minutes)
+   - PWSWeather: 600 seconds (10 minutes)
+   - SynopticData: 900 seconds (15 minutes)
+   - METAR: 7200 seconds (2 hours)
+
+### Legacy Data Merging (deprecated, available via ?legacy=1)
 
 When primary, backup, and METAR data are available:
 
