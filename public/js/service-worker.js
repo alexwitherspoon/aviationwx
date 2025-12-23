@@ -166,7 +166,26 @@ self.isCachedResponseStale = async function(cachedResponse) {
         return null;
     }
     
-    // Fast path: Check custom header first (no cloning or parsing needed)
+    // Fast path: Check newest obs_time header first (preferred method)
+    const newestObsTimeHeader = cachedResponse.headers.get('X-Weather-Newest-Obs-Time');
+    if (newestObsTimeHeader) {
+        try {
+            const newestObsTime = parseInt(newestObsTimeHeader, 10);
+            if (!isNaN(newestObsTime) && newestObsTime > 0) {
+                const now = Math.floor(Date.now() / 1000);
+                const age = now - newestObsTime;
+                // Use 10x multiplier threshold (600 seconds = 10 minutes for 60s refresh)
+                // This is conservative - frontend will do per-field checks
+                const staleThreshold = 600; // 10 minutes default
+                return age >= staleThreshold;
+            }
+        } catch (err) {
+            // Header exists but invalid, fall through to JSON parsing
+            console.warn('[SW] Invalid X-Weather-Newest-Obs-Time header:', err);
+        }
+    }
+    
+    // Fallback: Check last_updated header (backward compatibility)
     const lastUpdatedHeader = cachedResponse.headers.get('X-Weather-Last-Updated');
     if (lastUpdatedHeader) {
         try {
@@ -188,9 +207,25 @@ self.isCachedResponseStale = async function(cachedResponse) {
         const clonedResponse = cachedResponse.clone();
         const cachedData = await clonedResponse.json();
         
-        if (cachedData && cachedData.weather && cachedData.weather.last_updated) {
-            const cacheAge = Date.now() / 1000 - cachedData.weather.last_updated;
-            return cacheAge > MAX_STALE_AGE_SECONDS;
+        if (cachedData && cachedData.weather) {
+            // Try to get newest obs_time from _field_obs_time_map (preferred)
+            if (cachedData.weather._field_obs_time_map && typeof cachedData.weather._field_obs_time_map === 'object') {
+                const obsTimes = Object.values(cachedData.weather._field_obs_time_map).filter(t => t > 0);
+                if (obsTimes.length > 0) {
+                    const newestObsTime = Math.max(...obsTimes);
+                    const now = Math.floor(Date.now() / 1000);
+                    const age = now - newestObsTime;
+                    // Use 10x multiplier threshold (600 seconds = 10 minutes for 60s refresh)
+                    const staleThreshold = 600;
+                    return age >= staleThreshold;
+                }
+            }
+            
+            // Fallback to last_updated
+            if (cachedData.weather.last_updated) {
+                const cacheAge = Date.now() / 1000 - cachedData.weather.last_updated;
+                return cacheAge > MAX_STALE_AGE_SECONDS;
+            }
         }
         
         return null; // Cannot determine staleness without timestamp
@@ -268,6 +303,7 @@ self.extractAndCacheWithTimestamp = async function(response) {
     // Clone response once to read JSON without consuming original body
     const clonedForParsing = response.clone();
     let lastUpdated = null;
+    let newestObsTime = null;
     let responseBody = null;
     
     try {
@@ -275,8 +311,20 @@ self.extractAndCacheWithTimestamp = async function(response) {
         const bodyArrayBuffer = await clonedForParsing.arrayBuffer();
         const data = JSON.parse(new TextDecoder().decode(bodyArrayBuffer));
         
-        if (data && data.weather && data.weather.last_updated) {
-            lastUpdated = data.weather.last_updated;
+        if (data && data.weather) {
+            // Extract last_updated for backward compatibility
+            if (data.weather.last_updated) {
+                lastUpdated = data.weather.last_updated;
+            }
+            
+            // Extract newest obs_time from _field_obs_time_map (preferred method)
+            if (data.weather._field_obs_time_map && typeof data.weather._field_obs_time_map === 'object') {
+                const obsTimes = Object.values(data.weather._field_obs_time_map).filter(t => t > 0);
+                if (obsTimes.length > 0) {
+                    newestObsTime = Math.max(...obsTimes);
+                }
+            }
+            
             // Reuse the array buffer for the new response
             responseBody = bodyArrayBuffer;
         }
@@ -287,7 +335,7 @@ self.extractAndCacheWithTimestamp = async function(response) {
     }
     
     // If no timestamp found, return original response
-    if (lastUpdated === null) {
+    if (lastUpdated === null && newestObsTime === null) {
         return response.clone();
     }
     
@@ -298,7 +346,14 @@ self.extractAndCacheWithTimestamp = async function(response) {
         statusText: response.statusText,
         headers: (() => {
             const headers = new Headers(response.headers);
-            headers.set('X-Weather-Last-Updated', lastUpdated.toString());
+            // Set last_updated for backward compatibility
+            if (lastUpdated !== null) {
+                headers.set('X-Weather-Last-Updated', lastUpdated.toString());
+            }
+            // Set newest obs_time (preferred method for staleness checks)
+            if (newestObsTime !== null) {
+                headers.set('X-Weather-Newest-Obs-Time', newestObsTime.toString());
+            }
             return headers;
         })()
     });

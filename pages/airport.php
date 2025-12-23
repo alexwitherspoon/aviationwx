@@ -1048,6 +1048,47 @@ const AIRPORT_DATA = <?php
         echo $airportJson;
     }
 ?>;
+
+// Initial weather data (embedded from cache for immediate display)
+const INITIAL_WEATHER_DATA = <?php
+    // Load cached weather data for immediate display
+    $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+    $initialWeatherData = null;
+    if (file_exists($weatherCacheFile)) {
+        $cachedWeather = @json_decode(@file_get_contents($weatherCacheFile), true);
+        if (is_array($cachedWeather)) {
+            // Apply staleness checks to ensure we don't show stale data
+            require_once __DIR__ . '/../lib/constants.php';
+            require_once __DIR__ . '/../lib/weather/staleness.php';
+            
+            $defaultWeatherRefresh = getDefaultWeatherRefresh();
+            $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) 
+                ? intval($airport['weather_refresh_seconds']) 
+                : $defaultWeatherRefresh;
+            $maxStaleSeconds = MAX_STALE_HOURS * 3600;
+            $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+            
+            // Null out stale fields before embedding
+            nullStaleFieldsBySource($cachedWeather, $maxStaleSeconds, $maxStaleSecondsMetar);
+            
+            $initialWeatherData = $cachedWeather;
+        }
+    }
+    
+    // Defensive JSON encoding with error handling
+    if ($initialWeatherData === null) {
+        echo 'null'; // No cached data available
+    } else {
+        $weatherJson = json_encode($initialWeatherData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        if ($weatherJson === false) {
+            error_log('JSON encode failed for initial weather data: ' . json_last_error_msg());
+            echo 'null'; // Fallback to null
+        } else {
+            echo $weatherJson;
+        }
+    }
+?>;
+
 // Default timezone (from global config)
 const DEFAULT_TIMEZONE = <?php
     $defaultTz = getDefaultTimezone();
@@ -1553,7 +1594,9 @@ function smToKm(sm) {
 
 // Format visibility (statute miles) based on current unit preference
 function formatVisibility(sm) {
-    if (sm === null || sm === undefined) return '--';
+    if (sm === null || sm === undefined) return '--';  // Failed state
+    // Sentinel value 999.0 represents unlimited visibility
+    if (sm === 999.0) return 'Unlimited';
     const unit = getDistanceUnit();
     if (unit === 'm') {
         return smToKm(sm).toFixed(1);
@@ -1564,7 +1607,9 @@ function formatVisibility(sm) {
 
 // Format ceiling (feet) based on current unit preference
 function formatCeiling(ft) {
-    if (ft === null || ft === undefined) return null;
+    if (ft === null || ft === undefined) return null;  // Failed state (shows as '--' in template)
+    // Sentinel value 99999 represents unlimited ceiling
+    if (ft === 99999) return 'Unlimited';
     const unit = getDistanceUnit();
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
@@ -2361,7 +2406,105 @@ async function fetchWeather(forceRefresh = false) {
     }
 }
 
+/**
+ * Check if a weather field is stale and should be hidden
+ * Uses per-field observation time from _field_obs_time_map
+ * Fail-closed: if no obs_time entry, consider stale
+ * 
+ * @param {string} fieldName - Field name to check
+ * @param {object} weatherData - Weather data object with _field_obs_time_map
+ * @param {number} refreshIntervalSeconds - Refresh interval for multiplier calculation
+ * @param {boolean} isMetarField - True if METAR field (uses hour-based threshold)
+ * @returns {boolean} True if field should be hidden
+ */
+function isFieldStale(fieldName, weatherData, refreshIntervalSeconds, isMetarField) {
+    const fieldObsTimeMap = weatherData._field_obs_time_map || {};
+    const obsTime = fieldObsTimeMap[fieldName];
+    
+    // Fail-closed: no obs_time entry = stale
+    if (!obsTime || obsTime <= 0) {
+        return true;
+    }
+    
+    const now = Math.floor(Date.now() / 1000);
+    const age = now - obsTime;
+    
+    // METAR fields: use hour-based threshold (2 hours)
+    if (isMetarField) {
+        const staleThreshold = WEATHER_STALENESS_ERROR_HOURS_METAR * SECONDS_PER_HOUR;
+        return age >= staleThreshold;
+    }
+    
+    // Non-METAR fields: use multiplier-based threshold (10x refresh interval)
+    const staleThreshold = refreshIntervalSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER;
+    return age >= staleThreshold;
+}
+
+/**
+ * Check if calculated field should be shown based on source field validity
+ */
+function shouldShowGustFactor(weather) {
+    return weather.wind_speed !== null && weather.gust_speed !== null;
+}
+
+function shouldShowDewpointSpread(weather) {
+    return weather.temperature !== null && weather.dewpoint !== null;
+}
+
+function shouldShowPressureAltitude(weather) {
+    return weather.pressure !== null;
+}
+
+function shouldShowDensityAltitude(weather) {
+    return weather.temperature !== null && weather.pressure !== null;
+}
+
+/**
+ * Create sanitized weather data with stale fields nulled
+ * This provides client-side validation for offline scenarios
+ * 
+ * @param {object} weather - Weather data from API
+ * @param {number} refreshIntervalSeconds - Refresh interval for staleness calculation
+ * @returns {object} Sanitized weather data with stale fields set to null
+ */
+function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
+    const sanitized = { ...weather };
+    
+    // METAR fields (use hour-based threshold)
+    const metarFields = ['visibility', 'ceiling', 'cloud_cover'];
+    metarFields.forEach(field => {
+        if (isFieldStale(field, weather, refreshIntervalSeconds, true)) {
+            sanitized[field] = null;
+        }
+    });
+    
+    // Non-METAR fields (use multiplier-based threshold)
+    const nonMetarFields = [
+        'temperature', 'dewpoint', 'humidity', 'wind_speed', 
+        'wind_direction', 'gust_speed', 'pressure', 'precip_accum'
+    ];
+    nonMetarFields.forEach(field => {
+        if (isFieldStale(field, weather, refreshIntervalSeconds, false)) {
+            sanitized[field] = null;
+        }
+    });
+    
+    // Calculated fields: null if source fields are invalid
+    sanitized.gust_factor = shouldShowGustFactor(sanitized) ? sanitized.gust_factor : null;
+    sanitized.dewpoint_spread = shouldShowDewpointSpread(sanitized) ? sanitized.dewpoint_spread : null;
+    sanitized.pressure_altitude = shouldShowPressureAltitude(sanitized) ? sanitized.pressure_altitude : null;
+    sanitized.density_altitude = shouldShowDensityAltitude(sanitized) ? sanitized.density_altitude : null;
+    
+    return sanitized;
+}
+
 function displayWeather(weather) {
+    // Sanitize weather data - null out stale fields for fail-closed behavior
+    const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+        ? AIRPORT_DATA.weather_refresh_seconds 
+        : 60;
+    const sanitizedWeather = sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds);
+    
     // Determine weather emojis based on abnormal conditions only
     function getWeatherEmojis(weather) {
         const emojis = [];
@@ -2427,7 +2570,7 @@ function displayWeather(weather) {
         return emojis.length > 0 ? emojis.join(' ') : '';
     }
     
-    const weatherEmojis = getWeatherEmojis(weather);
+    const weatherEmojis = getWeatherEmojis(sanitizedWeather);
     
     const container = document.getElementById('weather-data');
     if (!container) {
@@ -2441,7 +2584,7 @@ function displayWeather(weather) {
         <div class="weather-group">
             ${(() => {
                 // Check if METAR data is actually available (has METAR timestamp)
-                const hasMetarData = (weather.obs_time_metar && weather.obs_time_metar > 0) || (weather.last_updated_metar && weather.last_updated_metar > 0);
+                const hasMetarData = (sanitizedWeather.obs_time_metar && sanitizedWeather.obs_time_metar > 0) || (sanitizedWeather.last_updated_metar && sanitizedWeather.last_updated_metar > 0);
                 if (!hasMetarData) {
                     // METAR is unavailable - show all fields as '--'
                     return `
@@ -2450,11 +2593,11 @@ function displayWeather(weather) {
                     <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">--</span></div>
                     `;
                 }
-                // METAR data is available - show values
+                // METAR data is available - show values (using sanitized data)
                 return `
-                <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${weather.flight_category_class || ''}">${weather.flight_category || '--'} ${weather.flight_category ? weatherEmojis : ''}</span></div>
-                <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(weather.visibility)}</span><span class="weather-unit">${weather.visibility !== null && weather.visibility !== undefined ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${weather.visibility !== null && weather.visibility !== undefined ? formatTempTimestamp(weather.obs_time_metar || weather.last_updated_metar) : ''}</div>
-                <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${weather.ceiling !== null && weather.ceiling !== undefined ? formatCeiling(weather.ceiling) : (weather.visibility !== null && weather.visibility !== undefined ? 'Unlimited' : '--')}</span><span class="weather-unit">${weather.ceiling !== null && weather.ceiling !== undefined ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(weather.ceiling !== null && weather.ceiling !== undefined || (weather.visibility !== null && weather.visibility !== undefined)) ? formatTempTimestamp(weather.obs_time_metar || weather.last_updated_metar) : ''}</div>
+                <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${sanitizedWeather.flight_category_class || ''}">${sanitizedWeather.flight_category || '--'} ${sanitizedWeather.flight_category ? weatherEmojis : ''}</span></div>
+                <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(sanitizedWeather.visibility)}</span><span class="weather-unit">${sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? formatTempTimestamp(sanitizedWeather.obs_time_metar || sanitizedWeather.last_updated_metar) : ''}</div>
+                <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined ? formatCeiling(sanitizedWeather.ceiling) : (sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? 'Unlimited' : '--')}</span><span class="weather-unit">${sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined || (sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined)) ? formatTempTimestamp(sanitizedWeather.obs_time_metar || sanitizedWeather.last_updated_metar) : ''}</div>
                 `;
             })()}
         </div>
@@ -2462,42 +2605,42 @@ function displayWeather(weather) {
         
         <!-- Temperature -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">${formatTemp(weather.temp_high_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(weather.temp_high_ts)}</div>
-            <div class="weather-item"><span class="label">Current Temperature</span><span class="weather-value">${formatTemp(weather.temperature)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">${formatTemp(weather.temp_low_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(weather.temp_low_ts)}</div>
+            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">${formatTemp(sanitizedWeather.temp_high_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(sanitizedWeather.temp_high_ts)}</div>
+            <div class="weather-item"><span class="label">Current Temperature</span><span class="weather-value">${formatTemp(sanitizedWeather.temperature)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">${formatTemp(sanitizedWeather.temp_low_today)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span>${formatTempTimestamp(sanitizedWeather.temp_low_ts)}</div>
         </div>
         
         <!-- Moisture & Precipitation -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(weather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(weather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
-            <div class="weather-item"><span class="label">Humidity</span><span class="weather-value">${weather.humidity !== null && weather.humidity !== undefined ? Math.round(weather.humidity) : '--'}</span><span class="weather-unit">${weather.humidity !== null && weather.humidity !== undefined ? '%' : ''}</span></div>
+            <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">${formatTempSpread(sanitizedWeather.dewpoint_spread)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">${formatTemp(sanitizedWeather.dewpoint)}</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Humidity</span><span class="weather-value">${sanitizedWeather.humidity !== null && sanitizedWeather.humidity !== undefined ? Math.round(sanitizedWeather.humidity) : '--'}</span><span class="weather-unit">${sanitizedWeather.humidity !== null && sanitizedWeather.humidity !== undefined ? '%' : ''}</span></div>
         </div>
         
         <!-- Precipitation & Daylight -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(weather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
+            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">${formatRainfall(sanitizedWeather.precip_accum)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌅</span>
                     <span class="label">Sunrise</span>
                 </span>
-                <span class="weather-value">${formatTime(weather.sunrise || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+                <span class="weather-value">${formatTime(sanitizedWeather.sunrise || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
             </div>
             <div class="weather-item sunrise-sunset">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.2rem;">🌇</span>
                     <span class="label">Sunset</span>
                 </span>
-                <span class="weather-value">${formatTime(weather.sunset || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+                <span class="weather-value">${formatTime(sanitizedWeather.sunset || '--')} <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
             </div>
         </div>
         
         <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Pressure</span><span class="weather-value">${weather.pressure ? weather.pressure.toFixed(2) : '--'}</span><span class="weather-unit">inHg</span></div>
-            <div class="weather-item"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(weather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
-            <div class="weather-item"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(weather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item"><span class="label">Pressure</span><span class="weather-value">${sanitizedWeather.pressure ? sanitizedWeather.pressure.toFixed(2) : '--'}</span><span class="weather-unit">inHg</span></div>
+            <div class="weather-item"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
         </div>
     `;
 }
@@ -2680,18 +2823,36 @@ function updateWindVisual(weather) {
         });
     });
     
-    // Draw wind only if speed > 0
-    const ws = weather.wind_speed ?? null;
-    const wd = weather.wind_direction;
+    // Check if wind data is stale before displaying wind indicators
+    const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+        ? AIRPORT_DATA.weather_refresh_seconds 
+        : 60;
+    const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, false) ||
+                      isFieldStale('wind_direction', weather, refreshIntervalSeconds, false);
+    
+    // Check staleness for individual wind fields for details panel
+    const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, false);
+    const windDirectionStale = isFieldStale('wind_direction', weather, refreshIntervalSeconds, false);
+    const gustSpeedStale = isFieldStale('gust_speed', weather, refreshIntervalSeconds, false);
+    
+    // Use sanitized values for details panel (null out stale fields)
+    const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
+    const wd = windDirectionStale ? null : (weather.wind_direction ?? null);
     const isVariableWind = wd === 'VRB' || wd === 'vrb';
     const windDirNumeric = typeof wd === 'number' && wd > 0 ? wd : null;
     
-    // Get today's peak gust from server
+    // Get today's peak gust from server (daily tracking, never stale)
     const todaysPeakGust = weather.peak_gust_today || 0;
     
     // Populate wind details section
     const windDetails = document.getElementById('wind-details');
-    const gustFactor = weather.gust_factor ?? null;
+    // Gust factor is calculated field - only show if source fields are valid
+    const gustFactor = (!windSpeedStale && !gustSpeedStale && weather.wind_speed !== null && weather.gust_speed !== null) 
+        ? (weather.gust_factor ?? null) 
+        : null;
+    
+    // Get gust speed/peak gust value (null if stale)
+    const gustSpeed = gustSpeedStale ? null : (weather.gust_speed || weather.peak_gust || null);
     
     const windUnitLabel = getWindSpeedUnitLabel();
     windDetails.innerHTML = `
@@ -2705,7 +2866,7 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Peak Gust:</span>
-            <span style="font-weight: bold;">${(weather.gust_speed || weather.peak_gust) !== null && (weather.gust_speed || weather.peak_gust) !== undefined ? (weather.gust_speed || weather.peak_gust) > 0 ? formatWindSpeed(weather.gust_speed || weather.peak_gust) + ' ' + windUnitLabel : '--' : '--'}</span>
+            <span style="font-weight: bold;">${gustSpeed !== null && gustSpeed !== undefined ? (gustSpeed > 0 ? formatWindSpeed(gustSpeed) + ' ' + windUnitLabel : '--') : '--'}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Gust Factor:</span>
@@ -2731,28 +2892,36 @@ function updateWindVisual(weather) {
         </div>
     `;
     
-    if (ws !== null && ws !== undefined && ws > 1 && !isVariableWind && windDirNumeric !== null) {
-        // Store for animation (only if we have a valid numeric direction)
-        windDirection = (windDirNumeric * Math.PI) / 180;
-        windSpeed = ws;
-        
-        // Draw wind arrow
-        drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
-    } else if (ws !== null && ws !== undefined && ws > 1 && isVariableWind) {
-        // Variable wind - draw "VRB" text
-        ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
-        ctx.strokeText('VRB', cx, cy);
-        ctx.fillStyle = '#dc3545';
-        ctx.fillText('VRB', cx, cy);
-    } else {
-        // Calm conditions - draw a circle
-        ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
-        ctx.strokeText('CALM', cx, cy);
-        ctx.fillStyle = '#333';
-        ctx.fillText('CALM', cx, cy);
+    // Only draw wind indicators if data is fresh (not stale)
+    if (!windStale) {
+        if (ws !== null && ws !== undefined && ws > 1 && !isVariableWind && windDirNumeric !== null) {
+            // Store for animation (only if we have a valid numeric direction)
+            windDirection = (windDirNumeric * Math.PI) / 180;
+            windSpeed = ws;
+            
+            // Draw wind arrow
+            drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
+        } else if (ws !== null && ws !== undefined && ws > 1 && isVariableWind) {
+            // Variable wind - draw "VRB" text
+            ctx.font = 'bold 20px sans-serif'; 
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = '#fff'; 
+            ctx.lineWidth = 3;
+            ctx.strokeText('VRB', cx, cy);
+            ctx.fillStyle = '#dc3545';
+            ctx.fillText('VRB', cx, cy);
+        } else if (ws === null || ws === undefined || ws === 0) {
+            // Calm conditions - draw CALM text (only when data is fresh)
+            ctx.font = 'bold 20px sans-serif'; 
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = '#fff'; 
+            ctx.lineWidth = 3;
+            ctx.strokeText('CALM', cx, cy);
+            ctx.fillStyle = '#333';
+            ctx.fillText('CALM', cx, cy);
+        }
     }
+    // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
     
     // Draw cardinal directions
     ['N', 'E', 'S', 'W'].forEach((l, i) => {
@@ -3137,6 +3306,28 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
 
     setupStaggeredWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
     <?php endforeach; ?>
+    
+    // Handle window visibility changes - refresh webcams immediately when window regains focus
+    // This ensures users see fresh images immediately after switching back to the tab
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // Window is now visible - refresh all webcams immediately
+            console.log('[Webcam] Window regained focus - refreshing all webcams');
+            <?php foreach ($airport['webcams'] as $index => $cam): ?>
+            safeSwapCameraImage(<?= $index ?>);
+            <?php endforeach; ?>
+        }
+    });
+    
+    // Also handle window focus event as fallback (for older browsers)
+    window.addEventListener('focus', () => {
+        if (!document.hidden) {
+            console.log('[Webcam] Window focused - refreshing all webcams');
+            <?php foreach ($airport['webcams'] as $index => $cam): ?>
+            safeSwapCameraImage(<?= $index ?>);
+            <?php endforeach; ?>
+        }
+    });
 })();
 <?php endif; ?>
 
@@ -3207,15 +3398,97 @@ if (hasWeatherSource || hasMetarStation) {
         ? AIRPORT_DATA.weather_refresh_seconds * 1000 
         : 60000; // Default 60 seconds
 
-    // Delay initial fetch to avoid competing with LCP image load
-    setTimeout(() => {
-        fetchWeather();
-    }, 500);
-    setInterval(fetchWeather, weatherRefreshMs);
+    // Display initial weather data immediately if available (from cache)
+    if (typeof INITIAL_WEATHER_DATA !== 'undefined' && INITIAL_WEATHER_DATA !== null) {
+        currentWeatherData = INITIAL_WEATHER_DATA;
+        const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+            ? AIRPORT_DATA.weather_refresh_seconds 
+            : 60;
+        displayWeather(INITIAL_WEATHER_DATA);
+        updateWindVisual(INITIAL_WEATHER_DATA);
+        
+        // Set initial timestamp from embedded data
+        if (INITIAL_WEATHER_DATA.last_updated) {
+            weatherLastUpdated = new Date(INITIAL_WEATHER_DATA.last_updated * 1000);
+            updateWeatherTimestamp();
+        }
+        
+        console.log('[Weather] Initial data displayed from cache');
+    }
+    
+    // Fetch immediately on page load (no delay - prioritize showing data quickly)
+    // This will update the display with fresh data if available
+    fetchWeather();
+    
+    // Store interval ID for cleanup
+    let weatherRefreshInterval = setInterval(fetchWeather, weatherRefreshMs);
+    
+    // Handle window visibility changes - refresh immediately when window regains focus
+    // This ensures users see fresh data immediately after switching back to the tab
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // Window is now visible - check if data is stale and refresh if needed
+            const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+                ? AIRPORT_DATA.weather_refresh_seconds * 1000 
+                : 60000;
+            const forceRefreshThreshold = weatherRefreshMs * 2;
+            
+            // If data is stale (older than 2x refresh interval), refresh immediately
+            if (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > forceRefreshThreshold) {
+                console.log('[Weather] Window regained focus with stale data - refreshing immediately');
+                fetchWeather(true); // Force refresh
+            } else if (weatherLastUpdated !== null) {
+                // Data might be slightly stale - refresh anyway to ensure freshness
+                console.log('[Weather] Window regained focus - refreshing to ensure fresh data');
+                fetchWeather(true); // Force refresh
+            } else {
+                // No data yet - normal fetch
+                fetchWeather();
+            }
+        }
+    });
+    
+    // Also handle window focus event as fallback (for older browsers)
+    window.addEventListener('focus', () => {
+        if (!document.hidden) {
+            const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
+                ? AIRPORT_DATA.weather_refresh_seconds * 1000 
+                : 60000;
+            const forceRefreshThreshold = weatherRefreshMs * 2;
+            
+            if (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > forceRefreshThreshold) {
+                console.log('[Weather] Window focused with stale data - refreshing immediately');
+                fetchWeather(true);
+            } else if (weatherLastUpdated !== null) {
+                console.log('[Weather] Window focused - refreshing to ensure fresh data');
+                fetchWeather(true);
+            }
+        }
+    });
 }
 
 // Track which images have already been handled to prevent infinite loops
 const webcamErrorHandled = new Set();
+
+/**
+ * Check if a webcam image is stale and should show placeholder
+ * 
+ * @param {number} camIndex - Camera index
+ * @param {number} maxStaleHours - Maximum stale hours from config
+ * @returns {boolean} True if webcam should show placeholder
+ */
+function isWebcamStale(camIndex, maxStaleHours) {
+    const timestamp = CAM_TS[camIndex] || 0;
+    if (timestamp <= 0) {
+        return true; // No timestamp = stale
+    }
+    
+    const now = Math.floor(Date.now() / 1000);
+    const age = now - timestamp;
+    const staleThreshold = maxStaleHours * SECONDS_PER_HOUR;
+    
+    return age >= staleThreshold;
+}
 
 // Handle webcam image load errors - show placeholder image
 function handleWebcamError(camIndex, img) {
@@ -3290,6 +3563,9 @@ function getStaggerOffset(baseInterval) {
  * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
  */
 function setupStaggeredWebcamRefresh(camIndex, baseInterval) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3292',message:'setupStaggeredWebcamRefresh called',data:{camIndex,baseInterval},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+    // #endregion
     // FIRST refresh: Immediate (no stagger)
     // This ensures user gets fresh data quickly on initial load
     safeSwapCameraImage(camIndex);
@@ -3305,6 +3581,10 @@ function setupStaggeredWebcamRefresh(camIndex, baseInterval) {
     // Next refresh: next minute + stagger offset
     const secondsUntilNextMinute = 60 - secondsPastMinute;
     const nextRefreshDelay = (secondsUntilNextMinute + staggerOffset) * 1000;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3307',message:'Staggered refresh scheduled',data:{camIndex,nextRefreshDelay,staggerOffset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+    // #endregion
     
     // Schedule first staggered refresh
     const staggeredTimeout = setTimeout(() => {
@@ -3757,16 +4037,27 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
  * @param {number} jpegTimestamp JPEG timestamp from mtime endpoint
  */
 async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {
+    // #region agent log
+    const loadStartTime = Date.now();
+    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3759',message:'loadWebcamImage called',data:{camIndex,url,preferredFormat,hasExisting},timestamp:loadStartTime,sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
+    // #endregion
     try {
         const response = await fetch(url, {
             cache: 'no-store',
             credentials: 'same-origin'
         });
         
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3766',message:'Image fetch response',data:{camIndex,status:response.status,url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
+        // #endregion
+        
         if (response.status === 200) {
             // Format ready - load immediately
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3770',message:'Image loaded successfully',data:{camIndex,blobSize:blob.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
+            // #endregion
             updateImageSilently(camIndex, blobUrl, jpegTimestamp);
             return;
         }
@@ -3774,6 +4065,9 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
         if (response.status === 202) {
             // Format generating
             const data = await response.json();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3777',message:'Format generating (202)',data:{camIndex,data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'V'})}).catch(()=>{});
+            // #endregion
             await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
             return;
         }
@@ -3781,6 +4075,9 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
         throw new Error(`Unexpected status: ${response.status}`);
         
     } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3783',message:'Image load error',data:{camIndex,error:error.message||'unknown',url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W'})}).catch(()=>{});
+        // #endregion
         // Network error - use fallback
         handleRequestError(error, camIndex, hasExisting);
     }
@@ -3809,31 +4106,72 @@ function handleRequestError(error, camIndex, hasExisting) {
 
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
 function safeSwapCameraImage(camIndex) {
-    // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
+    // #region agent log
+    const swapStartTime = Date.now();
     const imgEl = document.getElementById(`webcam-${camIndex}`);
     const initialTs = imgEl ? parseInt(imgEl.dataset.initialTimestamp || '0') : 0;
     const currentTs = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : initialTs;
+    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3811',message:'safeSwapCameraImage called',data:{camIndex,currentTs,initialTs},timestamp:swapStartTime,sessionId:'debug-session',runId:'run1',hypothesisId:'N'})}).catch(()=>{});
+    // #endregion
+    // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
+    // Note: We don't check staleness here - we fetch the new timestamp first,
+    // then check staleness after we have the actual current timestamp from the API
 
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
     const mtimeUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3821',message:'Fetching mtime',data:{camIndex,mtimeUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
+    // #endregion
+
     fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
-        .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(r => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3822',message:'mtime response received',data:{camIndex,status:r.status,ok:r.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
+            // #endregion
+            return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
+        })
         .then(json => {
+            // #region agent log
+            const newTs = parseInt(json.timestamp || 0);
+            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3823',message:'mtime JSON parsed',data:{camIndex,newTs,currentTs,isNewer:newTs>currentTs,json},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'P'})}).catch(()=>{});
+            // #endregion
             if (!json) return; // Invalid response
             
             // Check if we have a valid timestamp (even if success is false, we might have a timestamp)
-            const newTs = parseInt(json.timestamp || 0);
             if (isNaN(newTs) || newTs === 0) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3828',message:'No valid timestamp',data:{camIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'Q'})}).catch(()=>{});
+                // #endregion
                 // No cache available - don't try to update
                 return;
             }
             
             // Only update if timestamp is newer (strictly greater)
             if (newTs <= currentTs) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3834',message:'Timestamp not newer',data:{camIndex,newTs,currentTs},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'R'})}).catch(()=>{});
+                // #endregion
                 // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
                 return;
+            }
+
+            // Check if webcam is stale AFTER getting new timestamp
+            // This ensures we check staleness on the actual current image, not the old cached timestamp
+            const maxStaleHours = (AIRPORT_DATA && AIRPORT_DATA.max_stale_hours) 
+                ? AIRPORT_DATA.max_stale_hours 
+                : MAX_STALE_HOURS;
+            
+            // Update CAM_TS with new timestamp before checking staleness
+            CAM_TS[camIndex] = newTs;
+            
+            if (isWebcamStale(camIndex, maxStaleHours)) {
+                // Webcam is stale - show placeholder instead of loading stale image
+                if (imgEl) {
+                    imgEl.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                }
+                return; // Don't load stale image
             }
 
             const ready = json.formatReady || {};
@@ -3846,10 +4184,17 @@ function safeSwapCameraImage(camIndex) {
             const hash = calculateImageHash(AIRPORT_ID, camIndex, preferredFormat, newTs, json.size || 0);
             const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;
             
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3849',message:'Loading new image',data:{camIndex,newTs,preferredFormat,imageUrl,hasExisting},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'S'})}).catch(()=>{});
+            // #endregion
+            
             // Request preferred format (explicit fmt= triggers 202 if generating)
             loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);
         })
-        .catch(() => {
+        .catch((err) => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3852',message:'mtime fetch error',data:{camIndex,error:err.message||'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'T'})}).catch(()=>{});
+            // #endregion
             // Silently ignore; will retry on next interval
         });
 }
