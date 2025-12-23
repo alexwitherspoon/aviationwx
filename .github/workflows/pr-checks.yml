@@ -59,49 +59,39 @@ jobs:
             echo "✓ All PHP files have valid syntax"
           fi
       
-      - name: Validate Stale Data Safety Implementation
+      - name: Validate Weather Pipeline Implementation
         run: |
-          # Check that staleness.php is required (functions moved to library)
-          if ! grep -q "require.*staleness\.php\|include.*staleness\.php" api/weather.php; then
-            echo "❌ CRITICAL: lib/weather/staleness.php not required in api/weather.php!"
+          # Check that UnifiedFetcher is required
+          if ! grep -q "require.*UnifiedFetcher\.php\|include.*UnifiedFetcher\.php" api/weather.php; then
+            echo "❌ CRITICAL: lib/weather/UnifiedFetcher.php not required in api/weather.php!"
             exit 1
           fi
           
-          # Verify nullStaleFieldsBySource function exists in staleness.php
-          if ! grep -q "function nullStaleFieldsBySource" lib/weather/staleness.php; then
-            echo "❌ CRITICAL: nullStaleFieldsBySource function missing from lib/weather/staleness.php!"
+          # Verify fetchWeatherUnified function exists
+          if ! grep -q "function fetchWeatherUnified" lib/weather/UnifiedFetcher.php; then
+            echo "❌ CRITICAL: fetchWeatherUnified function missing from lib/weather/UnifiedFetcher.php!"
             exit 1
           fi
           
-          # Verify mergeWeatherDataWithFallback function exists in staleness.php
-          if ! grep -q "function mergeWeatherDataWithFallback" lib/weather/staleness.php; then
-            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing from lib/weather/staleness.php!"
+          # Verify WeatherAggregator class exists
+          if ! grep -q "class WeatherAggregator" lib/weather/WeatherAggregator.php; then
+            echo "❌ CRITICAL: WeatherAggregator class missing from lib/weather/WeatherAggregator.php!"
             exit 1
           fi
           
-          # Verify functions are being called in api/weather.php
-          if ! grep -q "nullStaleFieldsBySource" api/weather.php; then
-            echo "❌ CRITICAL: nullStaleFieldsBySource not being used in api/weather.php!"
+          # Verify cache-utils.php exists for staleness checking
+          if ! grep -q "function nullStaleFieldsBySource" lib/weather/cache-utils.php; then
+            echo "❌ CRITICAL: nullStaleFieldsBySource function missing from lib/weather/cache-utils.php!"
             exit 1
           fi
           
-          if ! grep -q "mergeWeatherDataWithFallback" api/weather.php; then
-            echo "❌ CRITICAL: mergeWeatherDataWithFallback not being used in api/weather.php!"
-            exit 1
-          fi
-          
-          # MAX_STALE_HOURS is defined in lib/constants.php, check there or usage in api/weather.php
-          if ! grep -q "MAX_STALE_HOURS" lib/constants.php api/weather.php 2>/dev/null; then
+          # MAX_STALE_HOURS is defined in lib/constants.php
+          if ! grep -q "MAX_STALE_HOURS" lib/constants.php 2>/dev/null; then
             echo "⚠️  Warning: Stale data threshold (MAX_STALE_HOURS) may not be set correctly"
           fi
           
-          # Daily tracking values preservation is in lib/weather/staleness.php
-          if ! grep -q "temp_high_today.*temp_low_today.*peak_gust_today" lib/weather/staleness.php api/weather.php 2>/dev/null; then
-            echo "⚠️  Warning: Daily tracking values preservation may be missing"
-          fi
-          
           # VRB handling is in lib/weather/adapter/metar-v1.php
-          if ! grep -q "VRB" lib/weather/adapter/metar-v1.php api/weather.php 2>/dev/null; then
+          if ! grep -q "VRB" lib/weather/adapter/metar-v1.php 2>/dev/null; then
             echo "⚠️  Warning: VRB (variable wind direction) handling may be missing"
           fi
           
@@ -109,7 +99,7 @@ jobs:
             echo "⚠️  Warning: Error handling around parsing may be missing"
           fi
           
-          echo "✓ Stale data safety validation complete"
+          echo "✓ Weather pipeline validation complete"
       
       - name: Validate Push Webcam Implementation
         run: |
@@ -182,7 +172,7 @@ jobs:
             "calculateDensityAltitude"
             "calculatePressureAltitude"
             "nullStaleFieldsBySource"
-            "mergeWeatherDataWithFallback"
+            "fetchWeatherUnified"
             "validateAirportId"
             "checkRateLimit"
             "checkRateLimitFileBased"
@@ -195,11 +185,12 @@ jobs:
             "validatePushWebcamConfig"
             "processPushWebcams"
             "syncPushConfig"
+            "nullStaleFieldsBySource"
           )
           
           for func in "${critical_functions[@]}"; do
-            # Check in all relevant files including library files where functions have been moved
-            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php lib/weather/calculator.php lib/weather/staleness.php 2>/dev/null; then
+            # Check in all relevant files including library files
+            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php lib/weather/calculator.php lib/weather/UnifiedFetcher.php lib/weather/cache-utils.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
               exit 1
             fi

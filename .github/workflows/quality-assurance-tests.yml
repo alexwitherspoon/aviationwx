@@ -238,18 +238,20 @@ jobs:
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
-      - name: Validate Merge Functionality
+      - name: Validate Weather Pipeline
         run: |
-          echo "🔍 Validating merge functionality implementation..."
+          echo "🔍 Validating unified weather pipeline..."
           
-          # Check that mergeWeatherDataWithFallback function exists (moved to lib/weather/staleness.php)
-          if ! grep -q "function mergeWeatherDataWithFallback" lib/weather/staleness.php; then
-            echo "❌ CRITICAL: mergeWeatherDataWithFallback function missing!"
+          # Check that UnifiedFetcher exists
+          if ! grep -q "function fetchWeatherUnified" lib/weather/UnifiedFetcher.php; then
+            echo "❌ CRITICAL: fetchWeatherUnified function missing!"
             exit 1
           fi
           
-          if ! grep -q "mergeWeatherDataWithFallback.*existingCache" api/weather.php; then
-            echo "⚠️  Warning: mergeWeatherDataWithFallback may not be called before cache write"
+          # Check that WeatherAggregator exists
+          if ! grep -q "class WeatherAggregator" lib/weather/WeatherAggregator.php; then
+            echo "❌ CRITICAL: WeatherAggregator class missing!"
+            exit 1
           fi
           
           if ! grep -q "wdir.*VRB\|'VRB'" lib/weather/adapter/metar-v1.php; then
@@ -260,7 +262,7 @@ jobs:
             echo "⚠️  Warning: Numeric validation for wind data may be missing"
           fi
           
-          echo "✓ Merge functionality validation complete"
+          echo "✓ Weather pipeline validation complete"
       
       - name: JavaScript Static Analysis
         run: |
