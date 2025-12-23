@@ -605,39 +605,37 @@ function generateMockWeatherData($airportId, $airport) {
     exit;
     }
 
-    // CRITICAL: Populate _field_obs_time_map IMMEDIATELY after fetch, before any calculations
-    // All downstream logic (calculations, validations, merges) depends on knowing when each field was measured
-    require_once __DIR__ . '/../lib/weather/observation-times.php';
-    populateFieldObservationTimes($weatherData);
+    // For legacy fetcher, populate observation times and calculate fields
+    // The unified fetcher already handles these internally
+    if (!$useUnifiedFetcher) {
+        require_once __DIR__ . '/../lib/weather/observation-times.php';
+        populateFieldObservationTimes($weatherData);
+        
+        // Calculate pressure/density altitude
+        if (isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
+            $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
+        } else {
+            $weatherData['pressure_altitude'] = null;
+        }
+        
+        $densityTempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+        $densityPressureObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+        $densityValid = ($densityTempObsTime !== null && $densityPressureObsTime !== null && 
+                         abs($densityTempObsTime - $densityPressureObsTime) <= 60);
+        
+        if ($densityValid && 
+            isset($weatherData['temperature']) && $weatherData['temperature'] !== null &&
+            isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
+            $weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
+        } else {
+            $weatherData['density_altitude'] = null;
+        }
+        
+        $weatherData['sunrise'] = getSunriseTime($airport);
+        $weatherData['sunset'] = getSunsetTime($airport);
+    }
 
-    // Calculate additional aviation-specific metrics
-    // Calculate pressure altitude - only if pressure is valid
-    if (isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
-        $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
-    } else {
-        $weatherData['pressure_altitude'] = null;
-    }
-    
-    // Calculate density altitude - only if temp/pressure within 1 minute
-    // Density altitude requires temperature and pressure from same observation time (within 1 minute)
-    $densityTempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-    $densityPressureObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-    $densityValid = false;
-    if ($densityTempObsTime !== null && $densityPressureObsTime !== null) {
-        $timeDiff = abs($densityTempObsTime - $densityPressureObsTime);
-        $densityValid = ($timeDiff <= 60); // Within 1 minute
-    }
-    
-    if ($densityValid && 
-        isset($weatherData['temperature']) && $weatherData['temperature'] !== null &&
-        isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
-        $weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
-    } else {
-        $weatherData['density_altitude'] = null;
-    }
-    $weatherData['sunrise'] = getSunriseTime($airport);
-    $weatherData['sunset'] = getSunsetTime($airport);
-
+    // Daily tracking (side effects - must run for all fetch methods)
     // Track and update today's peak gust (store value and timestamp)
     // Use peak_gust field if available (set by adapters), otherwise gust_speed, otherwise 0
     // peak_gust is set by adapters and might survive merge better than gust_speed
@@ -685,95 +683,85 @@ function generateMockWeatherData($airportId, $airport) {
         $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
     }
 
-    // Calculate VFR/IFR/MVFR status
-    calculateAndSetFlightCategory($weatherData);
-
-    // Format temperatures to °F for display
-    $weatherData['temperature_f'] = $weatherData['temperature'] !== null ? round(($weatherData['temperature'] * 9/5) + 32) : null;
-    
-    // Calculate dewpoint from temperature and humidity if dewpoint is missing
-    // This ensures we have dewpoint data when the sensor doesn't provide it directly
-    require_once __DIR__ . '/../lib/weather/calculator.php';
-    if (($weatherData['dewpoint'] ?? null) === null && 
-        $weatherData['temperature'] !== null && 
-        $weatherData['humidity'] !== null) {
-        $calculatedDewpoint = calculateDewpoint($weatherData['temperature'], $weatherData['humidity']);
-        if ($calculatedDewpoint !== null) {
-            $weatherData['dewpoint'] = round($calculatedDewpoint, 1);
-            // Track observation time for calculated dewpoint (use temperature's obs_time)
-            if (!isset($weatherData['_field_obs_time_map'])) {
-                $weatherData['_field_obs_time_map'] = [];
+    // Legacy fetcher calculations (unified fetcher handles these internally)
+    if (!$useUnifiedFetcher) {
+        calculateAndSetFlightCategory($weatherData);
+        
+        $weatherData['temperature_f'] = $weatherData['temperature'] !== null 
+            ? round(($weatherData['temperature'] * 9/5) + 32) : null;
+        
+        // Calculate dewpoint from temperature and humidity if missing
+        require_once __DIR__ . '/../lib/weather/calculator.php';
+        if (($weatherData['dewpoint'] ?? null) === null && 
+            $weatherData['temperature'] !== null && 
+            $weatherData['humidity'] !== null) {
+            $calculatedDewpoint = calculateDewpoint($weatherData['temperature'], $weatherData['humidity']);
+            if ($calculatedDewpoint !== null) {
+                $weatherData['dewpoint'] = round($calculatedDewpoint, 1);
+                if (!isset($weatherData['_field_obs_time_map'])) {
+                    $weatherData['_field_obs_time_map'] = [];
+                }
+                $dewpointObsTime = $weatherData['_field_obs_time_map']['temperature'] 
+                    ?? $weatherData['obs_time_primary'] 
+                    ?? $weatherData['obs_time_backup'] 
+                    ?? null;
+                if ($dewpointObsTime !== null) {
+                    $weatherData['_field_obs_time_map']['dewpoint'] = $dewpointObsTime;
+                }
             }
-            $dewpointObsTime = $weatherData['_field_obs_time_map']['temperature'] 
+        }
+        
+        $weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null 
+            ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
+
+        // Calculate gust factor
+        $fieldObsTimeMap = $weatherData['_field_obs_time_map'] ?? [];
+        $windObsTime = null;
+        $windFieldsPresent = 0;
+        if (isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
+            $windObsTime = $fieldObsTimeMap['wind_speed'] 
                 ?? $weatherData['obs_time_primary'] 
                 ?? $weatherData['obs_time_backup'] 
                 ?? null;
-            if ($dewpointObsTime !== null) {
-                $weatherData['_field_obs_time_map']['dewpoint'] = $dewpointObsTime;
+            $windFieldsPresent++;
+        }
+        if (isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
+            $gustObsTime = $fieldObsTimeMap['gust_speed'] 
+                ?? $weatherData['obs_time_primary'] 
+                ?? $weatherData['obs_time_backup'] 
+                ?? null;
+            if ($windObsTime === null) {
+                $windObsTime = $gustObsTime;
+            } elseif ($windObsTime !== $gustObsTime) {
+                $windObsTime = null;
             }
+            $windFieldsPresent++;
         }
-    }
-    
-    $weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
+        
+        if ($windObsTime !== null && $windFieldsPresent >= 2 && 
+            isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null &&
+            isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
+            $weatherData['gust_factor'] = round($weatherData['gust_speed'] - $weatherData['wind_speed']);
+            if (!isset($weatherData['_field_obs_time_map'])) {
+                $weatherData['_field_obs_time_map'] = [];
+            }
+            $weatherData['_field_obs_time_map']['gust_factor'] = $windObsTime;
+        } else {
+            $weatherData['gust_factor'] = null;
+        }
 
-    // Calculate gust factor - only if wind fields have same obs_time
-    // Wind group: wind_speed, wind_direction, gust_speed must be from same observation time
-    // Use per-field observation times from _field_obs_time_map (more accurate than source-level times)
-    $fieldObsTimeMap = $weatherData['_field_obs_time_map'] ?? [];
-    $windObsTime = null;
-    $windFieldsPresent = 0;
-    if (isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
-        // Use per-field obs_time if available, fallback to source-level
-        $windObsTime = $fieldObsTimeMap['wind_speed'] 
-            ?? $weatherData['obs_time_primary'] 
-            ?? $weatherData['obs_time_backup'] 
-            ?? null;
-        $windFieldsPresent++;
-    }
-    if (isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
-        // Use per-field obs_time if available, fallback to source-level
-        $gustObsTime = $fieldObsTimeMap['gust_speed'] 
-            ?? $weatherData['obs_time_primary'] 
-            ?? $weatherData['obs_time_backup'] 
-            ?? null;
-        if ($windObsTime === null) {
-            $windObsTime = $gustObsTime;
-        } elseif ($windObsTime !== $gustObsTime) {
-            // Different observation times - invalid for wind group
-            $windObsTime = null;
+        // Calculate dewpoint spread
+        $tempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+        $dewpointObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
+        $tempDewpointValid = ($tempObsTime !== null && $dewpointObsTime !== null && 
+                              abs($tempObsTime - $dewpointObsTime) <= 60);
+        
+        if ($tempDewpointValid && 
+            $weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
+            $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
+        } else {
+            $weatherData['dewpoint_spread'] = null;
         }
-        $windFieldsPresent++;
-    }
-    
-    // Only calculate gust_factor if wind fields have same obs_time
-    if ($windObsTime !== null && $windFieldsPresent >= 2 && 
-        isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null &&
-        isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
-        $weatherData['gust_factor'] = round($weatherData['gust_speed'] - $weatherData['wind_speed']);
-        // Track observation time for gust_factor (use the common wind obs_time)
-        if (!isset($weatherData['_field_obs_time_map'])) {
-            $weatherData['_field_obs_time_map'] = [];
-        }
-        $weatherData['_field_obs_time_map']['gust_factor'] = $windObsTime;
-    } else {
-        $weatherData['gust_factor'] = null;
-    }
-
-    // Calculate dewpoint spread - only if temp/dewpoint within 1 minute
-    // Temperature group: temperature, dewpoint, humidity must be within 1 minute
-    $tempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-    $dewpointObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-    $tempDewpointValid = false;
-    if ($tempObsTime !== null && $dewpointObsTime !== null) {
-        $timeDiff = abs($tempObsTime - $dewpointObsTime);
-        $tempDewpointValid = ($timeDiff <= 60); // Within 1 minute
-    }
-    
-    if ($tempDewpointValid && 
-        $weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
-        $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
-    } else {
-        $weatherData['dewpoint_spread'] = null;
     }
 
     // NOTE: Staleness check for fresh data has been removed (Option 2 fix)
