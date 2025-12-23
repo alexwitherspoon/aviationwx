@@ -660,6 +660,11 @@ Best regards,
                 <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666; text-align: center;">
                     Opens your email client with a template you can fill out with your airport's information
                 </p>
+                <p style="margin-top: 1rem; text-align: center;">
+                    <a href="https://guides.aviationwx.org" style="color: #0066cc; text-decoration: none; font-size: 0.95rem;">
+                        📚 Read setup guides and documentation →
+                    </a>
+                </p>
             </div>
         </section>
 
