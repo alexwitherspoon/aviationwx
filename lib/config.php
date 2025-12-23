@@ -1,4 +1,10 @@
 <?php
+// Prevent double inclusion
+if (defined('AVIATIONWX_CONFIG_LOADED')) {
+    return;
+}
+define('AVIATIONWX_CONFIG_LOADED', true);
+
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/airport-identifiers.php';
