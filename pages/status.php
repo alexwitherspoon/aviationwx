@@ -272,7 +272,123 @@ function checkSystemHealth(): array {
     $ftpSftpHealth = checkFtpSftpServices();
     $health['components']['ftp_sftp'] = $ftpSftpHealth;
     
+    // Check scheduler status
+    $schedulerStatus = getSchedulerStatus();
+    $schedulerHealthStatus = 'operational';
+    $schedulerMessage = 'Scheduler running and healthy';
+    
+    if (!$schedulerStatus['running']) {
+        $schedulerHealthStatus = 'down';
+        $schedulerMessage = $schedulerStatus['error'] ?? 'Scheduler not running';
+    } elseif (!$schedulerStatus['healthy']) {
+        $schedulerHealthStatus = 'degraded';
+        $schedulerMessage = 'Scheduler running but unhealthy';
+        if ($schedulerStatus['last_error']) {
+            $schedulerMessage .= ': ' . $schedulerStatus['last_error'];
+        }
+    }
+    
+    $health['components']['scheduler'] = [
+        'name' => 'Scheduler Daemon',
+        'status' => $schedulerHealthStatus,
+        'message' => $schedulerMessage,
+        'lastChanged' => $schedulerStatus['started'] ?? 0,
+        'details' => [
+            'pid' => $schedulerStatus['pid'],
+            'uptime_seconds' => $schedulerStatus['uptime'],
+            'loop_count' => $schedulerStatus['loop_count'],
+            'config_airports_count' => $schedulerStatus['config_airports_count'],
+            'config_last_reload' => $schedulerStatus['config_last_reload']
+        ]
+    ];
+    
     return $health;
+}
+
+/**
+ * Get scheduler status
+ * 
+ * Reads scheduler lock file to determine if scheduler is running and healthy.
+ * 
+ * @return array {
+ *   'running' => bool,
+ *   'healthy' => bool,
+ *   'pid' => int|null,
+ *   'started' => int|null,
+ *   'uptime' => int,
+ *   'loop_count' => int,
+ *   'last_error' => string|null,
+ *   'config_airports_count' => int,
+ *   'config_last_reload' => int,
+ *   'error' => string|null
+ * }
+ */
+function getSchedulerStatus(): array {
+    $lockFile = '/tmp/scheduler.lock';
+    
+    if (!file_exists($lockFile)) {
+        return [
+            'running' => false,
+            'healthy' => false,
+            'pid' => null,
+            'started' => null,
+            'uptime' => 0,
+            'loop_count' => 0,
+            'last_error' => null,
+            'config_airports_count' => 0,
+            'config_last_reload' => 0,
+            'error' => 'Scheduler not running'
+        ];
+    }
+    
+    $lockContent = @file_get_contents($lockFile);
+    if (!$lockContent) {
+        return [
+            'running' => false,
+            'healthy' => false,
+            'pid' => null,
+            'started' => null,
+            'uptime' => 0,
+            'loop_count' => 0,
+            'last_error' => null,
+            'config_airports_count' => 0,
+            'config_last_reload' => 0,
+            'error' => 'Cannot read lock file'
+        ];
+    }
+    
+    $lockData = json_decode($lockContent, true);
+    if (!$lockData) {
+        return [
+            'running' => false,
+            'healthy' => false,
+            'pid' => null,
+            'started' => null,
+            'uptime' => 0,
+            'loop_count' => 0,
+            'last_error' => null,
+            'config_airports_count' => 0,
+            'config_last_reload' => 0,
+            'error' => 'Invalid lock file data'
+        ];
+    }
+    
+    $pid = $lockData['pid'] ?? null;
+    $running = $pid && function_exists('posix_kill') && posix_kill($pid, 0);
+    $healthy = $running && ($lockData['health'] ?? 'unknown') === 'healthy';
+    
+    return [
+        'running' => $running,
+        'healthy' => $healthy,
+        'pid' => $pid,
+        'started' => $lockData['started'] ?? null,
+        'uptime' => isset($lockData['started']) ? (time() - $lockData['started']) : 0,
+        'loop_count' => $lockData['loop_count'] ?? 0,
+        'last_error' => $lockData['last_error'] ?? null,
+        'config_airports_count' => $lockData['config_airports_count'] ?? 0,
+        'config_last_reload' => $lockData['config_last_reload'] ?? 0,
+        'error' => null
+    ];
 }
 
 /**
