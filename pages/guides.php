@@ -5,7 +5,8 @@
  */
 
 // Load dependencies
-require_once __DIR__ . '/../lib/config.php';
+// Note: config.php is already loaded by index.php, so we don't need to load it again
+// require_once __DIR__ . '/../lib/config.php'; // Already loaded by index.php
 require_once __DIR__ . '/../lib/seo.php';
 
 // Load Parsedown
@@ -312,13 +313,59 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         
         .guides-content ul,
         .guides-content ol {
-            margin-bottom: 1rem;
-            padding-left: 2rem;
+            margin-top: 0;
+            margin-bottom: 16px;
+            padding-left: 2em;
+            list-style-position: outside;
+        }
+        
+        .guides-content ul {
+            list-style-type: disc;
+        }
+        
+        .guides-content ol {
+            list-style-type: decimal;
         }
         
         .guides-content li {
-            line-height: 1.8;
-            margin-bottom: 0.5rem;
+            line-height: 1.6;
+            margin-bottom: 0.25em;
+            word-wrap: break-word;
+        }
+        
+        .guides-content li + li {
+            margin-top: 0.25em;
+        }
+        
+        /* Nested lists */
+        .guides-content ul ul,
+        .guides-content ol ul {
+            list-style-type: circle;
+            margin-top: 0.25em;
+            margin-bottom: 0;
+        }
+        
+        .guides-content ul ul ul,
+        .guides-content ol ul ul {
+            list-style-type: square;
+        }
+        
+        .guides-content ol ol,
+        .guides-content ul ol {
+            list-style-type: lower-roman;
+            margin-top: 0.25em;
+            margin-bottom: 0;
+        }
+        
+        /* Ensure list items containing only links look good */
+        .guides-content li > a:only-child {
+            display: inline;
+        }
+        
+        /* Paragraphs followed by lists need less spacing */
+        .guides-content p + ul,
+        .guides-content p + ol {
+            margin-top: -0.5rem;
         }
         
         .guides-content code {
@@ -406,6 +453,117 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Apply same markdown styling to index page */
+        .guides-index h1,
+        .guides-index h2,
+        .guides-index h3,
+        .guides-index h4,
+        .guides-index h5,
+        .guides-index h6,
+        .guides-index p,
+        .guides-index ul,
+        .guides-index ol,
+        .guides-index li,
+        .guides-index a,
+        .guides-index code,
+        .guides-index pre,
+        .guides-index blockquote,
+        .guides-index table,
+        .guides-index hr {
+            /* Inherit from guides-content styles */
+        }
+        
+        .guides-index ul,
+        .guides-index ol {
+            margin-top: 0;
+            margin-bottom: 16px;
+            padding-left: 2em;
+            list-style-position: outside;
+        }
+        
+        .guides-index ul {
+            list-style-type: disc;
+        }
+        
+        .guides-index ol {
+            list-style-type: decimal;
+        }
+        
+        .guides-index li {
+            line-height: 1.6;
+            margin-bottom: 0.25em;
+        }
+        
+        .guides-index p + ul,
+        .guides-index p + ol {
+            margin-top: -0.5rem;
+        }
+        
+        .guides-index h1 {
+            font-size: 2rem;
+            color: #24292f;
+            margin-top: 0;
+            margin-bottom: 16px;
+            padding-bottom: 0.3em;
+            border-bottom: 1px solid #d0d7de;
+            font-weight: 600;
+        }
+        
+        .guides-index h2 {
+            font-size: 1.5rem;
+            color: #24292f;
+            margin-top: 24px;
+            margin-bottom: 16px;
+            padding-bottom: 0.3em;
+            border-bottom: 1px solid #d0d7de;
+            font-weight: 600;
+        }
+        
+        .guides-index h3 {
+            font-size: 1.25rem;
+            color: #24292f;
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        
+        .guides-index p {
+            line-height: 1.6;
+            margin-bottom: 16px;
+            color: #24292f;
+        }
+        
+        .guides-index a {
+            color: #0969da;
+            text-decoration: none;
+        }
+        
+        .guides-index a:hover {
+            text-decoration: underline;
+        }
+        
+        .guides-index strong {
+            font-weight: 600;
+            color: #24292f;
+        }
+        
+        .guides-index hr {
+            height: 0.25em;
+            padding: 0;
+            margin: 24px 0;
+            background-color: #d0d7de;
+            border: 0;
+        }
+        
+        .guides-index code {
+            padding: 0.2em 0.4em;
+            margin: 0;
+            font-size: 85%;
+            background-color: rgba(175,184,193,0.2);
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
         }
         
         footer {
