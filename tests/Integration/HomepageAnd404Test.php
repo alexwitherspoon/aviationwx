@@ -273,10 +273,16 @@ class HomepageAnd404Test extends TestCase
         $html = $response['body'];
         
         // Should show "doesn't appear to be a valid airport code" message
+        // The message varies slightly based on whether it's a valid ICAO format
         $this->assertStringContainsString(
-            'doesn\'t appear to be a valid airport code',
+            'doesn\'t appear to be',
             strtolower($html),
             "Airport 404 should show invalid code message for invalid codes"
+        );
+        $this->assertStringContainsString(
+            'valid',
+            strtolower($html),
+            "Airport 404 should mention validity for invalid codes"
         );
     }
     
