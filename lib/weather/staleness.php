@@ -577,11 +577,8 @@ function mergeWeatherDataWithFieldLevelFallback(array $primaryData, ?array $back
         'wind_speed', 'wind_direction', 'gust_speed', 'gust_factor',
         'pressure', 'precip_accum',
         'pressure_altitude', 'density_altitude'
-    ];
-    
-    // If no backup data, return primary data as-is
-    if ($backupData === null || !is_array($backupData)) {
-        // Still track source and observation time for all fields
+    ];// If no backup data, return primary data as-is
+    if ($backupData === null || !is_array($backupData)) {// Still track source and observation time for all fields
         $primaryObsTime = $primaryData['obs_time_primary'] ?? $primaryData['last_updated_primary'] ?? null;
         foreach ($primarySourceFields as $field) {
             if (isset($result[$field]) && $result[$field] !== null) {
@@ -887,9 +884,7 @@ function mergeWeatherDataWithFieldLevelFallback(array $primaryData, ?array $back
             $mergedDataForNullCheck = array_merge($backupData, $primaryData);
             $nullValidation = isFieldNullValid($field, null, $mergedDataForNullCheck, $backupQuality);
             $backupValid = $nullValidation['valid'];
-        }
-        
-        // Select best value: prefer newest obs_time when both are valid
+        }// Select best value: prefer newest obs_time when both are valid
         // Use recovery cycles and time duration to prevent rapid switching back to primary
         require_once __DIR__ . '/../constants.php';
         $recoveryCycles = $primaryData['primary_recovery_cycles'] ?? 0;

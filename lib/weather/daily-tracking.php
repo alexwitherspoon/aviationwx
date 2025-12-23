@@ -23,17 +23,14 @@ require_once __DIR__ . '/utils.php';
  * @return void
  */
 function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp = null) {
-    try {
-        $cacheDir = getWeatherCacheDir();
+    try {$cacheDir = getWeatherCacheDir();
         if (!file_exists($cacheDir)) {
             if (!mkdir($cacheDir, 0755, true)) {
-                error_log("Failed to create cache directory: {$cacheDir}");
-                return;
+                error_log("Failed to create cache directory: {$cacheDir}");return;
             }
         }
         
-        $file = $cacheDir . '/peak_gusts.json';
-        // Use airport's local timezone to determine "today" (midnight reset at local timezone)
+        $file = $cacheDir . '/peak_gusts.json';// Use airport's local timezone to determine "today" (midnight reset at local timezone)
         // If observation timestamp is provided, use it to determine the date key (ensures consistency)
         // Otherwise, use current time with airport timezone
         if ($obsTimestamp !== null && $airport !== null) {
@@ -115,16 +112,19 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         }
 
         // Ensure currentGust is properly cast to float for accurate comparison
-        $currentGustFloat = is_numeric($currentGust) ? (float)$currentGust : 0;
-
-        // Use observation timestamp if provided, otherwise fall back to current time
-        $timestamp = $obsTimestamp !== null ? $obsTimestamp : time();
+        $currentGustFloat = is_numeric($currentGust) ? (float)$currentGust : 0;// Use observation timestamp if provided, otherwise fall back to current time
+        $timestamp = $obsTimestamp !== null ? $obsTimestamp : time();// Get existing timestamp for comparison
+        $existingTimestamp = null;
+        if (isset($peakGusts[$dateKey][$airportId])) {
+            if (is_array($peakGusts[$dateKey][$airportId])) {
+                $existingTimestamp = $peakGusts[$dateKey][$airportId]['ts'] ?? null;
+            }
+        }
         
-        // If no entry for today (new day) or current gust is higher, update value and timestamp
-        // This ensures we never use yesterday's data for today
+        // If no entry for today (new day), current gust is higher, or current gust equals existing but timestamp is newer
+        // This ensures we never use yesterday's data for today, and we always show the most recent timestamp for equal values
         if (!isset($peakGusts[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGustFloat, 'obs_ts' => $timestamp], 'app');
-            $peakGusts[$dateKey][$airportId] = [
+            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGustFloat, 'obs_ts' => $timestamp], 'app');$peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGustFloat,
                 'ts' => $timestamp,
             ];
@@ -137,13 +137,25 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
                 'old_peak' => $existingValue,
                 'new_peak' => $currentGustFloat,
                 'obs_ts' => $timestamp
-            ], 'app');
-            $peakGusts[$dateKey][$airportId] = [
+            ], 'app');$peakGusts[$dateKey][$airportId] = [
+                'value' => $currentGustFloat,
+                'ts' => $timestamp,
+            ];
+        } elseif ($currentGustFloat == $existingValue && $timestamp !== null && ($existingTimestamp === null || $timestamp > $existingTimestamp)) {
+            // Update timestamp if current gust equals existing value but new timestamp is more recent
+            // This ensures we always show the most recent occurrence of the peak gust
+            aviationwx_log('info', 'updating peak gust timestamp (equal value, newer timestamp)', [
+                'airport' => $airportId,
+                'date_key' => $dateKey,
+                'peak_value' => $currentGustFloat,
+                'old_ts' => $existingTimestamp,
+                'new_ts' => $timestamp
+            ], 'app');$peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGustFloat,
                 'ts' => $timestamp,
             ];
         } else {
-            // If current gust is not higher, preserve existing value and timestamp
+            // If current gust is not higher and timestamp is not newer, preserve existing value and timestamp
             // Log this to help debug any issues where peak gust might be incorrectly overwritten
             if ($currentGustFloat < $existingValue) {
                 aviationwx_log('debug', 'preserving peak gust (current lower than existing)', [
@@ -152,23 +164,18 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
                     'existing_peak' => $existingValue,
                     'current_gust' => $currentGustFloat
                 ], 'app');
-            }
-        }
-        
-        // Write modified data back while lock is still held
+            }}// Write modified data back while lock is still held
         // Truncate first to ensure clean write (prevents partial overwrites)
         @ftruncate($fp, 0);
         @rewind($fp);
         $jsonData = json_encode($peakGusts);
         if ($jsonData !== false) {
-            @fwrite($fp, $jsonData);
-            @fflush($fp);
-        }
+            $bytesWritten = @fwrite($fp, $jsonData);
+            @fflush($fp);} else {}
         
         // Release lock and close
         @flock($fp, LOCK_UN);
-        @fclose($fp);
-    } catch (Exception $e) {
+        @fclose($fp);} catch (Exception $e) {
         error_log("Error updating peak gust: " . $e->getMessage());
     }
 }
@@ -274,9 +281,7 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
     $file = $cacheDir . '/peak_gusts.json';
     // Use airport's local timezone to determine "today" (midnight reset at local timezone)
     // Fallback to UTC if airport not provided (backward compatibility)
-        $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
-
-    if (!file_exists($file)) {
+        $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');if (!file_exists($file)) {
         return ['value' => $currentGust, 'ts' => null];
     }
 
@@ -303,10 +308,32 @@ function getPeakGust($airportId, $currentGust, $airport = null) {
     
     $peakGusts = $decoded;
     
-    // Only return data for today's date key (never yesterday or older dates)
+    // Get entry for today's date key
     $entry = $peakGusts[$dateKey][$airportId] ?? null;
+    
+    // Also check for a more recent date (timezone boundary case)
+    // This can happen if the date key calculation changed due to timezone or time differences
+    // For example: observation at 11:30 PM PST (Dec 22) might be stored as Dec 23 if timestamp is in UTC
+    $allDateKeys = array_keys($peakGusts);
+    rsort($allDateKeys); // Sort descending (most recent first)
+    $mostRecentEntry = null;
+    $mostRecentDateKey = null;
+    foreach ($allDateKeys as $key) {
+        if (isset($peakGusts[$key][$airportId])) {
+            $mostRecentEntry = $peakGusts[$key][$airportId];
+            $mostRecentDateKey = $key;
+            break;
+        }
+    }
+    
+    // Use the most recent entry if it's more recent than today's date key
+    // This handles timezone boundary cases where entries might be stored under tomorrow's date
+    if ($mostRecentEntry !== null && $mostRecentDateKey !== null && $mostRecentDateKey >= $dateKey) {
+        $entry = $mostRecentEntry;
+    }
+    
     if ($entry === null) {
-        // No entry for today - return current gust as today's value
+        // No entry for today or more recent - return current gust as today's value
         return ['value' => $currentGust, 'ts' => null];
     }
 

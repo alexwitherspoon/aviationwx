@@ -172,17 +172,12 @@ function isMetarEnabled(array $airport): bool {
  * @param array $airport Airport configuration array (modified in place)
  * @return bool True if weather source is now configured, false if no source available
  */
-function normalizeWeatherSource(array &$airport): bool {
-    if (isset($airport['weather_source']) && isset($airport['weather_source']['type'])) {
-        return true;
+function normalizeWeatherSource(array &$airport): bool {if (isset($airport['weather_source']) && isset($airport['weather_source']['type'])) {return true;
     }
     
     if (isMetarEnabled($airport)) {
-        $airport['weather_source'] = ['type' => 'metar'];
-        return true;
-    }
-    
-    return false;
+        $airport['weather_source'] = ['type' => 'metar'];return true;
+    }return false;
 }
 
 /**
