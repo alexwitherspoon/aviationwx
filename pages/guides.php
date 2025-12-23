@@ -311,61 +311,52 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             color: #333;
         }
         
+        /* GitHub-style list rendering - override CSS reset */
         .guides-content ul,
         .guides-content ol {
-            margin-top: 0;
-            margin-bottom: 16px;
-            padding-left: 2em;
-            list-style-position: outside;
+            margin: 0 0 16px 0 !important;
+            padding-left: 2em !important;
+            list-style-position: outside !important;
         }
         
         .guides-content ul {
-            list-style-type: disc;
+            list-style-type: disc !important;
         }
         
         .guides-content ol {
-            list-style-type: decimal;
+            list-style-type: decimal !important;
         }
         
         .guides-content li {
             line-height: 1.6;
-            margin-bottom: 0.25em;
+            margin-top: 0.25em !important;
+            margin-bottom: 0 !important;
+            padding-left: 0.5em;
             word-wrap: break-word;
         }
         
-        .guides-content li + li {
-            margin-top: 0.25em;
+        .guides-content li:first-child {
+            margin-top: 0 !important;
         }
         
         /* Nested lists */
         .guides-content ul ul,
         .guides-content ol ul {
-            list-style-type: circle;
-            margin-top: 0.25em;
-            margin-bottom: 0;
+            list-style-type: circle !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
         }
         
         .guides-content ul ul ul,
         .guides-content ol ul ul {
-            list-style-type: square;
+            list-style-type: square !important;
         }
         
         .guides-content ol ol,
         .guides-content ul ol {
-            list-style-type: lower-roman;
-            margin-top: 0.25em;
-            margin-bottom: 0;
-        }
-        
-        /* Ensure list items containing only links look good */
-        .guides-content li > a:only-child {
-            display: inline;
-        }
-        
-        /* Paragraphs followed by lists need less spacing */
-        .guides-content p + ul,
-        .guides-content p + ol {
-            margin-top: -0.5rem;
+            list-style-type: lower-roman !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
         }
         
         .guides-content code {
@@ -475,30 +466,43 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             /* Inherit from guides-content styles */
         }
         
+        /* GitHub-style list rendering - override CSS reset */
         .guides-index ul,
         .guides-index ol {
-            margin-top: 0;
-            margin-bottom: 16px;
-            padding-left: 2em;
-            list-style-position: outside;
+            margin: 0 0 16px 0 !important;
+            padding-left: 2em !important;
+            list-style-position: outside !important;
         }
         
         .guides-index ul {
-            list-style-type: disc;
+            list-style-type: disc !important;
         }
         
         .guides-index ol {
-            list-style-type: decimal;
+            list-style-type: decimal !important;
         }
         
         .guides-index li {
             line-height: 1.6;
-            margin-bottom: 0.25em;
+            margin-top: 0.25em !important;
+            margin-bottom: 0 !important;
+            padding-left: 0.5em;
         }
         
-        .guides-index p + ul,
-        .guides-index p + ol {
-            margin-top: -0.5rem;
+        .guides-index li:first-child {
+            margin-top: 0 !important;
+        }
+        
+        /* Nested lists */
+        .guides-index ul ul,
+        .guides-index ol ul {
+            list-style-type: circle !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        
+        .guides-index ul ul ul {
+            list-style-type: square !important;
         }
         
         .guides-index h1 {
