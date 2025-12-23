@@ -6,12 +6,17 @@
  * 
  * Runs via cron every 60 seconds to ensure scheduler stays running.
  * 
+ * Note: This script uses /proc filesystem to detect process existence,
+ * which works even when running as www-data checking a root-owned process.
+ * However, killing/restarting a root-owned scheduler requires root privileges.
+ * 
  * Usage:
  *   Via cron: * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php 2>&1
  */
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/process-utils.php';
 
 $lockFile = '/tmp/scheduler.lock';
 $schedulerScript = __DIR__ . '/scheduler.php';
@@ -32,9 +37,9 @@ if (file_exists($lockFile)) {
         if ($lockData && isset($lockData['pid'])) {
             $schedulerPid = (int)$lockData['pid'];
             
-            // Verify PID is running
+            // Verify PID is running using /proc filesystem (works across user boundaries)
             if ($schedulerPid > 0) {
-                $schedulerRunning = posix_kill($schedulerPid, 0);
+                $schedulerRunning = isProcessRunning($schedulerPid, 'scheduler');
             }
         }
     }
@@ -63,8 +68,11 @@ if (!$schedulerRunning && !$needsRestart) {
 
 // Restart if needed
 if ($needsRestart) {
-    // Kill existing process if running but unhealthy
-    if ($schedulerPid && $schedulerRunning) {
+    // Check if we can signal the process (have permission to kill it)
+    $canKill = $schedulerPid && canSignalProcess($schedulerPid);
+    
+    // Kill existing process if running but unhealthy (only if we have permission)
+    if ($schedulerPid && $schedulerRunning && $canKill) {
         aviationwx_log('info', 'scheduler health check: killing unhealthy scheduler', [
             'pid' => $schedulerPid,
             'reason' => $restartReason
@@ -74,25 +82,38 @@ if ($needsRestart) {
         sleep(2);
         
         // Force kill if still running
-        if (posix_kill($schedulerPid, 0)) {
+        if (isProcessRunning($schedulerPid, 'scheduler')) {
             posix_kill($schedulerPid, SIGKILL);
         }
+    } elseif ($schedulerPid && $schedulerRunning && !$canKill) {
+        // Process is running but we can't kill it (permission denied)
+        // This happens when www-data tries to kill root-owned scheduler
+        aviationwx_log('warning', 'scheduler health check: cannot kill scheduler - permission denied', [
+            'pid' => $schedulerPid,
+            'reason' => $restartReason,
+            'hint' => 'Scheduler is owned by root but health check runs as www-data'
+        ], 'app');
+        // Don't try to restart - the existing scheduler is still running
+        // A stale lock with running process likely means lock file wasn't updated
+        return;
     }
     
-    // Clean up lock file
-    @unlink($lockFile);
-    
-    // Start new scheduler
-    $command = sprintf(
-        'nohup /usr/local/bin/php %s > /dev/null 2>&1 &',
-        escapeshellarg($schedulerScript)
-    );
-    exec($command);
-    
-    aviationwx_log('info', 'scheduler health check: restarted scheduler', [
-        'reason' => $restartReason,
-        'old_pid' => $schedulerPid
-    ], 'app');
+    // Clean up lock file (only if process is actually dead or we killed it)
+    if (!isProcessRunning($schedulerPid ?? 0, 'scheduler')) {
+        @unlink($lockFile);
+        
+        // Start new scheduler
+        $command = sprintf(
+            'nohup /usr/local/bin/php %s > /dev/null 2>&1 &',
+            escapeshellarg($schedulerScript)
+        );
+        exec($command);
+        
+        aviationwx_log('info', 'scheduler health check: restarted scheduler', [
+            'reason' => $restartReason,
+            'old_pid' => $schedulerPid
+        ], 'app');
+    }
 }
 
 // Note: We don't log healthy status to avoid log spam

@@ -7,6 +7,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/process-utils.php';
 require_once __DIR__ . '/../../pages/status.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
 

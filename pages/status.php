@@ -8,6 +8,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/process-utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 
 // VPN routing is optional - only required if VPN features are used
@@ -303,62 +304,6 @@ function checkSystemHealth(): array {
     ];
     
     return $health;
-}
-
-/**
- * Check if a process is running by PID
- * 
- * Uses /proc filesystem which is readable regardless of process ownership,
- * unlike posix_kill() which requires permission to send signals.
- * Falls back to posix_kill() on non-Linux systems.
- * 
- * @param int $pid Process ID to check
- * @return bool True if process exists and is running
- */
-function isProcessRunning(int $pid): bool {
-    if ($pid <= 0) {
-        return false;
-    }
-    
-    // Primary method: Check /proc/{pid} directory (Linux)
-    // This works regardless of the process owner and is the most reliable method
-    $procDir = "/proc/{$pid}";
-    if (is_dir($procDir)) {
-        // Verify it's the expected process by checking cmdline contains 'scheduler'
-        $cmdlineFile = "{$procDir}/cmdline";
-        if (is_readable($cmdlineFile)) {
-            $cmdline = @file_get_contents($cmdlineFile);
-            // cmdline uses null bytes as separators
-            if ($cmdline !== false && stripos($cmdline, 'scheduler') !== false) {
-                return true;
-            }
-            // Even if cmdline doesn't match, process exists
-            // (might be a different scheduler path)
-            if ($cmdline !== false && strlen($cmdline) > 0) {
-                return true;
-            }
-        }
-        // Directory exists but can't read cmdline - process exists
-        return true;
-    }
-    
-    // Fallback method: posix_kill with signal 0
-    // This may fail if the process is owned by a different user (EPERM)
-    // Only use this as a fallback for non-Linux systems
-    if (function_exists('posix_kill')) {
-        $result = @posix_kill($pid, 0);
-        if ($result) {
-            return true;
-        }
-        // Check if error was permission denied (EPERM = 1)
-        // If EPERM, the process exists but we can't signal it
-        $errno = posix_get_last_error();
-        if ($errno === 1) { // EPERM - Operation not permitted
-            return true; // Process exists, we just can't signal it
-        }
-    }
-    
-    return false;
 }
 
 /**
