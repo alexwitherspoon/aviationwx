@@ -11,8 +11,7 @@
     "autoload": {
         "files": [
             "lib/rate-limit.php",
-            "lib/logger.php",
-            "api/weather.php"
+            "lib/logger.php"
         ]
     },
     "autoload-dev": {
