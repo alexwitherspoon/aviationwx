@@ -296,27 +296,42 @@ function getSourceMaxAge(array $source): int {
  * Add calculated fields to weather data
  * 
  * Uses existing calculator functions that expect $weather and $airport arrays.
+ * Handles all derived calculations from raw weather data.
  * 
  * @param array $data Weather data
  * @param array $airport Airport configuration
  * @return array Weather data with calculated fields
  */
 function addCalculatedFields(array $data, array $airport): array {
+    // Calculate dewpoint from humidity if missing
+    if (($data['dewpoint'] ?? null) === null && 
+        ($data['temperature'] ?? null) !== null && 
+        ($data['humidity'] ?? null) !== null) {
+        $data['dewpoint'] = calculateDewpointFromHumidity($data['temperature'], $data['humidity']);
+    }
+    
+    // Calculate humidity from dewpoint if missing
+    if (($data['humidity'] ?? null) === null && 
+        ($data['temperature'] ?? null) !== null && 
+        ($data['dewpoint'] ?? null) !== null) {
+        $data['humidity'] = calculateHumidityFromDewpoint($data['temperature'], $data['dewpoint']);
+    }
+    
     // Temperature conversions (Celsius to Fahrenheit)
-    if ($data['temperature'] !== null) {
+    if (($data['temperature'] ?? null) !== null) {
         $data['temperature_f'] = round($data['temperature'] * 9 / 5 + 32, 1);
     } else {
         $data['temperature_f'] = null;
     }
     
-    if ($data['dewpoint'] !== null) {
+    if (($data['dewpoint'] ?? null) !== null) {
         $data['dewpoint_f'] = round($data['dewpoint'] * 9 / 5 + 32, 1);
     } else {
         $data['dewpoint_f'] = null;
     }
     
     // Dewpoint spread
-    if ($data['temperature'] !== null && $data['dewpoint'] !== null) {
+    if (($data['temperature'] ?? null) !== null && ($data['dewpoint'] ?? null) !== null) {
         $data['dewpoint_spread'] = round($data['temperature'] - $data['dewpoint'], 1);
     } else {
         $data['dewpoint_spread'] = null;
@@ -324,12 +339,34 @@ function addCalculatedFields(array $data, array $airport): array {
     
     // Flight category - use existing calculator
     $data['flight_category'] = calculateFlightCategory($data);
+    $data['flight_category_class'] = getFlightCategoryClass($data['flight_category']);
     
     // Pressure/density altitude - use existing calculators
     $data['pressure_altitude'] = calculatePressureAltitude($data, $airport);
     $data['density_altitude'] = calculateDensityAltitude($data, $airport);
     
+    // Sunrise/sunset times
+    $data['sunrise'] = getSunriseTime($airport);
+    $data['sunset'] = getSunsetTime($airport);
+    
+    // ISO timestamp
+    $lastUpdated = $data['last_updated'] ?? time();
+    $data['last_updated_iso'] = date('c', $lastUpdated);
+    
     return $data;
+}
+
+/**
+ * Get CSS class for flight category
+ * 
+ * @param string|null $category Flight category (VFR, MVFR, IFR, LIFR)
+ * @return string CSS class name
+ */
+function getFlightCategoryClass(?string $category): string {
+    if ($category === null) {
+        return '';
+    }
+    return 'status-' . strtolower($category);
 }
 
 /**
