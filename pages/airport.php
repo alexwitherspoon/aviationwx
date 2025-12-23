@@ -1059,7 +1059,7 @@ const INITIAL_WEATHER_DATA = <?php
         if (is_array($cachedWeather)) {
             // Apply staleness checks to ensure we don't show stale data
             require_once __DIR__ . '/../lib/constants.php';
-            require_once __DIR__ . '/../lib/weather/staleness.php';
+            require_once __DIR__ . '/../lib/weather/cache-utils.php';
             
             $defaultWeatherRefresh = getDefaultWeatherRefresh();
             $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) 
