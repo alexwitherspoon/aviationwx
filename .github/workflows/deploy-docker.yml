@@ -552,6 +552,20 @@ jobs:
             echo "⚠ config/airports.json not found - skipping validation"
           fi
           
+          # Validation 7: Validate guides (if guides directory exists)
+          echo ""
+          echo "7. Validating guides..."
+          if [ -d "guides" ]; then
+            if php scripts/validate-guides.php; then
+              echo "✓ Guides validation passed"
+            else
+              VALIDATION_FAILED=true
+              FAILURE_REASONS+=("Guides validation failed - see errors above")
+            fi
+          else
+            echo "⚠ Guides directory not found - skipping validation"
+          fi
+          
           # Final check
           if [ "$VALIDATION_FAILED" = "true" ]; then
             echo ""
