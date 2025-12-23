@@ -326,6 +326,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         Data will automatically update once the local site is back online.
     </div>
     <?php endif; ?>
+    <div id="notam-banner-container"></div>
     <main>
     <div class="container">
         <!-- Header -->
@@ -3365,6 +3366,267 @@ if (document.readyState === 'loading') {
 } else {
     // DOM already loaded
     initializeOutageBanner();
+}
+
+// NOTAM Banner Management
+let notamRefreshInterval = null;
+
+/**
+ * Format NOTAM time for display
+ * 
+ * @param {string} timeUtc ISO 8601 UTC time string
+ * @param {string} timeLocal Local time string (from API)
+ * @return {string} Formatted time string
+ */
+function formatNotamTime(timeUtc, timeLocal) {
+    if (!timeUtc && !timeLocal) return '';
+    
+    // Use local time if available, otherwise parse UTC
+    if (timeLocal) {
+        try {
+            const timeFormat = getTimeFormat();
+            const dt = new Date(timeLocal);
+            if (isNaN(dt.getTime())) {
+                // Fallback to parsing UTC
+                const dtUtc = new Date(timeUtc);
+                const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || DEFAULT_TIMEZONE;
+                return dtUtc.toLocaleString('en-US', {
+                    timeZone: timezone,
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: timeFormat === '12hr'
+                }) + ' ' + getTimezoneAbbreviation(dtUtc, timezone);
+            }
+            return dt.toLocaleString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: timeFormat === '12hr'
+            }) + ' ' + (timeLocal.match(/\s([A-Z]{3,4})$/)?.[1] || '');
+        } catch (e) {
+            return timeLocal;
+        }
+    }
+    
+    // Parse UTC and convert to local
+    try {
+        const dt = new Date(timeUtc);
+        const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || DEFAULT_TIMEZONE;
+        const timeFormat = getTimeFormat();
+        return dt.toLocaleString('en-US', {
+            timeZone: timezone,
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: timeFormat === '12hr'
+        }) + ' ' + getTimezoneAbbreviation(dt, timezone);
+    } catch (e) {
+        return timeUtc;
+    }
+}
+
+/**
+ * Get timezone abbreviation
+ * 
+ * @param {Date} date Date object
+ * @param {string} timezone Timezone identifier
+ * @return {string} Timezone abbreviation
+ */
+function getTimezoneAbbreviation(date, timezone) {
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            timeZoneName: 'short'
+        });
+        const parts = formatter.formatToParts(date);
+        const tzPart = parts.find(p => p.type === 'timeZoneName');
+        return tzPart ? tzPart.value : '';
+    } catch (e) {
+        return '';
+    }
+}
+
+/**
+ * Fetch NOTAM data and update banner
+ */
+async function fetchAndUpdateNotamBanner() {
+    if (!AIRPORT_ID) return;
+    
+    try {
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        const url = `${baseUrl}/api/notam.php?airport=${AIRPORT_ID}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            console.warn('[NotamBanner] Failed to fetch NOTAMs:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.status !== 'success') {
+            console.warn('[NotamBanner] Server returned error:', data.error);
+            return;
+        }
+        
+        updateNotamBanner(data.notams || []);
+        
+    } catch (error) {
+        console.warn('[NotamBanner] Error fetching NOTAMs:', error);
+    }
+}
+
+/**
+ * Update NOTAM banner display
+ * 
+ * @param {Array} notams Array of NOTAM objects
+ */
+function updateNotamBanner(notams) {
+    const container = document.getElementById('notam-banner-container');
+    if (!container) return;
+    
+    // Filter for active and upcoming today
+    const activeNotams = notams.filter(n => n.status === 'active');
+    const upcomingNotams = notams.filter(n => n.status === 'upcoming_today');
+    
+    // Clear container
+    container.innerHTML = '';
+    
+    // Show active NOTAMs first (red banner)
+    if (activeNotams.length > 0) {
+        const banner = createNotamBanner('active', activeNotams);
+        container.appendChild(banner);
+    }
+    
+    // Show upcoming NOTAMs (orange banner)
+    if (upcomingNotams.length > 0) {
+        const banner = createNotamBanner('upcoming', upcomingNotams);
+        container.appendChild(banner);
+    }
+}
+
+/**
+ * Create NOTAM banner element
+ * 
+ * @param {string} type 'active' or 'upcoming'
+ * @param {Array} notams Array of NOTAM objects
+ * @return {HTMLElement} Banner element
+ */
+function createNotamBanner(type, notams) {
+    const banner = document.createElement('div');
+    banner.className = `notam-banner-${type}`;
+    
+    const isActive = type === 'active';
+    const icon = isActive ? '🚨' : '⚠️';
+    const statusText = isActive ? 'ACTIVE NOTAM' : 'NOTAM EFFECTIVE TODAY';
+    const statusTextPlural = isActive ? 'ACTIVE NOTAMs' : 'NOTAMs EFFECTIVE TODAY';
+    
+    if (notams.length === 1) {
+        const notam = notams[0];
+        const startTime = formatNotamTime(notam.start_time_utc, notam.start_time_local);
+        const endTime = notam.end_time_utc 
+            ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
+            : 'until further notice';
+        
+        const timeRange = isActive 
+            ? `from ${startTime} to ${endTime}`
+            : `starting at ${startTime}`;
+        
+        banner.innerHTML = `
+            <span class="notam-icon">${icon}</span>
+            <span class="notam-status">${statusText}:</span>
+            <span class="notam-message">${escapeHtml(notam.message)}</span>
+            <span class="notam-time-range">${timeRange}</span>
+            ${notam.official_link ? `<a href="${escapeHtml(notam.official_link)}" class="notam-link" target="_blank" rel="noopener noreferrer">View Full NOTAM</a>` : ''}
+        `;
+    } else {
+        // Multiple NOTAMs - show summary with expandable details
+        const summary = notams.map(n => {
+            const shortMsg = n.message.length > 50 ? n.message.substring(0, 50) + '...' : n.message;
+            return shortMsg;
+        }).join(', ');
+        
+        banner.innerHTML = `
+            <span class="notam-icon">${icon}</span>
+            <span class="notam-status">${statusTextPlural}:</span>
+            <span class="notam-message">${escapeHtml(summary)}</span>
+            <button class="notam-expand" onclick="toggleNotamDetails(this)">View Details (${notams.length} NOTAMs)</button>
+            <div class="notam-details" style="display: none;">
+                ${notams.map((notam, idx) => {
+                    const startTime = formatNotamTime(notam.start_time_utc, notam.start_time_local);
+                    const endTime = notam.end_time_utc 
+                        ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
+                        : 'until further notice';
+                    const timeRange = isActive 
+                        ? `from ${startTime} to ${endTime}`
+                        : `starting at ${startTime}`;
+                    const typeLabel = notam.type === 'aerodrome_closure' ? 'Aerodrome Closure' : 'TFR';
+                    return `
+                        <div class="notam-item">
+                            <strong>${typeLabel}:</strong> ${escapeHtml(notam.message)} ${timeRange}
+                            ${notam.official_link ? `<a href="${escapeHtml(notam.official_link)}" target="_blank" rel="noopener noreferrer">View NOTAM</a>` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+    
+    return banner;
+}
+
+/**
+ * Toggle NOTAM details expansion
+ * 
+ * @param {HTMLElement} button Expand/collapse button
+ */
+function toggleNotamDetails(button) {
+    const banner = button.closest('.notam-banner-active, .notam-banner-upcoming');
+    if (!banner) return;
+    
+    const details = banner.querySelector('.notam-details');
+    if (!details) return;
+    
+    const isExpanded = details.style.display !== 'none';
+    details.style.display = isExpanded ? 'none' : 'block';
+    button.textContent = isExpanded 
+        ? `View Details (${details.querySelectorAll('.notam-item').length} NOTAMs)`
+        : 'Hide Details';
+}
+
+/**
+ * Escape HTML to prevent XSS
+ * 
+ * @param {string} text Text to escape
+ * @return {string} Escaped text
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Initialize NOTAM banner
+ */
+function initializeNotamBanner() {
+    // Initial fetch
+    fetchAndUpdateNotamBanner();
+    
+    // Refresh every 3 minutes
+    notamRefreshInterval = setInterval(fetchAndUpdateNotamBanner, 180000);
+}
+
+// Initialize NOTAM banner
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeNotamBanner);
+} else {
+    initializeNotamBanner();
 }
 
 <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>

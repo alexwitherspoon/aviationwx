@@ -42,6 +42,110 @@ body {
     position: relative;
     z-index: 1000;
     line-height: 1.5;
+    border: 2px solid #c82333;
+}
+
+/* NOTAM Banners */
+.notam-banner-active {
+    background-color: #dc3545;
+    color: white;
+    padding: 12px 20px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1000;
+    line-height: 1.5;
+    border-left: 4px solid #ff0000;
+}
+
+.notam-banner-upcoming {
+    background-color: #ff8c00;
+    color: white;
+    padding: 12px 20px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1000;
+    line-height: 1.5;
+}
+
+.notam-icon {
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.notam-status {
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.notam-message {
+    margin: 0 8px;
+}
+
+.notam-time-range {
+    margin: 0 8px;
+    font-size: 14px;
+}
+
+.notam-link {
+    color: white;
+    text-decoration: underline;
+    margin-left: 12px;
+    font-weight: normal;
+}
+
+.notam-link:hover {
+    color: #f0f0f0;
+}
+
+.notam-expand {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    padding: 4px 12px;
+    margin-left: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.notam-expand:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.notam-details {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    text-align: left;
+}
+
+.notam-item {
+    margin: 8px 0;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.notam-item strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.notam-item a {
+    color: white;
+    text-decoration: underline;
+    margin-left: 8px;
 }
 
 .container {
