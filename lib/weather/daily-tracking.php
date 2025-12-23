@@ -30,13 +30,17 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
             }
         }
         
-        $file = $cacheDir . '/peak_gusts.json';// Use airport's local timezone to determine "today" (midnight reset at local timezone)
+        $file = $cacheDir . '/peak_gusts.json';
+        // Use airport's local timezone to determine "today" (midnight reset at local timezone)
         // If observation timestamp is provided, use it to determine the date key (ensures consistency)
         // Otherwise, use current time with airport timezone
         if ($obsTimestamp !== null && $airport !== null) {
             $timezone = getAirportTimezone($airport);
             $tz = new DateTimeZone($timezone);
-            $obsDate = new DateTime('@' . $obsTimestamp, $tz);
+            // Note: When using '@' prefix, PHP creates DateTime in UTC and ignores the timezone parameter.
+            // We must call setTimezone() after creation to convert to the airport's local timezone.
+            $obsDate = new DateTime('@' . $obsTimestamp);
+            $obsDate->setTimezone($tz);
             $dateKey = $obsDate->format('Y-m-d');
         } else {
             $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
