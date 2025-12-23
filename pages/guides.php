@@ -1,0 +1,484 @@
+<?php
+/**
+ * Guides Page
+ * Renders markdown guides from /guides directory
+ */
+
+// Load dependencies
+require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/seo.php';
+
+// Load Parsedown
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+} else {
+    error_log('Composer autoloader not found. Please run "composer install"');
+    http_response_code(500);
+    die('Configuration error. Please contact the administrator.');
+}
+
+// Get request path
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+$parsedUri = parse_url($requestUri);
+$requestPath = isset($parsedUri['path']) ? trim($parsedUri['path'], '/') : '';
+
+// Determine if this is index or a specific guide
+$isIndex = empty($requestPath);
+$guideName = $isIndex ? null : $requestPath;
+
+// Guides directory
+$guidesDir = __DIR__ . '/../guides';
+
+// Get all markdown files for sidebar
+$allGuides = [];
+if (is_dir($guidesDir)) {
+    $files = scandir($guidesDir);
+    foreach ($files as $file) {
+        if (preg_match('/^(\d+)-(.+)\.md$/i', $file, $matches)) {
+            $guideSlug = preg_replace('/\.md$/i', '', $file);
+            $allGuides[] = [
+                'file' => $file,
+                'slug' => $guideSlug,
+                'number' => intval($matches[1])
+            ];
+        }
+    }
+    // Sort by number
+    usort($allGuides, function($a, $b) {
+        return $a['number'] <=> $b['number'];
+    });
+}
+
+// Determine which file to load
+$markdownFile = null;
+$pageTitle = 'Guides - AviationWX.org';
+$pageDescription = 'Documentation and guides for AviationWX.org';
+
+if ($isIndex) {
+    // Index page - use README.md or readme.md
+    $readmeFiles = ['README.md', 'readme.md'];
+    foreach ($readmeFiles as $readme) {
+        $readmePath = $guidesDir . '/' . $readme;
+        if (file_exists($readmePath)) {
+            $markdownFile = $readmePath;
+            break;
+        }
+    }
+    if (!$markdownFile) {
+        http_response_code(404);
+        include 'error-404-guides.php';
+        exit;
+    }
+} else {
+    // Individual guide - look for matching file
+    $guideFile = $guidesDir . '/' . $guideName . '.md';
+    if (file_exists($guideFile) && is_file($guideFile)) {
+        $markdownFile = $guideFile;
+    } else {
+        // Guide not found
+        http_response_code(404);
+        include 'error-404-guides.php';
+        exit;
+    }
+}
+
+// Read and parse markdown
+$markdownContent = file_get_contents($markdownFile);
+if ($markdownContent === false) {
+    error_log('Failed to read markdown file: ' . $markdownFile);
+    http_response_code(500);
+    die('Error loading guide. Please contact the administrator.');
+}
+
+// Get file modification time for cache headers
+$fileMtime = filemtime($markdownFile);
+$fileAge = time() - $fileMtime;
+
+// Extract title from first H1
+$titleMatch = [];
+if (preg_match('/^#\s+(.+)$/m', $markdownContent, $titleMatch)) {
+    $pageTitle = htmlspecialchars(trim($titleMatch[1])) . ' - Guides - AviationWX.org';
+    $pageDescription = 'Guide: ' . htmlspecialchars(trim($titleMatch[1]));
+}
+
+// Parse markdown
+$parsedown = new Parsedown();
+$htmlContent = $parsedown->text($markdownContent);
+
+// Set cache headers for Cloudflare
+// Guides are documentation that doesn't change frequently, but we want reasonable cache times
+// Cache for 1 hour, allow stale-while-revalidate for 4 hours
+// This balances freshness with performance
+$cacheMaxAge = 3600; // 1 hour
+$staleWhileRevalidate = 14400; // 4 hours
+$cloudflareMaxAge = 3600; // 1 hour for Cloudflare
+
+// If file was recently modified (within last hour), use shorter cache
+if ($fileAge < 3600) {
+    $cacheMaxAge = 300; // 5 minutes for recently updated files
+    $cloudflareMaxAge = 300;
+}
+
+header('Cache-Control: public, max-age=' . $cacheMaxAge . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . $staleWhileRevalidate);
+header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cacheMaxAge) . ' GMT');
+header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $fileMtime) . ' GMT');
+header('ETag: "' . md5($markdownFile . $fileMtime) . '"');
+
+// Get base URL
+$baseUrl = getBaseUrl();
+$canonicalUrl = getCanonicalUrl();
+
+// SEO variables
+$ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    
+    <?php
+    // Favicon and icon tags
+    echo generateFaviconTags();
+    echo "\n    ";
+    
+    // Enhanced meta tags
+    echo generateEnhancedMetaTags($pageDescription, 'guides, documentation, aviation weather');
+    echo "\n    ";
+    
+    // Canonical URL
+    echo generateCanonicalTag($canonicalUrl);
+    echo "\n    ";
+    
+    // Open Graph and Twitter Card tags
+    echo generateSocialMetaTags($pageTitle, $pageDescription, $canonicalUrl, $ogImage);
+    ?>
+    
+    <link rel="stylesheet" href="public/css/styles.css">
+    <style>
+        /* Smooth scrolling for anchor links */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Ensure proper anchor positioning */
+        section[id], h1[id], h2[id], h3[id], h4[id], h5[id], h6[id] {
+            scroll-margin-top: 2rem;
+        }
+        
+        .hero {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            margin: -1rem -1rem 3rem -1rem;
+        }
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .hero p {
+            font-size: 1.2rem;
+            opacity: 0.95;
+            max-width: 700px;
+            margin: 0 auto 1rem;
+        }
+        
+        /* Layout for guides with sidebar */
+        .guides-layout {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .guides-layout {
+                grid-template-columns: 1fr;
+            }
+            .guides-sidebar {
+                order: 2;
+            }
+        }
+        
+        /* Sidebar */
+        .guides-sidebar {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            height: fit-content;
+            position: sticky;
+            top: 2rem;
+        }
+        
+        .guides-sidebar h3 {
+            margin-top: 0;
+            color: #0066cc;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .guides-sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .guides-sidebar li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .guides-sidebar a {
+            color: #333;
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .guides-sidebar a:hover {
+            background: #e9ecef;
+            color: #0066cc;
+        }
+        
+        .guides-sidebar a.active {
+            background: #0066cc;
+            color: white;
+        }
+        
+        .guides-sidebar .back-link {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .guides-sidebar .back-link a {
+            color: #0066cc;
+            font-weight: 600;
+        }
+        
+        .guides-sidebar .back-link a:hover {
+            background: #e9ecef;
+        }
+        
+        /* Markdown content */
+        .guides-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Markdown styling */
+        .guides-content h1 {
+            font-size: 2.5rem;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #0066cc;
+        }
+        
+        .guides-content h2 {
+            font-size: 2rem;
+            color: #0066cc;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .guides-content h3 {
+            font-size: 1.5rem;
+            color: #333;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .guides-content h4 {
+            font-size: 1.25rem;
+            color: #555;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .guides-content p {
+            line-height: 1.8;
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        
+        .guides-content ul,
+        .guides-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+        
+        .guides-content li {
+            line-height: 1.8;
+            margin-bottom: 0.5rem;
+        }
+        
+        .guides-content code {
+            background: #f4f4f4;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            color: #d63384;
+        }
+        
+        .guides-content pre {
+            background: #1a1a1a;
+            color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+        }
+        
+        .guides-content pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+            font-size: 0.9rem;
+        }
+        
+        .guides-content blockquote {
+            border-left: 4px solid #0066cc;
+            padding-left: 1rem;
+            margin-left: 0;
+            margin-bottom: 1rem;
+            color: #555;
+            font-style: italic;
+        }
+        
+        .guides-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+        
+        .guides-content table th,
+        .guides-content table td {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        
+        .guides-content table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .guides-content table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .guides-content a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .guides-content a:hover {
+            text-decoration: underline;
+        }
+        
+        .guides-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+        }
+        
+        .guides-content hr {
+            border: none;
+            border-top: 2px solid #e9ecef;
+            margin: 2rem 0;
+        }
+        
+        /* Index page specific */
+        .guides-index {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #555;
+            font-size: 0.9rem;
+        }
+        
+        footer a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <main>
+    <div class="container">
+        <div class="hero">
+            <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 76px; height: 76px; background: transparent;"> AviationWX Guides</h1>
+            <p style="font-size: 1.2rem; opacity: 0.95;">
+                Documentation and guides for using and contributing to AviationWX.org
+            </p>
+        </div>
+
+        <?php if ($isIndex): ?>
+            <!-- Index page - no sidebar -->
+            <div class="guides-index">
+                <?= $htmlContent ?>
+            </div>
+        <?php else: ?>
+            <!-- Individual guide - with sidebar -->
+            <div class="guides-layout">
+                <div class="guides-sidebar">
+                    <div class="back-link">
+                        <a href="https://guides.aviationwx.org">← Back to Guides</a>
+                    </div>
+                    <h3>All Guides</h3>
+                    <ul>
+                        <?php foreach ($allGuides as $guide): 
+                            $guideUrl = 'https://guides.aviationwx.org/' . $guide['slug'];
+                            $isActive = ($guide['slug'] === $guideName);
+                        ?>
+                            <li>
+                                <a href="<?= htmlspecialchars($guideUrl) ?>" <?= $isActive ? 'class="active"' : '' ?>>
+                                    <?= htmlspecialchars($guide['slug']) ?>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <div class="guides-content">
+                    <?= $htmlContent ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <footer class="footer">
+            <p>
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source</a> | 
+                <a href="https://status.aviationwx.org">Status</a>
+            </p>
+        </footer>
+    </div>
+    </main>
+</body>
+</html>
+
