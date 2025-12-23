@@ -32,7 +32,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testPerFieldStalenessWithObsTimeMap()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         $refreshInterval = 60;
@@ -72,7 +72,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testFailClosed_NoObsTimeEntry()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         
@@ -104,7 +104,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testMetarFieldStaleness_TwoHourThreshold()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         $metarThreshold = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600; // 2 hours = 7200 seconds
@@ -137,7 +137,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testNonMetarFieldStaleness_TenXThreshold()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         $refreshInterval = 60;
@@ -171,7 +171,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testCalculatedFields_NulledWhenSourceStale()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         $refreshInterval = 60;
@@ -219,7 +219,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testFieldExceedingThresholdIsNulled()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         $refreshInterval = 60;
@@ -248,7 +248,7 @@ class FailClosedStalenessTest extends TestCase
      */
     public function testFieldUnderThresholdIsPreserved()
     {
-        require_once __DIR__ . '/../../lib/weather/staleness.php';
+        require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
         $refreshInterval = 60;
