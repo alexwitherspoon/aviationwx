@@ -441,26 +441,6 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds,
             $isPrimaryField = in_array($field, $primarySourceFields);
             $isMetarField = in_array($field, $metarSourceFields);
             
-            // CRITICAL: If new data has fresh timestamps, null means the field was explicitly cleared/rejected
-            // Only preserve old data if new fetch didn't happen or failed
-            $newFetchHappened = false;
-            if ($isPrimaryField && isset($newData['last_updated_primary']) && $newData['last_updated_primary'] > 0) {
-                // New primary data was fetched - check if it's fresh (within last hour)
-                $newFetchAge = time() - $newData['last_updated_primary'];
-                $newFetchHappened = ($newFetchAge < 3600); // Fresh if within last hour
-            } elseif ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
-                // New METAR data was fetched - check if it's fresh
-                $newFetchAge = time() - $newData['last_updated_metar'];
-                $newFetchHappened = ($newFetchAge < 3600); // Fresh if within last hour
-            }
-            
-            // If new fetch happened and field is explicitly null, clear old value (don't preserve)
-            if ($newFetchHappened && array_key_exists($field, $newData) && $newData[$field] === null) {
-                // Explicit null in fresh data means field was rejected/cleared - don't preserve old value
-                $result[$field] = null;
-                continue;
-            }
-            
             // Check if old value is still fresh enough to use
             // Prefer per-field observation time if available, otherwise use source-level timestamp
             $isStale = false;
@@ -481,6 +461,32 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds,
                 $isStale = ($age >= $maxStaleSecondsMetar);
             }
             
+            // CRITICAL: If new data has fresh timestamps, null means the field was explicitly cleared/rejected
+            // However, we should still preserve non-stale old values to avoid data loss
+            // Only clear old value if it's stale OR if new fetch happened and old value is stale
+            $newFetchHappened = false;
+            if ($isPrimaryField && isset($newData['last_updated_primary']) && $newData['last_updated_primary'] > 0) {
+                // New primary data was fetched - check if it's fresh (within last hour)
+                $newFetchAge = $now - $newData['last_updated_primary'];
+                $newFetchHappened = ($newFetchAge < 3600); // Fresh if within last hour
+            } elseif ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
+                // New METAR data was fetched - check if it's fresh
+                $newFetchAge = $now - $newData['last_updated_metar'];
+                $newFetchHappened = ($newFetchAge < 3600); // Fresh if within last hour
+            }
+            
+            // If new fetch happened and field is explicitly null, only clear if old value is stale
+            // If old value is not stale, preserve it (field might just be missing from API response)
+            if ($newFetchHappened && array_key_exists($field, $newData) && $newData[$field] === null) {
+                // Explicit null in fresh data - clear old value only if it's stale
+                // If old value is not stale, preserve it to avoid data loss
+                if ($isStale) {
+                    $result[$field] = null;
+                    continue;
+                }
+                // If not stale, fall through to preservation logic below
+            }
+            
             // METAR fields: distinguish between explicit null (unlimited/missing) vs missing from array
             if ($isMetarField && isset($newData['last_updated_metar']) && $newData['last_updated_metar'] > 0) {
                 if (array_key_exists($field, $newData) && $newData[$field] === null) {
@@ -497,16 +503,10 @@ function mergeWeatherDataWithFallback($newData, $existingData, $maxStaleSeconds,
                 continue;
             }
             
-            // Preserve old value if it's not too stale AND new fetch didn't explicitly clear it
-            if (!$isStale && !$newFetchHappened) {
-                $result[$field] = $oldValue;
-                // Preserve old field observation time if available
-                if (isset($oldFieldObsTimeMap[$field]) && $oldFieldObsTimeMap[$field] > 0) {
-                    $resultFieldObsTimeMap[$field] = $oldFieldObsTimeMap[$field];
-                }
-            } elseif (!$isStale && $newFetchHappened && !array_key_exists($field, $newData)) {
-                // New fetch happened but field wasn't in response (missing, not explicitly null)
-                // Only preserve if old value is not stale
+            // Preserve old value if it's not too stale
+            // For primary fields: preserve if not stale, regardless of whether new fetch happened
+            // This ensures we don't lose valid data when API response is missing a field
+            if (!$isStale) {
                 $result[$field] = $oldValue;
                 // Preserve old field observation time if available
                 if (isset($oldFieldObsTimeMap[$field]) && $oldFieldObsTimeMap[$field] > 0) {

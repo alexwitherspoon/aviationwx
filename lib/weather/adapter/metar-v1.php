@@ -39,7 +39,8 @@ function parseMETARResponse($response, $airport): ?array {
     
     // Parse visibility - use parsed visibility from JSON
     $visibility = null;
-    if (isset($metarData['visib'])) {
+    $visibilityFieldPresent = isset($metarData['visib']);
+    if ($visibilityFieldPresent) {
         $visStr = str_replace('+', '', $metarData['visib']);
         // Handle "1 1/2" format
         if (preg_match('/(\d+)\s+(\d+\/\d+)/', $visStr, $matches)) {
@@ -62,9 +63,10 @@ function parseMETARResponse($response, $airport): ?array {
         }
     }
     
-    // Convert null visibility to sentinel value (unlimited)
-    // METAR API: null = unlimited visibility, not a failure
-    if ($visibility === null) {
+    // Convert null visibility to sentinel value (unlimited) only if field was present in response
+    // If field is missing from response, keep it as null (indicates missing data, not unlimited)
+    // METAR API: null/empty visib field = unlimited visibility, missing field = missing data
+    if ($visibility === null && $visibilityFieldPresent) {
         $visibility = UNLIMITED_VISIBILITY_SM;  // 999.0 = unlimited
     }
     
