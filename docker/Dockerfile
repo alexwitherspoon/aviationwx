@@ -47,6 +47,11 @@ WORKDIR /var/www/html
 # These change less frequently than application code
 COPY composer.json composer.lock* ./
 
+# Install Composer and dependencies
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+    && composer install --no-dev --optimize-autoloader --no-interaction \
+    && rm -rf /root/.composer/cache
+
 # Copy configuration files (rarely change)
 COPY config/crontab /etc/cron.d/aviationwx-cron
 COPY docker/docker-entrypoint.sh /usr/local/bin/

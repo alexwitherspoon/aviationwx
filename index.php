@@ -47,7 +47,8 @@ if ($config === null) {
 
 // Check for guides subdomain (after config is loaded so getBaseDomain() works)
 $baseDomain = getBaseDomain();
-if (strpos($host, 'guides') !== false || preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+// Match guides subdomain exactly (e.g., guides.aviationwx.org)
+if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     // Route to guides page
     include 'pages/guides.php';
     exit;
