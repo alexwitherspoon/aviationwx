@@ -147,6 +147,7 @@ function parseWeatherLinkResponse(?string $response): ?array {
         
         // Precipitation - WeatherLink provides both inches and mm versions
         // Prefer daily accumulation, fallback to hourly
+        // Normalize to 0 for no precipitation (unified standard: 0 = no precip, null = failed)
         if (isset($dataFields['rainfall_daily_in']) && is_numeric($dataFields['rainfall_daily_in'])) {
             $result['precip_accum'] = (float)$dataFields['rainfall_daily_in']; // Already in inches
         } elseif (isset($dataFields['rainfall_daily_mm']) && is_numeric($dataFields['rainfall_daily_mm'])) {
@@ -155,6 +156,9 @@ function parseWeatherLinkResponse(?string $response): ?array {
             $result['precip_accum'] = (float)$dataFields['rainfall_last_60_min_in']; // Already in inches
         } elseif (isset($dataFields['rainfall_last_60_min_mm']) && is_numeric($dataFields['rainfall_last_60_min_mm'])) {
             $result['precip_accum'] = (float)$dataFields['rainfall_last_60_min_mm'] * 0.0393701; // Convert mm to inches
+        } else {
+            // Default to 0 if no precip (unified standard: 0 = no precip, null = failed)
+            $result['precip_accum'] = 0;
         }
     }
     

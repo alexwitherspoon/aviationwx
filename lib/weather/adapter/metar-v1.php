@@ -62,6 +62,12 @@ function parseMETARResponse($response, $airport): ?array {
         }
     }
     
+    // Convert null visibility to sentinel value (unlimited)
+    // METAR API: null = unlimited visibility, not a failure
+    if ($visibility === null) {
+        $visibility = UNLIMITED_VISIBILITY_SM;  // 999.0 = unlimited
+    }
+    
     // Parse ceiling and cloud cover from clouds array
     $ceiling = null;
     $cloudCover = null;
@@ -104,6 +110,12 @@ function parseMETARResponse($response, $airport): ?array {
     // If only FEW/SCT clouds exist, ceiling remains null (unlimited).
     if ($ceiling === null && isset($cloudLayer) && $cloudLayer['cover'] !== 'CLR' && $cloudLayer['cover'] !== 'SKC') {
         $cloudCover = $cloudLayer['cover'];
+    }
+    
+    // Convert null ceiling to sentinel value (unlimited)
+    // METAR API: null = no clouds array or no BKN/OVC = unlimited ceiling, not a failure
+    if ($ceiling === null) {
+        $ceiling = UNLIMITED_CEILING_FT;  // 99999 = unlimited
     }
     
     // Parse temperature (Celsius)
@@ -181,11 +193,16 @@ function parseMETARResponse($response, $airport): ?array {
     
     // Parse precipitation (METAR doesn't always have this)
     // Check both pcp24hr and precip fields for compatibility
+    // Normalize to 0 for no precipitation (unified standard: 0 = no precip, null = failed)
     $precip = null;
     if (isset($metarData['pcp24hr']) && is_numeric($metarData['pcp24hr'])) {
         $precip = floatval($metarData['pcp24hr']); // Already in inches
     } elseif (isset($metarData['precip']) && is_numeric($metarData['precip'])) {
         $precip = floatval($metarData['precip']); // Already in inches
+    }
+    // Default to 0 if no precip (unified standard: 0 = no precip, null = failed)
+    if ($precip === null) {
+        $precip = 0;
     }
     
     // Parse observation time (when the METAR was actually measured)

@@ -7,6 +7,119 @@
  */
 
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/utils.php';
+
+/**
+ * Check if a null value is valid for a specific field
+ * 
+ * Determines if a null value represents a valid state (e.g., no wind, no gust) or
+ * an invalid state (e.g., broken sensor, failed measurement). Uses quality metadata
+ * and cross-field consistency to make this determination.
+ * 
+ * @param string $field Field name (e.g., 'wind_speed', 'wind_direction', 'dewpoint')
+ * @param mixed $value Field value (should be null for this function)
+ * @param array $data Full weather data array for cross-field consistency checks
+ * @param array $qualityMetadata Quality metadata from API (e.g., QCcode, RESPONSE_CODE, http_status)
+ * @return array {
+ *   'valid' => bool,              // True if null is valid for this field, false otherwise
+ *   'reason' => string|null      // Reason for validity/invalidity
+ * }
+ */
+function isFieldNullValid(string $field, $value, array $data, array $qualityMetadata = []): array {
+    // This function is specifically for null values
+    if ($value !== null) {
+        return ['valid' => true, 'reason' => 'not_null'];
+    }
+    
+    // Strong indicator: Quality code or HTTP error says there are issues
+    if (!empty($qualityMetadata['has_quality_issues']) || 
+        (isset($qualityMetadata['http_status']) && $qualityMetadata['http_status'] !== 200 && $qualityMetadata['http_status'] !== 0)) {
+        // Quality metadata indicates problems - null is likely invalid
+        return ['valid' => false, 'reason' => 'api_indicates_issues'];
+    }
+    
+    // Field-specific validation
+    switch ($field) {
+        // Core measurements - null is always invalid (sensor should always report)
+        case 'temperature':
+        case 'humidity':
+        case 'pressure':
+        case 'wind_speed':
+            // Check cross-field consistency: if other sensors working, null is likely invalid
+            $otherFieldsWorking = (
+                ($data['temperature'] ?? null) !== null ||
+                ($data['pressure'] ?? null) !== null ||
+                ($data['humidity'] ?? null) !== null
+            );
+            if ($otherFieldsWorking) {
+                return ['valid' => false, 'reason' => 'sensor_failure_with_other_sensors_working'];
+            }
+            // If all sensors null, might be system failure (but we'll be conservative)
+            return ['valid' => false, 'reason' => 'core_measurement_missing'];
+        
+        // Unlimited fields - null is valid (represents unlimited, but we use sentinels now)
+        // Note: With sentinels, null should not occur for visibility/ceiling, but handle gracefully
+        case 'visibility':
+        case 'ceiling':
+            // Null visibility/ceiling should be converted to sentinels in adapters
+            // If we see null here, it's likely a failure (should have been sentinel)
+            return ['valid' => false, 'reason' => 'unlimited_field_should_use_sentinel'];
+        
+        // Conditional fields - null is valid under certain conditions
+        case 'wind_direction':
+            // Valid if wind_speed is 0 or null (direction undefined when no wind)
+            $windSpeed = $data['wind_speed'] ?? null;
+            if ($windSpeed === 0 || $windSpeed === null) {
+                return ['valid' => true, 'reason' => 'no_wind'];
+            }
+            return ['valid' => false, 'reason' => 'wind_direction_missing'];
+        
+        case 'gust_speed':
+        case 'peak_gust':
+            // Valid if no gust (null = no gust, which is valid)
+            return ['valid' => true, 'reason' => 'no_gust'];
+        
+        case 'dewpoint':
+            // Valid if temperature is null (can't calculate dewpoint without temp)
+            // Invalid if temperature exists but dewpoint is null (sensor should report)
+            if (($data['temperature'] ?? null) === null) {
+                return ['valid' => true, 'reason' => 'temperature_missing'];
+            }
+            // Check cross-field consistency
+            $otherFieldsWorking = (
+                ($data['humidity'] ?? null) !== null ||
+                ($data['pressure'] ?? null) !== null
+            );
+            if ($otherFieldsWorking) {
+                return ['valid' => false, 'reason' => 'dewpoint_missing_with_other_sensors_working'];
+            }
+            return ['valid' => false, 'reason' => 'dewpoint_missing'];
+        
+        case 'precip_accum':
+            // Precipitation is often optional
+            // If other sensors working, null is likely valid (precip optional)
+            // If all sensors null, likely system failure
+            $otherFieldsWorking = (
+                ($data['temperature'] ?? null) !== null ||
+                ($data['pressure'] ?? null) !== null ||
+                ($data['humidity'] ?? null) !== null
+            );
+            if ($otherFieldsWorking) {
+                return ['valid' => true, 'reason' => 'precipitation_optional'];
+            }
+            return ['valid' => false, 'reason' => 'precipitation_missing_with_other_failures'];
+        
+        case 'visibility':
+        case 'ceiling':
+            // These should use sentinels, but if null, check context
+            // METAR provides these, so null might mean unlimited (but should be sentinel)
+            return ['valid' => false, 'reason' => 'should_use_sentinel'];
+        
+        default:
+            // Unknown fields: assume valid (conservative)
+            return ['valid' => true, 'reason' => null];
+    }
+}
 
 /**
  * Validate weather field value against climate bounds
@@ -24,7 +137,10 @@ require_once __DIR__ . '/../constants.php';
  * }
  */
 function validateWeatherField(string $field, $value, ?string $unit = null, array $context = []): array {
-    // Null values are acceptable (missing data)
+    // Null values: check if null is valid for this field
+    // Note: This function doesn't have full data context, so we can't fully validate null
+    // Null validation should be done by isFieldNullValid() with full context
+    // For now, return valid (bounds validation doesn't apply to null)
     if ($value === null) {
         return ['valid' => true, 'reason' => null];
     }
@@ -35,6 +151,15 @@ function validateWeatherField(string $field, $value, ?string $unit = null, array
     }
     
     $numValue = (float)$value;
+    
+    // IMPORTANT: Check for sentinel values BEFORE bounds validation
+    // Sentinel values represent "unlimited" conditions and should pass validation
+    if ($field === 'visibility' && $numValue === UNLIMITED_VISIBILITY_SM) {
+        return ['valid' => true, 'reason' => 'unlimited_visibility'];
+    }
+    if ($field === 'ceiling' && $numValue === UNLIMITED_CEILING_FT) {
+        return ['valid' => true, 'reason' => 'unlimited_ceiling'];
+    }
     
     // Validate based on field type
     switch ($field) {

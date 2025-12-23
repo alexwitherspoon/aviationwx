@@ -119,11 +119,18 @@ function calculateDensityAltitude($weather, $airport) {
  * @return string|null Flight category ('VFR', 'MVFR', 'IFR', 'LIFR'), or null if insufficient data
  */
 function calculateFlightCategory($weather) {
+    require_once __DIR__ . '/../constants.php';
+    require_once __DIR__ . '/utils.php';
+    
     $ceiling = $weather['ceiling'] ?? null;
     $visibility = $weather['visibility'] ?? null;
     
-    // Cannot determine category without any data
-    if ($visibility === null && $ceiling === null) {
+    // Check for unlimited sentinel values FIRST
+    $isUnlimitedVisibility = isUnlimitedVisibility($visibility);
+    $isUnlimitedCeiling = isUnlimitedCeiling($ceiling);
+    
+    // Cannot determine category without any data (and not unlimited)
+    if (!$isUnlimitedVisibility && $visibility === null && !$isUnlimitedCeiling && $ceiling === null) {
         return null;
     }
     
@@ -132,7 +139,9 @@ function calculateFlightCategory($weather) {
     $ceilingCategory = null;
     
     // Categorize visibility
-    if ($visibility !== null) {
+    if ($isUnlimitedVisibility) {
+        $visibilityCategory = 'VFR';  // Unlimited = VFR
+    } elseif ($visibility !== null) {
         if ($visibility < 1) {
             $visibilityCategory = 'LIFR';
         } elseif ($visibility >= 1 && $visibility <= 3) {
@@ -145,7 +154,9 @@ function calculateFlightCategory($weather) {
     }
     
     // Categorize ceiling
-    if ($ceiling !== null) {
+    if ($isUnlimitedCeiling) {
+        $ceilingCategory = 'VFR';  // Unlimited = VFR
+    } elseif ($ceiling !== null) {
         if ($ceiling < 500) {
             $ceilingCategory = 'LIFR';
         } elseif ($ceiling >= 500 && $ceiling < 1000) {

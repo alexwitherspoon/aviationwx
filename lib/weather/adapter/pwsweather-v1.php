@@ -146,7 +146,18 @@ function parsePWSWeatherResponse(?string $response): ?array {
     // For now, we'll leave ceiling as null since we don't have base height
     $ceiling = null;
     
-    return [
+    // Extract quality metadata (API-specific quality indicators)
+    $qualityMetadata = [];
+    
+    // Extract QCcode from observation data (quality code)
+    // QCcode: 10 = data quality issues (sensor problems)
+    if (isset($obs['QCcode']) && is_numeric($obs['QCcode'])) {
+        $qualityMetadata['qc_code'] = (int)$obs['QCcode'];
+        // QCcode: 10 indicates known sensor problems
+        $qualityMetadata['has_quality_issues'] = ($obs['QCcode'] == 10);
+    }
+    
+    $result = [
         'temperature' => $temperature,
         'humidity' => $humidity,
         'pressure' => $pressure,
@@ -162,6 +173,13 @@ function parsePWSWeatherResponse(?string $response): ?array {
         'peak_gust' => $gustSpeedKts,
         'obs_time' => $obsTime,
     ];
+    
+    // Add quality metadata if present (internal only)
+    if (!empty($qualityMetadata)) {
+        $result['_quality_metadata'] = $qualityMetadata;
+    }
+    
+    return $result;
 }
 
 /**

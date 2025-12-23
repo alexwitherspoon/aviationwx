@@ -66,6 +66,22 @@ if (!defined('WEATHER_STALENESS_ERROR_MULTIPLIER')) {
     define('WEATHER_STALENESS_ERROR_MULTIPLIER', 10); // Error at 10x refresh interval
 }
 
+// Primary source recovery thresholds (for switching back from backup to primary)
+// Both conditions must be met before switching back to primary source
+if (!defined('PRIMARY_RECOVERY_CYCLES_THRESHOLD')) {
+    define('PRIMARY_RECOVERY_CYCLES_THRESHOLD', 15); // Require 15 successful cycles before switching back
+}
+if (!defined('PRIMARY_RECOVERY_TIME_SECONDS')) {
+    define('PRIMARY_RECOVERY_TIME_SECONDS', 900); // Require 15 minutes (900 seconds) before switching back
+}
+
+// Wind group merge tolerance (seconds)
+// Maximum time difference allowed when merging wind data from multiple sources
+// All merged wind fields must be within this tolerance window
+if (!defined('WIND_GROUP_MERGE_TOLERANCE_SECONDS')) {
+    define('WIND_GROUP_MERGE_TOLERANCE_SECONDS', 10); // 10 seconds tolerance for wind group merging
+}
+
 // Rate limiting defaults
 if (!defined('RATE_LIMIT_WEATHER_MAX')) {
     define('RATE_LIMIT_WEATHER_MAX', 60);
@@ -394,5 +410,15 @@ if (!defined('CLIMATE_DENSITY_ALTITUDE_MIN_FT')) {
 }
 if (!defined('CLIMATE_DENSITY_ALTITUDE_MAX_FT')) {
     define('CLIMATE_DENSITY_ALTITUDE_MAX_FT', 38500); // 35000 * 1.1
+}
+
+// Sentinel values for unlimited visibility/ceiling
+// These values are outside normal climate bounds and represent "unlimited" conditions
+// Used internally to differentiate between unlimited (sentinel) and failed (null)
+if (!defined('UNLIMITED_VISIBILITY_SM')) {
+    define('UNLIMITED_VISIBILITY_SM', 999.0);  // Sentinel for unlimited visibility in statute miles
+}
+if (!defined('UNLIMITED_CEILING_FT')) {
+    define('UNLIMITED_CEILING_FT', 99999);     // Sentinel for unlimited ceiling in feet
 }
 

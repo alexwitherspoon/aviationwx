@@ -87,9 +87,19 @@ function parseSynopticDataResponse(?string $response): ?array {
         return null;
     }
     
-    // Check for API errors
-    if (isset($data['SUMMARY']['RESPONSE_CODE']) && $data['SUMMARY']['RESPONSE_CODE'] !== 1) {
-        return null;
+    // Extract quality metadata (API-specific quality indicators)
+    $qualityMetadata = [];
+    
+    // Extract RESPONSE_CODE from SUMMARY
+    // RESPONSE_CODE: 1 = success, != 1 = error
+    if (isset($data['SUMMARY']['RESPONSE_CODE'])) {
+        $qualityMetadata['response_code'] = (int)$data['SUMMARY']['RESPONSE_CODE'];
+        $qualityMetadata['has_quality_issues'] = ($data['SUMMARY']['RESPONSE_CODE'] !== 1);
+        
+        // If RESPONSE_CODE indicates error, return null (existing behavior)
+        if ($data['SUMMARY']['RESPONSE_CODE'] !== 1) {
+            return null;
+        }
     }
     
     if (!isset($data['STATION']) || !is_array($data['STATION']) || empty($data['STATION'])) {
@@ -246,7 +256,7 @@ function parseSynopticDataResponse(?string $response): ?array {
     // Ceiling - typically not available from SynopticData
     $ceiling = null;
     
-    return [
+    $result = [
         'temperature' => $temperature,
         'humidity' => $humidity,
         'pressure' => $pressure,
@@ -262,6 +272,13 @@ function parseSynopticDataResponse(?string $response): ?array {
         'peak_gust' => $gustSpeedKts,
         'obs_time' => $obsTime,
     ];
+    
+    // Add quality metadata if present (internal only)
+    if (!empty($qualityMetadata)) {
+        $result['_quality_metadata'] = $qualityMetadata;
+    }
+    
+    return $result;
 }
 
 /**
