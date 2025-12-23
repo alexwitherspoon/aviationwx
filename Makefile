@@ -107,3 +107,14 @@ update-config: ## Update configuration and restart (recreates containers to pick
 	@bash config/docker-config.sh
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml up -d --force-recreate
 
+# Guides validation
+validate-guides: ## Validate guides markdown files
+	@echo "Validating guides..."
+	@php scripts/validate-guides.php
+
+# Guides testing (requires running containers)
+test-guides: ## Test guides pages (requires running containers)
+	@echo "Testing guides pages..."
+	@echo "- Guides index" && curl -sf http://127.0.0.1:8080 -H "Host: guides.localhost" >/dev/null && echo " ✓" || echo " ✗"
+	@echo "- Guides 404" && curl -sf http://127.0.0.1:8080/nonexistent -H "Host: guides.localhost" | grep -q "404" && echo " ✓" || echo " ✗"
+
