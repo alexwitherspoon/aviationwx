@@ -2840,7 +2840,8 @@ function updateWindVisual(weather) {
     const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
     const wd = windDirectionStale ? null : (weather.wind_direction ?? null);
     const isVariableWind = wd === 'VRB' || wd === 'vrb';
-    const windDirNumeric = typeof wd === 'number' && wd > 0 ? wd : null;
+    // Allow 0° (north wind) - check for number type and valid range (0-360)
+    const windDirNumeric = typeof wd === 'number' && wd >= 0 && wd <= 360 ? wd : null;
     
     // Get today's peak gust from server (daily tracking, never stale)
     const todaysPeakGust = weather.peak_gust_today || 0;
@@ -2896,11 +2897,12 @@ function updateWindVisual(weather) {
     // Only draw wind indicators if data is fresh (not stale)
     if (!windStale) {
         if (ws !== null && ws !== undefined && ws > 1 && !isVariableWind && windDirNumeric !== null) {
-            // Store for animation (only if we have a valid numeric direction)
-            windDirection = (windDirNumeric * Math.PI) / 180;
+            // Convert wind direction FROM to TOWARD (add 180°) for windsock visualization
+            // Normalize to 0-360° range (e.g., 270° + 180° = 450° → 90°)
+            const windDirToward = (windDirNumeric + 180) % 360;
+            windDirection = (windDirToward * Math.PI) / 180;
             windSpeed = ws;
             
-            // Draw wind arrow
             drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
         } else if (ws !== null && ws !== undefined && ws > 1 && isVariableWind) {
             // Variable wind - draw "VRB" text
@@ -2933,21 +2935,19 @@ function updateWindVisual(weather) {
 }
 
 function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0) {
-    // Wind arrow points INTO the wind (direction from which wind is blowing)
+    // Arrow points in direction wind is blowing TOWARD (windsock behavior)
+    // angle is already in TOWARD direction (caller converts FROM by adding 180°)
     const arrowLength = Math.min(speed * 6, r - 30);
     const arrowEndX = cx + Math.sin(angle) * arrowLength;
     const arrowEndY = cy - Math.cos(angle) * arrowLength;
     
-    // Draw wind speed indicator circle
     ctx.fillStyle = 'rgba(220, 53, 69, 0.2)';
     const circleRadius = Math.max(20, speed * 4);
     ctx.beginPath(); ctx.arc(cx, cy, circleRadius, 0, 2 * Math.PI); ctx.fill();
     
-    // Draw wind arrow shaft
     ctx.strokeStyle = '#dc3545'; ctx.fillStyle = '#dc3545'; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(arrowEndX, arrowEndY); ctx.stroke();
     
-    // Draw arrowhead pointing into the wind
     const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
     ctx.beginPath();
     ctx.moveTo(arrowEndX, arrowEndY);
