@@ -1,4 +1,7 @@
 # AviationWX URL Rewriting (when Apache serves directly)
+# Disable directory listing (prevents 403 errors on directories)
+Options -Indexes
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
@@ -45,6 +48,12 @@
 
     # Return 404 for old service worker path (sw.js) - no longer used
     RewriteRule ^sw\.js$ - [R=404,L]
+    
+    # Route guides paths to index.php (for local dev/testing)
+    # Must come before directory checks to prevent Apache from trying to access the guides/ directory
+    # Match /guides, /guides/, and /guides/anything - force rewrite even if directory exists
+    RewriteCond %{REQUEST_URI} ^/guides
+    RewriteRule ^guides/?(.*)$ index.php [QSA,L]
     
     # Ensure service worker is served correctly (must come before catch-all)
     # Allow service worker file to be served as-is (don't route to index.php)

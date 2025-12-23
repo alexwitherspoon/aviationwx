@@ -54,6 +54,22 @@ if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
+// Check for guides query parameter or path (for local dev/testing)
+// This must be after config is loaded because guides.php needs config
+if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
+    // If path-based route, strip 'guides/' prefix so guides.php can handle it correctly
+    if (strpos($requestPath, 'guides/') === 0) {
+        // Extract the guide name after 'guides/'
+        $guideName = substr($requestPath, 7); // Remove 'guides/' prefix (7 chars)
+        $_SERVER['REQUEST_URI'] = '/' . $guideName;
+    } elseif ($requestPath === 'guides') {
+        $_SERVER['REQUEST_URI'] = '/'; // Index page
+    }
+    // Route to guides page
+    include 'pages/guides.php';
+    exit;
+}
+
 // Check for airport subdomain
 if (!$isAirportRequest) {
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
