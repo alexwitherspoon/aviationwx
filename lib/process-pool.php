@@ -152,7 +152,11 @@ class ProcessPool {
     private function spawnWorker(array $args) {
         $scriptPath = __DIR__ . '/../scripts/' . basename($this->scriptName);
         
+        // Workers run at nice 5 (lower priority than user requests at 0, higher than scheduler at 10)
+        $workerNice = 5;
+        
         $cmdParts = [
+            'nice', '-n', (string)$workerNice,
             '/usr/local/bin/php',
             escapeshellarg($scriptPath),
             '--worker'

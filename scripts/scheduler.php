@@ -110,9 +110,22 @@ $lockFp = acquireLock($lockFile);
 $pid = getmypid();
 $startTime = time();
 
+// Set scheduler to low priority (nice 10) to avoid blocking user requests
+// Workers run at nice 5, user requests at nice 0 (default)
+$schedulerNice = 10;
+if (function_exists('proc_nice')) {
+    $niceResult = @proc_nice($schedulerNice);
+    if ($niceResult === false) {
+        aviationwx_log('warning', 'scheduler: failed to set nice level', [
+            'nice' => $schedulerNice
+        ], 'app');
+    }
+}
+
 aviationwx_log('info', 'scheduler: started', [
     'pid' => $pid,
-    'start_time' => $startTime
+    'start_time' => $startTime,
+    'nice' => $schedulerNice
 ], 'app');
 
 // Register shutdown function for cleanup
