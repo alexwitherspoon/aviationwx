@@ -23,6 +23,15 @@ if (file_exists($projectRoot . $path) && is_file($projectRoot . $path)) {
     return false; // Let PHP's built-in server handle it
 }
 
+// Handle guides subdomain for local testing
+if ($subdomain === 'guides' || strpos($host, 'guides.') === 0) {
+    // For local testing, set a mock base domain so routing works
+    // This allows guides.localhost to work like guides.aviationwx.org
+    $_SERVER['HTTP_HOST'] = 'guides.aviationwx.org';
+    include __DIR__ . '/../index.php';
+    exit;
+}
+
 // If no subdomain or subdomain is 'localhost' or '127.0.0.1', serve homepage
 if ($subdomain === 'localhost' || $subdomain === '127' || $subdomain === '' || 
     $host === 'localhost' || $host === '127.0.0.1') {
