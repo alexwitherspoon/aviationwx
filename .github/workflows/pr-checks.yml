@@ -268,4 +268,21 @@ jobs:
             echo "❌ VPN Manager security tests failed"
             exit 1
           fi
+      
+      - name: Validate Guides
+        run: |
+          if [ ! -d "guides" ]; then
+            echo "⚠️  Guides directory not found - skipping validation"
+            exit 0
+          fi
+          
+          php scripts/validate-guides.php
+          exit_code=$?
+          
+          if [ $exit_code -eq 0 ]; then
+            echo "✓ Guides validation passed"
+          else
+            echo "❌ Guides validation failed"
+            exit 1
+          fi
 
