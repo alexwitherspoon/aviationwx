@@ -15,6 +15,94 @@ require_once __DIR__ . '/airport-identifiers.php';
  */
 
 /**
+ * Detect duplicate keys in raw JSON content
+ * 
+ * PHP's json_decode silently uses the last value for duplicate keys, which can
+ * lead to subtle configuration bugs (e.g., two "weather_source" keys in an airport
+ * where the second overwrites the first).
+ * 
+ * This function parses the raw JSON to detect such duplicates.
+ * 
+ * @param string $jsonContent Raw JSON string to check
+ * @return array Array of duplicate key paths found (e.g., ["airports.kspb.weather_source"])
+ */
+function detectDuplicateJsonKeys(string $jsonContent): array {
+    $duplicates = [];
+    
+    // Use a simple regex-based approach to find potential duplicate keys
+    // This won't catch all edge cases but handles the common case of duplicate
+    // object keys at the same nesting level
+    
+    // We'll track keys at each nesting level using a stack approach
+    // For simplicity, we look for patterns like "key": appearing multiple times
+    // within the same object context
+    
+    $lines = explode("\n", $jsonContent);
+    $keyStack = []; // Track keys at current nesting level
+    $pathStack = []; // Track path for error reporting
+    $braceDepth = 0;
+    $bracketDepth = 0;
+    
+    foreach ($lines as $lineNum => $line) {
+        $trimmed = trim($line);
+        
+        // Track brace depth
+        $openBraces = substr_count($trimmed, '{');
+        $closeBraces = substr_count($trimmed, '}');
+        $openBrackets = substr_count($trimmed, '[');
+        $closeBrackets = substr_count($trimmed, ']');
+        
+        // When entering a new object, push new key tracker
+        for ($i = 0; $i < $openBraces; $i++) {
+            $keyStack[] = [];
+            $braceDepth++;
+        }
+        
+        // Check for key definitions: "key": 
+        if (preg_match('/^\s*"([^"]+)"\s*:/', $trimmed, $matches)) {
+            $key = $matches[1];
+            
+            // Check if this key was already seen at current level
+            if (!empty($keyStack)) {
+                $currentLevelKeys = &$keyStack[count($keyStack) - 1];
+                if (isset($currentLevelKeys[$key])) {
+                    // Duplicate found!
+                    $path = implode('.', array_merge($pathStack, [$key]));
+                    $duplicates[] = [
+                        'key' => $key,
+                        'path' => $path,
+                        'first_line' => $currentLevelKeys[$key],
+                        'duplicate_line' => $lineNum + 1
+                    ];
+                } else {
+                    $currentLevelKeys[$key] = $lineNum + 1;
+                }
+                
+                // Update path stack if this opens a new object
+                if (strpos($trimmed, '{') !== false) {
+                    $pathStack[] = $key;
+                }
+            }
+        }
+        
+        // When leaving objects, pop key tracker
+        for ($i = 0; $i < $closeBraces; $i++) {
+            if (!empty($keyStack)) {
+                array_pop($keyStack);
+            }
+            if (!empty($pathStack)) {
+                array_pop($pathStack);
+            }
+            $braceDepth--;
+        }
+        
+        $bracketDepth += $openBrackets - $closeBrackets;
+    }
+    
+    return $duplicates;
+}
+
+/**
  * Validate and sanitize airport ID
  * 
  * Airport IDs must be 3-4 lowercase alphanumeric characters (ICAO format).
@@ -506,6 +594,17 @@ function loadConfig(bool $useCache = true): ?array {
     if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
         aviationwx_log('error', 'config invalid json', ['error' => json_last_error_msg(), 'path' => $configFile], 'app', true);
         return null;
+    }
+    
+    // Check for duplicate keys in JSON (PHP silently uses last value for duplicates)
+    $duplicateKeys = detectDuplicateJsonKeys($jsonContent);
+    if (!empty($duplicateKeys)) {
+        aviationwx_log('error', 'config has duplicate JSON keys', [
+            'path' => $configFile,
+            'duplicate_keys' => $duplicateKeys
+        ], 'app', true);
+        // Don't fail - just warn. The config is still valid JSON, just has overwrites.
+        // This helps catch config errors like having two "weather_source" keys in an airport.
     }
 
     // Basic schema validation (lightweight)
