@@ -34,7 +34,16 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         
         $file = $cacheDir . '/peak_gusts.json';
         // Use airport's local timezone to determine "today" (midnight reset at local timezone)
-        $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
+        // If observation timestamp is provided, use it to determine the date key (ensures consistency)
+        // Otherwise, use current time with airport timezone
+        if ($obsTimestamp !== null && $airport !== null) {
+            $timezone = getAirportTimezone($airport);
+            $tz = new DateTimeZone($timezone);
+            $obsDate = new DateTime('@' . $obsTimestamp, $tz);
+            $dateKey = $obsDate->format('Y-m-d');
+        } else {
+            $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
+        }
         
         // Use file locking to prevent race conditions
         // Critical: Lock must be acquired BEFORE reading to prevent concurrent updates
