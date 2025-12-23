@@ -146,20 +146,20 @@ jobs:
             echo "✓ WebcamRefreshInitializationTest passed"
           fi
       
-      - name: Run Weather Data Merge Tests
+      - name: Run Weather Aggregation Tests
         run: |
-          vendor/bin/phpunit tests/Unit/WeatherDataMergeTest.php --testdox --stop-on-failure || exit_code=$?
+          vendor/bin/phpunit tests/Unit/WeatherAggregatorTest.php --testdox --stop-on-failure || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
-            echo "❌ WeatherDataMergeTest failed"
+            echo "❌ WeatherAggregatorTest failed"
             exit 1
           elif [ $exit_code -eq 1 ]; then
-            echo "⚠️  WeatherDataMergeTest passed with warnings (expected in CI without coverage driver)"
+            echo "⚠️  WeatherAggregatorTest passed with warnings (expected in CI without coverage driver)"
           else
-            echo "✓ WeatherDataMergeTest passed"
+            echo "✓ WeatherAggregatorTest passed"
           fi
           
-          # Verify merge function exists and VRB wind direction handling
+          # Verify VRB wind direction handling
           vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --filter testParseMETARResponse_VariableWindDirection --testdox || exit_code=$?
           exit_code=${exit_code:-$?}
           if [ $exit_code -gt 1 ]; then
@@ -174,7 +174,7 @@ jobs:
             exit 1
           fi
           
-          echo "✓ Weather data merge and error handling tests passed"
+          echo "✓ Weather aggregation and error handling tests passed"
       
       - name: Upload Test Results
         if: always()
