@@ -260,6 +260,22 @@ class ProcessPool {
                 $exitCode = $status['exitcode'];
                 $elapsed = $now - $worker['started'];
                 
+                // Read worker output before closing pipes to capture any errors
+                $stdout = '';
+                $stderr = '';
+                if (isset($worker['pipes'][1]) && is_resource($worker['pipes'][1])) {
+                    stream_set_blocking($worker['pipes'][1], false);
+                    while (!feof($worker['pipes'][1])) {
+                        $stdout .= fread($worker['pipes'][1], 8192);
+                    }
+                }
+                if (isset($worker['pipes'][2]) && is_resource($worker['pipes'][2])) {
+                    stream_set_blocking($worker['pipes'][2], false);
+                    while (!feof($worker['pipes'][2])) {
+                        $stderr .= fread($worker['pipes'][2], 8192);
+                    }
+                }
+                
                 @proc_close($worker['proc']);
                 $this->closePipes($worker['pipes']);
                 $jobKey = $this->getJobKey($worker['args']);
@@ -269,13 +285,19 @@ class ProcessPool {
                     $stats['completed']++;
                 } else {
                     $stats['failed']++;
+                    // Include worker output in log for debugging
+                    $outputPreview = trim($stdout . $stderr);
+                    if (strlen($outputPreview) > 500) {
+                        $outputPreview = substr($outputPreview, 0, 500) . '... (truncated)';
+                    }
                     aviationwx_log('warning', 'process pool: worker failed', [
                         'invocation_id' => $this->invocationId,
                         'script' => $this->scriptName,
                         'args' => $worker['args'],
                         'pid' => $worker['pid'],
                         'exit_code' => $exitCode,
-                        'elapsed' => $elapsed
+                        'elapsed' => $elapsed,
+                        'output' => $outputPreview ?: null
                     ], 'app');
                 }
                 

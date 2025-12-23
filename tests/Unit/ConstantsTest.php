@@ -158,5 +158,32 @@ class ConstantsTest extends TestCase
         // Error multiplier should be >= warning multiplier
         $this->assertGreaterThanOrEqual(WEATHER_STALENESS_WARNING_MULTIPLIER, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be >= WEATHER_STALENESS_WARNING_MULTIPLIER');
     }
+    
+    /**
+     * Test that sentinel value constants are defined
+     */
+    public function testSentinelConstants_AreDefined()
+    {
+        $this->assertTrue(defined('UNLIMITED_VISIBILITY_SM'), 'UNLIMITED_VISIBILITY_SM should be defined');
+        $this->assertTrue(defined('UNLIMITED_CEILING_FT'), 'UNLIMITED_CEILING_FT should be defined');
+    }
+    
+    /**
+     * Test that sentinel values are outside normal climate bounds
+     */
+    public function testSentinelValues_AreOutsideClimateBounds()
+    {
+        require_once __DIR__ . '/../../lib/constants.php';
+        
+        // Sentinel visibility should be > max visibility
+        $this->assertGreaterThan(CLIMATE_VISIBILITY_MAX_SM, UNLIMITED_VISIBILITY_SM, 'UNLIMITED_VISIBILITY_SM should be > CLIMATE_VISIBILITY_MAX_SM');
+        
+        // Sentinel ceiling should be > max ceiling
+        $this->assertGreaterThan(CLIMATE_CEILING_MAX_FT, UNLIMITED_CEILING_FT, 'UNLIMITED_CEILING_FT should be > CLIMATE_CEILING_MAX_FT');
+        
+        // Sentinel values should have expected values
+        $this->assertEquals(999.0, UNLIMITED_VISIBILITY_SM, 'UNLIMITED_VISIBILITY_SM should be 999.0');
+        $this->assertEquals(99999, UNLIMITED_CEILING_FT, 'UNLIMITED_CEILING_FT should be 99999');
+    }
 }
 

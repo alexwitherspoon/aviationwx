@@ -873,7 +873,18 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
 // Guard: Only execute main code if not included by another script
 // When included, __FILE__ is the included file, when executed directly, it's the script
 // We check if this is the main script execution vs an include
-if (basename(__FILE__) === basename($_SERVER['SCRIPT_NAME'] ?? '')) {
+// Also allow execution when run via proc_open (SCRIPT_NAME may not be set, but argv[0] will be script name)
+$isDirectExecution = false;
+if (php_sapi_name() === 'cli') {
+    // CLI mode: check if script name matches or if we're in worker mode (which means direct execution)
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? ($argv[0] ?? '');
+    $isDirectExecution = (basename(__FILE__) === basename($scriptName)) || $isWorkerMode;
+} else {
+    // Web mode: check SCRIPT_NAME
+    $isDirectExecution = (basename(__FILE__) === basename($_SERVER['SCRIPT_NAME'] ?? ''));
+}
+
+if ($isDirectExecution) {
 // Load config (support CONFIG_PATH env override, no cache for CLI script)
 $config = loadConfig(false);
 

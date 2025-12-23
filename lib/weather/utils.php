@@ -243,3 +243,31 @@ function getWeatherSourceDisplayName(string $sourceType): string {
     $info = getWeatherSourceInfo($sourceType);
     return $info !== null ? $info['name'] : 'Unknown Source';
 }
+
+/**
+ * Check if visibility value represents unlimited
+ * 
+ * Sentinel value (999.0 SM) is used internally to represent unlimited visibility,
+ * differentiating it from null (which represents a failed state).
+ * 
+ * @param float|null $visibility Visibility in statute miles
+ * @return bool True if value represents unlimited visibility, false otherwise
+ */
+function isUnlimitedVisibility(?float $visibility): bool {
+    require_once __DIR__ . '/../constants.php';
+    return $visibility === UNLIMITED_VISIBILITY_SM;
+}
+
+/**
+ * Check if ceiling value represents unlimited
+ * 
+ * Sentinel value (99999 ft) is used internally to represent unlimited ceiling,
+ * differentiating it from null (which represents a failed state).
+ * 
+ * @param int|null $ceiling Ceiling in feet
+ * @return bool True if value represents unlimited ceiling, false otherwise
+ */
+function isUnlimitedCeiling(?int $ceiling): bool {
+    require_once __DIR__ . '/../constants.php';
+    return $ceiling === UNLIMITED_CEILING_FT;
+}

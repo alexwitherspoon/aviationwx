@@ -17,12 +17,18 @@ class StaleDataSafetyTest extends TestCase
      */
     public function testNullStaleFieldsBySource_BothFresh()
     {
+        $now = time();
         $data = createTestWeatherData([
             'temperature' => 15.0,
             'visibility' => 10.0,
             'ceiling' => 5000,
-            'last_updated_primary' => time() - 300,  // 5 minutes ago (fresh)
-            'last_updated_metar' => time() - 180     // 3 minutes ago (fresh)
+            'last_updated_primary' => $now - 300,  // 5 minutes ago (fresh)
+            'last_updated_metar' => $now - 180,     // 3 minutes ago (fresh)
+            '_field_obs_time_map' => [
+                'temperature' => $now - 300,
+                'visibility' => $now - 180,
+                'ceiling' => $now - 180,
+            ],
         ]);
         
         $originalTemp = $data['temperature'];
@@ -32,7 +38,7 @@ class StaleDataSafetyTest extends TestCase
         $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
         nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
         
-        // All data should remain (both sources fresh)
+        // All data should remain (both sources fresh, per-field obs times fresh)
         $this->assertEquals($originalTemp, $data['temperature']);
         $this->assertEquals($originalVisibility, $data['visibility']);
     }

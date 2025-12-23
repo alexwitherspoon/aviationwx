@@ -98,6 +98,14 @@ class WeatherEndpointTest extends TestCase
             $this->assertNotNull($weather, "Weather data should exist if success is true");
             
             if ($weather) {
+                // Verify _field_obs_time_map is present in response (for fail-closed behavior)
+                $this->assertArrayHasKey('_field_obs_time_map', $weather, 
+                    "_field_obs_time_map should be present in API response for frontend staleness validation");
+                if (is_array($weather['_field_obs_time_map'])) {
+                    // Verify it's an object/map structure
+                    $this->assertIsArray($weather['_field_obs_time_map'], 
+                        "_field_obs_time_map should be an array/map");
+                }
                 // Check for expected fields (some may be null)
                 $expectedFields = [
                     'temperature', 'humidity', 'pressure',

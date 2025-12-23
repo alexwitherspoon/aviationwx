@@ -19,6 +19,7 @@
       "icao": "KSPB",
       "iata": "SPB",
       "faa": "SPB",
+      "formerly": [],
       "address": "City, State",
       "lat": 45.7710278,
       "lon": -122.8618333,
@@ -311,6 +312,19 @@
           "url": "https://custom-airport.example.com"
         }
       ]
+    },
+    "4or9": {
+      "name": "Country Squire Airpark",
+      "enabled": true,
+      "maintenance": false,
+      "faa": "4OR9",
+      "formerly": ["S48"],
+      "address": "Sandy, Oregon, USA",
+      "lat": 45.3546648,
+      "lon": -122.2691641,
+      "elevation_ft": 500,
+      "timezone": "America/Los_Angeles",
+      "note": "Example of airport with 'formerly' field. This airport was previously known as S48. NOTAMs issued before the rename may still reference the old identifier (S48), so we include it in the 'formerly' array to ensure those NOTAMs are matched correctly."
     }
   }
 }
