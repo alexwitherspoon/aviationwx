@@ -10,19 +10,12 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
 
-// Weather API adapters (domain-organized)
+// Weather pipeline
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/weather/calculator.php';
-require_once __DIR__ . '/../lib/weather/staleness.php';
-require_once __DIR__ . '/../lib/weather/fetcher.php';
-require_once __DIR__ . '/../lib/weather/adapter/tempest-v1.php';
-require_once __DIR__ . '/../lib/weather/adapter/ambient-v1.php';
-require_once __DIR__ . '/../lib/weather/adapter/weatherlink-v1.php';
-require_once __DIR__ . '/../lib/weather/adapter/pwsweather-v1.php';
-require_once __DIR__ . '/../lib/weather/adapter/synopticdata-v1.php';
-require_once __DIR__ . '/../lib/weather/adapter/metar-v1.php';
 require_once __DIR__ . '/../lib/weather/daily-tracking.php';
 require_once __DIR__ . '/../lib/weather/UnifiedFetcher.php';
+require_once __DIR__ . '/../lib/weather/cache-utils.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
@@ -86,10 +79,8 @@ function generateMockWeatherData($airportId, $airport) {
     ];
 }
 
-// parseMETARResponse() is now in lib/weather/adapter/metar-v1.php
-
-// All staleness functions (mergeWeatherDataWithFallback, nullStaleFieldsBySource)
-// are now in lib/weather/staleness.php
+// parseMETARResponse() is in lib/weather/adapter/metar-v1.php
+// nullStaleFieldsBySource() is in lib/weather/cache-utils.php
 
 // Only execute endpoint logic when called as a web request (not when included for testing)
     if (php_sapi_name() !== 'cli' && !empty($_SERVER['REQUEST_METHOD'])) {
@@ -486,8 +477,6 @@ function generateMockWeatherData($airportId, $airport) {
     }
     // If forceRefresh is true or no cache file exists, continue to fetch fresh weather
     }
-
-    // fetchWeatherAsync() and fetchWeatherSync() are now in lib/weather/fetcher.php
     
     // Normalize weather source configuration (handle airports with metar_station but no weather_source)
     if (!normalizeWeatherSource($airport)) {
@@ -498,17 +487,11 @@ function generateMockWeatherData($airportId, $airport) {
         exit;
     }
     
-    // Fetch weather based on source
+    // Fetch weather using unified fetcher
     $weatherData = null;
     $weatherError = null;
     
-    // Use new unified fetcher by default (use ?legacy=1 to fall back to old system)
-    $useUnifiedFetcher = !(isset($_GET['legacy']) && $_GET['legacy'] === '1');
-    
     try {
-    
-    if ($useUnifiedFetcher) {
-        // New unified fetcher - clean, simple aggregation
         $fetchStartTime = microtime(true);
         $weatherData = fetchWeatherUnified($airport, $airportId);
         if ($debugMode) {
@@ -519,46 +502,6 @@ function generateMockWeatherData($airportId, $airport) {
                 'sources_succeeded' => $weatherData['_sources_succeeded'] ?? 0,
             ];
         }
-    } elseif ($airport['weather_source']['type'] !== 'metar') {
-        // Legacy: Use async fetch when METAR supplementation is needed
-        // Load existing cache for backup fetching logic
-        $existingCache = null;
-        if (file_exists($weatherCacheFile)) {
-            $existingCacheJson = @file_get_contents($weatherCacheFile);
-            if ($existingCacheJson !== false) {
-                $existingCache = json_decode($existingCacheJson, true);
-            }
-        }
-        
-        $fetchStartTime = microtime(true);
-        $weatherData = fetchWeatherAsync($airport, $airportId, $airportWeatherRefresh, $existingCache);
-        if ($debugMode) {
-            $debugInfo['fetch'] = [
-                'method' => 'async (legacy)',
-                'duration_ms' => round((microtime(true) - $fetchStartTime) * 1000, 2),
-                'existing_cache_age' => $existingCache ? (time() - ($existingCache['last_updated_primary'] ?? 0)) : null,
-            ];
-        }
-    } else {
-        // Legacy: Load existing cache for backup fetching logic (sync path)
-        $existingCacheSync = null;
-        if (file_exists($weatherCacheFile)) {
-            $existingCacheJson = @file_get_contents($weatherCacheFile);
-            if ($existingCacheJson !== false) {
-                $existingCacheSync = json_decode($existingCacheJson, true);
-            }
-        }
-        $fetchStartTime = microtime(true);
-        $weatherData = fetchWeatherSync($airport, $airportId, $airportWeatherRefresh, $existingCacheSync);
-        if ($debugMode) {
-            $debugInfo['fetch'] = [
-                'method' => 'sync (legacy)',
-                'duration_ms' => round((microtime(true) - $fetchStartTime) * 1000, 2),
-                'existing_cache_age' => $existingCacheSync ? (time() - ($existingCacheSync['last_updated_primary'] ?? 0)) : null,
-            ];
-        }
-    }
-    
     } catch (Throwable $e) {
         $weatherError = 'Error fetching weather: ' . $e->getMessage();
         aviationwx_log('error', 'weather fetch error', [
@@ -605,37 +548,7 @@ function generateMockWeatherData($airportId, $airport) {
     exit;
     }
 
-    // For legacy fetcher, populate observation times and calculate fields
-    // The unified fetcher already handles these internally
-    if (!$useUnifiedFetcher) {
-        require_once __DIR__ . '/../lib/weather/observation-times.php';
-        populateFieldObservationTimes($weatherData);
-        
-        // Calculate pressure/density altitude
-        if (isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
-            $weatherData['pressure_altitude'] = calculatePressureAltitude($weatherData, $airport);
-        } else {
-            $weatherData['pressure_altitude'] = null;
-        }
-        
-        $densityTempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-        $densityPressureObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-        $densityValid = ($densityTempObsTime !== null && $densityPressureObsTime !== null && 
-                         abs($densityTempObsTime - $densityPressureObsTime) <= 60);
-        
-        if ($densityValid && 
-            isset($weatherData['temperature']) && $weatherData['temperature'] !== null &&
-            isset($weatherData['pressure']) && $weatherData['pressure'] !== null) {
-            $weatherData['density_altitude'] = calculateDensityAltitude($weatherData, $airport);
-        } else {
-            $weatherData['density_altitude'] = null;
-        }
-        
-        $weatherData['sunrise'] = getSunriseTime($airport);
-        $weatherData['sunset'] = getSunsetTime($airport);
-    }
-
-    // Daily tracking (side effects - must run for all fetch methods)
+    // Daily tracking (side effects - updates cache files)
     // Track and update today's peak gust (store value and timestamp)
     // Use peak_gust field if available (set by adapters), otherwise gust_speed, otherwise 0
     // peak_gust is set by adapters and might survive merge better than gust_speed
@@ -683,332 +596,29 @@ function generateMockWeatherData($airportId, $airport) {
         $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
     }
 
-    // Legacy fetcher calculations (unified fetcher handles these internally)
-    if (!$useUnifiedFetcher) {
-        calculateAndSetFlightCategory($weatherData);
-        
-        $weatherData['temperature_f'] = $weatherData['temperature'] !== null 
-            ? round(($weatherData['temperature'] * 9/5) + 32) : null;
-        
-        // Calculate dewpoint from temperature and humidity if missing
-        require_once __DIR__ . '/../lib/weather/calculator.php';
-        if (($weatherData['dewpoint'] ?? null) === null && 
-            $weatherData['temperature'] !== null && 
-            $weatherData['humidity'] !== null) {
-            $calculatedDewpoint = calculateDewpoint($weatherData['temperature'], $weatherData['humidity']);
-            if ($calculatedDewpoint !== null) {
-                $weatherData['dewpoint'] = round($calculatedDewpoint, 1);
-                if (!isset($weatherData['_field_obs_time_map'])) {
-                    $weatherData['_field_obs_time_map'] = [];
-                }
-                $dewpointObsTime = $weatherData['_field_obs_time_map']['temperature'] 
-                    ?? $weatherData['obs_time_primary'] 
-                    ?? $weatherData['obs_time_backup'] 
-                    ?? null;
-                if ($dewpointObsTime !== null) {
-                    $weatherData['_field_obs_time_map']['dewpoint'] = $dewpointObsTime;
-                }
-            }
-        }
-        
-        $weatherData['dewpoint_f'] = $weatherData['dewpoint'] !== null 
-            ? round(($weatherData['dewpoint'] * 9/5) + 32) : null;
+    // Unified fetcher already provides all calculated fields and _field_obs_time_map
+    // Just need to finalize the response
 
-        // Calculate gust factor
-        $fieldObsTimeMap = $weatherData['_field_obs_time_map'] ?? [];
-        $windObsTime = null;
-        $windFieldsPresent = 0;
-        if (isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
-            $windObsTime = $fieldObsTimeMap['wind_speed'] 
-                ?? $weatherData['obs_time_primary'] 
-                ?? $weatherData['obs_time_backup'] 
-                ?? null;
-            $windFieldsPresent++;
-        }
-        if (isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
-            $gustObsTime = $fieldObsTimeMap['gust_speed'] 
-                ?? $weatherData['obs_time_primary'] 
-                ?? $weatherData['obs_time_backup'] 
-                ?? null;
-            if ($windObsTime === null) {
-                $windObsTime = $gustObsTime;
-            } elseif ($windObsTime !== $gustObsTime) {
-                $windObsTime = null;
-            }
-            $windFieldsPresent++;
-        }
-        
-        if ($windObsTime !== null && $windFieldsPresent >= 2 && 
-            isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null &&
-            isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
-            $weatherData['gust_factor'] = round($weatherData['gust_speed'] - $weatherData['wind_speed']);
-            if (!isset($weatherData['_field_obs_time_map'])) {
-                $weatherData['_field_obs_time_map'] = [];
-            }
-            $weatherData['_field_obs_time_map']['gust_factor'] = $windObsTime;
-        } else {
-            $weatherData['gust_factor'] = null;
-        }
-
-        // Calculate dewpoint spread
-        $tempObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-        $dewpointObsTime = $weatherData['obs_time_primary'] ?? $weatherData['obs_time_backup'] ?? null;
-        $tempDewpointValid = ($tempObsTime !== null && $dewpointObsTime !== null && 
-                              abs($tempObsTime - $dewpointObsTime) <= 60);
-        
-        if ($tempDewpointValid && 
-            $weatherData['temperature'] !== null && $weatherData['dewpoint'] !== null) {
-            $weatherData['dewpoint_spread'] = round($weatherData['temperature'] - $weatherData['dewpoint'], 1);
-        } else {
-            $weatherData['dewpoint_spread'] = null;
-        }
+    // Ensure _field_obs_time_map is present for frontend validation
+    if (!isset($weatherData['_field_obs_time_map']) || !is_array($weatherData['_field_obs_time_map'])) {
+        $weatherData['_field_obs_time_map'] = [];
     }
 
-    // NOTE: Staleness check for fresh data has been removed (Option 2 fix)
-    // Fresh data from API should never be nulled out - it's already current
-    // Staleness checks are only applied to cached data before serving (see lines 686, 705)
-    // This prevents the bug where fresh data was incorrectly nulled, causing merge to preserve old cache values
-
-    // Load existing cache for merging and recovery cycle tracking
-    $existingCache = null;
-    if (file_exists($weatherCacheFile)) {
-        $existingCacheJson = @file_get_contents($weatherCacheFile);
-        if ($existingCacheJson !== false) {
-            $existingCache = json_decode($existingCacheJson, true);
-        }
-    }
-    
-    // Always merge to track primary field observation times in _field_obs_time_map
-    // This is critical for frontend fail-closed staleness validation
-    // mergeWeatherDataWithFieldLevelFallback() handles the no-backup case (tracks primary fields)
-    $backupData = null;
-    if (isset($weatherData['_backup_data']) && is_array($weatherData['_backup_data'])) {
-        $backupData = $weatherData['_backup_data'];
-        // Remove internal backup data key before merging
-        unset($weatherData['_backup_data']);
-    }
-    // Always call mergeWeatherDataWithFieldLevelFallback() to track primary field observation times
-    // Even when no backup exists, this ensures _field_obs_time_map is populated for frontend validation
-    $weatherData = mergeWeatherDataWithFieldLevelFallback($weatherData, $backupData, $existingCache, $airportWeatherRefresh);
-    
-    // If we have existing cache, merge it with new data to preserve good values
-    // Use separate thresholds for primary source and METAR
-    if (is_array($existingCache)) {
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
-        $weatherData = mergeWeatherDataWithFallback($weatherData, $existingCache, $maxStaleSeconds, $maxStaleSecondsMetar);
-        
-        // Recalculate flight category after merge - visibility/ceiling may have been added from cache
-        // If fresh fetch didn't include METAR data but cache has it, flight_category would be null
-        // without this recalculation, causing blank condition field on dashboard
-        calculateAndSetFlightCategory($weatherData);
-        
-        // Recalculate gust_factor after merge - wind fields may have been restored from cache
-        // Use per-field observation times from _field_obs_time_map (now fully populated)
-        $fieldObsTimeMap = $weatherData['_field_obs_time_map'] ?? [];
-        $windObsTime = null;
-        $windFieldsPresent = 0;
-        if (isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
-            $windObsTime = $fieldObsTimeMap['wind_speed'] 
-                ?? $weatherData['obs_time_primary'] 
-                ?? $weatherData['obs_time_backup'] 
-                ?? null;
-            $windFieldsPresent++;
-        }
-        if (isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
-            $gustObsTime = $fieldObsTimeMap['gust_speed'] 
-                ?? $weatherData['obs_time_primary'] 
-                ?? $weatherData['obs_time_backup'] 
-                ?? null;
-            if ($windObsTime === null) {
-                $windObsTime = $gustObsTime;
-            } elseif ($gustObsTime !== null && $windObsTime !== $gustObsTime) {
-                // Different observation times - invalid for wind group
-                $windObsTime = null;
-            }
-            $windFieldsPresent++;
-        }
-        
-        // Only calculate gust_factor if wind fields have same obs_time
-        if ($windObsTime !== null && $windFieldsPresent >= 2 && 
-            isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null &&
-            isset($weatherData['wind_speed']) && $weatherData['wind_speed'] !== null) {
-            $weatherData['gust_factor'] = round($weatherData['gust_speed'] - $weatherData['wind_speed']);
-            // Track observation time for gust_factor (use the common wind obs_time)
-            if (!isset($weatherData['_field_obs_time_map'])) {
-                $weatherData['_field_obs_time_map'] = [];
-            }
-            $weatherData['_field_obs_time_map']['gust_factor'] = $windObsTime;
-        } else {
-            $weatherData['gust_factor'] = null;
-        }
-        
-        // Ensure peak_gust is set from gust_speed if it's null (adapters set this, but merge might have cleared it)
-        if (($weatherData['peak_gust'] ?? null) === null && isset($weatherData['gust_speed']) && $weatherData['gust_speed'] !== null) {
-            $weatherData['peak_gust'] = $weatherData['gust_speed'];
-        }
-    }
-    
-    // Recovery cycle tracking: track primary source recovery (requires both cycles and time duration)
-    require_once __DIR__ . '/../lib/constants.php';
-    require_once __DIR__ . '/../lib/weather/validation.php';
-    $staleThresholdSeconds = $airportWeatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
-    $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
-        ? time() - $weatherData['last_updated_primary']
-        : PHP_INT_MAX;
-    $primaryStale = $primaryAge >= $staleThresholdSeconds;
-    
-    // Check if primary is providing data (check field_source_map if available, otherwise check if primary has data)
-    $primaryProvidingData = false;
+    // Determine backup status from field source map
+    $backupStatus = 'standby';
     $fieldSourceMap = $weatherData['_field_source_map'] ?? [];
     if (!empty($fieldSourceMap)) {
-        // Check if any fields are using primary
-        foreach ($fieldSourceMap as $field => $source) {
-            if ($source === 'primary') {
-                $primaryProvidingData = true;
-                break;
-            }
-        }
-    } else {
-        // Fallback: check if primary has any data
-        $primarySourceFields = ['temperature', 'wind_speed', 'wind_direction', 'pressure', 'humidity'];
-        foreach ($primarySourceFields as $field) {
-            if (isset($weatherData[$field]) && $weatherData[$field] !== null) {
-                $primaryProvidingData = true;
-                break;
-            }
-        }
-    }
-    
-    // Check if primary fields are valid (not stale and pass validation)
-    $primaryFieldsValid = true;
-    if ($primaryProvidingData) {
-        $primarySourceFields = ['temperature', 'wind_speed', 'wind_direction', 'pressure', 'humidity'];
-        foreach ($primarySourceFields as $field) {
-            $value = $weatherData[$field] ?? null;
-            if ($value !== null) {
-                $context = [];
-                if ($field === 'dewpoint' || $field === 'dewpoint_f') {
-                    $context['temperature'] = $weatherData['temperature'] ?? null;
-                }
-                if ($field === 'gust_speed' || $field === 'peak_gust') {
-                    $context['wind_speed'] = $weatherData['wind_speed'] ?? null;
-                }
-                $validation = validateWeatherField($field, $value, null, $context);
-                if (!$validation['valid']) {
-                    $primaryFieldsValid = false;
-                    break;
-                }
-            }
-        }
-    }
-    
-    // Get current recovery cycles and recovery start time from cache or initialize
-    $recoveryCycles = 0;
-    $recoveryStartTime = null;
-    if (is_array($existingCache)) {
-        if (isset($existingCache['primary_recovery_cycles'])) {
-            $recoveryCycles = (int)$existingCache['primary_recovery_cycles'];
-        }
-        if (isset($existingCache['primary_recovery_start']) && $existingCache['primary_recovery_start'] > 0) {
-            $recoveryStartTime = (int)$existingCache['primary_recovery_start'];
-        }
-    }
-    
-    // Update recovery tracking: increment cycles and track start time if primary is fresh, providing data, and valid
-    $now = time();
-    if (!$primaryStale && $primaryProvidingData && $primaryFieldsValid) {
-        // Primary is healthy - increment recovery cycles
-        $recoveryCycles++;
-        
-        // If this is the first successful cycle, set recovery start time
-        if ($recoveryStartTime === null && $recoveryCycles === 1) {
-            $recoveryStartTime = $now;
-        }
-    } else {
-        // Primary is not healthy - reset recovery tracking
-        $recoveryCycles = 0;
-        $recoveryStartTime = null;
-    }
-    
-    // Store recovery cycles and start time in weather data (for cache persistence)
-    $weatherData['primary_recovery_cycles'] = $recoveryCycles;
-    if ($recoveryStartTime !== null) {
-        $weatherData['primary_recovery_start'] = $recoveryStartTime;
-    } else {
-        // Explicitly unset if null to clear old recovery start time from cache
-        unset($weatherData['primary_recovery_start']);
-    }
-    
-    // Set overall last_updated to most recent observation time from ALL data sources
-    // This ensures we pick the latest observation time even if METAR is hourly (low frequency)
-    // and primary source is more frequent (e.g., every few minutes)
-    // Prefer observation time (obs_time_primary/obs_time_metar) over fetch time (last_updated_primary/last_updated_metar)
-    // This ensures the "last updated" on the page shows when the weather observation was made, not when it was fetched
-    
-    // Collect all available observation times (preferred) and fetch times (fallback)
-    $allTimes = [];
-    
-    // Primary source: prefer observation time, fallback to fetch time
-    if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
-        $allTimes[] = $weatherData['obs_time_primary'];
-    } elseif (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
-        $allTimes[] = $weatherData['last_updated_primary'];
-    }
-    
-    // METAR source: prefer observation time, fallback to fetch time
-    if (isset($weatherData['obs_time_metar']) && $weatherData['obs_time_metar'] > 0) {
-        $allTimes[] = $weatherData['obs_time_metar'];
-    } elseif (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
-        $allTimes[] = $weatherData['last_updated_metar'];
-    }
-    
-    // Backup source: prefer observation time, fallback to fetch time
-    if (isset($weatherData['obs_time_backup']) && $weatherData['obs_time_backup'] > 0) {
-        $allTimes[] = $weatherData['obs_time_backup'];
-    } elseif (isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
-        $allTimes[] = $weatherData['last_updated_backup'];
-    }
-    
-    // Use the latest (most recent) time from all sources
-    $lastUpdated = !empty($allTimes) ? max($allTimes) : time();
-    if ($lastUpdated > 0) {
-    $weatherData['last_updated'] = $lastUpdated;
-    $weatherData['last_updated_iso'] = date('c', $lastUpdated);
-    } else {
-    // Fallback if no source timestamps (shouldn't happen with new code)
-    $weatherData['last_updated'] = time();
-    $weatherData['last_updated_iso'] = date('c', $weatherData['last_updated']);
-    }
-
-    // Determine backup status before removing internal fields
-    // Backup is active if it's providing data for any fields
-    $backupStatus = 'standby'; // Default: configured but not active
-    $fieldSourceMap = $weatherData['_field_source_map'] ?? [];
-    if (!empty($fieldSourceMap)) {
-        // Check if backup is providing any fields
-        $backupProvidingFields = false;
         foreach ($fieldSourceMap as $field => $source) {
             if ($source === 'backup') {
-                $backupProvidingFields = true;
+                $backupStatus = 'active';
                 break;
             }
         }
-        
-        if ($backupProvidingFields) {
-            $backupStatus = 'active';
-        }
     }
-    
-    // Check if backup circuit breaker is open (failed state)
-    require_once __DIR__ . '/../lib/circuit-breaker.php';
-    $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
-    if ($backupCircuit['skip']) {
-        $backupStatus = 'failed';
-    }
-    
-    // Store backup status in cache (for status page and weather credits)
     $weatherData['backup_status'] = $backupStatus;
+    
+    // Set recovery cycles (legacy field, keep for compatibility)
+    $weatherData['primary_recovery_cycles'] = 0;
     
     // Remove internal fields before caching and sending response
     // Strip internal fields before API response
