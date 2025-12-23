@@ -1,6 +1,9 @@
 <?php
 /**
- * Observation Time Tracking
+ * Observation Time Tracking (LEGACY)
+ * 
+ * @deprecated The new WeatherAggregator builds observation time maps during aggregation.
+ *             This file is kept for backward compatibility with the legacy fetcher.
  * 
  * Functions for populating _field_obs_time_map immediately after data fetch.
  * This ensures observation times are available for all calculations and validations.

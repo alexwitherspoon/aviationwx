@@ -1,9 +1,19 @@
 <?php
 /**
- * Weather Data Fetcher
+ * Weather Data Fetcher (LEGACY)
+ * 
+ * @deprecated Use UnifiedFetcher.php instead. This file is kept for backward compatibility
+ *             and can be activated via ?legacy=1 query parameter.
  * 
  * Functions for fetching weather data from APIs synchronously and asynchronously.
  * Handles circuit breaker logic, error handling, and parallel requests.
+ * 
+ * The new UnifiedFetcher provides:
+ * - Cleaner aggregation with predictable behavior
+ * - All sources fetched in parallel
+ * - Field-level source tracking
+ * - METAR preference for visibility/ceiling
+ * - Wind group integrity (complete from single source)
  */
 
 require_once __DIR__ . '/../logger.php';

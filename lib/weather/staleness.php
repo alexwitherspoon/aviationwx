@@ -1,6 +1,9 @@
 <?php
 /**
- * Weather Data Staleness Handling
+ * Weather Data Staleness Handling (LEGACY)
+ * 
+ * @deprecated The new WeatherAggregator handles staleness during aggregation.
+ *             This file is kept for backward compatibility with the legacy fetcher.
  * 
  * Functions for handling stale weather data, merging with fallbacks, and nulling stale fields.
  * Critical for safety - ensures pilots never see stale data without clear indication.
