@@ -272,6 +272,12 @@ function generateMockWeatherData($airportId, $airport) {
             header('Vary: Accept');
             header('X-Cache-Status: HIT');
             
+            // Ensure _field_obs_time_map is present (for frontend fail-closed staleness validation)
+            // Old cache files might not have this field
+            if (!isset($cached['_field_obs_time_map']) || !is_array($cached['_field_obs_time_map'])) {
+                $cached['_field_obs_time_map'] = [];
+            }
+            
             ob_clean();
             echo json_encode(['success' => true, 'weather' => $cached]);
             exit;
@@ -296,6 +302,12 @@ function generateMockWeatherData($airportId, $airport) {
             header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
             header('Vary: Accept');
             header('X-Cache-Status: STALE');
+            
+            // Ensure _field_obs_time_map is present (for frontend fail-closed staleness validation)
+            // Old cache files might not have this field
+            if (!isset($staleData['_field_obs_time_map']) || !is_array($staleData['_field_obs_time_map'])) {
+                $staleData['_field_obs_time_map'] = [];
+            }
             
             // Serve stale data immediately with flush
             ob_clean();
@@ -901,6 +913,10 @@ function generateMockWeatherData($airportId, $airport) {
     unset($weatherData['_field_source_map']);
     // Keep _field_obs_time_map for frontend fail-closed staleness validation
     // Frontend uses per-field observation times to hide stale data when offline
+    // Ensure _field_obs_time_map is always present (even if empty) for frontend validation
+    if (!isset($weatherData['_field_obs_time_map']) || !is_array($weatherData['_field_obs_time_map'])) {
+        $weatherData['_field_obs_time_map'] = [];
+    }
     unset($weatherData['_quality_metadata']);
 
     $cacheWriteResult = @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
