@@ -200,6 +200,11 @@ function generateMockWeatherData($airportId, $airport) {
             $mockWeather['temp_low_ts'] = $tempInfo['low_ts'] ?? null;
         }
         
+        // Ensure _field_obs_time_map is present (for frontend fail-closed staleness validation)
+        if (!isset($mockWeather['_field_obs_time_map']) || !is_array($mockWeather['_field_obs_time_map'])) {
+            $mockWeather['_field_obs_time_map'] = [];
+        }
+        
         // Build response
         $payload = ['success' => true, 'weather' => $mockWeather];
         $body = json_encode($payload);
