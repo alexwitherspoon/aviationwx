@@ -155,10 +155,10 @@ if (!defined('BACKOFF_BASE_SECONDS')) {
     define('BACKOFF_BASE_SECONDS', 60);
 }
 if (!defined('BACKOFF_MAX_TRANSIENT')) {
-    define('BACKOFF_MAX_TRANSIENT', 3600); // 1 hour
+    define('BACKOFF_MAX_TRANSIENT', 600); // 10 minutes
 }
 if (!defined('BACKOFF_MAX_PERMANENT')) {
-    define('BACKOFF_MAX_PERMANENT', 7200); // 2 hours
+    define('BACKOFF_MAX_PERMANENT', 1800); // 30 minutes
 }
 if (!defined('BACKOFF_MAX_FAILURES')) {
     define('BACKOFF_MAX_FAILURES', 5);
@@ -200,6 +200,85 @@ if (!defined('SECONDS_PER_DAY')) {
 }
 if (!defined('SECONDS_PER_WEEK')) {
     define('SECONDS_PER_WEEK', 604800);
+}
+
+// Debug log path - works in both container and host
+// Debug log path - uses file-based logging directory when available, otherwise falls back to cache
+// In container: /var/log/aviationwx/debug.log (consistent with other services)
+// On host: use .cursor/debug.log relative to project root
+if (!defined('DEBUG_LOG_PATH')) {
+    // Check if we're in Docker container
+    $inContainer = file_exists('/var/www/html');
+    
+    // If in container, check if /var/log/aviationwx exists (indicates file-based logging is used)
+    // This directory is used by all major services for file-based logs
+    if ($inContainer && is_dir('/var/log/aviationwx')) {
+        // Use the same directory as other services (app.log, user.log, cron-*.log, etc.)
+        $logDir = '/var/log/aviationwx';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        define('DEBUG_LOG_PATH', $logDir . '/debug.log');
+    } elseif ($inContainer && is_dir('/var/www/html/cache')) {
+        // Fallback: use cache directory if /var/log/aviationwx doesn't exist yet
+        $debugLogDir = '/var/www/html/cache/.cursor';
+        if (!is_dir($debugLogDir)) {
+            @mkdir($debugLogDir, 0755, true);
+        }
+        define('DEBUG_LOG_PATH', $debugLogDir . '/debug.log');
+    } elseif (file_exists(dirname(__DIR__) . '/.cursor')) {
+        // On host, use .cursor directory
+        define('DEBUG_LOG_PATH', dirname(__DIR__) . '/.cursor/debug.log');
+    } else {
+        // Last resort: try to create .cursor in cache or use container path
+        $fallbackDir = dirname(__DIR__) . '/cache/.cursor';
+        if (!is_dir($fallbackDir)) {
+            @mkdir($fallbackDir, 0755, true);
+        }
+        if (is_dir($fallbackDir)) {
+            define('DEBUG_LOG_PATH', $fallbackDir . '/debug.log');
+        } else {
+            // Final fallback: use /var/log/aviationwx (will be created if needed)
+            define('DEBUG_LOG_PATH', '/var/log/aviationwx/debug.log');
+        }
+    }
+}
+
+// Helper function to get debug log path (ensures constants are loaded)
+if (!function_exists('get_debug_log_path')) {
+    function get_debug_log_path(): string {
+        if (defined('DEBUG_LOG_PATH')) {
+            return DEBUG_LOG_PATH;
+        }
+        // Fallback if constant not defined
+        require_once __DIR__ . '/constants.php';
+        return defined('DEBUG_LOG_PATH') ? DEBUG_LOG_PATH : (dirname(__DIR__) . '/.cursor/debug.log');
+    }
+}
+
+// Helper function to get host-accessible debug log path (for reading logs from host)
+// This checks both the project .cursor directory and the Docker-mounted log/cache locations
+if (!function_exists('get_debug_log_path_host')) {
+    function get_debug_log_path_host(): string {
+        // First check if we're on the host and the project .cursor directory exists
+        $projectLogPath = dirname(__DIR__) . '/.cursor/debug.log';
+        if (file_exists($projectLogPath)) {
+            return $projectLogPath;
+        }
+        // Check Docker log directory (if file-based logging is enabled, logs are in /var/log/aviationwx)
+        // This maps to the container's log directory, but we need to check if it's accessible from host
+        // For Docker, we'd need to check the container's log directory via docker exec or volume mount
+        // For now, check the cache location as fallback (backward compatibility)
+        $dockerCacheLogPath = '/tmp/aviationwx-cache/.cursor/debug.log';
+        if (file_exists($dockerCacheLogPath)) {
+            return $dockerCacheLogPath;
+        }
+        // Check if we can access the container's log directory via docker exec
+        // This is a best-effort check - in production, logs should be accessible via volume mounts
+        $containerLogPath = '/var/log/aviationwx/debug.log';
+        // Fallback to project path (will be created if needed)
+        return $projectLogPath;
+    }
 }
 
 // Status page thresholds
