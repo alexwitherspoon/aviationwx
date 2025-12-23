@@ -45,6 +45,14 @@ if ($config === null) {
     die('Configuration error. Please contact the administrator.');
 }
 
+// Check for guides subdomain (after config is loaded so getBaseDomain() works)
+$baseDomain = getBaseDomain();
+if (strpos($host, 'guides') !== false || preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // Route to guides page
+    include 'pages/guides.php';
+    exit;
+}
+
 // Check for airport subdomain
 if (!$isAirportRequest) {
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
@@ -61,7 +69,7 @@ if (!$isAirportRequest) {
         if (count($hostParts) >= 3) {
             $potentialId = $hostParts[0];
             // Exclude known non-airport subdomains
-            if (!in_array($potentialId, ['www', 'status', 'aviationwx'])) {
+            if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides'])) {
                 $isAirportRequest = true;
                 $rawAirportIdentifier = $potentialId;
             }
