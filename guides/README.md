@@ -51,11 +51,6 @@ This is a **supplemental** source of information and does not replace official b
 
 ---
 
-## Templates
-- [Airport Site Survey Checklist](./_templates/airport-site-survey-checklist.md)
-
----
-
 ## Open source and portability
 AviationWX is open source. Airports and local groups are not locked into a proprietary solution:
 - participate in the shared AviationWX network, or
