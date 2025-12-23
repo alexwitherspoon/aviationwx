@@ -917,6 +917,10 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
     // Set basic cache headers
     if ($refreshInterval !== null && $mtime > 0) {
         $age = time() - $mtime;
+        // If mtime is in the future (negative age), treat as fresh (age = 0)
+        if ($age < 0) {
+            $age = 0;
+        }
         $remainingTime = max(0, $refreshInterval - $age);
         
         // Rate limited - use shorter cache
@@ -926,14 +930,32 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
             header('X-RateLimit: exceeded');
         } else {
             // Normal cache headers
+            $isStale = $age >= $refreshInterval;
             $hasHash = isset($_GET['v']) && preg_match('/^[a-f0-9]{6,}$/i', $_GET['v']);
-            $cc = $hasHash ? 'public, max-age=' . $remainingTime . ', s-maxage=' . $remainingTime . ', immutable' : 'public, max-age=' . $remainingTime;
-            header('Cache-Control: ' . $cc);
-            if ($hasHash) {
-                header('Surrogate-Control: max-age=' . $remainingTime . ', stale-while-revalidate=' . (STALE_WHILE_REVALIDATE_SECONDS / 5));
-                header('CDN-Cache-Control: max-age=' . $remainingTime . ', stale-while-revalidate=' . (STALE_WHILE_REVALIDATE_SECONDS / 5));
+            
+            if ($isStale) {
+                // Stale cache: include stale-while-revalidate
+                $cc = $hasHash 
+                    ? 'public, max-age=0, s-maxage=0, must-revalidate, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS
+                    : 'public, max-age=0, must-revalidate, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS;
+                header('Cache-Control: ' . $cc);
+                if ($hasHash) {
+                    header('Surrogate-Control: max-age=0, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
+                    header('CDN-Cache-Control: max-age=0, stale-while-revalidate=' . STALE_WHILE_REVALIDATE_SECONDS);
+                }
+                header('X-Cache-Status: STALE');
+            } else {
+                // Fresh cache: normal headers
+                $cc = $hasHash 
+                    ? 'public, max-age=' . $remainingTime . ', s-maxage=' . $remainingTime . ', immutable' 
+                    : 'public, max-age=' . $remainingTime;
+                header('Cache-Control: ' . $cc);
+                if ($hasHash) {
+                    header('Surrogate-Control: max-age=' . $remainingTime . ', stale-while-revalidate=' . (STALE_WHILE_REVALIDATE_SECONDS / 5));
+                    header('CDN-Cache-Control: max-age=' . $remainingTime . ', stale-while-revalidate=' . (STALE_WHILE_REVALIDATE_SECONDS / 5));
+                }
+                header('X-Cache-Status: HIT');
             }
-            header('X-Cache-Status: ' . ($age < $refreshInterval ? 'HIT' : 'STALE'));
         }
         
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
@@ -1239,8 +1261,8 @@ if (!$isCurrentCycle && areAllFormatsFromSameCycle($formatStatus, $jpegMtime, $r
         serve200Response($mostEfficient['file'], $mostEfficient['type'], $mtime, $refreshInterval);
         exit;
     }
-    // Fallback to JPEG
-    serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtime, $refreshInterval);
+    // Fallback to JPEG - use file mtime (not EXIF) for cache status
+    serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $formatStatus['jpg']['mtime'], $refreshInterval);
     exit;
 }
 
@@ -1276,8 +1298,8 @@ if ($mostEfficient) {
     exit;
 }
 
-// Fallback to JPEG
-serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtime, $refreshInterval);
+// Fallback to JPEG - use file mtime (not EXIF) for cache status
+serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $formatStatus['jpg']['mtime'], $refreshInterval);
 exit;
 
 /**
