@@ -4339,24 +4339,38 @@ function handleRequestError(error, camIndex, hasExisting) {
 }
 
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
-function safeSwapCameraImage(camIndex) {// Get current timestamp from CAM_TS, fallback to image data attribute, then 0
+function safeSwapCameraImage(camIndex) {
+    // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
     // Note: We don't check staleness here - we fetch the new timestamp first,
     // then check staleness after we have the actual current timestamp from the API
+    
+    const imgEl = document.getElementById('webcam-' + camIndex);
+    const imgDataTs = imgEl ? parseInt(imgEl.getAttribute('data-ts') || '0', 10) : 0;
+    const currentTs = CAM_TS[camIndex] || imgDataTs || 0;
 
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
-    const mtimeUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
-        .then(r => {return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
+    const mtimeUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;
+    
+    fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
+        .then(r => {
+            return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
         })
-        .then(json => {if (!json) return; // Invalid response
+        .then(json => {
+            if (!json) return; // Invalid response
+            
+            // Parse new timestamp from API response
+            const newTs = parseInt(json.mtime || '0', 10);
             
             // Check if we have a valid timestamp (even if success is false, we might have a timestamp)
-            if (isNaN(newTs) || newTs === 0) {// No cache available - don't try to update
+            if (isNaN(newTs) || newTs === 0) {
+                // No cache available - don't try to update
                 return;
             }
             
             // Only update if timestamp is newer (strictly greater)
-            if (newTs <= currentTs) {// Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
+            if (newTs <= currentTs) {
+                // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
                 return;
             }
 
@@ -4385,10 +4399,14 @@ function safeSwapCameraImage(camIndex) {// Get current timestamp from CAM_TS, fa
             
             // Build image URL with explicit fmt parameter (triggers 202 logic if generating)
             const hash = calculateImageHash(AIRPORT_ID, camIndex, preferredFormat, newTs, json.size || 0);
-            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;// Request preferred format (explicit fmt= triggers 202 if generating)
+            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;
+            
+            // Request preferred format (explicit fmt= triggers 202 if generating)
             loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);
         })
-        .catch((err) => {// Silently ignore; will retry on next interval
+        .catch((err) => {
+            // Silently ignore; will retry on next interval
+            console.debug('[Webcam] Refresh error for cam ' + camIndex + ':', err.message);
         });
 }
 
