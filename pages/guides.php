@@ -72,7 +72,10 @@ if ($isIndex) {
     }
 } else {
     // Individual guide - look for matching file
-    $guideFile = $guidesDir . '/' . $guideName . '.md';
+    // Strip .md extension if already present to handle both URL formats
+    $guideSlug = preg_replace('/\.md$/i', '', $guideName);
+    $guideFile = $guidesDir . '/' . $guideSlug . '.md';
+    
     if (file_exists($guideFile) && is_file($guideFile)) {
         $markdownFile = $guideFile;
     } else {
