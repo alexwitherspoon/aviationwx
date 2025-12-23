@@ -77,6 +77,12 @@ else
     echo "⚠️  Warning: Cron daemon may not have started properly"
 fi
 
+# Start scheduler daemon
+echo "Starting scheduler daemon..."
+nohup /usr/local/bin/php /var/www/html/scripts/scheduler.php > /dev/null 2>&1 &
+SCHEDULER_PID=$!
+echo "✓ Scheduler started (PID: $SCHEDULER_PID)"
+
 # Initialize cache directory with correct permissions
 # This is critical after reboots when /tmp is cleared and the mount point
 # may be created with wrong ownership/permissions

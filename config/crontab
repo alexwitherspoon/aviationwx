@@ -17,19 +17,11 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Uses PHP script like other cron jobs for consistency and reliability
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cron-heartbeat.php >> /var/log/aviationwx/cron-heartbeat.log 2>&1
 
-# Webcam Image Fetcher - Runs every minute
-# Fetches webcam images from configured sources (MJPEG streams, RTSP, static images)
-# and caches them for serving via the webcam API. Skips cameras with fresh cache.
-# Logs to file-based log (logrotate handles rotation: 7 days, 100MB max)
-# Also forwards to Docker logs for convenience (tee to both locations)
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-webcam.php 2>&1 | tee -a /var/log/aviationwx/cron-webcam.log
-
-# Weather Data Fetcher - Runs every minute
-# Refreshes weather cache for all configured airports by calling the weather API endpoint.
-# Ensures weather data stays fresh for display on airport pages.
-# Logs to file-based log (logrotate handles rotation: 7 days, 100MB max)
-# Also forwards to Docker logs for convenience (tee to both locations)
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/fetch-weather.php 2>&1 | tee -a /var/log/aviationwx/cron-weather.log
+# Scheduler Health Check - Runs every minute
+# Validates scheduler daemon is running and healthy, restarts if needed.
+# The scheduler daemon handles all weather and webcam updates (replaces cron-based fetching).
+# Logs to Docker logs (stdout/stderr).
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php 2>&1
 
 # Push Webcam Processor - Runs every minute
 # Processes webcam images uploaded via SFTP/FTP/FTPS by push cameras.
