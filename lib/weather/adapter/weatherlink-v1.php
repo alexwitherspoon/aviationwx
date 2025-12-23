@@ -9,6 +9,130 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../test-mocks.php';
 require_once __DIR__ . '/../../logger.php';
+require_once __DIR__ . '/../data/WeatherReading.php';
+require_once __DIR__ . '/../data/WindGroup.php';
+require_once __DIR__ . '/../data/WeatherSnapshot.php';
+
+use AviationWX\Weather\Data\WeatherReading;
+use AviationWX\Weather\Data\WindGroup;
+use AviationWX\Weather\Data\WeatherSnapshot;
+
+/**
+ * WeatherLink Adapter Class (implements new interface pattern)
+ * 
+ * Davis Instruments WeatherLink stations provide real-time weather data.
+ * Updates every ~60 seconds depending on model/configuration.
+ */
+class WeatherLinkAdapter {
+    
+    /** Fields this adapter can provide */
+    public const FIELDS_PROVIDED = [
+        'temperature',
+        'dewpoint',
+        'humidity',
+        'pressure',
+        'wind_speed',
+        'wind_direction',
+        'gust_speed',
+        'precip_accum',
+    ];
+    
+    /** Typical update frequency in seconds */
+    public const UPDATE_FREQUENCY = 60;
+    
+    /** Max acceptable age before data is stale (5 minutes) */
+    public const MAX_ACCEPTABLE_AGE = 300;
+    
+    /** Source type identifier */
+    public const SOURCE_TYPE = 'weatherlink';
+    
+    /**
+     * Get fields this adapter can provide
+     */
+    public static function getFieldsProvided(): array {
+        return self::FIELDS_PROVIDED;
+    }
+    
+    /**
+     * Get typical update frequency in seconds
+     */
+    public static function getTypicalUpdateFrequency(): int {
+        return self::UPDATE_FREQUENCY;
+    }
+    
+    /**
+     * Get maximum acceptable age before data is stale
+     */
+    public static function getMaxAcceptableAge(): int {
+        return self::MAX_ACCEPTABLE_AGE;
+    }
+    
+    /**
+     * Get source type identifier
+     */
+    public static function getSourceType(): string {
+        return self::SOURCE_TYPE;
+    }
+    
+    /**
+     * Check if this adapter provides a specific field
+     */
+    public static function providesField(string $fieldName): bool {
+        return in_array($fieldName, self::FIELDS_PROVIDED, true);
+    }
+    
+    /**
+     * Parse API response into a WeatherSnapshot
+     */
+    public static function parseToSnapshot(string $response, array $config = []): ?WeatherSnapshot {
+        $parsed = parseWeatherLinkResponse($response);
+        if ($parsed === null) {
+            return WeatherSnapshot::empty(self::SOURCE_TYPE);
+        }
+        
+        $obsTime = $parsed['obs_time'] ?? time();
+        $source = self::SOURCE_TYPE;
+        
+        $hasCompleteWind = $parsed['wind_speed'] !== null && $parsed['wind_direction'] !== null;
+        
+        return new WeatherSnapshot(
+            source: $source,
+            fetchTime: time(),
+            temperature: $parsed['temperature'] !== null 
+                ? WeatherReading::from($parsed['temperature'], $source, $obsTime)
+                : WeatherReading::null($source),
+            dewpoint: $parsed['dewpoint'] !== null
+                ? WeatherReading::from($parsed['dewpoint'], $source, $obsTime)
+                : WeatherReading::null($source),
+            humidity: $parsed['humidity'] !== null
+                ? WeatherReading::from($parsed['humidity'], $source, $obsTime)
+                : WeatherReading::null($source),
+            pressure: $parsed['pressure'] !== null
+                ? WeatherReading::from($parsed['pressure'], $source, $obsTime)
+                : WeatherReading::null($source),
+            precipAccum: $parsed['precip_accum'] !== null
+                ? WeatherReading::from($parsed['precip_accum'], $source, $obsTime)
+                : WeatherReading::null($source),
+            wind: $hasCompleteWind
+                ? WindGroup::from(
+                    $parsed['wind_speed'],
+                    $parsed['wind_direction'],
+                    $parsed['gust_speed'],
+                    $source,
+                    $obsTime
+                )
+                : WindGroup::empty(),
+            visibility: WeatherReading::null($source),
+            ceiling: WeatherReading::null($source),
+            cloudCover: WeatherReading::null($source),
+            isValid: true
+        );
+    }
+}
+
+// =============================================================================
+// LEGACY FUNCTIONS (kept for backward compatibility during migration)
+// =============================================================================
 
 /**
  * Parse WeatherLink v2 API response

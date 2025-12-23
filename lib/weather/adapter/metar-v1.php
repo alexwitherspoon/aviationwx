@@ -12,6 +12,188 @@
 require_once __DIR__ . '/../../constants.php';
 require_once __DIR__ . '/../../logger.php';
 require_once __DIR__ . '/../../test-mocks.php';
+require_once __DIR__ . '/../data/WeatherReading.php';
+require_once __DIR__ . '/../data/WindGroup.php';
+require_once __DIR__ . '/../data/WeatherSnapshot.php';
+
+use AviationWX\Weather\Data\WeatherReading;
+use AviationWX\Weather\Data\WindGroup;
+use AviationWX\Weather\Data\WeatherSnapshot;
+
+/**
+ * METAR Adapter Class (implements new interface pattern)
+ * 
+ * METAR is the authoritative source for:
+ * - Visibility
+ * - Ceiling
+ * - Cloud cover
+ * 
+ * It also provides temperature, pressure, wind but these are typically
+ * less fresh than dedicated weather stations.
+ */
+class MetarAdapter {
+    
+    /** Fields this adapter can provide */
+    public const FIELDS_PROVIDED = [
+        'temperature',
+        'dewpoint',
+        'humidity',
+        'pressure',
+        'wind_speed',
+        'wind_direction',
+        'gust_speed',
+        'visibility',
+        'ceiling',
+        'cloud_cover',
+        'precip_accum',
+    ];
+    
+    /** Fields where METAR is the preferred/authoritative source */
+    public const PREFERRED_FIELDS = [
+        'visibility',
+        'ceiling',
+        'cloud_cover',
+    ];
+    
+    /** Typical update frequency in seconds (METAR is hourly with specials) */
+    public const UPDATE_FREQUENCY = 3600;
+    
+    /** Max acceptable age before data is stale (2 hours) */
+    public const MAX_ACCEPTABLE_AGE = 7200;
+    
+    /** Source type identifier */
+    public const SOURCE_TYPE = 'metar';
+    
+    /**
+     * Get fields this adapter can provide
+     */
+    public static function getFieldsProvided(): array {
+        return self::FIELDS_PROVIDED;
+    }
+    
+    /**
+     * Get fields where this adapter is preferred
+     */
+    public static function getPreferredFields(): array {
+        return self::PREFERRED_FIELDS;
+    }
+    
+    /**
+     * Get typical update frequency in seconds
+     */
+    public static function getTypicalUpdateFrequency(): int {
+        return self::UPDATE_FREQUENCY;
+    }
+    
+    /**
+     * Get maximum acceptable age before data is stale
+     */
+    public static function getMaxAcceptableAge(): int {
+        return self::MAX_ACCEPTABLE_AGE;
+    }
+    
+    /**
+     * Get source type identifier
+     */
+    public static function getSourceType(): string {
+        return self::SOURCE_TYPE;
+    }
+    
+    /**
+     * Check if this adapter provides a specific field
+     */
+    public static function providesField(string $fieldName): bool {
+        return in_array($fieldName, self::FIELDS_PROVIDED, true);
+    }
+    
+    /**
+     * Check if this adapter is preferred for a specific field
+     */
+    public static function isPreferredFor(string $fieldName): bool {
+        return in_array($fieldName, self::PREFERRED_FIELDS, true);
+    }
+    
+    /**
+     * Build the API URL for fetching data
+     */
+    public static function buildUrl(string $stationId): ?string {
+        if (empty($stationId)) {
+            return null;
+        }
+        return "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+    }
+    
+    /**
+     * Parse API response into a WeatherSnapshot
+     * 
+     * @param string $response Raw API response
+     * @param array $airport Airport configuration
+     * @return WeatherSnapshot|null
+     */
+    public static function parseToSnapshot(string $response, array $airport = []): ?WeatherSnapshot {
+        // Use existing parser
+        $parsed = parseMETARResponse($response, $airport);
+        if ($parsed === null) {
+            return WeatherSnapshot::empty(self::SOURCE_TYPE);
+        }
+        
+        $obsTime = $parsed['obs_time'] ?? time();
+        $source = self::SOURCE_TYPE;
+        
+        // Handle VRB wind direction - treat as null for aggregation purposes
+        // VRB means variable and shouldn't be used in calculations
+        $windDirection = $parsed['wind_direction'];
+        if ($windDirection === 'VRB') {
+            $windDirection = null;
+        }
+        
+        $hasCompleteWind = $parsed['wind_speed'] !== null && $windDirection !== null;
+        
+        return new WeatherSnapshot(
+            source: $source,
+            fetchTime: time(),
+            temperature: $parsed['temperature'] !== null 
+                ? WeatherReading::from($parsed['temperature'], $source, $obsTime)
+                : WeatherReading::null($source),
+            dewpoint: $parsed['dewpoint'] !== null
+                ? WeatherReading::from($parsed['dewpoint'], $source, $obsTime)
+                : WeatherReading::null($source),
+            humidity: $parsed['humidity'] !== null
+                ? WeatherReading::from($parsed['humidity'], $source, $obsTime)
+                : WeatherReading::null($source),
+            pressure: $parsed['pressure'] !== null
+                ? WeatherReading::from($parsed['pressure'], $source, $obsTime)
+                : WeatherReading::null($source),
+            precipAccum: $parsed['precip_accum'] !== null
+                ? WeatherReading::from($parsed['precip_accum'], $source, $obsTime)
+                : WeatherReading::null($source),
+            wind: $hasCompleteWind
+                ? WindGroup::from(
+                    $parsed['wind_speed'],
+                    $windDirection,
+                    $parsed['gust_speed'],
+                    $source,
+                    $obsTime
+                )
+                : WindGroup::empty(),
+            visibility: $parsed['visibility'] !== null
+                ? WeatherReading::from($parsed['visibility'], $source, $obsTime)
+                : WeatherReading::null($source),
+            ceiling: $parsed['ceiling'] !== null
+                ? WeatherReading::from($parsed['ceiling'], $source, $obsTime)
+                : WeatherReading::null($source),
+            cloudCover: $parsed['cloud_cover'] !== null
+                ? WeatherReading::from($parsed['cloud_cover'], $source, $obsTime)
+                : WeatherReading::null($source),
+            rawMetar: $airport['rawOb'] ?? null,
+            isValid: true
+        );
+    }
+}
+
+// =============================================================================
+// LEGACY FUNCTIONS (kept for backward compatibility during migration)
+// =============================================================================
 
 /**
  * Parse METAR response
