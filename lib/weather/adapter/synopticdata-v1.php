@@ -211,6 +211,11 @@ function parseSynopticDataResponse(?string $response): ?array {
         $gustSpeedKts = null;
     }
     
+    // Note: SynopticData API does not provide daily peak gust fields in the latest observations endpoint.
+    // Daily peak gust tracking is handled by the application using current gust values.
+    $peakGustHistorical = null;
+    $peakGustHistoricalObsTime = null;
+    
     // Precipitation - prefer since_local_midnight for daily accumulation
     // SynopticData typically provides precipitation in mm
     // Convert to inches: inches = mm × 0.0393701
@@ -270,8 +275,11 @@ function parseSynopticDataResponse(?string $response): ?array {
         'temp_high' => null, // Not available from latest observations endpoint
         'temp_low' => null,  // Not available from latest observations endpoint
         'peak_gust' => $gustSpeedKts,
+        'peak_gust_historical' => $peakGustHistorical, // Daily peak gust from API if available
+        'peak_gust_historical_obs_time' => $peakGustHistoricalObsTime,
         'obs_time' => $obsTime,
     ];
+    
     
     // Add quality metadata if present (internal only)
     if (!empty($qualityMetadata)) {

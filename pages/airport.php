@@ -3824,11 +3824,7 @@ function getStaggerOffset(baseInterval) {
  * @param {number} camIndex Camera index
  * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
  */
-function setupStaggeredWebcamRefresh(camIndex, baseInterval) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3292',message:'setupStaggeredWebcamRefresh called',data:{camIndex,baseInterval},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
-    // #endregion
-    // FIRST refresh: Immediate (no stagger)
+function setupStaggeredWebcamRefresh(camIndex, baseInterval) {// FIRST refresh: Immediate (no stagger)
     // This ensures user gets fresh data quickly on initial load
     safeSwapCameraImage(camIndex);
     
@@ -3842,13 +3838,7 @@ function setupStaggeredWebcamRefresh(camIndex, baseInterval) {
     
     // Next refresh: next minute + stagger offset
     const secondsUntilNextMinute = 60 - secondsPastMinute;
-    const nextRefreshDelay = (secondsUntilNextMinute + staggerOffset) * 1000;
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3307',message:'Staggered refresh scheduled',data:{camIndex,nextRefreshDelay,staggerOffset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
-    // #endregion
-    
-    // Schedule first staggered refresh
+    const nextRefreshDelay = (secondsUntilNextMinute + staggerOffset) * 1000;// Schedule first staggered refresh
     const staggeredTimeout = setTimeout(() => {
         safeSwapCameraImage(camIndex);
         
@@ -4298,49 +4288,26 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
  * @param {boolean} hasExisting Whether image is already rendered
  * @param {number} jpegTimestamp JPEG timestamp from mtime endpoint
  */
-async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {
-    // #region agent log
-    const loadStartTime = Date.now();
-    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3759',message:'loadWebcamImage called',data:{camIndex,url,preferredFormat,hasExisting},timestamp:loadStartTime,sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
-    // #endregion
-    try {
+async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {try {
         const response = await fetch(url, {
             cache: 'no-store',
             credentials: 'same-origin'
-        });
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3766',message:'Image fetch response',data:{camIndex,status:response.status,url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
-        // #endregion
-        
-        if (response.status === 200) {
+        });if (response.status === 200) {
             // Format ready - load immediately
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3770',message:'Image loaded successfully',data:{camIndex,blobSize:blob.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
-            // #endregion
-            updateImageSilently(camIndex, blobUrl, jpegTimestamp);
+            const blobUrl = URL.createObjectURL(blob);updateImageSilently(camIndex, blobUrl, jpegTimestamp);
             return;
         }
         
         if (response.status === 202) {
             // Format generating
-            const data = await response.json();
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3777',message:'Format generating (202)',data:{camIndex,data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'V'})}).catch(()=>{});
-            // #endregion
-            await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
+            const data = await response.json();await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
             return;
         }
         
         throw new Error(`Unexpected status: ${response.status}`);
         
-    } catch (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3783',message:'Image load error',data:{camIndex,error:error.message||'unknown',url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W'})}).catch(()=>{});
-        // #endregion
-        // Network error - use fallback
+    } catch (error) {// Network error - use fallback
         handleRequestError(error, camIndex, hasExisting);
     }
 }
@@ -4367,55 +4334,24 @@ function handleRequestError(error, camIndex, hasExisting) {
 }
 
 // Safely swap camera image only when the backend has a newer image and the new image is loaded
-function safeSwapCameraImage(camIndex) {
-    // #region agent log
-    const swapStartTime = Date.now();
-    const imgEl = document.getElementById(`webcam-${camIndex}`);
-    const initialTs = imgEl ? parseInt(imgEl.dataset.initialTimestamp || '0') : 0;
-    const currentTs = CAM_TS[camIndex] ? parseInt(CAM_TS[camIndex]) : initialTs;
-    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3811',message:'safeSwapCameraImage called',data:{camIndex,currentTs,initialTs},timestamp:swapStartTime,sessionId:'debug-session',runId:'run1',hypothesisId:'N'})}).catch(()=>{});
-    // #endregion
-    // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
+function safeSwapCameraImage(camIndex) {// Get current timestamp from CAM_TS, fallback to image data attribute, then 0
     // Note: We don't check staleness here - we fetch the new timestamp first,
     // then check staleness after we have the actual current timestamp from the API
 
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
-    const mtimeUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3821',message:'Fetching mtime',data:{camIndex,mtimeUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
-    // #endregion
-
-    fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
-        .then(r => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3822',message:'mtime response received',data:{camIndex,status:r.status,ok:r.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
-            // #endregion
-            return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
+    const mtimeUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&mtime=1&_=${Date.now()}`;fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
+        .then(r => {return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
         })
-        .then(json => {
-            // #region agent log
-            const newTs = parseInt(json.timestamp || 0);
-            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3823',message:'mtime JSON parsed',data:{camIndex,newTs,currentTs,isNewer:newTs>currentTs,json},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'P'})}).catch(()=>{});
-            // #endregion
-            if (!json) return; // Invalid response
+        .then(json => {if (!json) return; // Invalid response
             
             // Check if we have a valid timestamp (even if success is false, we might have a timestamp)
-            if (isNaN(newTs) || newTs === 0) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3828',message:'No valid timestamp',data:{camIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'Q'})}).catch(()=>{});
-                // #endregion
-                // No cache available - don't try to update
+            if (isNaN(newTs) || newTs === 0) {// No cache available - don't try to update
                 return;
             }
             
             // Only update if timestamp is newer (strictly greater)
-            if (newTs <= currentTs) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3834',message:'Timestamp not newer',data:{camIndex,newTs,currentTs},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'R'})}).catch(()=>{});
-                // #endregion
-                // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
+            if (newTs <= currentTs) {// Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
                 return;
             }
 
@@ -4444,20 +4380,10 @@ function safeSwapCameraImage(camIndex) {
             
             // Build image URL with explicit fmt parameter (triggers 202 logic if generating)
             const hash = calculateImageHash(AIRPORT_ID, camIndex, preferredFormat, newTs, json.size || 0);
-            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3849',message:'Loading new image',data:{camIndex,newTs,preferredFormat,imageUrl,hasExisting},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'S'})}).catch(()=>{});
-            // #endregion
-            
-            // Request preferred format (explicit fmt= triggers 202 if generating)
+            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;// Request preferred format (explicit fmt= triggers 202 if generating)
             loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);
         })
-        .catch((err) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/753639f8-be25-4d7b-918d-fe04ce6d9e12',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'airport.php:3852',message:'mtime fetch error',data:{camIndex,error:err.message||'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'T'})}).catch(()=>{});
-            // #endregion
-            // Silently ignore; will retry on next interval
+        .catch((err) => {// Silently ignore; will retry on next interval
         });
 }
 

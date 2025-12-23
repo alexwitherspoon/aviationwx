@@ -128,6 +128,11 @@ function parsePWSWeatherResponse(?string $response): ?array {
         $gustSpeedKts = (int)round((float)$obs['windGustKTS']);
     }
     
+    // Note: AerisWeather/PWSWeather API does not provide daily peak gust fields in the current observations endpoint.
+    // Daily peak gust tracking is handled by the application using current gust values.
+    $peakGustHistorical = null;
+    $peakGustHistoricalObsTime = null;
+    
     // Precipitation - already in inches
     $precip = isset($obs['precipIN']) && is_numeric($obs['precipIN']) ? (float)$obs['precipIN'] : 0;
     
@@ -171,8 +176,11 @@ function parsePWSWeatherResponse(?string $response): ?array {
         'temp_high' => null, // Not available from current observations endpoint
         'temp_low' => null,  // Not available from current observations endpoint
         'peak_gust' => $gustSpeedKts,
+        'peak_gust_historical' => $peakGustHistorical, // Daily peak gust from API if available
+        'peak_gust_historical_obs_time' => $peakGustHistoricalObsTime,
         'obs_time' => $obsTime,
     ];
+    
     
     // Add quality metadata if present (internal only)
     if (!empty($qualityMetadata)) {

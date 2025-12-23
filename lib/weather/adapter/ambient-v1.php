@@ -63,6 +63,11 @@ function parseAmbientResponse($response): ?array {
     $precip = isset($obs['dailyrainin']) ? $obs['dailyrainin'] : 0; // Already in inches
     $dewpoint = isset($obs['dewPoint']) && is_numeric($obs['dewPoint']) ? ((float)$obs['dewPoint'] - 32) / 1.8 : null; // F to C
     
+    // Note: Ambient Weather API does not provide daily peak gust fields in the current observations endpoint.
+    // Daily peak gust tracking is handled by the application using current gust values.
+    $peakGustHistorical = null;
+    $peakGustHistoricalObsTime = null;
+    
     return [
         'temperature' => $temperature,
         'humidity' => $humidity,
@@ -77,6 +82,8 @@ function parseAmbientResponse($response): ?array {
         'temp_high' => null,
         'temp_low' => null,
         'peak_gust' => $gustSpeed,
+        'peak_gust_historical' => $peakGustHistorical, // Daily peak gust from API if available
+        'peak_gust_historical_obs_time' => $peakGustHistoricalObsTime,
         'obs_time' => $obsTime, // Observation time when weather was actually measured
     ];
 }
@@ -132,13 +139,9 @@ function fetchAmbientWeather($source): ?array {
             ],
         ]);
         
-        $response = @file_get_contents($url, false, $context);
-        
-        if ($response === false) {
-            return null;
-        }
-    }
+        $response = @file_get_contents($url, false, $context);if ($response === false) {return null;
+        }}
     
-    return parseAmbientResponse($response);
+    $parsed = parseAmbientResponse($response);return $parsed;
 }
 

@@ -313,14 +313,11 @@ function parseMETARResponse($response, $airport): ?array {
  * @param array $airport Airport configuration array (for logging context)
  * @return array|null Parsed METAR data array with standard keys, or null on failure
  */
-function fetchMETARFromStation($stationId, $airport): ?array {
-    if (!is_string($stationId) || !is_array($airport)) {
+function fetchMETARFromStation($stationId, $airport): ?array {if (!is_string($stationId) || !is_array($airport)) {
         return null;
     }
     // Fetch METAR from aviationweather.gov (new API format)
-    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
-    
-    // Check for mock response in test mode
+    $url = "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";// Check for mock response in test mode
     $mockResponse = getMockHttpResponse($url);
     if ($mockResponse !== null) {
         $response = $mockResponse;
@@ -333,16 +330,10 @@ function fetchMETARFromStation($stationId, $airport): ?array {
             ],
         ]);
         
-        $response = @file_get_contents($url, false, $context);
-        
-        if ($response === false) {
+        $response = @file_get_contents($url, false, $context);if ($response === false) {
             return null;
         }
-    }
-    
-    $parsed = parseMETARResponse($response, $airport);
-    
-    // If parsing succeeded, add metadata about which station was used
+    }$parsed = parseMETARResponse($response, $airport);// If parsing succeeded, add metadata about which station was used
     if ($parsed !== null) {
         $parsed['_metar_station_used'] = $stationId;
     }
@@ -359,15 +350,13 @@ function fetchMETARFromStation($stationId, $airport): ?array {
  * @param array $airport Airport configuration
  * @return array|null Parsed METAR data or null on failure
  */
-function fetchMETAR($airport): ?array {
-    if (!is_array($airport)) {
+function fetchMETAR($airport): ?array {if (!is_array($airport)) {
         return null;
     }
     require_once __DIR__ . '/../utils.php';
     
     // METAR enabled if metar_station is configured
-    if (!isMetarEnabled($airport)) {
-        aviationwx_log('info', 'METAR not configured - skipping METAR fetch', [
+    if (!isMetarEnabled($airport)) {aviationwx_log('info', 'METAR not configured - skipping METAR fetch', [
             'airport' => $airport['icao'] ?? 'unknown'
         ], 'app');
         return null;
@@ -375,9 +364,7 @@ function fetchMETAR($airport): ?array {
     
     // Station is guaranteed to exist and be non-empty after isMetarEnabled() check
     $stationId = $airport['metar_station'];
-    $result = fetchMETARFromStation($stationId, $airport);
-    
-    // If primary station failed and nearby stations are configured, try fallback
+    $result = fetchMETARFromStation($stationId, $airport);// If primary station failed and nearby stations are configured, try fallback
     if ($result === null) {
         $fallbackResult = fetchMETARFromNearbyStations($airport, $stationId);
         if ($fallbackResult !== null) {

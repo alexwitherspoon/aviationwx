@@ -145,6 +145,11 @@ function parseWeatherLinkResponse(?string $response): ?array {
             $result['peak_gust'] = $gustSpeed;
         }
         
+        // Note: WeatherLink v2 API does not provide daily peak gust fields in the current observations endpoint.
+        // Daily peak gust tracking is handled by the application using current gust values.
+        $peakGustHistorical = null;
+        $peakGustHistoricalObsTime = null;
+        
         // Precipitation - WeatherLink provides both inches and mm versions
         // Prefer daily accumulation, fallback to hourly
         // Normalize to 0 for no precipitation (unified standard: 0 = no precip, null = failed)
@@ -165,9 +170,7 @@ function parseWeatherLinkResponse(?string $response): ?array {
     // Set observation time
     if ($latestTimestamp !== null) {
         $result['obs_time'] = $latestTimestamp;
-    }
-    
-    return $result;
+    }return $result;
 }
 
 /**
