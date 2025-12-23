@@ -108,24 +108,24 @@ jobs:
       
       - name: Run Critical Safety Tests
         run: |
-          vendor/bin/phpunit tests/Unit/StaleDataSafetyTest.php --testdox --stop-on-failure --no-coverage || exit_code1=$?
+          vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage || exit_code1=$?
           exit_code1=${exit_code1:-$?}
           if [ $exit_code1 -gt 1 ]; then
-            echo "❌ StaleDataSafetyTest failed"
-            exit 1
-          fi
-          
-          vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage || exit_code2=$?
-          exit_code2=${exit_code2:-$?}
-          if [ $exit_code2 -gt 1 ]; then
             echo "❌ WeatherCalculationsTest failed"
             exit 1
           fi
           
-          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --testdox --stop-on-failure --no-coverage || exit_code3=$?
+          vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --testdox --stop-on-failure --no-coverage || exit_code2=$?
+          exit_code2=${exit_code2:-$?}
+          if [ $exit_code2 -gt 1 ]; then
+            echo "❌ ErrorHandlingTest failed"
+            exit 1
+          fi
+          
+          vendor/bin/phpunit tests/Unit/WeatherAggregatorTest.php --testdox --stop-on-failure --no-coverage || exit_code3=$?
           exit_code3=${exit_code3:-$?}
           if [ $exit_code3 -gt 1 ]; then
-            echo "❌ ErrorHandlingTest failed"
+            echo "❌ WeatherAggregatorTest failed"
             exit 1
           fi
           
