@@ -10,7 +10,6 @@
     },
     "autoload": {
         "files": [
-            "lib/config.php",
             "lib/rate-limit.php",
             "lib/logger.php",
             "api/weather.php"
