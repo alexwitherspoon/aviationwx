@@ -207,13 +207,16 @@ class ProcessPool {
      * Updates statistics array with counts of completed, timed-out, and failed jobs.
      * Terminates timed-out workers with SIGTERM, then SIGKILL if needed.
      * 
+     * Public method to support continuous operation patterns (e.g., scheduler daemon).
+     * Can be called periodically to clean up finished workers without blocking.
+     * 
      * @param array &$stats Statistics array to update (passed by reference)
      *   - 'completed' => int (incremented for successful jobs)
      *   - 'timed_out' => int (incremented for timed-out jobs)
      *   - 'failed' => int (incremented for failed jobs)
      * @return void
      */
-    private function cleanupFinished(array &$stats) {
+    public function cleanupFinished(array &$stats) {
         $now = time();
         
         foreach ($this->workers as $key => $worker) {
