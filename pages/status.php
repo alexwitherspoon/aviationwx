@@ -306,9 +306,66 @@ function checkSystemHealth(): array {
 }
 
 /**
+ * Check if a process is running by PID
+ * 
+ * Uses /proc filesystem which is readable regardless of process ownership,
+ * unlike posix_kill() which requires permission to send signals.
+ * Falls back to posix_kill() on non-Linux systems.
+ * 
+ * @param int $pid Process ID to check
+ * @return bool True if process exists and is running
+ */
+function isProcessRunning(int $pid): bool {
+    if ($pid <= 0) {
+        return false;
+    }
+    
+    // Primary method: Check /proc/{pid} directory (Linux)
+    // This works regardless of the process owner and is the most reliable method
+    $procDir = "/proc/{$pid}";
+    if (is_dir($procDir)) {
+        // Verify it's the expected process by checking cmdline contains 'scheduler'
+        $cmdlineFile = "{$procDir}/cmdline";
+        if (is_readable($cmdlineFile)) {
+            $cmdline = @file_get_contents($cmdlineFile);
+            // cmdline uses null bytes as separators
+            if ($cmdline !== false && stripos($cmdline, 'scheduler') !== false) {
+                return true;
+            }
+            // Even if cmdline doesn't match, process exists
+            // (might be a different scheduler path)
+            if ($cmdline !== false && strlen($cmdline) > 0) {
+                return true;
+            }
+        }
+        // Directory exists but can't read cmdline - process exists
+        return true;
+    }
+    
+    // Fallback method: posix_kill with signal 0
+    // This may fail if the process is owned by a different user (EPERM)
+    // Only use this as a fallback for non-Linux systems
+    if (function_exists('posix_kill')) {
+        $result = @posix_kill($pid, 0);
+        if ($result) {
+            return true;
+        }
+        // Check if error was permission denied (EPERM = 1)
+        // If EPERM, the process exists but we can't signal it
+        $errno = posix_get_last_error();
+        if ($errno === 1) { // EPERM - Operation not permitted
+            return true; // Process exists, we just can't signal it
+        }
+    }
+    
+    return false;
+}
+
+/**
  * Get scheduler status
  * 
  * Reads scheduler lock file to determine if scheduler is running and healthy.
+ * Uses /proc filesystem to check process existence (works across user boundaries).
  * 
  * @return array {
  *   'running' => bool,
@@ -374,7 +431,7 @@ function getSchedulerStatus(): array {
     }
     
     $pid = $lockData['pid'] ?? null;
-    $running = $pid && function_exists('posix_kill') && posix_kill($pid, 0);
+    $running = $pid && isProcessRunning((int)$pid);
     $healthy = $running && ($lockData['health'] ?? 'unknown') === 'healthy';
     
     return [

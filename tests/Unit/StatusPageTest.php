@@ -12,6 +12,29 @@ require_once __DIR__ . '/../../lib/weather/utils.php';
 
 class StatusPageTest extends TestCase
 {
+    public function testIsProcessRunning_CurrentProcess_ReturnsTrue(): void
+    {
+        // Test that the current process is detected as running
+        $currentPid = getmypid();
+        $result = isProcessRunning($currentPid);
+        $this->assertTrue($result, 'Current process should be detected as running');
+    }
+    
+    public function testIsProcessRunning_InvalidPid_ReturnsFalse(): void
+    {
+        // Test with invalid PIDs
+        $this->assertFalse(isProcessRunning(0), 'PID 0 should return false');
+        $this->assertFalse(isProcessRunning(-1), 'Negative PID should return false');
+    }
+    
+    public function testIsProcessRunning_NonExistentPid_ReturnsFalse(): void
+    {
+        // Test with a very high PID that's unlikely to exist
+        // PID 4000000 is beyond typical range
+        $result = isProcessRunning(4000000);
+        $this->assertFalse($result, 'Non-existent PID should return false');
+    }
+    
     public function testGetStatusColor_Operational_ReturnsGreen(): void
     {
         $result = getStatusColor('operational');
