@@ -22,6 +22,7 @@ require_once __DIR__ . '/../lib/weather/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/../lib/weather/adapter/synopticdata-v1.php';
 require_once __DIR__ . '/../lib/weather/adapter/metar-v1.php';
 require_once __DIR__ . '/../lib/weather/daily-tracking.php';
+require_once __DIR__ . '/../lib/weather/UnifiedFetcher.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
@@ -148,6 +149,27 @@ function generateMockWeatherData($airportId, $airport) {
 
     $airport = $result['airport'];
     $airportId = $result['airportId'];
+    
+    // Debug mode: collect pipeline information for diagnostics
+    // Usage: ?airport=kspb&debug=1 (requires force=1 or cron user agent for fresh fetch)
+    $debugMode = isset($_GET['debug']) && $_GET['debug'] === '1';
+    $debugInfo = [];
+    if ($debugMode) {
+        $debugInfo['request'] = [
+            'timestamp' => time(),
+            'timestamp_iso' => date('c'),
+            'airport_id' => $airportId,
+            'raw_identifier' => $rawIdentifier,
+            'force' => isset($_GET['force']) && $_GET['force'] === '1',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+        ];
+        $debugInfo['config'] = [
+            'weather_source_type' => $airport['weather_source']['type'] ?? null,
+            'weather_source_backup_type' => $airport['weather_source_backup']['type'] ?? null,
+            'metar_station' => $airport['metar_station'] ?? null,
+            'refresh_interval' => $airport['weather_refresh_seconds'] ?? getDefaultWeatherRefresh(),
+        ];
+    }
     
     // Check if airport is enabled (opt-in model: must have enabled: true)
     if (!isAirportEnabled($airport)) {
@@ -284,8 +306,34 @@ function generateMockWeatherData($airportId, $airport) {
                 $cached['_field_obs_time_map'] = [];
             }
             
+            $payload = ['success' => true, 'weather' => $cached];
+            
+            // Add debug info if debug mode is enabled
+            if ($debugMode) {
+                $now = time();
+                $debugInfo['cache'] = [
+                    'status' => 'fresh',
+                    'age_seconds' => $age,
+                    'cache_file' => basename($weatherCacheFile),
+                ];
+                $debugInfo['result'] = [
+                    'temperature' => $cached['temperature'] ?? null,
+                    'pressure' => $cached['pressure'] ?? null,
+                    'wind_speed' => $cached['wind_speed'] ?? null,
+                    'obs_time_primary' => $cached['obs_time_primary'] ?? null,
+                    'obs_time_primary_age_seconds' => isset($cached['obs_time_primary']) ? ($now - $cached['obs_time_primary']) : null,
+                    'last_updated' => $cached['last_updated'] ?? null,
+                ];
+                $debugInfo['field_obs_times'] = $cached['_field_obs_time_map'] ?? [];
+                $debugInfo['field_obs_times_ages'] = [];
+                foreach (($cached['_field_obs_time_map'] ?? []) as $field => $obsTime) {
+                    $debugInfo['field_obs_times_ages'][$field] = $now - $obsTime;
+                }
+                $payload['debug'] = $debugInfo;
+            }
+            
             ob_clean();
-            echo json_encode(['success' => true, 'weather' => $cached]);
+            echo json_encode($payload, $debugMode ? JSON_PRETTY_PRINT : 0);
             exit;
         }
     } elseif (file_exists($weatherCacheFile) && !$forceRefresh) {
@@ -316,9 +364,36 @@ function generateMockWeatherData($airportId, $airport) {
                 $staleData['_field_obs_time_map'] = [];
             }
             
+            $payload = ['success' => true, 'weather' => $staleData, 'stale' => true];
+            
+            // Add debug info if debug mode is enabled
+            if ($debugMode) {
+                $now = time();
+                $debugInfo['cache'] = [
+                    'status' => 'stale',
+                    'age_seconds' => $age,
+                    'cache_file' => basename($weatherCacheFile),
+                    'triggering_background_refresh' => true,
+                ];
+                $debugInfo['result'] = [
+                    'temperature' => $staleData['temperature'] ?? null,
+                    'pressure' => $staleData['pressure'] ?? null,
+                    'wind_speed' => $staleData['wind_speed'] ?? null,
+                    'obs_time_primary' => $staleData['obs_time_primary'] ?? null,
+                    'obs_time_primary_age_seconds' => isset($staleData['obs_time_primary']) ? ($now - $staleData['obs_time_primary']) : null,
+                    'last_updated' => $staleData['last_updated'] ?? null,
+                ];
+                $debugInfo['field_obs_times'] = $staleData['_field_obs_time_map'] ?? [];
+                $debugInfo['field_obs_times_ages'] = [];
+                foreach (($staleData['_field_obs_time_map'] ?? []) as $field => $obsTime) {
+                    $debugInfo['field_obs_times_ages'][$field] = $now - $obsTime;
+                }
+                $payload['debug'] = $debugInfo;
+            }
+            
             // Serve stale data immediately with flush
             ob_clean();
-            echo json_encode(['success' => true, 'weather' => $staleData, 'stale' => true]);
+            echo json_encode($payload, $debugMode ? JSON_PRETTY_PRINT : 0);
             
             // Flush output to client immediately
             if (function_exists('fastcgi_finish_request')) {
@@ -426,9 +501,26 @@ function generateMockWeatherData($airportId, $airport) {
     // Fetch weather based on source
     $weatherData = null;
     $weatherError = null;
+    
+    // Use new unified fetcher by default (use ?legacy=1 to fall back to old system)
+    $useUnifiedFetcher = !(isset($_GET['legacy']) && $_GET['legacy'] === '1');
+    
     try {
-    // Use async fetch when METAR supplementation is needed, otherwise sync
-    if ($airport['weather_source']['type'] !== 'metar') {
+    
+    if ($useUnifiedFetcher) {
+        // New unified fetcher - clean, simple aggregation
+        $fetchStartTime = microtime(true);
+        $weatherData = fetchWeatherUnified($airport, $airportId);
+        if ($debugMode) {
+            $debugInfo['fetch'] = [
+                'method' => 'unified',
+                'duration_ms' => round((microtime(true) - $fetchStartTime) * 1000, 2),
+                'sources_attempted' => $weatherData['_sources_attempted'] ?? 0,
+                'sources_succeeded' => $weatherData['_sources_succeeded'] ?? 0,
+            ];
+        }
+    } elseif ($airport['weather_source']['type'] !== 'metar') {
+        // Legacy: Use async fetch when METAR supplementation is needed
         // Load existing cache for backup fetching logic
         $existingCache = null;
         if (file_exists($weatherCacheFile)) {
@@ -438,9 +530,17 @@ function generateMockWeatherData($airportId, $airport) {
             }
         }
         
+        $fetchStartTime = microtime(true);
         $weatherData = fetchWeatherAsync($airport, $airportId, $airportWeatherRefresh, $existingCache);
+        if ($debugMode) {
+            $debugInfo['fetch'] = [
+                'method' => 'async (legacy)',
+                'duration_ms' => round((microtime(true) - $fetchStartTime) * 1000, 2),
+                'existing_cache_age' => $existingCache ? (time() - ($existingCache['last_updated_primary'] ?? 0)) : null,
+            ];
+        }
     } else {
-        // Load existing cache for backup fetching logic (sync path)
+        // Legacy: Load existing cache for backup fetching logic (sync path)
         $existingCacheSync = null;
         if (file_exists($weatherCacheFile)) {
             $existingCacheJson = @file_get_contents($weatherCacheFile);
@@ -448,8 +548,15 @@ function generateMockWeatherData($airportId, $airport) {
                 $existingCacheSync = json_decode($existingCacheJson, true);
             }
         }
+        $fetchStartTime = microtime(true);
         $weatherData = fetchWeatherSync($airport, $airportId, $airportWeatherRefresh, $existingCacheSync);
-        
+        if ($debugMode) {
+            $debugInfo['fetch'] = [
+                'method' => 'sync (legacy)',
+                'duration_ms' => round((microtime(true) - $fetchStartTime) * 1000, 2),
+                'existing_cache_age' => $existingCacheSync ? (time() - ($existingCacheSync['last_updated_primary'] ?? 0)) : null,
+            ];
+        }
     }
     
     } catch (Throwable $e) {
@@ -951,7 +1058,37 @@ function generateMockWeatherData($airportId, $airport) {
 
     // Build ETag for response based on content
     $payload = ['success' => true, 'weather' => $weatherData];
-    $body = json_encode($payload);
+    
+    // Add debug info if debug mode is enabled
+    if ($debugMode) {
+        $now = time();
+        $debugInfo['result'] = [
+            'temperature' => $weatherData['temperature'] ?? null,
+            'pressure' => $weatherData['pressure'] ?? null,
+            'wind_speed' => $weatherData['wind_speed'] ?? null,
+            'obs_time_primary' => $weatherData['obs_time_primary'] ?? null,
+            'obs_time_primary_age_seconds' => isset($weatherData['obs_time_primary']) ? ($now - $weatherData['obs_time_primary']) : null,
+            'obs_time_backup' => $weatherData['obs_time_backup'] ?? null,
+            'obs_time_metar' => $weatherData['obs_time_metar'] ?? null,
+            'last_updated' => $weatherData['last_updated'] ?? null,
+            'last_updated_primary' => $weatherData['last_updated_primary'] ?? null,
+            'primary_recovery_cycles' => $weatherData['primary_recovery_cycles'] ?? null,
+            'backup_status' => $weatherData['backup_status'] ?? null,
+        ];
+        $debugInfo['field_obs_times'] = $weatherData['_field_obs_time_map'] ?? [];
+        $debugInfo['field_obs_times_ages'] = [];
+        foreach (($weatherData['_field_obs_time_map'] ?? []) as $field => $obsTime) {
+            $debugInfo['field_obs_times_ages'][$field] = $now - $obsTime;
+        }
+        $debugInfo['staleness_thresholds'] = [
+            'refresh_interval' => $airportWeatherRefresh,
+            'warning_threshold' => $airportWeatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER,
+            'error_threshold' => $airportWeatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER,
+        ];
+        $payload['debug'] = $debugInfo;
+    }
+    
+    $body = json_encode($payload, JSON_PRETTY_PRINT);
     $etag = 'W/"' . sha1($body) . '"';
 
     // Conditional requests support
