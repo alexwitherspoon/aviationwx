@@ -61,8 +61,7 @@ $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
 $pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . ') - Live Webcams & Runway Conditions';
 $pageDescription = 'Live webcams and real-time runway conditions for ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . '). ' . $webcamText . 'current weather, wind, visibility, and aviation metrics. Free for pilots.';
 $pageKeywords = htmlspecialchars($primaryIdentifier) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($primaryIdentifier) . ' weather, airport webcam, pilot weather, aviation weather';
-// Get base domain from global config
-require_once __DIR__ . '/../lib/config.php';
+// Get base domain from global config (config.php already loaded at top of file)
 $baseDomain = getBaseDomain();
 $airportUrl = 'https://' . $airportId . '.' . $baseDomain;
 $canonicalUrl = $airportUrl; // Always use subdomain URL for canonical
@@ -2471,6 +2470,9 @@ function shouldShowDensityAltitude(weather) {
 function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
     const sanitized = { ...weather };
     
+    // Determine if this is a METAR-only source
+    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && AIRPORT_DATA.weather_source.type === 'metar';
+    
     // METAR fields (use hour-based threshold)
     const metarFields = ['visibility', 'ceiling', 'cloud_cover'];
     metarFields.forEach(field => {
@@ -2480,12 +2482,14 @@ function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
     });
     
     // Non-METAR fields (use multiplier-based threshold)
+    // BUT: For METAR-only sources, ALL fields come from METAR, so use METAR threshold
     const nonMetarFields = [
         'temperature', 'dewpoint', 'humidity', 'wind_speed', 
         'wind_direction', 'gust_speed', 'pressure', 'precip_accum'
     ];
     nonMetarFields.forEach(field => {
-        if (isFieldStale(field, weather, refreshIntervalSeconds, false)) {
+        // For METAR-only sources, treat all fields as METAR fields (use METAR threshold)
+        if (isFieldStale(field, weather, refreshIntervalSeconds, isMetarOnly)) {
             sanitized[field] = null;
         }
     });
@@ -2828,13 +2832,14 @@ function updateWindVisual(weather) {
     const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds 
         : 60;
-    const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, false) ||
-                      isFieldStale('wind_direction', weather, refreshIntervalSeconds, false);
+    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && AIRPORT_DATA.weather_source.type === 'metar';
+    const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly) ||
+                      isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
     
     // Check staleness for individual wind fields for details panel
-    const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, false);
-    const windDirectionStale = isFieldStale('wind_direction', weather, refreshIntervalSeconds, false);
-    const gustSpeedStale = isFieldStale('gust_speed', weather, refreshIntervalSeconds, false);
+    const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly);
+    const windDirectionStale = isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
+    const gustSpeedStale = isFieldStale('gust_speed', weather, refreshIntervalSeconds, isMetarOnly);
     
     // Use sanitized values for details panel (null out stale fields)
     const ws = windSpeedStale ? null : (weather.wind_speed ?? null);

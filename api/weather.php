@@ -264,7 +264,8 @@ function generateMockWeatherData($airportId, $airport) {
             // Safety check: Check per-source staleness
             $maxStaleSeconds = MAX_STALE_HOURS * 3600;
             $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
-            nullStaleFieldsBySource($cached, $maxStaleSeconds, $maxStaleSecondsMetar);
+            $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
+            nullStaleFieldsBySource($cached, $maxStaleSeconds, $maxStaleSecondsMetar, $isMetarOnly);
             
             // Set cache headers for cached responses
             // Use s-maxage to control Cloudflare cache separately from browser cache
@@ -295,7 +296,8 @@ function generateMockWeatherData($airportId, $airport) {
             // Safety check: Check per-source staleness
             $maxStaleSeconds = MAX_STALE_HOURS * 3600;
             $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
-            nullStaleFieldsBySource($staleData, $maxStaleSeconds, $maxStaleSecondsMetar);
+            $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
+            nullStaleFieldsBySource($staleData, $maxStaleSeconds, $maxStaleSecondsMetar, $isMetarOnly);
             
             $hasStaleCache = true;
             
