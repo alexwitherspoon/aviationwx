@@ -452,6 +452,87 @@ $ogImage = file_exists($aboutPhotoWebp)
         ul {
             line-height: 1.8;
         }
+        /* Homepage Airport Search Styles */
+        .homepage-airport-search-container {
+            max-width: 500px;
+            margin: 0 auto 2rem;
+            position: relative;
+        }
+        .homepage-airport-search-wrapper {
+            position: relative;
+        }
+        .homepage-airport-search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            color: #333;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .homepage-airport-search-input:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+        }
+        .homepage-airport-search-input::placeholder {
+            color: #888;
+        }
+        .homepage-airport-dropdown {
+            position: absolute;
+            top: calc(100% + 0.25rem);
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 350px;
+            overflow-y: auto;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .homepage-airport-dropdown.show {
+            display: block;
+        }
+        .homepage-airport-item {
+            display: flex;
+            flex-direction: column;
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #eee;
+        }
+        .homepage-airport-item:last-child {
+            border-bottom: none;
+        }
+        .homepage-airport-item:hover,
+        .homepage-airport-item.selected {
+            background: #f0f7ff;
+        }
+        .homepage-airport-item .airport-identifier {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0066cc;
+        }
+        .homepage-airport-item .airport-name {
+            font-size: 0.9rem;
+            color: #555;
+            margin-top: 0.15rem;
+        }
+        .homepage-airport-item.no-results {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            cursor: default;
+        }
+        .homepage-airport-item.no-results:hover {
+            background: transparent;
+        }
         code {
             background: #f4f4f4;
             padding: 0.2rem 0.4rem;
@@ -516,7 +597,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 Reduce general aviation incidents, promote safety, and ensure accessible solutions for smaller airports and aviators.
             </p>
             <p style="font-size: 1.1rem; opacity: 0.95; margin-bottom: 2rem;">
-                Free weather dashboards with real-time webcams and weather data. We handle all the technical work—you just provide permission and access.
+                Free weather dashboards with real-time webcams and weather data. We host and maintain the dashboard—your community installs the local sensors with our guidance.
             </p>
             <div class="btn-group" style="margin-top: 1.5rem;">
                 <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Add Your Airport</a>
@@ -572,8 +653,8 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <p>Reach out via email with your airport information. We'll discuss your existing equipment or what's needed for new setup.</p>
                 </div>
                 <div class="feature-card">
-                    <h3>2. We Handle Setup</h3>
-                    <p>All technical work is on us. We integrate with existing equipment or provide new equipment if needed.</p>
+                    <h3>2. We Build Your Dashboard</h3>
+                    <p>We create and host your weather dashboard, integrating with your local sensors. Your community handles the physical equipment installation—we provide guidance and equipment recommendations.</p>
                 </div>
                 <div class="feature-card">
                     <h3>3. Your Airport Goes Live</h3>
@@ -594,60 +675,38 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <ul>
                     <li>Permission to partner with the AviationWX.org project</li>
                     <li>Access to existing webcam and weather equipment data if available</li>
-                    <li>If no local webcam or weather station is available, access to power and/or internet for equipment</li>
+                    <li>Local webcam and weather equipment installed by your community (we'll recommend equipment and guide the installation)</li>
                 </ul>
                 
                 <p style="margin-top: 1.5rem;"><strong>What you get:</strong></p>
                 <ul>
                     <li>Free weather dashboard at <code>ICAO.aviationwx.org</code></li>
-                    <li>We handle all technical setup and ongoing maintenance</li>
-                    <li>Equipment ownership stays with the airport (if we provide it)</li>
+                    <li>We handle all dashboard hosting and software maintenance</li>
+                    <li>Equipment recommendations and installation guidance</li>
+                    <li>Equipment ownership stays with the airport</li>
                     <li>SEO benefits - we link to your organization's website to help drive traffic</li>
-                    <li>No ongoing costs or maintenance burden on your end</li>
                 </ul>
                 <?php
                 $ownerEmailSubject = rawurlencode("Request to add airport to AviationWX.org");
                 $ownerEmailBody = encodeEmailBody("Hello AviationWX.org team,
 
-I'm interested in adding my airport to the AviationWX.org network. Please find the information below:
+I'm interested in adding my airport to the AviationWX.org network.
 
-=== AIRPORT INFORMATION ===
-Airport ICAO Code: [Please provide]
+Airport Code: [Please provide]
 Airport Name: [Please provide]
-Organization/Contact Name: [Please provide]
-Your Email: [Please provide]
-Your Phone: [Optional]
+Your Name: [Please provide]
+Your Role: [e.g., Airport manager, Pilot, Community volunteer]
 
-=== EXISTING EQUIPMENT (if available) ===
-Webcams:
-- Number of webcams: [Please provide]
-- Webcam make/model: [Please provide]
-- Webcam URL/API endpoint: [Please provide]
-- Access credentials: [Please provide if needed]
+Do you have existing equipment?
+- [ ] Yes - webcam(s) and/or weather station already installed
+- [ ] No - starting fresh, will need equipment recommendations
 
-Weather Station:
-- Weather station make/model: [Please provide]
-- Weather station API endpoint: [Please provide]
-- API key/credentials: [Please provide]
-- Data format: [Please provide if known]
+Brief description of your situation:
+[Please describe - existing setup, or what you're hoping to achieve]
 
-=== INFRASTRUCTURE (if new equipment needed) ===
-Power:
-- Power available at location: [Yes/No]
-- Power source type: [e.g., Grid, Solar, Generator]
-- Location details: [Please describe where equipment could be installed]
-
-Internet:
-- Internet available at location: [Yes/No]
-- Internet type: [e.g., Wired, WiFi, Cellular]
-- Bandwidth/speed: [If known]
-- Location details: [Please describe where equipment could be installed]
-
-=== ADDITIONAL INFORMATION ===
-Preferred installation location: [Please describe]
-Any special considerations: [Please note any restrictions, access requirements, etc.]
-
-Thank you for providing this free service to the aviation community!
+I've reviewed the installation guides at guides.aviationwx.org:
+- [ ] Yes
+- [ ] Not yet
 
 Best regards,
 [Your name]");
@@ -724,6 +783,223 @@ Best regards,
             window.changePage = changePage;
         })();
         </script>
+        
+        <?php
+        // Prepare all airports for homepage search
+        $homepageSearchAirports = [];
+        if (isset($enabledAirports) && is_array($enabledAirports)) {
+            foreach ($enabledAirports as $searchAirportId => $searchAirport) {
+                $searchPrimaryIdentifier = getPrimaryIdentifier($searchAirportId, $searchAirport);
+                $homepageSearchAirports[] = [
+                    'id' => $searchAirportId,
+                    'name' => $searchAirport['name'] ?? '',
+                    'identifier' => $searchPrimaryIdentifier,
+                    'icao' => $searchAirport['icao'] ?? '',
+                    'iata' => $searchAirport['iata'] ?? '',
+                    'faa' => $searchAirport['faa'] ?? ''
+                ];
+            }
+        }
+        ?>
+        <script>
+        (function() {
+            'use strict';
+            
+            // Airport data for search
+            var HOMEPAGE_AIRPORTS = <?= json_encode($homepageSearchAirports) ?>;
+            var BASE_DOMAIN = <?= json_encode(getBaseDomain()) ?>;
+            
+            function initHomepageSearch() {
+                var searchInput = document.getElementById('homepage-airport-search');
+                var dropdown = document.getElementById('homepage-airport-dropdown');
+                var selectedIndex = -1;
+                var searchTimeout = null;
+                
+                if (!searchInput || !dropdown) return;
+            
+            // Navigate to airport subdomain
+            function navigateToAirport(airportId) {
+                var protocol = window.location.protocol;
+                var newUrl = protocol + '//' + airportId.toLowerCase() + '.' + BASE_DOMAIN;
+                window.location.href = newUrl;
+            }
+            
+            // Search airports
+            function searchAirports(query) {
+                if (!query || query.length < 2) {
+                    return [];
+                }
+                
+                var queryLower = query.toLowerCase().trim();
+                var results = [];
+                
+                for (var i = 0; i < HOMEPAGE_AIRPORTS.length; i++) {
+                    var airport = HOMEPAGE_AIRPORTS[i];
+                    var nameMatch = airport.name.toLowerCase().indexOf(queryLower) !== -1;
+                    var icaoMatch = airport.icao && airport.icao.toLowerCase().indexOf(queryLower) !== -1;
+                    var iataMatch = airport.iata && airport.iata.toLowerCase().indexOf(queryLower) !== -1;
+                    var faaMatch = airport.faa && airport.faa.toLowerCase().indexOf(queryLower) !== -1;
+                    var identifierMatch = airport.identifier.toLowerCase().indexOf(queryLower) !== -1;
+                    
+                    if (nameMatch || icaoMatch || iataMatch || faaMatch || identifierMatch) {
+                        results.push(airport);
+                    }
+                }
+                
+                // Sort: exact matches first, then by name
+                results.sort(function(a, b) {
+                    var aExact = a.identifier.toLowerCase() === queryLower || 
+                                (a.icao && a.icao.toLowerCase() === queryLower) ||
+                                (a.iata && a.iata.toLowerCase() === queryLower);
+                    var bExact = b.identifier.toLowerCase() === queryLower || 
+                                (b.icao && b.icao.toLowerCase() === queryLower) ||
+                                (b.iata && b.iata.toLowerCase() === queryLower);
+                    
+                    if (aExact && !bExact) return -1;
+                    if (!aExact && bExact) return 1;
+                    
+                    return a.name.localeCompare(b.name);
+                });
+                
+                return results.slice(0, 10);
+            }
+            
+            // Populate dropdown with results
+            function populateDropdown(results) {
+                dropdown.innerHTML = '';
+                
+                if (results.length === 0) {
+                    var noResults = document.createElement('div');
+                    noResults.className = 'homepage-airport-item no-results';
+                    noResults.textContent = 'No airports found';
+                    dropdown.appendChild(noResults);
+                } else {
+                    for (var i = 0; i < results.length; i++) {
+                        (function(index) {
+                            var airport = results[index];
+                            var item = document.createElement('a');
+                            item.href = '#';
+                            item.className = 'homepage-airport-item';
+                            item.dataset.airportId = airport.id;
+                            item.dataset.index = index;
+                            
+                            var identifier = document.createElement('span');
+                            identifier.className = 'airport-identifier';
+                            identifier.textContent = airport.identifier;
+                            
+                            var name = document.createElement('span');
+                            name.className = 'airport-name';
+                            name.textContent = airport.name;
+                            
+                            item.appendChild(identifier);
+                            item.appendChild(name);
+                            
+                            item.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                navigateToAirport(airport.id);
+                            });
+                            
+                            item.addEventListener('mouseenter', function() {
+                                selectedIndex = index;
+                                updateSelection();
+                            });
+                            
+                            dropdown.appendChild(item);
+                        })(i);
+                    }
+                }
+                
+                dropdown.classList.add('show');
+                selectedIndex = -1;
+            }
+            
+            function updateSelection() {
+                var items = dropdown.querySelectorAll('.homepage-airport-item');
+                for (var i = 0; i < items.length; i++) {
+                    if (i === selectedIndex) {
+                        items[i].classList.add('selected');
+                    } else {
+                        items[i].classList.remove('selected');
+                    }
+                }
+            }
+            
+            function performSearch(query) {
+                if (!query || query.length < 2) {
+                    dropdown.classList.remove('show');
+                    return;
+                }
+                
+                var results = searchAirports(query);
+                populateDropdown(results);
+            }
+            
+            // Event handlers
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(function() {
+                    performSearch(e.target.value);
+                }, 200);
+            });
+            
+            searchInput.addEventListener('focus', function() {
+                if (searchInput.value.length >= 2) {
+                    performSearch(searchInput.value);
+                }
+            });
+            
+            searchInput.addEventListener('keydown', function(e) {
+                var items = dropdown.querySelectorAll('.homepage-airport-item:not(.no-results)');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                        updateSelection();
+                        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        selectedIndex = Math.max(selectedIndex - 1, 0);
+                        updateSelection();
+                        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (selectedIndex >= 0 && selectedIndex < items.length) {
+                        var airportId = items[selectedIndex].dataset.airportId;
+                        if (airportId) {
+                            navigateToAirport(airportId);
+                        }
+                    } else if (items.length === 1) {
+                        var airportId = items[0].dataset.airportId;
+                        if (airportId) {
+                            navigateToAirport(airportId);
+                        }
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.remove('show');
+                    searchInput.blur();
+                }
+            });
+            
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                    }
+                });
+            }
+            
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initHomepageSearch);
+            } else {
+                initHomepageSearch();
+            }
+        })();
+        </script>
 
         <!-- For Pilots -->
         <section>
@@ -736,8 +1012,23 @@ Best regards,
             </div>
             
             <div id="participating-airports" style="margin-top: 3rem;">
-                <h2 style="text-align: center; margin-bottom: 2rem;">Participating Airports</h2>
+                <h2 style="text-align: center; margin-bottom: 1.5rem;">Participating Airports</h2>
+                
                 <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
+                <!-- Airport Search -->
+                <div class="homepage-airport-search-container">
+                    <div class="homepage-airport-search-wrapper">
+                        <input type="text" 
+                               id="homepage-airport-search" 
+                               class="homepage-airport-search-input" 
+                               placeholder="Search airports by name or identifier..." 
+                               autocomplete="off"
+                               aria-label="Search airports">
+                        <div id="homepage-airport-dropdown" class="homepage-airport-dropdown">
+                            <!-- Content populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
                 <?php
                 $envConfigPath = getenv('CONFIG_PATH');
                 $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');

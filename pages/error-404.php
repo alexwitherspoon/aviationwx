@@ -147,6 +147,94 @@ $canonicalUrl = getCanonicalUrl();
         .note strong {
             color: #333;
         }
+        /* Airport Search Styles */
+        .airport-search-section {
+            margin-bottom: 2rem;
+        }
+        .airport-search-section h2 {
+            color: #0066cc;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        .error-airport-search-container {
+            max-width: 400px;
+            margin: 1rem auto 0;
+            position: relative;
+        }
+        .error-airport-search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            color: #333;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .error-airport-search-input:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+        }
+        .error-airport-search-input::placeholder {
+            color: #888;
+        }
+        .error-airport-dropdown {
+            position: absolute;
+            top: calc(100% + 0.25rem);
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .error-airport-dropdown.show {
+            display: block;
+        }
+        .error-airport-item {
+            display: flex;
+            flex-direction: column;
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid #eee;
+        }
+        .error-airport-item:last-child {
+            border-bottom: none;
+        }
+        .error-airport-item:hover,
+        .error-airport-item.selected {
+            background: #f0f7ff;
+        }
+        .error-airport-item .airport-identifier {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0066cc;
+        }
+        .error-airport-item .airport-name {
+            font-size: 0.9rem;
+            color: #555;
+            margin-top: 0.15rem;
+        }
+        .error-airport-item.no-results {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            cursor: default;
+        }
+        .error-airport-item.no-results:hover {
+            background: transparent;
+        }
     </style>
 </head>
 <body>
@@ -159,7 +247,25 @@ $canonicalUrl = getCanonicalUrl();
             </div>
 
             <div class="section">
-                <h2>What Were You Looking For?</h2>
+                <div class="airport-search-section">
+                    <h2>Search Participating Airports</h2>
+                    <p style="text-align: center; color: #666; margin-bottom: 1rem;">Find an airport in our network:</p>
+                    <div class="error-airport-search-container">
+                        <input type="text" 
+                               id="error-airport-search" 
+                               class="error-airport-search-input" 
+                               placeholder="Search by name or identifier..." 
+                               autocomplete="off"
+                               aria-label="Search airports">
+                        <div id="error-airport-dropdown" class="error-airport-dropdown">
+                            <!-- Content populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Helpful Links</h2>
                 <ul class="helpful-links">
                     <li>
                         <a href="https://aviationwx.org">Homepage</a>
@@ -192,5 +298,206 @@ $canonicalUrl = getCanonicalUrl();
             </div>
         </div>
     </div>
+
+    <?php
+    // Prepare all airports for search
+    $config = loadConfig();
+    $searchAirports = [];
+    $enabledAirports = $config ? getEnabledAirports($config) : [];
+    foreach ($enabledAirports as $searchAirportId => $searchAirport) {
+        $searchPrimaryIdentifier = getPrimaryIdentifier($searchAirportId, $searchAirport);
+        $searchAirports[] = [
+            'id' => $searchAirportId,
+            'name' => $searchAirport['name'] ?? '',
+            'identifier' => $searchPrimaryIdentifier,
+            'icao' => $searchAirport['icao'] ?? '',
+            'iata' => $searchAirport['iata'] ?? '',
+            'faa' => $searchAirport['faa'] ?? ''
+        ];
+    }
+    ?>
+    <script>
+    (function() {
+        'use strict';
+        
+        var ERROR_AIRPORTS = <?= json_encode($searchAirports) ?>;
+        var BASE_DOMAIN = <?= json_encode(getBaseDomain()) ?>;
+        
+        function initErrorSearch() {
+            var searchInput = document.getElementById('error-airport-search');
+            var dropdown = document.getElementById('error-airport-dropdown');
+            var selectedIndex = -1;
+            var searchTimeout = null;
+            
+            if (!searchInput || !dropdown) return;
+            
+            function navigateToAirport(airportId) {
+                var protocol = window.location.protocol;
+                var newUrl = protocol + '//' + airportId.toLowerCase() + '.' + BASE_DOMAIN;
+                window.location.href = newUrl;
+            }
+            
+            function searchAirports(query) {
+                if (!query || query.length < 2) return [];
+                
+                var queryLower = query.toLowerCase().trim();
+                var results = [];
+                
+                for (var i = 0; i < ERROR_AIRPORTS.length; i++) {
+                    var airport = ERROR_AIRPORTS[i];
+                    var nameMatch = airport.name.toLowerCase().indexOf(queryLower) !== -1;
+                    var icaoMatch = airport.icao && airport.icao.toLowerCase().indexOf(queryLower) !== -1;
+                    var iataMatch = airport.iata && airport.iata.toLowerCase().indexOf(queryLower) !== -1;
+                    var faaMatch = airport.faa && airport.faa.toLowerCase().indexOf(queryLower) !== -1;
+                    var identifierMatch = airport.identifier.toLowerCase().indexOf(queryLower) !== -1;
+                    
+                    if (nameMatch || icaoMatch || iataMatch || faaMatch || identifierMatch) {
+                        results.push(airport);
+                    }
+                }
+                
+                results.sort(function(a, b) {
+                    var aExact = a.identifier.toLowerCase() === queryLower || 
+                                (a.icao && a.icao.toLowerCase() === queryLower) ||
+                                (a.iata && a.iata.toLowerCase() === queryLower);
+                    var bExact = b.identifier.toLowerCase() === queryLower || 
+                                (b.icao && b.icao.toLowerCase() === queryLower) ||
+                                (b.iata && b.iata.toLowerCase() === queryLower);
+                    
+                    if (aExact && !bExact) return -1;
+                    if (!aExact && bExact) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+                
+                return results.slice(0, 10);
+            }
+            
+            function populateDropdown(results) {
+                dropdown.innerHTML = '';
+                
+                if (results.length === 0) {
+                    var noResults = document.createElement('div');
+                    noResults.className = 'error-airport-item no-results';
+                    noResults.textContent = 'No airports found';
+                    dropdown.appendChild(noResults);
+                } else {
+                    for (var i = 0; i < results.length; i++) {
+                        (function(index) {
+                            var airport = results[index];
+                            var item = document.createElement('a');
+                            item.href = '#';
+                            item.className = 'error-airport-item';
+                            item.dataset.airportId = airport.id;
+                            item.dataset.index = index;
+                            
+                            var identifier = document.createElement('span');
+                            identifier.className = 'airport-identifier';
+                            identifier.textContent = airport.identifier;
+                            
+                            var name = document.createElement('span');
+                            name.className = 'airport-name';
+                            name.textContent = airport.name;
+                            
+                            item.appendChild(identifier);
+                            item.appendChild(name);
+                            
+                            item.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                navigateToAirport(airport.id);
+                            });
+                            
+                            item.addEventListener('mouseenter', function() {
+                                selectedIndex = index;
+                                updateSelection();
+                            });
+                            
+                            dropdown.appendChild(item);
+                        })(i);
+                    }
+                }
+                
+                dropdown.classList.add('show');
+                selectedIndex = -1;
+            }
+            
+            function updateSelection() {
+                var items = dropdown.querySelectorAll('.error-airport-item');
+                for (var i = 0; i < items.length; i++) {
+                    if (i === selectedIndex) {
+                        items[i].classList.add('selected');
+                    } else {
+                        items[i].classList.remove('selected');
+                    }
+                }
+            }
+            
+            function performSearch(query) {
+                if (!query || query.length < 2) {
+                    dropdown.classList.remove('show');
+                    return;
+                }
+                var results = searchAirports(query);
+                populateDropdown(results);
+            }
+            
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(function() {
+                    performSearch(e.target.value);
+                }, 200);
+            });
+            
+            searchInput.addEventListener('focus', function() {
+                if (searchInput.value.length >= 2) {
+                    performSearch(searchInput.value);
+                }
+            });
+            
+            searchInput.addEventListener('keydown', function(e) {
+                var items = dropdown.querySelectorAll('.error-airport-item:not(.no-results)');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                        updateSelection();
+                        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (items.length > 0) {
+                        selectedIndex = Math.max(selectedIndex - 1, 0);
+                        updateSelection();
+                        items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (selectedIndex >= 0 && selectedIndex < items.length) {
+                        var airportId = items[selectedIndex].dataset.airportId;
+                        if (airportId) navigateToAirport(airportId);
+                    } else if (items.length === 1) {
+                        var airportId = items[0].dataset.airportId;
+                        if (airportId) navigateToAirport(airportId);
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.remove('show');
+                    searchInput.blur();
+                }
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initErrorSearch);
+        } else {
+            initErrorSearch();
+        }
+    })();
+    </script>
 </body>
 </html>
