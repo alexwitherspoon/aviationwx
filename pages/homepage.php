@@ -22,17 +22,47 @@ $envConfigPath = getenv('CONFIG_PATH');
 $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
 $totalAirports = 0;
 $totalWebcams = 0;
+$totalWeatherStations = 0;
 if (file_exists($configFile)) {
     $config = json_decode(file_get_contents($configFile), true);
     if (isset($config['airports'])) {
         // Only count enabled airports
         $enabledAirports = getEnabledAirports($config);
         $totalAirports = count($enabledAirports);
-        foreach ($enabledAirports as $airport) {
+        
+        // Track unique weather stations
+        $uniqueWeatherStations = [];
+        
+        foreach ($enabledAirports as $airportId => $airport) {
             if (isset($airport['webcams'])) {
                 $totalWebcams += count($airport['webcams']);
             }
+            
+            // Count primary weather sources (non-METAR types with unique identifiers)
+            if (isset($airport['weather_source']) && is_array($airport['weather_source'])) {
+                $source = $airport['weather_source'];
+                $type = $source['type'] ?? '';
+                
+                // Build unique identifier based on source type
+                if ($type === 'tempest' && isset($source['station_id'])) {
+                    $uniqueWeatherStations['tempest_' . $source['station_id']] = true;
+                } elseif ($type === 'ambient' && isset($source['mac_address'])) {
+                    $uniqueWeatherStations['ambient_' . $source['mac_address']] = true;
+                } elseif ($type === 'weatherlink' && isset($source['station_id'])) {
+                    $uniqueWeatherStations['weatherlink_' . $source['station_id']] = true;
+                } elseif ($type === 'pwsweather' && isset($source['station_id'])) {
+                    $uniqueWeatherStations['pwsweather_' . $source['station_id']] = true;
+                }
+                // Note: type 'metar' uses metar_station field, counted below
+            }
+            
+            // Count unique METAR stations
+            if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
+                $uniqueWeatherStations['metar_' . $airport['metar_station']] = true;
+            }
         }
+        
+        $totalWeatherStations = count($uniqueWeatherStations);
     }
 }
 
@@ -597,7 +627,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 Reduce general aviation incidents, promote safety, and ensure accessible solutions for smaller airports and aviators.
             </p>
             <p style="font-size: 1.1rem; opacity: 0.95; margin-bottom: 2rem;">
-                Free weather dashboards with real-time webcams and weather data. We host and maintain the dashboard—your community installs the local sensors with our guidance.
+                Free weather dashboards with real-time webcams and weather data. We host the dashboard and integrate with your existing cameras and sensors, or guide your community through new installations.
             </p>
             <div class="btn-group" style="margin-top: 1.5rem;">
                 <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Add Your Airport</a>
@@ -616,8 +646,8 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <div class="stat-label">Live Webcams</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">4</div>
-                <div class="stat-label">Weather Sources</div>
+                <div class="stat-number"><?= $totalWeatherStations ?></div>
+                <div class="stat-label">Weather Stations</div>
             </div>
         </div>
 
@@ -654,7 +684,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 </div>
                 <div class="feature-card">
                     <h3>2. We Build Your Dashboard</h3>
-                    <p>We create and host your weather dashboard, integrating with your local sensors. Your community handles the physical equipment installation—we provide guidance and equipment recommendations.</p>
+                    <p>We create and host your weather dashboard. We integrate with your existing equipment or guide your community through new sensor installations.</p>
                 </div>
                 <div class="feature-card">
                     <h3>3. Your Airport Goes Live</h3>
@@ -674,8 +704,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 <p style="margin-top: 1.5rem;"><strong>What we need:</strong></p>
                 <ul>
                     <li>Permission to partner with the AviationWX.org project</li>
-                    <li>Access to existing webcam and weather equipment data if available</li>
-                    <li>Local webcam and weather equipment installed by your community (we'll recommend equipment and guide the installation)</li>
+                    <li>Existing webcam and weather equipment we can integrate with, or local equipment installed by your community (we provide recommendations and guidance)</li>
                 </ul>
                 
                 <p style="margin-top: 1.5rem;"><strong>What you get:</strong></p>
