@@ -216,6 +216,18 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
             </div>
         </div>
     </div>
+    
+    <footer class="footer" style="text-align: center; padding: 2rem 1rem; margin-top: 2rem; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
+        <p>
+            &copy; <?= date('Y') ?> <a href="https://aviationwx.org" style="color: #0066cc;">AviationWX.org</a> | 
+            <a href="https://guides.aviationwx.org" style="color: #0066cc;">Guides</a> | 
+            <a href="https://aviationwx.org#about-the-project" style="color: #0066cc;">Built for pilots, by pilots</a> | 
+            <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc;">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
+            <a href="https://terms.aviationwx.org" style="color: #0066cc;">Terms of Service</a> | 
+            <a href="https://api.aviationwx.org" style="color: #0066cc;">API</a> | 
+            <a href="https://status.aviationwx.org" style="color: #0066cc;">Status</a>
+        </p>
+    </footer>
 </body>
 </html>
 
