@@ -93,6 +93,111 @@ function formatAbsoluteTime(int $timestamp): string {
 }
 
 /**
+ * Get node performance metrics from container perspective
+ * 
+ * @return array {
+ *   'cpu_load' => array{
+ *     '1min' => float|null,
+ *     '5min' => float|null,
+ *     '15min' => float|null
+ *   },
+ *   'memory_used_bytes' => int|null,
+ *   'storage_used_bytes' => int|null
+ * }
+ */
+function getNodePerformance(): array {
+    $performance = [
+        'cpu_load' => [
+            '1min' => null,
+            '5min' => null,
+            '15min' => null
+        ],
+        'memory_used_bytes' => null,
+        'storage_used_bytes' => null
+    ];
+    
+    // CPU Load Averages - sys_getloadavg() works on Linux/macOS
+    if (function_exists('sys_getloadavg')) {
+        $load = sys_getloadavg();
+        if (is_array($load) && count($load) >= 3) {
+            $performance['cpu_load']['1min'] = round($load[0], 2);
+            $performance['cpu_load']['5min'] = round($load[1], 2);
+            $performance['cpu_load']['15min'] = round($load[2], 2);
+        }
+    }
+    
+    // Memory Usage - Try cgroups v2 first (Docker), then v1, then /proc/meminfo
+    $memoryUsed = null;
+    
+    // cgroups v2 (modern Docker)
+    $cgroupV2Current = '/sys/fs/cgroup/memory.current';
+    if (file_exists($cgroupV2Current) && is_readable($cgroupV2Current)) {
+        $memoryUsed = (int) trim(@file_get_contents($cgroupV2Current));
+    }
+    
+    // cgroups v1 fallback
+    if ($memoryUsed === null) {
+        $cgroupV1Usage = '/sys/fs/cgroup/memory/memory.usage_in_bytes';
+        if (file_exists($cgroupV1Usage) && is_readable($cgroupV1Usage)) {
+            $memoryUsed = (int) trim(@file_get_contents($cgroupV1Usage));
+        }
+    }
+    
+    // /proc/meminfo fallback (host view, less ideal but works)
+    if ($memoryUsed === null && file_exists('/proc/meminfo')) {
+        $meminfo = @file_get_contents('/proc/meminfo');
+        if ($meminfo) {
+            $total = 0;
+            $available = 0;
+            if (preg_match('/MemTotal:\s+(\d+)\s+kB/', $meminfo, $m)) {
+                $total = (int) $m[1] * 1024;
+            }
+            if (preg_match('/MemAvailable:\s+(\d+)\s+kB/', $meminfo, $m)) {
+                $available = (int) $m[1] * 1024;
+            }
+            if ($total > 0) {
+                $memoryUsed = $total - $available;
+            }
+        }
+    }
+    
+    $performance['memory_used_bytes'] = $memoryUsed;
+    
+    // Storage Usage - Check the main app directory mount
+    $storagePath = __DIR__ . '/..';
+    if (function_exists('disk_total_space') && function_exists('disk_free_space')) {
+        $total = @disk_total_space($storagePath);
+        $free = @disk_free_space($storagePath);
+        if ($total !== false && $free !== false) {
+            $performance['storage_used_bytes'] = (int) ($total - $free);
+        }
+    }
+    
+    return $performance;
+}
+
+/**
+ * Format bytes into human-readable format
+ * 
+ * @param int|null $bytes Number of bytes
+ * @param int $precision Decimal precision
+ * @return string Formatted string like "1.5 GB" or "Unknown"
+ */
+function formatBytes(?int $bytes, int $precision = 1): string {
+    if ($bytes === null || $bytes < 0) {
+        return '—';
+    }
+    
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $bytes = max($bytes, 0);
+    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+    $pow = min($pow, count($units) - 1);
+    $bytes /= pow(1024, $pow);
+    
+    return round($bytes, $precision) . ' ' . $units[$pow];
+}
+
+/**
  * Check system health
  * 
  * @return array {
@@ -206,8 +311,8 @@ function checkSystemHealth(): array {
         }
         $loggingStatus = $canWriteStdout ? 'operational' : 'degraded';
         $loggingMessage = $canWriteStdout 
-            ? 'Logging to Docker (stdout/stderr) - view with docker compose logs' 
-            : 'Cannot write to stdout/stderr';
+            ? 'Logging operational' 
+            : 'Logging unavailable';
         $logMtime = time(); // Use current time since we can't check file mtime
     } else {
         // File-based logging - check log file existence and activity
@@ -226,19 +331,19 @@ function checkSystemHealth(): array {
         // If log file exists and has recent activity, show as operational
         // If log directory not writable or log file doesn't exist and can't be created, show as degraded
         $loggingStatus = 'operational';
-        $loggingMessage = 'Recent log activity detected';
+        $loggingMessage = 'Logging operational';
         if ($hasRecentLogs) {
             $loggingStatus = 'operational';
-            $loggingMessage = 'Recent log activity detected';
+            $loggingMessage = 'Logging operational';
         } elseif ($logDirWritable) {
             $loggingStatus = 'operational';
-            $loggingMessage = 'Logging ready (no recent activity)';
+            $loggingMessage = 'Logging ready';
         } elseif (file_exists($logFile)) {
             $loggingStatus = 'degraded';
-            $loggingMessage = 'No recent log activity';
+            $loggingMessage = 'Logging degraded';
         } else {
             $loggingStatus = 'degraded';
-            $loggingMessage = 'Log file not accessible';
+            $loggingMessage = 'Logging unavailable';
         }
     }
     
@@ -1071,6 +1176,9 @@ if ($config === null) {
 // Get system health
 $systemHealth = checkSystemHealth();
 
+// Get node performance metrics
+$nodePerformance = getNodePerformance();
+
 // Get airport health for each configured airport
 $airportHealth = [];
 if (isset($config['airports']) && is_array($config['airports'])) {
@@ -1308,6 +1416,40 @@ if (php_sapi_name() === 'cli') {
             text-decoration: underline;
         }
         
+        .node-metrics-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2rem;
+            padding-bottom: 1rem;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .metric-inline {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+        
+        .metric-label-inline {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        
+        .metric-value-inline {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .metric-sub {
+            font-size: 0.7rem;
+            font-weight: 400;
+            color: #9ca3af;
+        }
+        
         @media (max-width: 768px) {
             .component-item {
                 flex-direction: column;
@@ -1316,6 +1458,11 @@ if (php_sapi_name() === 'cli') {
             
             .component-status {
                 margin-left: 0;
+            }
+            
+            .node-metrics-row {
+                flex-direction: column;
+                gap: 0.75rem;
             }
         }
     </style>
@@ -1333,6 +1480,33 @@ if (php_sapi_name() === 'cli') {
                 <h2>System Status</h2>
             </div>
             <div class="status-card-body">
+                <!-- Node Performance Row -->
+                <div class="node-metrics-row">
+                    <div class="metric-inline">
+                        <span class="metric-label-inline">CPU Load</span>
+                        <span class="metric-value-inline">
+                            <?php 
+                            $load = $nodePerformance['cpu_load'];
+                            if ($load['1min'] !== null) {
+                                echo htmlspecialchars($load['1min']) . ' <span class="metric-sub">(1m)</span> ';
+                                echo htmlspecialchars($load['5min']) . ' <span class="metric-sub">(5m)</span> ';
+                                echo htmlspecialchars($load['15min']) . ' <span class="metric-sub">(15m)</span>';
+                            } else {
+                                echo '—';
+                            }
+                            ?>
+                        </span>
+                    </div>
+                    <div class="metric-inline">
+                        <span class="metric-label-inline">Memory</span>
+                        <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['memory_used_bytes']); ?></span>
+                    </div>
+                    <div class="metric-inline">
+                        <span class="metric-label-inline">Storage</span>
+                        <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['storage_used_bytes']); ?></span>
+                    </div>
+                </div>
+                
                 <ul class="component-list">
                     <?php foreach ($systemHealth['components'] as $component): ?>
                     <li class="component-item">
