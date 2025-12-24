@@ -1021,3 +1021,271 @@ h3 {
     color: #ff00ff; /* Magenta - LIFR: Visibility < 1 mile, Ceiling < 500 feet */
 }
 
+/* Visually hidden but accessible to screen readers */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================
+   Webcam History Player - Mobile First
+   ============================================ */
+
+.webcam-player {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: #000;
+    flex-direction: column;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.webcam-player.active {
+    display: flex;
+}
+
+.webcam-player-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.webcam-player-back {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    padding: 8px 12px;
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    transition: background 0.15s;
+}
+
+.webcam-player-back:hover,
+.webcam-player-back:active {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.webcam-player-title {
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 12px;
+}
+
+.webcam-player-image-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    background: #000;
+}
+
+.webcam-player-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: opacity 0.15s ease-out;
+}
+
+.webcam-player-image.loading {
+    opacity: 0.6;
+}
+
+.webcam-player-loading-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: rgba(59, 130, 246, 0.8);
+    transition: width 0.2s;
+    border-radius: 0 2px 2px 0;
+}
+
+.webcam-player-timestamp {
+    text-align: center;
+    color: #fff;
+    font-size: 14px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    flex-shrink: 0;
+}
+
+.webcam-player-controls {
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.9);
+    flex-shrink: 0;
+}
+
+.webcam-player-timeline {
+    width: 100%;
+    height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+}
+
+.webcam-player-timeline::-webkit-slider-runnable-track {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
+.webcam-player-timeline::-moz-range-track {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
+.webcam-player-timeline::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    margin-top: -8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+
+.webcam-player-timeline::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+
+.webcam-player-time-range {
+    display: flex;
+    justify-content: space-between;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 0 4px;
+}
+
+.webcam-player-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.webcam-player-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.webcam-player-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.webcam-player-btn:active {
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(0.95);
+}
+
+.webcam-player-btn.play {
+    width: 60px;
+    height: 60px;
+    font-size: 22px;
+    background: rgba(59, 130, 246, 0.8);
+}
+
+.webcam-player-btn.play:hover {
+    background: rgba(59, 130, 246, 0.9);
+}
+
+.webcam-player-btn.play:active {
+    background: rgba(59, 130, 246, 1);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .webcam-player-image {
+        transition: none;
+    }
+    
+    .webcam-player-btn {
+        transition: none;
+    }
+    
+    .webcam-player-loading-bar {
+        transition: none;
+    }
+}
+
+/* Landscape orientation adjustments */
+@media (orientation: landscape) and (max-height: 500px) {
+    .webcam-player-header {
+        padding: 8px 16px;
+    }
+    
+    .webcam-player-timestamp {
+        padding: 6px;
+        font-size: 12px;
+    }
+    
+    .webcam-player-controls {
+        padding: 10px 16px;
+    }
+    
+    .webcam-player-buttons {
+        margin-top: 10px;
+        gap: 16px;
+    }
+    
+    .webcam-player-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 16px;
+    }
+    
+    .webcam-player-btn.play {
+        width: 50px;
+        height: 50px;
+        font-size: 18px;
+    }
+}
+

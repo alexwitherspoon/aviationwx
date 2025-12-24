@@ -455,7 +455,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 currentIdentifier: <?= json_encode($primaryIdentifier) ?>,
                 baseDomain: <?= json_encode(getBaseDomain()) ?>,
                 nearbyAirports: <?= json_encode($nearbyAirports) ?>,
-                allAirports: <?= json_encode($allAirportsForSearch) ?>
+                allAirports: <?= json_encode($allAirportsForSearch) ?>,
+                webcamHistoryEnabled: <?= json_encode(isWebcamHistoryEnabledForAirport($airportId)) ?>
             };
         </script>
         <?php endif; ?>
@@ -502,7 +503,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                              decoding="async"
                              onerror="handleWebcamError(<?= $index ?>, this)"
                              onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
-                             onclick="openLiveStream(this.src)">
+                             onclick="openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.src)">
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
@@ -2963,6 +2964,354 @@ function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0) {
 
 function openLiveStream(url) { window.open(url, '_blank'); }
 
+// Webcam History Player
+const WebcamPlayer = {
+    active: false,
+    frames: [],
+    currentIndex: 0,
+    playing: false,
+    playInterval: null,
+    preloadedImages: {},
+    timezone: 'UTC',
+
+    async open(airportId, camIndex, camName, currentImageSrc) {
+        const player = document.getElementById('webcam-player');
+        const img = document.getElementById('webcam-player-image');
+        const title = document.getElementById('webcam-player-title');
+
+        // Show player immediately with current image
+        img.src = currentImageSrc;
+        title.textContent = camName;
+        player.classList.add('active');
+        this.active = true;
+
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+
+        // Push history state for back button
+        history.pushState({ webcamPlayer: true }, '');
+
+        // Fetch history manifest
+        try {
+            const response = await fetch(`/api/webcam-history.php?id=${encodeURIComponent(airportId)}&cam=${camIndex}`);
+            const data = await response.json();
+
+            if (data.enabled && data.frames && data.frames.length > 0) {
+                this.frames = data.frames;
+                this.timezone = data.timezone || 'UTC';
+                this.currentIndex = data.current_index || 0;
+                this.initTimeline();
+                this.preloadFrames();
+                document.querySelector('.webcam-player-controls').style.display = '';
+            } else {
+                // No history available - show single frame mode
+                this.frames = [];
+                document.querySelector('.webcam-player-controls').style.display = 'none';
+                document.getElementById('webcam-player-timestamp').textContent = 'History not available';
+            }
+        } catch (error) {
+            console.error('Failed to load webcam history:', error);
+            this.frames = [];
+            document.querySelector('.webcam-player-controls').style.display = 'none';
+        }
+
+        this.setupGestures();
+    },
+
+    close() {
+        if (!this.active) return;
+
+        this.stop();
+        this.active = false;
+
+        const player = document.getElementById('webcam-player');
+        player.classList.remove('active');
+
+        // Restore body scroll
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+
+        // Clean up
+        this.preloadedImages = {};
+        this.frames = [];
+
+        // Reset UI for next time
+        document.querySelector('.webcam-player-controls').style.display = '';
+        document.getElementById('webcam-player-timestamp').textContent = '--';
+    },
+
+    initTimeline() {
+        const timeline = document.getElementById('webcam-player-timeline');
+        const startEl = document.getElementById('webcam-player-time-start');
+        const endEl = document.getElementById('webcam-player-time-end');
+        const playBtn = document.getElementById('webcam-player-play-btn');
+        const prevBtn = document.getElementById('webcam-player-prev-btn');
+        const nextBtn = document.getElementById('webcam-player-next-btn');
+
+        timeline.min = 0;
+        timeline.max = this.frames.length - 1;
+        timeline.value = this.currentIndex;
+
+        if (this.frames.length > 0) {
+            startEl.textContent = this.formatTime(this.frames[0].timestamp);
+            endEl.textContent = this.formatTime(this.frames[this.frames.length - 1].timestamp);
+        }
+
+        // Disable controls if only 1 frame (nothing to play/navigate)
+        const hasMultipleFrames = this.frames.length > 1;
+        playBtn.disabled = !hasMultipleFrames;
+        prevBtn.disabled = !hasMultipleFrames;
+        nextBtn.disabled = !hasMultipleFrames;
+        timeline.disabled = !hasMultipleFrames;
+        
+        if (!hasMultipleFrames) {
+            playBtn.style.opacity = '0.4';
+            prevBtn.style.opacity = '0.4';
+            nextBtn.style.opacity = '0.4';
+        } else {
+            playBtn.style.opacity = '';
+            prevBtn.style.opacity = '';
+            nextBtn.style.opacity = '';
+        }
+
+        // Remove old listener if any
+        const newTimeline = timeline.cloneNode(true);
+        timeline.parentNode.replaceChild(newTimeline, timeline);
+        newTimeline.addEventListener('input', (e) => {
+            this.goToFrame(parseInt(e.target.value));
+        });
+
+        this.updateTimestampDisplay();
+    },
+
+    formatTime(timestamp) {
+        const date = new Date(timestamp * 1000);
+        try {
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZone: this.timezone
+            });
+        } catch {
+            return date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+    },
+
+    updateTimestampDisplay() {
+        const el = document.getElementById('webcam-player-timestamp');
+        if (this.frames.length > 0 && this.frames[this.currentIndex]) {
+            const ts = this.frames[this.currentIndex].timestamp;
+            const date = new Date(ts * 1000);
+            try {
+                el.textContent = date.toLocaleString('en-US', {
+                    weekday: 'short',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: this.timezone
+                });
+            } catch {
+                el.textContent = date.toLocaleString('en-US', {
+                    weekday: 'short',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        }
+    },
+
+    goToFrame(index) {
+        if (index < 0 || index >= this.frames.length) return;
+
+        this.currentIndex = index;
+        const frame = this.frames[index];
+        const img = document.getElementById('webcam-player-image');
+        const timeline = document.getElementById('webcam-player-timeline');
+
+        timeline.value = index;
+
+        // Use preloaded image if available
+        if (this.preloadedImages[frame.timestamp]) {
+            img.src = this.preloadedImages[frame.timestamp];
+            img.classList.remove('loading');
+        } else {
+            img.classList.add('loading');
+            img.src = frame.url;
+            img.onload = () => img.classList.remove('loading');
+        }
+
+        this.updateTimestampDisplay();
+    },
+
+    async preloadFrames() {
+        const bar = document.getElementById('webcam-player-loading-bar');
+        let loaded = 0;
+
+        for (const frame of this.frames) {
+            if (!this.active) break;
+
+            const img = new Image();
+            await new Promise((resolve) => {
+                img.onload = () => {
+                    this.preloadedImages[frame.timestamp] = img.src;
+                    loaded++;
+                    bar.style.width = `${(loaded / this.frames.length) * 100}%`;
+                    resolve();
+                };
+                img.onerror = resolve;
+                img.src = frame.url;
+            });
+        }
+
+        setTimeout(() => { bar.style.width = '0%'; }, 500);
+    },
+
+    togglePlay() {
+        if (this.playing) {
+            this.stop();
+        } else {
+            this.play();
+        }
+    },
+
+    play() {
+        if (this.frames.length < 2) return;
+
+        this.playing = true;
+        document.getElementById('webcam-player-play-btn').textContent = '⏸';
+
+        this.playInterval = setInterval(() => {
+            if (this.currentIndex >= this.frames.length - 1) {
+                this.currentIndex = 0;
+            } else {
+                this.currentIndex++;
+            }
+            this.goToFrame(this.currentIndex);
+        }, 500);  // 500ms = 2 FPS for deliberate time-lapse viewing
+    },
+
+    stop() {
+        this.playing = false;
+        document.getElementById('webcam-player-play-btn').textContent = '▶';
+        if (this.playInterval) {
+            clearInterval(this.playInterval);
+            this.playInterval = null;
+        }
+    },
+
+    prev() {
+        this.stop();
+        this.goToFrame(Math.max(0, this.currentIndex - 1));
+    },
+
+    next() {
+        this.stop();
+        this.goToFrame(Math.min(this.frames.length - 1, this.currentIndex + 1));
+    },
+
+    setupGestures() {
+        const swipeArea = document.getElementById('webcam-player-swipe-area');
+        if (!swipeArea || swipeArea._gesturesSetup) return;
+        swipeArea._gesturesSetup = true;
+
+        let startX = 0, startY = 0, currentY = 0;
+
+        swipeArea.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            currentY = startY;
+        }, { passive: true });
+
+        swipeArea.addEventListener('touchmove', (e) => {
+            currentY = e.touches[0].clientY;
+            const deltaY = currentY - startY;
+
+            if (deltaY > 0) {
+                const player = document.getElementById('webcam-player');
+                player.style.transform = `translateY(${Math.min(deltaY, 150)}px)`;
+                player.style.opacity = Math.max(0.5, 1 - deltaY / 300);
+            }
+        }, { passive: true });
+
+        swipeArea.addEventListener('touchend', (e) => {
+            const deltaX = e.changedTouches[0].clientX - startX;
+            const deltaY = currentY - startY;
+            const player = document.getElementById('webcam-player');
+
+            player.style.transform = '';
+            player.style.opacity = '';
+
+            if (deltaY > 100 && Math.abs(deltaX) < 50) {
+                this.close();
+                return;
+            }
+
+            if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 50) {
+                if (deltaX > 0) {
+                    this.prev();
+                } else {
+                    this.next();
+                }
+            }
+        });
+    }
+};
+
+// Global function for onclick handler - with fallback for disabled history
+function openWebcamPlayer(airportId, camIndex, camName, currentSrc) {
+    if (!window.AIRPORT_NAV_DATA?.webcamHistoryEnabled) {
+        openLiveStream(currentSrc);
+        return;
+    }
+    WebcamPlayer.open(airportId, camIndex, camName, currentSrc);
+}
+
+function closeWebcamPlayer() { WebcamPlayer.close(); }
+function webcamPlayerTogglePlay() { WebcamPlayer.togglePlay(); }
+function webcamPlayerPrev() { WebcamPlayer.prev(); }
+function webcamPlayerNext() { WebcamPlayer.next(); }
+
+// Handle back button
+window.addEventListener('popstate', () => {
+    if (WebcamPlayer.active) {
+        WebcamPlayer.close();
+    }
+});
+
+// Keyboard navigation for player
+window.addEventListener('keydown', (e) => {
+    if (!WebcamPlayer.active) return;
+    
+    switch (e.key) {
+        case 'Escape':
+            WebcamPlayer.close();
+            break;
+        case 'ArrowLeft':
+            WebcamPlayer.prev();
+            break;
+        case 'ArrowRight':
+            WebcamPlayer.next();
+            break;
+        case ' ': // Space bar
+            e.preventDefault();
+            WebcamPlayer.togglePlay();
+            break;
+        case 'Home':
+            WebcamPlayer.goToFrame(0);
+            break;
+        case 'End':
+            WebcamPlayer.goToFrame(WebcamPlayer.frames.length - 1);
+            break;
+    }
+});
+
 <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
 // Update webcam timestamps (called periodically to refresh relative time display)
 function updateWebcamTimestamps() {
@@ -4830,6 +5179,43 @@ window.addEventListener('beforeunload', () => {
     }
 
 ?>
+
+<!-- Webcam History Player (hidden by default) -->
+<div id="webcam-player" class="webcam-player" role="dialog" aria-modal="true" aria-labelledby="webcam-player-title">
+    <div class="webcam-player-header">
+        <button class="webcam-player-back" onclick="closeWebcamPlayer()" aria-label="Close player and go back">← Back</button>
+        <span class="webcam-player-title" id="webcam-player-title">Camera</span>
+        <span style="width: 60px;"></span>
+    </div>
+    
+    <div class="webcam-player-image-container" id="webcam-player-swipe-area">
+        <img id="webcam-player-image" class="webcam-player-image" src="" alt="Webcam history frame">
+        <div id="webcam-player-loading-bar" class="webcam-player-loading-bar" style="width: 0%;" role="progressbar" aria-label="Loading frames"></div>
+    </div>
+    
+    <div class="webcam-player-timestamp" id="webcam-player-timestamp" aria-live="polite">--</div>
+    
+    <div class="webcam-player-controls">
+        <label for="webcam-player-timeline" class="visually-hidden">Timeline scrubber</label>
+        <input type="range" 
+               id="webcam-player-timeline" 
+               class="webcam-player-timeline" 
+               min="0" 
+               max="0" 
+               value="0"
+               aria-label="Timeline - drag to navigate through history">
+        <div class="webcam-player-time-range" aria-hidden="true">
+            <span id="webcam-player-time-start">--</span>
+            <span id="webcam-player-time-end">--</span>
+        </div>
+        <div class="webcam-player-buttons" role="group" aria-label="Playback controls">
+            <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame">⏮</button>
+            <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause">▶</button>
+            <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame">⏭</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
 
