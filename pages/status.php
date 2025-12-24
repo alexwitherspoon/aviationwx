@@ -163,14 +163,22 @@ function getNodePerformance(): array {
     
     $performance['memory_used_bytes'] = $memoryUsed;
     
-    // Storage Usage - Check the main app directory mount
-    $storagePath = __DIR__ . '/..';
-    if (function_exists('disk_total_space') && function_exists('disk_free_space')) {
-        $total = @disk_total_space($storagePath);
-        $free = @disk_free_space($storagePath);
-        if ($total !== false && $free !== false) {
-            $performance['storage_used_bytes'] = (int) ($total - $free);
+    // Storage Usage - Calculate actual size of cache directory
+    // In production, cache is mounted from /tmp/aviationwx-cache on the host
+    // This shows actual data stored, not filesystem capacity
+    $cachePath = __DIR__ . '/../cache';
+    if (is_dir($cachePath)) {
+        $cacheSize = 0;
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($cachePath, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $cacheSize += $file->getSize();
+            }
         }
+        $performance['storage_used_bytes'] = $cacheSize;
     }
     
     return $performance;
@@ -1502,7 +1510,7 @@ if (php_sapi_name() === 'cli') {
                         <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['memory_used_bytes']); ?></span>
                     </div>
                     <div class="metric-inline">
-                        <span class="metric-label-inline">Storage</span>
+                        <span class="metric-label-inline">Cache</span>
                         <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['storage_used_bytes']); ?></span>
                     </div>
                 </div>
