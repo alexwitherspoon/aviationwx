@@ -8,6 +8,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
+require_once __DIR__ . '/../lib/webcam-history.php';
 
 // Set up invocation tracking
 $invocationId = aviationwx_get_invocation_id();
@@ -389,6 +390,78 @@ function validateImageFile($file, $pushConfig = null) {
 }
 
 /**
+ * Harvest all valid images from upload directory for history
+ * 
+ * For push cameras, multiple images may accumulate between processing intervals.
+ * When history is enabled, save all valid images to history before processing.
+ * This captures intermediate frames that would otherwise be discarded.
+ * 
+ * @param string $uploadDir Upload directory path
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param array|null $pushConfig Push config for validation limits
+ * @param int|null $lastProcessedTime Only harvest files newer than this timestamp
+ * @return int Number of frames harvested
+ */
+function harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig = null, $lastProcessedTime = null) {
+    // Check if history is enabled for this airport
+    if (!isWebcamHistoryEnabledForAirport($airportId)) {
+        return 0;
+    }
+    
+    if (!is_dir($uploadDir)) {
+        return 0;
+    }
+    
+    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp,avif}', GLOB_BRACE);
+    if (empty($files)) {
+        return 0;
+    }
+    
+    // Filter to files newer than last processed (if specified)
+    if ($lastProcessedTime !== null && $lastProcessedTime > 0) {
+        $files = array_filter($files, function($file) use ($lastProcessedTime) {
+            $mtime = @filemtime($file);
+            return $mtime !== false && $mtime > $lastProcessedTime;
+        });
+        
+        if (empty($files)) {
+            return 0;
+        }
+    }
+    
+    // Sort by modification time (oldest first for chronological history)
+    usort($files, function($a, $b) {
+        $mtimeA = @filemtime($a);
+        $mtimeB = @filemtime($b);
+        if ($mtimeA === false) return 1;
+        if ($mtimeB === false) return -1;
+        return $mtimeA - $mtimeB;
+    });
+    
+    $harvested = 0;
+    
+    foreach ($files as $file) {
+        // Validate image is complete and not corrupted
+        if (!validateImageForHistory($file, $pushConfig)) {
+            aviationwx_log('debug', 'harvest: skipping invalid/incomplete image', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'file' => basename($file)
+            ], 'app');
+            continue;
+        }
+        
+        // Save to history (uses EXIF or mtime for timestamp)
+        if (saveFrameToHistory($file, $airportId, $camIndex)) {
+            $harvested++;
+        }
+    }
+    
+    return $harvested;
+}
+
+/**
  * Move image to cache and generate missing formats
  * 
  * Keeps original format as primary, generates missing formats.
@@ -502,6 +575,9 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     if ($primaryFormat !== 'avif') {
         generateAvif($primaryCacheFile, $airportId, $camIndex);
     }
+    
+    // Save frame to history (if enabled for this airport)
+    saveFrameToHistory($primaryCacheFile, $airportId, $camIndex);
     
     return $primaryCacheFile;
 }
@@ -653,6 +729,17 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     
     // Get push_config for per-camera validation limits
     $pushConfig = $cam['push_config'] ?? null;
+    
+    // Harvest all valid images for history before processing
+    // This captures intermediate frames that accumulated since last processing
+    $harvestedCount = harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig, $lastProcessed);
+    if ($harvestedCount > 0) {
+        aviationwx_log('info', 'harvested frames for history', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'frames' => $harvestedCount
+        ], 'app');
+    }
     
     // Find newest valid image (with per-camera limits)
     // Pass lastProcessed time to quickly skip old files

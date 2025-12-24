@@ -13,6 +13,7 @@ if (file_exists(__DIR__ . '/../lib/test-mocks.php')) {
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
+require_once __DIR__ . '/../lib/webcam-history.php';
 
 /**
  * Detect webcam source type from URL
@@ -835,6 +836,9 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         // Mtime sync happens automatically during generation via shell command chaining
         generateWebp($cacheFile, $airportId, $camIndex);
         generateAvif($cacheFile, $airportId, $camIndex);
+        
+        // Save frame to history (if enabled for this airport)
+        saveFrameToHistory($cacheFile, $airportId, $camIndex);
         
         aviationwx_log('info', 'webcam format generation started', [
             'invocation_id' => $invocationId,
