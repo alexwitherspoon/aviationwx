@@ -74,6 +74,13 @@ if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
+// Match terms subdomain exactly (e.g., terms.aviationwx.org)
+if (preg_match('/^terms\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // Route to terms of service page
+    include 'pages/terms.php';
+    exit;
+}
+
 // Check for guides query parameter or path (for local dev/testing)
 // This must be after config is loaded because guides.php needs config
 if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
@@ -87,6 +94,13 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
     }
     // Route to guides page
     include 'pages/guides.php';
+    exit;
+}
+
+// Check for terms query parameter or path (for local dev/testing)
+if (isset($_GET['terms']) || $requestPath === 'terms') {
+    // Route to terms of service page
+    include 'pages/terms.php';
     exit;
 }
 
@@ -119,7 +133,7 @@ if (!$isAirportRequest) {
             if (count($hostParts) >= 3) {
                 $potentialId = $hostParts[0];
                 // Exclude known non-airport subdomains
-                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api'])) {
+                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms'])) {
                     $isAirportRequest = true;
                     $rawAirportIdentifier = $potentialId;
                 }
