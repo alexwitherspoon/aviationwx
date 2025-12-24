@@ -1174,6 +1174,161 @@ function checkAirportHealth(string $airportId, array $airport): array {
     return $health;
 }
 
+/**
+ * Check Public API health
+ * 
+ * Performs lightweight health checks on public API endpoints.
+ * Results are cached to avoid excessive internal requests.
+ * 
+ * @return array {
+ *   'status' => 'operational'|'degraded'|'down',
+ *   'endpoints' => array
+ * }
+ */
+function checkPublicApiHealth(): array {
+    $health = [
+        'status' => 'operational',
+        'endpoints' => []
+    ];
+    
+    // Define endpoints to check
+    // Use kspb as test airport since it's commonly available
+    $endpoints = [
+        '/api/v1/status' => 'API Status',
+        '/api/v1/airports' => 'List Airports',
+        '/api/v1/airports/kspb' => 'Airport Details',
+        '/api/v1/airports/kspb/weather' => 'Weather Data',
+        '/api/v1/airports/kspb/webcams' => 'Webcam List',
+        '/api/v1/airports/kspb/weather/history' => 'Weather History',
+        '/api/v1/weather/bulk?airports=kspb' => 'Bulk Weather',
+    ];
+    
+    $hasDown = false;
+    $hasDegraded = false;
+    
+    // Check cache for recent health check results
+    $cacheFile = __DIR__ . '/../cache/public_api_health.json';
+    $cacheValid = false;
+    $cachedHealth = null;
+    
+    if (file_exists($cacheFile)) {
+        $cached = @json_decode(@file_get_contents($cacheFile), true);
+        if (is_array($cached) && isset($cached['checked_at'])) {
+            // Cache is valid for 30 seconds
+            if (time() - $cached['checked_at'] < 30) {
+                $cacheValid = true;
+                $cachedHealth = $cached;
+            }
+        }
+    }
+    
+    if ($cacheValid && $cachedHealth) {
+        return $cachedHealth;
+    }
+    
+    // Perform health checks
+    foreach ($endpoints as $endpoint => $name) {
+        $result = performPublicApiHealthCheck($endpoint);
+        $health['endpoints'][] = [
+            'name' => $name,
+            'endpoint' => $endpoint,
+            'status' => $result['status'],
+            'message' => $result['message'],
+            'response_time_ms' => $result['response_time_ms'],
+            'lastChanged' => time()
+        ];
+        
+        if ($result['status'] === 'down') {
+            $hasDown = true;
+        } elseif ($result['status'] === 'degraded') {
+            $hasDegraded = true;
+        }
+    }
+    
+    $health['status'] = $hasDown ? 'down' : ($hasDegraded ? 'degraded' : 'operational');
+    $health['checked_at'] = time();
+    
+    // Cache the result
+    @file_put_contents($cacheFile, json_encode($health), LOCK_EX);
+    
+    return $health;
+}
+
+/**
+ * Perform a health check on a single API endpoint
+ * 
+ * @param string $endpoint The endpoint path to check
+ * @return array {status: string, message: string, response_time_ms: int}
+ */
+function performPublicApiHealthCheck(string $endpoint): array {
+    $start = microtime(true);
+    
+    // Use internal request with health check header
+    $context = stream_context_create([
+        'http' => [
+            'header' => "X-Health-Check: internal\r\n",
+            'timeout' => 5,
+            'ignore_errors' => true
+        ]
+    ]);
+    
+    // Use localhost to avoid going through the network
+    $url = 'http://127.0.0.1' . $endpoint;
+    $response = @file_get_contents($url, false, $context);
+    $elapsed = (microtime(true) - $start) * 1000;
+    
+    // Check HTTP response code
+    $httpCode = 0;
+    if (isset($http_response_header) && is_array($http_response_header)) {
+        foreach ($http_response_header as $header) {
+            if (preg_match('/HTTP\/\d\.\d\s+(\d+)/', $header, $matches)) {
+                $httpCode = (int)$matches[1];
+                break;
+            }
+        }
+    }
+    
+    // Determine status
+    if ($response === false || $httpCode === 0) {
+        return [
+            'status' => 'down',
+            'message' => 'Endpoint unreachable',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    if ($httpCode >= 500) {
+        return [
+            'status' => 'down',
+            'message' => 'Server error (HTTP ' . $httpCode . ')',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    if ($httpCode >= 400) {
+        return [
+            'status' => 'degraded',
+            'message' => 'Client error (HTTP ' . $httpCode . ')',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    // Check response time (slow = degraded)
+    if ($elapsed > 2000) {
+        return [
+            'status' => 'degraded',
+            'message' => 'Slow response (' . round($elapsed) . 'ms)',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    return [
+        'status' => 'operational',
+        'message' => 'OK (' . round($elapsed) . 'ms)',
+        'response_time_ms' => round($elapsed)
+    ];
+}
+
 // Load configuration
 $config = loadConfig();
 if ($config === null) {
@@ -1186,6 +1341,13 @@ $systemHealth = checkSystemHealth();
 
 // Get node performance metrics
 $nodePerformance = getNodePerformance();
+
+// Get public API health (if enabled)
+require_once __DIR__ . '/../lib/public-api/config.php';
+$publicApiHealth = null;
+if (isPublicApiEnabled()) {
+    $publicApiHealth = checkPublicApiHealth();
+}
 
 // Get airport health for each configured airport
 $airportHealth = [];
@@ -1540,6 +1702,48 @@ if (php_sapi_name() === 'cli') {
                 </ul>
             </div>
         </div>
+        
+        <?php if ($publicApiHealth !== null): ?>
+        <!-- Public API Status Card -->
+        <div class="status-card">
+            <div class="status-card-header">
+                <h2>Public API</h2>
+                <span class="status-badge">
+                    <span class="status-indicator <?php echo getStatusColor($publicApiHealth['status']); ?>">
+                        <?php echo getStatusIcon($publicApiHealth['status']); ?>
+                    </span>
+                    <?php echo ucfirst($publicApiHealth['status']); ?>
+                </span>
+            </div>
+            <div class="status-card-body">
+                <div style="margin-bottom: 1rem; color: #666; font-size: 0.9rem;">
+                    <a href="https://api.aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc;">api.aviationwx.org</a> · 
+                    <a href="https://api.aviationwx.org/openapi.json" target="_blank" rel="noopener" style="color: #0066cc;">OpenAPI Spec</a>
+                </div>
+                <ul class="component-list">
+                    <?php foreach ($publicApiHealth['endpoints'] as $endpoint): ?>
+                    <li class="component-item">
+                        <div class="component-info">
+                            <div class="component-name"><?php echo htmlspecialchars($endpoint['name']); ?></div>
+                            <div class="component-message">
+                                <code style="font-size: 0.85rem; background: #f5f5f5; padding: 0.15rem 0.4rem; border-radius: 3px;">
+                                    <?php echo htmlspecialchars($endpoint['endpoint']); ?>
+                                </code>
+                                · <?php echo htmlspecialchars($endpoint['message']); ?>
+                            </div>
+                        </div>
+                        <div class="component-status">
+                            <span class="status-indicator <?php echo getStatusColor($endpoint['status']); ?>">
+                                <?php echo getStatusIcon($endpoint['status']); ?>
+                            </span>
+                            <?php echo ucfirst($endpoint['status']); ?>
+                        </div>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+        <?php endif; ?>
         
         <!-- Airport Status Cards -->
         <?php if (!empty($airportHealth)): ?>
