@@ -456,6 +456,52 @@ function getEnabledWebcamFormats(): array {
 }
 
 /**
+ * Check if webcam history is enabled for an airport
+ * 
+ * Checks airport-specific setting first, falls back to global default.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return bool True if webcam history enabled for this airport
+ */
+function isWebcamHistoryEnabledForAirport(string $airportId): bool {
+    $config = loadConfig();
+    if ($config === null) {
+        return false;
+    }
+    
+    // Check airport-specific setting first
+    if (isset($config['airports'][$airportId]['webcam_history_enabled'])) {
+        return (bool)$config['airports'][$airportId]['webcam_history_enabled'];
+    }
+    
+    // Fall back to global default
+    return (bool)getGlobalConfig('webcam_history_enabled', false);
+}
+
+/**
+ * Get max history frames for an airport
+ * 
+ * Checks airport-specific setting first, falls back to global default.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return int Max frames to retain per camera
+ */
+function getWebcamHistoryMaxFrames(string $airportId): int {
+    $config = loadConfig();
+    if ($config === null) {
+        return 12;
+    }
+    
+    // Check airport-specific setting first
+    if (isset($config['airports'][$airportId]['webcam_history_max_frames'])) {
+        return (int)$config['airports'][$airportId]['webcam_history_max_frames'];
+    }
+    
+    // Fall back to global default
+    return (int)getGlobalConfig('webcam_history_max_frames', 12);
+}
+
+/**
  * Load airport configuration with caching
  * 
  * Uses APCu cache if available, falls back to static variable for request lifetime.
