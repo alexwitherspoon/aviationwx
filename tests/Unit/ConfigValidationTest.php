@@ -2356,6 +2356,128 @@ class ConfigValidationTest extends TestCase
         $this->assertEmpty($result['errors']);
     }
 
+    /**
+     * Test webcam history config validation - Valid settings
+     */
+    public function testGlobalConfig_WebcamHistory_ValidSettings()
+    {
+        $config = [
+            'config' => [
+                'webcam_history_enabled' => true,
+                'webcam_history_max_frames' => 24
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid webcam history settings should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test webcam history config validation - Invalid types
+     */
+    public function testGlobalConfig_WebcamHistory_InvalidTypes()
+    {
+        $config = [
+            'config' => [
+                'webcam_history_enabled' => 'true',  // String, not boolean
+                'webcam_history_max_frames' => '12'  // String, not integer
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Invalid type webcam history settings should fail validation');
+        $this->assertCount(2, $result['errors']);
+        $this->assertStringContainsString('webcam_history_enabled must be a boolean', implode(' ', $result['errors']));
+        $this->assertStringContainsString('webcam_history_max_frames must be a positive integer', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test webcam history config validation - Invalid max_frames (zero or negative)
+     */
+    public function testGlobalConfig_WebcamHistory_InvalidMaxFrames()
+    {
+        $config = [
+            'config' => [
+                'webcam_history_max_frames' => 0  // Must be positive
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Zero max_frames should fail validation');
+        $this->assertStringContainsString('webcam_history_max_frames must be a positive integer', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test per-airport webcam history settings - Valid overrides
+     */
+    public function testAirport_WebcamHistory_ValidOverrides()
+    {
+        $config = [
+            'config' => [
+                'webcam_history_enabled' => false  // Global disabled
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'webcam_history_enabled' => true,  // Per-airport override
+                    'webcam_history_max_frames' => 48
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid per-airport webcam history overrides should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test per-airport webcam history settings - Invalid types
+     */
+    public function testAirport_WebcamHistory_InvalidTypes()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'webcam_history_enabled' => 1,     // Integer, not boolean
+                    'webcam_history_max_frames' => -5  // Negative
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Invalid per-airport webcam history settings should fail validation');
+        $this->assertCount(2, $result['errors']);
+        $this->assertStringContainsString('webcam_history_enabled', implode(' ', $result['errors']));
+        $this->assertStringContainsString('webcam_history_max_frames', implode(' ', $result['errors']));
+    }
+
     public function testGlobalConfig_InvalidDefaultTimezone()
     {
         $config = [

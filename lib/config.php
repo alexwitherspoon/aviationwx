@@ -1817,6 +1817,19 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.webcam_generate_avif must be a boolean (true or false)";
                 }
             }
+            
+            // Validate webcam history settings
+            if (isset($cfg['webcam_history_enabled'])) {
+                if (!is_bool($cfg['webcam_history_enabled'])) {
+                    $errors[] = "config.webcam_history_enabled must be a boolean (true or false)";
+                }
+            }
+            
+            if (isset($cfg['webcam_history_max_frames'])) {
+                if (!is_int($cfg['webcam_history_max_frames']) || $cfg['webcam_history_max_frames'] < 1) {
+                    $errors[] = "config.webcam_history_max_frames must be a positive integer";
+                }
+            }
         }
     }
     
@@ -1998,6 +2011,19 @@ function validateAirportsJsonStructure(array $config): array {
             $val = $airport['webcam_refresh_seconds'];
             if (!validateRefreshInterval($val, 5)) {
                 $errors[] = "Airport '{$airportCode}' has invalid webcam_refresh_seconds: {$val} (must be integer >= 5 seconds)";
+            }
+        }
+        
+        // Validate webcam history settings (per-airport overrides)
+        if (isset($airport['webcam_history_enabled'])) {
+            if (!is_bool($airport['webcam_history_enabled'])) {
+                $errors[] = "Airport '{$airportCode}' has invalid webcam_history_enabled: must be a boolean (true or false)";
+            }
+        }
+        
+        if (isset($airport['webcam_history_max_frames'])) {
+            if (!is_int($airport['webcam_history_max_frames']) || $airport['webcam_history_max_frames'] < 1) {
+                $errors[] = "Airport '{$airportCode}' has invalid webcam_history_max_frames: must be a positive integer";
             }
         }
         
