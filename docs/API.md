@@ -104,6 +104,61 @@ The API uses `s-maxage` to limit Cloudflare cache TTL separately from browser ca
 
 Returns a cached webcam image for the specified airport and camera.
 
+---
+
+### Webcam History
+
+#### `GET /api/webcam-history.php?id={airport_id}&cam={camera_index}[&ts={timestamp}]`
+
+Returns webcam history data. When `ts` is omitted, returns a JSON manifest of available frames. When `ts` is provided, returns the actual historical image.
+
+**Parameters:**
+- `id` (required): Airport ID (e.g., `kspb`)
+- `cam` (required): Camera index (0-based)
+- `ts` (optional): Unix timestamp of specific frame to retrieve
+
+**Response (without `ts` - JSON manifest):**
+```json
+{
+  "enabled": true,
+  "airport": "kspb",
+  "cam": 0,
+  "frames": [
+    { "timestamp": 1703444400, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444400" },
+    { "timestamp": 1703444460, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444460" }
+  ],
+  "current_index": 11,
+  "timezone": "America/Los_Angeles"
+}
+```
+
+**Response (with `ts` - Image):**
+- **Content-Type**: `image/jpeg`
+- **Cache-Control**: `public, max-age=31536000` (immutable historical frame)
+
+**Response (history disabled):**
+```json
+{
+  "enabled": false,
+  "airport": "kspb",
+  "cam": 0,
+  "frames": [],
+  "current_index": 0,
+  "timezone": "UTC"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing required parameters
+- `404 Not Found`: Airport not found or frame not found
+
+**Notes:**
+- Webcam history must be enabled in configuration (`webcam_history_enabled: true`)
+- Historical frames are retained based on `webcam_history_max_frames` setting
+- See [Configuration Guide](CONFIGURATION.md#webcam-history-time-lapse-player) for setup details
+
+---
+
 **Parameters:**
 - `id` (required): Airport ID (e.g., `kspb`)
 - `cam` (required): Camera index (0-based, e.g., `0`, `1`)

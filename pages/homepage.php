@@ -684,6 +684,11 @@ Best regards,
                 </div>
                 
                 <div class="feature-card">
+                    <h3>🎬 Time-lapse History</h3>
+                    <p>Review recent conditions with the webcam history player. Shareable URLs and kiosk mode for airport signage displays.</p>
+                </div>
+                
+                <div class="feature-card">
                     <h3>🧭 Wind Visualization</h3>
                     <p>Interactive runway wind diagram with wind speed, direction, and crosswind components.</p>
                 </div>

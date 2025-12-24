@@ -41,6 +41,7 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Automatic Caching**: Background refresh with atomic writes
 - **Reliability**: Circuit breaker with exponential backoff for failing sources
 - **Multiple Formats**: WEBP and JPEG with automatic fallback
+- **Time-lapse History**: Optional webcam history player with shareable URLs and kiosk mode
 
 ### User Experience
 - **Wind Visualization**: Interactive runway wind diagram with parallel runway support
