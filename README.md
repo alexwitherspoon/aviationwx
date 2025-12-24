@@ -57,6 +57,32 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Monitoring**: Status page with real-time system health
 - **VPN Support**: Optional VPN for accessing private camera networks
 
+## Public API
+
+AviationWX provides a free public API for developers to integrate aviation weather data into their applications.
+
+- **Documentation:** [api.aviationwx.org](https://api.aviationwx.org)
+- **OpenAPI Spec:** [api.aviationwx.org/openapi.json](https://api.aviationwx.org/openapi.json)
+
+### Quick Start
+
+```bash
+# Get current weather for an airport
+curl https://api.aviationwx.org/v1/airports/kspb/weather
+
+# List all available airports
+curl https://api.aviationwx.org/v1/airports
+```
+
+### Rate Limits
+
+| Tier | Requests/min | Requests/day |
+|------|--------------|--------------|
+| Anonymous | 20 | 2,000 |
+| Partner (API key) | 120 | 50,000 |
+
+See [API documentation](https://api.aviationwx.org) for full endpoint details, authentication, and usage guidelines.
+
 ## Quick Start
 
 ### For Developers

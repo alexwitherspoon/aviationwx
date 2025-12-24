@@ -766,6 +766,11 @@ Best regards,
                     <h3>🆓 Free Forever</h3>
                     <p>No fees, no subscriptions, no ads, no apps needed. Completely free for airports and pilots.</p>
                 </div>
+                
+                <div class="feature-card">
+                    <h3>📡 Public API</h3>
+                    <p>Access weather, webcams, and 24-hour history programmatically. <a href="https://api.aviationwx.org" style="color: #0066cc;">API Documentation →</a></p>
+                </div>
             </div>
         </section>
 

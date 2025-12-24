@@ -1,8 +1,21 @@
-# API Documentation
+# Internal API Documentation
 
-This document describes the API endpoints available in AviationWX.org.
+This document describes the **internal** API endpoints used by the AviationWX.org web interface. These endpoints are designed for the frontend and are not versioned.
 
-## Base URL
+> **For Third-Party Developers:** If you're building an application that integrates with AviationWX, please use the [**Public API**](https://api.aviationwx.org) instead. The Public API provides:
+> - Stable, versioned endpoints (`/v1/...`)
+> - OpenAPI specification
+> - Rate limit headers
+> - Consistent JSON responses
+> - Support for API keys with higher rate limits
+>
+> Visit **[api.aviationwx.org](https://api.aviationwx.org)** for documentation.
+
+---
+
+## Internal Endpoints
+
+### Base URL
 
 Examples:
 - Production: `https://aviationwx.org`
