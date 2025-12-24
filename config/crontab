@@ -30,6 +30,14 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Also forwards to Docker logs for convenience (tee to both locations)
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php 2>&1 | tee -a /var/log/aviationwx/cron-push-webcams.log
 
+# Cache Cleanup - Runs daily at 4 AM
+# Two-layer cleanup strategy (belt and suspenders):
+# - Layer 1: Primary cleanup for files without automatic cleanup (rate limits, error files)
+# - Layer 2: Backup cleanup as safety net for files that should have auto-cleanup
+# - Layer 3: Orphan cleanup for removed airports
+# Logs to Docker logs for monitoring.
+0 4 * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cleanup-cache.php 2>&1
+
 # Let's Encrypt Certificate Renewal - Runs weekly (Sunday at 3 AM)
 # Renews wildcard SSL certificates (aviationwx.org, *.aviationwx.org) if they're expiring soon.
 # After renewal, enables SSL/TLS in vsftpd if certificates are available.
