@@ -534,11 +534,11 @@ AviationWX.org provides:
 - Real-time weather data and webcams
 - Free for airports and pilots (no fees, no subscriptions, no ads)
 - Dashboard hosting and software maintenance handled by the project
-- Equipment recommendations and installation guidance
+- Integration with existing equipment, or guidance for new installations
 
 This is a safety-oriented service that helps pilots make better flight decisions with timely, accurate local weather information. It also helps encourage airport use and brings positive attention to the general aviation community.
 
-The project can work with existing webcam and weather equipment. For new installations, AviationWX provides equipment recommendations and guidance while the local community handles the physical installation.
+AviationWX integrates with your existing cameras and sensors, or guides your community through new installations.
 
 You can learn more at: https://aviationwx.org
 Example airport dashboard: https://kspb.aviationwx.org
@@ -567,13 +567,12 @@ Best regards");
                 <div class="cta-box" style="border-left-color: #28a745;">
                     <h3 style="color: #28a745;">🏢 For Airport Owners, Managers & Organizations</h3>
                     <p><strong>Add Your Airport - It's Free & Easy!</strong></p>
-                    <p>This is a <strong>safety-oriented service</strong> for pilots. We host and maintain the dashboard—your community installs the local sensors with our guidance.</p>
+                    <p>This is a <strong>safety-oriented service</strong> for pilots. We host the dashboard and integrate with your existing cameras and sensors, or guide your community through new installations.</p>
                     
                     <p style="margin-top: 1rem;"><strong>What we need:</strong></p>
                     <ul>
                         <li>Permission to partner with the AviationWX.org project</li>
-                        <li>Access to existing webcam and weather equipment data if available</li>
-                        <li>Local webcam and weather equipment installed by your community (we'll recommend equipment and guide the installation)</li>
+                        <li>Existing webcam and weather equipment we can integrate with, or local equipment installed by your community (we provide recommendations and guidance)</li>
                     </ul>
                     
                     <p style="margin-top: 1rem;"><strong>What you get:</strong></p>
@@ -632,7 +631,7 @@ Best regards,
                 <ol class="steps-list">
                     <li><strong>Contact us</strong> - Reach out via email (see below) or share your airport's contact information</li>
                     <li><strong>We discuss requirements</strong> - Existing equipment vs. new setup, what's needed, timeline</li>
-                    <li><strong>Your community installs local sensors</strong> - We provide equipment recommendations and installation guidance. Once your sensors are online, we integrate them into your dashboard.</li>
+                    <li><strong>Equipment setup</strong> - We integrate with your existing equipment, or your community installs new sensors with our guidance. Once online, we connect everything to your dashboard.</li>
                     <li><strong>Your airport goes live!</strong> - Pilots can start using the dashboard at <?= htmlspecialchars($displayAirportId) ?>.aviationwx.org</li>
                 </ol>
             </div>
