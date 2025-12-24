@@ -1,12 +1,15 @@
 # Local Development Docker Compose Configuration
-# This is an example file for local development
 # 
-# For user-specific overrides (like custom airports.json paths), create:
-# docker-compose.override.yml (gitignored, not checked in)
+# This file provides a clean base configuration for local development.
+# It uses the built Docker image without source mounts.
+#
+# For local development with live code reloading, create docker-compose.override.yml
+# (gitignored) with source directory mounts and your secrets path.
+# See docker-compose.override.yml.example for a template.
 #
 # Usage:
 #   docker compose -f docker/docker-compose.local.yml up
-#   or use: make up (which uses this file)
+#   or use: make up (which also loads docker-compose.override.yml if present)
 
 name: aviationwx-local
 
@@ -20,43 +23,22 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8080}:80"
-      # Expose FTP/FTPS and SFTP ports for local testing
-      # Using non-standard ports to avoid conflicts with system services
-      - "12121:2121"  # FTP/FTPS (mapped to avoid conflicts)
-      - "12222:2222"  # SFTP (mapped to avoid conflicts)
+      # Expose FTP/FTPS and SFTP ports for push webcam testing
+      - "12121:2121"  # FTP/FTPS (non-standard to avoid conflicts)
+      - "12222:2222"  # SFTP (non-standard to avoid conflicts)
     volumes:
-      # Mount source code directories for local development (allows code changes without rebuild)
-      - ../lib:/var/www/html/lib:ro
-      - ../pages:/var/www/html/pages:ro
-      - ../api:/var/www/html/api:ro
-      - ../admin:/var/www/html/admin:ro
-      - ../scripts:/var/www/html/scripts:ro
-      - ../public:/var/www/html/public:ro
-      # Mount config directory for other config files (read-only)
-      # airports.json is loaded via CONFIG_PATH environment variable pointing to secrets location
-      - ../config:/var/www/html/config:ro
-      # Also mount tests directory so test fixture is available as fallback
-      - ../tests:/var/www/html/tests:ro
-      # Mount cache directory from /tmp (ephemeral, cleared on reboot)
+      # Cache directory (ephemeral)
       - /tmp/aviationwx-cache:/var/www/html/cache
-      # Mount production airports.json from secrets repository to a separate location
-      # (configurable via PRODUCTION_AIRPORTS_JSON env var)
-      # Default path: /Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json
-      # To override: export PRODUCTION_AIRPORTS_JSON=/path/to/airports.json
-      # Mount to /var/www/html/secrets/airports.json to avoid conflict with config directory mount
-      - ${PRODUCTION_AIRPORTS_JSON:-/Users/alexwitherspoon/GitHub/aviationwx.org-secrets/airports.json}:/var/www/html/secrets/airports.json:ro
     cap_add:
       - NET_ADMIN
       - NET_RAW
     environment:
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-localhost}
-      - CONFIG_PATH=/var/www/html/secrets/airports.json
+      - CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}
       - WEATHER_REFRESH_URL=http://localhost
       - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
-      # MOCK_WEATHER is auto-detected: enabled when APP_ENV=testing (set by PHPUnit) or when explicitly set to 'true'
-      # To manually enable mock weather for testing, set: MOCK_WEATHER=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -71,7 +53,6 @@ services:
         tag: "{{.Name}}/{{.ID}}"
 
   # VPN Server - strongSwan IPsec server
-  # Uses host networking for full VPN functionality (requires Linux or proper host networking support)
   vpn-server:
     build:
       context: ..
@@ -83,8 +64,6 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - ../config:/var/www/html/config:ro
-      - ../tests:/var/www/html/tests:ro
       - vpn-config:/etc/ipsec-shared:ro
     restart: unless-stopped
     healthcheck:
@@ -101,7 +80,6 @@ services:
         tag: "{{.Name}}/{{.ID}}"
 
   # VPN Manager - Manages VPN connections and configuration
-  # Uses host networking to access VPN server and manage connections
   vpn-manager:
     build:
       context: ..
@@ -113,12 +91,10 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - ../config:/var/www/html/config:ro
-      - ../tests:/var/www/html/tests:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
       - vpn-config:/etc/ipsec-shared
     environment:
-      - CONFIG_PATH=/var/www/html/config/airports.json
+      - CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}
       - STATUS_FILE=/var/www/html/cache/vpn-status.json
       - VPN_TEST_MODE=true
       - VPN_TEST_CLIENT_IP=127.0.0.1

@@ -1,0 +1,56 @@
+# Local Development Override Template
+# 
+# Copy this file to docker-compose.override.yml and customize for your setup.
+# The override file is gitignored and will not be committed.
+#
+# cp docker/docker-compose.override.yml.example docker/docker-compose.override.yml
+#
+# Then edit docker-compose.override.yml to set your secrets path.
+
+name: aviationwx-local
+
+services:
+  web:
+    volumes:
+      # Mount source code for live reloading (no rebuild needed)
+      - ../lib:/var/www/html/lib:ro
+      - ../pages:/var/www/html/pages:ro
+      - ../api:/var/www/html/api:ro
+      - ../admin:/var/www/html/admin:ro
+      - ../scripts:/var/www/html/scripts:ro
+      - ../public:/var/www/html/public:ro
+      - ../config:/var/www/html/config:ro
+      - ../tests:/var/www/html/tests:ro
+      - ../dev:/var/www/html/dev:ro
+      - ../guides:/var/www/html/guides:ro
+      - ../health:/var/www/html/health:ro
+      # Cache directory
+      - /tmp/aviationwx-cache:/var/www/html/cache
+      # TODO: Update this path to your airports.json location
+      # Option 1: Use a secrets repository
+      # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+      # Option 2: Copy airports.json.example to a local file and customize
+      # - /path/to/my-airports.json:/var/www/html/secrets/airports.json:ro
+    environment:
+      # Point CONFIG_PATH to secrets location (must match volume mount above)
+      - CONFIG_PATH=/var/www/html/secrets/airports.json
+
+  vpn-server:
+    volumes:
+      - ../config:/var/www/html/config:ro
+      - ../tests:/var/www/html/tests:ro
+      - vpn-config:/etc/ipsec-shared:ro
+      # TODO: Update this path to match your airports.json location
+      # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+
+  vpn-manager:
+    volumes:
+      - ../config:/var/www/html/config:ro
+      - ../tests:/var/www/html/tests:ro
+      - /tmp/aviationwx-cache:/var/www/html/cache
+      - vpn-config:/etc/ipsec-shared
+      # TODO: Update this path to match your airports.json location
+      # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+    environment:
+      - CONFIG_PATH=/var/www/html/secrets/airports.json
+
