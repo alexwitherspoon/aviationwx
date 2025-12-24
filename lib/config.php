@@ -615,17 +615,22 @@ function loadConfig(bool $useCache = true): ?array {
     }
     
     // Use static cache for request lifetime (but check file hasn't changed)
-    // We also store file mtime in a static variable to detect changes
+    // We also store file mtime and path in static variables to detect changes
     static $cachedConfigMtime = null;
+    static $cachedConfigPath = null;
     
-    if ($cachedConfig !== null && $cachedConfigMtime === $fileMtime) {
+    // Check if cache is valid: same file path AND same mtime
+    if ($cachedConfig !== null && 
+        $cachedConfigPath === $configFile && 
+        $cachedConfigMtime === $fileMtime) {
         // File hasn't changed in this request, return cached config
         return $cachedConfig;
     }
     
-    // File changed or no cache, clear static cache
+    // File changed, path changed, or no cache - clear static cache
     $cachedConfig = null;
     $cachedConfigMtime = null;
+    $cachedConfigPath = null;
     
     // Read and validate JSON
     // Use @ to suppress errors for non-critical file operations
@@ -746,9 +751,10 @@ function loadConfig(bool $useCache = true): ?array {
 
     aviationwx_log('info', 'config loaded', ['path' => $configFile, 'mtime' => $fileMtime], 'app');
     
-    // Cache in static variable (with mtime)
+    // Cache in static variable (with mtime and path)
     $cachedConfig = $config;
     $cachedConfigMtime = $fileMtime;
+    $cachedConfigPath = $configFile;
     
     // Cache in APCu if available (1 hour TTL, but invalidated on file change)
     if ($useCache && function_exists('apcu_store')) {
