@@ -1,0 +1,987 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AviationWX Public API",
+    "description": "Real-time aviation weather data, webcam images, and airport information. Free access with rate limiting. Partner API keys available for higher limits.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "AviationWX",
+      "url": "https://aviationwx.org"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.aviationwx.org/v1",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {},
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "paths": {
+    "/airports": {
+      "get": {
+        "summary": "List all airports",
+        "description": "Returns a list of all enabled airports with basic metadata.",
+        "operationId": "listAirports",
+        "tags": ["Airports"],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AirportListResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/airports/{id}": {
+      "get": {
+        "summary": "Get airport details",
+        "description": "Returns detailed metadata for a single airport including runways, frequencies, and services.",
+        "operationId": "getAirport",
+        "tags": ["Airports"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AirportDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/airports/{id}/weather": {
+      "get": {
+        "summary": "Get current weather",
+        "description": "Returns current weather conditions for an airport.",
+        "operationId": "getWeather",
+        "tags": ["Weather"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/airports/{id}/weather/history": {
+      "get": {
+        "summary": "Get weather history",
+        "description": "Returns 24-hour rolling weather history for an airport.",
+        "operationId": "getWeatherHistory",
+        "tags": ["Weather"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "Number of hours of history (1-24)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24,
+              "default": 24
+            }
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "description": "Data resolution",
+            "schema": {
+              "type": "string",
+              "enum": ["all", "hourly", "15min"],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherHistoryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/airports/{id}/webcams": {
+      "get": {
+        "summary": "List webcams",
+        "description": "Returns a list of webcams for an airport with metadata.",
+        "operationId": "listWebcams",
+        "tags": ["Webcams"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebcamListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/airports/{id}/webcams/{cam}/image": {
+      "get": {
+        "summary": "Get webcam image",
+        "description": "Returns the current webcam image.",
+        "operationId": "getWebcamImage",
+        "tags": ["Webcams"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          },
+          {
+            "$ref": "#/components/parameters/CamIndex"
+          },
+          {
+            "name": "fmt",
+            "in": "query",
+            "description": "Image format",
+            "schema": {
+              "type": "string",
+              "enum": ["jpg", "webp", "avif"],
+              "default": "jpg"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image data",
+            "content": {
+              "image/jpeg": {},
+              "image/webp": {},
+              "image/avif": {}
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/airports/{id}/webcams/{cam}/history": {
+      "get": {
+        "summary": "Get webcam history",
+        "description": "Returns list of historical webcam frames, or a specific frame when ts parameter is provided.",
+        "operationId": "getWebcamHistory",
+        "tags": ["Webcams"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          },
+          {
+            "$ref": "#/components/parameters/CamIndex"
+          },
+          {
+            "name": "ts",
+            "in": "query",
+            "description": "Timestamp of specific frame to retrieve (returns image)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Frame list or image data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebcamHistoryResponse"
+                }
+              },
+              "image/jpeg": {}
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/weather/bulk": {
+      "get": {
+        "summary": "Get weather for multiple airports",
+        "description": "Returns current weather for multiple airports in a single request.",
+        "operationId": "getWeatherBulk",
+        "tags": ["Weather"],
+        "parameters": [
+          {
+            "name": "airports",
+            "in": "query",
+            "required": true,
+            "description": "Comma-separated list of airport IDs (max 10)",
+            "schema": {
+              "type": "string",
+              "example": "kspb,kczk,kpfc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherBulkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "Get API status",
+        "description": "Returns API health and status information.",
+        "operationId": "getStatus",
+        "tags": ["Status"],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Optional API key for higher rate limits"
+      }
+    },
+    "parameters": {
+      "AirportId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Airport ID (e.g., kspb, kczk)",
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9-]+$"
+        }
+      },
+      "CamIndex": {
+        "name": "cam",
+        "in": "path",
+        "required": true,
+        "description": "Camera index (0-based)",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds until rate limit resets"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Service temporarily unavailable",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "AIRPORT_NOT_FOUND"
+              },
+              "message": {
+                "type": "string",
+                "example": "Airport not found: xyz"
+              },
+              "retry_after": {
+                "type": "integer",
+                "description": "Seconds until retry (for rate limiting)"
+              }
+            }
+          }
+        }
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "api_version": {
+            "type": "string",
+            "example": "1"
+          },
+          "request_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attribution": {
+            "type": "string",
+            "example": "Weather data from AviationWX.org"
+          }
+        }
+      },
+      "AirportSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icao": {
+            "type": "string",
+            "nullable": true
+          },
+          "iata": {
+            "type": "string",
+            "nullable": true
+          },
+          "faa": {
+            "type": "string",
+            "nullable": true
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "elevation_ft": {
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "maintenance": {
+            "type": "boolean",
+            "description": "Whether airport is in maintenance mode"
+          },
+          "has_weather": {
+            "type": "boolean"
+          },
+          "has_webcams": {
+            "type": "boolean"
+          },
+          "webcam_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "AirportListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "airports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AirportSummary"
+            }
+          }
+        }
+      },
+      "AirportDetailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "airport": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "icao": {
+                "type": "string",
+                "nullable": true
+              },
+              "iata": {
+                "type": "string",
+                "nullable": true
+              },
+              "faa": {
+                "type": "string",
+                "nullable": true
+              },
+              "address": {
+                "type": "string",
+                "nullable": true
+              },
+              "lat": {
+                "type": "number"
+              },
+              "lon": {
+                "type": "number"
+              },
+              "elevation_ft": {
+                "type": "integer"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "maintenance": {
+                "type": "boolean"
+              },
+              "has_weather": {
+                "type": "boolean"
+              },
+              "has_webcams": {
+                "type": "boolean"
+              },
+              "webcam_count": {
+                "type": "integer"
+              },
+              "runways": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "heading_1": {
+                      "type": "integer"
+                    },
+                    "heading_2": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              "frequencies": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "services": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "Weather": {
+        "type": "object",
+        "properties": {
+          "flight_category": {
+            "type": "string",
+            "enum": ["VFR", "MVFR", "IFR", "LIFR"],
+            "nullable": true
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Temperature in Celsius",
+            "nullable": true
+          },
+          "temperature_f": {
+            "type": "number",
+            "description": "Temperature in Fahrenheit",
+            "nullable": true
+          },
+          "dewpoint": {
+            "type": "number",
+            "description": "Dewpoint in Celsius",
+            "nullable": true
+          },
+          "dewpoint_f": {
+            "type": "number",
+            "description": "Dewpoint in Fahrenheit",
+            "nullable": true
+          },
+          "dewpoint_spread": {
+            "type": "number",
+            "description": "Difference between temperature and dewpoint",
+            "nullable": true
+          },
+          "humidity": {
+            "type": "number",
+            "description": "Relative humidity percentage",
+            "nullable": true
+          },
+          "wind_speed": {
+            "type": "integer",
+            "description": "Wind speed in knots",
+            "nullable": true
+          },
+          "wind_direction": {
+            "type": "integer",
+            "description": "Wind direction in degrees",
+            "nullable": true
+          },
+          "gust_speed": {
+            "type": "integer",
+            "description": "Gust speed in knots",
+            "nullable": true
+          },
+          "gust_factor": {
+            "type": "number",
+            "description": "Gust factor (gust/sustained ratio)",
+            "nullable": true
+          },
+          "pressure": {
+            "type": "number",
+            "description": "Barometric pressure in inHg",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "number",
+            "description": "Visibility in statute miles",
+            "nullable": true
+          },
+          "ceiling": {
+            "type": "integer",
+            "description": "Ceiling in feet AGL",
+            "nullable": true
+          },
+          "cloud_cover": {
+            "type": "string",
+            "description": "Cloud cover description",
+            "nullable": true
+          },
+          "precip_accum": {
+            "type": "number",
+            "description": "Precipitation accumulation in inches",
+            "nullable": true
+          },
+          "density_altitude": {
+            "type": "integer",
+            "description": "Density altitude in feet",
+            "nullable": true
+          },
+          "pressure_altitude": {
+            "type": "integer",
+            "description": "Pressure altitude in feet",
+            "nullable": true
+          },
+          "sunrise": {
+            "type": "string",
+            "description": "Sunrise time (local)",
+            "nullable": true
+          },
+          "sunset": {
+            "type": "string",
+            "description": "Sunset time (local)",
+            "nullable": true
+          },
+          "daily": {
+            "type": "object",
+            "description": "Daily statistics",
+            "properties": {
+              "temp_high": {
+                "type": "number",
+                "nullable": true
+              },
+              "temp_high_time": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "temp_low": {
+                "type": "number",
+                "nullable": true
+              },
+              "temp_low_time": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "peak_gust": {
+                "type": "integer",
+                "nullable": true
+              },
+              "peak_gust_time": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
+            }
+          },
+          "observation_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of observation",
+            "nullable": true
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When data was last updated",
+            "nullable": true
+          }
+        }
+      },
+      "WeatherResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "weather": {
+            "$ref": "#/components/schemas/Weather"
+          }
+        }
+      },
+      "WeatherHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "allOf": [
+              { "$ref": "#/components/schemas/Meta" },
+              {
+                "type": "object",
+                "properties": {
+                  "airport_id": {
+                    "type": "string"
+                  },
+                  "airport_name": {
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Unix timestamp of first observation"
+                  },
+                  "end_time": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Unix timestamp of last observation"
+                  },
+                  "observation_count": {
+                    "type": "integer"
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "enum": ["all", "hourly", "15min"]
+                  },
+                  "units": {
+                    "type": "object",
+                    "description": "Unit definitions for weather values"
+                  }
+                }
+              }
+            ]
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Weather"
+            }
+          }
+        }
+      },
+      "WeatherBulkResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "weather": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Weather"
+            }
+          }
+        }
+      },
+      "WebcamListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "webcams": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "image_url": {
+                  "type": "string"
+                },
+                "history_url": {
+                  "type": "string",
+                  "description": "URL to webcam history endpoint"
+                },
+                "history_enabled": {
+                  "type": "boolean"
+                },
+                "refresh_seconds": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WebcamHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "timestamp": {
+                  "type": "integer"
+                },
+                "timestamp_iso": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["operational", "degraded", "down"]
+              },
+              "version": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "checks": {
+                "type": "object",
+                "description": "Health check results",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "airports_available": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Airports",
+      "description": "Airport discovery and metadata"
+    },
+    {
+      "name": "Weather",
+      "description": "Current and historical weather data"
+    },
+    {
+      "name": "Webcams",
+      "description": "Webcam images and history"
+    },
+    {
+      "name": "Status",
+      "description": "API health and status"
+    }
+  ]
+}
+
