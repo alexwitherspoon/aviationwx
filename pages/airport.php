@@ -3133,6 +3133,7 @@ const WebcamPlayer = {
 
         // Handle hideui mode
         this.hideUIMode = options.hideui || false;
+        this.updateHideUIButton();
         if (this.hideUIMode) {
             this.hideControls();
         }
@@ -3205,6 +3206,8 @@ const WebcamPlayer = {
         // Reset UI for next time
         document.querySelector('.webcam-player-controls').style.display = '';
         document.getElementById('webcam-player-timestamp').textContent = '--';
+        this.updateHideUIButton();
+        this.updateAutoplayButton();
         
         // Update URL to remove player params
         this.updateURL();
