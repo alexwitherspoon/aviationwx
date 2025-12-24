@@ -30,6 +30,8 @@ The `airports.json` file has two main sections:
     "worker_timeout_seconds": 45,
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
+    "webcam_history_enabled": false,
+    "webcam_history_max_frames": 12,
     "notam_cache_ttl_seconds": 3600
   },
   "airports": {
@@ -65,6 +67,10 @@ The `config` section (optional) contains application-wide defaults:
 - **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
 - **`webcam_generate_avif`** - Enable AVIF generation globally (default: `false`)
 
+#### Webcam History (Time-lapse Player)
+- **`webcam_history_enabled`** - Enable webcam history/time-lapse feature globally (default: `false`)
+- **`webcam_history_max_frames`** - Maximum number of historical frames to retain per camera (default: `12`)
+
 #### NOTAM Configuration
 - **`notam_cache_ttl_seconds`** - NOTAM cache time-to-live in seconds (default: `3600` = 1 hour)
 - **`notam_api_client_id`** - NOTAM API client ID (required for NOTAM functionality)
@@ -79,6 +85,79 @@ If the `config` section is omitted, sensible defaults are used.
 - `webcam_generate_avif` - Enable AVIF generation (default: `false`)
 
 **Note:** JPEG is always generated and always available as fallback.
+
+### Webcam History (Time-lapse Player)
+
+The webcam history feature stores recent webcam frames and provides a time-lapse player for viewing recent airport conditions.
+
+#### Configuration
+
+**Global Settings** (in `config` section):
+```json
+{
+  "config": {
+    "webcam_history_enabled": false,
+    "webcam_history_max_frames": 12
+  }
+}
+```
+
+**Per-Airport Overrides** (in airport configuration):
+```json
+{
+  "airports": {
+    "kspb": {
+      "webcam_history_enabled": true,
+      "webcam_history_max_frames": 24
+    }
+  }
+}
+```
+
+#### Configuration Hierarchy
+
+Settings follow this priority order:
+1. **Per-airport setting** - If set, uses the airport-specific value
+2. **Global setting** - Falls back to global `config` section value
+3. **Default** - Uses built-in default (`false` for enabled, `12` for max frames)
+
+| Scenario | Global | Airport | Result |
+|----------|--------|---------|--------|
+| Global only | `true` | *(not set)* | `true` |
+| Global only | `false` | *(not set)* | `false` |
+| Airport override | `true` | `false` | `false` |
+| Airport override | `false` | `true` | `true` |
+| Max frames | `12` | `24` | `24` |
+| Max frames | `12` | *(not set)* | `12` |
+
+#### Player URL Parameters
+
+When webcam history is enabled, users can share direct links to the player:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `cam` | Camera index (0-based) | `?airport=kspb&cam=0` |
+| `autoplay` | Start playing automatically | `?airport=kspb&cam=0&autoplay` |
+| `hideui` | Kiosk mode (hide controls) | `?airport=kspb&cam=0&hideui` |
+
+**Example URLs:**
+- `https://kspb.aviationwx.org/?cam=0` - Opens player for camera 0
+- `https://kspb.aviationwx.org/?cam=0&autoplay` - Opens and auto-plays
+- `https://kspb.aviationwx.org/?cam=0&autoplay&hideui` - Full kiosk mode (great for signage)
+
+#### Keyboard Shortcuts
+
+When the player is open:
+- **`H`** - Toggle hide UI / kiosk mode
+- **`C`** - Toggle controls visibility
+- **`Space`** - Play/pause
+- **`←` / `→`** - Previous/next frame
+- **`Home` / `End`** - First/last frame
+- **`Escape`** - Close player
+
+#### Storage
+
+Historical frames are stored in `cache/webcam-history/{airport}_{cam}/` with timestamps as filenames. The cleanup process automatically removes oldest frames when `max_frames` is exceeded.
 
 **Format Request Behavior:**
 - Requests with explicit `fmt=webp` or `fmt=avif` parameter may return HTTP 202 if format is generating
@@ -1539,6 +1618,12 @@ All application defaults are configured in the `config` section of `airports.jso
 - **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
 - **`webcam_generate_avif`** - Enable AVIF generation globally (default: `false`)
 
+#### Webcam History (Time-lapse Player)
+- **`webcam_history_enabled`** - Enable webcam history/time-lapse feature globally (default: `false`)
+- **`webcam_history_max_frames`** - Maximum number of historical frames to retain per camera (default: `12`)
+
+These settings can be overridden per-airport. See "Webcam History (Time-lapse Player)" section above for details.
+
 #### NOTAM Configuration
 - **`notam_cache_ttl_seconds`** - NOTAM cache time-to-live in seconds (default: `3600` = 1 hour)
 - **`notam_api_client_id`** - NOTAM API client ID (required for NOTAM functionality)
@@ -1564,6 +1649,8 @@ All application defaults are configured in the `config` section of `airports.jso
     "worker_timeout_seconds": 45,
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
+    "webcam_history_enabled": false,
+    "webcam_history_max_frames": 12,
     "notam_cache_ttl_seconds": 3600
   },
   "airports": { ... }
