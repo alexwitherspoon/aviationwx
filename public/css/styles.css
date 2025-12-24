@@ -1054,6 +1054,64 @@ h3 {
     display: flex;
 }
 
+/* Hidden controls state (tap to show, auto-hide while playing) */
+.webcam-player.controls-hidden .webcam-player-header,
+.webcam-player.controls-hidden .webcam-player-timestamp,
+.webcam-player.controls-hidden .webcam-player-controls {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    overflow: hidden;
+    transition: opacity 0.3s ease-out, max-height 0.3s ease-out, padding 0.3s ease-out;
+}
+
+.webcam-player .webcam-player-header,
+.webcam-player .webcam-player-timestamp,
+.webcam-player .webcam-player-controls {
+    transition: opacity 0.3s ease-out, max-height 0.3s ease-out, padding 0.3s ease-out;
+}
+
+/* Set max-heights for smooth animation */
+.webcam-player .webcam-player-header {
+    max-height: 80px;
+}
+
+.webcam-player .webcam-player-timestamp {
+    max-height: 50px;
+}
+
+.webcam-player .webcam-player-controls {
+    max-height: 200px;
+}
+
+/* Image expands to fill space when controls hidden */
+.webcam-player.controls-hidden .webcam-player-image-container {
+    flex: 1;
+}
+
+/* Cursor hint for tap-to-toggle */
+.webcam-player-image-container {
+    cursor: pointer;
+}
+
+/* Divider between main controls and toggles */
+.webcam-player-btn-divider {
+    width: 1px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.3);
+    margin: 0 8px;
+}
+
+/* Toggle button active state */
+.webcam-player-btn.toggle.active {
+    background: rgba(255, 255, 255, 0.3);
+    color: #4ade80;
+}
+
 .webcam-player-header {
     display: flex;
     align-items: center;
@@ -1111,6 +1169,8 @@ h3 {
     max-height: 100%;
     object-fit: contain;
     transition: opacity 0.15s ease-out;
+    cursor: pointer;
+    pointer-events: auto;
 }
 
 .webcam-player-image.loading {

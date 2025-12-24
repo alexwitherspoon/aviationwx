@@ -2973,25 +2973,177 @@ const WebcamPlayer = {
     playInterval: null,
     preloadedImages: {},
     timezone: 'UTC',
+    // State for URL sync and UI control
+    airportId: null,
+    camIndex: null,
+    camName: null,
+    controlsVisible: true,
+    hideTimeout: null,
+    hideUIMode: false,  // Kiosk/signage mode
 
-    async open(airportId, camIndex, camName, currentImageSrc) {
+    // Update URL to reflect current state (for sharing)
+    updateURL() {
+        const params = new URLSearchParams(window.location.search);
+        
+        if (this.active && this.camIndex !== null) {
+            params.set('cam', this.camIndex);
+            if (this.playing) {
+                params.set('autoplay', '1');
+            } else {
+                params.delete('autoplay');
+            }
+            if (this.hideUIMode) {
+                params.set('hideui', '1');
+            } else {
+                params.delete('hideui');
+            }
+        } else {
+            params.delete('cam');
+            params.delete('autoplay');
+            params.delete('hideui');
+        }
+        
+        // Build clean URL (convert autoplay=1 to just autoplay, etc.)
+        let paramStr = params.toString();
+        paramStr = paramStr.replace(/=1(&|$)/g, '$1').replace(/&$/, '');
+        
+        const newURL = paramStr 
+            ? `${window.location.pathname}?${paramStr}`
+            : window.location.pathname;
+        
+        history.replaceState({ webcamPlayer: this.active }, '', newURL);
+    },
+
+    // Show controls (header, timestamp, buttons)
+    // In hideUI mode, controls will still auto-hide after 3 seconds
+    showControls() {
+        const player = document.getElementById('webcam-player');
+        player.classList.remove('controls-hidden');
+        this.controlsVisible = true;
+        this.resetHideTimer();
+    },
+
+    // Hide controls
+    hideControls() {
+        const player = document.getElementById('webcam-player');
+        player.classList.add('controls-hidden');
+        this.controlsVisible = false;
+        this.clearHideTimer();
+    },
+
+    // Toggle controls visibility
+    toggleControls() {
+        if (this.controlsVisible) {
+            this.hideControls();
+        } else {
+            this.showControls();
+        }
+    },
+
+    // Set up auto-hide timer
+    resetHideTimer() {
+        this.clearHideTimer();
+        // Auto-hide after 3 seconds while playing (or in hideUI mode)
+        if (this.playing || this.hideUIMode) {
+            this.hideTimeout = setTimeout(() => {
+                if (this.playing || this.hideUIMode) {
+                    this.hideControls();
+                }
+            }, 3000);
+        }
+    },
+
+    clearHideTimer() {
+        if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+        }
+    },
+
+    // Toggle autoplay and update button state
+    toggleAutoplay() {
+        if (this.playing) {
+            this.stop();
+        } else {
+            this.play();
+        }
+        this.updateAutoplayButton();
+    },
+
+    // Update autoplay button visual state
+    updateAutoplayButton() {
+        const btn = document.getElementById('webcam-player-autoplay-btn');
+        if (btn) {
+            btn.classList.toggle('active', this.playing);
+            btn.title = this.playing ? 'Stop autoplay' : 'Start autoplay';
+        }
+    },
+
+    // Toggle hide UI mode and update button state
+    toggleHideUI() {
+        this.hideUIMode = !this.hideUIMode;
+        this.updateHideUIButton();
+        
+        if (this.hideUIMode) {
+            this.hideControls();
+        } else {
+            this.showControls();
+        }
+        this.updateURL();
+    },
+
+    // Update hide UI button visual state
+    updateHideUIButton() {
+        const btn = document.getElementById('webcam-player-hideui-btn');
+        if (btn) {
+            btn.classList.toggle('active', this.hideUIMode);
+            btn.title = this.hideUIMode ? 'Show controls' : 'Hide controls';
+        }
+    },
+
+    // Enable kiosk/signage mode (URL param: hideui)
+    setHideUIMode(enabled) {
+        this.hideUIMode = enabled;
+        this.updateHideUIButton();
+        if (enabled) {
+            this.hideControls();
+        } else {
+            this.showControls();
+        }
+        this.updateURL();
+    },
+
+    async open(airportId, camIndex, camName, currentImageSrc, options = {}) {
         const player = document.getElementById('webcam-player');
         const img = document.getElementById('webcam-player-image');
         const title = document.getElementById('webcam-player-title');
+
+        // Store state for URL sync
+        this.airportId = airportId;
+        this.camIndex = camIndex;
+        this.camName = camName;
 
         // Show player immediately with current image
         img.src = currentImageSrc;
         title.textContent = camName;
         player.classList.add('active');
+        player.classList.remove('controls-hidden');
         this.active = true;
+        this.controlsVisible = true;
+
+        // Handle hideui mode
+        this.hideUIMode = options.hideui || false;
+        if (this.hideUIMode) {
+            this.hideControls();
+        }
 
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
         document.body.style.width = '100%';
 
-        // Push history state for back button
-        history.pushState({ webcamPlayer: true }, '');
+        // Update URL (don't push state, use replaceState for clean back behavior)
+        this.updateURL();
 
         // Fetch history manifest
         try {
@@ -3005,6 +3157,11 @@ const WebcamPlayer = {
                 this.initTimeline();
                 this.preloadFrames();
                 document.querySelector('.webcam-player-controls').style.display = '';
+                
+                // Auto-play if requested
+                if (options.autoplay && this.frames.length > 1) {
+                    this.play();
+                }
             } else {
                 // No history available - show single frame mode
                 this.frames = [];
@@ -3018,16 +3175,20 @@ const WebcamPlayer = {
         }
 
         this.setupGestures();
+        this.setupTapToToggle();
     },
 
     close() {
         if (!this.active) return;
 
         this.stop();
+        this.clearHideTimer();
         this.active = false;
+        this.hideUIMode = false;
 
         const player = document.getElementById('webcam-player');
         player.classList.remove('active');
+        player.classList.remove('controls-hidden');
 
         // Restore body scroll
         document.body.style.overflow = '';
@@ -3037,10 +3198,16 @@ const WebcamPlayer = {
         // Clean up
         this.preloadedImages = {};
         this.frames = [];
+        this.airportId = null;
+        this.camIndex = null;
+        this.camName = null;
 
         // Reset UI for next time
         document.querySelector('.webcam-player-controls').style.display = '';
         document.getElementById('webcam-player-timestamp').textContent = '--';
+        
+        // Update URL to remove player params
+        this.updateURL();
     },
 
     initTimeline() {
@@ -3186,6 +3353,7 @@ const WebcamPlayer = {
 
         this.playing = true;
         document.getElementById('webcam-player-play-btn').textContent = '⏸';
+        this.updateAutoplayButton();
 
         this.playInterval = setInterval(() => {
             if (this.currentIndex >= this.frames.length - 1) {
@@ -3195,14 +3363,26 @@ const WebcamPlayer = {
             }
             this.goToFrame(this.currentIndex);
         }, 500);  // 500ms = 2 FPS for deliberate time-lapse viewing
+        
+        // Update URL to reflect playing state
+        this.updateURL();
+        // Start auto-hide timer
+        this.resetHideTimer();
     },
 
     stop() {
         this.playing = false;
         document.getElementById('webcam-player-play-btn').textContent = '▶';
+        this.updateAutoplayButton();
         if (this.playInterval) {
             clearInterval(this.playInterval);
             this.playInterval = null;
+        }
+        // Update URL to reflect stopped state
+        this.updateURL();
+        // Show controls when stopped
+        if (!this.hideUIMode) {
+            this.showControls();
         }
     },
 
@@ -3227,6 +3407,8 @@ const WebcamPlayer = {
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
             currentY = startY;
+            // Reset hide timer on any touch
+            this.resetHideTimer();
         }, { passive: true });
 
         swipeArea.addEventListener('touchmove', (e) => {
@@ -3248,39 +3430,90 @@ const WebcamPlayer = {
             player.style.transform = '';
             player.style.opacity = '';
 
+            // Swipe down to dismiss
             if (deltaY > 100 && Math.abs(deltaX) < 50) {
                 this.close();
                 return;
             }
 
+            // Horizontal swipe to navigate
             if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 50) {
                 if (deltaX > 0) {
                     this.prev();
                 } else {
                     this.next();
                 }
+                return;
+            }
+            
+            // Small movement = tap to toggle controls
+            if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                this.toggleControls();
+            }
+        });
+    },
+
+    setupTapToToggle() {
+        const player = document.getElementById('webcam-player');
+        if (!player || player._tapSetup) return;
+        player._tapSetup = true;
+
+        // Reset hide timer on any mouse movement in the player (desktop)
+        // Also show controls temporarily on mouse move
+        player.addEventListener('mousemove', () => {
+            if (!this.controlsVisible) {
+                this.showControls();
+            }
+            this.resetHideTimer();
+        });
+
+        // Also reset timer when interacting with controls
+        const controls = document.querySelector('.webcam-player-controls');
+        const header = document.querySelector('.webcam-player-header');
+        
+        [controls, header].forEach(el => {
+            if (el) {
+                el.addEventListener('click', () => this.resetHideTimer());
+                el.addEventListener('touchstart', () => this.resetHideTimer(), { passive: true });
             }
         });
     }
 };
 
 // Global function for onclick handler - with fallback for disabled history
-function openWebcamPlayer(airportId, camIndex, camName, currentSrc) {
+function openWebcamPlayer(airportId, camIndex, camName, currentSrc, options = {}) {
     if (!window.AIRPORT_NAV_DATA?.webcamHistoryEnabled) {
         openLiveStream(currentSrc);
         return;
     }
-    WebcamPlayer.open(airportId, camIndex, camName, currentSrc);
+    WebcamPlayer.open(airportId, camIndex, camName, currentSrc, options);
 }
 
 function closeWebcamPlayer() { WebcamPlayer.close(); }
 function webcamPlayerTogglePlay() { WebcamPlayer.togglePlay(); }
 function webcamPlayerPrev() { WebcamPlayer.prev(); }
 function webcamPlayerNext() { WebcamPlayer.next(); }
+function webcamPlayerToggleAutoplay() { WebcamPlayer.toggleAutoplay(); }
+function webcamPlayerToggleHideUI() { WebcamPlayer.toggleHideUI(); }
+function webcamPlayerToggleControls(event) {
+    // Don't toggle if clicking on controls or header
+    if (event && event.target && (event.target.closest('.webcam-player-controls') || event.target.closest('.webcam-player-header'))) {
+        return;
+    }
+    WebcamPlayer.toggleControls();
+}
 
-// Handle back button
+// Handle back button / navigation
 window.addEventListener('popstate', () => {
-    if (WebcamPlayer.active) {
+    // Check if we should open or close based on URL
+    const params = new URLSearchParams(window.location.search);
+    const camParam = params.get('cam');
+    
+    if (camParam !== null && !WebcamPlayer.active) {
+        // URL has cam param but player not open - this shouldn't happen normally
+        // but handle it gracefully
+    } else if (camParam === null && WebcamPlayer.active) {
+        // URL no longer has cam param - close the player
         WebcamPlayer.close();
     }
 });
@@ -3309,6 +3542,49 @@ window.addEventListener('keydown', (e) => {
         case 'End':
             WebcamPlayer.goToFrame(WebcamPlayer.frames.length - 1);
             break;
+        case 'h':
+        case 'H':
+            // Toggle hide UI mode
+            WebcamPlayer.setHideUIMode(!WebcamPlayer.hideUIMode);
+            break;
+        case 'c':
+        case 'C':
+            // Toggle controls visibility (without changing hideUI mode)
+            if (!WebcamPlayer.hideUIMode) {
+                WebcamPlayer.toggleControls();
+            }
+            break;
+    }
+});
+
+// Check URL params on page load and open player if needed
+document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const camParam = params.get('cam');
+    
+    if (camParam !== null && window.AIRPORT_NAV_DATA?.webcamHistoryEnabled) {
+        const camIndex = parseInt(camParam, 10);
+        const webcams = <?= json_encode($airport['webcams'] ?? []) ?>;
+        
+        if (!isNaN(camIndex) && webcams && webcams[camIndex]) {
+            const cam = webcams[camIndex];
+            const airportId = window.AIRPORT_NAV_DATA.currentAirportId;
+            
+            // Get the current image src from the page
+            const imgEl = document.getElementById(`webcam-${camIndex}`);
+            const currentSrc = imgEl ? imgEl.src : '';
+            
+            // Check for autoplay and hideui params (handle both ?autoplay and ?autoplay=1)
+            const options = {
+                autoplay: params.has('autoplay') || params.get('autoplay') === '1',
+                hideui: params.has('hideui') || params.get('hideui') === '1'
+            };
+            
+            // Small delay to ensure page is fully loaded
+            setTimeout(() => {
+                openWebcamPlayer(airportId, camIndex, cam.name, currentSrc, options);
+            }, 100);
+        }
     }
 });
 
@@ -5188,7 +5464,7 @@ window.addEventListener('beforeunload', () => {
         <span style="width: 60px;"></span>
     </div>
     
-    <div class="webcam-player-image-container" id="webcam-player-swipe-area">
+    <div class="webcam-player-image-container" id="webcam-player-swipe-area" onclick="webcamPlayerToggleControls(event)">
         <img id="webcam-player-image" class="webcam-player-image" src="" alt="Webcam history frame">
         <div id="webcam-player-loading-bar" class="webcam-player-loading-bar" style="width: 0%;" role="progressbar" aria-label="Loading frames"></div>
     </div>
@@ -5212,6 +5488,9 @@ window.addEventListener('beforeunload', () => {
             <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame">⏮</button>
             <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause">▶</button>
             <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame">⏭</button>
+            <span class="webcam-player-btn-divider"></span>
+            <button class="webcam-player-btn toggle" id="webcam-player-autoplay-btn" onclick="webcamPlayerToggleAutoplay()" aria-label="Toggle autoplay" title="Toggle autoplay">🔄</button>
+            <button class="webcam-player-btn toggle" id="webcam-player-hideui-btn" onclick="webcamPlayerToggleHideUI()" aria-label="Toggle fullscreen mode" title="Hide controls">⛶</button>
         </div>
     </div>
 </div>
