@@ -17,6 +17,26 @@ if ($requestPath === 'status.php') {
     exit;
 }
 
+// Route Public API requests (/api/v1/...)
+if (strpos($requestPath, 'api/v1/') === 0 || strpos($requestPath, 'api/v1') === 0) {
+    include 'api/v1/router.php';
+    exit;
+}
+
+// Route API docs requests
+if ($requestPath === 'api/docs' || strpos($requestPath, 'api/docs/') === 0) {
+    if ($requestPath === 'api/docs' || $requestPath === 'api/docs/') {
+        include 'api/docs/index.php';
+    } elseif ($requestPath === 'api/docs/openapi.json') {
+        header('Content-Type: application/json');
+        readfile(__DIR__ . '/api/docs/openapi.json');
+    } else {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => ['code' => 'NOT_FOUND', 'message' => 'Documentation page not found']]);
+    }
+    exit;
+}
+
 $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
 if (strpos($host, 'status') !== false || (isset($_GET['status']) && $_GET['status'] === '1')) {
     // Route to status page
@@ -73,22 +93,36 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
 // Check for airport subdomain
 if (!$isAirportRequest) {
     $host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
+    // Remove port from host if present
+    $hostWithoutPort = preg_replace('/:\d+$/', '', $host);
     $baseDomain = getBaseDomain();
     
-    // Match subdomain pattern (e.g., kspb.aviationwx.org or 03s.aviationwx.org)
-    $pattern = '/^([a-z0-9-]{3,50})\.' . preg_quote($baseDomain, '/') . '$/';
-    if (preg_match($pattern, $host, $matches)) {
-        $isAirportRequest = true;
-        $rawAirportIdentifier = $matches[1];
-    } else {
-        // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
-        $hostParts = explode('.', $host);
-        if (count($hostParts) >= 3) {
-            $potentialId = $hostParts[0];
-            // Exclude known non-airport subdomains
-            if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides'])) {
-                $isAirportRequest = true;
-                $rawAirportIdentifier = $potentialId;
+    // In non-production environments, skip subdomain parsing for local development hosts
+    // This allows localhost, 127.0.0.1, IP addresses, and other non-DNS hosts to work
+    $isLocalDevHost = !isProduction() && (
+        $hostWithoutPort === 'localhost' ||
+        $hostWithoutPort === '127.0.0.1' ||
+        preg_match('/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $hostWithoutPort) || // Any IPv4
+        preg_match('/^\[?[a-f0-9:]+\]?$/', $hostWithoutPort) || // IPv6
+        $hostWithoutPort === $baseDomain // Bare domain without subdomain
+    );
+    
+    if (!$isLocalDevHost) {
+        // Match subdomain pattern (e.g., kspb.aviationwx.org or 03s.aviationwx.org)
+        $pattern = '/^([a-z0-9-]{3,50})\.' . preg_quote($baseDomain, '/') . '$/';
+        if (preg_match($pattern, $host, $matches)) {
+            $isAirportRequest = true;
+            $rawAirportIdentifier = $matches[1];
+        } else {
+            // Fallback: check if host has 3+ parts (handles other TLDs and custom domains)
+            $hostParts = explode('.', $hostWithoutPort);
+            if (count($hostParts) >= 3) {
+                $potentialId = $hostParts[0];
+                // Exclude known non-airport subdomains
+                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api'])) {
+                    $isAirportRequest = true;
+                    $rawAirportIdentifier = $potentialId;
+                }
             }
         }
     }
