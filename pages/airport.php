@@ -3048,6 +3048,8 @@ const WebcamPlayer = {
             this.hideTimeout = setTimeout(() => {
                 if (this.playing || this.hideUIMode) {
                     this.hideControls();
+                    // Ensure URL reflects current state after auto-hide
+                    this.updateURL();
                 }
             }, 3000);
         }
