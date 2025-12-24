@@ -20,7 +20,36 @@
     "notam_worker_pool_size": 1,
     "notam_api_client_id": "nMrmYk4UzonK4Ny1mGNGBpecTM4hodoGgyEZzsk3dYdaHAq8",
     "notam_api_client_secret": "p3rJGiTJgsOTWn8gMqmdhu7F1hqPPebakpAYhWTT1gNwKK2TOQuQlU1Sv66NFxk8",
-    "notam_api_base_url": "https://api-staging.cgifederal-aim.com"
+    "notam_api_base_url": "https://api-staging.cgifederal-aim.com",
+    "public_api": {
+      "enabled": false,
+      "version": "1",
+      "rate_limits": {
+        "anonymous": {
+          "requests_per_minute": 20,
+          "requests_per_hour": 200,
+          "requests_per_day": 2000
+        },
+        "partner": {
+          "requests_per_minute": 120,
+          "requests_per_hour": 5000,
+          "requests_per_day": 50000
+        }
+      },
+      "bulk_max_airports": 10,
+      "weather_history_enabled": true,
+      "weather_history_retention_hours": 24,
+      "attribution_text": "Weather data from AviationWX.org",
+      "partner_keys": {
+        "ak_live_example1234567890abcd": {
+          "name": "Example Partner",
+          "contact": "developer@example.com",
+          "enabled": true,
+          "created": "2024-01-01",
+          "notes": "Example partner API key - replace with real keys"
+        }
+      }
+    }
   },
   "airports": {
     "kspb": {
@@ -291,7 +320,7 @@
         "api_token": "your-synopticdata-api-token"
       }
     },
-    "custom-airport": {
+    "cust": {
       "name": "Custom Airport Without Standard Identifiers",
       "enabled": true,
       "address": "City, State",
