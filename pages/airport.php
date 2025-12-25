@@ -117,6 +117,133 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             } catch {}
         })();
     </script>
+    <?php
+    // Calculate sunrise/sunset for night mode auto-detection
+    // Uses airport's coordinates and timezone for accurate local times
+    $nightModeData = [];
+    if (isset($airport['lat']) && isset($airport['lon']) && isset($airport['timezone'])) {
+        try {
+            $tz = new DateTimeZone($airport['timezone']);
+            $now = new DateTime('now', $tz);
+            $today = $now->format('Y-m-d');
+            
+            // Get sun info for today at the airport's location
+            $sunInfo = date_sun_info(
+                strtotime($today . ' 12:00:00 ' . $airport['timezone']),
+                $airport['lat'],
+                $airport['lon']
+            );
+            
+            if ($sunInfo !== false && isset($sunInfo['sunset']) && isset($sunInfo['sunrise'])) {
+                // Format times in airport's timezone
+                $sunrise = new DateTime('@' . $sunInfo['sunrise']);
+                $sunrise->setTimezone($tz);
+                $sunset = new DateTime('@' . $sunInfo['sunset']);
+                $sunset->setTimezone($tz);
+                
+                $nightModeData = [
+                    'timezone' => $airport['timezone'],
+                    'sunriseHour' => (int)$sunrise->format('G'),
+                    'sunriseMin' => (int)$sunrise->format('i'),
+                    'sunsetHour' => (int)$sunset->format('G'),
+                    'sunsetMin' => (int)$sunset->format('i'),
+                    'currentHour' => (int)$now->format('G'),
+                    'currentMin' => (int)$now->format('i'),
+                    'todayDate' => $today
+                ];
+            }
+        } catch (Exception $e) {
+            // Silently fail - night mode just won't auto-activate
+        }
+    }
+    ?>
+    <script>
+        // Theme Mode - Instant activation before first paint
+        // Three modes: day (light), dark (classic dark), night (red night vision)
+        // Priority: 
+        //   1) Mobile after sunset → Night mode (auto, unless manually overridden today)
+        //   2) Saved cookie preference (day/dark)
+        //   3) Browser prefers-color-scheme
+        //   4) Fallback: Day mode
+        (function() {
+            'use strict';
+            
+            var nightData = <?= json_encode($nightModeData) ?>;
+            
+            // Check if mobile device (for auto night mode)
+            function isMobile() {
+                return window.innerWidth <= 768 || ('ontouchstart' in window);
+            }
+            
+            // Check browser/OS dark mode preference
+            function browserPrefersDark() {
+                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            
+            // Get cookie value
+            function getCookie(name) {
+                var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                return match ? decodeURIComponent(match[2]) : null;
+            }
+            
+            // Apply theme class
+            function applyTheme(theme) {
+                if (theme === 'night') {
+                    document.documentElement.classList.add('night-mode');
+                } else if (theme === 'dark') {
+                    document.documentElement.classList.add('dark-mode');
+                }
+                // 'day' = no class (default)
+            }
+            
+            // Check if it's currently night at the airport
+            function isNightTime() {
+                if (!nightData || !nightData.timezone) return false;
+                var currentMins = nightData.currentHour * 60 + nightData.currentMin;
+                var sunriseMins = nightData.sunriseHour * 60 + nightData.sunriseMin;
+                var sunsetMins = nightData.sunsetHour * 60 + nightData.sunsetMin;
+                
+                // Night = after sunset OR before sunrise
+                return currentMins >= sunsetMins || currentMins < sunriseMins;
+            }
+            
+            // Get theme preference (check new then old cookie names)
+            var themePref = getCookie('aviationwx_theme');
+            var manualOverride = getCookie('aviationwx_theme_override') || getCookie('aviationwx_night_override');
+            
+            // Legacy support: convert old night mode preference
+            if (!themePref) {
+                var oldNightPref = getCookie('aviationwx_night_mode');
+                if (oldNightPref === 'on') themePref = 'night';
+                else if (oldNightPref === 'off') themePref = 'day';
+            }
+            
+            // PRIORITY 1: Mobile after sunset → Auto night mode
+            if (isMobile() && isNightTime()) {
+                // Unless user manually overrode today
+                if (nightData && manualOverride === nightData.todayDate && themePref) {
+                    applyTheme(themePref);
+                } else {
+                    applyTheme('night');
+                }
+                return;
+            }
+            
+            // PRIORITY 2: Saved cookie preference (persists across sessions)
+            if (themePref === 'day' || themePref === 'dark') {
+                applyTheme(themePref);
+                return;
+            }
+            
+            // PRIORITY 3: Browser/OS dark mode preference
+            if (browserPrefersDark()) {
+                applyTheme('dark');
+                return;
+            }
+            
+            // FALLBACK: Day mode (no class added)
+        })();
+    </script>
     <title><?= $pageTitle ?></title>
     
     <?php
@@ -527,6 +654,10 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <div class="weather-header-left" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <h2 class="weather-header-title" style="margin: 0;">Current Conditions</h2>
                     <div class="weather-toggle-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle night vision mode (red dark theme to protect night vision)">
+                            <span id="night-mode-icon">🌙</span>
+                            <span id="night-mode-display">Night</span>
+                        </button>
                         <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                             <span id="time-format-display">12hr</span>
                         </button>
@@ -1800,6 +1931,344 @@ if (document.getElementById('time-format-toggle')) {
         }
     }
     initTimeFormatToggleWrapper();
+}
+
+// Theme mode toggle handler
+// Three modes: day (default), dark (classic dark theme), night (red night vision)
+// Night vision red mode protects pilot night vision (scotopic vision)
+// On mobile: auto-activates night mode after sunset until sunrise (unless manually overridden)
+// On desktop: manual toggle only
+// Manual toggle disables auto mode until the next day
+
+// Night mode data from server (sunrise/sunset times in airport's timezone)
+var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
+
+// Theme modes: 'day', 'dark', 'night'
+function getThemePreference() {
+    // Try cookie first (source of truth), then localStorage (cache)
+    return getCookie('aviationwx_theme') 
+        || localStorage.getItem('aviationwx_theme')
+        || 'day';
+}
+
+function setThemePreference(value) {
+    // Set cookie (source of truth, cross-subdomain)
+    setCookie('aviationwx_theme', value);
+    // localStorage is updated by setCookie, but ensure it's set
+    try {
+        localStorage.setItem('aviationwx_theme', value);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
+}
+
+function setThemeManualOverride() {
+    // Set manual override cookie to today's date (in airport's timezone)
+    // This disables auto mode until the next day
+    var today = NIGHT_MODE_DATA && NIGHT_MODE_DATA.todayDate ? NIGHT_MODE_DATA.todayDate : new Date().toISOString().split('T')[0];
+    setCookie('aviationwx_theme_override', today);
+    try {
+        localStorage.setItem('aviationwx_theme_override', today);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
+}
+
+function getCurrentTheme() {
+    if (document.body.classList.contains('night-mode')) return 'night';
+    if (document.body.classList.contains('dark-mode')) return 'dark';
+    return 'day';
+}
+
+function isNightModeActive() {
+    return document.documentElement.classList.contains('night-mode') || 
+           document.body.classList.contains('night-mode');
+}
+
+function isDarkModeActive() {
+    return document.documentElement.classList.contains('dark-mode') || 
+           document.body.classList.contains('dark-mode');
+}
+
+function applyTheme(theme) {
+    // Remove all theme classes
+    document.documentElement.classList.remove('night-mode', 'dark-mode');
+    document.body.classList.remove('night-mode', 'dark-mode');
+    
+    // Apply the selected theme
+    if (theme === 'night') {
+        document.documentElement.classList.add('night-mode');
+        document.body.classList.add('night-mode');
+    } else if (theme === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+        document.body.classList.add('dark-mode');
+    }
+    // 'day' means no class added (default light theme)
+}
+
+// Legacy compatibility
+function applyNightMode(active) {
+    applyTheme(active ? 'night' : 'day');
+}
+
+function isMobileDevice() {
+    return window.innerWidth <= 768 || ('ontouchstart' in window);
+}
+
+function isNightTimeAtAirport() {
+    if (!NIGHT_MODE_DATA || !NIGHT_MODE_DATA.timezone) return false;
+    
+    // Get current time in airport's timezone
+    try {
+        var now = new Date();
+        var formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: NIGHT_MODE_DATA.timezone,
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: false
+        });
+        var parts = formatter.formatToParts(now);
+        var hour = 0, minute = 0;
+        parts.forEach(function(p) {
+            if (p.type === 'hour') hour = parseInt(p.value, 10);
+            if (p.type === 'minute') minute = parseInt(p.value, 10);
+        });
+        
+        var currentMins = hour * 60 + minute;
+        var sunriseMins = NIGHT_MODE_DATA.sunriseHour * 60 + NIGHT_MODE_DATA.sunriseMin;
+        var sunsetMins = NIGHT_MODE_DATA.sunsetHour * 60 + NIGHT_MODE_DATA.sunsetMin;
+        
+        // Night = after sunset OR before sunrise
+        return currentMins >= sunsetMins || currentMins < sunriseMins;
+    } catch (e) {
+        return false;
+    }
+}
+
+function getTodayInAirportTimezone() {
+    if (!NIGHT_MODE_DATA || !NIGHT_MODE_DATA.timezone) {
+        return new Date().toISOString().split('T')[0];
+    }
+    try {
+        var now = new Date();
+        var formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: NIGHT_MODE_DATA.timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        return formatter.format(now); // Returns YYYY-MM-DD format
+    } catch (e) {
+        return new Date().toISOString().split('T')[0];
+    }
+}
+
+function hasManualOverrideToday() {
+    // Check both old and new cookie names for backwards compatibility
+    var override = getCookie('aviationwx_theme_override') 
+        || localStorage.getItem('aviationwx_theme_override')
+        || getCookie('aviationwx_night_override') 
+        || localStorage.getItem('aviationwx_night_override');
+    if (!override) return false;
+    var today = getTodayInAirportTimezone();
+    return override === today;
+}
+
+function initThemeToggle() {
+    var toggle = document.getElementById('night-mode-toggle');
+    var icon = document.getElementById('night-mode-icon');
+    var display = document.getElementById('night-mode-display');
+    
+    if (!toggle) return;
+    
+    function updateToggle() {
+        var theme = getCurrentTheme();
+        if (theme === 'night') {
+            // Currently in night vision mode
+            icon.textContent = '🌙';
+            display.textContent = 'Night';
+            toggle.title = 'Night vision mode (red) - click to switch to day mode';
+        } else if (theme === 'dark') {
+            // Currently in dark mode
+            icon.textContent = '🌑';
+            display.textContent = 'Dark';
+            toggle.title = 'Dark mode - click to switch to night vision mode';
+        } else {
+            // Currently in day mode
+            icon.textContent = '☀️';
+            display.textContent = 'Day';
+            toggle.title = 'Day mode - click to switch to dark mode';
+        }
+    }
+    
+    toggle.addEventListener('click', function() {
+        var currentTheme = getCurrentTheme();
+        var newTheme;
+        
+        // Cycle: day -> dark -> night -> day
+        if (currentTheme === 'day') {
+            newTheme = 'dark';
+        } else if (currentTheme === 'dark') {
+            newTheme = 'night';
+        } else {
+            newTheme = 'day';
+        }
+        
+        // Apply the theme
+        applyTheme(newTheme);
+        
+        // Save preference
+        setThemePreference(newTheme);
+        
+        // Set manual override for today (disables auto until tomorrow)
+        setThemeManualOverride();
+        
+        // Update button display
+        updateToggle();
+        
+        // Update wind canvas colors if needed
+        if (typeof updateWindVisual === 'function' && currentWeatherData) {
+            updateWindVisual(currentWeatherData);
+        }
+    });
+    
+    // Sync with initial state (might have been set by inline script in <head>)
+    // This must happen BEFORE updateToggle() so it reads the correct theme
+    if (document.documentElement.classList.contains('night-mode')) {
+        document.body.classList.add('night-mode');
+    } else if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    
+    // Initial update (after sync)
+    updateToggle();
+}
+
+// Legacy alias
+function initNightModeToggle() {
+    initThemeToggle();
+}
+
+// Check browser/OS dark mode preference
+function browserPrefersDark() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+// Auto-detect night mode on mobile (runs periodically)
+function checkNightModeAuto() {
+    // Only auto-switch on mobile
+    if (!isMobileDevice()) return;
+    
+    // Don't auto-switch if user manually toggled today
+    if (hasManualOverrideToday()) return;
+    
+    var shouldBeNight = isNightTimeAtAirport();
+    var currentTheme = getCurrentTheme();
+    var isCurrentlyNight = (currentTheme === 'night');
+    
+    if (shouldBeNight !== isCurrentlyNight) {
+        // Determine target theme
+        var targetTheme;
+        if (shouldBeNight) {
+            targetTheme = 'night';
+        } else {
+            // Transitioning from night to daytime at sunrise
+            // Use saved preference if exists, otherwise browser preference
+            var savedPref = getThemePreference();
+            if (savedPref === 'day' || savedPref === 'dark') {
+                targetTheme = savedPref;
+            } else {
+                targetTheme = browserPrefersDark() ? 'dark' : 'day';
+            }
+        }
+        
+        applyTheme(targetTheme);
+        
+        // Update toggle display
+        updateThemeToggleDisplay();
+        
+        // Update wind canvas if needed
+        if (typeof updateWindVisual === 'function' && currentWeatherData) {
+            updateWindVisual(currentWeatherData);
+        }
+    }
+}
+
+// Initialize night mode toggle
+if (document.getElementById('night-mode-toggle')) {
+    initNightModeToggle();
+} else {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initNightModeToggle);
+    } else {
+        initNightModeToggle();
+    }
+}
+
+// Check for night mode auto-switch every minute (on mobile)
+setInterval(checkNightModeAuto, 60000);
+
+// Also check immediately after page load (in case of timezone edge cases)
+setTimeout(checkNightModeAuto, 1000);
+
+// Listen for browser/OS theme preference changes
+// This allows real-time updates when user changes system dark mode
+// But only if user hasn't set a manual preference
+if (window.matchMedia) {
+    var darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    function handleBrowserThemeChange(e) {
+        // Don't auto-switch if user has a saved theme preference
+        // This respects manual choices permanently, not just for today
+        var savedPref = getThemePreference();
+        if (savedPref && savedPref !== 'auto') return;
+        
+        // Don't switch if mobile and it's nighttime (night mode takes priority)
+        if (isMobileDevice() && isNightTimeAtAirport()) return;
+        
+        var currentTheme = getCurrentTheme();
+        var browserWantsDark = e.matches;
+        
+        // If browser preference changes and matches a theme switch
+        if (browserWantsDark && currentTheme === 'day') {
+            applyTheme('dark');
+            updateThemeToggleDisplay();
+        } else if (!browserWantsDark && currentTheme === 'dark') {
+            applyTheme('day');
+            updateThemeToggleDisplay();
+        }
+    }
+    
+    // Modern browsers
+    if (darkModeQuery.addEventListener) {
+        darkModeQuery.addEventListener('change', handleBrowserThemeChange);
+    } else if (darkModeQuery.addListener) {
+        // Older browsers (Safari < 14)
+        darkModeQuery.addListener(handleBrowserThemeChange);
+    }
+}
+
+// Helper to update toggle display from outside initThemeToggle
+function updateThemeToggleDisplay() {
+    var toggle = document.getElementById('night-mode-toggle');
+    var icon = document.getElementById('night-mode-icon');
+    var display = document.getElementById('night-mode-display');
+    if (!toggle || !icon || !display) return;
+    
+    var theme = getCurrentTheme();
+    if (theme === 'night') {
+        icon.textContent = '🌙';
+        display.textContent = 'Night';
+        toggle.title = 'Night vision mode (red) - click to switch to day mode';
+    } else if (theme === 'dark') {
+        icon.textContent = '🌑';
+        display.textContent = 'Dark';
+        toggle.title = 'Dark mode - click to switch to night vision mode';
+    } else {
+        icon.textContent = '☀️';
+        display.textContent = 'Day';
+        toggle.title = 'Day mode - click to switch to dark mode';
+    }
 }
 
 // Wind speed unit toggle handler
