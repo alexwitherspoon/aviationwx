@@ -81,6 +81,18 @@ if (preg_match('/^terms\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
     exit;
 }
 
+// Match embed subdomain exactly (e.g., embed.aviationwx.org)
+if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // Check if there's an airport parameter - if so, show embed renderer
+    if (isset($_GET['airport']) && !empty($_GET['airport'])) {
+        include 'pages/embed.php';
+    } else {
+        // Show embed configurator
+        include 'pages/embed-configurator.php';
+    }
+    exit;
+}
+
 // Check for guides query parameter or path (for local dev/testing)
 // This must be after config is loaded because guides.php needs config
 if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
@@ -101,6 +113,18 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
 if (isset($_GET['terms']) || $requestPath === 'terms') {
     // Route to terms of service page
     include 'pages/terms.php';
+    exit;
+}
+
+// Check for embed query parameter (for local dev/testing)
+if (isset($_GET['embed'])) {
+    // Check if there's an airport parameter - if so, show embed renderer
+    if (isset($_GET['airport']) && !empty($_GET['airport'])) {
+        include 'pages/embed.php';
+    } else {
+        // Show embed configurator
+        include 'pages/embed-configurator.php';
+    }
     exit;
 }
 
