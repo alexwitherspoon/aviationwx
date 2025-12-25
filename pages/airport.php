@@ -657,9 +657,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <div class="weather-header-left" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <h2 class="weather-header-title" style="margin: 0;">Current Conditions</h2>
                     <div class="weather-toggle-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle night vision mode (red dark theme to protect night vision)">
+                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 40px; height: auto;" title="Toggle theme: Day → Dark → Night">
                             <span id="night-mode-icon">🌙</span>
-                            <span id="night-mode-display">Night</span>
                         </button>
                         <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                             <span id="time-format-display">12hr</span>
@@ -2198,7 +2197,6 @@ function hasManualOverrideToday() {
 function initThemeToggle() {
     var toggle = document.getElementById('night-mode-toggle');
     var icon = document.getElementById('night-mode-icon');
-    var display = document.getElementById('night-mode-display');
     
     if (!toggle) return;
     
@@ -2207,17 +2205,14 @@ function initThemeToggle() {
         if (theme === 'night') {
             // Currently in night vision mode
             icon.textContent = '🌙';
-            display.textContent = 'Night';
-            toggle.title = 'Night vision mode (red) - click to switch to day mode';
+            toggle.title = 'Night vision mode - click to switch to day mode';
         } else if (theme === 'dark') {
             // Currently in dark mode
             icon.textContent = '🌑';
-            display.textContent = 'Dark';
             toggle.title = 'Dark mode - click to switch to night vision mode';
         } else {
             // Currently in day mode
             icon.textContent = '☀️';
-            display.textContent = 'Day';
             toggle.title = 'Day mode - click to switch to dark mode';
         }
     }
@@ -2379,21 +2374,17 @@ if (window.matchMedia) {
 function updateThemeToggleDisplay() {
     var toggle = document.getElementById('night-mode-toggle');
     var icon = document.getElementById('night-mode-icon');
-    var display = document.getElementById('night-mode-display');
-    if (!toggle || !icon || !display) return;
+    if (!toggle || !icon) return;
     
     var theme = getCurrentTheme();
     if (theme === 'night') {
         icon.textContent = '🌙';
-        display.textContent = 'Night';
-        toggle.title = 'Night vision mode (red) - click to switch to day mode';
+        toggle.title = 'Night vision mode - click to switch to day mode';
     } else if (theme === 'dark') {
         icon.textContent = '🌑';
-        display.textContent = 'Dark';
         toggle.title = 'Dark mode - click to switch to night vision mode';
     } else {
         icon.textContent = '☀️';
-        display.textContent = 'Day';
         toggle.title = 'Day mode - click to switch to dark mode';
     }
 }
