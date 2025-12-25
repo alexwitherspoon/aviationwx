@@ -85,29 +85,34 @@ test.describe('Theme Toggle', () => {
     await expect(page.locator('html')).toHaveClass(/dark-mode/);
   });
 
-  test('Night mode preference should persist via cookie', async ({ page, context }) => {
+  test('Night mode should NOT persist via cookie (time-based only)', async ({ page, context }) => {
     await page.goto(`${baseUrl}/?airport=${testAirport}`);
     await page.waitForLoadState('load', { timeout: 30000 });
 
     const themeToggle = page.locator('#theme-toggle');
 
-    // Set to Night mode (click twice: Day → Dark → Night)
-    await themeToggle.click();
-    await themeToggle.click();
+    // First set Dark mode to establish a preference
+    await themeToggle.click(); // Day → Dark
+    await expect(themeToggle).toContainText('Dark');
+    
+    // Now set to Night mode
+    await themeToggle.click(); // Dark → Night
     await expect(themeToggle).toContainText('Night');
 
-    // Verify cookie was set
+    // Cookie should still be 'dark' (night is not stored)
     const cookies = await context.cookies();
     const themeCookie = cookies.find(c => c.name === 'aviationwx_theme');
     expect(themeCookie).toBeDefined();
-    expect(themeCookie.value).toBe('night');
+    expect(themeCookie.value).toBe('dark'); // NOT 'night'
 
-    // Reload page - should still be Night mode
+    // Reload page - should return to Dark (last saved preference)
+    // because night mode is purely time-based
     await page.reload();
     await page.waitForLoadState('load', { timeout: 30000 });
 
-    await expect(themeToggle).toContainText('Night');
-    await expect(page.locator('html')).toHaveClass(/night-mode/);
+    // During daytime, should show Dark (the saved preference)
+    await expect(themeToggle).toContainText('Dark');
+    await expect(page.locator('html')).toHaveClass(/dark-mode/);
   });
 
   test('Day mode preference should persist via cookie', async ({ page, context }) => {
@@ -263,7 +268,71 @@ test.describe('Theme Toggle', () => {
     // Should have a title attribute for accessibility
     const title = await themeToggle.getAttribute('title');
     expect(title).toBeTruthy();
-    expect(title.toLowerCase()).toContain('theme');
+    expect(title.toLowerCase()).toContain('mode');
+  });
+
+  test('Theme should follow browser preference changes when no manual override', async ({ browser }) => {
+    // Create a context with light color scheme preference
+    const context = await browser.newContext({
+      colorScheme: 'light'
+    });
+    const page = await context.newPage();
+
+    await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    await page.waitForLoadState('load', { timeout: 30000 });
+
+    const themeToggle = page.locator('#theme-toggle');
+    const html = page.locator('html');
+
+    // Should start in Day mode (browser prefers light)
+    await expect(themeToggle).toContainText('Day');
+    await expect(html).not.toHaveClass(/dark-mode/);
+
+    // Emulate browser switching to dark mode
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.waitForTimeout(500); // Allow time for change listener
+
+    // Should now be in Dark mode
+    await expect(themeToggle).toContainText('Dark');
+    await expect(html).toHaveClass(/dark-mode/);
+
+    // Switch back to light
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForTimeout(500);
+
+    // Should now be back to Day mode
+    await expect(themeToggle).toContainText('Day');
+    await expect(html).not.toHaveClass(/dark-mode/);
+
+    await context.close();
+  });
+
+  test('Manual toggle should prevent browser preference changes for today', async ({ browser }) => {
+    // Create a context with light color scheme preference
+    const context = await browser.newContext({
+      colorScheme: 'light'
+    });
+    const page = await context.newPage();
+
+    await page.goto(`${baseUrl}/?airport=${testAirport}`);
+    await page.waitForLoadState('load', { timeout: 30000 });
+
+    const themeToggle = page.locator('#theme-toggle');
+    const html = page.locator('html');
+
+    // Manually toggle to Dark mode
+    await themeToggle.click();
+    await expect(themeToggle).toContainText('Dark');
+
+    // Emulate browser switching to light mode
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForTimeout(500);
+
+    // Should remain in Dark mode (manual override for today)
+    await expect(themeToggle).toContainText('Dark');
+    await expect(html).toHaveClass(/dark-mode/);
+
+    await context.close();
   });
 });
 
