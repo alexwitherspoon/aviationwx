@@ -588,7 +588,7 @@ $baseUrl = getBaseUrl();
                     <div class="radio-group">
                         <label class="radio-item">
                             <input type="radio" name="style" value="card" checked>
-                            <span>Mini Airport Card (300×275)</span>
+                            <span>Mini Airport Card (300×300)</span>
                         </label>
                         <label class="radio-item" id="style-webcam">
                             <input type="radio" name="style" value="webcam">
@@ -684,7 +684,7 @@ $baseUrl = getBaseUrl();
                     <div class="size-inputs">
                         <input type="number" id="width" value="300" min="200" max="1200">
                         <span>×</span>
-                        <input type="number" id="height" value="250" min="80" max="800">
+                        <input type="number" id="height" value="300" min="80" max="800">
                         <span>px</span>
                     </div>
                     <div class="info-callout" style="margin-top: 0.75rem;">
@@ -778,10 +778,10 @@ $baseUrl = getBaseUrl();
                 <div class="preview-panel">
                     <div class="preview-header">
                         <h2>Live Preview</h2>
-                        <span class="preview-dimensions" id="preview-dimensions">300 × 250 px</span>
+                        <span class="preview-dimensions" id="preview-dimensions">300 × 300 px</span>
                     </div>
                     <div class="preview-container">
-                        <div class="preview-frame" id="preview-frame" style="width: 300px; height: 250px;">
+                        <div class="preview-frame" id="preview-frame" style="width: 300px; height: 300px;">
                             <div class="preview-placeholder" id="preview-placeholder">
                                 <div class="icon">✈️</div>
                                 <p>Select an airport to see preview</p>
@@ -845,7 +845,7 @@ $baseUrl = getBaseUrl();
             webcam: 0,
             cams: [0, 1, 2, 3], // Camera indices for multi-cam widgets
             width: 300,
-            height: 250,
+            height: 300,
             target: '_blank',
             embedType: 'iframe',
             tempUnit: 'F',
@@ -856,7 +856,7 @@ $baseUrl = getBaseUrl();
         
         // Size presets for each style
         var SIZE_PRESETS = {
-            card: { width: 300, height: 275 },
+            card: { width: 300, height: 300 },
             webcam: { width: 400, height: 320 },
             dual: { width: 600, height: 320 },
             multi: { width: 600, height: 600 },
@@ -1050,7 +1050,7 @@ $baseUrl = getBaseUrl();
                     break;
                 case 'webcomponent':
                     elements.embedTypeLabel.textContent = 'Web Component Code';
-                    elements.embedInfo.innerHTML = '<strong>Web Component:</strong> Modern approach that integrates seamlessly with your page. Requires JavaScript support. <em>(Coming soon)</em>';
+                    elements.embedInfo.innerHTML = '<strong>Web Component:</strong> Modern approach that integrates seamlessly with your page. Requires JavaScript support.';
                     break;
             }
             
