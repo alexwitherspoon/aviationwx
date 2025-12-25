@@ -1584,6 +1584,27 @@ if (php_sapi_name() === 'cli') {
             margin-bottom: 0.25rem;
         }
         
+        .component-message code {
+            font-size: 0.85rem;
+            background: #f5f5f5;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+        }
+        
+        .api-links {
+            margin-bottom: 1rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .api-links a {
+            color: #0066cc;
+        }
+        
+        .api-links a:hover {
+            text-decoration: underline;
+        }
+        
         .component-timestamp {
             font-size: 0.75rem;
             color: #999;
@@ -1731,6 +1752,14 @@ if (php_sapi_name() === 'cli') {
             color: #ff7eb6;
         }
         
+        body.dark-mode .api-links {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .api-links a {
+            color: #4a9eff;
+        }
+        
         body.dark-mode .component-timestamp {
             color: #707070;
         }
@@ -1865,9 +1894,9 @@ if (php_sapi_name() === 'cli') {
                 </span>
             </div>
             <div class="status-card-body">
-                <div style="margin-bottom: 1rem; color: #666; font-size: 0.9rem;">
-                    <a href="https://api.aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc;">api.aviationwx.org</a> · 
-                    <a href="https://api.aviationwx.org/openapi.json" target="_blank" rel="noopener" style="color: #0066cc;">OpenAPI Spec</a>
+                <div class="api-links">
+                    <a href="https://api.aviationwx.org" target="_blank" rel="noopener">api.aviationwx.org</a> · 
+                    <a href="https://api.aviationwx.org/openapi.json" target="_blank" rel="noopener">OpenAPI Spec</a>
                 </div>
                 <ul class="component-list">
                     <?php foreach ($publicApiHealth['endpoints'] as $endpoint): ?>
@@ -1875,9 +1904,7 @@ if (php_sapi_name() === 'cli') {
                         <div class="component-info">
                             <div class="component-name"><?php echo htmlspecialchars($endpoint['name']); ?></div>
                             <div class="component-message">
-                                <code style="font-size: 0.85rem; background: #f5f5f5; padding: 0.15rem 0.4rem; border-radius: 3px;">
-                                    <?php echo htmlspecialchars($endpoint['endpoint']); ?>
-                                </code>
+                                <code><?php echo htmlspecialchars($endpoint['endpoint']); ?></code>
                                 · <?php echo htmlspecialchars($endpoint['message']); ?>
                             </div>
                         </div>
