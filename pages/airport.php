@@ -159,12 +159,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     ?>
     <script>
         // Theme Mode - Instant activation before first paint
-        // Three modes: day (light), dark (classic dark), night (red night vision)
+        // Four modes: auto (browser preference), day (light), dark (classic dark), night (red night vision)
         // Priority: 
-        //   1) Mobile after sunset → Night mode (auto, unless manually overridden today)
-        //   2) Saved cookie preference (day/dark)
-        //   3) Browser prefers-color-scheme
-        //   4) Fallback: Day mode
+        //   1) Mobile after sunset → Night mode (safety priority, unless manually overridden today)
+        //   2) Saved cookie preference (auto/day/dark)
+        //   3) Default: auto (follows browser prefers-color-scheme)
         (function() {
             'use strict';
             
@@ -196,6 +195,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 // 'day' = no class (default)
             }
             
+            // Apply theme based on browser preference (for auto mode)
+            function applyAutoTheme() {
+                applyTheme(browserPrefersDark() ? 'dark' : 'day');
+            }
+            
             // Check if it's currently night at the airport
             function isNightTime() {
                 if (!nightData || !nightData.timezone) return false;
@@ -207,7 +211,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 return currentMins >= sunsetMins || currentMins < sunriseMins;
             }
             
-            // Get theme preference (only day/dark are stored - night is time-based)
+            // Get theme preference (auto/day/dark are stored - night is time-based)
             var themePref = getCookie('aviationwx_theme');
             var manualOverride = getCookie('aviationwx_theme_override') || getCookie('aviationwx_night_override');
             
@@ -221,7 +225,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             // Ignore legacy 'night' preference (should not be stored anymore)
             if (themePref === 'night') themePref = null;
             
-            // PRIORITY 1: Mobile after sunset → Auto night mode
+            // PRIORITY 1: Mobile after sunset → Auto night mode (safety priority)
             if (isMobile() && isNightTime()) {
                 // Unless user manually overrode today with day/dark
                 if (nightData && manualOverride === nightData.todayDate && (themePref === 'day' || themePref === 'dark')) {
@@ -232,19 +236,15 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 return;
             }
             
-            // PRIORITY 2: Saved cookie preference (day/dark only)
+            // PRIORITY 2: Saved cookie preference (day/dark - explicit choice)
             if (themePref === 'day' || themePref === 'dark') {
                 applyTheme(themePref);
                 return;
             }
             
-            // PRIORITY 3: Browser/OS dark mode preference
-            if (browserPrefersDark()) {
-                applyTheme('dark');
-                return;
-            }
-            
-            // FALLBACK: Day mode (no class added)
+            // PRIORITY 3: Auto mode (explicit 'auto' or no preference) → follow browser preference
+            // This is the default when no preference is stored
+            applyAutoTheme();
         })();
     </script>
     <title><?= $pageTitle ?></title>
@@ -657,7 +657,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 <div class="weather-header-left" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <h2 class="weather-header-title" style="margin: 0;">Current Conditions</h2>
                     <div class="weather-toggle-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 40px; height: auto;" title="Toggle theme: Day → Dark → Night">
+                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 40px; height: auto;" title="Toggle theme: Auto → Day → Dark → Night">
                             <span id="night-mode-icon">🌙</span>
                         </button>
                         <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
@@ -2050,7 +2050,7 @@ if (document.getElementById('time-format-toggle')) {
 }
 
 // Theme mode toggle handler
-// Three modes: day (default), dark (classic dark theme), night (red night vision)
+// Four modes: auto (default, follows browser), day, dark (classic dark theme), night (red night vision)
 // Night vision red mode protects pilot night vision (scotopic vision)
 // On mobile: auto-activates night mode after sunset until sunrise (unless manually overridden)
 // On desktop: manual toggle only
@@ -2059,16 +2059,16 @@ if (document.getElementById('time-format-toggle')) {
 // Night mode data from server (sunrise/sunset times in airport's timezone)
 var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
 
-// Theme modes: 'day', 'dark' (night is time-based, not stored)
+// Theme modes: 'auto' (default, follows browser), 'day', 'dark' (night is time-based, not stored)
 function getThemePreference() {
     // Try cookie first (source of truth), then localStorage (cache)
     var pref = getCookie('aviationwx_theme') || localStorage.getItem('aviationwx_theme');
-    // Only return valid stored preferences (day/dark)
-    // Night mode is never stored - it's determined by airport time
-    if (pref === 'day' || pref === 'dark') {
+    // Valid stored preferences: auto/day/dark
+    // Night mode is never stored - it's determined by airport time on mobile
+    if (pref === 'auto' || pref === 'day' || pref === 'dark') {
         return pref;
     }
-    return null; // No valid preference stored
+    return 'auto'; // Default to auto (follows browser preference)
 }
 
 function setThemePreference(value) {
@@ -2200,46 +2200,76 @@ function initThemeToggle() {
     
     if (!toggle) return;
     
+    // Track current preference mode (auto/day/dark/night-visual)
+    // This is separate from the visual theme applied to the page
+    var currentPreference = getThemePreference(); // Returns 'auto', 'day', or 'dark'
+    
+    // Check if we're in mobile night mode (visual night, not a preference)
+    var visualTheme = getCurrentTheme();
+    var isInMobileNightMode = (visualTheme === 'night');
+    
     function updateToggle() {
-        var theme = getCurrentTheme();
-        if (theme === 'night') {
-            // Currently in night vision mode
+        var visualTheme = getCurrentTheme();
+        
+        // If in night mode (mobile auto-night), show night icon
+        if (visualTheme === 'night') {
             icon.textContent = '🌙';
-            toggle.title = 'Night vision mode - click to switch to day mode';
-        } else if (theme === 'dark') {
-            // Currently in dark mode
+            toggle.title = 'Night vision mode (auto) - click to switch to auto mode';
+        } else if (currentPreference === 'auto') {
+            // Auto mode - show auto icon regardless of visual theme
+            icon.textContent = '🔄';
+            toggle.title = 'Auto mode (follows browser preference) - click to switch to day mode';
+        } else if (currentPreference === 'dark') {
             icon.textContent = '🌑';
             toggle.title = 'Dark mode - click to switch to night vision mode';
         } else {
-            // Currently in day mode
+            // day mode
             icon.textContent = '☀️';
             toggle.title = 'Day mode - click to switch to dark mode';
         }
     }
     
     toggle.addEventListener('click', function() {
-        var currentTheme = getCurrentTheme();
-        var newTheme;
+        var visualTheme = getCurrentTheme();
+        var newPreference;
+        var newVisualTheme;
         
-        // Cycle: day -> dark -> night -> day
-        if (currentTheme === 'day') {
-            newTheme = 'dark';
-        } else if (currentTheme === 'dark') {
-            newTheme = 'night';
+        // Cycle: auto -> day -> dark -> night -> auto
+        // Note: 'night' in this context means the user explicitly chose night vision mode
+        if (visualTheme === 'night') {
+            // From night (visual) -> auto
+            newPreference = 'auto';
+            newVisualTheme = browserPrefersDark() ? 'dark' : 'day';
+        } else if (currentPreference === 'auto') {
+            // From auto -> day
+            newPreference = 'day';
+            newVisualTheme = 'day';
+        } else if (currentPreference === 'day') {
+            // From day -> dark
+            newPreference = 'dark';
+            newVisualTheme = 'dark';
+        } else if (currentPreference === 'dark') {
+            // From dark -> night
+            newPreference = 'night'; // This is a visual choice, not stored
+            newVisualTheme = 'night';
         } else {
-            newTheme = 'day';
+            // Fallback: go to auto
+            newPreference = 'auto';
+            newVisualTheme = browserPrefersDark() ? 'dark' : 'day';
         }
         
-        // Apply the theme
-        applyTheme(newTheme);
+        // Apply the visual theme
+        applyTheme(newVisualTheme);
         
-        // Only save day/dark preferences to cookie
-        // Night mode is purely time-based (determined by airport sunset/sunrise)
-        if (newTheme === 'day' || newTheme === 'dark') {
-            setThemePreference(newTheme);
+        // Update tracked preference
+        currentPreference = newPreference;
+        
+        // Save preference to cookie (auto/day/dark - night is not stored)
+        if (newPreference === 'auto' || newPreference === 'day' || newPreference === 'dark') {
+            setThemePreference(newPreference);
         }
         
-        // Set manual override for today (disables auto night mode until tomorrow)
+        // Set manual override for today (disables mobile auto-night until tomorrow)
         setThemeManualOverride();
         
         // Update button display
@@ -2261,6 +2291,20 @@ function initThemeToggle() {
     
     // Initial update (after sync)
     updateToggle();
+    
+    // Listen for browser preference changes when in auto mode
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            // Only react if we're in auto mode and not in mobile night mode
+            if (currentPreference === 'auto' && getCurrentTheme() !== 'night') {
+                applyTheme(e.matches ? 'dark' : 'day');
+                // Update wind canvas if needed
+                if (typeof updateWindVisual === 'function' && currentWeatherData) {
+                    updateWindVisual(currentWeatherData);
+                }
+            }
+        });
+    }
 }
 
 // Legacy alias
@@ -2292,11 +2336,12 @@ function checkNightModeAuto() {
             targetTheme = 'night';
         } else {
             // Transitioning from night to daytime at sunrise
-            // Use saved preference if exists, otherwise browser preference
+            // Use saved preference: day/dark are explicit, auto follows browser
             var savedPref = getThemePreference();
             if (savedPref === 'day' || savedPref === 'dark') {
                 targetTheme = savedPref;
             } else {
+                // Auto mode (or legacy null): follow browser preference
                 targetTheme = browserPrefersDark() ? 'dark' : 'day';
             }
         }
