@@ -83,11 +83,12 @@ if (preg_match('/^terms\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 
 // Match embed subdomain exactly (e.g., embed.aviationwx.org)
 if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
-    // Check if there's an airport parameter - if so, show embed renderer
-    if (isset($_GET['airport']) && !empty($_GET['airport'])) {
+    // Check if render=1 parameter is set - if so, show embed widget
+    // Otherwise show configurator (with optional pre-selected airport from URL)
+    if (isset($_GET['render']) && $_GET['render'] === '1' && isset($_GET['airport']) && !empty($_GET['airport'])) {
         include 'pages/embed.php';
     } else {
-        // Show embed configurator
+        // Show embed configurator (URL params will be read by JS for pre-selection)
         include 'pages/embed-configurator.php';
     }
     exit;
@@ -118,11 +119,12 @@ if (isset($_GET['terms']) || $requestPath === 'terms') {
 
 // Check for embed query parameter (for local dev/testing)
 if (isset($_GET['embed'])) {
-    // Check if there's an airport parameter - if so, show embed renderer
-    if (isset($_GET['airport']) && !empty($_GET['airport'])) {
+    // Check if render=1 parameter is set - if so, show embed widget
+    // Otherwise show configurator (with optional pre-selected airport from URL)
+    if (isset($_GET['render']) && $_GET['render'] === '1' && isset($_GET['airport']) && !empty($_GET['airport'])) {
         include 'pages/embed.php';
     } else {
-        // Show embed configurator
+        // Show embed configurator (URL params will be read by JS for pre-selection)
         include 'pages/embed-configurator.php';
     }
     exit;

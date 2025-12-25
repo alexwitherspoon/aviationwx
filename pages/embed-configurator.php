@@ -886,7 +886,7 @@ $baseUrl = getBaseUrl();
             styleMulti: document.getElementById('style-multi')
         };
         
-        // Generate embed URL
+        // Generate embed URL (for actual embed widget with render=1)
         function getEmbedUrl() {
             if (!state.airport) return null;
             
@@ -902,6 +902,7 @@ $baseUrl = getBaseUrl();
             }
             
             var params = [];
+            params.push('render=1'); // Required to trigger embed renderer vs configurator
             params.push('airport=' + state.airport.id);
             params.push('style=' + state.style);
             params.push('theme=' + state.theme);
@@ -922,6 +923,33 @@ $baseUrl = getBaseUrl();
             if (state.baroUnit !== 'inHg') params.push('baro=' + state.baroUnit);
             
             return baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + params.join('&');
+        }
+        
+        // Update browser URL to reflect current configurator state (for sharing/bookmarking)
+        function updateBrowserUrl() {
+            var params = new URLSearchParams();
+            if (state.airport) params.set('airport', state.airport.id);
+            params.set('style', state.style);
+            params.set('theme', state.theme);
+            if (state.style === 'webcam' || state.style === 'full') {
+                params.set('webcam', state.webcam);
+            }
+            if (state.style === 'dual') {
+                params.set('cams', state.cams.slice(0, 2).join(','));
+            }
+            if (state.style === 'multi') {
+                params.set('cams', state.cams.slice(0, 4).join(','));
+            }
+            params.set('width', state.width);
+            params.set('height', state.height);
+            params.set('target', state.target);
+            if (state.tempUnit !== 'F') params.set('temp', state.tempUnit);
+            if (state.distUnit !== 'ft') params.set('dist', state.distUnit);
+            if (state.windUnit !== 'kt') params.set('wind', state.windUnit);
+            if (state.baroUnit !== 'inHg') params.set('baro', state.baroUnit);
+            
+            var newUrl = window.location.pathname + '?' + params.toString();
+            window.history.replaceState({}, '', newUrl);
         }
         
         // Generate dashboard URL
@@ -1023,6 +1051,9 @@ $baseUrl = getBaseUrl();
                     elements.embedInfo.innerHTML = '<strong>Web Component:</strong> Modern approach that integrates seamlessly with your page. Requires JavaScript support. <em>(Coming soon)</em>';
                     break;
             }
+            
+            // Update browser URL to reflect current state (for sharing/bookmarking)
+            updateBrowserUrl();
         }
         
         // Escape HTML for display
@@ -1189,9 +1220,10 @@ $baseUrl = getBaseUrl();
             updateWebcamStyles();
             updateWebcamOptions();
             
-            // Update preview and code
+            // Update preview, code, and URL
             updatePreview();
             updateEmbedCode();
+            updateBrowserUrl();
         }
         
         // Clear airport selection
@@ -1203,6 +1235,7 @@ $baseUrl = getBaseUrl();
             updateWebcamOptions();
             updatePreview();
             updateEmbedCode();
+            updateBrowserUrl();
         }
         
         // Event listeners
@@ -1397,10 +1430,107 @@ $baseUrl = getBaseUrl();
             }
         });
         
+        // Initialize from URL parameters (for sharing/bookmarking)
+        function initFromUrl() {
+            var params = new URLSearchParams(window.location.search);
+            
+            // Style
+            var style = params.get('style');
+            if (style && ['card', 'webcam', 'dual', 'multi', 'full'].indexOf(style) !== -1) {
+                state.style = style;
+                var styleRadio = document.querySelector('input[name="style"][value="' + style + '"]');
+                if (styleRadio) styleRadio.checked = true;
+            }
+            
+            // Theme
+            var theme = params.get('theme');
+            if (theme && ['light', 'dark'].indexOf(theme) !== -1) {
+                state.theme = theme;
+                var themeRadio = document.querySelector('input[name="theme"][value="' + theme + '"]');
+                if (themeRadio) themeRadio.checked = true;
+            }
+            
+            // Size
+            var width = params.get('width');
+            var height = params.get('height');
+            if (width && !isNaN(parseInt(width))) {
+                state.width = parseInt(width);
+                document.getElementById('width-input').value = state.width;
+            }
+            if (height && !isNaN(parseInt(height))) {
+                state.height = parseInt(height);
+                document.getElementById('height-input').value = state.height;
+            }
+            
+            // Target
+            var target = params.get('target');
+            if (target && ['_blank', '_self'].indexOf(target) !== -1) {
+                state.target = target;
+                var targetRadio = document.querySelector('input[name="target"][value="' + target + '"]');
+                if (targetRadio) targetRadio.checked = true;
+            }
+            
+            // Units
+            var temp = params.get('temp');
+            if (temp && ['F', 'C'].indexOf(temp) !== -1) {
+                state.tempUnit = temp;
+                var tempRadio = document.querySelector('input[name="temp-unit"][value="' + temp + '"]');
+                if (tempRadio) tempRadio.checked = true;
+            }
+            var dist = params.get('dist');
+            if (dist && ['ft', 'm'].indexOf(dist) !== -1) {
+                state.distUnit = dist;
+                var distRadio = document.querySelector('input[name="dist-unit"][value="' + dist + '"]');
+                if (distRadio) distRadio.checked = true;
+            }
+            var wind = params.get('wind');
+            if (wind && ['kt', 'mph', 'kmh'].indexOf(wind) !== -1) {
+                state.windUnit = wind;
+                var windRadio = document.querySelector('input[name="wind-unit"][value="' + wind + '"]');
+                if (windRadio) windRadio.checked = true;
+            }
+            var baro = params.get('baro');
+            if (baro && ['inHg', 'hPa', 'mmHg'].indexOf(baro) !== -1) {
+                state.baroUnit = baro;
+                var baroRadio = document.querySelector('input[name="baro-unit"][value="' + baro + '"]');
+                if (baroRadio) baroRadio.checked = true;
+            }
+            
+            // Webcam
+            var webcam = params.get('webcam');
+            if (webcam && !isNaN(parseInt(webcam))) {
+                state.webcam = parseInt(webcam);
+            }
+            
+            // Cams (for multi-cam widgets)
+            var cams = params.get('cams');
+            if (cams) {
+                state.cams = cams.split(',').map(function(c) { return parseInt(c) || 0; });
+            }
+            
+            // Airport (load asynchronously)
+            var airportId = params.get('airport');
+            if (airportId) {
+                // Find the airport in our list
+                var foundAirport = null;
+                for (var i = 0; i < airports.length; i++) {
+                    if (airports[i].id.toLowerCase() === airportId.toLowerCase() ||
+                        airports[i].identifier.toLowerCase() === airportId.toLowerCase()) {
+                        foundAirport = airports[i];
+                        break;
+                    }
+                }
+                if (foundAirport) {
+                    selectAirport(foundAirport);
+                }
+            }
+        }
+        
         // Initialize
+        initFromUrl();
+        updateWebcamStyles();
         updatePreview();
         updateEmbedCode();
-        updateWebcamStyles();
     })();
     </script>
 </body>

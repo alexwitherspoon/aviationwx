@@ -220,6 +220,7 @@ $windSpeed = $weather['wind_speed'] ?? null;
 $windDirection = $weather['wind_direction'] ?? null;
 $gustSpeed = $weather['gust_speed'] ?? null;
 $peakGustToday = $weather['peak_gust_today'] ?? null;
+$peakGustTime = $weather['peak_gust_time'] ?? null;
 $visibility = $weather['visibility'] ?? null;
 $pressure = $weather['pressure'] ?? null;
 $densityAltitude = $weather['density_altitude'] ?? null;
@@ -1003,6 +1004,17 @@ header('X-Frame-Options: ALLOWALL');
             color: <?= $theme === 'dark' ? '#ffa94d' : '#e67700' ?>;
         }
         
+        .style-full .wind-section .wind-details .peak-time-item {
+            font-size: 0.65rem;
+            opacity: 0.8;
+            margin-top: -0.1rem;
+        }
+        
+        .style-full .wind-section .wind-details .peak-time-item .value {
+            color: <?= $theme === 'dark' ? '#ffa94d' : '#e67700' ?>;
+            font-weight: 500;
+        }
+        
         .style-full .wind-viz-container canvas {
             display: block;
         }
@@ -1753,6 +1765,21 @@ header('X-Frame-Options: ALLOWALL');
                                 <span class="label">Peak Gust</span>
                                 <span class="value"><?= formatWindSpeed($peakGustToday, $windUnit) ?></span>
                             </div>
+                            <?php if ($peakGustTime !== null): ?>
+                            <div class="metric-item peak-time-item">
+                                <span class="label">@ Time</span>
+                                <span class="value peak-time"><?php
+                                    try {
+                                        $tz = new DateTimeZone($airportTimezone);
+                                        $dt = new DateTime('@' . $peakGustTime);
+                                        $dt->setTimezone($tz);
+                                        echo $dt->format('g:ia');
+                                    } catch (Exception $e) {
+                                        echo date('g:ia', $peakGustTime);
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </div>
