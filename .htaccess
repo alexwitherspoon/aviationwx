@@ -11,8 +11,9 @@ Options -Indexes
     # Handle subdomain requests (Host header preserved by reverse proxy)
     # Match subdomain pattern like kspb.aviationwx.org
     RewriteCond %{HTTP_HOST} ^([^\.]+)\.aviationwx\.org$ [NC]
-    # Exclude www, bare domain, status, and guides subdomains
-    RewriteCond %1 !^(www|aviationwx|status|guides)$ [NC]
+    # Exclude www, bare domain, status, guides, embed, api, and terms subdomains
+    # These are handled by PHP routing in index.php, not as airport identifiers
+    RewriteCond %1 !^(www|aviationwx|status|guides|embed|api|terms)$ [NC]
     # Exclude existing PHP files (weather.php, webcam.php, etc.)
     RewriteCond %{REQUEST_FILENAME} !-f
     # Rewrite to index.php with airport parameter
