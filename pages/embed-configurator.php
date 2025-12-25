@@ -928,6 +928,8 @@ $baseUrl = getBaseUrl();
         // Update browser URL to reflect current configurator state (for sharing/bookmarking)
         function updateBrowserUrl() {
             var params = new URLSearchParams();
+            // Preserve 'embed' param for local development
+            if (IS_LOCAL_DEV) params.set('embed', '');
             if (state.airport) params.set('airport', state.airport.id);
             params.set('style', state.style);
             params.set('theme', state.theme);
@@ -1508,15 +1510,15 @@ $baseUrl = getBaseUrl();
                 state.cams = cams.split(',').map(function(c) { return parseInt(c) || 0; });
             }
             
-            // Airport (load asynchronously)
+            // Airport (load from URL)
             var airportId = params.get('airport');
             if (airportId) {
                 // Find the airport in our list
                 var foundAirport = null;
-                for (var i = 0; i < airports.length; i++) {
-                    if (airports[i].id.toLowerCase() === airportId.toLowerCase() ||
-                        airports[i].identifier.toLowerCase() === airportId.toLowerCase()) {
-                        foundAirport = airports[i];
+                for (var i = 0; i < AIRPORTS.length; i++) {
+                    if (AIRPORTS[i].id.toLowerCase() === airportId.toLowerCase() ||
+                        AIRPORTS[i].identifier.toLowerCase() === airportId.toLowerCase()) {
+                        foundAirport = AIRPORTS[i];
                         break;
                     }
                 }
