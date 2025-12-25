@@ -454,6 +454,44 @@ The system tracks daily extremes that reset at local midnight:
 - `checkAirportHealth()` - Status page health checks
 - Ensures consistent timestamp extraction across both features
 
+### Webcam History Timestamp Handling
+
+**Purpose**: Extract accurate capture timestamps from webcam images for history/time-lapse playback
+
+**Function**: `getHistoryImageCaptureTime($filePath)` in `lib/webcam-history.php`
+
+**Timestamp Detection Order**:
+1. **AviationWX Bridge marker** → interpret `DateTimeOriginal` as UTC
+2. **EXIF 2.31 `OffsetTimeOriginal`** → use the specified timezone offset
+3. **GPS timestamp** → always UTC per EXIF specification
+4. **`DateTimeOriginal` without marker** → assume local time (backward compatible)
+5. **File mtime** → fallback when no EXIF data available
+
+**Bridge Upload Detection**:
+- Bridge uploads include "AviationWX-Bridge" in EXIF `UserComment` field
+- Detected via `isBridgeUpload($filePath)` helper function
+- Bridge uploads write EXIF timestamps in UTC for consistent time handling
+
+**Source Interpretation Summary**:
+
+| Scenario | EXIF UserComment | Interpretation |
+|----------|-----------------|----------------|
+| Bridge upload | Contains "AviationWX-Bridge" | DateTimeOriginal is UTC |
+| Direct camera | No marker | DateTimeOriginal is local time |
+| Any with GPS timestamp | N/A | GPSTimeStamp is always UTC |
+| Any with OffsetTimeOriginal | N/A | Use specified offset |
+
+**GPS Timestamp Parsing**:
+- Uses `parseGPSTimestamp($gps)` helper function
+- Handles EXIF rational values (numerator/denominator format)
+- Protects against division by zero in rational values
+- GPS timestamps are always interpreted as UTC per EXIF specification
+
+**Backward Compatibility**:
+- Direct camera uploads (Reolink, etc.) continue using local time interpretation
+- No changes required for existing camera configurations
+- Bridge marker detection is additive, not breaking
+
 ### Data Outage Detection
 
 **Purpose**: Warn users when all data sources are offline (complete site outage)
@@ -634,12 +672,19 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 #### 5. Push Type (Not Fetched)
 - **Type**: `type: 'push'` or has `push_config`
 - **Behavior**: Skipped by fetch script (images pushed by external system)
+- **Upload Sources**:
+  - **Direct camera uploads**: Cameras upload via SFTP/FTP/FTPS with local time EXIF
+  - **Bridge uploads**: AviationWX-Bridge uploads with UTC EXIF and marker in UserComment
 - **Supported Upload Formats**: JPEG, PNG, WebP, AVIF
 - **Processing**:
   - PNG always converted to JPEG (we don't serve PNG)
   - Original format preserved for JPEG, WebP, AVIF (no redundant conversion)
   - Missing formats generated in background (JPEG, WebP, AVIF)
   - Mtime synced to match source image's capture time
+- **Timestamp Handling**:
+  - Bridge uploads: EXIF `DateTimeOriginal` interpreted as UTC
+  - Direct uploads: EXIF `DateTimeOriginal` interpreted as local time
+  - Detection via "AviationWX-Bridge" marker in EXIF UserComment
 
 ### Source Type Detection
 

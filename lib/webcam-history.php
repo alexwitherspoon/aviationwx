@@ -61,6 +61,9 @@ function saveFrameToHistory(string $sourceFile, string $airportId, int $camIndex
         $timestamp = time();
     }
     
+    // Detect if this is a bridge upload for logging
+    $isBridgeUpload = isBridgeUpload($sourceFile);
+    
     $destFile = $historyDir . '/' . $timestamp . '.jpg';
     
     // Don't overwrite existing frame with same timestamp
@@ -79,11 +82,21 @@ function saveFrameToHistory(string $sourceFile, string $airportId, int $camIndex
         return false;
     }
     
-    aviationwx_log('debug', 'webcam history: saved frame', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'timestamp' => $timestamp
-    ], 'app');
+    // Log with source indicator (bridge or direct camera)
+    if ($isBridgeUpload) {
+        aviationwx_log('debug', 'webcam history: saved bridge frame (UTC)', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'timestamp' => $timestamp,
+            'source' => 'bridge'
+        ], 'app');
+    } else {
+        aviationwx_log('debug', 'webcam history: saved frame', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'timestamp' => $timestamp
+        ], 'app');
+    }
     
     // Cleanup old frames
     cleanupHistoryFrames($airportId, $camIndex);
@@ -178,7 +191,16 @@ function cleanupHistoryFrames(string $airportId, int $camIndex): void {
 /**
  * Get capture time from image
  * 
- * Attempts to read EXIF DateTimeOriginal, falls back to file modification time.
+ * Handles both:
+ * - Bridge uploads: EXIF is UTC, marked with "AviationWX-Bridge" in UserComment
+ * - Direct camera uploads: EXIF is local time (existing behavior)
+ * 
+ * Detection order:
+ * 1. Check for AviationWX Bridge marker → interpret DateTimeOriginal as UTC
+ * 2. Check for EXIF 2.31 OffsetTimeOriginal → use specified offset
+ * 3. Check GPS timestamp → always UTC per EXIF spec
+ * 4. DateTimeOriginal without marker → assume local time (backward compatible)
+ * 5. Fall back to file mtime
  * 
  * @param string $filePath Path to image file
  * @return int Unix timestamp, or 0 if unable to determine
@@ -188,34 +210,146 @@ function getHistoryImageCaptureTime(string $filePath): int {
         return 0;
     }
     
-    // Try EXIF data first
-    if (function_exists('exif_read_data')) {
-        $exif = @exif_read_data($filePath, 'EXIF', true);
-        
-        if ($exif !== false) {
-            // Check EXIF.DateTimeOriginal
-            if (isset($exif['EXIF']['DateTimeOriginal'])) {
-                $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
-                if ($timestamp !== false && $timestamp > 0) {
-                    return $timestamp;
-                }
-            }
-            
-            // Check root DateTimeOriginal
-            if (isset($exif['DateTimeOriginal'])) {
-                $dateTime = $exif['DateTimeOriginal'];
-                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
-                if ($timestamp !== false && $timestamp > 0) {
-                    return $timestamp;
-                }
-            }
+    // Try EXIF data
+    if (!function_exists('exif_read_data')) {
+        $mtime = @filemtime($filePath);
+        return $mtime !== false ? (int)$mtime : 0;
+    }
+    
+    // Read EXIF with all sections we need
+    $exif = @exif_read_data($filePath, 'EXIF,GPS,COMMENT,IFD0', true);
+    
+    if ($exif === false) {
+        $mtime = @filemtime($filePath);
+        return $mtime !== false ? (int)$mtime : 0;
+    }
+    
+    // Get DateTimeOriginal from various possible locations
+    $dateTime = null;
+    if (isset($exif['EXIF']['DateTimeOriginal'])) {
+        $dateTime = $exif['EXIF']['DateTimeOriginal'];
+    } elseif (isset($exif['DateTimeOriginal'])) {
+        $dateTime = $exif['DateTimeOriginal'];
+    } elseif (isset($exif['IFD0']['DateTime'])) {
+        $dateTime = $exif['IFD0']['DateTime'];
+    }
+    
+    if ($dateTime === null) {
+        $mtime = @filemtime($filePath);
+        return $mtime !== false ? (int)$mtime : 0;
+    }
+    
+    // Check for AviationWX Bridge marker (primary detection)
+    $isBridgeUpload = false;
+    $userComment = $exif['COMMENT']['UserComment']
+                ?? $exif['EXIF']['UserComment']
+                ?? null;
+    
+    if ($userComment !== null && strpos($userComment, 'AviationWX-Bridge') !== false) {
+        $isBridgeUpload = true;
+    }
+    
+    // Parse EXIF datetime: "2024:12:25 16:30:45" → "2024-12-25 16:30:45"
+    $formatted = str_replace(':', '-', substr($dateTime, 0, 10)) . substr($dateTime, 10);
+    
+    // Bridge upload - DateTimeOriginal is already UTC
+    if ($isBridgeUpload) {
+        $timestamp = @strtotime($formatted . ' UTC');
+        if ($timestamp !== false && $timestamp > 0) {
+            return $timestamp;
         }
     }
     
-    // Fall back to file modification time
+    // Check for EXIF 2.31 offset field (explicit timezone)
+    $offset = $exif['EXIF']['OffsetTimeOriginal'] ?? null;
+    if ($offset !== null && preg_match('/^[+-]\d{2}:\d{2}$/', $offset)) {
+        if ($offset === '+00:00' || $offset === '-00:00') {
+            // Explicit UTC
+            $timestamp = @strtotime($formatted . ' UTC');
+        } else {
+            // Has explicit offset - parse with it
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s P', $formatted . ' ' . $offset);
+            if ($dt !== false) {
+                return $dt->getTimestamp();
+            }
+        }
+        if (isset($timestamp) && $timestamp !== false && $timestamp > 0) {
+            return $timestamp;
+        }
+    }
+    
+    // Check GPS timestamp (always UTC per EXIF spec)
+    if (isset($exif['GPS']['GPSDateStamp']) && isset($exif['GPS']['GPSTimeStamp'])) {
+        $gpsTimestamp = parseGPSTimestamp($exif['GPS']);
+        if ($gpsTimestamp > 0) {
+            return $gpsTimestamp;
+        }
+    }
+    
+    // No bridge marker, no offset, no GPS - assume local time
+    // This maintains backward compatibility with direct camera uploads
+    $timestamp = @strtotime($formatted);
+    if ($timestamp !== false && $timestamp > 0) {
+        return $timestamp;
+    }
+    
+    // Last resort: file mtime
     $mtime = @filemtime($filePath);
     return $mtime !== false ? (int)$mtime : 0;
+}
+
+/**
+ * Check if image is from AviationWX Bridge
+ * 
+ * Bridge uploads have "AviationWX-Bridge" in the EXIF UserComment field.
+ * 
+ * @param string $filePath Path to image file
+ * @return bool True if this is a bridge upload
+ */
+function isBridgeUpload(string $filePath): bool {
+    if (!file_exists($filePath) || !function_exists('exif_read_data')) {
+        return false;
+    }
+    
+    $exif = @exif_read_data($filePath, 'EXIF,COMMENT', true);
+    if ($exif === false) {
+        return false;
+    }
+    
+    $userComment = $exif['COMMENT']['UserComment']
+                ?? $exif['EXIF']['UserComment']
+                ?? null;
+    
+    return $userComment !== null && strpos($userComment, 'AviationWX-Bridge') !== false;
+}
+
+/**
+ * Parse GPS timestamp from EXIF GPS data
+ * 
+ * @param array $gps GPS EXIF section
+ * @return int Unix timestamp, or 0 if unable to parse
+ */
+function parseGPSTimestamp(array $gps): int {
+    if (!isset($gps['GPSDateStamp']) || !isset($gps['GPSTimeStamp'])) {
+        return 0;
+    }
+    
+    $date = $gps['GPSDateStamp'];  // "2024:12:25"
+    $time = $gps['GPSTimeStamp'];  // Array of rationals
+    
+    if (!is_array($time) || count($time) < 3) {
+        return 0;
+    }
+    
+    // Parse rational values (may be array with num/den or just numbers)
+    $h = is_array($time[0]) ? ($time[0]['num'] / max(1, $time[0]['den'])) : (float)$time[0];
+    $m = is_array($time[1]) ? ($time[1]['num'] / max(1, $time[1]['den'])) : (float)$time[1];
+    $s = is_array($time[2]) ? ($time[2]['num'] / max(1, $time[2]['den'])) : (float)$time[2];
+    
+    $formatted = str_replace(':', '-', $date) . sprintf(' %02d:%02d:%02d', (int)$h, (int)$m, (int)$s);
+    $timestamp = @strtotime($formatted . ' UTC');
+    
+    return ($timestamp !== false && $timestamp > 0) ? $timestamp : 0;
 }
 
 /**
@@ -440,3 +574,4 @@ function validateImageForHistory(string $file, ?array $pushConfig = null): bool 
     // Additional check: verify file is complete (not truncated)
     return isImageComplete($file);
 }
+
