@@ -670,6 +670,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         <button id="distance-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle distance unit (ft/m)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                             <span id="distance-unit-display">ft</span>
                         </button>
+                        <button id="baro-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 60px; height: auto;" title="Toggle barometer unit (inHg/hPa/mmHg)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                            <span id="baro-unit-display">inHg</span>
+                        </button>
                     </div>
                 </div>
                 <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
@@ -1734,6 +1737,55 @@ function formatRainfall(inches) {
     }
 }
 
+// Barometer unit preference (default to inHg for US)
+function getBaroUnit() {
+    // Try cookie first (source of truth), then localStorage (cache), then default
+    const unit = getCookie('aviationwx_baro_unit')
+        || localStorage.getItem('aviationwx_baro_unit')
+        || 'inHg';
+    return unit;
+}
+
+function setBaroUnit(unit) {
+    // Set cookie (source of truth, cross-subdomain)
+    setCookie('aviationwx_baro_unit', unit);
+    // localStorage is updated by setCookie, but ensure it's set
+    try {
+        localStorage.setItem('aviationwx_baro_unit', unit);
+    } catch (e) {
+        // localStorage may be disabled - continue
+    }
+}
+
+// Convert inHg to hPa (hectopascals/millibars)
+function inHgToHPa(inHg) {
+    return (inHg * 33.8639).toFixed(1);
+}
+
+// Convert inHg to mmHg (millimeters of mercury)
+function inHgToMmHg(inHg) {
+    return (inHg * 25.4).toFixed(1);
+}
+
+// Format pressure based on current unit preference
+function formatPressure(inHg) {
+    if (inHg === null || inHg === undefined) return '--';
+    const unit = getBaroUnit();
+    switch (unit) {
+        case 'hPa':
+            return inHgToHPa(inHg);
+        case 'mmHg':
+            return inHgToMmHg(inHg);
+        default:
+            return inHg.toFixed(2);
+    }
+}
+
+// Get pressure unit label
+function getPressureUnit() {
+    return getBaroUnit();
+}
+
 // Convert statute miles to kilometers
 function smToKm(sm) {
     return sm * 1.609344;
@@ -1868,6 +1920,45 @@ function initDistanceUnitToggle() {
     updateToggle();
 }
 
+// Barometer unit toggle handler
+function initBaroUnitToggle() {
+    const toggle = document.getElementById('baro-unit-toggle');
+    const display = document.getElementById('baro-unit-display');
+    
+    if (!toggle || !display) return;
+    
+    function updateToggle() {
+        const unit = getBaroUnit();
+        display.textContent = unit;
+        const nextUnit = unit === 'inHg' ? 'hPa' : (unit === 'hPa' ? 'mmHg' : 'inHg');
+        toggle.title = `Switch to ${nextUnit}`;
+    }
+    
+    toggle.addEventListener('click', () => {
+        const currentUnit = getBaroUnit();
+        // Cycle through: inHg -> hPa -> mmHg -> inHg
+        let newUnit;
+        switch (currentUnit) {
+            case 'inHg':
+                newUnit = 'hPa';
+                break;
+            case 'hPa':
+                newUnit = 'mmHg';
+                break;
+            default:
+                newUnit = 'inHg';
+        }
+        setBaroUnit(newUnit);
+        updateToggle();
+        // Re-render weather data with new unit if we have weather data
+        if (currentWeatherData) {
+            displayWeather(currentWeatherData);
+        }
+    });
+    
+    updateToggle();
+}
+
 // Time format toggle handler
 function initTimeFormatToggle() {
     const toggle = document.getElementById('time-format-toggle');
@@ -1929,6 +2020,20 @@ if (document.getElementById('distance-unit-toggle')) {
         }
     }
     initDistToggle();
+}
+
+// Initialize barometer unit toggle
+if (document.getElementById('baro-unit-toggle')) {
+    initBaroUnitToggle();
+} else {
+    function initBaroToggle() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initBaroUnitToggle);
+        } else {
+            initBaroUnitToggle();
+        }
+    }
+    initBaroToggle();
 }
 
 // Initialize time format toggle
@@ -3138,7 +3243,7 @@ function displayWeather(weather) {
         
         <!-- Pressure & Altitude -->
         <div class="weather-group">
-            <div class="weather-item"><span class="label">Pressure</span><span class="weather-value">${sanitizedWeather.pressure ? sanitizedWeather.pressure.toFixed(2) : '--'}</span><span class="weather-unit">inHg</span></div>
+            <div class="weather-item"><span class="label">Pressure</span><span class="weather-value">${formatPressure(sanitizedWeather.pressure)}</span><span class="weather-unit">${getPressureUnit()}</span></div>
             <div class="weather-item"><span class="label">Pressure Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.pressure_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
             <div class="weather-item"><span class="label">Density Altitude</span><span class="weather-value">${formatAltitude(sanitizedWeather.density_altitude)}</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
         </div>

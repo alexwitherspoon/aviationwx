@@ -554,6 +554,14 @@ h3 {
     border: 1px solid #ccc !important;
     border-radius: 6px !important;
     padding: 0.5rem 1rem !important;
+}
+
+/* Barometer unit toggle */
+#baro-unit-toggle {
+    background: #f5f5f5 !important;
+    border: 1px solid #ccc !important;
+    border-radius: 6px !important;
+    padding: 0.5rem 1rem !important;
     cursor: pointer !important;
     font-size: 0.9rem !important;
     font-weight: 600 !important;
@@ -1599,7 +1607,8 @@ body.night-mode .weather-last-updated-text {
 body.night-mode #time-format-toggle,
 body.night-mode #temp-unit-toggle,
 body.night-mode #distance-unit-toggle,
-body.night-mode #wind-speed-unit-toggle {
+body.night-mode #wind-speed-unit-toggle,
+body.night-mode #baro-unit-toggle {
     background: var(--night-bg-button) !important;
     border-color: var(--night-border) !important;
     color: var(--night-text-primary) !important;
@@ -1608,7 +1617,8 @@ body.night-mode #wind-speed-unit-toggle {
 body.night-mode #time-format-toggle:hover,
 body.night-mode #temp-unit-toggle:hover,
 body.night-mode #distance-unit-toggle:hover,
-body.night-mode #wind-speed-unit-toggle:hover {
+body.night-mode #wind-speed-unit-toggle:hover,
+body.night-mode #baro-unit-toggle:hover {
     background: var(--night-bg-button-hover) !important;
     border-color: #440000 !important;
 }
@@ -2025,7 +2035,8 @@ body.dark-mode .weather-last-updated-text {
 body.dark-mode #time-format-toggle,
 body.dark-mode #temp-unit-toggle,
 body.dark-mode #distance-unit-toggle,
-body.dark-mode #wind-speed-unit-toggle {
+body.dark-mode #wind-speed-unit-toggle,
+body.dark-mode #baro-unit-toggle {
     background: var(--dark-bg-button) !important;
     border-color: var(--dark-border) !important;
     color: var(--dark-text-primary) !important;
@@ -2034,7 +2045,8 @@ body.dark-mode #wind-speed-unit-toggle {
 body.dark-mode #time-format-toggle:hover,
 body.dark-mode #temp-unit-toggle:hover,
 body.dark-mode #distance-unit-toggle:hover,
-body.dark-mode #wind-speed-unit-toggle:hover {
+body.dark-mode #wind-speed-unit-toggle:hover,
+body.dark-mode #baro-unit-toggle:hover {
     background: var(--dark-bg-button-hover) !important;
     border-color: #444 !important;
 }
