@@ -1072,18 +1072,27 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         </section>
         <?php endif; ?>
 
+        <!-- Embed This Dashboard Section -->
+        <section class="embed-section">
+            <div class="embed-container">
+                <span class="embed-icon">🔗</span>
+                <span class="embed-text">Want to add this dashboard to your website?</span>
+                <a href="https://embed.aviationwx.org/?airport=<?= htmlspecialchars($airportId) ?>" class="embed-link" target="_blank" rel="noopener">Create Embed →</a>
+            </div>
+        </section>
+
         <!-- Footer -->
         <footer class="footer">
             <p class="footer-disclaimer">
                 <em>Data is for advisory use only. Consult official weather sources for flight planning purposes.</em>
             </p>
             <p>
-                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
-                <a href="https://guides.aviationwx.org">Guides</a> | 
-                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-                <a href="https://terms.aviationwx.org">Terms of Service</a> | 
-                <a href="https://api.aviationwx.org">API</a> | 
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
+                <a href="https://guides.aviationwx.org">Guides</a> • 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://terms.aviationwx.org">Terms of Service</a> • 
+                <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>
             </p>
         </footer>

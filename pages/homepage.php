@@ -1027,8 +1027,8 @@ Best regards,
                 </div>
                 
                 <div class="feature-card">
-                    <h3>🆓 Free Forever</h3>
-                    <p>No fees, no subscriptions, no ads, no apps needed. Completely free for airports and pilots.</p>
+                    <h3>🔗 Embed Generator</h3>
+                    <p>Add weather widgets to your website, WordPress, or Google Sites. <a href="https://embed.aviationwx.org" style="color: #0066cc;">Create Embed →</a></p>
                 </div>
                 
                 <div class="feature-card">
