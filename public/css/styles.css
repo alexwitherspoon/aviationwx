@@ -1349,3 +1349,836 @@ h3 {
     }
 }
 
+/* ============================================
+   Night Vision Mode - Red Dark Theme
+   Protects pilot night vision (scotopic vision)
+   ============================================ */
+
+/* Night mode toggle button */
+#night-mode-toggle {
+    background: #f5f5f5 !important;
+    border: 1px solid #ccc !important;
+    border-radius: 6px !important;
+    padding: 0.5rem 1rem !important;
+    cursor: pointer !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    color: #333 !important;
+    transition: all 0.2s !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    min-width: 50px !important;
+    height: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+#night-mode-toggle:hover {
+    background: #e8e8e8 !important;
+    border-color: #999 !important;
+}
+
+/* Night mode toggle - active state (day mode) */
+body.night-mode #night-mode-toggle {
+    background: #330000 !important;
+    border-color: #660000 !important;
+    color: #ff6666 !important;
+}
+
+body.night-mode #night-mode-toggle:hover {
+    background: #440000 !important;
+    border-color: #880000 !important;
+}
+
+/* CSS Custom Properties for Night Mode */
+body.night-mode {
+    --night-bg-body: #050000;
+    --night-bg-section: #0f0505;
+    --night-bg-header: #0a0000;
+    --night-bg-item: #150808;
+    --night-bg-button: #1a0808;
+    --night-bg-button-hover: #250a0a;
+    --night-text-primary: #cc4444;
+    --night-text-bright: #ff5555;
+    --night-text-muted: #993333;
+    --night-text-dim: #662222;
+    --night-border: #330000;
+    --night-border-light: #220000;
+    --night-accent: #ff4444;
+    --night-link: #ff6666;
+}
+
+/* Base body styles */
+body.night-mode {
+    background: var(--night-bg-body) !important;
+    color: var(--night-text-primary) !important;
+}
+
+/* Header */
+body.night-mode .header {
+    background: var(--night-bg-header) !important;
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .header h1 {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .header h2 {
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .location {
+    color: var(--night-text-muted) !important;
+}
+
+/* Airport navigation */
+body.night-mode .airport-nav-container {
+    background: #0c0202 !important;
+    border-bottom-color: var(--night-border) !important;
+}
+
+body.night-mode .airport-search-input {
+    background: var(--night-bg-item) !important;
+    border-color: var(--night-border) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .airport-search-input::placeholder {
+    color: var(--night-text-dim) !important;
+}
+
+body.night-mode .airport-search-input:focus {
+    border-color: var(--night-accent) !important;
+    background: var(--night-bg-button) !important;
+}
+
+body.night-mode .airport-dropdown {
+    background: var(--night-bg-section) !important;
+    border-color: var(--night-border) !important;
+}
+
+body.night-mode .nearby-airport-item {
+    color: var(--night-text-primary) !important;
+    border-bottom-color: var(--night-border-light) !important;
+}
+
+body.night-mode .nearby-airport-item:hover {
+    background: var(--night-bg-item) !important;
+}
+
+body.night-mode .nearby-airports-btn {
+    background: #660000 !important;
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .nearby-airports-btn:hover {
+    background: #880000 !important;
+}
+
+body.night-mode .nearby-airports-btn.active {
+    background: #550000 !important;
+}
+
+body.night-mode .airport-name {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .airport-identifier {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .airport-distance {
+    color: var(--night-text-dim) !important;
+}
+
+/* Sections */
+body.night-mode section {
+    background: var(--night-bg-section) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5) !important;
+}
+
+body.night-mode h2 {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode h3 {
+    color: var(--night-text-primary) !important;
+}
+
+/* Info items */
+body.night-mode .label {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .value {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .address-link {
+    color: var(--night-link) !important;
+}
+
+/* Frequencies section */
+body.night-mode .frequencies {
+    border-top-color: var(--night-border) !important;
+}
+
+/* Links section */
+body.night-mode .links {
+    border-top-color: var(--night-border) !important;
+}
+
+body.night-mode .btn {
+    background: #660000 !important;
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .btn:hover {
+    background: #880000 !important;
+}
+
+/* Weather section */
+body.night-mode .weather-item {
+    background: var(--night-bg-item) !important;
+}
+
+body.night-mode .weather-value {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .weather-unit {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .weather-last-updated-text {
+    color: var(--night-text-muted) !important;
+}
+
+/* Toggle buttons in night mode */
+body.night-mode #time-format-toggle,
+body.night-mode #temp-unit-toggle,
+body.night-mode #distance-unit-toggle,
+body.night-mode #wind-speed-unit-toggle {
+    background: var(--night-bg-button) !important;
+    border-color: var(--night-border) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode #time-format-toggle:hover,
+body.night-mode #temp-unit-toggle:hover,
+body.night-mode #distance-unit-toggle:hover,
+body.night-mode #wind-speed-unit-toggle:hover {
+    background: var(--night-bg-button-hover) !important;
+    border-color: #440000 !important;
+}
+
+/* Wind visual */
+body.night-mode .wind-visual-container {
+    background: transparent !important;
+}
+
+/* Webcam section */
+body.night-mode .webcam-item {
+    background: #000 !important;
+}
+
+body.night-mode .webcam-name-label {
+    background: var(--night-bg-header) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .webcam-timestamp {
+    color: var(--night-text-muted) !important;
+}
+
+/* Partnerships section */
+body.night-mode .partnerships-section {
+    background: var(--night-bg-section) !important;
+    border-top-color: #660000 !important;
+}
+
+body.night-mode .partnerships-heading {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .partnerships-subheading {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .partner-link {
+    background: var(--night-bg-item) !important;
+    border-color: var(--night-border) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .partner-link:hover {
+    background: var(--night-bg-button) !important;
+    border-color: #660000 !important;
+}
+
+/* Partner logos - reduce brightness and add red tint to protect night vision 
+   Strategy: Lower brightness significantly, reduce contrast to soften harsh whites,
+   then add a red tint via sepia + hue-rotate */
+body.night-mode .partner-logo {
+    filter: brightness(0.35) contrast(0.75) sepia(1) hue-rotate(-15deg) saturate(0.5) !important;
+    opacity: 0.9 !important;
+    transition: filter 0.3s ease, opacity 0.3s ease !important;
+}
+
+body.night-mode .partner-link:hover .partner-logo {
+    filter: brightness(0.5) contrast(0.85) sepia(1) hue-rotate(-15deg) saturate(0.6) !important;
+    opacity: 1 !important;
+}
+
+body.night-mode .partner-name {
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .data-sources-content {
+    border-top-color: var(--night-border) !important;
+}
+
+body.night-mode .data-sources-label,
+body.night-mode .data-source-link {
+    color: var(--night-text-dim) !important;
+}
+
+body.night-mode .data-source-link:hover {
+    color: var(--night-link) !important;
+}
+
+body.night-mode .data-source-separator {
+    color: var(--night-text-dim) !important;
+}
+
+/* Footer */
+body.night-mode .footer {
+    background: var(--night-bg-section) !important;
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .footer-disclaimer {
+    color: var(--night-text-dim) !important;
+    border-bottom-color: var(--night-border) !important;
+}
+
+body.night-mode .footer a {
+    color: var(--night-link) !important;
+}
+
+/* Webcam player in night mode */
+body.night-mode .webcam-player {
+    background: #000 !important;
+}
+
+body.night-mode .webcam-player-header {
+    background: rgba(10, 0, 0, 0.9) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .webcam-player-back {
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .webcam-player-back:hover,
+body.night-mode .webcam-player-back:active {
+    background: rgba(100, 0, 0, 0.3) !important;
+}
+
+body.night-mode .webcam-player-title {
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .webcam-player-timestamp {
+    background: rgba(10, 0, 0, 0.8) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .webcam-player-controls {
+    background: rgba(10, 0, 0, 0.95) !important;
+}
+
+body.night-mode .webcam-player-timeline::-webkit-slider-runnable-track {
+    background: rgba(100, 0, 0, 0.5) !important;
+}
+
+body.night-mode .webcam-player-timeline::-moz-range-track {
+    background: rgba(100, 0, 0, 0.5) !important;
+}
+
+body.night-mode .webcam-player-timeline::-webkit-slider-thumb {
+    background: #ff4444 !important;
+}
+
+body.night-mode .webcam-player-timeline::-moz-range-thumb {
+    background: #ff4444 !important;
+}
+
+body.night-mode .webcam-player-time-range {
+    color: var(--night-text-muted) !important;
+}
+
+body.night-mode .webcam-player-btn {
+    background: rgba(100, 0, 0, 0.3) !important;
+    color: var(--night-text-primary) !important;
+}
+
+body.night-mode .webcam-player-btn:hover {
+    background: rgba(150, 0, 0, 0.4) !important;
+}
+
+body.night-mode .webcam-player-btn:active {
+    background: rgba(200, 0, 0, 0.5) !important;
+}
+
+body.night-mode .webcam-player-btn.play {
+    background: rgba(180, 0, 0, 0.7) !important;
+}
+
+body.night-mode .webcam-player-btn.play:hover {
+    background: rgba(200, 0, 0, 0.8) !important;
+}
+
+body.night-mode .webcam-player-btn.play:active {
+    background: rgba(220, 0, 0, 0.9) !important;
+}
+
+body.night-mode .webcam-player-loading-bar {
+    background: rgba(255, 68, 68, 0.8) !important;
+}
+
+/* Banners in night mode */
+body.night-mode .maintenance-banner,
+body.night-mode .data-outage-banner,
+body.night-mode .notam-banner-active {
+    background-color: #550000 !important;
+    border-color: #880000 !important;
+}
+
+body.night-mode .notam-banner-upcoming {
+    background-color: #553300 !important;
+}
+
+/* Loading state */
+body.night-mode .loading {
+    color: var(--night-text-dim) !important;
+}
+
+/* Flight category colors - KEEP STANDARD for safety */
+/* VFR, MVFR, IFR, LIFR colors are intentionally NOT overridden */
+/* These are critical safety indicators that pilots recognize instantly */
+
+/* Smooth transition when toggling night mode */
+body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+section, .header, .footer, .weather-item, .webcam-name-label {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Mobile responsive adjustments for night mode toggle */
+@media (max-width: 768px) {
+    body.night-mode .weather-toggle-buttons {
+        gap: 0.5rem !important;
+    }
+}
+
+/* ============================================
+   Dark Mode - Classic Dark Theme
+   Standard dark mode with gray backgrounds
+   ============================================ */
+
+/* CSS Custom Properties for Dark Mode */
+body.dark-mode {
+    --dark-bg-body: #121212;
+    --dark-bg-section: #1e1e1e;
+    --dark-bg-header: #181818;
+    --dark-bg-item: #252525;
+    --dark-bg-button: #2d2d2d;
+    --dark-bg-button-hover: #383838;
+    --dark-text-primary: #e0e0e0;
+    --dark-text-bright: #ffffff;
+    --dark-text-muted: #a0a0a0;
+    --dark-text-dim: #707070;
+    --dark-border: #333333;
+    --dark-border-light: #2a2a2a;
+    --dark-accent: #4a9eff;
+    --dark-link: #6eb5ff;
+}
+
+/* Dark mode toggle button state */
+body.dark-mode #night-mode-toggle {
+    background: #2d2d2d !important;
+    border-color: #444 !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode #night-mode-toggle:hover {
+    background: #383838 !important;
+    border-color: #555 !important;
+}
+
+/* Base body styles */
+body.dark-mode {
+    background: var(--dark-bg-body) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+/* Header */
+body.dark-mode .header {
+    background: var(--dark-bg-header) !important;
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .header h1 {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .header h2 {
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .location {
+    color: var(--dark-text-muted) !important;
+}
+
+/* Airport navigation */
+body.dark-mode .airport-nav-container {
+    background: #161616 !important;
+    border-bottom-color: var(--dark-border) !important;
+}
+
+body.dark-mode .airport-search-input {
+    background: var(--dark-bg-item) !important;
+    border-color: var(--dark-border) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .airport-search-input::placeholder {
+    color: var(--dark-text-dim) !important;
+}
+
+body.dark-mode .airport-search-input:focus {
+    border-color: var(--dark-accent) !important;
+    background: var(--dark-bg-button) !important;
+}
+
+body.dark-mode .airport-dropdown {
+    background: var(--dark-bg-section) !important;
+    border-color: var(--dark-border) !important;
+}
+
+body.dark-mode .nearby-airport-item {
+    color: var(--dark-text-primary) !important;
+    border-bottom-color: var(--dark-border-light) !important;
+}
+
+body.dark-mode .nearby-airport-item:hover {
+    background: var(--dark-bg-item) !important;
+}
+
+body.dark-mode .nearby-airports-btn {
+    background: #3a7bd5 !important;
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .nearby-airports-btn:hover {
+    background: #4a8be5 !important;
+}
+
+body.dark-mode .nearby-airports-btn.active {
+    background: #2a6bc5 !important;
+}
+
+body.dark-mode .airport-name {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .airport-identifier {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .airport-distance {
+    color: var(--dark-text-dim) !important;
+}
+
+/* Sections */
+body.dark-mode section {
+    background: var(--dark-bg-section) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+}
+
+body.dark-mode h2 {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode h3 {
+    color: var(--dark-text-primary) !important;
+}
+
+/* Info items */
+body.dark-mode .label {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .value {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .address-link {
+    color: var(--dark-link) !important;
+}
+
+/* Frequencies section */
+body.dark-mode .frequencies {
+    border-top-color: var(--dark-border) !important;
+}
+
+/* Links section */
+body.dark-mode .links {
+    border-top-color: var(--dark-border) !important;
+}
+
+body.dark-mode .btn {
+    background: #3a7bd5 !important;
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .btn:hover {
+    background: #4a8be5 !important;
+}
+
+/* Weather section */
+body.dark-mode .weather-item {
+    background: var(--dark-bg-item) !important;
+}
+
+body.dark-mode .weather-value {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .weather-unit {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .weather-last-updated-text {
+    color: var(--dark-text-muted) !important;
+}
+
+/* Toggle buttons in dark mode */
+body.dark-mode #time-format-toggle,
+body.dark-mode #temp-unit-toggle,
+body.dark-mode #distance-unit-toggle,
+body.dark-mode #wind-speed-unit-toggle {
+    background: var(--dark-bg-button) !important;
+    border-color: var(--dark-border) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode #time-format-toggle:hover,
+body.dark-mode #temp-unit-toggle:hover,
+body.dark-mode #distance-unit-toggle:hover,
+body.dark-mode #wind-speed-unit-toggle:hover {
+    background: var(--dark-bg-button-hover) !important;
+    border-color: #444 !important;
+}
+
+/* Wind visual */
+body.dark-mode .wind-visual-container {
+    background: transparent !important;
+}
+
+/* Webcam section */
+body.dark-mode .webcam-item {
+    background: #000 !important;
+}
+
+body.dark-mode .webcam-name-label {
+    background: var(--dark-bg-header) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .webcam-timestamp {
+    color: var(--dark-text-muted) !important;
+}
+
+/* Partnerships section */
+body.dark-mode .partnerships-section {
+    background: var(--dark-bg-section) !important;
+    border-top-color: var(--dark-border) !important;
+}
+
+body.dark-mode .partnerships-heading {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .partnerships-subheading {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .partner-link {
+    background: var(--dark-bg-item) !important;
+    border-color: var(--dark-border) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .partner-link:hover {
+    background: var(--dark-bg-button) !important;
+    border-color: #444 !important;
+}
+
+/* Partner logos in dark mode - slight dim to reduce harsh whites */
+body.dark-mode .partner-logo {
+    filter: brightness(0.85) !important;
+    transition: filter 0.3s ease !important;
+}
+
+body.dark-mode .partner-link:hover .partner-logo {
+    filter: brightness(1) !important;
+}
+
+body.dark-mode .partner-name {
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .data-sources-content {
+    border-top-color: var(--dark-border) !important;
+}
+
+body.dark-mode .data-sources-label,
+body.dark-mode .data-source-link {
+    color: var(--dark-text-dim) !important;
+}
+
+body.dark-mode .data-source-link:hover {
+    color: var(--dark-link) !important;
+}
+
+body.dark-mode .data-source-separator {
+    color: var(--dark-text-dim) !important;
+}
+
+/* Footer */
+body.dark-mode .footer {
+    background: var(--dark-bg-section) !important;
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .footer-disclaimer {
+    color: var(--dark-text-dim) !important;
+    border-bottom-color: var(--dark-border) !important;
+}
+
+body.dark-mode .footer a {
+    color: var(--dark-link) !important;
+}
+
+/* Webcam player in dark mode */
+body.dark-mode .webcam-player {
+    background: #000 !important;
+}
+
+body.dark-mode .webcam-player-header {
+    background: rgba(18, 18, 18, 0.95) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .webcam-player-back {
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .webcam-player-back:hover,
+body.dark-mode .webcam-player-back:active {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode .webcam-player-title {
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .webcam-player-timestamp {
+    background: rgba(18, 18, 18, 0.9) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .webcam-player-controls {
+    background: rgba(18, 18, 18, 0.95) !important;
+}
+
+body.dark-mode .webcam-player-timeline::-webkit-slider-runnable-track {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+body.dark-mode .webcam-player-timeline::-moz-range-track {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+body.dark-mode .webcam-player-timeline::-webkit-slider-thumb {
+    background: var(--dark-accent) !important;
+}
+
+body.dark-mode .webcam-player-timeline::-moz-range-thumb {
+    background: var(--dark-accent) !important;
+}
+
+body.dark-mode .webcam-player-time-range {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode .webcam-player-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode .webcam-player-btn:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+body.dark-mode .webcam-player-btn:active {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+body.dark-mode .webcam-player-btn.play {
+    background: rgba(74, 158, 255, 0.5) !important;
+}
+
+body.dark-mode .webcam-player-btn.play:hover {
+    background: rgba(74, 158, 255, 0.6) !important;
+}
+
+body.dark-mode .webcam-player-btn.play:active {
+    background: rgba(74, 158, 255, 0.7) !important;
+}
+
+body.dark-mode .webcam-player-loading-bar {
+    background: rgba(74, 158, 255, 0.8) !important;
+}
+
+/* Banners in dark mode */
+body.dark-mode .maintenance-banner,
+body.dark-mode .data-outage-banner,
+body.dark-mode .notam-banner-active {
+    background-color: #4a3000 !important;
+    border-color: #6a4500 !important;
+}
+
+body.dark-mode .notam-banner-upcoming {
+    background-color: #3a4000 !important;
+}
+
+/* Loading state */
+body.dark-mode .loading {
+    color: var(--dark-text-dim) !important;
+}
+
+/* Mobile responsive adjustments for dark mode */
+@media (max-width: 768px) {
+    body.dark-mode .weather-toggle-buttons {
+        gap: 0.5rem !important;
+    }
+}
+
