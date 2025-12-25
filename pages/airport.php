@@ -207,21 +207,24 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 return currentMins >= sunsetMins || currentMins < sunriseMins;
             }
             
-            // Get theme preference (check new then old cookie names)
+            // Get theme preference (only day/dark are stored - night is time-based)
             var themePref = getCookie('aviationwx_theme');
             var manualOverride = getCookie('aviationwx_theme_override') || getCookie('aviationwx_night_override');
             
-            // Legacy support: convert old night mode preference
+            // Legacy support: convert old preferences
             if (!themePref) {
                 var oldNightPref = getCookie('aviationwx_night_mode');
-                if (oldNightPref === 'on') themePref = 'night';
-                else if (oldNightPref === 'off') themePref = 'day';
+                if (oldNightPref === 'off') themePref = 'day';
+                // Note: 'night' is no longer stored - it's purely time-based
             }
+            
+            // Ignore legacy 'night' preference (should not be stored anymore)
+            if (themePref === 'night') themePref = null;
             
             // PRIORITY 1: Mobile after sunset → Auto night mode
             if (isMobile() && isNightTime()) {
-                // Unless user manually overrode today
-                if (nightData && manualOverride === nightData.todayDate && themePref) {
+                // Unless user manually overrode today with day/dark
+                if (nightData && manualOverride === nightData.todayDate && (themePref === 'day' || themePref === 'dark')) {
                     applyTheme(themePref);
                 } else {
                     applyTheme('night');
@@ -229,7 +232,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                 return;
             }
             
-            // PRIORITY 2: Saved cookie preference (persists across sessions)
+            // PRIORITY 2: Saved cookie preference (day/dark only)
             if (themePref === 'day' || themePref === 'dark') {
                 applyTheme(themePref);
                 return;
@@ -1943,12 +1946,16 @@ if (document.getElementById('time-format-toggle')) {
 // Night mode data from server (sunrise/sunset times in airport's timezone)
 var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
 
-// Theme modes: 'day', 'dark', 'night'
+// Theme modes: 'day', 'dark' (night is time-based, not stored)
 function getThemePreference() {
     // Try cookie first (source of truth), then localStorage (cache)
-    return getCookie('aviationwx_theme') 
-        || localStorage.getItem('aviationwx_theme')
-        || 'day';
+    var pref = getCookie('aviationwx_theme') || localStorage.getItem('aviationwx_theme');
+    // Only return valid stored preferences (day/dark)
+    // Night mode is never stored - it's determined by airport time
+    if (pref === 'day' || pref === 'dark') {
+        return pref;
+    }
+    return null; // No valid preference stored
 }
 
 function setThemePreference(value) {
@@ -2117,10 +2124,13 @@ function initThemeToggle() {
         // Apply the theme
         applyTheme(newTheme);
         
-        // Save preference
-        setThemePreference(newTheme);
+        // Only save day/dark preferences to cookie
+        // Night mode is purely time-based (determined by airport sunset/sunrise)
+        if (newTheme === 'day' || newTheme === 'dark') {
+            setThemePreference(newTheme);
+        }
         
-        // Set manual override for today (disables auto until tomorrow)
+        // Set manual override for today (disables auto night mode until tomorrow)
         setThemeManualOverride();
         
         // Update button display
@@ -2218,24 +2228,27 @@ if (window.matchMedia) {
     var darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
     function handleBrowserThemeChange(e) {
-        // Don't auto-switch if user has a saved theme preference
-        // This respects manual choices permanently, not just for today
-        var savedPref = getThemePreference();
-        if (savedPref && savedPref !== 'auto') return;
+        // Don't switch if user manually toggled today
+        // This respects their choice for the current session
+        if (hasManualOverrideToday()) return;
         
         // Don't switch if mobile and it's nighttime (night mode takes priority)
         if (isMobileDevice() && isNightTimeAtAirport()) return;
         
         var currentTheme = getCurrentTheme();
         var browserWantsDark = e.matches;
+        var targetTheme = browserWantsDark ? 'dark' : 'day';
         
-        // If browser preference changes and matches a theme switch
-        if (browserWantsDark && currentTheme === 'day') {
-            applyTheme('dark');
+        // Only switch between day/dark based on browser preference
+        // Night mode is never triggered by browser preference (only by time)
+        if (currentTheme !== 'night' && currentTheme !== targetTheme) {
+            applyTheme(targetTheme);
             updateThemeToggleDisplay();
-        } else if (!browserWantsDark && currentTheme === 'dark') {
-            applyTheme('day');
-            updateThemeToggleDisplay();
+            
+            // Update wind canvas colors
+            if (typeof updateWindVisual === 'function' && currentWeatherData) {
+                updateWindVisual(currentWeatherData);
+            }
         }
     }
     
