@@ -102,7 +102,12 @@ function formatAbsoluteTime(int $timestamp): string {
  *     '15min' => float|null
  *   },
  *   'memory_used_bytes' => int|null,
- *   'storage_used_bytes' => int|null
+ *   'storage_used_bytes' => int,
+ *   'storage_breakdown' => array{
+ *     'cache' => int,
+ *     'uploads' => int,
+ *     'logs' => int
+ *   }
  * }
  */
 function getNodePerformance(): array {
@@ -163,23 +168,64 @@ function getNodePerformance(): array {
     
     $performance['memory_used_bytes'] = $memoryUsed;
     
-    // Storage Usage - Calculate actual size of cache directory
-    // In production, cache is mounted from /tmp/aviationwx-cache on the host
-    // This shows actual data stored, not filesystem capacity
-    $cachePath = __DIR__ . '/../cache';
-    if (is_dir($cachePath)) {
-        $cacheSize = 0;
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($cachePath, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::LEAVES_ONLY
-        );
-        foreach ($iterator as $file) {
-            if ($file->isFile()) {
-                $cacheSize += $file->getSize();
-            }
+    // Storage Usage - Calculate actual size of all data directories
+    // Includes cache, uploads, and logs for complete picture
+    $performance['storage_used_bytes'] = 0;
+    $performance['storage_breakdown'] = [
+        'cache' => 0,
+        'uploads' => 0,
+        'logs' => 0
+    ];
+    
+    // Helper function to calculate directory size
+    $calculateDirSize = function($path) {
+        if (!is_dir($path)) {
+            return 0;
         }
-        $performance['storage_used_bytes'] = $cacheSize;
+        $size = 0;
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::LEAVES_ONLY
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $fileSize = @$file->getSize();
+                    if ($fileSize !== false) {
+                        $size += $fileSize;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // Directory not accessible, return 0
+        }
+        return $size;
+    };
+    
+    // 1. Cache directory (weather data, webcam images, history frames)
+    $cachePath = __DIR__ . '/../cache';
+    $performance['storage_breakdown']['cache'] = $calculateDirSize($cachePath);
+    
+    // 2. Uploads directory (push webcam uploads waiting to be processed)
+    $uploadsPath = __DIR__ . '/../uploads';
+    $performance['storage_breakdown']['uploads'] = $calculateDirSize($uploadsPath);
+    
+    // 3. Logs directory (when file-based logging is enabled)
+    // Check both the defined log directory and common locations
+    $logPaths = [
+        defined('AVIATIONWX_LOG_DIR') ? AVIATIONWX_LOG_DIR : '/var/log/aviationwx',
+        '/var/log/aviationwx'
+    ];
+    foreach (array_unique($logPaths) as $logPath) {
+        $logSize = $calculateDirSize($logPath);
+        if ($logSize > 0) {
+            $performance['storage_breakdown']['logs'] = $logSize;
+            break;
+        }
     }
+    
+    // Calculate total
+    $performance['storage_used_bytes'] = array_sum($performance['storage_breakdown']);
     
     return $performance;
 }
@@ -301,65 +347,43 @@ function checkSystemHealth(): array {
         'lastChanged' => 0 // Static state, no meaningful timestamp
     ];
     
-    // Check logging system
-    $logToStdout = defined('AVIATIONWX_LOG_TO_STDOUT') && AVIATIONWX_LOG_TO_STDOUT;
+    // Check logging system (file-based logging)
+    $logFile = AVIATIONWX_APP_LOG_FILE;
+    $logDir = dirname($logFile);
+    $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
+    $hasRecentLogs = false;
+    if ($logMtime > 0) {
+        $hasRecentLogs = (time() - $logMtime) < STATUS_RECENT_LOG_THRESHOLD_SECONDS;
+    }
     
-    if ($logToStdout) {
-        // Docker logging via stdout/stderr - check if we can write to stdout
-        // In CLI, STDOUT is defined; in web context, use php://stdout
-        if (php_sapi_name() === 'cli' && defined('STDOUT')) {
-            $canWriteStdout = @fwrite(STDOUT, '') !== false || @is_resource(STDOUT);
-        } else {
-            // Web context: try to open php://stdout
-            $testStream = @fopen('php://stdout', 'a');
-            $canWriteStdout = $testStream !== false;
-            if ($testStream !== false) {
-                @fclose($testStream);
-            }
-        }
-        $loggingStatus = $canWriteStdout ? 'operational' : 'degraded';
-        $loggingMessage = $canWriteStdout 
-            ? 'Logging operational' 
-            : 'Logging unavailable';
-        $logMtime = time(); // Use current time since we can't check file mtime
-    } else {
-        // File-based logging - check log file existence and activity
-        $logFile = AVIATIONWX_APP_LOG_FILE;
-        $logDir = dirname($logFile);
-        $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
-        $hasRecentLogs = false;
-        if ($logMtime > 0) {
-            $hasRecentLogs = (time() - $logMtime) < STATUS_RECENT_LOG_THRESHOLD_SECONDS;
-        }
-        
-        // Check if log directory is writable (for local development)
-        $logDirWritable = is_dir($logDir) && is_writable($logDir);
-        
-        // If log directory is writable but no recent logs, show as operational (local dev is fine)
-        // If log file exists and has recent activity, show as operational
-        // If log directory not writable or log file doesn't exist and can't be created, show as degraded
+    // Check if log directory is writable
+    $logDirWritable = is_dir($logDir) && is_writable($logDir);
+    
+    // Determine logging status:
+    // - Operational if recent logs exist or log directory is writable
+    // - Degraded if log file exists but no recent activity
+    // - Degraded if log directory not writable
+    $loggingStatus = 'operational';
+    $loggingMessage = 'Logging operational';
+    if ($hasRecentLogs) {
         $loggingStatus = 'operational';
         $loggingMessage = 'Logging operational';
-        if ($hasRecentLogs) {
-            $loggingStatus = 'operational';
-            $loggingMessage = 'Logging operational';
-        } elseif ($logDirWritable) {
-            $loggingStatus = 'operational';
-            $loggingMessage = 'Logging ready';
-        } elseif (file_exists($logFile)) {
-            $loggingStatus = 'degraded';
-            $loggingMessage = 'Logging degraded';
-        } else {
-            $loggingStatus = 'degraded';
-            $loggingMessage = 'Logging unavailable';
-        }
+    } elseif ($logDirWritable) {
+        $loggingStatus = 'operational';
+        $loggingMessage = 'Logging ready';
+    } elseif (file_exists($logFile)) {
+        $loggingStatus = 'degraded';
+        $loggingMessage = 'Logging degraded';
+    } else {
+        $loggingStatus = 'degraded';
+        $loggingMessage = 'Logging unavailable';
     }
     
     $health['components']['logging'] = [
         'name' => 'Logging',
         'status' => $loggingStatus,
         'message' => $loggingMessage,
-        'lastChanged' => $logMtime > 0 ? $logMtime : (isset($logDir) && is_dir($logDir) ? filemtime($logDir) : 0)
+        'lastChanged' => $logMtime > 0 ? $logMtime : (is_dir($logDir) ? filemtime($logDir) : 0)
     ];
     
     // Check internal error rate (system errors only, not external data source failures)
@@ -1781,9 +1805,24 @@ if (php_sapi_name() === 'cli') {
                         <span class="metric-label-inline">Memory</span>
                         <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['memory_used_bytes']); ?></span>
                     </div>
-                    <div class="metric-inline">
-                        <span class="metric-label-inline">Cache</span>
-                        <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['storage_used_bytes']); ?></span>
+                    <div class="metric-inline" title="Cache: <?php echo formatBytes($nodePerformance['storage_breakdown']['cache']); ?>, Uploads: <?php echo formatBytes($nodePerformance['storage_breakdown']['uploads']); ?>, Logs: <?php echo formatBytes($nodePerformance['storage_breakdown']['logs']); ?>">
+                        <span class="metric-label-inline">Storage</span>
+                        <span class="metric-value-inline">
+                            <?php echo formatBytes($nodePerformance['storage_used_bytes']); ?>
+                            <span class="metric-sub">(<?php 
+                                $parts = [];
+                                if ($nodePerformance['storage_breakdown']['cache'] > 0) {
+                                    $parts[] = formatBytes($nodePerformance['storage_breakdown']['cache']) . ' cache';
+                                }
+                                if ($nodePerformance['storage_breakdown']['uploads'] > 0) {
+                                    $parts[] = formatBytes($nodePerformance['storage_breakdown']['uploads']) . ' uploads';
+                                }
+                                if ($nodePerformance['storage_breakdown']['logs'] > 0) {
+                                    $parts[] = formatBytes($nodePerformance['storage_breakdown']['logs']) . ' logs';
+                                }
+                                echo !empty($parts) ? implode(', ', $parts) : 'cache';
+                            ?>)</span>
+                        </span>
                     </div>
                 </div>
                 
