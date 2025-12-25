@@ -133,7 +133,7 @@ if (!$isAirportRequest) {
             if (count($hostParts) >= 3) {
                 $potentialId = $hostParts[0];
                 // Exclude known non-airport subdomains
-                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms'])) {
+                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed'])) {
                     $isAirportRequest = true;
                     $rawAirportIdentifier = $potentialId;
                 }

@@ -78,14 +78,48 @@ foreach ($enabledAirports as $airportId => $airport) {
     echo "  </url>\n";
 }
 
-// Add status page
+// Add utility pages and subdomains (only if on main domain)
 if ($isMainDomain) {
-    $statusLastmod = date('Y-m-d');
+    $pageLastmod = date('Y-m-d');
+    
+    // Status page
     echo "  <url>\n";
-    echo "    <loc>{$baseUrl}/status.php</loc>\n";
-    echo "    <lastmod>{$statusLastmod}</lastmod>\n";
+    echo "    <loc>https://status.aviationwx.org</loc>\n";
+    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>daily</changefreq>\n";
     echo "    <priority>0.3</priority>\n";
+    echo "  </url>\n";
+    
+    // Guides subdomain
+    echo "  <url>\n";
+    echo "    <loc>https://guides.aviationwx.org</loc>\n";
+    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
+    echo "    <changefreq>weekly</changefreq>\n";
+    echo "    <priority>0.6</priority>\n";
+    echo "  </url>\n";
+    
+    // Terms of Service
+    echo "  <url>\n";
+    echo "    <loc>https://terms.aviationwx.org</loc>\n";
+    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
+    echo "    <changefreq>yearly</changefreq>\n";
+    echo "    <priority>0.2</priority>\n";
+    echo "  </url>\n";
+    
+    // API Documentation
+    echo "  <url>\n";
+    echo "    <loc>https://api.aviationwx.org</loc>\n";
+    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
+    echo "    <changefreq>monthly</changefreq>\n";
+    echo "    <priority>0.5</priority>\n";
+    echo "  </url>\n";
+    
+    // Embed Generator
+    echo "  <url>\n";
+    echo "    <loc>https://embed.aviationwx.org</loc>\n";
+    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
+    echo "    <changefreq>monthly</changefreq>\n";
+    echo "    <priority>0.5</priority>\n";
     echo "  </url>\n";
 }
 
