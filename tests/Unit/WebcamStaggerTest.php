@@ -7,8 +7,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Unit tests for webcam stagger offset calculation
  * 
- * Tests the logic for calculating random stagger offsets to distribute client requests.
- * This logic is used in JavaScript (client-side) and must match the PHP implementation.
+ * Tests the PHP logic for calculating random stagger offsets used in server-side
+ * webcam refresh scheduling (cron jobs, background refresh).
  */
 class WebcamStaggerTest extends TestCase
 {
@@ -103,17 +103,15 @@ class WebcamStaggerTest extends TestCase
     }
     
     /**
-     * Test stagger offset calculation matches JavaScript logic
+     * Test stagger offset consistently stays within 20-30% range
      * 
-     * JavaScript: Math.floor(baseInterval * (0.20 + Math.random() * 0.10))
-     * PHP: floor($baseInterval * ($minPercent + random * ($maxPercent - $minPercent)))
+     * Verifies the stagger calculation produces values in the expected range
+     * across many iterations for statistical confidence.
      */
-    public function testStaggerOffsetMatchesJavaScriptLogic()
+    public function testStaggerOffsetConsistentlyWithinRange()
     {
         $baseInterval = 60;
         
-        // Test with fixed random seed would be ideal, but we can't easily do that
-        // Instead, verify the range matches JavaScript expectations
         $minExpected = (int)floor($baseInterval * 0.20); // 12
         $maxExpected = (int)floor($baseInterval * 0.30); // 18
         
@@ -121,12 +119,11 @@ class WebcamStaggerTest extends TestCase
         for ($i = 0; $i < 100; $i++) {
             $offset = calculateWebcamStaggerOffset($baseInterval);
             
-            // JavaScript: Math.floor(60 * (0.20 + Math.random() * 0.10))
-            // Range: Math.floor(60 * 0.20) to Math.floor(60 * 0.30) = 12 to 18
+            // Range: floor(60 * 0.20) to floor(60 * 0.30) = 12 to 18
             $this->assertGreaterThanOrEqual($minExpected, $offset, 
-                'Offset should match JavaScript minimum (20% of interval)');
+                'Offset should be >= 20% of interval');
             $this->assertLessThanOrEqual($maxExpected, $offset, 
-                'Offset should match JavaScript maximum (30% of interval)');
+                'Offset should be <= 30% of interval');
         }
     }
     
@@ -146,4 +143,5 @@ class WebcamStaggerTest extends TestCase
         $this->assertLessThanOrEqual($maxExpected, $offset);
     }
 }
+
 

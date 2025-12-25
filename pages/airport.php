@@ -4575,7 +4575,7 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
     // Periodic refresh of timestamp (every 30 seconds) even if image doesn't reload
     // Debounced: batched across all cameras to reduce requests
 
-    setupStaggeredWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
+    setupWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
     <?php endforeach; ?>
     
     // Handle window visibility changes - refresh webcams immediately when window regains focus
@@ -5066,63 +5066,34 @@ function handleWebcamError(camIndex, img) {
 }
 
 /**
- * Get random stagger offset for camera
+ * Setup webcam refresh interval
  * 
- * Random offset per client (better distribution, avoids clustering).
- * No sessionStorage needed - each page load gets new random offset.
+ * Creates an immediate refresh followed by a regular interval.
+ * Uses the same reliable pattern as weather refresh - interval is created
+ * immediately at the top level, not nested inside a setTimeout.
  * 
- * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
- * @returns {number} Stagger offset in seconds (20-30% of interval)
- */
-function getStaggerOffset(baseInterval) {
-    // Random offset 20-30% of interval (accounts for format generation + buffer)
-    // For 60s: 12-18 seconds
-    // For 30s: 6-9 seconds  
-    // For 120s: 24-36 seconds
-    const minPercent = 0.20;
-    const maxPercent = 0.30;
-    const percent = minPercent + Math.random() * (maxPercent - minPercent);
-    return Math.floor(baseInterval * percent);
-}
-
-/**
- * Setup staggered webcam refresh
- * 
- * First refresh: Immediate (user gets data quickly, handles stale images)
- * Subsequent refreshes: Staggered (avoids cron spike at :00)
+ * This avoids issues with browser timer throttling in background tabs,
+ * where nested setTimeout/setInterval patterns can fail to create the
+ * interval if the outer timeout is throttled.
  * 
  * @param {number} camIndex Camera index
  * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
  */
-function setupStaggeredWebcamRefresh(camIndex, baseInterval) {// FIRST refresh: Immediate (no stagger)
-    // This ensures user gets fresh data quickly on initial load
+function setupWebcamRefresh(camIndex, baseInterval) {
+    // First refresh: Immediate (user gets data quickly, handles stale images)
     safeSwapCameraImage(camIndex);
     
-    // Calculate stagger for subsequent refreshes
-    const staggerOffset = getStaggerOffset(baseInterval);
-    
-    // Calculate delay until next staggered refresh
-    // Use client time (accept some drift - randomness still distributes load)
-    const now = new Date();
-    const secondsPastMinute = now.getSeconds();
-    
-    // Next refresh: next minute + stagger offset
-    const secondsUntilNextMinute = 60 - secondsPastMinute;
-    const nextRefreshDelay = (secondsUntilNextMinute + staggerOffset) * 1000;// Schedule first staggered refresh
-    const staggeredTimeout = setTimeout(() => {
+    // Create interval immediately (like weather refresh pattern)
+    // This ensures the interval is always created, even if tab is backgrounded
+    const intervalId = setInterval(() => {
         safeSwapCameraImage(camIndex);
-        
-        // Then continue with normal interval
-        setInterval(() => {
-            safeSwapCameraImage(camIndex);
-        }, baseInterval * 1000);
-    }, nextRefreshDelay);
+    }, baseInterval * 1000);
     
-    // Store timeout ID for cleanup
-    if (!window.webcamRefreshTimeouts) {
-        window.webcamRefreshTimeouts = new Map();
+    // Store interval ID for cleanup
+    if (!window.webcamRefreshIntervals) {
+        window.webcamRefreshIntervals = new Map();
     }
-    window.webcamRefreshTimeouts.set(camIndex, staggeredTimeout);
+    window.webcamRefreshIntervals.set(camIndex, intervalId);
 }
 
 /**
@@ -5684,10 +5655,10 @@ window.addEventListener('beforeunload', () => {
         }
     }
     
-    // Clear webcam refresh timeouts
-    if (window.webcamRefreshTimeouts) {
-        for (const timeoutId of window.webcamRefreshTimeouts.values()) {
-            clearTimeout(timeoutId);
+    // Clear webcam refresh intervals
+    if (window.webcamRefreshIntervals) {
+        for (const intervalId of window.webcamRefreshIntervals.values()) {
+            clearInterval(intervalId);
         }
     }
 });
