@@ -22,6 +22,7 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - 📖 **[Configure Airports](docs/CONFIGURATION.md)** - Add and configure airports
 - 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - System design and components
 - 🔌 **[API Documentation](docs/API.md)** - API endpoints reference
+- 🔗 **[Embed Generator](https://embed.aviationwx.org)** - Create embeddable weather widgets ([docs](docs/EMBED.md))
 - 🤝 **[Contributing](CONTRIBUTING.md)** - How to contribute
 - 🔒 **[Security](docs/SECURITY.md)** - Security best practices
 - 📊 **[Operations](docs/OPERATIONS.md)** - Logging, monitoring, troubleshooting
@@ -45,7 +46,7 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 
 ### User Experience
 - **Wind Visualization**: Interactive runway wind diagram with parallel runway support
-- **Unit Toggles**: Switch between temperature (F/C), distance (ft/m), and wind speed (kts/mph/km/h) units
+- **Unit Toggles**: Switch between temperature (F/C), distance (ft/m), wind speed (kts/mph/km/h), and barometer (inHg/hPa/mmHg) units
 - **Theme Toggle**: Three display modes - Day (light), Dark (classic dark theme), and Night (red night vision mode for cockpit use)
   - Auto night mode on mobile after sunset (based on airport local time)
   - Respects browser `prefers-color-scheme` preference
@@ -53,6 +54,14 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Weather Status Emojis**: Visual indicators for abnormal conditions
 - **Mobile-First Design**: Responsive layout for all devices
 - **Offline Support**: Service worker for offline access
+
+### Embed Generator
+- **Embeddable Widgets**: Create weather widgets to embed on external websites
+- **Multiple Styles**: Mini Airport Card, Single Webcam, Dual Camera, 4 Camera Grid, Full Widget
+- **Customizable**: Choose theme (light/dark), select specific cameras, configure units
+- **Easy Integration**: Copy iframe code for WordPress, Google Sites, Squarespace, or any HTML page
+- **Live Preview**: See exactly how your embed will look before copying the code
+- **Visit**: [embed.aviationwx.org](https://embed.aviationwx.org)
 
 ### Technical Features
 - **Performance**: Config caching (APCu), HTTP cache headers, rate limiting
