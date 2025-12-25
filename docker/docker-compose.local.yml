@@ -37,7 +37,6 @@ services:
       - DOMAIN=${DOMAIN:-localhost}
       - CONFIG_PATH=${CONFIG_PATH:-/var/www/html/config/airports.json}
       - WEATHER_REFRESH_URL=http://localhost
-      - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]

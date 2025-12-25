@@ -390,8 +390,8 @@ See [LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for testing instructions.
 
 ## Monitoring
 
-- **Logging**: Comprehensive logging via `lib/logger.php` (writes to stdout/stderr for Docker logging)
-- **Docker Logs**: All logs captured by Docker with automatic rotation (10MB files, 10 files = 100MB total)
+- **Logging**: Comprehensive file-based logging via `lib/logger.php` (writes to `/var/log/aviationwx/`)
+- **Log Rotation**: Logrotate handles rotation (7 days retention, 100MB max per file)
 - **Metrics**: `/metrics.php` endpoint for monitoring
 - **Health Checks**: `/health.php` for uptime monitoring
 - **Diagnostics**: `/diagnostics.php` for system information

@@ -3,7 +3,7 @@
 
 # Set PATH for cron jobs (cron has minimal PATH by default)
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-# Disable mail output (send to /dev/null) - we want output in Docker logs instead
+# Disable mail output (send to /dev/null) - we use file-based logging
 MAILTO=""
 # Set environment variables for cron jobs (cron doesn't inherit container env by default)
 # CONFIG_PATH is critical for scripts to find airports.json
@@ -12,31 +12,28 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Cron Heartbeat - Runs every minute
 # Logs a heartbeat message to confirm cron daemon is running and executing jobs
 # This helps monitor cron health and detect when cron stops working
-# Writes to file-based log (logrotate handles rotation: 7 days, 100MB max)
-# Runs as www-data to match other cron jobs (root cron jobs may not execute reliably on macOS Docker)
-# Uses PHP script like other cron jobs for consistency and reliability
+# Logs to /var/log/aviationwx/ (logrotate handles rotation: 7 days, 100MB max)
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cron-heartbeat.php >> /var/log/aviationwx/cron-heartbeat.log 2>&1
 
 # Scheduler Health Check - Runs every minute
 # Validates scheduler daemon is running and healthy, restarts if needed.
 # The scheduler daemon handles all weather and webcam updates (replaces cron-based fetching).
-# Logs to Docker logs (stdout/stderr).
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php 2>&1
+# Logs to /var/log/aviationwx/ via aviationwx_log() function.
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php >> /var/log/aviationwx/scheduler-health-check.log 2>&1
 
 # Push Webcam Processor - Runs every minute
 # Processes webcam images uploaded via SFTP/FTP/FTPS by push cameras.
 # Moves uploaded images from uploads directory to cache directory for serving.
-# Logs to file-based log (logrotate handles rotation: 7 days, 100MB max)
-# Also forwards to Docker logs for convenience (tee to both locations)
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php 2>&1 | tee -a /var/log/aviationwx/cron-push-webcams.log
+# Logs to /var/log/aviationwx/ (logrotate handles rotation: 7 days, 100MB max)
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php >> /var/log/aviationwx/cron-push-webcams.log 2>&1
 
 # Cache Cleanup - Runs daily at 4 AM
 # Two-layer cleanup strategy (belt and suspenders):
 # - Layer 1: Primary cleanup for files without automatic cleanup (rate limits, error files)
 # - Layer 2: Backup cleanup as safety net for files that should have auto-cleanup
 # - Layer 3: Orphan cleanup for removed airports
-# Logs to Docker logs for monitoring.
-0 4 * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cleanup-cache.php 2>&1
+# Logs to /var/log/aviationwx/ via aviationwx_log() function.
+0 4 * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cleanup-cache.php >> /var/log/aviationwx/cleanup-cache.log 2>&1
 
 # Let's Encrypt Certificate Renewal - Runs weekly (Sunday at 3 AM)
 # Renews wildcard SSL certificates (aviationwx.org, *.aviationwx.org) if they're expiring soon.

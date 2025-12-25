@@ -24,7 +24,7 @@ Complete guide for deploying AviationWX.org to production. This guide covers eve
 ## Minimal Host Customization
 
 This deployment requires **minimal host customization**:
-- ✅ **No log directory setup** - All logs go to Docker stdout/stderr
+- ✅ **No log directory setup** - Logs written to `/var/log/aviationwx/` inside container with logrotate
 - ✅ **No cache directory setup** - Cache automatically created in `/tmp/aviationwx-cache`
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
@@ -334,8 +334,8 @@ docker compose -f docker/docker-compose.prod.yml up -d --build
 # Verify containers are running
 docker compose -f docker/docker-compose.prod.yml ps
 
-# Check logs (all logs captured by Docker automatically)
-docker compose -f docker/docker-compose.prod.yml logs -f
+# Check logs (view inside container)
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/app.log
 ```
 
 ### 4. Verify Deployment
@@ -505,24 +505,23 @@ docker compose -f docker/docker-compose.prod.yml up -d --build
 
 ### Monitor Logs
 
+Logs are written to `/var/log/aviationwx/` inside the container. Logrotate handles rotation (7 days retention, 100MB max per file).
+
 ```bash
-# All logs are captured by Docker and can be viewed with docker compose logs
-# Docker automatically handles log rotation (10MB files, 10 files = 100MB total)
+# Application logs (PHP - JSONL format)
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/app.log
 
-# Application logs (PHP application logs)
-docker compose -f docker/docker-compose.prod.yml logs -f web
+# Apache access logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/apache-access.log
 
-# Nginx logs (access and error logs)
-docker compose -f docker/docker-compose.prod.yml logs -f nginx
+# Apache error logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/apache-error.log
 
-# View all logs together
-docker compose -f docker/docker-compose.prod.yml logs -f
-
-# Filter logs by log type
-docker compose -f docker/docker-compose.prod.yml logs -f web | grep '"log_type":"app"'
+# Filter by log type (using jq)
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.log_type == "app")'
 
 # View only errors/warnings
-docker compose -f docker/docker-compose.prod.yml logs -f web 2>&1 | grep -E '"level":"(error|warning)"'
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error" or .level == "warning")'
 ```
 
 See [Operations Guide](OPERATIONS.md) for detailed logging and monitoring information.
@@ -542,11 +541,11 @@ cp -r ~/aviationwx/ssl ~/ssl.backup
 ### Containers Not Starting
 
 ```bash
-# Check logs
-docker compose -f docker/docker-compose.prod.yml logs
-
 # Check container status
 docker compose -f docker/docker-compose.prod.yml ps
+
+# Check container logs (startup issues)
+docker compose -f docker/docker-compose.prod.yml logs web
 
 # Restart containers
 docker compose -f docker/docker-compose.prod.yml restart
@@ -593,14 +592,14 @@ ls -lh /tmp/aviationwx-cache/webcams/
 ### View Logs
 
 ```bash
-# Application logs
-docker compose -f docker/docker-compose.prod.yml logs -f web
+# Application logs (PHP - JSONL format)
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/app.log
 
-# Nginx logs
-docker compose -f docker/docker-compose.prod.yml logs -f nginx
+# Apache access logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/apache-access.log
 
 # All logs
-docker compose -f docker/docker-compose.prod.yml logs -f
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/*.log
 ```
 
 ## Security Best Practices

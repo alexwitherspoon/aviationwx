@@ -139,7 +139,7 @@ RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "log_errors = On" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT" >> /usr/local/etc/php/conf.d/security.ini \
-    && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/security.ini
+    && echo "error_log = /var/log/aviationwx/php-error.log" >> /usr/local/etc/php/conf.d/security.ini
 
 # Configure Apache to listen on port 80 by default (for local/CI with bridge networking)
 # Production will reconfigure to port 8080 bound to 127.0.0.1 via entrypoint script
@@ -150,14 +150,13 @@ RUN if ! grep -q "^Listen 80" /etc/apache2/ports.conf 2>/dev/null; then \
         echo "Listen 80" >> /etc/apache2/ports.conf; \
     fi
 
-# Configure Apache for dual logging: both Docker logs and file-based logs
-# Docker logs: stdout/stderr for immediate access and log aggregation
-# File logs: Persistent logs with rotation (7 days, 100MB max per file)
-# Add log format prefix to identify Apache access logs
+# Configure Apache for file-based logging
+# Logs are written to /var/log/aviationwx/ with rotation handled by logrotate
+# (7 days retention, 100MB max per file)
 RUN echo "LogFormat \"[apache_access] %h %l %u %t \\\"%r\\\" %>s %O \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\"\" combined" >> /etc/apache2/apache2.conf \
-    && echo "# Dual logging: Docker logs (stdout/stderr) and file-based logs" >> /etc/apache2/apache2.conf \
-    && echo "ErrorLog \"|/usr/bin/tee -a /var/log/aviationwx/apache-error.log /proc/self/fd/2\"" >> /etc/apache2/apache2.conf \
-    && echo "CustomLog \"|/usr/bin/tee -a /var/log/aviationwx/apache-access.log /proc/self/fd/1\" combined" >> /etc/apache2/apache2.conf
+    && echo "# File-based logging with logrotate" >> /etc/apache2/apache2.conf \
+    && echo "ErrorLog /var/log/aviationwx/apache-error.log" >> /etc/apache2/apache2.conf \
+    && echo "CustomLog /var/log/aviationwx/apache-access.log combined" >> /etc/apache2/apache2.conf
 
 # Use custom entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

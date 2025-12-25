@@ -46,9 +46,10 @@
     create 0644 root root
 }
 
-# PHP application logs (if file-based logging is enabled)
+# PHP application logs
 /var/log/aviationwx/app.log
-/var/log/aviationwx/user.log {
+/var/log/aviationwx/user.log
+/var/log/aviationwx/php-error.log {
     daily
     rotate 7
     compress

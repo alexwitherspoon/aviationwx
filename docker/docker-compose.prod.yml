@@ -37,7 +37,6 @@ services:
       - WEBCAM_REFRESH_DEFAULT=${WEBCAM_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_DEFAULT=${WEATHER_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_URL=http://localhost:8080
-      - AVIATIONWX_LOG_TO_STDOUT=true
       - GIT_SHA=${GIT_SHA:-}
     healthcheck:
       # Override Dockerfile healthcheck with longer start_period

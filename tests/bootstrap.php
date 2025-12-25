@@ -13,10 +13,7 @@ if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
 }
 
 // Set test environment (use defined() check to avoid redefinition warnings)
-// For tests, use file-based logging (not stdout/stderr) so we can verify log output
-if (!defined('AVIATIONWX_LOG_TO_STDOUT')) {
-    define('AVIATIONWX_LOG_TO_STDOUT', false);
-}
+// Use temporary directory for test logs to avoid polluting production log directory
 if (!defined('AVIATIONWX_LOG_DIR')) {
     define('AVIATIONWX_LOG_DIR', sys_get_temp_dir() . '/aviationwx_test_logs');
 }
@@ -24,12 +21,10 @@ if (!defined('AVIATIONWX_LOG_FILE')) {
     define('AVIATIONWX_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
 }
 
-// Create test log directory and both log files (only needed for file-based logging)
-if (!AVIATIONWX_LOG_TO_STDOUT) {
-    @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
-    @touch(AVIATIONWX_LOG_DIR . '/user.log');
-    @touch(AVIATIONWX_LOG_DIR . '/app.log');
-}
+// Create test log directory and log files
+@mkdir(AVIATIONWX_LOG_DIR, 0755, true);
+@touch(AVIATIONWX_LOG_DIR . '/user.log');
+@touch(AVIATIONWX_LOG_DIR . '/app.log');
 
 // Include core application files for testing (only those that don't have endpoint logic)
 require_once __DIR__ . '/../lib/config.php';

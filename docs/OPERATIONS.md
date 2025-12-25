@@ -12,24 +12,24 @@ Guide for logging, monitoring, and troubleshooting AviationWX.org in production.
 
 ## Logging Overview
 
-All logs are captured by Docker and written to stdout/stderr. Docker automatically handles log rotation (10MB files, 10 files = 100MB total per container).
+All logs are written to files in `/var/log/aviationwx/`. Log rotation is handled by logrotate (7 days retention, 100MB max per file).
 
-### Log Sources
+### Log Files
 
-The application generates logs from multiple sources:
-
-1. **Nginx Access Logs** - JSON format, source: `nginx_access`
-2. **Nginx Error Logs** - Plain text, warnings and errors
-3. **Apache Access Logs** - Plain text, prefixed with `[apache_access]`
-4. **Apache Error Logs** - Plain text, PHP errors and warnings
-5. **PHP Application Logs** - JSONL format, source: `app`, `web`, or `cli`
+| File | Description |
+|------|-------------|
+| `app.log` | PHP application logs (JSONL format) |
+| `user.log` | User activity logs (JSONL format) |
+| `apache-access.log` | Apache HTTP access logs |
+| `apache-error.log` | Apache HTTP error logs |
+| `php-error.log` | PHP runtime errors |
+| `cron-heartbeat.log` | Cron daemon heartbeat |
+| `cron-push-webcams.log` | Push webcam processing |
+| `scheduler-health-check.log` | Scheduler health checks |
+| `cleanup-cache.log` | Cache cleanup operations |
+| `service-watchdog.log` | Service watchdog logs |
 
 ### Log Formats
-
-#### Nginx Access Logs (JSON)
-```json
-{"time":"2024-01-01T12:00:00+00:00","remote_addr":"1.2.3.4","request":"GET / HTTP/1.1","request_method":"GET","request_uri":"/","status":200,"body_bytes_sent":1234,"http_referer":"","http_user_agent":"Mozilla/5.0...","http_x_forwarded_for":"","request_time":0.001,"upstream_response_time":"0.001","source":"nginx_access"}
-```
 
 #### PHP Application Logs (JSONL)
 ```json
@@ -43,110 +43,95 @@ The application generates logs from multiple sources:
 
 ## Viewing Logs
 
-### View All Logs
+### View Logs Inside Container
 
 ```bash
-# All containers
-docker compose -f docker/docker-compose.prod.yml logs -f
+# View application logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/app.log
 
-# Follow logs in real-time
-docker compose -f docker/docker-compose.prod.yml logs -f
+# View Apache access logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/apache-access.log
+
+# View Apache error logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/apache-error.log
+
+# View all logs
+docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/aviationwx/*.log
 ```
 
-### View Logs by Container
+### View Logs by Type
 
 ```bash
-# Web application logs
-docker compose -f docker/docker-compose.prod.yml logs -f web
+# Application logs (PHP)
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq .
 
-# Nginx logs
-docker compose -f docker/docker-compose.prod.yml logs -f nginx
+# Cron job logs
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/cron-heartbeat.log
 
-# VPN server logs (if VPN is configured)
-docker compose -f docker/docker-compose.prod.yml logs -f vpn-server
+# Push webcam processing logs
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/cron-push-webcams.log
 ```
 
 ## Filtering Logs
 
-### Filter Access Logs Only
-
-#### Nginx Access Logs (JSON)
-
-```bash
-# Extract only Nginx access logs
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}'
-
-# Pretty print JSON access logs
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq .
-
-# Filter by status code
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq 'select(.status >= 400)'
-
-# Filter by request URI
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq 'select(.request_uri | contains("/api"))'
-```
-
-#### Apache Access Logs (Plain Text)
-
-```bash
-# Extract only Apache access logs
-docker compose -f docker/docker-compose.prod.yml logs web | grep '\[apache_access\]'
-
-# Filter by status code
-docker compose -f docker/docker-compose.prod.yml logs web | grep '\[apache_access\]' | grep ' 4[0-9][0-9] \| 5[0-9][0-9] '
-
-# Filter by request path
-docker compose -f docker/docker-compose.prod.yml logs web | grep '\[apache_access\]' | grep '/api/'
-```
-
-### Filter Application Logs Only
+### Filter Application Logs
 
 #### PHP Application Logs (JSONL)
 
 ```bash
-# Extract only PHP application logs (JSON format)
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq .
+# Extract all PHP application logs
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq .
 
 # Filter by log level
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.level == "error")'
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error")'
 
 # Filter by source
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.source == "web")'
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.source == "web")'
 
 # Filter by log type
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.log_type == "app")'
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.log_type == "app")'
 
 # Filter errors and warnings
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.level == "error" or .level == "warning")'
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error" or .level == "warning")'
+```
+
+#### Apache Access Logs
+
+```bash
+# View Apache access logs
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/apache-access.log
+
+# Filter by status code (4xx and 5xx errors)
+docker compose -f docker/docker-compose.prod.yml exec web grep ' 4[0-9][0-9] \| 5[0-9][0-9] ' /var/log/aviationwx/apache-access.log
+
+# Filter by request path
+docker compose -f docker/docker-compose.prod.yml exec web grep '/api/' /var/log/aviationwx/apache-access.log
 ```
 
 ### Filter Error Logs
 
 ```bash
-# All errors (Nginx, Apache, PHP)
-docker compose -f docker/docker-compose.prod.yml logs | grep -i error
+# All PHP errors
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error")'
 
-# PHP errors only
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.level == "error")'
+# Apache errors
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/apache-error.log
 
-# Nginx errors only
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -v '{"source":"nginx_access"'
+# PHP runtime errors
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/php-error.log
 ```
 
 ### Advanced Filtering with jq
 
 ```bash
-# Count requests by status code
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq -s 'group_by(.status) | map({status: .[0].status, count: length})'
+# Count errors by message
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error") | .message' | sort | uniq -c | sort -rn
 
-# Top requested URIs
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq -r '.request_uri' | sort | uniq -c | sort -rn | head -10
+# Error rate over time (by date)
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error") | .ts' | cut -d'T' -f1 | uniq -c
 
-# Error rate over time
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.level == "error") | .ts' | cut -d'T' -f1 | uniq -c
-
-# Requests taking longer than 1 second
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq 'select(.request_time > 1.0)'
+# Recent errors (last 20)
+docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/aviationwx/app.log | jq 'select(.level == "error")' | tail -20
 ```
 
 ### Using Helper Script
@@ -228,11 +213,11 @@ docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 #### Containers Not Starting
 
 ```bash
-# Check logs for errors
-docker compose -f docker/docker-compose.prod.yml logs
-
 # Check container status
 docker compose -f docker/docker-compose.prod.yml ps
+
+# View container logs (startup issues)
+docker compose -f docker/docker-compose.prod.yml logs web
 
 # Restart containers
 docker compose -f docker/docker-compose.prod.yml restart
@@ -242,20 +227,10 @@ docker compose -f docker/docker-compose.prod.yml restart
 
 ```bash
 # View recent errors
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.level == "error")' | tail -20
+docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/aviationwx/app.log | jq 'select(.level == "error")'
 
 # Count errors by type
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' | jq 'select(.level == "error") | .message' | sort | uniq -c | sort -rn
-```
-
-#### Slow Requests
-
-```bash
-# Find slow requests (>1 second)
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq 'select(.request_time > 1.0)'
-
-# Average response time
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' | jq -s 'map(.request_time) | add / length'
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log | jq 'select(.level == "error") | .message' | sort | uniq -c | sort -rn
 ```
 
 #### Missing Webcam Images
@@ -304,14 +279,10 @@ yum install jq
 #### Extract Logs to File
 
 ```bash
-# Extract Nginx access logs
-docker compose -f docker/docker-compose.prod.yml logs nginx | grep -o '{"source":"nginx_access"[^}]*}' > nginx_access.log
-
-# Extract Apache access logs
-docker compose -f docker/docker-compose.prod.yml logs web | grep '\[apache_access\]' > apache_access.log
-
-# Extract PHP application logs
-docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' > app.log
+# Copy log files from container to host
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/app.log > app.log
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/apache-access.log > apache-access.log
+docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationwx/apache-error.log > apache-error.log
 ```
 
 ## Best Practices
@@ -324,20 +295,19 @@ docker compose -f docker/docker-compose.prod.yml logs web | grep -E '^\{"ts":' >
 
 ## Log Rotation
 
-Docker automatically rotates logs based on configuration:
-- **Max size**: 10MB per log file
-- **Max files**: 10 files per container
-- **Total**: ~100MB per container
+Logrotate handles log rotation with the following settings:
+- **Retention**: 7 days
+- **Max size**: 100MB per log file
+- **Compression**: Older logs are compressed with gzip
+- **Location**: `/var/log/aviationwx/`
 
-Logs are stored in:
-- **Linux**: `/var/lib/docker/containers/<container-id>/<container-id>-json.log`
-- **macOS/Windows**: Docker Desktop manages log storage
+Configuration is in `/etc/logrotate.d/aviationwx`.
 
 ## Performance Considerations
 
 For large log volumes:
-- Use `tail -f` instead of `docker compose logs -f` for real-time monitoring
-- Filter before processing: `docker compose logs | grep pattern | jq ...`
+- Use `tail -f` for real-time monitoring instead of `cat`
+- Filter before processing: `cat logfile | grep pattern | jq ...`
 - Use log aggregation tools for production environments
 - Consider log sampling for high-volume access logs
 
@@ -346,4 +316,3 @@ For large log volumes:
 - [Deployment Guide](DEPLOYMENT.md) - Production deployment
 - [Architecture](ARCHITECTURE.md) - System design
 - [Configuration Guide](CONFIGURATION.md) - Airport configuration
-

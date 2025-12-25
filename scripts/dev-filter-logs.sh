@@ -1,11 +1,12 @@
 #!/bin/bash
-# Log filtering utility for AviationWX Docker logs
-# Usage: ./scripts/dev-filter-logs.sh [access|app|error|nginx|apache|all] [container]
+# Log filtering utility for AviationWX logs
+# Reads from log files inside the Docker container
+# Usage: ./scripts/dev-filter-logs.sh [access|app|error|apache|all]
 
 set -euo pipefail
 
 LOG_TYPE="${1:-all}"
-CONTAINER="${2:-}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker/docker-compose.yml}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -23,39 +24,32 @@ else
     JQ_AVAILABLE=true
 fi
 
-# Function to get logs from container
-get_logs() {
-    local container=$1
-    if [ -n "$container" ]; then
-        docker compose logs "$container" 2>/dev/null || docker logs "$container" 2>/dev/null
-    else
-        docker compose logs 2>/dev/null || docker-compose logs 2>/dev/null
-    fi
+# Function to get log file from container
+get_log_file() {
+    local log_file=$1
+    docker compose -f "$COMPOSE_FILE" exec -T web cat "/var/log/aviationwx/$log_file" 2>/dev/null || echo ""
 }
 
-# Function to filter Nginx access logs
-filter_nginx_access() {
-    local logs=$1
-    if [ "$JQ_AVAILABLE" = true ]; then
-        echo "$logs" | grep -o '{"source":"nginx_access"[^}]*}' | jq .
-    else
-        echo "$logs" | grep -o '{"source":"nginx_access"[^}]*}'
-    fi
+# Function to tail log file from container
+tail_log_file() {
+    local log_file=$1
+    local lines=${2:-100}
+    docker compose -f "$COMPOSE_FILE" exec -T web tail -n "$lines" "/var/log/aviationwx/$log_file" 2>/dev/null || echo ""
 }
 
 # Function to filter Apache access logs
 filter_apache_access() {
     local logs=$1
-    echo "$logs" | grep '\[apache_access\]'
+    echo "$logs" | grep '\[apache_access\]' || true
 }
 
 # Function to filter PHP application logs
 filter_app_logs() {
     local logs=$1
     if [ "$JQ_AVAILABLE" = true ]; then
-        echo "$logs" | grep -E '^\{"ts":' | jq .
+        echo "$logs" | grep -E '^\{' | jq . 2>/dev/null || echo "$logs"
     else
-        echo "$logs" | grep -E '^\{"ts":'
+        echo "$logs" | grep -E '^\{'
     fi
 }
 
@@ -64,62 +58,69 @@ filter_errors() {
     local logs=$1
     if [ "$JQ_AVAILABLE" = true ]; then
         # PHP errors (JSON)
-        echo "$logs" | grep -E '^\{"ts":' | jq 'select(.level == "error" or .level == "warning" or .level == "critical")'
-        # Nginx/Apache errors (plain text)
-        echo "$logs" | grep -iE '(error|warning|critical)' | grep -v '{"source":"nginx_access"'
+        echo "$logs" | grep -E '^\{' | jq 'select(.level == "error" or .level == "warning" or .level == "critical")' 2>/dev/null || true
     else
-        echo "$logs" | grep -iE '(error|warning|critical)'
+        echo "$logs" | grep -iE '(error|warning|critical)' || true
     fi
 }
 
 # Main filtering logic
 case "$LOG_TYPE" in
     access)
-        echo -e "${BLUE}=== Access Logs ===${NC}"
-        logs=$(get_logs "$CONTAINER")
-        echo -e "${GREEN}Nginx Access Logs:${NC}"
-        filter_nginx_access "$logs"
-        echo ""
-        echo -e "${GREEN}Apache Access Logs:${NC}"
+        echo -e "${BLUE}=== Apache Access Logs ===${NC}"
+        logs=$(tail_log_file "apache-access.log" 100)
         filter_apache_access "$logs"
-        ;;
-    nginx)
-        echo -e "${BLUE}=== Nginx Logs ===${NC}"
-        logs=$(get_logs "${CONTAINER:-nginx}")
-        echo -e "${GREEN}Nginx Access Logs (JSON):${NC}"
-        filter_nginx_access "$logs"
         ;;
     apache)
         echo -e "${BLUE}=== Apache Logs ===${NC}"
-        logs=$(get_logs "${CONTAINER:-web}")
-        echo -e "${GREEN}Apache Access Logs:${NC}"
-        filter_apache_access "$logs"
+        echo -e "${GREEN}Access Logs (last 50 lines):${NC}"
+        tail_log_file "apache-access.log" 50
+        echo ""
+        echo -e "${GREEN}Error Logs (last 50 lines):${NC}"
+        tail_log_file "apache-error.log" 50
         ;;
     app)
         echo -e "${BLUE}=== Application Logs ===${NC}"
-        logs=$(get_logs "${CONTAINER:-web}")
+        logs=$(tail_log_file "app.log" 100)
         filter_app_logs "$logs"
         ;;
     error)
         echo -e "${RED}=== Error Logs ===${NC}"
-        logs=$(get_logs "$CONTAINER")
+        echo -e "${GREEN}PHP Application Errors:${NC}"
+        logs=$(get_log_file "app.log")
         filter_errors "$logs"
+        echo ""
+        echo -e "${GREEN}Apache Error Logs (last 50 lines):${NC}"
+        tail_log_file "apache-error.log" 50
+        echo ""
+        echo -e "${GREEN}PHP Runtime Errors (last 50 lines):${NC}"
+        tail_log_file "php-error.log" 50
         ;;
     all)
-        echo -e "${BLUE}=== All Logs ===${NC}"
-        get_logs "$CONTAINER"
+        echo -e "${BLUE}=== All Logs (last 50 lines each) ===${NC}"
+        echo -e "${GREEN}Application Logs:${NC}"
+        tail_log_file "app.log" 50
+        echo ""
+        echo -e "${GREEN}Apache Access Logs:${NC}"
+        tail_log_file "apache-access.log" 50
+        echo ""
+        echo -e "${GREEN}Apache Error Logs:${NC}"
+        tail_log_file "apache-error.log" 50
         ;;
     *)
-        echo "Usage: $0 [access|app|error|nginx|apache|all] [container]"
+        echo "Usage: $0 [access|app|error|apache|all]"
+        echo ""
+        echo "Log files are located at /var/log/aviationwx/ inside the container."
         echo ""
         echo "Examples:"
-        echo "  $0 access          # Show all access logs"
-        echo "  $0 app             # Show application logs"
-        echo "  $0 error           # Show error logs"
-        echo "  $0 nginx           # Show Nginx logs"
-        echo "  $0 apache          # Show Apache logs"
-        echo "  $0 all web         # Show all logs from web container"
+        echo "  $0 access          # Show Apache access logs"
+        echo "  $0 app             # Show application logs (JSONL)"
+        echo "  $0 error           # Show error logs from all sources"
+        echo "  $0 apache          # Show Apache access and error logs"
+        echo "  $0 all             # Show all log types"
+        echo ""
+        echo "Environment variables:"
+        echo "  COMPOSE_FILE       # Docker compose file (default: docker/docker-compose.yml)"
         exit 1
         ;;
 esac
-

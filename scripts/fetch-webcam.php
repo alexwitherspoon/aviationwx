@@ -986,8 +986,7 @@ if ($isWeb) {
     </style></head><body>";
     echo '<div class="header"><h2>🔌 AviationWX Webcam Fetcher</h2></div>';
 } else {
-    // Write directly to stderr for cron output - ensures it appears in Docker logs
-    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "AviationWX Webcam Fetcher\n");
     @fwrite(STDERR, "==========================\n\n");
 }
@@ -1001,8 +1000,7 @@ register_shutdown_function(function() use ($pool) {
 if ($isWeb) {
     echo "<p>Processing webcams with {$poolSize} workers...</p>";
 } else {
-    // Write directly to stderr for cron output - ensures it appears in Docker logs
-    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "Processing webcams with {$poolSize} workers...\n\n");
 }
 
@@ -1040,8 +1038,7 @@ if ($isWeb) {
     }
     echo "</div>";
 } else {
-    // Write directly to stderr for cron output - ensures it appears in Docker logs
-    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "\n\nDone! Webcam images cached.\n");
     $statsLine = "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
     if ($skipped > 0) {

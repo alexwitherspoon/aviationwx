@@ -185,8 +185,7 @@ if ($isWeb) {
     echo "<div class='header'><h1>AviationWX Weather Fetcher</h1></div>";
     echo "<p>Processing " . count($config['airports']) . " airports with {$poolSize} workers...</p>";
 } else {
-    // Write directly to stderr for cron output - ensures it appears in Docker logs
-    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "AviationWX Weather Fetcher\n");
     @fwrite(STDERR, "========================\n\n");
     @fwrite(STDERR, "Processing " . count($config['airports']) . " airports with {$poolSize} workers...\n\n");
@@ -220,8 +219,7 @@ if ($isWeb) {
     }
     echo "</body></html>";
 } else {
-    // Write directly to stderr for cron output - ensures it appears in Docker logs
-    // error_log() may go to syslog when run via cron, so use fwrite(STDERR) instead
+    // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "\nDone! Weather cache refreshed.\n");
     $statsLine = "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
     if ($skipped > 0) {

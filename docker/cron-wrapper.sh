@@ -1,8 +1,7 @@
 #!/bin/bash
-# Wrapper script to ensure cron job output goes to Docker logs
-# This script captures stdout/stderr and ensures it's visible in Docker logs
-
-exec >> /proc/1/fd/1 2>> /proc/1/fd/2
+# Wrapper script to ensure cron job output goes to log files
+# All cron jobs should use file-based logging via the aviationwx_log() function
+# This wrapper is kept for backward compatibility but no longer redirects to Docker logs
 
 # Execute the command passed as arguments
 exec "$@"
