@@ -562,12 +562,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     <input type="text" 
                            id="airport-search" 
                            class="airport-search-input" 
-                           placeholder="Search airports..." 
+                           placeholder="Search by name, ICAO, IATA, or FAA code..." 
                            autocomplete="off"
-                           aria-label="Search airports">
+                           title="Search airports by name or identifier (ICAO, IATA, FAA)"
+                           aria-label="Search airports by name or identifier">
                 </div>
                 <div class="nearby-airports-container">
-                    <button id="nearby-airports-btn" class="nearby-airports-btn" aria-label="Show nearby airports">
+                    <button id="nearby-airports-btn" class="nearby-airports-btn" title="Show airports within 200 miles" aria-label="Show nearby airports within 200 miles">
                         <span>Nearby Airports</span>
                         <span class="dropdown-arrow">▼</span>
                     </button>
@@ -623,8 +624,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         <img id="webcam-<?= $index ?>" 
                              src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&v=<?= $imgHash ?>"
                              data-initial-timestamp="<?= $mtimeJpg ?>" 
-                             alt="<?= htmlspecialchars($cam['name']) ?>"
-                             title="<?= htmlspecialchars($cam['name']) ?>"
+                             alt="<?= htmlspecialchars($cam['name']) ?> webcam - click to view 24-hour history"
+                             title="<?= htmlspecialchars($cam['name']) ?> – Tap to view 24-hour history"
+                             aria-label="<?= htmlspecialchars($cam['name']) ?> webcam - tap to view 24-hour time-lapse history"
+                             role="button"
+                             tabindex="0"
                              class="webcam-image"
                              width="1600"
                              height="900"
@@ -633,7 +637,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                              decoding="async"
                              onerror="handleWebcamError(<?= $index ?>, this)"
                              onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
-                             onclick="openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.src)">
+                             onclick="openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.src)"
+                             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.src)}">
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
@@ -817,7 +822,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     $airnavUrl = 'https://www.airnav.com/airport/' . $linkIdentifier;
                 }
                 if ($airnavUrl !== null): ?>
-                <a href="<?= htmlspecialchars($airnavUrl) ?>" target="_blank" rel="noopener" class="btn">
+                <a href="<?= htmlspecialchars($airnavUrl) ?>" target="_blank" rel="noopener" class="btn" title="View airport information on AirNav (opens in new tab)">
                     AirNav
                 </a>
                 <?php endif; ?>
@@ -831,7 +836,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     $skyvectorUrl = 'https://skyvector.com/airport/' . $linkIdentifier;
                 }
                 if ($skyvectorUrl !== null): ?>
-                <a href="<?= htmlspecialchars($skyvectorUrl) ?>" target="_blank" rel="noopener" class="btn">
+                <a href="<?= htmlspecialchars($skyvectorUrl) ?>" target="_blank" rel="noopener" class="btn" title="View aeronautical charts on SkyVector (opens in new tab)">
                     SkyVector
                 </a>
                 <?php endif; ?>
@@ -845,7 +850,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     $aopaUrl = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
                 }
                 if ($aopaUrl !== null): ?>
-                <a href="<?= htmlspecialchars($aopaUrl) ?>" target="_blank" rel="noopener" class="btn">
+                <a href="<?= htmlspecialchars($aopaUrl) ?>" target="_blank" rel="noopener" class="btn" title="View AOPA airport directory page (opens in new tab)">
                     AOPA
                 </a>
                 <?php endif; ?>
@@ -875,7 +880,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     );
                 }
                 if ($faaWeatherUrl !== null): ?>
-                <a href="<?= htmlspecialchars($faaWeatherUrl) ?>" target="_blank" rel="noopener" class="btn">
+                <a href="<?= htmlspecialchars($faaWeatherUrl) ?>" target="_blank" rel="noopener" class="btn" title="View FAA weather cameras for this area (opens in new tab)">
                     FAA Weather
                 </a>
                 <?php endif; ?>
@@ -891,7 +896,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     $foreflightUrl = 'foreflightmobile://maps/search?q=' . urlencode($linkIdentifier);
                 }
                 if ($foreflightUrl !== null): ?>
-                <a href="<?= htmlspecialchars($foreflightUrl) ?>" target="_blank" rel="noopener" class="btn foreflight-link">
+                <a href="<?= htmlspecialchars($foreflightUrl) ?>" target="_blank" rel="noopener" class="btn foreflight-link" title="Open this airport in ForeFlight app">
                     ForeFlight
                 </a>
                 <?php endif; ?>
@@ -902,7 +907,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         // Validate that both label and url are present
                         if (!empty($link['label']) && !empty($link['url'])) {
                             ?>
-                            <a href="<?= htmlspecialchars($link['url']) ?>" target="_blank" rel="noopener" class="btn">
+                            <a href="<?= htmlspecialchars($link['url']) ?>" target="_blank" rel="noopener" class="btn" title="<?= htmlspecialchars($link['label']) ?> (opens in new tab)">
                                 <?= htmlspecialchars($link['label']) ?>
                             </a>
                             <?php
@@ -4042,8 +4047,11 @@ const WebcamPlayer = {
         swipeArea._gesturesSetup = true;
 
         let startX = 0, startY = 0, currentY = 0;
+        // Track if touch event handled the interaction (prevents double-toggle on Android)
+        let touchHandled = false;
 
         swipeArea.addEventListener('touchstart', (e) => {
+            touchHandled = false; // Reset on new touch
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
             currentY = startY;
@@ -4072,12 +4080,14 @@ const WebcamPlayer = {
 
             // Swipe down to dismiss
             if (deltaY > 100 && Math.abs(deltaX) < 50) {
+                touchHandled = true;
                 this.close();
                 return;
             }
 
             // Horizontal swipe to navigate
             if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 50) {
+                touchHandled = true;
                 if (deltaX > 0) {
                     this.prev();
                 } else {
@@ -4088,8 +4098,26 @@ const WebcamPlayer = {
             
             // Small movement = tap to toggle controls
             if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                touchHandled = true;
                 this.toggleControls();
             }
+        });
+
+        // Click handler for desktop (mouse) - won't double-fire after touch events
+        // This replaces the previous onclick attribute on the swipe area
+        swipeArea.addEventListener('click', (e) => {
+            // If touch already handled this interaction, skip click
+            if (touchHandled) {
+                touchHandled = false; // Reset for next interaction
+                return;
+            }
+            // Don't toggle if clicking on controls or header (they have their own handlers)
+            if (e.target.closest('.webcam-player-controls') || 
+                e.target.closest('.webcam-player-header')) {
+                return;
+            }
+            // Desktop click - toggle controls
+            this.toggleControls();
         });
     },
 
@@ -6138,12 +6166,12 @@ window.addEventListener('beforeunload', () => {
 <!-- Webcam History Player (hidden by default) -->
 <div id="webcam-player" class="webcam-player" role="dialog" aria-modal="true" aria-labelledby="webcam-player-title">
     <div class="webcam-player-header">
-        <button class="webcam-player-back" onclick="closeWebcamPlayer()" aria-label="Close player and go back">← Back</button>
+        <button class="webcam-player-back" onclick="closeWebcamPlayer()" aria-label="Close player and go back" title="Close player and return to dashboard (Escape key)">← Back</button>
         <span class="webcam-player-title" id="webcam-player-title">Camera</span>
         <span style="width: 60px;"></span>
     </div>
     
-    <div class="webcam-player-image-container" id="webcam-player-swipe-area" onclick="webcamPlayerToggleControls(event)">
+    <div class="webcam-player-image-container" id="webcam-player-swipe-area">
         <img id="webcam-player-image" class="webcam-player-image" src="" alt="Webcam history frame">
         <div id="webcam-player-loading-bar" class="webcam-player-loading-bar" style="width: 0%;" role="progressbar" aria-label="Loading frames"></div>
     </div>
@@ -6158,18 +6186,19 @@ window.addEventListener('beforeunload', () => {
                min="0" 
                max="0" 
                value="0"
-               aria-label="Timeline - drag to navigate through history">
+               aria-label="Timeline - drag to navigate through history"
+               title="Drag to scrub through 24-hour history">
         <div class="webcam-player-time-range" aria-hidden="true">
             <span id="webcam-player-time-start">--</span>
             <span id="webcam-player-time-end">--</span>
         </div>
         <div class="webcam-player-buttons" role="group" aria-label="Playback controls">
-            <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame">⏮</button>
-            <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause">▶</button>
-            <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame">⏭</button>
+            <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame" title="Previous frame (← arrow key)">⏮</button>
+            <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause" title="Play/pause time-lapse (Space bar)">▶</button>
+            <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame" title="Next frame (→ arrow key)">⏭</button>
             <span class="webcam-player-btn-divider"></span>
-            <button class="webcam-player-btn toggle" id="webcam-player-autoplay-btn" onclick="webcamPlayerToggleAutoplay()" aria-label="Toggle autoplay" title="Toggle autoplay">🔄</button>
-            <button class="webcam-player-btn toggle" id="webcam-player-hideui-btn" onclick="webcamPlayerToggleHideUI()" aria-label="Toggle fullscreen mode" title="Hide controls">⛶</button>
+            <button class="webcam-player-btn toggle" id="webcam-player-autoplay-btn" onclick="webcamPlayerToggleAutoplay()" aria-label="Toggle autoplay" title="Toggle continuous playback">🔄</button>
+            <button class="webcam-player-btn toggle" id="webcam-player-hideui-btn" onclick="webcamPlayerToggleHideUI()" aria-label="Toggle fullscreen mode" title="Hide controls for full-screen view">⛶</button>
         </div>
     </div>
 </div>

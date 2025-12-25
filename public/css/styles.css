@@ -426,7 +426,9 @@ h3 {
 }
 
 .btn {
-    display: inline-block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 0.75rem 1.5rem;
     background: #0066cc;
     color: white;
@@ -434,8 +436,7 @@ h3 {
     border-radius: 4px;
     font-weight: 600;
     transition: background 0.2s;
-    flex: 0 1 auto;
-    min-width: 0;
+    box-sizing: border-box;
 }
 
 .btn:hover {
@@ -1005,25 +1006,14 @@ h3 {
     }
     
     .links {
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 0 !important; /* Remove gap, use margins instead for Safari compatibility */
-        row-gap: 0 !important;
-        column-gap: 0 !important;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem; /* Flexbox gap is now well-supported (Safari 14.1+, Chrome 84+) */
     }
     
     .btn {
-        width: 100% !important;
-        text-align: center !important;
-        margin-bottom: 1.25rem !important; /* Use margin for spacing - works better in Safari */
-        margin-top: 0 !important;
-        min-height: 48px; /* Ensure consistent button height */
-        box-sizing: border-box; /* Ensure padding is included in height calculation */
-    }
-    
-    /* Remove margin from last button to prevent extra spacing */
-    .links .btn:last-child {
-        margin-bottom: 0 !important;
+        width: 100%;
+        min-height: 48px; /* Touch-friendly minimum height */
     }
     
     /* Weather section mobile layout: buttons below header, above last updated */
@@ -1163,7 +1153,9 @@ h3 {
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    padding-top: max(12px, env(safe-area-inset-top));
+    /* Fallback for browsers without env() support, then safe area with fallback */
+    padding-top: 12px;
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
     background: rgba(0, 0, 0, 0.8);
     color: #fff;
     flex-shrink: 0;
@@ -1244,7 +1236,9 @@ h3 {
 
 .webcam-player-controls {
     padding: 16px;
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    /* Fallback for browsers without env() support, then safe area with fallback */
+    padding-bottom: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
     background: rgba(0, 0, 0, 0.9);
     flex-shrink: 0;
 }
@@ -1360,6 +1354,47 @@ h3 {
     .webcam-player-loading-bar {
         transition: none;
     }
+    
+    /* Extended reduced motion for all interactive elements */
+    .btn,
+    .nearby-airports-btn,
+    .airport-search-input,
+    section,
+    .partner-link,
+    .partner-logo {
+        transition: none !important;
+    }
+}
+
+/* Focus visible styles for keyboard navigation accessibility */
+.btn:focus-visible {
+    outline: 2px solid #0052a3;
+    outline-offset: 2px;
+}
+
+.webcam-player-btn:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.webcam-player-back:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.nearby-airports-btn:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.airport-search-input:focus-visible {
+    outline: 2px solid #0066cc;
+    outline-offset: 2px;
+}
+
+.webcam-player-timeline:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 4px;
 }
 
 /* Landscape orientation adjustments */
