@@ -81,6 +81,14 @@ $ogImage = file_exists($aboutPhotoWebp)
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply dark mode immediately based on browser preference to prevent flash
+(function() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark-mode');
+    }
+})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -607,9 +615,236 @@ $ogImage = file_exists($aboutPhotoWebp)
             max-width: calc(100% - 0.8rem);
             min-width: 0;
         }
+        
+        /* ============================================
+           Dark Mode Overrides for Homepage
+           Automatically applied based on browser preference
+           ============================================ */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #121212;
+                color: #e0e0e0;
+            }
+        }
+        
+        body.dark-mode {
+            background: #121212;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .hero {
+            background: linear-gradient(135deg, #0a0a0a 0%, #003d7a 100%);
+        }
+        
+        body.dark-mode .feature-card {
+            background: #1e1e1e;
+            border-left-color: #4a9eff;
+        }
+        
+        body.dark-mode .feature-card h3 {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .airport-card {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .airport-card:hover {
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+            border-color: #4a9eff;
+        }
+        
+        body.dark-mode .airport-code {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .airport-name,
+        body.dark-mode .metric-value {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .airport-location,
+        body.dark-mode .metric-label {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .airport-metrics {
+            border-top-color: #333;
+        }
+        
+        body.dark-mode .flight-condition.vfr {
+            background: #1a3a1a;
+        }
+        
+        body.dark-mode .flight-condition.mvfr {
+            background: #1a2a3a;
+        }
+        
+        body.dark-mode .flight-condition.ifr {
+            background: #3a1a1a;
+        }
+        
+        body.dark-mode .flight-condition.lifr {
+            background: #3a1a3a;
+        }
+        
+        body.dark-mode .flight-condition.unknown {
+            background: #2a2a2a;
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .pagination button {
+            background: #1e1e1e;
+            border-color: #333;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .pagination button:hover:not(:disabled) {
+            background: #4a9eff;
+            border-color: #4a9eff;
+        }
+        
+        body.dark-mode .pagination button.active {
+            background: #4a9eff;
+            border-color: #4a9eff;
+        }
+        
+        body.dark-mode .pagination-info {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .cta-section {
+            background: #1e1e1e;
+        }
+        
+        body.dark-mode .stats .stat-card {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .stat-number {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .stat-label {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .highlight-box {
+            background: #1e1e1e !important;
+            border-left-color: #4a9eff !important;
+        }
+        
+        body.dark-mode .highlight-box[style*="border-left-color: #dc3545"] {
+            background: #2a1515 !important;
+            border-left-color: #ff6b6b !important;
+        }
+        
+        body.dark-mode .highlight-box p {
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode .highlight-box strong {
+            color: #ff6b6b !important;
+        }
+        
+        body.dark-mode .user-group-section {
+            background: #1e1e1e;
+        }
+        
+        body.dark-mode .user-group-section h3 {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .user-group-section[style*="border-left-color: #28a745"] h3 {
+            color: #4ade80;
+        }
+        
+        body.dark-mode .contact-info {
+            background: #252525;
+        }
+        
+        body.dark-mode section h2 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .about-box {
+            background: #1e1e1e;
+        }
+        
+        body.dark-mode .about-box p {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .about-image {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode footer {
+            border-top-color: #333;
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode footer a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode code {
+            background: #2a2a2a;
+            color: #ff7eb6;
+        }
+        
+        body.dark-mode ul {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .homepage-airport-search-input {
+            background: #1e1e1e;
+            border-color: #333;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .homepage-airport-search-input::placeholder {
+            color: #707070;
+        }
+        
+        body.dark-mode .homepage-airport-search-input:focus {
+            border-color: #4a9eff;
+            box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.15);
+        }
+        
+        body.dark-mode .homepage-airport-dropdown {
+            background: #1e1e1e;
+            border-color: #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+        
+        body.dark-mode .homepage-airport-item {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .homepage-airport-item:hover,
+        body.dark-mode .homepage-airport-item.selected {
+            background: #252525;
+        }
+        
+        body.dark-mode .homepage-airport-item .airport-identifier {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .homepage-airport-item .airport-name {
+            color: #a0a0a0;
+        }
     </style>
 </head>
 <body>
+    <script>
+    // Sync dark-mode class from html to body
+    if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    </script>
     <noscript>
         <style>
             html { scroll-behavior: auto; }
@@ -1398,12 +1633,12 @@ Best regards,
 
         <footer class="footer">
             <p>
-                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
-                <a href="https://guides.aviationwx.org">Guides</a> | 
-                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-                <a href="https://terms.aviationwx.org">Terms of Service</a> | 
-                <a href="https://api.aviationwx.org">API</a> | 
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
+                <a href="https://guides.aviationwx.org">Guides</a> • 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://terms.aviationwx.org">Terms of Service</a> • 
+                <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>
             </p>
         </footer>

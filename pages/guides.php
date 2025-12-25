@@ -137,6 +137,14 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply dark mode immediately based on browser preference to prevent flash
+(function() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark-mode');
+    }
+})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -590,9 +598,150 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         footer a:hover {
             text-decoration: underline;
         }
+        
+        /* ============================================
+           Dark Mode Overrides for Guides
+           Automatically applied based on browser preference
+           ============================================ */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #121212;
+                color: #e0e0e0;
+            }
+        }
+        
+        body.dark-mode {
+            background: #121212;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .hero {
+            background: linear-gradient(135deg, #0a0a0a 0%, #003d7a 100%);
+        }
+        
+        body.dark-mode .guides-sidebar {
+            background: #1e1e1e;
+        }
+        
+        body.dark-mode .guides-sidebar h3 {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .guides-sidebar a {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .guides-sidebar a:hover {
+            background: #252525;
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .guides-sidebar a.active {
+            background: #4a9eff;
+            color: white;
+        }
+        
+        body.dark-mode .guides-sidebar .back-link {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .guides-sidebar .back-link a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .guides-content,
+        body.dark-mode .guides-index {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .guides-content h1,
+        body.dark-mode .guides-index h1 {
+            color: #e0e0e0;
+            border-bottom-color: #4a9eff;
+        }
+        
+        body.dark-mode .guides-content h2,
+        body.dark-mode .guides-index h2 {
+            color: #4a9eff;
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .guides-content h3,
+        body.dark-mode .guides-content h4,
+        body.dark-mode .guides-index h3 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .guides-content p,
+        body.dark-mode .guides-index p {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .guides-content a,
+        body.dark-mode .guides-index a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .guides-content code,
+        body.dark-mode .guides-index code {
+            background: #2a2a2a;
+            color: #ff7eb6;
+        }
+        
+        body.dark-mode .guides-content pre {
+            background: #0a0a0a;
+        }
+        
+        body.dark-mode .guides-content blockquote {
+            border-left-color: #4a9eff;
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .guides-content table th {
+            background: #252525;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .guides-content table td {
+            border-color: #333;
+        }
+        
+        body.dark-mode .guides-content table tr:nth-child(even) {
+            background: #1a1a1a;
+        }
+        
+        body.dark-mode .guides-content hr,
+        body.dark-mode .guides-index hr {
+            border-top-color: #333;
+        }
+        
+        body.dark-mode .guides-content li,
+        body.dark-mode .guides-index li {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .guides-index strong {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode footer {
+            border-top-color: #333;
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode footer a {
+            color: #4a9eff;
+        }
     </style>
 </head>
 <body>
+    <script>
+    // Sync dark-mode class from html to body
+    if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    </script>
     <main>
     <div class="container">
         <div class="hero">
@@ -636,12 +785,12 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
 
         <footer class="footer">
             <p>
-                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
-                <a href="https://guides.aviationwx.org">Guides</a> | 
-                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-                <a href="https://terms.aviationwx.org">Terms of Service</a> | 
-                <a href="https://api.aviationwx.org">API</a> | 
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
+                <a href="https://guides.aviationwx.org">Guides</a> • 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://terms.aviationwx.org">Terms of Service</a> • 
+                <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>
             </p>
         </footer>

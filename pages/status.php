@@ -1373,6 +1373,14 @@ if (php_sapi_name() === 'cli') {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply dark mode immediately based on browser preference to prevent flash
+(function() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark-mode');
+    }
+})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1635,9 +1643,111 @@ if (php_sapi_name() === 'cli') {
                 gap: 0.75rem;
             }
         }
+        
+        /* ============================================
+           Dark Mode Overrides for Status Page
+           Automatically applied based on browser preference
+           ============================================ */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #121212;
+                color: #e0e0e0;
+            }
+        }
+        
+        body.dark-mode {
+            background: #121212;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .header {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .header h1 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .header .subtitle {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .status-card {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .status-card-header {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .status-card-header h2 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .airport-card-header:hover {
+            background-color: #252525;
+        }
+        
+        body.dark-mode .component-item {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .component-name {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .component-message {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .component-message code {
+            background: #2a2a2a;
+            color: #ff7eb6;
+        }
+        
+        body.dark-mode .component-timestamp {
+            color: #707070;
+        }
+        
+        body.dark-mode .node-metrics-row {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .metric-label-inline {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .metric-value-inline {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .metric-sub {
+            color: #707070;
+        }
+        
+        body.dark-mode .footer {
+            border-top-color: #333;
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .footer a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode h2[style*="font-size: 1.5rem"] {
+            color: #e0e0e0;
+        }
     </style>
 </head>
 <body>
+    <script>
+    // Sync dark-mode class from html to body
+    if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    </script>
     <div class="container">
         <div class="header">
             <h1>AviationWX Status</h1>
@@ -1857,12 +1967,12 @@ if (php_sapi_name() === 'cli') {
         
         <div class="footer">
             <p>
-                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
-                <a href="https://guides.aviationwx.org">Guides</a> | 
-                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-                <a href="https://terms.aviationwx.org">Terms of Service</a> | 
-                <a href="https://api.aviationwx.org">API</a> | 
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
+                <a href="https://guides.aviationwx.org">Guides</a> • 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://terms.aviationwx.org">Terms of Service</a> • 
+                <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>
             </p>
             <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #999;">

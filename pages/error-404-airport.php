@@ -63,6 +63,14 @@ $canonicalUrl = getCanonicalUrl();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply dark mode immediately based on browser preference to prevent flash
+(function() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark-mode');
+    }
+})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -408,9 +416,220 @@ $canonicalUrl = getCanonicalUrl();
         .error-airport-item.no-results:hover {
             background: transparent;
         }
+        
+        /* ============================================
+           Dark Mode Overrides for 404 Airport Page
+           Automatically applied based on browser preference
+           ============================================ */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #121212;
+                color: #e0e0e0;
+            }
+        }
+        
+        body.dark-mode {
+            background: #121212;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .error-hero {
+            background: linear-gradient(135deg, #0a0a0a 0%, #003d7a 100%);
+        }
+        
+        body.dark-mode .airport-code-highlight {
+            background: rgba(255,255,255,0.15);
+        }
+        
+        body.dark-mode .section {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .section h2 {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .section h3 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .section p {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .suggestions-list .suggestion-item {
+            background: #1a1a1a;
+            border-left-color: #4a9eff;
+        }
+        
+        body.dark-mode .suggestion-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .suggestion-icao {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .suggestion-name {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .suggestion-address {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .cta-box {
+            background: #1a1a1a;
+            border-left-color: #4a9eff;
+        }
+        
+        body.dark-mode .cta-box h3 {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .cta-box[style*="border-left-color: #28a745"] h3 {
+            color: #4ade80;
+        }
+        
+        body.dark-mode .cta-box[style*="border-left-color: #28a745"] {
+            border-left-color: #4ade80;
+        }
+        
+        body.dark-mode ul {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .contact-info {
+            background: #252525;
+        }
+        
+        body.dark-mode .contact-info a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .steps-list li {
+            background: #1a1a1a;
+            border-left-color: #4ade80;
+        }
+        
+        body.dark-mode .steps-list li::before {
+            background: #4ade80;
+        }
+        
+        body.dark-mode .example-card {
+            background: #1a1a1a;
+        }
+        
+        body.dark-mode .example-card:hover {
+            border-color: #4a9eff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .example-icao {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .example-name {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode code {
+            background: #2a2a2a;
+            color: #ff7eb6;
+        }
+        
+        body.dark-mode .btn-primary {
+            background: #4a9eff;
+        }
+        
+        body.dark-mode .btn-primary:hover {
+            background: #3a8eef;
+        }
+        
+        body.dark-mode .btn-primary[style*="background: #28a745"] {
+            background: #4ade80;
+        }
+        
+        body.dark-mode .btn-secondary {
+            background: #1e1e1e;
+            color: #4a9eff;
+            border-color: #4a9eff;
+        }
+        
+        body.dark-mode .btn-secondary:hover {
+            background: #4a9eff;
+            color: white;
+        }
+        
+        body.dark-mode .home-link {
+            border-top-color: #333;
+        }
+        
+        body.dark-mode .airport-search-section {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .airport-search-section h2 {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .error-airport-search-input {
+            background: #252525;
+            border-color: #333;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .error-airport-search-input::placeholder {
+            color: #707070;
+        }
+        
+        body.dark-mode .error-airport-search-input:focus {
+            border-color: #4a9eff;
+            box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.15);
+        }
+        
+        body.dark-mode .error-airport-dropdown {
+            background: #1e1e1e;
+            border-color: #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+        
+        body.dark-mode .error-airport-item {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .error-airport-item:hover,
+        body.dark-mode .error-airport-item.selected {
+            background: #252525;
+        }
+        
+        body.dark-mode .error-airport-item .airport-identifier {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .error-airport-item .airport-name {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .footer {
+            border-top-color: #333;
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .footer a {
+            color: #4a9eff;
+        }
     </style>
 </head>
 <body>
+    <script>
+    // Sync dark-mode class from html to body
+    if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    </script>
     <div class="container">
         <div class="error-container">
             <div class="error-hero">
@@ -903,12 +1122,12 @@ Best regards,
     
     <footer class="footer" style="text-align: center; padding: 2rem 1rem; margin-top: 2rem; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
         <p>
-            &copy; <?= date('Y') ?> <a href="https://aviationwx.org" style="color: #0066cc;">AviationWX.org</a> | 
-            <a href="https://guides.aviationwx.org" style="color: #0066cc;">Guides</a> | 
-            <a href="https://aviationwx.org#about-the-project" style="color: #0066cc;">Built for pilots, by pilots</a> | 
-            <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc;">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-            <a href="https://terms.aviationwx.org" style="color: #0066cc;">Terms of Service</a> | 
-            <a href="https://api.aviationwx.org" style="color: #0066cc;">API</a> | 
+            &copy; <?= date('Y') ?> <a href="https://aviationwx.org" style="color: #0066cc;">AviationWX.org</a> • 
+            <a href="https://guides.aviationwx.org" style="color: #0066cc;">Guides</a> • 
+            <a href="https://aviationwx.org#about-the-project" style="color: #0066cc;">Built for pilots, by pilots</a> • 
+            <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc;">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+            <a href="https://terms.aviationwx.org" style="color: #0066cc;">Terms of Service</a> • 
+            <a href="https://api.aviationwx.org" style="color: #0066cc;">API</a> • 
             <a href="https://status.aviationwx.org" style="color: #0066cc;">Status</a>
         </p>
     </footer>

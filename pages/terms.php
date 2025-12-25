@@ -19,6 +19,14 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply dark mode immediately based on browser preference to prevent flash
+(function() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark-mode');
+    }
+})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -155,9 +163,90 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
         .footer {
             margin-top: 2rem;
         }
+        
+        /* ============================================
+           Dark Mode Overrides for Terms
+           Automatically applied based on browser preference
+           ============================================ */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #121212;
+                color: #e0e0e0;
+            }
+        }
+        
+        body.dark-mode {
+            background: #121212;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .terms-header {
+            background: linear-gradient(135deg, #0a0a0a 0%, #003d7a 100%);
+        }
+        
+        body.dark-mode .terms-content {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .terms-content h2 {
+            color: #4a9eff;
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .terms-content h3 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .terms-content p {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .terms-content ul,
+        body.dark-mode .terms-content ol {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .terms-content a {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .highlight-box {
+            background: #1a1a1a;
+            border-left-color: #4a9eff;
+        }
+        
+        body.dark-mode .highlight-box.warning {
+            background: #1a0a0a;
+            border-left-color: #ef4444;
+        }
+        
+        body.dark-mode .highlight-box.info {
+            background: #0a1a0a;
+            border-left-color: #4ade80;
+        }
+        
+        body.dark-mode .last-updated {
+            color: #707070;
+            border-top-color: #333;
+        }
+        
+        body.dark-mode .footer {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .footer a {
+            color: #4a9eff;
+        }
     </style>
 </head>
 <body>
+    <script>
+    // Sync dark-mode class from html to body
+    if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    </script>
     <main>
     <div class="container">
         <div class="terms-container">
@@ -391,12 +480,12 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
             
             <footer class="footer">
                 <p>
-                    &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
-                    <a href="https://guides.aviationwx.org">Guides</a> | 
-                    <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-                    <a href="https://terms.aviationwx.org">Terms of Service</a> | 
-                    <a href="https://api.aviationwx.org">API</a> | 
+                    &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
+                    <a href="https://guides.aviationwx.org">Guides</a> • 
+                    <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                    <a href="https://terms.aviationwx.org">Terms of Service</a> • 
+                    <a href="https://api.aviationwx.org">API</a> • 
                     <a href="https://status.aviationwx.org">Status</a>
                 </p>
             </footer>
