@@ -895,13 +895,14 @@ $baseUrl = getBaseUrl();
                 // For local dev, use query param approach
                 var protocol = window.location.protocol;
                 var host = window.location.host;
-                baseUrl = protocol + '//' + host + '/?embed&airport=' + state.airport.id;
+                baseUrl = protocol + '//' + host + '/?embed';
             } else {
-                // Production: use subdomain
-                baseUrl = 'https://embed.' + BASE_DOMAIN + '/' + state.airport.id;
+                // Production: use subdomain with query params
+                baseUrl = 'https://embed.' + BASE_DOMAIN + '/';
             }
             
             var params = [];
+            params.push('airport=' + state.airport.id);
             params.push('style=' + state.style);
             params.push('theme=' + state.theme);
             if (state.style === 'webcam' || state.style === 'full') {
