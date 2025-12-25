@@ -171,9 +171,18 @@ aviationwx.org/
 - **Features**:
   - Dynamic weather data display
   - Unit toggles (temperature, distance, wind speed)
+  - Theme toggle (Day/Dark/Night modes)
   - Wind visualization (Canvas-based)
   - Service worker for offline support
   - Responsive design
+
+**Theme System**:
+- **Three Modes**: Day (light), Dark (classic dark), Night (red night vision)
+- **Night Vision Mode**: Red-tinted display to preserve scotopic vision for pilots
+- **Auto-Detection**: Mobile devices automatically switch to Night mode after sunset (based on airport local time)
+- **Browser Preference**: Respects `prefers-color-scheme: dark` for Day/Dark selection
+- **Persistence**: Theme preference saved via cookie (`aviationwx_theme`)
+- **Priority**: Mobile auto-night → Saved preference → Browser preference → Day (fallback)
 
 **Key JavaScript Functions**:
 - `fetchWeather()`: Fetches weather data
@@ -182,6 +191,8 @@ aviationwx.org/
 - `parseRunwayName()`: Extracts L/C/R designations from runway names
 - `groupParallelRunways()`: Groups parallel runways by similar headings
 - `calculateRunwayOffset()`: Calculates horizontal offset for parallel runways
+- `initThemeToggle()`: Initializes theme toggle with auto-detection logic
+- `checkThemeAuto()`: Checks time-based and browser theme preferences
 - Unit conversion functions
 - Timestamp formatting
 

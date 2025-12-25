@@ -46,6 +46,10 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 ### User Experience
 - **Wind Visualization**: Interactive runway wind diagram with parallel runway support
 - **Unit Toggles**: Switch between temperature (F/C), distance (ft/m), and wind speed (kts/mph/km/h) units
+- **Theme Toggle**: Three display modes - Day (light), Dark (classic dark theme), and Night (red night vision mode for cockpit use)
+  - Auto night mode on mobile after sunset (based on airport local time)
+  - Respects browser `prefers-color-scheme` preference
+  - Persists user theme preference via cookie
 - **Weather Status Emojis**: Visual indicators for abnormal conditions
 - **Mobile-First Design**: Responsive layout for all devices
 - **Offline Support**: Service worker for offline access
