@@ -163,7 +163,7 @@ aviationwx.org/
   - Open Graph and Twitter Card tags for social sharing
   - Canonical URLs to prevent duplicate content
   - Enhanced meta tags (keywords, author, description)
-- **Sitemap**: Automatically includes homepage, status page, and all airport subdomains
+- **Sitemap**: Automatically includes homepage, status page, embed generator, and all airport subdomains
 
 ### Frontend (`pages/airport.php`)
 
