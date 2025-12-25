@@ -4395,6 +4395,8 @@ function updateTimestampDisplay(elem, timestamp) {
 const timestampCheckPending = {};
 const timestampCheckRetries = {}; // Track retry attempts
 const CAM_TS = {}; // In-memory timestamps per camera (no UI field)
+const CAM_LAST_FETCH = {}; // Track when each webcam was last successfully fetched (client time ms)
+let webcamVisibilityDebounceTimer = null; // Debounce visibility/focus events
 
 // Initialize CAM_TS with server-side timestamps from initial image load
 // Uses EXIF capture time when available, otherwise falls back to filemtime
@@ -4578,27 +4580,65 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
     setupWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
     <?php endforeach; ?>
     
+    /**
+     * Handle visibility change with robust recovery
+     * - Debounces multiple events (visibility + focus can fire together)
+     * - Forces refresh to bypass timestamp check
+     * - Checks interval health and reinitializes if needed
+     */
+    function handleWebcamVisibilityChange() {
+        if (document.hidden) return;
+        
+        // Debounce: clear any pending handler
+        if (webcamVisibilityDebounceTimer) {
+            clearTimeout(webcamVisibilityDebounceTimer);
+        }
+        
+        // Short debounce to coalesce visibilitychange + focus events
+        webcamVisibilityDebounceTimer = setTimeout(() => {
+            const now = Date.now();
+            console.log('[Webcam] Window regained visibility - refreshing all webcams with force=true');
+            
+            <?php foreach ($airport['webcams'] as $index => $cam): ?>
+            // Check interval health for cam <?= $index ?>
+            const lastFetch<?= $index ?> = CAM_LAST_FETCH[<?= $index ?>] || 0;
+            const intervalMs<?= $index ?> = <?= max(60, $perCam) ?> * 1000;
+            const expectedIntervals<?= $index ?> = Math.floor((now - lastFetch<?= $index ?>) / intervalMs<?= $index ?>);
+            
+            // If more than 3 intervals have passed without a fetch, reinitialize the interval
+            if (lastFetch<?= $index ?> > 0 && expectedIntervals<?= $index ?> > 3) {
+                console.log('[Webcam] Cam <?= $index ?> interval appears stalled (' + expectedIntervals<?= $index ?> + ' missed intervals), reinitializing...');
+                
+                // Clear old interval
+                if (window.webcamRefreshIntervals && window.webcamRefreshIntervals.has(<?= $index ?>)) {
+                    clearInterval(window.webcamRefreshIntervals.get(<?= $index ?>));
+                }
+                
+                // Create new interval
+                const newIntervalId<?= $index ?> = setInterval(() => {
+                    safeSwapCameraImage(<?= $index ?>);
+                }, intervalMs<?= $index ?>);
+                
+                if (!window.webcamRefreshIntervals) {
+                    window.webcamRefreshIntervals = new Map();
+                }
+                window.webcamRefreshIntervals.set(<?= $index ?>, newIntervalId<?= $index ?>);
+            }
+            
+            // Force refresh (bypasses timestamp check, retries on error)
+            safeSwapCameraImage(<?= $index ?>, true);
+            <?php endforeach; ?>
+            
+            webcamVisibilityDebounceTimer = null;
+        }, 100); // 100ms debounce
+    }
+    
     // Handle window visibility changes - refresh webcams immediately when window regains focus
     // This ensures users see fresh images immediately after switching back to the tab
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            // Window is now visible - refresh all webcams immediately
-            console.log('[Webcam] Window regained focus - refreshing all webcams');
-            <?php foreach ($airport['webcams'] as $index => $cam): ?>
-            safeSwapCameraImage(<?= $index ?>);
-            <?php endforeach; ?>
-        }
-    });
+    document.addEventListener('visibilitychange', handleWebcamVisibilityChange);
     
     // Also handle window focus event as fallback (for older browsers)
-    window.addEventListener('focus', () => {
-        if (!document.hidden) {
-            console.log('[Webcam] Window focused - refreshing all webcams');
-            <?php foreach ($airport['webcams'] as $index => $cam): ?>
-            safeSwapCameraImage(<?= $index ?>);
-            <?php endforeach; ?>
-        }
-    });
+    window.addEventListener('focus', handleWebcamVisibilityChange);
 })();
 <?php endif; ?>
 
@@ -5080,6 +5120,9 @@ function handleWebcamError(camIndex, img) {
  * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
  */
 function setupWebcamRefresh(camIndex, baseInterval) {
+    // Initialize last fetch tracking
+    CAM_LAST_FETCH[camIndex] = Date.now();
+    
     // First refresh: Immediate (user gets data quickly, handles stale images)
     safeSwapCameraImage(camIndex);
     
@@ -5529,26 +5572,34 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
  * @param {boolean} hasExisting Whether image is already rendered
  * @param {number} jpegTimestamp JPEG timestamp from mtime endpoint
  */
-async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {try {
+async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {
+    try {
         const response = await fetch(url, {
             cache: 'no-store',
             credentials: 'same-origin'
-        });if (response.status === 200) {
+        });
+        
+        if (response.status === 200) {
             // Format ready - load immediately
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);updateImageSilently(camIndex, blobUrl, jpegTimestamp);
+            const blobUrl = URL.createObjectURL(blob);
+            updateImageSilently(camIndex, blobUrl, jpegTimestamp);
+            // Track successful image load
+            CAM_LAST_FETCH[camIndex] = Date.now();
             return;
         }
         
         if (response.status === 202) {
             // Format generating
-            const data = await response.json();await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
+            const data = await response.json();
+            await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
             return;
         }
         
         throw new Error(`Unexpected status: ${response.status}`);
         
-    } catch (error) {// Network error - use fallback
+    } catch (error) {
+        // Network error - use fallback
         handleRequestError(error, camIndex, hasExisting);
     }
 }
@@ -5574,8 +5625,13 @@ function handleRequestError(error, camIndex, hasExisting) {
     // If has existing image, keep it (silent failure)
 }
 
-// Safely swap camera image only when the backend has a newer image and the new image is loaded
-function safeSwapCameraImage(camIndex) {
+/**
+ * Safely swap camera image only when the backend has a newer image and the new image is loaded
+ * 
+ * @param {number} camIndex Camera index
+ * @param {boolean} forceRefresh If true, bypass timestamp check and force image reload (useful after visibility change)
+ */
+function safeSwapCameraImage(camIndex, forceRefresh = false) {
     // Get current timestamp from CAM_TS, fallback to image data attribute, then 0
     // Note: We don't check staleness here - we fetch the new timestamp first,
     // then check staleness after we have the actual current timestamp from the API
@@ -5604,9 +5660,12 @@ function safeSwapCameraImage(camIndex) {
                 return;
             }
             
-            // Only update if timestamp is newer (strictly greater)
-            if (newTs <= currentTs) {
+            // Only update if timestamp is newer (strictly greater) OR if force refresh is requested
+            // Force refresh is used when returning from background to verify image is displaying correctly
+            if (newTs <= currentTs && !forceRefresh) {
                 // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
+                // Still update last fetch time to show interval is working
+                CAM_LAST_FETCH[camIndex] = Date.now();
                 return;
             }
 
@@ -5624,6 +5683,7 @@ function safeSwapCameraImage(camIndex) {
                 if (imgEl) {
                     imgEl.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
                 }
+                CAM_LAST_FETCH[camIndex] = Date.now();
                 return; // Don't load stale image
             }
 
@@ -5641,8 +5701,16 @@ function safeSwapCameraImage(camIndex) {
             loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);
         })
         .catch((err) => {
-            // Silently ignore; will retry on next interval
+            // Log and retry on error - especially important after visibility change
             console.debug('[Webcam] Refresh error for cam ' + camIndex + ':', err.message);
+            
+            // If this was a force refresh (on visibility change), schedule a retry
+            if (forceRefresh) {
+                console.log('[Webcam] Force refresh failed for cam ' + camIndex + ', scheduling retry...');
+                setTimeout(() => {
+                    safeSwapCameraImage(camIndex, true);
+                }, 2000); // Retry after 2 seconds
+            }
         });
 }
 
