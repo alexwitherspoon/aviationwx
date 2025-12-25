@@ -1,0 +1,16 @@
+# Logrotate configuration for weekly Docker cleanup log
+# Deployed via CD to /etc/logrotate.d/docker-cleanup-weekly
+#
+# Rotates the weekly cleanup log to prevent unbounded growth
+# Keeps 4 weeks of logs (one per weekly run)
+
+/var/log/docker-cleanup-weekly.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
+

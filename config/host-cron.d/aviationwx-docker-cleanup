@@ -1,0 +1,20 @@
+# AviationWX Weekly Docker Cleanup
+# Deployed via CD to /etc/cron.d/aviationwx-docker-cleanup
+#
+# Runs every Sunday at 2:00 AM UTC
+# Aggressively removes ALL unused Docker resources (images, containers, volumes, networks)
+#
+# This is the "suspenders" to the CD workflow's "belt" cleanup:
+# - CD cleanup: Runs conditionally (disk > 40%) during deployments
+# - This cron: Runs weekly regardless, removes everything unused
+#
+# Log output: /var/log/docker-cleanup-weekly.log (rotated by logrotate)
+#
+# Manual run: sudo /home/aviationwx/aviationwx/scripts/docker-cleanup-weekly.sh
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Weekly Docker cleanup - Sunday 2:00 AM UTC
+0 2 * * 0 root /home/aviationwx/aviationwx/scripts/docker-cleanup-weekly.sh >> /var/log/docker-cleanup-weekly.log 2>&1
+

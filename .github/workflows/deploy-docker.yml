@@ -1144,6 +1144,63 @@ jobs:
           fi
           EOF
 
+      - name: Deploy host-level cron and logrotate configs
+        run: |
+          echo "Deploying host-level cron and logrotate configurations..."
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Deploying weekly Docker cleanup cron job"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Make the cleanup script executable
+          if [ -f scripts/docker-cleanup-weekly.sh ]; then
+            chmod +x scripts/docker-cleanup-weekly.sh
+            echo "✓ Made docker-cleanup-weekly.sh executable"
+          else
+            echo "⚠️  scripts/docker-cleanup-weekly.sh not found (will be created on next rsync)"
+          fi
+          
+          # Deploy cron.d file (weekly Docker cleanup - Sundays at 2 AM)
+          if [ -f config/host-cron.d/aviationwx-docker-cleanup ]; then
+            sudo cp config/host-cron.d/aviationwx-docker-cleanup /etc/cron.d/aviationwx-docker-cleanup
+            sudo chown root:root /etc/cron.d/aviationwx-docker-cleanup
+            sudo chmod 644 /etc/cron.d/aviationwx-docker-cleanup
+            echo "✓ Deployed /etc/cron.d/aviationwx-docker-cleanup (weekly cleanup at Sunday 2 AM UTC)"
+          else
+            echo "⚠️  config/host-cron.d/aviationwx-docker-cleanup not found (will be deployed on next rsync)"
+          fi
+          
+          # Deploy logrotate config for cleanup log
+          if [ -f config/host-logrotate.d/docker-cleanup-weekly ]; then
+            sudo cp config/host-logrotate.d/docker-cleanup-weekly /etc/logrotate.d/docker-cleanup-weekly
+            sudo chown root:root /etc/logrotate.d/docker-cleanup-weekly
+            sudo chmod 644 /etc/logrotate.d/docker-cleanup-weekly
+            echo "✓ Deployed /etc/logrotate.d/docker-cleanup-weekly (4 week retention)"
+          else
+            echo "⚠️  config/host-logrotate.d/docker-cleanup-weekly not found (will be deployed on next rsync)"
+          fi
+          
+          # Verify cron syntax is valid
+          if [ -f /etc/cron.d/aviationwx-docker-cleanup ]; then
+            # cron.d files are automatically parsed by crond, but we can validate basic syntax
+            if grep -qE '^[0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ [0-9*,/-]+ ' /etc/cron.d/aviationwx-docker-cleanup; then
+              echo "✓ Cron syntax validation passed"
+            else
+              echo "⚠️  Cron file may have syntax issues - please verify manually"
+            fi
+          fi
+          
+          echo ""
+          echo "Weekly Docker cleanup configured:"
+          echo "  • Script: /home/aviationwx/aviationwx/scripts/docker-cleanup-weekly.sh"
+          echo "  • Schedule: Sunday 2:00 AM UTC"
+          echo "  • Log: /var/log/docker-cleanup-weekly.log"
+          echo "  • Retention: 4 weeks of logs"
+          EOF
+
       - name: Check for Docker config changes
         id: docker-config-changed
         run: |

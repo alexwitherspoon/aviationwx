@@ -29,6 +29,7 @@ This deployment requires **minimal host customization**:
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
 - ✅ **No sudo required for application** - Only needed for initial Docker/SSL setup
+- ✅ **No Docker cleanup setup** - Weekly cleanup cron auto-deployed via CD
 
 **One-time setup only**: After initial configuration, the application runs with minimal host dependencies.
 
@@ -535,6 +536,47 @@ cp /home/aviationwx/airports.json ~/airports.json.backup
 # Backup SSL certificates (already backed up by Let's Encrypt, but useful to have local copy)
 cp -r ~/aviationwx/ssl ~/ssl.backup
 ```
+
+### Docker Cleanup
+
+Docker images and build cache are cleaned up using a "belt and suspenders" approach:
+
+#### Automatic Cleanup (CD Workflow - "Belt")
+During each deployment, if disk usage exceeds 40%, the CD workflow runs `scripts/deploy-docker-cleanup.sh` which:
+- Cleans build cache (keeps last 24 hours)
+- Removes dangling images
+- Removes unused images older than 7 days
+- Removes unused volumes and networks
+
+#### Weekly Cleanup (Host Cron - "Suspenders")
+A weekly host-level cron job runs every Sunday at 2:00 AM UTC to aggressively clean ALL unused Docker resources:
+
+**Files deployed by CD:**
+- `/etc/cron.d/aviationwx-docker-cleanup` - Weekly cron schedule
+- `/etc/logrotate.d/docker-cleanup-weekly` - Log rotation (4 week retention)
+
+**Cleanup script:**
+- `/home/aviationwx/aviationwx/scripts/docker-cleanup-weekly.sh`
+
+**Log file:**
+- `/var/log/docker-cleanup-weekly.log`
+
+**Manual execution:**
+```bash
+# Run cleanup manually
+sudo /home/aviationwx/aviationwx/scripts/docker-cleanup-weekly.sh
+
+# View cleanup logs
+cat /var/log/docker-cleanup-weekly.log
+
+# Verify cron job is installed
+cat /etc/cron.d/aviationwx-docker-cleanup
+
+# Check next scheduled run
+grep docker /etc/cron.d/* 2>/dev/null
+```
+
+**Note**: The weekly cleanup uses `docker system prune -af --volumes` which removes ALL unused resources, not just those older than a certain age. This ensures disk space is reclaimed even during periods of low deployment activity.
 
 ## Troubleshooting
 
