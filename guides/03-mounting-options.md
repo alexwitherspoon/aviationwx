@@ -1,4 +1,4 @@
-# 03 — Mounting Options
+# 03 - Mounting Options
 
 ## Goal
 Pick a mounting approach that is:
@@ -9,8 +9,8 @@ Pick a mounting approach that is:
 
 ## Before you choose an option
 This guide assumes you have already completed:
-- **Guide 01 (Permission Packet)** — especially privacy expectations and written approval
-- **Guide 02 (Location & Siting)** — especially the default camera view guidance and site survey scoring
+- **Guide 01 (Permission Packet)** - especially privacy expectations and written approval
+- **Guide 02 (Location & Siting)** - especially the default camera view guidance and site survey scoring
 
 If you haven’t done those yet, do them first. Mounting is the implementation step.
 
@@ -22,7 +22,7 @@ Start here based on what you already have access to:
 - If you need a **new permanent mount** → go to **Option C**
 - If you want a **reversible pilot install** (or a trial) → go to **Option D**
 
-## Option A — Existing pole or structure (often the easiest)
+## Option A - Existing pole or structure (often the easiest)
 Use what’s already there, if it’s safe and permitted.
 
 **Good fits:**
@@ -46,7 +46,7 @@ Use what’s already there, if it’s safe and permitted.
 - Safe access for installation and maintenance (escort is OK; plan for it)
 - Cables can be routed cleanly and safely
 
-## Option B — Building mount (often best for power + internet)
+## Option B - Building mount (often best for power + internet)
 Mount to a building (or a short mast attached to a building) when it provides a safe, useful view and easier power/internet.
 
 **Good fits:**
@@ -69,7 +69,7 @@ Mount to a building (or a short mast attached to a building) when it provides a 
 - Confirm where cables can enter and how they’ll be protected
 - Confirm the final view is acceptable (Guide 02) and privacy expectations are met (Guide 01)
 
-## Option C — Permanent ground mount (new pole / fixed installation)
+## Option C - Permanent ground mount (new pole / fixed installation)
 This is the long-term approach when you need height, permanence, or a specific location that existing structures can’t provide.
 
 **Pros**
@@ -93,7 +93,7 @@ This is the long-term approach when you need height, permanence, or a specific l
 - if you’re unsure whether FAA airspace notification/review applies
 - if the airport sponsor/manager wants a formal process
 
-## Option D — Temporary ground mount (reversible / pilot install)
+## Option D - Temporary ground mount (reversible / pilot install)
 Best for trials, remote strips, or reversible installs. Temporary does **not** mean casual: it must still be safe, stable, and permitted.
 
 **Examples**

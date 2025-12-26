@@ -1,4 +1,4 @@
-# 05 — Power Options
+# 05 - Power Options
 
 ## Goal
 Power the cameras + weather station in a way that is:
@@ -7,7 +7,7 @@ Power the cameras + weather station in a way that is:
 - **maintainable** by the local group,
 - and realistic for the budget and install effort.
 
-This guide assumes you’ve already chosen a location and mounting approach (Guides 02–03).
+This guide assumes you’ve already chosen a location and mounting approach (Guides 02-03).
 
 ## Quick pick-your-path
 Choose the simplest option that works:
@@ -25,7 +25,7 @@ Choose the simplest option that works:
 
 ## What you are powering (typical footprint)
 A common setup is:
-- **1–4 cameras** (still image snapshots every 1–15 minutes)
+- **1-4 cameras** (still image snapshots every 1-15 minutes)
 - **1 weather station** (wind, temp, pressure, rain, etc.)
 - optional: a small network device (switch / router / LTE modem)
 
@@ -34,7 +34,7 @@ As a rough rule of thumb, plan the system around:
 - networking gear: small but constant power draw
 - solar/battery sizing: depends heavily on winter sun and local shading
 
-## Option A — Use existing grid power (simplest)
+## Option A - Use existing grid power (simplest)
 If there’s an existing outlet or building power you can use safely and with permission, this is usually the best starting point.
 
 **Checklist**
@@ -42,7 +42,7 @@ If there’s an existing outlet or building power you can use safely and with pe
 - Power source is safe, reliable, and realistically accessible for maintenance.
 - You have a plan to keep adapters/enclosures protected from weather and tampering.
 
-## Option B — Grid power + PoE (recommended when possible)
+## Option B - Grid power + PoE (recommended when possible)
 **PoE (Power over Ethernet)** lets one Ethernet cable carry both power and data.
 This is often the safest and simplest “professional” approach when a building or existing infrastructure is nearby.
 
@@ -61,7 +61,7 @@ This is often the safest and simplest “professional” approach when a buildin
 - Cable enters buildings cleanly and safely (approved entry point, weather sealing).
 - Long runs are planned thoughtfully (avoid “mystery cables” that future maintainers can’t identify).
 
-## Option C — Grid power + backup (UPS or hybrid)
+## Option C - Grid power + backup (UPS or hybrid)
 If power outages are common, consider a backup plan. Even short outages can create long downtime if a modem or camera needs manual reboot.
 
 **Simple approach**
@@ -75,11 +75,11 @@ If power outages are common, consider a backup plan. Even short outages can crea
 - If you rely on LTE or a router, confirm it will auto-recover after outages.
 - Maintenance plan includes periodic checks (battery health, connections, weatherproofing).
 
-## Option D — Solar + battery (when there’s no grid power)
+## Option D - Solar + battery (when there’s no grid power)
 This is common for remote strips or where running power is not feasible.
 
 **High-level recipe**
-- Solar panel (often ~30–100W depending on load and winter conditions)
+- Solar panel (often ~30-100W depending on load and winter conditions)
 - Charge controller
 - Battery (often LiFePO₄ for durability)
 - Weatherproof enclosure

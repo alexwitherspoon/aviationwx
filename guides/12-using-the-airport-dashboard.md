@@ -1,15 +1,15 @@
-# 12 — Using the Airport Dashboard (Pilot's Quick Reference)
+# 12 - Using the Airport Dashboard (Pilot's Quick Reference)
 
 ## What is this?
-This guide helps you get the most out of an AviationWX airport dashboard. Think of it as the "controls overview" screen before the game starts — we'll show you where everything is, what it does, and let you learn by exploring.
+This guide helps you get the most out of an AviationWX airport dashboard. Think of it as the "controls overview" screen before the game starts - we'll show you where everything is, what it does, and let you learn by exploring.
 
 **A working example:** https://kspb.aviationwx.org
 
 ### Our Philosophy
 
-AviationWX dashboards focus on **essential, at-a-glance information** — the stuff you actually need when checking conditions before a flight. We keep it simple and fast.
+AviationWX dashboards focus on **essential, at-a-glance information** - the stuff you actually need when checking conditions before a flight. We keep it simple and fast.
 
-For deeper research, every dashboard includes links to trusted external resources like **AirNav**, **SkyVector**, **AOPA**, and **FAA Weather Cams**. We're not trying to replace these great tools — we're giving you a quick visual check and then connecting you to the experts when you need more.
+For deeper research, every dashboard includes links to trusted external resources like **AirNav**, **SkyVector**, **AOPA**, and **FAA Weather Cams**. We're not trying to replace these great tools - we're giving you a quick visual check and then connecting you to the experts when you need more.
 
 > ⚠️ **Important**: AviationWX is a **supplemental** information source. Always obtain official weather briefings and NOTAMs before flight.
 
@@ -77,9 +77,9 @@ AviationWX combines multiple data sources to show you the **freshest, most compl
 ```
 
 **What this means for you:**
-- Some airports have **on-site weather stations** (updated every 1–5 minutes)
+- Some airports have **on-site weather stations** (updated every 1-5 minutes)
 - Some airports use **official METAR data** from nearby ASOS/AWOS
-- Many airports show **both** — you get hyper-local conditions AND official aviation weather
+- Many airports show **both** - you get hyper-local conditions AND official aviation weather
 - Values like density altitude and crosswind components are calculated automatically
 
 ### Flight Category Colors
@@ -156,7 +156,7 @@ The wind rose shows wind relative to the runway(s):
 **What you see:**
 - **Wind arrow** pointing FROM the wind direction
 - **Runway alignment** overlaid for reference
-- **Component breakdown** — headwind/tailwind and crosswind for each runway end
+- **Component breakdown** - headwind/tailwind and crosswind for each runway end
 
 ---
 
@@ -185,7 +185,7 @@ The wind rose shows wind relative to the runway(s):
 ```
 
 **Each webcam shows:**
-- Current image (updated every 1–15 minutes depending on configuration)
+- Current image (updated every 1-15 minutes depending on configuration)
 - Camera name and last update time
 - Warning icon if image is stale (hasn't updated in a while)
 
@@ -228,12 +228,12 @@ Tap (or click) any webcam image to open the **24-hour history player**:
 | << Previous | Step back one frame | `←` Left Arrow |
 | PLAY/Pause | Start/stop playback | `Space` |
 | >> Next | Step forward one frame | `→` Right Arrow |
-| Timeline | Drag to scrub through time | — |
-| Loop | Loop continuously | — |
+| Timeline | Drag to scrub through time | - |
+| Loop | Loop continuously | - |
 | Hide | Full-screen view (controls auto-hide) | `C` |
 | <- Back | Close player | `Escape` |
-| — | Jump to oldest frame | `Home` |
-| — | Jump to newest frame | `End` |
+| - | Jump to oldest frame | `Home` |
+| - | Jump to newest frame | `End` |
 
 ### Touch Gestures (Mobile)
 
@@ -505,12 +505,12 @@ The real power of AviationWX is **visual verification**. Use the dashboard like 
 
 | What to Check | What You're Looking For |
 |---------------|------------------------|
-| **Webcam images** | Actual sky conditions — does it match the forecast? Can you see the horizon? Any fog, haze, or precipitation visible? |
-| **24-hour history** | Weather trends — is it improving or deteriorating? When did that fog roll in? How quickly did conditions change? |
-| **On-site wind** | Real-time local wind vs. official report — is there a difference? Gusty conditions the METAR might miss? |
-| **Crosswind display** | Runway decision — which runway has the best wind component right now? |
-| **Multiple cameras** | Full picture — check different angles to see if conditions vary across the field |
-| **Timestamps** | Data freshness — is this a current observation or stale data? |
+| **Webcam images** | Actual sky conditions - does it match the forecast? Can you see the horizon? Any fog, haze, or precipitation visible? |
+| **24-hour history** | Weather trends - is it improving or deteriorating? When did that fog roll in? How quickly did conditions change? |
+| **On-site wind** | Real-time local wind vs. official report - is there a difference? Gusty conditions the METAR might miss? |
+| **Crosswind display** | Runway decision - which runway has the best wind component right now? |
+| **Multiple cameras** | Full picture - check different angles to see if conditions vary across the field |
+| **Timestamps** | Data freshness - is this a current observation or stale data? |
 
 **Pro tip:** Scrub through the webcam history before departure to understand how conditions have evolved. A clear field now that was IFR an hour ago tells a different story than one that's been clear all day.
 
@@ -521,7 +521,7 @@ The real power of AviationWX is **visual verification**. Use the dashboard like 
 
 ### Sharing
 - Every dashboard has a shareable URL: `https://[airport-id].aviationwx.org`
-- Webcam player URLs are shareable too — great for showing conditions to others
+- Webcam player URLs are shareable too - great for showing conditions to others
 
 ---
 

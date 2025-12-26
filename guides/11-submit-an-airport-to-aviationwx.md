@@ -1,4 +1,4 @@
-# 11 — Submit a New Airport to AviationWX (What to send + what happens next)
+# 11 - Submit a New Airport to AviationWX (What to send + what happens next)
 
 ## Goal
 Make it easy for a normal, non-technical airport volunteer to send AviationWX the information needed to:
@@ -17,18 +17,18 @@ I’m happy to help you gather the required details and pick the simplest workin
 
 ---
 
-## Step 0 — Before you send anything
+## Step 0 - Before you send anything
 If you get stuck at any point, email `contact@aviationwx.org` and we’ll help you through it.
 
 Please review these guides first (they’ll save time):
-- **Guide 01 — Permission Packet** (permission + privacy expectations)
-- **Guide 07 — Equipment Recommendations** (tested weather stations + cameras)
-- **Guide 09 — Camera Configuration** (FTP/FTPs/SFTP recommended path)
-- **Guide 10 — Weather Station Configuration** (siting + sanity checks)
+- **Guide 01 - Permission Packet** (permission + privacy expectations)
+- **Guide 07 - Equipment Recommendations** (tested weather stations + cameras)
+- **Guide 09 - Camera Configuration** (FTP/FTPs/SFTP recommended path)
+- **Guide 10 - Weather Station Configuration** (siting + sanity checks)
 
 ---
 
-## Step 1 — The “airport basics” checklist (copy/paste)
+## Step 1 - The “airport basics” checklist (copy/paste)
 In your email, include:
 
 - **Airport identifier:** (ICAO / FAA / IATA)
@@ -39,7 +39,7 @@ In your email, include:
 - **Install location summary:** (e.g., “hangar roof”, “existing pole near …”)  
 - **Power source:** (grid / solar+battery / hybrid)  
 - **Internet source:** (LAN / Wi‑Fi / LTE / Starlink / point-to-point)  
-- **Target update cadence:** (typical: 1–15 minutes)
+- **Target update cadence:** (typical: 1-15 minutes)
 
 Optional but helpful:
 - **Photos of the install site** (even cellphone photos are fine)
@@ -47,9 +47,9 @@ Optional but helpful:
 
 ---
 
-## Step 2 — Weather data (choose one path)
+## Step 2 - Weather data (choose one path)
 
-### Option A — Tempest (recommended default)
+### Option A - Tempest (recommended default)
 Please send:
 - **Tempest Station ID**
 - **Tempest Access Token** (personal access token is best)
@@ -67,7 +67,7 @@ Create a personal access token (Data Authorizations):
 https://tempestwx.com/settings/tokens
 ```  
 
-### Option B — Davis WeatherLink (Vantage Pro2, etc.)
+### Option B - Davis WeatherLink (Vantage Pro2, etc.)
 Please send:
 - **WeatherLink v2 API Key**
 - **WeatherLink v2 API Secret**
@@ -83,7 +83,7 @@ WeatherLink v2 API tutorial (generate v2 key + secret):
 https://weatherlink.github.io/v2-api/tutorial
 ```
 
-### Option C — Ambient Weather (WS‑2902, etc.)
+### Option C - Ambient Weather (WS‑2902, etc.)
 Please send:
 - **Ambient Weather API Key** (sometimes called a *User Key* or *Device Key*)
 - **Ambient Weather Application Key** (required for the REST API)
@@ -102,7 +102,7 @@ Ambient REST API docs:
 https://ambientweather.docs.apiary.io/
 ```
 
-### Option D — Official airport weather source (ASOS/AWOS)
+### Option D - Official airport weather source (ASOS/AWOS)
 If you’re using an official airport weather feed:
 - tell us **what the airport identifier is**
 - and whether the field has **ASOS / AWOS** (and which one, if known)
@@ -111,10 +111,10 @@ AviationWX can combine official sources (when present) with local sensors so pil
 
 ---
 
-## Step 3 — Camera connection (choose one path)
-AviationWX supports multiple cameras. Typical installs are **1–4 cameras**.
+## Step 3 - Camera connection (choose one path)
+AviationWX supports multiple cameras. Typical installs are **1-4 cameras**.
 
-### Option A — Scheduled JPEG uploads (FTP/FTPs/SFTP) ✅ recommended
+### Option A - Scheduled JPEG uploads (FTP/FTPs/SFTP) ✅ recommended
 This is the simplest and usually produces the best still-image quality.
 
 **What to send**
@@ -131,13 +131,13 @@ If you’re using Reolink, their support doc shows the general steps to enable F
 https://support.reolink.com/hc/en-us/articles/360020081034-How-to-Set-up-FTP-for-Reolink-Products/
 ```
 
-### Option B — RTSP stream (still image extracted)
+### Option B - RTSP stream (still image extracted)
 **What to send**
 - Camera brand + model
 - RTSP URL (or enough info for us to derive it)
 - A dedicated camera user + password (ideally a **view-only** account created specifically for AviationWX)
 
-### Option C — Snapshot URL (HTTP/HTTPS)
+### Option C - Snapshot URL (HTTP/HTTPS)
 **What to send**
 - Snapshot URL
 - Any credentials required (again: a dedicated “AviationWX” view-only account is ideal)
@@ -146,7 +146,7 @@ https://support.reolink.com/hc/en-us/articles/360020081034-How-to-Set-up-FTP-for
 
 ---
 
-## Step 4 — “What good looks like” (validation checklist)
+## Step 4 - “What good looks like” (validation checklist)
 After you email us, we’ll validate:
 
 ### Camera validation
@@ -158,18 +158,18 @@ After you email us, we’ll validate:
 ### Weather validation
 - Readings look reasonable (Guide 10 sanity checks)
 - Wind exposure is adequate (or limitations are clearly noted)
-- Updates are consistent over 24–72 hours
+- Updates are consistent over 24-72 hours
 
 ### Operations validation
 - A local maintainer exists (and has access)
 - There’s a reasonable plan to keep it alive (and to remove it cleanly if needed)
 
-If something doesn’t pass, that’s normal — we’ll tell you exactly what to adjust, and we’ll re-test.
+If something doesn’t pass, that’s normal - we’ll tell you exactly what to adjust, and we’ll re-test.
 
 ---
 
 ## Email template (copy/paste)
-Subject: `New airport submission — [AIRPORT IDENTIFIER]`
+Subject: `New airport submission - [AIRPORT IDENTIFIER]`
 
 Body:
 
@@ -206,4 +206,4 @@ If you’re technical (or helping someone technical), the full configuration ref
 https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md
 ```
 
-But you don’t need to read that to submit an airport — the checklists above are enough.
+But you don’t need to read that to submit an airport - the checklists above are enough.

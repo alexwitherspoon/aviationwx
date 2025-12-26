@@ -1,4 +1,4 @@
-# 02 — Location & Safety‑First Siting
+# 02 - Location & Safety‑First Siting
 
 ## Goal
 Choose locations that provide useful **runway + sky** cues **in one glance** and representative weather readings **without creating hazards**.
@@ -9,11 +9,11 @@ A “good” site is:
 
 If you can’t do those three things, **don’t install**.
 
-**Success =** pilots can answer **what it looks like right now** and whether conditions are **trending better or worse**—quickly, in one glance.
+**Success =** pilots can answer **what it looks like right now** and whether conditions are **trending better or worse**-quickly, in one glance.
 
 ## The siting workflow (pick-your-path friendly)
 1) Get written permission (Guide 01)  
-2) Identify **2–5 candidate locations**  
+2) Identify **2-5 candidate locations**  
 3) Walk the field with the airport sponsor/manager (or their delegate)  
 4) Use the site survey checklist to score options  
    - For each candidate: take a photo in the intended direction and a photo of the mounting surface
@@ -21,10 +21,10 @@ If you can’t do those three things, **don’t install**.
 6) Decide mounting + power + internet based on what the chosen location can support
 
 ## Site survey checklist
-Use the checklist at the bottom of this page to evaluate **2–5 candidate locations** before you mount anything.
+Use the checklist at the bottom of this page to evaluate **2-5 candidate locations** before you mount anything.
 Jump here: [Site survey checklist](#site-survey-checklist-1)
 
-**Note:** the scoring is intentionally **weighted toward view usefulness**—the view is the main reason the camera exists. Everything else supports whether that view is safe and sustainable.
+**Note:** the scoring is intentionally **weighted toward view usefulness**-the view is the main reason the camera exists. Everything else supports whether that view is safe and sustainable.
 
 ## What “good views” means (plain language)
 ### Cameras
@@ -53,7 +53,7 @@ Windsock visibility is **not a priority** (wind is better captured by a local we
 ### Weather station
 Place it where it reflects **field conditions** (not sheltered, not heat-soaked), while staying safe and permitted.
 
-**Wind sampling matters:** whenever possible, mount the weather sensor in a spot with **unobstructed wind exposure**—ideally **at the top of a pole, building, or other approved structure**.
+**Wind sampling matters:** whenever possible, mount the weather sensor in a spot with **unobstructed wind exposure**-ideally **at the top of a pole, building, or other approved structure**.
 
 **Rule of thumb:** avoid sheltered corners, heat sources, and obstructions that can mislead wind and temperature readings.
 
@@ -74,7 +74,7 @@ Your location choice will determine:
 Pause and re-plan if you can’t get a view that is **useful**, **safe**, and **maintainable**.
 
 ## Common failure modes (and what to do)
-These aren’t dead ends—this is often the moment to ask for help or change the plan.
+These aren’t dead ends-this is often the moment to ask for help or change the plan.
 
 - **View is great, but power/internet isn’t realistic:** pause and ask the airport sponsor/manager (or local community) about options: PoE from a nearby building, a short conduit run, a point‑to‑point link, a local WISP, or LTE.
 - **Placement is safe, but the view is misleading:** blocked horizon, sheltered microclimate, heat soak, or an angle that hides the real sky/visibility story. Try a different location or add a second “wide sky” camera.
@@ -99,7 +99,7 @@ We’ll cover this with links and a practical checklist in a dedicated legal/saf
 
 # Airport Site Survey Checklist (Template)
 
-Use this checklist to evaluate **2–5 candidate locations** before you mount anything.
+Use this checklist to evaluate **2-5 candidate locations** before you mount anything.
 
 ## 0) Before you go (10 minutes)
 - Confirm **who the decision maker is** (airport sponsor/owner or manager) and how to reach them on site
@@ -129,7 +129,7 @@ Use this checklist to evaluate **2–5 candidate locations** before you mount an
 
 **Written permission:** ☐ yes ☐ pending ☐ no
 
-## 3) Candidate locations (list 2–5)
+## 3) Candidate locations (list 2-5)
 For each candidate location, capture the fields below.
 
 ### Location A (name it)
@@ -152,11 +152,11 @@ For each candidate location, capture the fields below.
 - Notes (cable route, conduit, trenching avoidance, equipment enclosure):
 
 #### Quick scoring (weighted)
-- **View usefulness (runway axis + sky + landmarks):** 1–10  
-- Weather representativeness: 1–5  
-- Safety / non‑hazard: 1–5  
-- Maintenance access: 1–5  
-- Power + internet feasibility: 1–5  
+- **View usefulness (runway axis + sky + landmarks):** 1-10  
+- Weather representativeness: 1-5  
+- Safety / non‑hazard: 1-5  
+- Maintenance access: 1-5  
+- Power + internet feasibility: 1-5  
 - **Total (out of 30):**
 
 **Why the weighting?** The primary reason the camera exists is the view. Everything else supports whether that view is safe, feasible, and sustainable.
@@ -188,7 +188,7 @@ If any of these are true, pause and ask the airport sponsor/manager what process
 ## 6) Decision
 - **Chosen location:**  
 - **Backup location:**  
-- Why (2–3 bullets):
+- Why (2-3 bullets):
 
 ## 7) Next steps
 - Confirm written permission and access plan

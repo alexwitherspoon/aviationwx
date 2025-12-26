@@ -1,10 +1,10 @@
-# 04 — Safety, Legal, and Compliance References (FAA + Codes)
+# 04 - Safety, Legal, and Compliance References (FAA + Codes)
 
 This guide is a “deep links + plain-English” reference for the most common safety and compliance topics that come up when installing **weather and runway observation equipment** (cameras + weather sensors) at an airport.
 
 **This is not legal advice.** Airports vary widely. When in doubt, involve the airport sponsor/manager and (if applicable) your state aviation agency and FAA contacts.
 
-If you’re new to this project, start with **Guide 01 — Permission Packet** first.
+If you’re new to this project, start with **Guide 01 - Permission Packet** first.
 
 ---
 
@@ -19,7 +19,7 @@ If you’re new to this project, start with **Guide 01 — Permission Packet** f
 
 ## “Pick your path” decision tree
 
-### Path A — “No new structure, no new height” (lowest friction)
+### Path A - “No new structure, no new height” (lowest friction)
 Examples:
 - Mounting a camera to an existing building
 - Adding equipment to an existing pole **without increasing overall height**
@@ -29,7 +29,7 @@ Still do:
 - Permission + site survey + safe work practices
 - Confirm you’re not creating a hazard in safety areas (see Airport Design references below)
 
-### Path B — “New pole / tower / mast” or “meaningful increase in height”
+### Path B - “New pole / tower / mast” or “meaningful increase in height”
 Examples:
 - A new ground-mounted pole
 - Any new equipment that increases the structure height, or changes what’s on top
@@ -38,7 +38,7 @@ Do:
 - Ask the airport sponsor if an **FAA airspace notice** is required (Part 77 / 7460-1)
 - If yes, file through **OE/AAA** and coordinate with state aviation agencies (example: Oregon)
 
-### Path C — “Work on or near movement areas” (runway/taxiway environments)
+### Path C - “Work on or near movement areas” (runway/taxiway environments)
 Examples:
 - You need to cross a taxiway, work near runway edges, or stage a lift near operational surfaces
 
@@ -50,7 +50,7 @@ Do:
 
 ## Major FAA references (what they are + why they matter)
 
-### 1) 14 CFR Part 77 — “Do we have to notify the FAA about this structure?”
+### 1) 14 CFR Part 77 - “Do we have to notify the FAA about this structure?”
 **What it is:** Federal rules on the safe, efficient use and preservation of navigable airspace, including when you must **notify the FAA** about a proposed structure or alteration.  
 **Why it matters:** Even a well-intentioned pole can become an airspace issue if it penetrates certain surfaces or thresholds near airports.
 
@@ -58,7 +58,7 @@ Links:
 - Part 77 (eCFR): https://www.ecfr.gov/current/title-14/chapter-I/subchapter-E/part-77
 - FAA “Part 77 notification” explainer: https://www.faa.gov/airports/central/engineering/part77
 
-### 2) FAA Form 7460-1 — Notice of Proposed Construction or Alteration
+### 2) FAA Form 7460-1 - Notice of Proposed Construction or Alteration
 **What it is:** The form used to notify the FAA when Part 77 requires notice (or when FAA requests it).  
 **Why it matters:** This is the most common “trigger” for FAA review of a new structure near an airport.
 
@@ -66,14 +66,14 @@ Links:
 - FAA Form 7460-1 landing page: https://www.faa.gov/forms/index.cfm/go/document.information/documentid/186273
 - PDF of FAA Form 7460-1: https://www.faa.gov/documentLibrary/media/Form/FAA_Form_7460-1_042023.pdf
 
-### 3) OE/AAA — FAA Obstruction Evaluation / Airport Airspace Analysis portal
+### 3) OE/AAA - FAA Obstruction Evaluation / Airport Airspace Analysis portal
 **What it is:** The FAA’s online system used to submit and track 7460-1 filings and the resulting aeronautical study.  
 **Why it matters:** If a notice is required, this is the “source of truth” system.
 
 Link:
 - OE/AAA Portal: https://oeaaa.faa.gov/
 
-### 4) Airport Layout Plans (ALP) — “Does this need to be on the airport’s plan?”
+### 4) Airport Layout Plans (ALP) - “Does this need to be on the airport’s plan?”
 **What it is:** The Airport Layout Plan is the airport’s planning “blueprint” showing existing and planned facilities. Many airports coordinate development via the ALP process, especially if federally obligated or receiving funding.  
 **Why it matters:** A new structure (or certain changes) may need to be reflected on the ALP, and airport sponsors may need FAA coordination through their Airports District Office (ADO).
 
@@ -87,7 +87,7 @@ Links:
 
 ## Airport geometry & safety areas (the “don’t create hazards” portion)
 
-### 5) AC 150/5300-13B — Airport Design
+### 5) AC 150/5300-13B - Airport Design
 **What it is:** The FAA’s main design standard for civil airports (runways, taxiways, aprons, and the safety areas around them).  
 **Why it matters:** It defines concepts like **Runway Safety Area (RSA)** and **Runway Object Free Area (ROFA)** and runway protection zones. Even at small GA airports, it’s the most common “reference language” used by airport managers and consultants.
 
@@ -105,7 +105,7 @@ Links:
 
 ## Marking/lighting & visibility (when structures must be made conspicuous)
 
-### 6) AC 70/7460-1M — Obstruction Marking and Lighting
+### 6) AC 70/7460-1M - Obstruction Marking and Lighting
 **What it is:** FAA guidance on how to mark/light structures that have been determined to be an obstruction or hazard to air navigation.  
 **Why it matters:** If FAA (or the airport) determines marking/lighting is needed, this is the standard reference.
 
@@ -122,7 +122,7 @@ Links:
 
 ## Construction safety (even for “small” installs)
 
-### 7) AC 150/5370-2G — Operational Safety on Airports During Construction (CSPP)
+### 7) AC 150/5370-2G - Operational Safety on Airports During Construction (CSPP)
 **What it is:** FAA guidance for maintaining operational safety during construction, including checklists and expectations for a **Construction Safety and Phasing Plan (CSPP)**.  
 **Why it matters:** Even a small equipment install can create hazards: open trenches, equipment staged near taxiways, unmarked holes, ladders in windy conditions, etc. This AC provides a proven framework.
 
@@ -134,7 +134,7 @@ Links:
 - Plan your work so you’re not improvising next to aircraft operations.  
 - Coordinate times/areas, use barricades/markings as required, and do daily “is anything unsafe?” checks.
 
-> AviationWX practice: if an airport wants an escort for safety, that’s normal—plan for it.
+> AviationWX practice: if an airport wants an escort for safety, that’s normal-plan for it.
 
 ---
 
@@ -153,7 +153,7 @@ Links:
 
 ## National “codes” you should know (non-FAA, but highly relevant)
 
-### 8) NFPA 70 — National Electrical Code (NEC)
+### 8) NFPA 70 - National Electrical Code (NEC)
 **What it is:** The benchmark safety standard for electrical installations and inspection.  
 **Why it matters:** Outdoor power, grounding, trenching, and building entry points are where projects get unsafe fast.
 
@@ -161,7 +161,7 @@ Links:
 - NFPA 70 overview: https://www.nfpa.org/codes-and-standards/nfpa-70-standard-development/70
 - Free online read-only access to NFPA standards: https://www.nfpa.org/for-professionals/codes-and-standards/list-of-codes-and-standards/free-access
 
-### 9) NFPA 780 — Lightning Protection Systems
+### 9) NFPA 780 - Lightning Protection Systems
 **What it is:** A standard describing lightning protection installation requirements (air terminals, bonding, grounding, surge protection, etc.).  
 **Why it matters:** Poles + rooftop mounts + long cables can increase lightning exposure. Mitigations are part of “do no harm.”
 
@@ -169,7 +169,7 @@ Links:
 - NFPA 780 overview: https://www.nfpa.org/codes-and-standards/nfpa-780-standard-development/780
 - NFPA 780 product page: https://www.nfpa.org/product/nfpa-780-standard-for-the-installation-of-lightning-protection-systems/p0780code
 
-> Practical takeaway: “Grounding before entering a building” is not just a nice-to-have—it’s a safety principle.
+> Practical takeaway: “Grounding before entering a building” is not just a nice-to-have-it’s a safety principle.
 
 ### 10) FCC rules for unlicensed wireless (if you’re using Wi‑Fi / point‑to‑point links)
 **What it is:** FCC rules for radio frequency devices operating without an individual license (common for Wi‑Fi, many point‑to‑point radios, etc.).  
@@ -206,13 +206,13 @@ Example (Oregon):
 ---
 
 ## Glossary (quick aviation/FAA terms)
-- **RSA**: Runway Safety Area — a graded, clear area around the runway to reduce damage if an aircraft leaves the runway.  
-- **ROFA**: Runway Object Free Area — a clear area to keep objects away from runway operations.  
-- **RPZ**: Runway Protection Zone — an area beyond the runway intended to protect people and property on the ground.  
-- **ALP**: Airport Layout Plan — official plan drawing set for airport facilities/development.  
+- **RSA**: Runway Safety Area - a graded, clear area around the runway to reduce damage if an aircraft leaves the runway.  
+- **ROFA**: Runway Object Free Area - a clear area to keep objects away from runway operations.  
+- **RPZ**: Runway Protection Zone - an area beyond the runway intended to protect people and property on the ground.  
+- **ALP**: Airport Layout Plan - official plan drawing set for airport facilities/development.  
 - **Part 77 / 7460-1**: The “notify FAA about a structure” system.  
 - **OE/AAA**: FAA portal where Part 77 notices are submitted and reviewed.  
-- **CSPP**: Construction Safety and Phasing Plan — a structured safety plan for work on/near operational areas.
+- **CSPP**: Construction Safety and Phasing Plan - a structured safety plan for work on/near operational areas.
 
 ---
 
@@ -221,4 +221,4 @@ AviationWX tries to be a **good citizen**:
 - We prefer low-profile installs and existing structures when possible.
 - We prioritize pilot safety and “do no harm” installation choices.
 - We rely on the airport sponsor/manager’s established processes for approvals.
-- If you’re unsure, email us — we’ll help you navigate the right path.
+- If you’re unsure, email us - we’ll help you navigate the right path.

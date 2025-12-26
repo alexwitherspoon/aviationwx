@@ -1,4 +1,4 @@
-# 01 — Permission Packet
+# 01 - Permission Packet
 
 ## Purpose (plain language)
 To help promote safety for pilots and the aviation community, we are requesting permission to install **weather and runway observation equipment** at this airport and share the resulting information **freely** with the aviation community via AviationWX.org.
@@ -7,10 +7,10 @@ This is intended as **supplemental “what it looks like right now” informatio
 
 ## What we’re asking permission to do
 With written approval from the airport sponsor/owner (or their designated steward/manager), we would like to:
-- install **1–4 still-image cameras** oriented to show runway/sky conditions
+- install **1-4 still-image cameras** oriented to show runway/sky conditions
 - install **one weather station** (or integrate existing local weather sources if available)
   - for best results, the wind sensor should have **unobstructed exposure**, ideally mounted **at the top of an approved pole/building/structure**
-- publish updates typically every **1–15 minutes**
+- publish updates typically every **1-15 minutes**
 - maintain and, if needed, remove the equipment
 
 ## What this provides (benefit)
@@ -39,15 +39,15 @@ This equipment is for **weather and runway observations**, not security monitori
 
 ## Typical footprint and rough budget
 A typical install is:
-- 1–4 cameras + 1 weather station
-- updates every 1–15 minutes
+- 1-4 cameras + 1 weather station
+- updates every 1-15 minutes
 
 Budget can be as low as **~$500**, but **~$1,000** is a good average minimum to plan for when volunteer labor can install the equipment. (More robust or professional solutions can cost more.)
 
 ## Installation and maintenance expectations
 To be successful, the project needs:
 - a safe, approved location (Guide 02)
-- a realistic plan for power + internet (Guides 05–06)
+- a realistic plan for power + internet (Guides 05-06)
 - a designated local contact for basic checks and occasional maintenance
 - a plan to remove or relocate equipment if it’s no longer wanted or maintainable
 

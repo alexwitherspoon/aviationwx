@@ -16,38 +16,38 @@ Need help at any point?
 Most installs follow the same “pick a path” sequence:
 
 1) **Get permission and alignment**
-- [01 — Permission Packet](01-permission-packet.md)
+- [01 - Permission Packet](01-permission-packet.md)
 
 2) **Choose a location that produces useful data**
-- [02 — Location & Siting](02-location-and-siting.md)
-- [03 — Mounting Options](03-mounting-options.md)
+- [02 - Location & Siting](02-location-and-siting.md)
+- [03 - Mounting Options](03-mounting-options.md)
 
 3) **Confirm safety and compliance when needed**
-- [04 — Safety, Legal, and Compliance References](04-safety-legal-and-compliance.md)
+- [04 - Safety, Legal, and Compliance References](04-safety-legal-and-compliance.md)
 
 4) **Plan power and connectivity**
-- [05 — Power Options](05-power-options.md)
-- [06 — Internet Options](06-internet-options.md)
+- [05 - Power Options](05-power-options.md)
+- [06 - Internet Options](06-internet-options.md)
 
 5) **Pick equipment and configure it**
-- [07 — Equipment Recommendations](07-equipment-recommendations.md)
-- [09 — Camera Configuration](09-camera-configuration.md)
-- [10 — Weather Station Configuration](10-weather-station-configuration.md)
+- [07 - Equipment Recommendations](07-equipment-recommendations.md)
+- [09 - Camera Configuration](09-camera-configuration.md)
+- [10 - Weather Station Configuration](10-weather-station-configuration.md)
 
 6) **Install, hand off, and operate**
-- [08 — Installation Planning & Handoff](08-installation-planning-and-handoff.md)
+- [08 - Installation Planning & Handoff](08-installation-planning-and-handoff.md)
 
 7) **Submit the airport for review and inclusion**
-- [11 — Submit a New Airport to AviationWX](11-submit-an-airport-to-aviationwx.md)
+- [11 - Submit a New Airport to AviationWX](11-submit-an-airport-to-aviationwx.md)
 
 8) **Learn how to use the dashboard**
-- [12 — Using the Airport Dashboard](12-using-the-airport-dashboard.md)
+- [12 - Using the Airport Dashboard](12-using-the-airport-dashboard.md)
 
 ---
 
 ## What AviationWX is (plain language)
 AviationWX provides a clean, fast dashboard for each airport that focuses on the most practical “right now” information:
-- one or more still-image views (updated every 1–15 minutes)
+- one or more still-image views (updated every 1-15 minutes)
 - local weather data (official sources when available, plus on-site sensors when helpful)
 
 This is a **supplemental** source of information and does not replace official briefings or official airport equipment.

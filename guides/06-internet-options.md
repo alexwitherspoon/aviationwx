@@ -1,4 +1,4 @@
-# 06 — Internet Options
+# 06 - Internet Options
 
 ## Goal
 Get images and weather data from the airport to AviationWX in a way that is:
@@ -7,7 +7,7 @@ Get images and weather data from the airport to AviationWX in a way that is:
 - **cost-appropriate** for the airport,
 - and **safe and permitted** (no unsafe cabling, no surprise installs).
 
-AviationWX is designed to work on low bandwidth: still images every **1–15 minutes** plus weather data is usually a small data footprint.
+AviationWX is designed to work on low bandwidth: still images every **1-15 minutes** plus weather data is usually a small data footprint.
 
 ## Quick pick-your-path
 Choose the simplest option that works:
@@ -26,13 +26,13 @@ Choose the simplest option that works:
 
 ## What you’re sending (why bandwidth is usually manageable)
 A common setup is:
-- 1–4 cameras uploading still images every 1–15 minutes
+- 1-4 cameras uploading still images every 1-15 minutes
 - one weather station sending periodic readings
 - optional: small “bridge” device that forwards the data
 
 Because AviationWX focuses on still images (not continuous video), bandwidth costs are usually much lower and more predictable.
 
-## Option A — Existing LAN / broadband (best when available)
+## Option A - Existing LAN / broadband (best when available)
 If a building or tenant already has broadband, this is often the most reliable and lowest-cost approach.
 
 **Common patterns**
@@ -55,7 +55,7 @@ If a building or tenant already has broadband, this is often the most reliable a
 - Does the setup auto-recover after outages?
 - Is there a plan if the building is locked / inaccessible?
 
-## Option B — Point-to-point wireless (great when the view is “far from the building”)
+## Option B - Point-to-point wireless (great when the view is “far from the building”)
 If the best camera location is away from existing internet, a point-to-point wireless bridge can connect it back to a building that has broadband.
 
 **Common patterns**
@@ -79,7 +79,7 @@ If the best camera location is away from existing internet, a point-to-point wir
 - Weather-rated gear and clean cable protection
 - Document the link so others can maintain it
 
-## Option C — LTE / 5G (simple and flexible, but ongoing cost)
+## Option C - LTE / 5G (simple and flexible, but ongoing cost)
 Cellular internet works well when you can’t access a building network or when the site is isolated.
 
 **Pros**
@@ -98,7 +98,7 @@ Cellular internet works well when you can’t access a building network or when 
 - Ensure the device auto-reconnects after outages
 - Plan where the LTE router and antennas can be mounted safely
 
-## Option D — Starlink (remote, self-contained, higher cost)
+## Option D - Starlink (remote, self-contained, higher cost)
 Starlink can be a great fit for very remote airports or fields with no cell coverage and no broadband options.
 
 **Pros**
@@ -117,13 +117,13 @@ Starlink can be a great fit for very remote airports or fields with no cell cove
 - Equipment mounting is safe and approved
 - Ongoing subscription ownership is clear
 
-## Option E — Hybrid for reliability (recommended for critical locations)
+## Option E - Hybrid for reliability (recommended for critical locations)
 If the airport is safety-critical or outages are common, consider a hybrid approach:
 - primary connection: LAN/broadband or point-to-point wireless
 - backup connection: LTE (or Starlink in rare cases)
 - power backup: UPS or battery assist (Guide 05)
 
-The goal is not perfection—just improved uptime and fewer “someone has to go reboot it” moments.
+The goal is not perfection-just improved uptime and fewer “someone has to go reboot it” moments.
 
 ## Security and “being a good network citizen” (plain language)
 - Use only the connectivity needed for the job.
@@ -136,7 +136,7 @@ The goal is not perfection—just improved uptime and fewer “someone has to go
 - **Everything works… until the first power outage:** choose hardware that auto-recovers and add a small UPS (Guide 05).
 - **Wireless link drops in winter:** check line-of-sight and mount stability; trees and weather matter.
 - **LTE works but costs too much:** reduce image frequency, or explore point-to-point wireless / local WISP options.
-- **The best camera location has no connectivity:** this is a great time to ask the airport sponsor/manager for help—often there’s an existing building, conduit path, or partner who can help bridge the gap.
+- **The best camera location has no connectivity:** this is a great time to ask the airport sponsor/manager for help-often there’s an existing building, conduit path, or partner who can help bridge the gap.
 
 ## Decision (write it down)
 - Internet option: A / B / C / D / E

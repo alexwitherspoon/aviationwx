@@ -1,4 +1,4 @@
-# 07 — Equipment Recommendations
+# 07 - Equipment Recommendations
 
 ## Goal
 Choose equipment that:
@@ -16,7 +16,7 @@ AviationWX works best with **still images** (not continuous video). For cameras,
 - **RTSP** video stream (we can extract still images)
 - **JPEG snapshot URL** (a URL that returns a current still image)
 
-**Important:** many cheaper cameras—especially many **battery-powered** models—do not support these features (or hide them behind paid cloud plans). Those are usually a poor fit for AviationWX.
+**Important:** many cheaper cameras-especially many **battery-powered** models-do not support these features (or hide them behind paid cloud plans). Those are usually a poor fit for AviationWX.
 
 ### Weather stations (reliable local data)
 A weather station should be able to provide the basics reliably:
@@ -82,14 +82,14 @@ If an airport, FBO, or hangar already uses UniFi/Protect, these can be a strong 
 
 ## How often should it update?
 Typical configurations:
-- **every 1–15 minutes** (common default range)
+- **every 1-15 minutes** (common default range)
 - faster updates can help in rapidly changing conditions, but cost more in bandwidth/power and can increase operational complexity
 
 AviationWX favors fewer **high-quality** still images over many low-quality frames.
 
 ## A practical “equipment recipe” (common pattern)
 A simple, high-impact setup often looks like:
-- **1–4 cameras** (still images every 1–15 minutes)
+- **1-4 cameras** (still images every 1-15 minutes)
 - **1 weather station**
 - optional: a small network device (switch/router/LTE modem), depending on your internet choice
 
@@ -101,7 +101,7 @@ AviationWX can display conditions from:
 When multiple sources exist, the goal is to present the most useful “right now” view while being clear about where the data came from.
 
 ## Integration notes (keep it simple)
-- For cameras, scheduled image upload (FTP/FTPs/SFTP) is often the simplest “set it and forget it” approach — and often yields **higher still-image quality** than sampling a video stream.
+- For cameras, scheduled image upload (FTP/FTPs/SFTP) is often the simplest “set it and forget it” approach - and often yields **higher still-image quality** than sampling a video stream.
 - RTSP and snapshot URLs can work well too, especially when the hardware supports them cleanly.
 - Prefer equipment that does not require a paid cloud plan to access the data you need.
 
@@ -109,7 +109,7 @@ When multiple sources exist, the goal is to present the most useful “right now
 - Don’t buy “consumer cloud-only” cameras for this project.
 - Prefer models that can operate reliably in cold/wet conditions.
 - Prioritize **maintainability**: a slightly more expensive camera that works for years is usually cheaper than a “cheap” camera that fails often.
-- If the airport already has standard equipment or vendors, AviationWX is designed to integrate—don’t force a rewrite of existing infrastructure.
+- If the airport already has standard equipment or vendors, AviationWX is designed to integrate-don’t force a rewrite of existing infrastructure.
 
 ## Decision (write it down)
 - Weather station choice:

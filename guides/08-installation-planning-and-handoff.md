@@ -1,4 +1,4 @@
-# 08 — Installation Planning & Handoff
+# 08 - Installation Planning & Handoff
 
 ## Goal
 Get from “approved idea” → “working, maintainable installation” with:
@@ -26,7 +26,7 @@ This guide ties together the earlier choices:
 
 ---
 
-## Phase 1 — Plan
+## Phase 1 - Plan
 
 ### Define the “owner” (don’t skip this)
 Write down who owns what:
@@ -40,9 +40,9 @@ Write down who owns what:
 If any of these are unclear, pause. Ambiguity becomes downtime later.
 
 ### Confirm the install scope
-- Cameras: ___ (typical: 1–4)
+- Cameras: ___ (typical: 1-4)
 - Weather station: ___ (typical: 1)
-- Update frequency: ___ minutes (typical: 1–15)
+- Update frequency: ___ minutes (typical: 1-15)
 - Power option: A / B / C / D (Guide 05)
 - Internet option: A / B / C / D / E (Guide 06)
 
@@ -50,13 +50,13 @@ If any of these are unclear, pause. Ambiguity becomes downtime later.
 A good “go-live” definition:
 - Camera view is **useful** (per Guide 02)
 - Weather station readings look **reasonable** for the field
-- Uploads are consistent for at least **24–72 hours**
+- Uploads are consistent for at least **24-72 hours**
 - Access and maintenance plan is clear (including escort expectations)
 - Documentation is stored somewhere the airport/steward can find it
 
 ---
 
-## Phase 2 — Pre-stage (test before you go on-site)
+## Phase 2 - Pre-stage (test before you go on-site)
 
 ### Pre-stage checklist
 - ☐ Inventory all parts (camera(s), mounts, fasteners, cables, weather station, network gear)
@@ -75,7 +75,7 @@ Recommended spares:
 
 ---
 
-## Phase 3 — Install (on-site)
+## Phase 3 - Install (on-site)
 
 ### Arrival and coordination
 - ☐ Check in with the airport sponsor/manager or designated contact
@@ -105,7 +105,7 @@ Recommended spares:
 
 ---
 
-## Phase 4 — Commission (prove it works)
+## Phase 4 - Commission (prove it works)
 
 ### Commission checklist (do this before you leave)
 - ☐ Confirm each camera view is correct and useful (Guide 02)
@@ -123,7 +123,7 @@ Recommended spares:
 
 ---
 
-## Phase 5 — Handoff (make it sustainable)
+## Phase 5 - Handoff (make it sustainable)
 
 ### Handoff checklist (pilots love checklists)
 - ☐ Identify the primary local maintainer and a backup contact
@@ -151,7 +151,7 @@ Recommended spares:
 
 ---
 
-## Phase 6 — Operate (lightweight maintenance)
+## Phase 6 - Operate (lightweight maintenance)
 
 ### Suggested maintenance cadence
 - **Monthly:** quick visual inspection (mount stability, cable wear, cleanliness)
@@ -163,11 +163,11 @@ Recommended spares:
 - **Camera view degraded:** clean lens, check focus, confirm mount stability
 - **Weather readings look wrong:** check for new obstructions or heat sources
 
-If you can’t solve it quickly, it’s okay—ask for help (airport sponsor/manager, local community, AviationWX support).
+If you can’t solve it quickly, it’s okay-ask for help (airport sponsor/manager, local community, AviationWX support).
 
 ---
 
-## Phase 7 — Decommission (clean removal plan)
+## Phase 7 - Decommission (clean removal plan)
 Every install should have a graceful exit plan.
 
 ### Decommission checklist

@@ -1,12 +1,12 @@
-# 10 — Weather Station Configuration (Tempest / Davis / Ambient)
+# 10 - Weather Station Configuration (Tempest / Davis / Ambient)
 
 ## Goal
 Set up a weather station so it provides **useful, trustworthy local observations** that can complement official sources.
 This guide focuses on practical configuration and sanity checks, not vendor marketing.
 
 This guide assumes you have already decided:
-- where the station will be mounted (Guides 02–03)
-- how it will be powered and connected (Guides 05–06)
+- where the station will be mounted (Guides 02-03)
+- how it will be powered and connected (Guides 05-06)
 
 ## What “good weather data” means (plain language)
 A good install produces readings that are:
@@ -58,7 +58,7 @@ If you can’t get good wind exposure, it is usually better to:
 - ☐ Mount with good wind exposure (top of approved pole/building/structure when possible)
 - ☐ Avoid heat-soaked surfaces and sheltered corners
 - ☐ Confirm the hub / gateway location has stable internet (LAN or reliable Wi‑Fi/LTE)
-- ☐ Confirm the station is reporting and updates look consistent over 24–72 hours
+- ☐ Confirm the station is reporting and updates look consistent over 24-72 hours
 - ☐ Record basic metadata (location description, mount height, nearby obstructions)
 
 ### Practical configuration defaults
@@ -77,7 +77,7 @@ If you can’t get good wind exposure, it is usually better to:
 - ☐ Mount for unobstructed wind exposure (top of approved structure preferred)
 - ☐ Confirm the full sensor suite is installed correctly and level as required
 - ☐ Confirm data is accessible through your chosen connectivity path
-- ☐ Validate “looks reasonable” readings for 24–72 hours
+- ☐ Validate “looks reasonable” readings for 24-72 hours
 
 ### Practical notes
 - Davis installs tend to reward careful mounting and cable hygiene
@@ -94,7 +94,7 @@ If you can’t get good wind exposure, it is usually better to:
 ### Install checklist (Ambient)
 - ☐ Prioritize wind exposure and representative placement (same rules apply)
 - ☐ Confirm the station can reliably publish readings through your chosen path
-- ☐ Validate readings over 24–72 hours
+- ☐ Validate readings over 24-72 hours
 
 ---
 
