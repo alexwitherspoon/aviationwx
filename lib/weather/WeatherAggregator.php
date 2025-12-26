@@ -138,7 +138,7 @@ class WeatherAggregator {
             }
             
             // Check staleness
-            $maxAge = $maxAges[$snapshot->source] ?? AggregationPolicy::MAX_STALE_SECONDS;
+            $maxAge = $maxAges[$snapshot->source] ?? AggregationPolicy::getStaleFailclosedSeconds();
             if ($snapshot->wind->isStale($maxAge, $this->now)) {
                 continue;
             }
@@ -197,7 +197,7 @@ class WeatherAggregator {
                 break; // METAR doesn't have this field, fall back
             }
             
-            $maxAge = $maxAges['metar'] ?? AggregationPolicy::METAR_MAX_STALE_SECONDS;
+            $maxAge = $maxAges['metar'] ?? AggregationPolicy::getMetarStaleFailclosedSeconds();
             if (!$reading->isStale($maxAge, $this->now)) {
                 return $reading->withSource('metar');
             }
@@ -228,7 +228,7 @@ class WeatherAggregator {
             
             $isMetar = $snapshot->source === 'metar';
             $maxAge = $maxAges[$snapshot->source] 
-                ?? ($isMetar ? AggregationPolicy::METAR_MAX_STALE_SECONDS : AggregationPolicy::MAX_STALE_SECONDS);
+                ?? ($isMetar ? AggregationPolicy::getMetarStaleFailclosedSeconds() : AggregationPolicy::getStaleFailclosedSeconds());
             
             if (!$reading->isStale($maxAge, $this->now)) {
                 return $reading->withSource($snapshot->source);
