@@ -1239,8 +1239,9 @@ header('X-Frame-Options: ALLOWALL');
                     ctx.stroke();
                 }
                 
-                // Draw wind arrow
-                if (windSpeed !== null && windSpeed > 0 && windDir !== null && !isVRB) {
+                // Draw wind arrow (only if wind >= 3 knots - calm otherwise)
+                var CALM_WIND_THRESHOLD = 3;
+                if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
                     var windAngle = ((windDir + 180) % 360) * Math.PI / 180;
                     var arrowLen = Math.min(windSpeed * 1.5, 18);
                     var endX = cx + Math.sin(windAngle) * arrowLen;
@@ -1362,8 +1363,9 @@ header('X-Frame-Options: ALLOWALL');
                     ctx.stroke();
                 }
                 
-                // Draw wind arrow
-                if (windSpeed !== null && windSpeed > 0 && windDir !== null && !isVRB) {
+                // Draw wind arrow (only if wind >= 3 knots - calm otherwise)
+                var CALM_WIND_THRESHOLD = 3;
+                if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
                     var windAngle = ((windDir + 180) % 360) * Math.PI / 180;
                     var arrowLen = Math.min(windSpeed * 1.5, 15);
                     var endX = cx + Math.sin(windAngle) * arrowLen;
@@ -1511,8 +1513,9 @@ header('X-Frame-Options: ALLOWALL');
                     ctx.stroke();
                 }
                 
-                // Draw wind arrow
-                if (windSpeed !== null && windSpeed > 0 && windDir !== null && !isVRB) {
+                // Draw wind arrow (only if wind >= 3 knots - calm otherwise)
+                var CALM_WIND_THRESHOLD = 3;
+                if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
                     var windAngle = ((windDir + 180) % 360) * Math.PI / 180;
                     var arrowLen = Math.min(windSpeed * 1.5, 15);
                     var endX = cx + Math.sin(windAngle) * arrowLen;
@@ -1664,8 +1667,9 @@ header('X-Frame-Options: ALLOWALL');
                     ctx.stroke();
                 }
                 
-                // Draw wind arrow
-                if (windSpeed !== null && windSpeed > 0 && windDir !== null && !isVRB) {
+                // Draw wind arrow (only if wind >= 3 knots - calm otherwise)
+                var CALM_WIND_THRESHOLD = 3;
+                if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
                     var windAngle = ((windDir + 180) % 360) * Math.PI / 180;
                     var arrowLen = Math.min(windSpeed * 1.5, 15);
                     var endX = cx + Math.sin(windAngle) * arrowLen;
@@ -1919,7 +1923,8 @@ header('X-Frame-Options: ALLOWALL');
             });
             
             // Draw wind arrow
-            if (windSpeed !== null && windSpeed > 0 && windDir !== null && !isVRB) {
+            var CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
+            if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
                 var windAngle = ((windDir + 180) % 360) * Math.PI / 180; // Convert FROM to TOWARD
                 var arrowLen = Math.min(windSpeed * 3, r - 15);
                 var endX = cx + Math.sin(windAngle) * arrowLen;
@@ -1949,12 +1954,12 @@ header('X-Frame-Options: ALLOWALL');
                 ctx.lineTo(endX - 8 * Math.cos(headAngle + Math.PI / 6), endY - 8 * Math.sin(headAngle + Math.PI / 6));
                 ctx.closePath();
                 ctx.fill();
-            } else if (isVRB && windSpeed > 0) {
+            } else if (isVRB && windSpeed >= CALM_WIND_THRESHOLD) {
                 ctx.font = 'bold 14px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillStyle = '#dc3545';
                 ctx.fillText('VRB', cx, cy + 4);
-            } else if (windSpeed === 0 || windSpeed === null) {
+            } else if (windSpeed === null || windSpeed < CALM_WIND_THRESHOLD) {
                 ctx.font = 'bold 12px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillStyle = isDark ? '#666' : '#999';

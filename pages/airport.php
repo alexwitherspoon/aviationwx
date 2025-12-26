@@ -3758,10 +3758,11 @@ function updateWindVisual(weather) {
     const gustSpeed = gustSpeedStale ? null : (weather.gust_speed || weather.peak_gust || null);
     
     const windUnitLabel = getWindSpeedUnitLabel();
+    const CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
     windDetails.innerHTML = `
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Speed:</span>
-            <span style="font-weight: bold;">${ws === null || ws === undefined ? '--' : (ws > 0 ? formatWindSpeed(ws) + ' ' + windUnitLabel : 'Calm')}</span>
+            <span style="font-weight: bold;">${ws === null || ws === undefined ? '--' : (ws < CALM_WIND_THRESHOLD ? 'Calm' : formatWindSpeed(ws) + ' ' + windUnitLabel)}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Direction:</span>
@@ -3797,7 +3798,7 @@ function updateWindVisual(weather) {
     
     // Only draw wind indicators if data is fresh (not stale)
     if (!windStale) {
-        if (ws !== null && ws !== undefined && ws > 1 && !isVariableWind && windDirNumeric !== null) {
+        if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && !isVariableWind && windDirNumeric !== null) {
             // Convert wind direction FROM to TOWARD (add 180°) for windsock visualization
             // Normalize to 0-360° range (e.g., 270° + 180° = 450° → 90°)
             const windDirToward = (windDirNumeric + 180) % 360;
@@ -3805,7 +3806,7 @@ function updateWindVisual(weather) {
             windSpeed = ws;
             
             drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
-        } else if (ws !== null && ws !== undefined && ws > 1 && isVariableWind) {
+        } else if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && isVariableWind) {
             // Variable wind - draw "VRB" text
             ctx.font = 'bold 20px sans-serif'; 
             ctx.textAlign = 'center';
@@ -3814,8 +3815,8 @@ function updateWindVisual(weather) {
             ctx.strokeText('VRB', cx, cy);
             ctx.fillStyle = '#dc3545';
             ctx.fillText('VRB', cx, cy);
-        } else if (ws === null || ws === undefined || ws === 0) {
-            // Calm conditions - draw CALM text (only when data is fresh)
+        } else if (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) {
+            // Calm conditions (< 3 knots) - draw CALM text (only when data is fresh)
             ctx.font = 'bold 20px sans-serif'; 
             ctx.textAlign = 'center';
             ctx.strokeStyle = '#fff'; 

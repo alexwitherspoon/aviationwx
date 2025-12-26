@@ -407,6 +407,11 @@ if (!defined('CLIMATE_WIND_SPEED_MAX_KTS')) {
     define('CLIMATE_WIND_SPEED_MAX_KTS', 242); // 220 * 1.1
 }
 
+// Calm wind threshold (knots) - winds below this are considered "calm" in aviation
+if (!defined('CALM_WIND_THRESHOLD_KTS')) {
+    define('CALM_WIND_THRESHOLD_KTS', 3);
+}
+
 // Wind Direction: 0 to 360 degrees (no margin needed)
 if (!defined('CLIMATE_WIND_DIRECTION_MIN')) {
     define('CLIMATE_WIND_DIRECTION_MIN', 0);
