@@ -9,6 +9,21 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
+require_once __DIR__ . '/../lib/exif-utils.php';
+require_once __DIR__ . '/../lib/webcam-error-detector.php';
+
+// Verify exiftool is available at startup (required for EXIF validation)
+try {
+    requireExiftool();
+} catch (RuntimeException $e) {
+    $errorMsg = "FATAL: " . $e->getMessage();
+    if (php_sapi_name() === 'cli') {
+        fwrite(STDERR, $errorMsg . "\n");
+    } else {
+        echo "<p style='color:red;'>$errorMsg</p>";
+    }
+    exit(1);
+}
 
 // Set up invocation tracking
 $invocationId = aviationwx_get_invocation_id();
@@ -218,9 +233,10 @@ function updateLastProcessedTime($airportId, $camIndex) {
  * @param int $maxWaitSeconds Maximum wait time for file to be fully written
  * @param int|null $lastProcessedTime Timestamp of last processed file (null = no filter)
  * @param array|null $pushConfig Optional push_config for per-camera validation
+ * @param array|null $airport Optional airport config for phase-aware pixelation detection
  * @return string|null Path to valid image file or null
  */
-function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = null, $pushConfig = null) {
+function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = null, $pushConfig = null, $airport = null) {
     if (!is_dir($uploadDir)) {
         return null;
     }
@@ -262,8 +278,8 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
     foreach ($files as $file) {
         // Check if file is fully written (only wait if we have a candidate)
         if (isFileFullyWritten($file, $maxWaitSeconds, $startTime)) {
-            // Validate image (with per-camera limits if provided)
-            if (validateImageFile($file, $pushConfig)) {
+            // Validate image (with per-camera limits and airport for phase-aware detection)
+            if (validateImageFile($file, $pushConfig, $airport)) {
                 return $file;
             }
         }
@@ -340,14 +356,16 @@ function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
  * 
  * Validates that a file is a valid image meeting size, extension, and MIME type
  * requirements. Checks file headers to ensure it's actually a JPEG or PNG.
+ * Also performs content validation (error frame, pixelation, EXIF).
  * 
  * @param string $file File path to validate
  * @param array|null $pushConfig Optional push_config for per-camera validation limits
  *   - max_file_size_mb: Maximum file size in MB (default: 100)
  *   - allowed_extensions: Array of allowed extensions (default: all)
+ * @param array|null $airport Optional airport config for phase-aware pixelation detection
  * @return bool True if file is valid image, false otherwise
  */
-function validateImageFile($file, $pushConfig = null) {
+function validateImageFile($file, $pushConfig = null, $airport = null) {
     if (!file_exists($file) || !is_readable($file)) {
         return false;
     }
@@ -386,7 +404,37 @@ function validateImageFile($file, $pushConfig = null) {
     
     // Check image headers using shared format detection
     $format = detectImageFormat($file);
-    return $format !== null;
+    if ($format === null) {
+        return false;
+    }
+    
+    // Validate image content (error frame, uniform color, pixelation, etc.)
+    // Only for JPEG which detectErrorFrame supports
+    // Pass airport for phase-aware pixelation thresholds
+    if ($format === 'jpeg') {
+        $errorCheck = detectErrorFrame($file, $airport);
+        if ($errorCheck['is_error']) {
+            aviationwx_log('warning', 'push webcam error frame detected, rejecting', [
+                'file' => basename($file),
+                'confidence' => $errorCheck['confidence'],
+                'reasons' => $errorCheck['reasons']
+            ], 'app');
+            return false;
+        }
+    }
+    
+    // Validate EXIF timestamp (push cameras must have camera-provided EXIF)
+    $exifCheck = validateExifTimestamp($file);
+    if (!$exifCheck['valid']) {
+        aviationwx_log('warning', 'push webcam EXIF timestamp invalid, rejecting', [
+            'file' => basename($file),
+            'reason' => $exifCheck['reason'],
+            'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
+        ], 'app');
+        return false;
+    }
+    
+    return true;
 }
 
 /**
@@ -741,9 +789,9 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         ], 'app');
     }
     
-    // Find newest valid image (with per-camera limits)
+    // Find newest valid image (with per-camera limits and airport for phase-aware detection)
     // Pass lastProcessed time to quickly skip old files
-    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessed, $pushConfig);
+    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessed, $pushConfig, $airport);
     
     if (!$newestFile) {
         aviationwx_log('info', 'no valid image found', [

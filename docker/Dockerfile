@@ -18,6 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ffmpeg \
     libavif-dev \
     libaom-dev \
+    libimage-exiftool-perl \
     cron \
     vsftpd \
     openssh-server \

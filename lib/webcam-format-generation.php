@@ -14,6 +14,7 @@
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/exif-utils.php';
 
 /**
  * Detect image format from file headers
@@ -207,6 +208,16 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
         $cmd = $cmdWebp;
     }
     
+    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
+    if (isExiftoolAvailable()) {
+        $cmdExif = sprintf(
+            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s",
+            escapeshellarg($sourceFile),
+            escapeshellarg($cacheWebp)
+        );
+        $cmd = $cmd . ' && ' . $cmdExif;
+    }
+    
     // Run in background (non-blocking)
     // Result will be logged when format status is checked (in getFormatStatus or isFormatGenerating)
     if (function_exists('exec')) {
@@ -288,6 +299,16 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
         $cmd = $cmdAvif;
     }
     
+    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
+    if (isExiftoolAvailable()) {
+        $cmdExif = sprintf(
+            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s",
+            escapeshellarg($sourceFile),
+            escapeshellarg($cacheAvif)
+        );
+        $cmd = $cmd . ' && ' . $cmdExif;
+    }
+    
     // Run in background (non-blocking)
     // Result will be logged when format status is checked (in getFormatStatus or isFormatGenerating)
     if (function_exists('exec')) {
@@ -354,6 +375,16 @@ function generateJpeg($sourceFile, $airportId, $camIndex) {
         $cmd = $cmdJpeg . ' && ' . $cmdSync;
     } else {
         $cmd = $cmdJpeg;
+    }
+    
+    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
+    if (isExiftoolAvailable()) {
+        $cmdExif = sprintf(
+            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s",
+            escapeshellarg($sourceFile),
+            escapeshellarg($cacheJpeg)
+        );
+        $cmd = $cmd . ' && ' . $cmdExif;
     }
     
     // Run in background (non-blocking)

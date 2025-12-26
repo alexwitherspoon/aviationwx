@@ -1,12 +1,34 @@
 # AviationWX Docker Management
-# Quick commands for local development
+# Quick commands for local development and testing
+#
+# SETUP OPTIONS:
+#   With Secrets (maintainers):  Configure docker-compose.override.yml to mount secrets
+#   Without Secrets (contrib.):  cp config/airports.json.example config/airports.json
+#                                Mock mode auto-activates for development
+#
+# See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down restart logs shell test test-local test-error-detector smoke clean config
+.PHONY: help init build build-force up down restart logs shell test test-unit test-integration test-browser test-local test-error-detector smoke clean config config-check dev
 
 help: ## Show this help message
-	@echo 'AviationWX Docker Management'
-	@echo '=========================='
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@echo ''
+	@echo '\033[1mAviationWX Docker Management\033[0m'
+	@echo '============================'
+	@echo ''
+	@echo '\033[1;33mDevelopment:\033[0m'
+	@grep -E '^(dev|up|down|restart|logs|shell):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ''
+	@echo '\033[1;33mTesting:\033[0m'
+	@grep -E '^(test|test-unit|test-integration|test-browser|test-local|smoke):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ''
+	@echo '\033[1;33mConfiguration:\033[0m'
+	@grep -E '^(init|config|config-check|config-example):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ''
+	@echo '\033[1;33mBuild & Cleanup:\033[0m'
+	@grep -E '^(build|build-force|clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ''
+	@echo 'See docs/LOCAL_SETUP.md for complete setup guide'
+	@echo ''
 
 init: ## Initialize environment (copy env.example to .env)
 	@if [ ! -f .env ]; then \
@@ -20,6 +42,35 @@ init: ## Initialize environment (copy env.example to .env)
 
 config: ## Generate configuration from .env
 	@bash config/docker-config.sh
+
+config-check: ## Validate current configuration and show mock mode status
+	@echo "Configuration Check"
+	@echo "==================="
+	@php -r " \
+		require 'lib/config.php'; \
+		echo 'Config file: ' . (getConfigFilePath() ?: 'NOT FOUND') . PHP_EOL; \
+		echo 'Test mode: ' . (isTestMode() ? 'YES' : 'NO') . PHP_EOL; \
+		echo 'Mock mode: ' . (shouldMockExternalServices() ? 'YES (external services will be mocked)' : 'NO (real API calls)') . PHP_EOL; \
+		echo 'Production: ' . (isProduction() ? 'YES' : 'NO') . PHP_EOL; \
+		\$$config = loadConfig(); \
+		if (\$$config) { \
+			\$$airports = array_keys(\$$config['airports'] ?? []); \
+			echo 'Airports: ' . count(\$$airports) . ' (' . implode(', ', array_slice(\$$airports, 0, 5)) . (count(\$$airports) > 5 ? '...' : '') . ')' . PHP_EOL; \
+		} else { \
+			echo 'ERROR: Could not load config' . PHP_EOL; \
+		} \
+	"
+
+config-example: ## Copy example config for local development (mock mode)
+	@if [ -f config/airports.json ]; then \
+		echo "⚠️  config/airports.json already exists"; \
+		echo "   Remove it first if you want to reset: rm config/airports.json"; \
+	else \
+		cp config/airports.json.example config/airports.json; \
+		echo "✓ Created config/airports.json from example"; \
+		echo "  Mock mode will auto-activate (test API keys detected)"; \
+		echo "  Run 'make dev' to start development server"; \
+	fi
 
 build: ## Build Docker containers (local development)
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml build
@@ -47,10 +98,21 @@ logs: ## View container logs
 shell: ## Open shell in web container
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec web bash
 
-test: ## Test the application (quick curl test)
-	@echo "Testing AviationWX..."
-	@curl -f http://localhost:8080 || echo "✗ Homepage failed"
-	@echo "✓ Tests complete"
+test: ## Run all PHPUnit tests (unit + integration)
+	@echo "Running all tests..."
+	@APP_ENV=testing vendor/bin/phpunit --testdox
+
+test-unit: ## Run unit tests only (fast, no Docker needed)
+	@echo "Running unit tests..."
+	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox
+
+test-integration: ## Run integration tests only
+	@echo "Running integration tests..."
+	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox
+
+test-browser: up ## Run Playwright browser tests (requires Docker)
+	@echo "Running browser tests..."
+	@cd tests/Browser && npm install && npx playwright test
 
 test-local: build-force up ## Rebuild containers and run PHPUnit tests locally
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

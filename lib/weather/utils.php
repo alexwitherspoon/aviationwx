@@ -266,3 +266,166 @@ function isUnlimitedCeiling(?int $ceiling): bool {
     require_once __DIR__ . '/../constants.php';
     return $ceiling === UNLIMITED_CEILING_FT;
 }
+
+/**
+ * Daylight phase constants
+ * 
+ * Used by getDaylightPhase() to categorize current lighting conditions.
+ * Phases progress: DAY -> CIVIL_TWILIGHT -> NAUTICAL_TWILIGHT -> NIGHT
+ */
+define('DAYLIGHT_PHASE_DAY', 'day');                    // Sun above horizon
+define('DAYLIGHT_PHASE_CIVIL_TWILIGHT', 'civil');       // Sun 0-6° below horizon (still bright)
+define('DAYLIGHT_PHASE_NAUTICAL_TWILIGHT', 'nautical'); // Sun 6-12° below horizon (getting dark)
+define('DAYLIGHT_PHASE_NIGHT', 'night');                // Sun >12° below horizon (dark)
+
+/**
+ * Get current daylight phase for airport location
+ * 
+ * Determines lighting conditions based on sun position:
+ * - day: Sun above horizon (full daylight)
+ * - civil: Sun 0-6° below horizon (bright enough to see without lights)
+ * - nautical: Sun 6-12° below horizon (horizon barely visible)
+ * - night: Sun >12° below horizon (full darkness)
+ * 
+ * Used for context-aware image validation thresholds.
+ * 
+ * @param array $airport Airport config with 'lat' and 'lon'
+ * @param int|null $timestamp Unix timestamp to check (default: now)
+ * @return string One of: 'day', 'civil', 'nautical', 'night'
+ */
+function getDaylightPhase(array $airport, ?int $timestamp = null): string {
+    if (!isset($airport['lat']) || !isset($airport['lon'])) {
+        // No location data - assume day (fail safe, less aggressive rejection)
+        return DAYLIGHT_PHASE_DAY;
+    }
+    
+    $lat = (float)$airport['lat'];
+    $lon = (float)$airport['lon'];
+    $timestamp = $timestamp ?? time();
+    
+    // Get sun info for the day containing the timestamp
+    $dayStart = strtotime('today', $timestamp);
+    $sunInfo = date_sun_info($dayStart, $lat, $lon);
+    
+    // Handle polar regions (midnight sun or polar night)
+    // If sunrise/sunset is false, check if we're in perpetual day or night
+    if ($sunInfo['sunrise'] === false || $sunInfo['sunset'] === false) {
+        // Check sun altitude at noon to determine if perpetual day or night
+        $noonTimestamp = $dayStart + 43200; // 12:00
+        $sunPosition = getSunAltitude($lat, $lon, $noonTimestamp);
+        return $sunPosition > 0 ? DAYLIGHT_PHASE_DAY : DAYLIGHT_PHASE_NIGHT;
+    }
+    
+    // Extract twilight boundaries from PHP's date_sun_info
+    // Morning: astronomical -> nautical -> civil -> sunrise
+    // Evening: sunset -> civil -> nautical -> astronomical
+    $sunrise = $sunInfo['sunrise'];
+    $sunset = $sunInfo['sunset'];
+    $civilDawn = $sunInfo['civil_twilight_begin'];
+    $civilDusk = $sunInfo['civil_twilight_end'];
+    $nauticalDawn = $sunInfo['nautical_twilight_begin'];
+    $nauticalDusk = $sunInfo['nautical_twilight_end'];
+    
+    // Determine phase based on current timestamp
+    // DAY: Between sunrise and sunset
+    if ($timestamp >= $sunrise && $timestamp < $sunset) {
+        return DAYLIGHT_PHASE_DAY;
+    }
+    
+    // CIVIL TWILIGHT: Between civil twilight begin/end and sunrise/sunset
+    // Morning: civilDawn to sunrise
+    // Evening: sunset to civilDusk
+    if (($timestamp >= $civilDawn && $timestamp < $sunrise) ||
+        ($timestamp >= $sunset && $timestamp < $civilDusk)) {
+        return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
+    }
+    
+    // NAUTICAL TWILIGHT: Between nautical twilight begin/end and civil twilight
+    // Morning: nauticalDawn to civilDawn
+    // Evening: civilDusk to nauticalDusk
+    if (($timestamp >= $nauticalDawn && $timestamp < $civilDawn) ||
+        ($timestamp >= $civilDusk && $timestamp < $nauticalDusk)) {
+        return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
+    }
+    
+    // NIGHT: Before nautical dawn or after nautical dusk
+    return DAYLIGHT_PHASE_NIGHT;
+}
+
+/**
+ * Calculate sun altitude angle at a given time and location
+ * 
+ * Used for polar region handling where sunrise/sunset may not occur.
+ * 
+ * @param float $lat Latitude in degrees
+ * @param float $lon Longitude in degrees  
+ * @param int $timestamp Unix timestamp
+ * @return float Sun altitude in degrees (positive = above horizon)
+ */
+function getSunAltitude(float $lat, float $lon, int $timestamp): float {
+    // Convert to radians
+    $latRad = deg2rad($lat);
+    
+    // Calculate day of year
+    $dayOfYear = (int)date('z', $timestamp) + 1;
+    
+    // Calculate solar declination (simplified)
+    $declination = deg2rad(23.45 * sin(deg2rad(360 * ($dayOfYear - 81) / 365)));
+    
+    // Calculate hour angle
+    $hour = (int)gmdate('G', $timestamp) + (int)gmdate('i', $timestamp) / 60;
+    $solarNoon = 12 - ($lon / 15); // Approximate solar noon in UTC hours
+    $hourAngle = deg2rad(15 * ($hour - $solarNoon));
+    
+    // Calculate altitude
+    $sinAlt = sin($latRad) * sin($declination) + 
+              cos($latRad) * cos($declination) * cos($hourAngle);
+    
+    return rad2deg(asin($sinAlt));
+}
+
+/**
+ * Check if currently daytime at airport location
+ * 
+ * Convenience function - returns true for 'day' phase only.
+ * 
+ * @param array $airport Airport config with 'lat' and 'lon'
+ * @param int|null $timestamp Unix timestamp to check (default: now)
+ * @return bool True if sun is above horizon
+ */
+function isDaytime(array $airport, ?int $timestamp = null): bool {
+    return getDaylightPhase($airport, $timestamp) === DAYLIGHT_PHASE_DAY;
+}
+
+/**
+ * Check if currently nighttime at airport location
+ * 
+ * Convenience function - returns true for 'night' phase only.
+ * Civil and nautical twilight are NOT considered night.
+ * 
+ * @param array $airport Airport config with 'lat' and 'lon'
+ * @param int|null $timestamp Unix timestamp to check (default: now)
+ * @return bool True if sun is more than 12° below horizon
+ */
+function isNighttime(array $airport, ?int $timestamp = null): bool {
+    return getDaylightPhase($airport, $timestamp) === DAYLIGHT_PHASE_NIGHT;
+}
+
+/**
+ * Get airport location (lat/lon) from config
+ * 
+ * Helper to extract just the location data needed for daylight calculations.
+ * 
+ * @param array $airport Airport configuration array
+ * @return array{lat: float, lon: float}|null Location array or null if not available
+ */
+function getAirportLocation(array $airport): ?array {
+    if (!isset($airport['lat']) || !isset($airport['lon'])) {
+        return null;
+    }
+    
+    return [
+        'lat' => (float)$airport['lat'],
+        'lon' => (float)$airport['lon']
+    ];
+}
