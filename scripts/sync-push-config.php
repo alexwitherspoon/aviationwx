@@ -186,27 +186,7 @@ function setDirectoryPermissions($path, $owner, $group, $perms, $description = '
     return $success;
 }
 
-/**
- * Get config file path
- * 
- * Determines the path to airports.json configuration file. Checks CONFIG_PATH
- * environment variable first, then falls back to default paths.
- * 
- * @return string Path to config file
- */
-function getConfigFilePath() {
-    $envConfigPath = getenv('CONFIG_PATH');
-    if ($envConfigPath && file_exists($envConfigPath) && is_file($envConfigPath)) {
-        return $envConfigPath;
-    }
-    
-    $configFile = __DIR__ . '/../config/airports.json';
-    if (!file_exists($configFile) || is_dir($configFile)) {
-        $configFile = '/var/www/html/airports.json';
-    }
-    
-    return $configFile;
-}
+// getConfigFilePath() is provided by lib/config.php which is already included
 
 /**
  * Get last sync timestamp
