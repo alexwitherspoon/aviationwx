@@ -12,6 +12,91 @@ require_once __DIR__ . '/../lib/logger.php';
 // Normalize weather source for METAR-only airports (sets weather_source if metar_station is configured)
 normalizeWeatherSource($airport);
 
+// =============================================================================
+// Version Cookie & Emergency Cleanup Detection
+// Set version cookie on every response for cross-subdomain version tracking
+// =============================================================================
+
+$versionFile = __DIR__ . '/../config/version.json';
+$buildTimestamp = time();
+$buildHash = 'unknown';
+$maxNoUpdateDays = 7;
+$stuckClientCleanup = false; // Default off, enable in airports.json when needed
+
+if (file_exists($versionFile)) {
+    $versionData = json_decode(file_get_contents($versionFile), true);
+    if ($versionData) {
+        $buildTimestamp = $versionData['timestamp'] ?? time();
+        $buildHash = $versionData['hash'] ?? 'unknown';
+        $maxNoUpdateDays = $versionData['max_no_update_days'] ?? 7;
+        $stuckClientCleanup = $versionData['stuck_client_cleanup'] ?? false;
+    }
+}
+
+// Build version cookie value: short_hash.timestamp
+$buildHashShort = substr($buildHash, 0, 7);
+$versionCookieValue = $buildHashShort . '.' . $buildTimestamp;
+
+// Set version cookie on every response (cross-subdomain via .aviationwx.org)
+$baseDomainForCookie = getBaseDomain();
+$cookieDomain = '.' . $baseDomainForCookie;
+$cookieExpiry = time() + 31536000; // 1 year
+
+// Set cookie with proper options
+setcookie('aviationwx_v', $versionCookieValue, [
+    'expires' => $cookieExpiry,
+    'path' => '/',
+    'domain' => $cookieDomain,
+    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+    'httponly' => false, // JS needs to read it
+    'samesite' => 'Lax'
+]);
+
+// Detect stuck clients: no version cookie OR stale version cookie
+// Only perform stuck client cleanup detection if enabled in config
+$clientVersionCookie = $_COOKIE['aviationwx_v'] ?? null;
+$injectStuckClientCleanup = false;
+$stuckClientCleanupReason = '';
+
+if ($stuckClientCleanup) {
+    if ($clientVersionCookie === null) {
+        // Check if client has OTHER aviationwx cookies (indicates returning user, not first visit)
+        $hasOtherCookies = false;
+        foreach ($_COOKIE as $name => $value) {
+            if (strpos($name, 'aviationwx_') === 0 && $name !== 'aviationwx_v') {
+                $hasOtherCookies = true;
+                break;
+            }
+        }
+        
+        if ($hasOtherCookies) {
+            // Has preference cookies but no version cookie = likely stuck on old code
+            $injectStuckClientCleanup = true;
+            $stuckClientCleanupReason = 'Missing version cookie but has preference cookies';
+        }
+    } else {
+        // Parse cookie: "hash.timestamp"
+        $parts = explode('.', $clientVersionCookie);
+        if (count($parts) === 2) {
+            $clientHash = $parts[0];
+            $clientTimestamp = (int)$parts[1];
+            
+            // If client timestamp is very old AND hash doesn't match, might be stuck
+            $maxAgeSeconds = $maxNoUpdateDays * 24 * 60 * 60;
+            $cookieAge = time() - $clientTimestamp;
+            
+            if ($cookieAge > $maxAgeSeconds && $clientHash !== $buildHashShort) {
+                $injectStuckClientCleanup = true;
+                $stuckClientCleanupReason = 'Version cookie is ' . round($cookieAge / 86400) . ' days old with hash mismatch';
+            }
+        }
+    }
+}
+
+// Set cache control headers for HTML
+header('Cache-Control: no-cache, must-revalidate');
+header('Pragma: no-cache');
+
 /**
  * Extract actual image capture timestamp from EXIF data
  * 
@@ -420,22 +505,56 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             });
         }
     </script>
-    <?php
-    // Read version info for client-side dead man's switch
-    $versionFile = __DIR__ . '/../config/version.json';
-    $buildTimestamp = time(); // Fallback to current time
-    $buildHash = 'unknown';
-    $maxNoUpdateDays = 7;
-    
-    if (file_exists($versionFile)) {
-        $versionData = json_decode(file_get_contents($versionFile), true);
-        if ($versionData) {
-            $buildTimestamp = $versionData['timestamp'] ?? time();
-            $buildHash = $versionData['hash'] ?? 'unknown';
-            $maxNoUpdateDays = $versionData['max_no_update_days'] ?? 7;
+    <?php if ($injectStuckClientCleanup): ?>
+    <!-- Stuck client cleanup - clears caches for clients on old code -->
+    <script>
+    (function() {
+        'use strict';
+        console.warn('[StuckClientCleanup] Triggered: <?= addslashes($stuckClientCleanupReason) ?>');
+        
+        // Prevent cleanup loops
+        if (sessionStorage.getItem('aviationwx-cleanup-in-progress')) {
+            console.log('[StuckClientCleanup] Already in progress, skipping');
+            return;
         }
-    }
-    ?>
+        sessionStorage.setItem('aviationwx-cleanup-in-progress', Date.now().toString());
+        
+        (async function() {
+            try {
+                // Clear Cache API
+                if ('caches' in window) {
+                    const names = await caches.keys();
+                    await Promise.all(names.map(n => caches.delete(n)));
+                    console.log('[StuckClientCleanup] Cleared caches');
+                }
+                
+                // Clear localStorage
+                try { localStorage.clear(); } catch(e) {}
+                
+                // Clear sessionStorage (except cleanup flag)
+                try {
+                    const flag = sessionStorage.getItem('aviationwx-cleanup-in-progress');
+                    sessionStorage.clear();
+                    if (flag) sessionStorage.setItem('aviationwx-cleanup-in-progress', flag);
+                } catch(e) {}
+                
+                // Unregister service workers
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map(r => r.unregister()));
+                    console.log('[StuckClientCleanup] Unregistered service workers');
+                }
+                
+                console.log('[StuckClientCleanup] Complete, reloading...');
+                setTimeout(() => location.reload(true), 100);
+            } catch(e) {
+                console.error('[StuckClientCleanup] Error:', e);
+                location.reload(true);
+            }
+        })();
+    })();
+    </script>
+    <?php endif; ?>
     <script>
         /**
          * Client Version Checking & Dead Man's Switch
@@ -1548,6 +1667,142 @@ function isMobileDevice() {
     
     return isMobileUA || (hasTouchScreen && isSmallScreen);
 }
+
+// =============================================================================
+// Timer Worker System
+// Uses a Web Worker for reliable timer management that isn't throttled in
+// background tabs. Falls back to setInterval if Workers aren't available.
+// =============================================================================
+
+// Timer worker configuration
+const TIMER_IS_MOBILE = isMobileDevice();
+const TIMER_TICK_MS = TIMER_IS_MOBILE ? 10000 : 1000; // 10s mobile, 1s desktop
+
+// Timer callback registry - maps timer IDs to callback functions
+const timerCallbacks = new Map();
+
+// Create the timer worker (inline via Blob URL for performance)
+let aviationwxTimerWorker = null;
+let usingFallbackTimer = false;
+
+try {
+    if (typeof Worker !== 'undefined') {
+        const workerCode = `
+            const TICK_MS = ${TIMER_TICK_MS};
+            const timers = new Map();
+            let paused = false;
+            
+            // Master tick loop
+            setInterval(() => {
+                if (paused) return;
+                const now = Date.now();
+                for (const [id, t] of timers) {
+                    if (now - t.lastFired >= t.interval) {
+                        self.postMessage({ type: 'tick', id: id, timestamp: now });
+                        t.lastFired = now;
+                    }
+                }
+            }, TICK_MS);
+            
+            // Handle messages from main thread
+            self.onmessage = function(e) {
+                const { action, id, interval } = e.data;
+                
+                if (action === 'register') {
+                    timers.set(id, { interval: interval, lastFired: Date.now() });
+                    self.postMessage({ type: 'registered', id: id });
+                } else if (action === 'unregister') {
+                    timers.delete(id);
+                } else if (action === 'pause') {
+                    paused = true;
+                    self.postMessage({ type: 'paused' });
+                } else if (action === 'resume') {
+                    paused = false;
+                    // Reset all lastFired to prevent burst of ticks
+                    const now = Date.now();
+                    for (const t of timers.values()) {
+                        t.lastFired = now;
+                    }
+                    self.postMessage({ type: 'resumed' });
+                } else if (action === 'ping') {
+                    self.postMessage({ type: 'pong' });
+                }
+            };
+        `;
+        
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        aviationwxTimerWorker = new Worker(workerUrl);
+        
+        // Handle messages from worker
+        aviationwxTimerWorker.onmessage = function(e) {
+            if (e.data.type === 'tick') {
+                // Record tick for health monitoring
+                if (typeof window.recordWorkerTick === 'function') {
+                    window.recordWorkerTick();
+                }
+                
+                // Call the registered callback
+                const callback = timerCallbacks.get(e.data.id);
+                if (callback) {
+                    callback();
+                }
+            }
+        };
+        
+        aviationwxTimerWorker.onerror = function(e) {
+            console.error('[TimerWorker] Error:', e.message);
+        };
+        
+        // Make worker available globally for timer-lifecycle.js
+        window.aviationwxTimerWorker = aviationwxTimerWorker;
+        
+        console.log('[TimerWorker] Initialized with', TIMER_TICK_MS + 'ms tick (' + (TIMER_IS_MOBILE ? 'mobile' : 'desktop') + ')');
+    } else {
+        throw new Error('Workers not supported');
+    }
+} catch (e) {
+    console.warn('[TimerWorker] Failed to create worker, using fallback:', e.message);
+    usingFallbackTimer = true;
+}
+
+/**
+ * Register a timer with the worker
+ * @param {string} id Unique timer identifier
+ * @param {number} intervalMs Interval in milliseconds
+ * @param {Function} callback Function to call on each tick
+ */
+function registerTimer(id, intervalMs, callback) {
+    timerCallbacks.set(id, callback);
+    
+    if (aviationwxTimerWorker && !usingFallbackTimer) {
+        aviationwxTimerWorker.postMessage({ action: 'register', id: id, interval: intervalMs });
+    } else if (typeof window.createFallbackTimerSystem === 'function') {
+        // Use fallback system from timer-lifecycle.js
+        const fallback = window.aviationwxFallbackTimer || window.createFallbackTimerSystem();
+        window.aviationwxFallbackTimer = fallback;
+        fallback.register(id, intervalMs, callback);
+    } else {
+        // Direct setInterval fallback
+        const intervalId = setInterval(callback, intervalMs);
+        window.fallbackIntervals = window.fallbackIntervals || new Map();
+        window.fallbackIntervals.set(id, intervalId);
+    }
+}
+
+/**
+ * Force refresh all registered timers
+ * Called when tab becomes visible to catch up
+ */
+window.forceRefreshAllTimers = function() {
+    for (const [id, callback] of timerCallbacks) {
+        try {
+            callback();
+        } catch (e) {
+            console.error('[TimerWorker] Error in timer callback:', id, e);
+        }
+    }
+};
 
 /**
  * Detect if browser is Safari (desktop or mobile)
@@ -3268,10 +3523,13 @@ async function fetchWeather(forceRefresh = false) {
             updateWeatherTimestamp(); // Update the timestamp
             checkAndUpdateOutageBanner(); // Check if outage banner should be shown/hidden
             
+            // Log successful weather update
+            console.log('[Weather] Updated - ' + (serverTimestamp ? serverTimestamp.toLocaleTimeString() : 'now') + (isStale ? ' (stale)' : ' (fresh)'));
+            
             // If server indicates data is stale, schedule a fresh fetch soon (30 seconds)
             // This gives the server's background refresh time to complete
             if (isStale) {
-                console.log('[Weather] Received stale data from server - scheduling refresh in 30 seconds');
+                console.log('[Weather] Stale data - scheduling refresh in 30 seconds');
                 // Clear any existing stale refresh timer
                 if (window.staleRefreshTimer) {
                     clearTimeout(window.staleRefreshTimer);
@@ -4865,65 +5123,9 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
     setupWebcamRefresh(<?= $index ?>, <?= max(60, $perCam) ?>);
     <?php endforeach; ?>
     
-    /**
-     * Handle visibility change with robust recovery
-     * - Debounces multiple events (visibility + focus can fire together)
-     * - Forces refresh to bypass timestamp check
-     * - Checks interval health and reinitializes if needed
-     */
-    function handleWebcamVisibilityChange() {
-        if (document.hidden) return;
-        
-        // Debounce: clear any pending handler
-        if (webcamVisibilityDebounceTimer) {
-            clearTimeout(webcamVisibilityDebounceTimer);
-        }
-        
-        // Short debounce to coalesce visibilitychange + focus events
-        webcamVisibilityDebounceTimer = setTimeout(() => {
-            const now = Date.now();
-            console.log('[Webcam] Window regained visibility - refreshing all webcams with force=true');
-            
-            <?php foreach ($airport['webcams'] as $index => $cam): ?>
-            // Check interval health for cam <?= $index ?>
-            const lastFetch<?= $index ?> = CAM_LAST_FETCH[<?= $index ?>] || 0;
-            const intervalMs<?= $index ?> = <?= max(60, $perCam) ?> * 1000;
-            const expectedIntervals<?= $index ?> = Math.floor((now - lastFetch<?= $index ?>) / intervalMs<?= $index ?>);
-            
-            // If more than 3 intervals have passed without a fetch, reinitialize the interval
-            if (lastFetch<?= $index ?> > 0 && expectedIntervals<?= $index ?> > 3) {
-                console.log('[Webcam] Cam <?= $index ?> interval appears stalled (' + expectedIntervals<?= $index ?> + ' missed intervals), reinitializing...');
-                
-                // Clear old interval
-                if (window.webcamRefreshIntervals && window.webcamRefreshIntervals.has(<?= $index ?>)) {
-                    clearInterval(window.webcamRefreshIntervals.get(<?= $index ?>));
-                }
-                
-                // Create new interval
-                const newIntervalId<?= $index ?> = setInterval(() => {
-                    safeSwapCameraImage(<?= $index ?>);
-                }, intervalMs<?= $index ?>);
-                
-                if (!window.webcamRefreshIntervals) {
-                    window.webcamRefreshIntervals = new Map();
-                }
-                window.webcamRefreshIntervals.set(<?= $index ?>, newIntervalId<?= $index ?>);
-            }
-            
-            // Force refresh (bypasses timestamp check, retries on error)
-            safeSwapCameraImage(<?= $index ?>, true);
-            <?php endforeach; ?>
-            
-            webcamVisibilityDebounceTimer = null;
-        }, 100); // 100ms debounce
-    }
-    
-    // Handle window visibility changes - refresh webcams immediately when window regains focus
-    // This ensures users see fresh images immediately after switching back to the tab
-    document.addEventListener('visibilitychange', handleWebcamVisibilityChange);
-    
-    // Also handle window focus event as fallback (for older browsers)
-    window.addEventListener('focus', handleWebcamVisibilityChange);
+    // Visibility change handling is now managed by timer-lifecycle.js
+    // which pauses the timer worker on mobile when tab is hidden, and
+    // calls forceRefreshAllTimers when tab becomes visible again
 })();
 <?php endif; ?>
 
@@ -5277,51 +5479,12 @@ if (hasWeatherSource || hasMetarStation) {
     // This will update the display with fresh data if available
     fetchWeather();
     
-    // Store interval ID for cleanup
-    let weatherRefreshInterval = setInterval(fetchWeather, weatherRefreshMs);
-    
-    // Handle window visibility changes - refresh immediately when window regains focus
-    // This ensures users see fresh data immediately after switching back to the tab
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            // Window is now visible - check if data is stale and refresh if needed
-            const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
-                ? AIRPORT_DATA.weather_refresh_seconds * 1000 
-                : 60000;
-            const forceRefreshThreshold = weatherRefreshMs * 2;
-            
-            // If data is stale (older than 2x refresh interval), refresh immediately
-            if (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > forceRefreshThreshold) {
-                console.log('[Weather] Window regained focus with stale data - refreshing immediately');
-                fetchWeather(true); // Force refresh
-            } else if (weatherLastUpdated !== null) {
-                // Data might be slightly stale - refresh anyway to ensure freshness
-                console.log('[Weather] Window regained focus - refreshing to ensure fresh data');
-                fetchWeather(true); // Force refresh
-            } else {
-                // No data yet - normal fetch
-                fetchWeather();
-            }
-        }
+    // Register weather refresh with timer worker
+    registerTimer('weather', weatherRefreshMs, function() {
+        fetchWeather();
     });
     
-    // Also handle window focus event as fallback (for older browsers)
-    window.addEventListener('focus', () => {
-        if (!document.hidden) {
-            const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
-                ? AIRPORT_DATA.weather_refresh_seconds * 1000 
-                : 60000;
-            const forceRefreshThreshold = weatherRefreshMs * 2;
-            
-            if (weatherLastUpdated !== null && (Date.now() - weatherLastUpdated.getTime()) > forceRefreshThreshold) {
-                console.log('[Weather] Window focused with stale data - refreshing immediately');
-                fetchWeather(true);
-            } else if (weatherLastUpdated !== null) {
-                console.log('[Weather] Window focused - refreshing to ensure fresh data');
-                fetchWeather(true);
-            }
-        }
-    });
+    console.log('[Weather] Registered timer, interval:', (weatherRefreshMs / 1000) + 's');
 }
 
 // Track which images have already been handled to prevent infinite loops
@@ -5390,15 +5553,11 @@ function handleWebcamError(camIndex, img) {
 }
 
 /**
- * Setup webcam refresh interval
+ * Setup webcam refresh using the timer worker
  * 
- * Creates an immediate refresh followed by a regular interval.
- * Uses the same reliable pattern as weather refresh - interval is created
- * immediately at the top level, not nested inside a setTimeout.
- * 
- * This avoids issues with browser timer throttling in background tabs,
- * where nested setTimeout/setInterval patterns can fail to create the
- * interval if the outer timeout is throttled.
+ * Uses the centralized timer worker for reliable refresh that isn't
+ * throttled in background tabs on desktop. Mobile devices pause when
+ * the tab is hidden to conserve battery.
  * 
  * @param {number} camIndex Camera index
  * @param {number} baseInterval Refresh interval in seconds (minimum 60, typically 60-900)
@@ -5410,17 +5569,16 @@ function setupWebcamRefresh(camIndex, baseInterval) {
     // First refresh: Immediate (user gets data quickly, handles stale images)
     safeSwapCameraImage(camIndex);
     
-    // Create interval immediately (like weather refresh pattern)
-    // This ensures the interval is always created, even if tab is backgrounded
-    const intervalId = setInterval(() => {
-        safeSwapCameraImage(camIndex);
-    }, baseInterval * 1000);
+    // Register with timer worker
+    const timerId = 'webcam-' + camIndex;
+    const intervalMs = baseInterval * 1000;
     
-    // Store interval ID for cleanup
-    if (!window.webcamRefreshIntervals) {
-        window.webcamRefreshIntervals = new Map();
-    }
-    window.webcamRefreshIntervals.set(camIndex, intervalId);
+    registerTimer(timerId, intervalMs, function() {
+        CAM_LAST_FETCH[camIndex] = Date.now();
+        safeSwapCameraImage(camIndex);
+    });
+    
+    console.log('[Webcam] Registered timer for cam', camIndex, 'interval:', baseInterval + 's');
 }
 
 /**
@@ -5930,17 +6088,22 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
     
     fetch(mtimeUrl, { cache: 'no-store', credentials: 'same-origin' })
         .then(r => {
-            return r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`));
+            if (!r.ok) {
+                return Promise.reject(new Error(`HTTP ${r.status}`));
+            }
+            return r.json();
         })
         .then(json => {
             if (!json) return; // Invalid response
             
             // Parse new timestamp from API response
-            const newTs = parseInt(json.mtime || '0', 10);
+            // API returns 'timestamp' field (Unix epoch seconds)
+            const newTs = parseInt(json.timestamp || json.mtime || '0', 10);
             
             // Check if we have a valid timestamp (even if success is false, we might have a timestamp)
             if (isNaN(newTs) || newTs === 0) {
                 // No cache available - don't try to update
+                console.log('[Webcam ' + camIndex + '] No image available (no timestamp)');
                 return;
             }
             
@@ -5950,6 +6113,7 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                 // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
                 // Still update last fetch time to show interval is working
                 CAM_LAST_FETCH[camIndex] = Date.now();
+                console.log('[Webcam ' + camIndex + '] No update - timestamp unchanged (' + new Date(newTs * 1000).toLocaleTimeString() + ')');
                 return;
             }
 
@@ -5964,6 +6128,7 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                     imgEl.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
                 }
                 CAM_LAST_FETCH[camIndex] = Date.now();
+                console.warn('[Webcam ' + camIndex + '] Stale image detected - showing placeholder');
                 return; // Don't load stale image
             }
 
@@ -5977,16 +6142,19 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             const hash = calculateImageHash(AIRPORT_ID, camIndex, preferredFormat, newTs, json.size || 0);
             const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;
             
+            // Log successful update
+            console.log('[Webcam ' + camIndex + '] Updating - new image at ' + new Date(newTs * 1000).toLocaleTimeString() + ' (format: ' + preferredFormat + ')');
+            
             // Request preferred format (explicit fmt= triggers 202 if generating)
             loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);
         })
         .catch((err) => {
-            // Log and retry on error - especially important after visibility change
-            console.debug('[Webcam] Refresh error for cam ' + camIndex + ':', err.message);
+            // Enhanced error logging for diagnosis
+            console.error('[Webcam ' + camIndex + '] Refresh failed:', err.name, '-', err.message);
             
             // If this was a force refresh (on visibility change), schedule a retry
             if (forceRefresh) {
-                console.log('[Webcam] Force refresh failed for cam ' + camIndex + ', scheduling retry...');
+                console.log('[Webcam ' + camIndex + '] Scheduling retry after force refresh failure...');
                 setTimeout(() => {
                     safeSwapCameraImage(camIndex, true);
                 }, 2000); // Retry after 2 seconds
@@ -6455,6 +6623,8 @@ window.addEventListener('beforeunload', () => {
     </div>
 </div>
 
+<!-- Timer lifecycle manager (deferred, non-blocking) -->
+<script src="/public/js/timer-lifecycle.js?v=<?= $buildHashShort ?>" defer></script>
 </body>
 </html>
 
