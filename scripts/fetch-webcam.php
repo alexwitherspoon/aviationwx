@@ -9,11 +9,30 @@ if (file_exists(__DIR__ . '/../lib/test-mocks.php')) {
     require_once __DIR__ . '/../lib/test-mocks.php';
 }
 
+// Load mock webcam generator for development mode
+if (file_exists(__DIR__ . '/../lib/mock-webcam.php')) {
+    require_once __DIR__ . '/../lib/mock-webcam.php';
+}
+
 // Load error detector early (needed by fetch functions)
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
+require_once __DIR__ . '/../lib/exif-utils.php';
+
+// Verify exiftool is available at startup (required for EXIF handling)
+try {
+    requireExiftool();
+} catch (RuntimeException $e) {
+    $errorMsg = "FATAL: " . $e->getMessage();
+    if (php_sapi_name() === 'cli') {
+        fwrite(STDERR, $errorMsg . "\n");
+    } else {
+        echo "<p style='color:red;'>$errorMsg</p>";
+    }
+    exit(1);
+}
 
 /**
  * Detect webcam source type from URL
@@ -123,6 +142,25 @@ function fetchStaticImage($url, $cacheFile) {
                     return false;
                 }
                 
+                // Ensure EXIF timestamp exists (add from mtime if needed)
+                if (!ensureExifTimestamp($tmpFile)) {
+                    aviationwx_log('warning', 'webcam EXIF timestamp could not be added', [
+                        'file' => basename($tmpFile)
+                    ], 'app');
+                    // Don't fail - timestamp is best-effort for static images
+                }
+                
+                // Validate EXIF timestamp is reasonable
+                $exifCheck = validateExifTimestamp($tmpFile);
+                if (!$exifCheck['valid']) {
+                    aviationwx_log('warning', 'webcam EXIF timestamp invalid, rejecting', [
+                        'reason' => $exifCheck['reason'],
+                        'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
+                    ], 'app');
+                    @unlink($tmpFile);
+                    return false;
+                }
+                
                 // Atomic rename
                 if (@rename($tmpFile, $cacheFile)) {
                     return true;
@@ -145,6 +183,25 @@ function fetchStaticImage($url, $cacheFile) {
                         aviationwx_log('warning', 'webcam error frame detected, rejecting', [
                             'confidence' => $errorCheck['confidence'],
                             'reasons' => $errorCheck['reasons']
+                        ], 'app');
+                        @unlink($tmpFile);
+                        return false;
+                    }
+                    
+                    // Ensure EXIF timestamp exists (add from mtime if needed)
+                    // PNG converted to JPEG loses original PNG metadata, so add fresh timestamp
+                    if (!ensureExifTimestamp($tmpFile)) {
+                        aviationwx_log('warning', 'webcam EXIF timestamp could not be added to converted PNG', [
+                            'file' => basename($tmpFile)
+                        ], 'app');
+                    }
+                    
+                    // Validate EXIF timestamp is reasonable
+                    $exifCheck = validateExifTimestamp($tmpFile);
+                    if (!$exifCheck['valid']) {
+                        aviationwx_log('warning', 'webcam EXIF timestamp invalid, rejecting', [
+                            'reason' => $exifCheck['reason'],
+                            'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
                         ], 'app');
                         @unlink($tmpFile);
                         return false;
@@ -387,15 +444,38 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
                 @unlink($jpegTmp);
                 // Continue to retry
             } else {
-                if (@rename($jpegTmp, $cacheFile)) {
+                // Ensure EXIF timestamp exists (add from mtime - ffmpeg just created the file)
+                if (!ensureExifTimestamp($jpegTmp)) {
+                    aviationwx_log('warning', 'webcam EXIF timestamp could not be added to RTSP frame', [
+                        'file' => basename($jpegTmp)
+                    ], 'app');
+                    // Don't fail - continue to validation
+                }
+                
+                // Validate EXIF timestamp is reasonable
+                $exifCheck = validateExifTimestamp($jpegTmp);
+                if (!$exifCheck['valid']) {
+                    if ($isWeb) {
+                        echo "<span class='error'>✗ EXIF timestamp invalid: " . htmlspecialchars($exifCheck['reason']) . "</span><br>\n";
+                    } else {
+                        echo "    ✗ EXIF timestamp invalid: " . $exifCheck['reason'] . "\n";
+                    }
+                    aviationwx_log('warning', 'webcam EXIF timestamp invalid for RTSP, rejecting', [
+                        'reason' => $exifCheck['reason'],
+                        'url' => preg_replace('/:[^:@]*@/', ':****@', $url)
+                    ], 'app');
+                    @unlink($jpegTmp);
+                    // Continue to retry
+                } elseif (@rename($jpegTmp, $cacheFile)) {
                     if ($isWeb) {
                         echo "<span class='success'>✓ Captured frame via ffmpeg</span><br>\n";
                     } else {
                         echo "    ✓ Captured frame via ffmpeg\n";
                     }
                     return true;
+                } else {
+                    @unlink($jpegTmp);
                 }
-                @unlink($jpegTmp);
             }
         }
         
@@ -554,6 +634,24 @@ function fetchMJPEGStream($url, $cacheFile) {
         aviationwx_log('warning', 'webcam error frame detected from MJPEG, rejecting', [
             'confidence' => $errorCheck['confidence'],
             'reasons' => $errorCheck['reasons']
+        ], 'app');
+        @unlink($tmpFile);
+        return false;
+    }
+    
+    // Ensure EXIF timestamp exists (add from mtime if needed)
+    if (!ensureExifTimestamp($tmpFile)) {
+        aviationwx_log('warning', 'webcam EXIF timestamp could not be added to MJPEG frame', [
+            'file' => basename($tmpFile)
+        ], 'app');
+        // Don't fail - continue to validation
+    }
+    
+    // Validate EXIF timestamp is reasonable
+    $exifCheck = validateExifTimestamp($tmpFile);
+    if (!$exifCheck['valid']) {
+        aviationwx_log('warning', 'webcam EXIF timestamp invalid for MJPEG, rejecting', [
+            'reason' => $exifCheck['reason']
         ], 'app');
         @unlink($tmpFile);
         return false;
@@ -746,7 +844,32 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
     $cacheFile = $cacheFileBase . '.jpg';
     $cacheWebp = $cacheFileBase . '.webp';
     $camName = $cam['name'] ?? "Cam {$camIndex}";
-    $url = $cam['url'];
+    $url = $cam['url'] ?? '';
+    
+    // Mock mode: generate placeholder images for development
+    // Activates when shouldMockExternalServices() returns true (test keys, example.com URLs)
+    if (function_exists('shouldMockExternalServices') && shouldMockExternalServices()) {
+        if (function_exists('generateMockWebcamImage')) {
+            $mockData = generateMockWebcamImage($airportId, $camIndex);
+            
+            // Write atomically
+            $tempFile = $cacheFile . '.tmp.' . getmypid();
+            if (@file_put_contents($tempFile, $mockData) !== false) {
+                @rename($tempFile, $cacheFile);
+                
+                aviationwx_log('info', 'webcam mock generated', [
+                    'invocation_id' => $invocationId,
+                    'trigger' => $triggerType,
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'mock_mode' => true
+                ], 'app');
+                
+                releaseCameraLock($lockFp);
+                return true;
+            }
+        }
+    }
     $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
     
     $defaultWebcamRefresh = getDefaultWebcamRefresh();
@@ -834,6 +957,10 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
     if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
         recordSuccess($airportId, $camIndex);
         $size = filesize($cacheFile);
+        
+        // Add AviationWX.org attribution metadata (IPTC/XMP)
+        $airportName = $airport['name'] ?? null;
+        addAviationWxMetadata($cacheFile, $airportId, $camIndex, $airportName);
         
         aviationwx_log('info', 'webcam fetch success', [
             'invocation_id' => $invocationId,
