@@ -429,7 +429,7 @@ jobs:
             'CACHE_FILE_MAX_SIZE',
             'CURL_TIMEOUT',
             'CONFIG_CACHE_TTL',
-            'MAX_STALE_HOURS'
+            'DEFAULT_STALE_FAILCLOSED_SECONDS'
           ];
           
           foreach (\$required_constants as \$const) {
