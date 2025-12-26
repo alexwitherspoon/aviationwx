@@ -26,8 +26,13 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: apcu, gd, zip, curl
+          extensions: apcu, gd, zip, curl, exif
           coverage: pcov
+      
+      - name: Install exiftool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libimage-exiftool-perl
       
       - name: Cache Composer dependencies
         uses: actions/cache@v4
