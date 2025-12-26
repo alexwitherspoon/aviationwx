@@ -1,0 +1,9 @@
+{
+    "hash": "abc1234",
+    "hash_full": "abc1234567890abcdef1234567890abcdef123456",
+    "timestamp": 1735142400,
+    "deploy_date": "2025-12-25T16:00:00Z",
+    "force_cleanup": false,
+    "max_no_update_days": 7
+}
+

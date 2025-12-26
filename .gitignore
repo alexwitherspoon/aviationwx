@@ -52,6 +52,7 @@ coverage.xml
 
 # Auto-generated configuration files
 config/nginx.conf
+config/version.json
 
 # Node.js (for Playwright tests)
 node_modules/

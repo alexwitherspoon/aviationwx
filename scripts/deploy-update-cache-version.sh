@@ -6,8 +6,33 @@ set -euo pipefail
 
 DEPLOY_VERSION="${1:-$(date +%s)}"
 SW_FILE="public/js/service-worker.js"
+VERSION_FILE="config/version.json"
 
 echo "Updating cache version to: ${DEPLOY_VERSION}"
+
+# Get git information
+GIT_HASH_SHORT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_HASH_FULL=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+DEPLOY_TIMESTAMP=$(date +%s)
+DEPLOY_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+echo "Git hash: ${GIT_HASH_SHORT} (${GIT_HASH_FULL})"
+echo "Deploy timestamp: ${DEPLOY_TIMESTAMP} (${DEPLOY_DATE})"
+
+# Generate version.json for client version checking
+# This file is served by the version API and used for dead man's switch detection
+cat > "${VERSION_FILE}" << EOF
+{
+    "hash": "${GIT_HASH_SHORT}",
+    "hash_full": "${GIT_HASH_FULL}",
+    "timestamp": ${DEPLOY_TIMESTAMP},
+    "deploy_date": "${DEPLOY_DATE}",
+    "force_cleanup": false,
+    "max_no_update_days": 7
+}
+EOF
+
+echo "✓ Generated ${VERSION_FILE}"
 
 # Update service worker cache version
 if [ ! -f "${SW_FILE}" ]; then
@@ -49,4 +74,16 @@ else
 fi
 
 echo "✓ Cache version updated successfully"
+
+# Verify version.json was created
+if [ -f "${VERSION_FILE}" ]; then
+    echo "✓ Version file contents:"
+    cat "${VERSION_FILE}"
+else
+    echo "⚠️  Warning: ${VERSION_FILE} was not created"
+    exit 1
+fi
+
+echo ""
+echo "✓ All version updates completed successfully"
 
