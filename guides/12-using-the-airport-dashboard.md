@@ -38,7 +38,7 @@ For deeper research, every dashboard includes links to trusted external resource
                                      |
                                      v
 +-----------------------------------------------------------------------------+
-|  AIRPORT INFO: Runways  *  Frequencies  *  Elevation  *  External Links    |
+|  AIRPORT INFO: Runways  *  Frequencies  *  Elevation  *  External Links     |
 +-----------------------------------------------------------------------------+
 ```
 
