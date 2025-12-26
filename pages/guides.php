@@ -686,7 +686,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         body.dark-mode .guides-content code,
         body.dark-mode .guides-index code {
             background: transparent;
-            color: #ff4444;
+            color: #ffffff;
         }
         
         body.dark-mode .guides-content pre {
@@ -695,7 +695,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         }
         
         body.dark-mode .guides-content pre code {
-            color: #ff4444;
+            color: #ffffff;
         }
         
         body.dark-mode .guides-content blockquote {
