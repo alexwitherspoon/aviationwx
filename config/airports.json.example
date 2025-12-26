@@ -21,6 +21,13 @@
     "notam_api_client_id": "nMrmYk4UzonK4Ny1mGNGBpecTM4hodoGgyEZzsk3dYdaHAq8",
     "notam_api_client_secret": "p3rJGiTJgsOTWn8gMqmdhu7F1hqPPebakpAYhWTT1gNwKK2TOQuQlU1Sv66NFxk8",
     "notam_api_base_url": "https://api-staging.cgifederal-aim.com",
+    "default_preferences": {
+      "time_format": "12hr",
+      "temp_unit": "F",
+      "distance_unit": "ft",
+      "baro_unit": "inHg",
+      "wind_speed_unit": "kts"
+    },
     "public_api": {
       "enabled": false,
       "version": "1",
@@ -69,6 +76,9 @@
       "weather_refresh_seconds": 60,
       "webcam_history_enabled": true,
       "webcam_history_max_frames": 24,
+      "default_preferences": {
+        "baro_unit": "hPa"
+      },
       "runways": [
         {
           "name": "15/33",

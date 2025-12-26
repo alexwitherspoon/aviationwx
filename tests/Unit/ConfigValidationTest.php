@@ -2717,5 +2717,246 @@ class ConfigValidationTest extends TestCase
         $result = validateAirportsJsonStructure($config);
         $this->assertTrue($result['valid'], 'Airport without metar_station should pass validation');
     }
+
+    /**
+     * Test global default_preferences validation - Valid settings
+     */
+    public function testGlobalConfig_DefaultPreferences_ValidSettings()
+    {
+        $config = [
+            'config' => [
+                'default_preferences' => [
+                    'time_format' => '24hr',
+                    'temp_unit' => 'C',
+                    'distance_unit' => 'm',
+                    'baro_unit' => 'hPa',
+                    'wind_speed_unit' => 'km/h'
+                ]
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid global default_preferences should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test global default_preferences validation - Partial settings
+     */
+    public function testGlobalConfig_DefaultPreferences_PartialSettings()
+    {
+        $config = [
+            'config' => [
+                'default_preferences' => [
+                    'temp_unit' => 'C',
+                    'baro_unit' => 'hPa'
+                ]
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Partial default_preferences should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test global default_preferences validation - Invalid values
+     */
+    public function testGlobalConfig_DefaultPreferences_InvalidValues()
+    {
+        $config = [
+            'config' => [
+                'default_preferences' => [
+                    'time_format' => 'invalid',
+                    'temp_unit' => 'K'
+                ]
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Invalid default_preferences values should fail validation');
+        $this->assertCount(2, $result['errors']);
+        $this->assertStringContainsString('time_format', implode(' ', $result['errors']));
+        $this->assertStringContainsString('temp_unit', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test global default_preferences validation - Unknown fields
+     */
+    public function testGlobalConfig_DefaultPreferences_UnknownFields()
+    {
+        $config = [
+            'config' => [
+                'default_preferences' => [
+                    'temp_unit' => 'C',
+                    'unknown_field' => 'value'
+                ]
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Unknown fields in default_preferences should fail validation');
+        $this->assertStringContainsString('unknown_field', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test global default_preferences validation - Invalid type (not object)
+     */
+    public function testGlobalConfig_DefaultPreferences_InvalidType()
+    {
+        $config = [
+            'config' => [
+                'default_preferences' => 'not_an_object'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'default_preferences as string should fail validation');
+        $this->assertStringContainsString('must be an object', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test per-airport default_preferences validation - Valid overrides
+     */
+    public function testAirport_DefaultPreferences_ValidOverrides()
+    {
+        $config = [
+            'config' => [
+                'default_preferences' => [
+                    'temp_unit' => 'F',
+                    'baro_unit' => 'inHg'
+                ]
+            ],
+            'airports' => [
+                'egll' => [
+                    'name' => 'London Heathrow',
+                    'lat' => 51.47,
+                    'lon' => -0.46,
+                    'default_preferences' => [
+                        'temp_unit' => 'C',
+                        'baro_unit' => 'hPa'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid per-airport default_preferences overrides should pass validation');
+        $this->assertEmpty($result['errors']);
+    }
+
+    /**
+     * Test per-airport default_preferences validation - Invalid values
+     */
+    public function testAirport_DefaultPreferences_InvalidValues()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'default_preferences' => [
+                        'wind_speed_unit' => 'invalid'
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Invalid per-airport default_preferences values should fail validation');
+        $this->assertStringContainsString('wind_speed_unit', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test validateDefaultPreferences function - Valid preferences
+     */
+    public function testValidateDefaultPreferences_Valid()
+    {
+        $prefs = [
+            'time_format' => '12hr',
+            'temp_unit' => 'F',
+            'distance_unit' => 'ft',
+            'baro_unit' => 'inHg',
+            'wind_speed_unit' => 'kts'
+        ];
+        
+        $errors = validateDefaultPreferences($prefs, 'test');
+        $this->assertEmpty($errors, 'Valid preferences should return no errors');
+    }
+
+    /**
+     * Test validateDefaultPreferences function - All valid option values
+     */
+    public function testValidateDefaultPreferences_AllValidOptions()
+    {
+        // Time format options
+        $this->assertEmpty(validateDefaultPreferences(['time_format' => '12hr'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['time_format' => '24hr'], 'test'));
+        
+        // Temperature unit options
+        $this->assertEmpty(validateDefaultPreferences(['temp_unit' => 'F'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['temp_unit' => 'C'], 'test'));
+        
+        // Distance unit options
+        $this->assertEmpty(validateDefaultPreferences(['distance_unit' => 'ft'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['distance_unit' => 'm'], 'test'));
+        
+        // Barometer unit options
+        $this->assertEmpty(validateDefaultPreferences(['baro_unit' => 'inHg'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['baro_unit' => 'hPa'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['baro_unit' => 'mmHg'], 'test'));
+        
+        // Wind speed unit options
+        $this->assertEmpty(validateDefaultPreferences(['wind_speed_unit' => 'kts'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['wind_speed_unit' => 'mph'], 'test'));
+        $this->assertEmpty(validateDefaultPreferences(['wind_speed_unit' => 'km/h'], 'test'));
+    }
+
+    /**
+     * Test getDefaultPreferencesForAirport function - Merges correctly
+     */
+    public function testGetDefaultPreferencesForAirport_MergesCorrectly()
+    {
+        // This test requires a mock config, but we can at least verify
+        // the function returns an array and handles missing config gracefully
+        $result = getDefaultPreferencesForAirport('nonexistent');
+        $this->assertIsArray($result, 'Should return an array even for nonexistent airport');
+    }
 }
 

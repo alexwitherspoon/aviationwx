@@ -29,6 +29,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_generate_avif` | `false` | Generate AVIF globally |
 | `webcam_history_enabled` | `false` | Enable time-lapse globally |
 | `webcam_history_max_frames` | `12` | Max history frames per camera |
+| `default_preferences` | — | Default unit toggle settings (see below) |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
 | `notam_api_client_secret` | — | NOTAM API client secret |
@@ -59,6 +60,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | **Feature Overrides** |||
 | `webcam_history_enabled` | global default | Override time-lapse for this airport |
 | `webcam_history_max_frames` | global default | Override max frames for this airport |
+| `default_preferences` | global default | Override unit toggle defaults for this airport |
 | **Data Sources** |||
 | `weather_source` | — | Primary weather source config |
 | `weather_source_backup` | — | Backup weather source config |
@@ -107,6 +109,15 @@ Settings resolve in this order (first match wins):
 2. **Per-airport** — `airport.webcam_refresh_seconds` or `airport.weather_refresh_seconds`
 3. **Global** — `config.webcam_refresh_default` or `config.weather_refresh_default`
 4. **Built-in default** — 60 seconds
+
+### Default Preferences Hierarchy
+
+Unit toggle defaults resolve in this order (first match wins):
+
+1. **User preference** — stored in browser cookie/localStorage
+2. **Per-airport** — `airport.default_preferences`
+3. **Global** — `config.default_preferences`
+4. **Built-in default** — US aviation standards (12hr, °F, ft, inHg, kts)
 
 ---
 
@@ -487,6 +498,62 @@ Stores recent frames for time-lapse playback.
 | `Home` / `End` | First/last frame |
 | `H` | Toggle hide UI |
 | `Escape` | Close player |
+
+---
+
+## Default Preferences (Unit Toggles)
+
+Configure default units for the airport page toggle buttons. User preferences (stored in cookies) always take priority over these defaults.
+
+### Available Preferences
+
+| Preference | Options | Default |
+|------------|---------|---------|
+| `time_format` | `12hr`, `24hr` | `12hr` |
+| `temp_unit` | `F`, `C` | `F` |
+| `distance_unit` | `ft`, `m` | `ft` |
+| `baro_unit` | `inHg`, `hPa`, `mmHg` | `inHg` |
+| `wind_speed_unit` | `kts`, `mph`, `km/h` | `kts` |
+
+### Set Global Defaults
+
+```json
+{
+  "config": {
+    "default_preferences": {
+      "time_format": "24hr",
+      "temp_unit": "C",
+      "distance_unit": "m",
+      "baro_unit": "hPa",
+      "wind_speed_unit": "kts"
+    }
+  }
+}
+```
+
+### Override Per-Airport
+
+```json
+{
+  "airports": {
+    "egll": {
+      "default_preferences": {
+        "temp_unit": "C",
+        "baro_unit": "hPa"
+      }
+    }
+  }
+}
+```
+
+### Priority Order
+
+1. **User preference** — stored in browser cookie/localStorage (persists across visits)
+2. **Per-airport** — `airport.default_preferences`
+3. **Global** — `config.default_preferences`
+4. **Built-in** — US aviation standards (12hr, °F, ft, inHg, kts)
+
+Only include preferences you want to change from defaults. Users who have previously set a preference will keep their choice.
 
 ---
 

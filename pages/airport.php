@@ -1503,6 +1503,13 @@ const DEFAULT_TIMEZONE = <?php
     $defaultTz = getDefaultTimezone();
     echo json_encode($defaultTz, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
+
+// Default preferences for unit toggles (merged: global config → airport override)
+const DEFAULT_PREFERENCES = <?php
+    $defaultPrefs = getDefaultPreferencesForAirport($airportId);
+    echo json_encode($defaultPrefs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>;
+
 const RUNWAYS = <?php
     // Defensive JSON encoding with error handling
     $runwaysJson = json_encode($airport['runways'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -1806,11 +1813,11 @@ function syncPreferencesFromCookies() {
 // Sync preferences on page load
 syncPreferencesFromCookies();
 
-// Time format preference (default to 12hr)
+// Time format preference (user cookie → airport config → global config → hardcoded default)
 function getTimeFormat() {
-    // Try cookie first (source of truth), then localStorage (cache), then default
     const format = getCookie('aviationwx_time_format') 
         || localStorage.getItem('aviationwx_time_format')
+        || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.time_format)
         || '12hr';
     return format;
 }
@@ -1856,11 +1863,11 @@ function formatTime(timeStr) {
     }
 }
 
-// Temperature unit preference (default to F)
+// Temperature unit preference (user cookie → airport config → global config → hardcoded default)
 function getTempUnit() {
-    // Try cookie first (source of truth), then localStorage (cache), then default
     const unit = getCookie('aviationwx_temp_unit')
         || localStorage.getItem('aviationwx_temp_unit')
+        || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.temp_unit)
         || 'F';
     return unit;
 }
@@ -1943,11 +1950,11 @@ function formatTempTimestamp(timestamp) {
     }
 }
 
-// Distance/altitude unit preference (default to imperial/feet)
+// Distance/altitude unit preference (user cookie → airport config → global config → hardcoded default)
 function getDistanceUnit() {
-    // Try cookie first (source of truth), then localStorage (cache), then default
     const unit = getCookie('aviationwx_distance_unit')
         || localStorage.getItem('aviationwx_distance_unit')
+        || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.distance_unit)
         || 'ft';
     return unit;
 }
@@ -1996,11 +2003,11 @@ function formatRainfall(inches) {
     }
 }
 
-// Barometer unit preference (default to inHg for US)
+// Barometer unit preference (user cookie → airport config → global config → hardcoded default)
 function getBaroUnit() {
-    // Try cookie first (source of truth), then localStorage (cache), then default
     const unit = getCookie('aviationwx_baro_unit')
         || localStorage.getItem('aviationwx_baro_unit')
+        || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.baro_unit)
         || 'inHg';
     return unit;
 }
@@ -2072,11 +2079,11 @@ function formatCeiling(ft) {
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
 
-// Wind speed unit preference (default to knots)
+// Wind speed unit preference (user cookie → airport config → global config → hardcoded default)
 function getWindSpeedUnit() {
-    // Try cookie first (source of truth), then localStorage (cache), then default
     const unit = getCookie('aviationwx_wind_speed_unit')
         || localStorage.getItem('aviationwx_wind_speed_unit')
+        || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.wind_speed_unit)
         || 'kts';
     return unit;
 }

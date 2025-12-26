@@ -502,6 +502,106 @@ function getWebcamHistoryMaxFrames(string $airportId): int {
 }
 
 /**
+ * Valid values for each preference type
+ */
+define('VALID_PREFERENCE_VALUES', [
+    'time_format' => ['12hr', '24hr'],
+    'temp_unit' => ['F', 'C'],
+    'distance_unit' => ['ft', 'm'],
+    'baro_unit' => ['inHg', 'hPa', 'mmHg'],
+    'wind_speed_unit' => ['kts', 'mph', 'km/h'],
+]);
+
+/**
+ * Default preference values (hardcoded fallbacks)
+ */
+define('DEFAULT_PREFERENCE_VALUES', [
+    'time_format' => '12hr',
+    'temp_unit' => 'F',
+    'distance_unit' => 'ft',
+    'baro_unit' => 'inHg',
+    'wind_speed_unit' => 'kts',
+]);
+
+/**
+ * Validate default_preferences object
+ * 
+ * Validates that all preference values are valid options.
+ * 
+ * @param mixed $preferences The default_preferences value to validate
+ * @param string $context Context for error messages (e.g., "config" or "Airport 'kspb'")
+ * @return array Array of error messages (empty if valid)
+ */
+function validateDefaultPreferences(mixed $preferences, string $context): array {
+    $errors = [];
+    
+    if (!is_array($preferences)) {
+        $errors[] = "{$context}.default_preferences must be an object";
+        return $errors;
+    }
+    
+    $allowedKeys = array_keys(VALID_PREFERENCE_VALUES);
+    
+    foreach ($preferences as $key => $value) {
+        if (!in_array($key, $allowedKeys, true)) {
+            $errors[] = "{$context}.default_preferences has unknown field '{$key}'. Allowed: " . implode(', ', $allowedKeys);
+            continue;
+        }
+        
+        if (!is_string($value)) {
+            $errors[] = "{$context}.default_preferences.{$key} must be a string";
+            continue;
+        }
+        
+        $validValues = VALID_PREFERENCE_VALUES[$key];
+        if (!in_array($value, $validValues, true)) {
+            $errors[] = "{$context}.default_preferences.{$key} has invalid value '{$value}'. Allowed: " . implode(', ', $validValues);
+        }
+    }
+    
+    return $errors;
+}
+
+/**
+ * Get default preferences for an airport
+ * 
+ * Merges preferences in order: hardcoded defaults → global config → airport override.
+ * Returns only the preferences that differ from hardcoded defaults.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return array Merged default preferences
+ */
+function getDefaultPreferencesForAirport(string $airportId): array {
+    $config = loadConfig();
+    if ($config === null) {
+        return [];
+    }
+    
+    // Start with empty (JS will use its own hardcoded defaults as final fallback)
+    $defaults = [];
+    
+    // Layer 1: Global config defaults
+    if (isset($config['config']['default_preferences']) && is_array($config['config']['default_preferences'])) {
+        foreach ($config['config']['default_preferences'] as $key => $value) {
+            if (isset(VALID_PREFERENCE_VALUES[$key]) && in_array($value, VALID_PREFERENCE_VALUES[$key], true)) {
+                $defaults[$key] = $value;
+            }
+        }
+    }
+    
+    // Layer 2: Airport-specific overrides
+    if (isset($config['airports'][$airportId]['default_preferences']) && is_array($config['airports'][$airportId]['default_preferences'])) {
+        foreach ($config['airports'][$airportId]['default_preferences'] as $key => $value) {
+            if (isset(VALID_PREFERENCE_VALUES[$key]) && in_array($value, VALID_PREFERENCE_VALUES[$key], true)) {
+                $defaults[$key] = $value;
+            }
+        }
+    }
+    
+    return $defaults;
+}
+
+/**
  * Load airport configuration with caching
  * 
  * Uses APCu cache if available, falls back to static variable for request lifetime.
@@ -1836,6 +1936,12 @@ function validateAirportsJsonStructure(array $config): array {
                     $errors[] = "config.webcam_history_max_frames must be a positive integer";
                 }
             }
+            
+            // Validate default_preferences
+            if (isset($cfg['default_preferences'])) {
+                $prefErrors = validateDefaultPreferences($cfg['default_preferences'], 'config');
+                $errors = array_merge($errors, $prefErrors);
+            }
         }
     }
     
@@ -2031,6 +2137,12 @@ function validateAirportsJsonStructure(array $config): array {
             if (!is_int($airport['webcam_history_max_frames']) || $airport['webcam_history_max_frames'] < 1) {
                 $errors[] = "Airport '{$airportCode}' has invalid webcam_history_max_frames: must be a positive integer";
             }
+        }
+        
+        // Validate default_preferences (per-airport overrides)
+        if (isset($airport['default_preferences'])) {
+            $prefErrors = validateDefaultPreferences($airport['default_preferences'], "Airport '{$airportCode}'");
+            $errors = array_merge($errors, $prefErrors);
         }
         
         // Validate timezone
