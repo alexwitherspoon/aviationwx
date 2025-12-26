@@ -420,6 +420,261 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             });
         }
     </script>
+    <?php
+    // Read version info for client-side dead man's switch
+    $versionFile = __DIR__ . '/../config/version.json';
+    $buildTimestamp = time(); // Fallback to current time
+    $buildHash = 'unknown';
+    $maxNoUpdateDays = 7;
+    
+    if (file_exists($versionFile)) {
+        $versionData = json_decode(file_get_contents($versionFile), true);
+        if ($versionData) {
+            $buildTimestamp = $versionData['timestamp'] ?? time();
+            $buildHash = $versionData['hash'] ?? 'unknown';
+            $maxNoUpdateDays = $versionData['max_no_update_days'] ?? 7;
+        }
+    }
+    ?>
+    <script>
+        /**
+         * Client Version Checking & Dead Man's Switch
+         * 
+         * Detects stuck/stale client versions and forces a full cleanup when:
+         * 1. No service worker update has occurred in max_no_update_days
+         * 2. The build timestamp age is unknown (localStorage cleared but client stuck)
+         * 3. Server responds with force_cleanup flag
+         * 
+         * This is a safety net for rare edge cases where normal SW updates fail.
+         */
+        (function() {
+            'use strict';
+            
+            const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
+            const BUILD_HASH = '<?= $buildHash ?>';
+            const MAX_NO_UPDATE_DAYS = <?= $maxNoUpdateDays ?>;
+            const LAST_UPDATE_KEY = 'aviationwx-last-sw-update';
+            const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
+            
+            /**
+             * Perform full cleanup - clear all caches, storage, and service workers
+             * This is intentionally aggressive as it only triggers in rare stuck states
+             */
+            async function performFullCleanup(reason) {
+                console.warn('[Version] Performing full cleanup. Reason:', reason);
+                
+                // Prevent cleanup loops - if we just did a cleanup, don't do another
+                const cleanupInProgress = sessionStorage.getItem(CLEANUP_IN_PROGRESS_KEY);
+                if (cleanupInProgress) {
+                    console.log('[Version] Cleanup already in progress, skipping');
+                    return;
+                }
+                
+                // Mark cleanup as in progress (session-scoped to prevent loops)
+                sessionStorage.setItem(CLEANUP_IN_PROGRESS_KEY, Date.now().toString());
+                
+                try {
+                    // 1. Clear all Cache API caches
+                    if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => {
+                            console.log('[Version] Deleting cache:', name);
+                            return caches.delete(name);
+                        }));
+                    }
+                    
+                    // 2. Clear localStorage (all keys)
+                    try {
+                        localStorage.clear();
+                        console.log('[Version] Cleared localStorage');
+                    } catch (e) {
+                        console.warn('[Version] Could not clear localStorage:', e);
+                    }
+                    
+                    // 3. Clear sessionStorage (except cleanup flag)
+                    try {
+                        const cleanupFlag = sessionStorage.getItem(CLEANUP_IN_PROGRESS_KEY);
+                        sessionStorage.clear();
+                        if (cleanupFlag) {
+                            sessionStorage.setItem(CLEANUP_IN_PROGRESS_KEY, cleanupFlag);
+                        }
+                        console.log('[Version] Cleared sessionStorage');
+                    } catch (e) {
+                        console.warn('[Version] Could not clear sessionStorage:', e);
+                    }
+                    
+                    // 4. Unregister all service workers
+                    if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(registrations.map(reg => {
+                            console.log('[Version] Unregistering service worker:', reg.scope);
+                            return reg.unregister();
+                        }));
+                    }
+                    
+                    console.log('[Version] Cleanup complete, reloading page...');
+                    
+                    // 5. Force hard reload from network
+                    // Small delay to ensure cleanup operations complete
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 100);
+                    
+                } catch (err) {
+                    console.error('[Version] Cleanup error:', err);
+                    // Even on error, try to reload
+                    window.location.reload(true);
+                }
+            }
+            
+            /**
+             * Check if dead man's switch should trigger
+             * Returns reason string if cleanup needed, null otherwise
+             */
+            function checkDeadManSwitch() {
+                const now = Date.now();
+                const maxAgeMs = MAX_NO_UPDATE_DAYS * 24 * 60 * 60 * 1000;
+                
+                // Get last SW update timestamp from localStorage
+                const lastUpdateStr = localStorage.getItem(LAST_UPDATE_KEY);
+                
+                if (!lastUpdateStr) {
+                    // No record of last update - this could be:
+                    // 1. First visit ever (normal)
+                    // 2. localStorage was cleared (normal)
+                    // 3. Very old client that never had this tracking (concerning)
+                    
+                    // Check if this build is suspiciously old
+                    const buildAge = now - (BUILD_TIMESTAMP * 1000);
+                    if (buildAge > maxAgeMs) {
+                        // Build is older than max age AND we have no update record
+                        // This suggests a stuck client with cleared storage
+                        return `Build is ${Math.floor(buildAge / 86400000)} days old with no update record`;
+                    }
+                    
+                    // First visit or recent build - initialize tracking
+                    localStorage.setItem(LAST_UPDATE_KEY, now.toString());
+                    return null;
+                }
+                
+                const lastUpdate = parseInt(lastUpdateStr, 10);
+                if (isNaN(lastUpdate) || lastUpdate <= 0) {
+                    // Invalid timestamp - reset and continue
+                    localStorage.setItem(LAST_UPDATE_KEY, now.toString());
+                    return null;
+                }
+                
+                const timeSinceUpdate = now - lastUpdate;
+                if (timeSinceUpdate > maxAgeMs) {
+                    return `No SW update in ${Math.floor(timeSinceUpdate / 86400000)} days (max: ${MAX_NO_UPDATE_DAYS})`;
+                }
+                
+                return null;
+            }
+            
+            /**
+             * Non-blocking version check via API
+             * Uses requestIdleCallback or setTimeout for minimal performance impact
+             */
+            function scheduleVersionCheck() {
+                const doCheck = async () => {
+                    try {
+                        // Add cache-busting parameter
+                        const response = await fetch('/api/v1/version.php?_=' + Date.now(), {
+                            cache: 'no-store'
+                        });
+                        
+                        if (!response.ok) {
+                            console.warn('[Version] API returned status:', response.status);
+                            return;
+                        }
+                        
+                        const serverVersion = await response.json();
+                        
+                        // Check for emergency force_cleanup flag
+                        if (serverVersion.force_cleanup === true) {
+                            performFullCleanup('Server requested force_cleanup');
+                            return;
+                        }
+                        
+                        // Check if server version is significantly newer
+                        // (Hash mismatch alone isn't enough - could be mid-deploy)
+                        if (serverVersion.hash !== BUILD_HASH && serverVersion.timestamp) {
+                            const serverBuildAge = Date.now() - (serverVersion.timestamp * 1000);
+                            const clientBuildAge = Date.now() - (BUILD_TIMESTAMP * 1000);
+                            
+                            // If client is more than max_no_update_days older than server
+                            const maxAgeDiff = (serverVersion.max_no_update_days || MAX_NO_UPDATE_DAYS) * 24 * 60 * 60 * 1000;
+                            if (clientBuildAge - serverBuildAge > maxAgeDiff) {
+                                performFullCleanup(`Client build is ${Math.floor((clientBuildAge - serverBuildAge) / 86400000)} days behind server`);
+                                return;
+                            }
+                        }
+                        
+                    } catch (err) {
+                        // Network errors are expected when offline - don't log as error
+                        if (navigator.onLine !== false) {
+                            console.warn('[Version] API check failed:', err.message);
+                        }
+                    }
+                };
+                
+                // Schedule check during idle time to avoid blocking page load
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(doCheck, { timeout: 10000 });
+                } else {
+                    // Fallback: run after initial page load settles
+                    setTimeout(doCheck, 5000);
+                }
+            }
+            
+            /**
+             * Update last SW update timestamp when controller changes
+             * This indicates a successful service worker update
+             */
+            function trackSwUpdates() {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        localStorage.setItem(LAST_UPDATE_KEY, Date.now().toString());
+                        console.log('[Version] SW controller changed, updated last update timestamp');
+                    });
+                }
+            }
+            
+            // Initialize version checking
+            function init() {
+                // Skip if cleanup is in progress (we're about to reload)
+                if (sessionStorage.getItem(CLEANUP_IN_PROGRESS_KEY)) {
+                    // Clear the flag after reload completes
+                    sessionStorage.removeItem(CLEANUP_IN_PROGRESS_KEY);
+                    console.log('[Version] Post-cleanup reload complete');
+                    // Initialize tracking fresh
+                    localStorage.setItem(LAST_UPDATE_KEY, Date.now().toString());
+                    return;
+                }
+                
+                // Track SW updates
+                trackSwUpdates();
+                
+                // Check dead man's switch immediately
+                const deadManReason = checkDeadManSwitch();
+                if (deadManReason) {
+                    performFullCleanup(deadManReason);
+                    return; // Don't continue, we're reloading
+                }
+                
+                // Schedule non-blocking version API check
+                scheduleVersionCheck();
+            }
+            
+            // Run on page load
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
     <style>
         @keyframes skeleton-loading {
             0% { background-position: 200% 0; }
