@@ -3812,6 +3812,7 @@ function updateWindVisual(weather) {
             ctx.textAlign = 'center';
             ctx.strokeStyle = '#fff'; 
             ctx.lineWidth = 3;
+            ctx.lineJoin = 'round'; // Prevent miter spike artifacts on letters
             ctx.strokeText('VRB', cx, cy);
             ctx.fillStyle = '#dc3545';
             ctx.fillText('VRB', cx, cy);
@@ -3821,6 +3822,7 @@ function updateWindVisual(weather) {
             ctx.textAlign = 'center';
             ctx.strokeStyle = '#fff'; 
             ctx.lineWidth = 3;
+            ctx.lineJoin = 'round'; // Prevent miter spike artifacts on letters like M
             ctx.strokeText('CALM', cx, cy);
             ctx.fillStyle = '#333';
             ctx.fillText('CALM', cx, cy);
