@@ -10,7 +10,7 @@
     "scheduler_config_reload_seconds": 60,
     "weather_worker_pool_size": 5,
     "webcam_worker_pool_size": 5,
-    "worker_timeout_seconds": 45,
+    "worker_timeout_seconds": 90,
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
     "webcam_history_enabled": false,

@@ -645,7 +645,8 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
   - Uses `ffmpeg` to capture single frame
   - Supports TCP and UDP transport (configurable)
   - RTSPS always uses TCP
-  - Retries on failure (default: 2 retries)
+  - 3 attempts with exponential backoff (1s, 5s, 10s delays before each attempt)
+  - Error frame detection rejects Blue Iris error screens and triggers retry
 - **Configuration**:
   - `rtsp_transport`: 'tcp' or 'udp' (default: 'tcp')
   - `rtsp_fetch_timeout`: Connection timeout in seconds

@@ -276,14 +276,16 @@ function isFfmpegAvailable() {
 /**
  * Fetch frame from RTSP stream using ffmpeg
  * 
- * Captures a single frame from RTSP/RTSPS stream using ffmpeg. Supports retries
- * and error classification. RTSPS streams are forced to use TCP transport.
+ * Captures a single frame from RTSP/RTSPS stream using ffmpeg. Uses exponential
+ * backoff (1s, 5s, 10s) before each attempt to handle unreliable sources like
+ * Blue Iris servers. Error frames are detected and rejected, triggering retry.
+ * RTSPS streams are forced to use TCP transport.
  * 
  * @param string $url RTSP/RTSPS stream URL
  * @param string $cacheFile Target cache file path (JPG format)
  * @param string $transport Transport protocol: 'tcp' or 'udp' (default: 'tcp')
  * @param int $timeoutSeconds Connection timeout in seconds (default: RTSP_DEFAULT_TIMEOUT)
- * @param int $retries Number of retry attempts (default: RTSP_DEFAULT_RETRIES)
+ * @param int $retries Number of retry attempts (default: RTSP_DEFAULT_RETRIES, gives 3 total attempts)
  * @param int $maxRuntime Maximum runtime for ffmpeg in seconds (default: RTSP_MAX_RUNTIME)
  * @return bool True on success, false on failure
  */
@@ -306,8 +308,23 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
     // Detect if we're in web context for better output formatting
     $isWeb = !empty($_SERVER['REQUEST_METHOD']);
     
+    $backoffDelays = defined('RTSP_BACKOFF_DELAYS') ? RTSP_BACKOFF_DELAYS : [1, 5, 10];
+    
     while ($attempt <= $retries) {
         $attempt++;
+        
+        // Backoff gives unreliable sources (e.g., Blue Iris) time to recover
+        $backoffIndex = $attempt - 1;
+        if (isset($backoffDelays[$backoffIndex])) {
+            $backoffSeconds = $backoffDelays[$backoffIndex];
+            if ($isWeb) {
+                echo "<span class='backoff'>Waiting {$backoffSeconds}s before attempt {$attempt}...</span><br>\n";
+            } else {
+                echo "    Waiting {$backoffSeconds}s before attempt {$attempt}...\n";
+            }
+            sleep($backoffSeconds);
+        }
+        
         $jpegTmp = getUniqueTmpFile($cacheFile) . '.jpg';
         
         if ($isWeb) {
@@ -430,10 +447,6 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         }
         
         @unlink($jpegTmp);
-        
-        if ($isRtsps && $attempt < ($retries + 1)) {
-            usleep(500000); // Wait 0.5s between retries
-        }
     }
     return false;
 }

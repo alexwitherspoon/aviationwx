@@ -297,10 +297,10 @@ function getWebcamWorkerPoolSize(): int {
 
 /**
  * Get worker timeout from global config
- * @return int Timeout in seconds (default: 45)
+ * @return int Timeout in seconds (default: 90)
  */
 function getWorkerTimeout(): int {
-    return (int)getGlobalConfig('worker_timeout_seconds', 45);
+    return (int)getGlobalConfig('worker_timeout_seconds', 90);
 }
 
 /**

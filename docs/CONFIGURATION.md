@@ -27,7 +27,7 @@ The `airports.json` file has two main sections:
     "weather_worker_pool_size": 5,
     "webcam_worker_pool_size": 5,
     "notam_worker_pool_size": 1,
-    "worker_timeout_seconds": 45,
+    "worker_timeout_seconds": 90,
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
     "webcam_history_enabled": false,
@@ -61,7 +61,7 @@ The `config` section (optional) contains application-wide defaults:
 - **`weather_worker_pool_size`** - Maximum concurrent weather worker processes (default: `5`)
 - **`webcam_worker_pool_size`** - Maximum concurrent webcam worker processes (default: `5`)
 - **`notam_worker_pool_size`** - Maximum concurrent NOTAM worker processes (default: `1`)
-- **`worker_timeout_seconds`** - Timeout for worker processes in seconds (default: `45`)
+- **`worker_timeout_seconds`** - Timeout for worker processes in seconds (default: `90`)
 
 #### Webcam Format Generation
 - **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
@@ -1058,8 +1058,10 @@ The system automatically detects the source type from the URL:
 **Note**: For RTSPS streams, always set `"type": "rtsp"` explicitly and use `"rtsp_transport": "tcp"` for best reliability.
 
 ### Error Handling and Backoff (RTSP)
-- Errors are classified into transient (timeout, connection, DNS) and permanent (auth, TLS).
-- Transient errors back off exponentially up to 1 hour; permanent errors up to 2 hours.
+- RTSP fetches use 3 attempts with exponential backoff (1s, 5s, 10s delays before each attempt)
+- Error frame detection rejects Blue Iris error screens and invalid frames, triggering retry
+- Errors are classified into transient (timeout, connection, DNS) and permanent (auth, TLS)
+- Transient errors back off exponentially up to 1 hour; permanent errors up to 2 hours
  
 
 **Static Image:**
@@ -1612,7 +1614,7 @@ All application defaults are configured in the `config` section of `airports.jso
 - **`weather_worker_pool_size`** - Maximum concurrent weather worker processes (default: `5`)
 - **`webcam_worker_pool_size`** - Maximum concurrent webcam worker processes (default: `5`)
 - **`notam_worker_pool_size`** - Maximum concurrent NOTAM worker processes (default: `1`)
-- **`worker_timeout_seconds`** - Timeout for worker processes in seconds (default: `45`)
+- **`worker_timeout_seconds`** - Timeout for worker processes in seconds (default: `90`)
 
 #### Webcam Format Generation
 - **`webcam_generate_webp`** - Enable WebP generation globally (default: `false`)
@@ -1646,7 +1648,7 @@ These settings can be overridden per-airport. See "Webcam History (Time-lapse Pl
     "weather_worker_pool_size": 5,
     "webcam_worker_pool_size": 5,
     "notam_worker_pool_size": 1,
-    "worker_timeout_seconds": 45,
+    "worker_timeout_seconds": 90,
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
     "webcam_history_enabled": false,

@@ -22,6 +22,10 @@ if (!defined('RTSP_MAX_RUNTIME')) {
 if (!defined('RTSP_DEFAULT_RETRIES')) {
     define('RTSP_DEFAULT_RETRIES', 2);
 }
+// Backoff delays (seconds) before each RTSP attempt
+if (!defined('RTSP_BACKOFF_DELAYS')) {
+    define('RTSP_BACKOFF_DELAYS', [1, 5, 10]);
+}
 if (!defined('DEFAULT_TRANSCODE_TIMEOUT')) {
     define('DEFAULT_TRANSCODE_TIMEOUT', 8);
 }
