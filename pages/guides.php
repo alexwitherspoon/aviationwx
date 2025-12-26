@@ -281,6 +281,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 750px; /* Accommodate wide ASCII diagrams; mobile users can pinch-zoom */
         }
         
         /* Markdown styling */
@@ -455,6 +456,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 750px; /* Accommodate wide ASCII diagrams; mobile users can pinch-zoom */
         }
         
         /* Apply same markdown styling to index page */
