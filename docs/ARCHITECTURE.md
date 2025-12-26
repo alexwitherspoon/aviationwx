@@ -19,7 +19,9 @@ aviationwx.org/
 │   ├── webcam.php            # Webcam image server endpoint
 │   ├── sitemap.php           # Dynamic XML sitemap generator
 │   ├── outage-status.php     # Data outage status API
-│   └── partner-logo.php     # Partner logo caching endpoint
+│   ├── partner-logo.php      # Partner logo caching endpoint
+│   └── v1/                   # Versioned public API
+│       └── version.php       # Deployment version info for client checking
 ├── lib/
 │   ├── config.php            # Configuration loading and utilities
 │   ├── rate-limit.php        # Rate limiting utilities
@@ -64,6 +66,7 @@ aviationwx.org/
 │   └── ready.php             # Readiness check endpoint
 ├── config/
 │   ├── airports.json.example # Configuration template
+│   ├── version.json          # Deploy version info (generated, gitignored)
 │   └── crontab               # Cron job definitions
 ├── public/
 │   ├── css/styles.css        # Application styles
@@ -195,6 +198,16 @@ aviationwx.org/
 - `checkThemeAuto()`: Checks time-based and browser theme preferences
 - Unit conversion functions
 - Timestamp formatting
+
+**Service Worker & Version Management**:
+- **Service Worker** (`public/js/service-worker.js`): Provides offline support with network-first caching for weather data
+- **Automatic Updates**: SW updates check every 5 minutes, with immediate activation via `skipWaiting()`
+- **Version Checking**: Client-side dead man's switch detects stuck versions:
+  - Tracks last SW update in localStorage
+  - Fetches `/api/v1/version.php` during idle time (non-blocking)
+  - Triggers full cleanup if no update in 7 days or if server sets `force_cleanup` flag
+- **Version File**: `config/version.json` generated during deploy with git hash and timestamp
+- See [Operations Guide](OPERATIONS.md#client-version-management) for emergency cleanup procedures
 
 ## Data Flow
 

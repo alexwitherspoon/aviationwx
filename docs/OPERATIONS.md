@@ -311,6 +311,64 @@ For large log volumes:
 - Use log aggregation tools for production environments
 - Consider log sampling for high-volume access logs
 
+## Client Version Management
+
+The site includes a "dead man's switch" mechanism to handle rare cases where client browsers get stuck on old cached versions (particularly iOS Safari).
+
+### How It Works
+
+On each page load, the client JavaScript:
+1. Checks if a service worker update has occurred in the last 7 days
+2. Fetches `/api/v1/version.php` to compare versions (non-blocking)
+3. Triggers a full cleanup if the client is stuck
+
+### Emergency Client Cleanup
+
+If you need to force ALL clients to clear their caches and reload:
+
+1. Edit `config/version.json` on the production server:
+   ```json
+   {
+       "hash": "abc123",
+       "hash_full": "abc123...",
+       "timestamp": 1735142400,
+       "deploy_date": "2025-12-25T12:00:00Z",
+       "force_cleanup": true,
+       "max_no_update_days": 7
+   }
+   ```
+
+2. Set `force_cleanup` to `true`
+
+3. On next visit, all clients will:
+   - Clear all Cache API caches
+   - Clear localStorage and sessionStorage
+   - Unregister all service workers
+   - Force reload from network
+
+4. After the issue is resolved, set `force_cleanup` back to `false`
+
+### Version File
+
+The `config/version.json` file is automatically generated during deployment by `scripts/deploy-update-cache-version.sh`. It contains:
+- Git hash of the current deployment
+- Deploy timestamp
+- Configuration for the dead man's switch
+
+**Note**: This file is gitignored and only exists in production.
+
+### Dead Man's Switch Thresholds
+
+- **max_no_update_days**: Days without SW update before cleanup (default: 7)
+- Cleanup also triggers if client build is older than threshold AND has no update record
+
+### Monitoring
+
+Watch for `[Version]` prefixed console messages in browser dev tools:
+- `[Version] Performing full cleanup...` - Cleanup triggered
+- `[Version] SW controller changed...` - Normal SW update
+- `[Version] API check failed...` - Version API unreachable (network issue)
+
 ## Related Documentation
 
 - [Deployment Guide](DEPLOYMENT.md) - Production deployment
