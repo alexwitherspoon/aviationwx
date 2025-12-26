@@ -218,3 +218,4 @@ function fetchNotamsForAirport(string $airportId, array $airport): array {
     return $filtered;
 }
 
+

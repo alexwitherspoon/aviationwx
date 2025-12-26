@@ -31,3 +31,4 @@ function calculateWebcamStaggerOffset($baseInterval) {
     return (int)floor($baseInterval * $percent);
 }
 
+

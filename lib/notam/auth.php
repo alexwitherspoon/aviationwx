@@ -99,3 +99,4 @@ function getNotamBearerToken(): ?string {
     return $token;
 }
 
+

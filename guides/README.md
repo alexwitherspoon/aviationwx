@@ -40,6 +40,9 @@ Most installs follow the same “pick a path” sequence:
 7) **Submit the airport for review and inclusion**
 - [11 — Submit a New Airport to AviationWX](11-submit-an-airport-to-aviationwx.md)
 
+8) **Learn how to use the dashboard**
+- [12 — Using the Airport Dashboard](12-using-the-airport-dashboard.md)
+
 ---
 
 ## What AviationWX is (plain language)
