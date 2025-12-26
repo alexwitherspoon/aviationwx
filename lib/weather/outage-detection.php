@@ -19,10 +19,10 @@ require_once __DIR__ . '/source-timestamps.php';
  * Check if all configured data sources are stale (data outage condition)
  * 
  * Checks all configured sources (primary weather, METAR, webcams) and determines
- * if they are all stale (older than DATA_OUTAGE_BANNER_HOURS). Uses outage state file
+ * if they are all stale (older than failclosed threshold). Uses outage state file
  * to persist outage start time across cache loss and brief recoveries. Preserves original
- * outage start time during grace period (1.5 hours) after recovery to handle back-to-back
- * outages as a single continuous event.
+ * outage start time during grace period (same as failclosed threshold) after recovery 
+ * to handle back-to-back outages as a single continuous event.
  * 
  * Logs outage start when first detected and outage end when fully resolved (after grace period).
  * 
@@ -36,7 +36,8 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
         return null;
     }
     
-    $outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
+    // Use failclosed threshold for outage detection
+    $outageThresholdSeconds = getStaleFailclosedSeconds($airport);
     $now = time();
     
     // Get timestamps from all configured sources using shared helper
@@ -215,7 +216,7 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
                 $lastChecked = (int)$outageState['last_checked'];
                 $outageStart = (int)$outageState['outage_start'];
                 $timeSinceLastCheck = $now - $lastChecked;
-                $gracePeriodSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
+                $gracePeriodSeconds = getStaleFailclosedSeconds($airport);
                 
                 // If more than grace period has passed, delete file (full recovery confirmed)
                 if ($timeSinceLastCheck >= $gracePeriodSeconds) {

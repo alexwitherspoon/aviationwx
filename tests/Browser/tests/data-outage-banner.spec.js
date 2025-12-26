@@ -61,9 +61,10 @@ test.describe('Data Outage Banner', () => {
     await expect(banner).toHaveCount(0);
   });
 
-  test('should show outage banner when all sources exceed threshold', async ({ page }) => {
-    // Mock all data sources to be stale (older than DATA_OUTAGE_BANNER_HOURS = 1.5 hours)
-    const staleTimestamp = Math.floor(Date.now() / 1000) - (2 * 3600); // 2 hours ago
+  test('should show outage banner when all sources exceed failclosed threshold', async ({ page }) => {
+    // Mock all data sources to be stale (older than STALE_FAILCLOSED_SECONDS = 3 hours by default)
+    // Use 4 hours to ensure we're well past the threshold
+    const staleTimestamp = Math.floor(Date.now() / 1000) - (4 * 3600); // 4 hours ago
     
     await page.evaluate((timestamp) => {
       // Set weather data to be stale
@@ -212,7 +213,7 @@ test.describe('Data Outage Banner', () => {
     expect(timestampText).not.toBe('unknown time');
   });
 
-  test('should show webcam warning emoji when webcam exceeds MAX_STALE_HOURS', async ({ page }) => {
+  test('should show webcam warning emoji when webcam exceeds STALE_FAILCLOSED_SECONDS', async ({ page }) => {
     // Wait for page to load
     await page.waitForLoadState('networkidle');
     
@@ -223,7 +224,7 @@ test.describe('Data Outage Banner', () => {
       return;
     }
     
-    // Set webcam timestamp to be stale (exceeds MAX_STALE_HOURS = 3 hours)
+    // Set webcam timestamp to be stale (exceeds STALE_FAILCLOSED_SECONDS = 3 hours by default)
     const staleTimestamp = Math.floor(Date.now() / 1000) - (4 * 3600); // 4 hours ago
     
     await page.evaluate((timestamp) => {

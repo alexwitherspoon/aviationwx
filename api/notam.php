@@ -49,7 +49,14 @@ $cacheFile = __DIR__ . '/../cache/notam/' . $airportId . '.json';
 $cacheExists = file_exists($cacheFile);
 $cacheAge = $cacheExists ? (time() - filemtime($cacheFile)) : PHP_INT_MAX;
 $cacheTtl = getNotamCacheTtlSeconds();
-$isStale = $cacheAge > NOTAM_STALE_THRESHOLD;
+
+// 3-tier staleness model for NOTAMs
+$notamWarningThreshold = getNotamStaleWarningSeconds();
+$notamErrorThreshold = getNotamStaleErrorSeconds();
+$notamFailclosedThreshold = getNotamStaleFailclosedSeconds();
+
+// Trigger refresh when data reaches warning tier
+$isStale = $cacheAge > $notamWarningThreshold;
 
 // Load cached data if available
 $cachedData = null;

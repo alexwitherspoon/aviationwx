@@ -56,7 +56,8 @@ $outageStatus = checkDataOutageStatus($airportId, $airport);
 
 // Get source timestamps for detailed response
 $sourceTimestamps = getSourceTimestamps($airportId, $airport);
-$outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
+// Use failclosed threshold for outage detection
+$outageThresholdSeconds = getStaleFailclosedSeconds($airport);
 $now = time();
 
 // Build response with source details

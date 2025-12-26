@@ -5,7 +5,7 @@
  * Defines consistent aggregation behavior across all airports:
  * - Which fields must be grouped (wind)
  * - Which fields prefer METAR (visibility, ceiling)
- * - Staleness thresholds
+ * - Staleness thresholds (uses 3-tier model from constants.php)
  * 
  * These rules are global, not per-airport, for predictable behavior.
  * 
@@ -13,6 +13,9 @@
  */
 
 namespace AviationWX\Weather;
+
+// Load constants for staleness thresholds
+require_once __DIR__ . '/../constants.php';
 
 class AggregationPolicy {
     
@@ -83,43 +86,66 @@ class AggregationPolicy {
     ];
     
     /**
-     * Staleness warning multiplier
-     * 
-     * Data older than (update_frequency * WARNING_MULTIPLIER) triggers a warning
-     * but is still shown to users.
-     */
-    public const WARNING_MULTIPLIER = 5;
-    
-    /**
-     * Staleness error multiplier
-     * 
-     * Data older than (update_frequency * ERROR_MULTIPLIER) is NULLed out
-     * and not shown to users (fail closed).
-     */
-    public const ERROR_MULTIPLIER = 10;
-    
-    /**
-     * Maximum absolute staleness (hard limit)
-     * 
-     * Data older than this is always considered stale, regardless of source.
-     * This is the safety backstop.
-     */
-    public const MAX_STALE_SECONDS = 10800; // 3 hours
-    
-    /**
-     * METAR-specific staleness threshold
-     * 
-     * METAR updates hourly (with specials), so we allow longer staleness.
-     */
-    public const METAR_MAX_STALE_SECONDS = 7200; // 2 hours
-    
-    /**
      * Recovery cycles threshold
      * 
      * How many consecutive successful fetches before a previously-failed
      * source is considered healthy again.
      */
     public const RECOVERY_CYCLES = 3;
+    
+    // =========================================================================
+    // STALENESS THRESHOLDS (3-Tier Model)
+    // =========================================================================
+    // These methods provide access to staleness thresholds from constants.php
+    // Use these instead of hardcoded values for consistent behavior.
+    
+    /**
+     * Get stale warning threshold for weather data
+     * @return int Threshold in seconds
+     */
+    public static function getStaleWarningSeconds(): int {
+        return \DEFAULT_STALE_WARNING_SECONDS;
+    }
+    
+    /**
+     * Get stale error threshold for weather data
+     * @return int Threshold in seconds
+     */
+    public static function getStaleErrorSeconds(): int {
+        return \DEFAULT_STALE_ERROR_SECONDS;
+    }
+    
+    /**
+     * Get stale failclosed threshold for weather data (data hidden from user)
+     * @return int Threshold in seconds
+     */
+    public static function getStaleFailclosedSeconds(): int {
+        return \DEFAULT_STALE_FAILCLOSED_SECONDS;
+    }
+    
+    /**
+     * Get METAR stale warning threshold
+     * @return int Threshold in seconds
+     */
+    public static function getMetarStaleWarningSeconds(): int {
+        return \DEFAULT_METAR_STALE_WARNING_SECONDS;
+    }
+    
+    /**
+     * Get METAR stale error threshold
+     * @return int Threshold in seconds
+     */
+    public static function getMetarStaleErrorSeconds(): int {
+        return \DEFAULT_METAR_STALE_ERROR_SECONDS;
+    }
+    
+    /**
+     * Get METAR stale failclosed threshold
+     * @return int Threshold in seconds
+     */
+    public static function getMetarStaleFailclosedSeconds(): int {
+        return \DEFAULT_METAR_STALE_FAILCLOSED_SECONDS;
+    }
     
     /**
      * Check if a field is part of a group
@@ -157,37 +183,78 @@ class AggregationPolicy {
     }
     
     /**
-     * Calculate staleness threshold for a source
+     * Determine staleness tier for a given age
      * 
-     * @param int $updateFrequency Source's typical update frequency in seconds
+     * @param int $ageSeconds Age of data in seconds
      * @param bool $isMetar Whether this is a METAR source
-     * @return int Maximum acceptable age in seconds
+     * @return string 'fresh' | 'warning' | 'error' | 'failclosed'
      */
-    public static function calculateMaxAge(int $updateFrequency, bool $isMetar = false): int {
+    public static function getStaleTier(int $ageSeconds, bool $isMetar = false): string {
         if ($isMetar) {
-            return self::METAR_MAX_STALE_SECONDS;
+            if ($ageSeconds >= self::getMetarStaleFailclosedSeconds()) {
+                return 'failclosed';
+            }
+            if ($ageSeconds >= self::getMetarStaleErrorSeconds()) {
+                return 'error';
+            }
+            if ($ageSeconds >= self::getMetarStaleWarningSeconds()) {
+                return 'warning';
+            }
+            return 'fresh';
         }
         
-        // Use error multiplier for hard cutoff
-        $calculated = $updateFrequency * self::ERROR_MULTIPLIER;
-        
-        // Cap at absolute maximum
-        return min($calculated, self::MAX_STALE_SECONDS);
+        if ($ageSeconds >= self::getStaleFailclosedSeconds()) {
+            return 'failclosed';
+        }
+        if ($ageSeconds >= self::getStaleErrorSeconds()) {
+            return 'error';
+        }
+        if ($ageSeconds >= self::getStaleWarningSeconds()) {
+            return 'warning';
+        }
+        return 'fresh';
     }
     
     /**
-     * Calculate warning threshold for a source
+     * Check if data should be hidden (failclosed tier)
      * 
-     * @param int $updateFrequency Source's typical update frequency in seconds
+     * @param int $ageSeconds Age of data in seconds
+     * @param bool $isMetar Whether this is a METAR source
+     * @return bool True if data should be hidden from user
+     */
+    public static function isFailclosed(int $ageSeconds, bool $isMetar = false): bool {
+        return self::getStaleTier($ageSeconds, $isMetar) === 'failclosed';
+    }
+    
+    /**
+     * Get failclosed threshold for a source type
+     * This is the "stop showing data" threshold
+     * 
+     * @param bool $isMetar Whether this is a METAR source
+     * @return int Maximum acceptable age in seconds before failclosed
+     */
+    public static function getFailclosedThreshold(bool $isMetar = false): int {
+        return $isMetar ? self::getMetarStaleFailclosedSeconds() : self::getStaleFailclosedSeconds();
+    }
+    
+    /**
+     * Get warning threshold for a source type
+     * 
      * @param bool $isMetar Whether this is a METAR source
      * @return int Warning age threshold in seconds
      */
-    public static function calculateWarningAge(int $updateFrequency, bool $isMetar = false): int {
-        if ($isMetar) {
-            return 3600; // 1 hour warning for METAR
-        }
-        
-        return $updateFrequency * self::WARNING_MULTIPLIER;
+    public static function getWarningThreshold(bool $isMetar = false): int {
+        return $isMetar ? self::getMetarStaleWarningSeconds() : self::getStaleWarningSeconds();
+    }
+    
+    /**
+     * Get error threshold for a source type
+     * 
+     * @param bool $isMetar Whether this is a METAR source
+     * @return int Error age threshold in seconds
+     */
+    public static function getErrorThreshold(bool $isMetar = false): int {
+        return $isMetar ? self::getMetarStaleErrorSeconds() : self::getStaleErrorSeconds();
     }
 }
 

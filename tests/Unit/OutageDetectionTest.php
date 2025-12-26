@@ -224,8 +224,9 @@ class OutageDetectionTest extends TestCase
         $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
         
         // Create outage state file with last_checked beyond grace period
+        // Use failclosed threshold as the grace period
         $outageStartTime = time() - (3 * 3600);
-        $gracePeriodSeconds = DATA_OUTAGE_BANNER_HOURS * 3600;
+        $gracePeriodSeconds = DEFAULT_STALE_FAILCLOSED_SECONDS;
         $outageState = [
             'outage_start' => $outageStartTime,
             'last_checked' => time() - $gracePeriodSeconds - 100 // Beyond grace period

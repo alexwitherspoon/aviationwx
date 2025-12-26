@@ -2,7 +2,22 @@
   "config": {
     "default_timezone": "UTC",
     "base_domain": "aviationwx.org",
-    "max_stale_hours": 3,
+    
+    "_comment_staleness": "3-tier staleness thresholds (seconds). Can be overridden per-airport for webcams/weather.",
+    "stale_warning_seconds": 600,
+    "stale_error_seconds": 3600,
+    "stale_failclosed_seconds": 10800,
+    
+    "_comment_metar_staleness": "METAR-specific thresholds (global only, since METAR is hourly)",
+    "metar_stale_warning_seconds": 3600,
+    "metar_stale_error_seconds": 7200,
+    "metar_stale_failclosed_seconds": 10800,
+    
+    "_comment_notam_staleness": "NOTAM-specific thresholds (global only)",
+    "notam_stale_warning_seconds": 900,
+    "notam_stale_error_seconds": 1800,
+    "notam_stale_failclosed_seconds": 3600,
+    
     "webcam_refresh_default": 60,
     "weather_refresh_default": 60,
     "metar_refresh_seconds": 60,

@@ -689,9 +689,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
     $weatherRefresh = isset($airport['weather_refresh_seconds']) 
         ? intval($airport['weather_refresh_seconds']) 
         : getDefaultWeatherRefresh();
-    $maxStaleHours = getMaxStaleHours();
-    $maxStaleSeconds = $maxStaleHours * SECONDS_PER_HOUR;
-    $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * SECONDS_PER_HOUR;
+    
+    // 3-tier staleness thresholds
+    $warningSeconds = getStaleWarningSeconds($airport);
+    $errorSeconds = getStaleErrorSeconds($airport);
+    $failclosedSeconds = getStaleFailclosedSeconds($airport);
+    $metarFailclosedSeconds = getMetarStaleFailclosedSeconds();
     
     $weatherSources = [];
     
@@ -755,37 +758,40 @@ function checkAirportHealth(string $airportId, array $airport): array {
         if ($primaryLastChanged > 0) {
             $primaryAge = $sourceTimestamps['primary']['age'];
             
-            // METAR uses hourly thresholds (not multipliers) since updates are hourly at source
+            // Use 3-tier staleness model
             if ($sourceType === 'metar') {
-                // Use METAR-specific thresholds (same as supplement METAR logic)
-                if ($primaryAge < $weatherRefresh) {
+                // Use METAR-specific thresholds
+                $metarWarning = getMetarStaleWarningSeconds();
+                $metarError = getMetarStaleErrorSeconds();
+                $metarFailclosed = getMetarStaleFailclosedSeconds();
+                
+                if ($primaryAge < $metarWarning) {
                     $primaryStatus = 'operational';
                     $primaryMessage = 'Fresh';
-                } elseif ($primaryAge < $maxStaleSecondsMetar) {
+                } elseif ($primaryAge < $metarError) {
                     $primaryStatus = 'operational';
-                    $primaryMessage = 'Recent';
-                } elseif ($primaryAge < $maxStaleSeconds) {
+                    $primaryMessage = 'Recent (warning)';
+                } elseif ($primaryAge < $metarFailclosed) {
                     $primaryStatus = 'degraded';
-                    $primaryMessage = 'Stale (but usable)';
+                    $primaryMessage = 'Stale (error)';
                 } else {
                     $primaryStatus = 'down';
-                    $primaryMessage = 'Expired';
+                    $primaryMessage = 'Expired (failclosed)';
                 }
             } else {
-                // Use multiplier-based thresholds for non-METAR sources (Tempest, Ambient, WeatherLink)
-                // Operational from 0 to 5x refresh interval, degraded from 5x to 10x, down after 10x
-                $warningThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
-                $errorThreshold = $weatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER;
-                
-                if ($primaryAge < $warningThreshold) {
+                // Use general 3-tier staleness thresholds for non-METAR sources
+                if ($primaryAge < $warningSeconds) {
                     $primaryStatus = 'operational';
                     $primaryMessage = 'Operational';
-                } elseif ($primaryAge < min($errorThreshold, $maxStaleSeconds)) {
+                } elseif ($primaryAge < $errorSeconds) {
+                    $primaryStatus = 'operational';
+                    $primaryMessage = 'Recent (warning)';
+                } elseif ($primaryAge < $failclosedSeconds) {
                     $primaryStatus = 'degraded';
-                    $primaryMessage = 'Stale (warning)';
+                    $primaryMessage = 'Stale (error)';
                 } else {
                     $primaryStatus = 'down';
-                    $primaryMessage = ($primaryAge >= $maxStaleSeconds) ? 'Expired' : 'Stale (error)';
+                    $primaryMessage = 'Expired (failclosed)';
                 }
             }
         } else {
@@ -824,19 +830,20 @@ function checkAirportHealth(string $airportId, array $airport): array {
         if ($metarLastChanged > 0) {
             $metarAge = $sourceTimestamps['metar']['age'];
             
-            // METAR status thresholds:
-            // - Operational until 2 hours (WEATHER_STALENESS_ERROR_HOURS_METAR)
-            // - Degraded from 2-3 hours (between WEATHER_STALENESS_ERROR_HOURS_METAR and MAX_STALE_HOURS)
-            // - Down after 3 hours (MAX_STALE_HOURS)
-            if ($metarAge < $weatherRefresh) {
+            // METAR status using 3-tier staleness model
+            $metarWarning = getMetarStaleWarningSeconds();
+            $metarError = getMetarStaleErrorSeconds();
+            $metarFailclosed = getMetarStaleFailclosedSeconds();
+            
+            if ($metarAge < $metarWarning) {
                 $metarStatus = 'operational';
                 $metarMessage = 'Fresh';
-            } elseif ($metarAge < $maxStaleSecondsMetar) {
+            } elseif ($metarAge < $metarError) {
                 $metarStatus = 'operational';
-                $metarMessage = 'Recent';
-            } elseif ($metarAge < $maxStaleSeconds) {
+                $metarMessage = 'Recent (warning)';
+            } elseif ($metarAge < $metarFailclosed) {
                 $metarStatus = 'degraded';
-                $metarMessage = 'Stale (but usable)';
+                $metarMessage = 'Stale (error)';
             } else {
                 $metarStatus = 'down';
                 $metarMessage = 'Expired';
@@ -886,18 +893,14 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
                         ? time() - $weatherData['last_updated_primary']
                         : PHP_INT_MAX;
-                    $staleThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
-                    
                     // Backup is active if it has fresh data and primary is stale
-                    $backupActive = ($backupAge < $staleThreshold) && ($primaryAge >= $staleThreshold);
+                    $backupActive = ($backupAge < $warningSeconds) && ($primaryAge >= $warningSeconds);
                 }
             }
         }
         
         if ($backupLastChanged > 0) {
             $backupAge = $sourceTimestamps['backup']['age'];
-            $warningThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
-            $errorThreshold = $weatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER;
             
             // Check circuit breaker for backup
             require_once __DIR__ . '/../lib/circuit-breaker.php';
@@ -907,28 +910,34 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $backupStatus = 'failed';
                 $backupMessage = 'Circuit breaker open';
             } elseif ($backupActive) {
-                // Backup is active (providing data)
-                if ($backupAge < $warningThreshold) {
+                // Backup is active (providing data) - use 3-tier staleness
+                if ($backupAge < $warningSeconds) {
                     $backupStatus = 'operational';
                     $backupMessage = 'Active';
-                } elseif ($backupAge < min($errorThreshold, $maxStaleSeconds)) {
+                } elseif ($backupAge < $errorSeconds) {
+                    $backupStatus = 'operational';
+                    $backupMessage = 'Active (warning)';
+                } elseif ($backupAge < $failclosedSeconds) {
                     $backupStatus = 'degraded';
-                    $backupMessage = 'Active (stale)';
+                    $backupMessage = 'Active (error)';
                 } else {
                     $backupStatus = 'down';
-                    $backupMessage = 'Active (expired)';
+                    $backupMessage = 'Active (failclosed)';
                 }
             } else {
-                // Backup is in standby (configured but not active)
-                if ($backupAge < $warningThreshold) {
+                // Backup is in standby (configured but not active) - use 3-tier staleness
+                if ($backupAge < $warningSeconds) {
                     $backupStatus = 'operational';
                     $backupMessage = 'Standby (ready)';
-                } elseif ($backupAge < min($errorThreshold, $maxStaleSeconds)) {
+                } elseif ($backupAge < $errorSeconds) {
+                    $backupStatus = 'operational';
+                    $backupMessage = 'Standby (warning)';
+                } elseif ($backupAge < $failclosedSeconds) {
                     $backupStatus = 'degraded';
-                    $backupMessage = 'Standby (stale)';
+                    $backupMessage = 'Standby (error)';
                 } else {
                     $backupStatus = 'down';
-                    $backupMessage = 'Standby (expired)';
+                    $backupMessage = 'Standby (failclosed)';
                 }
             }
         } else {
@@ -1027,9 +1036,10 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $cacheAge = time() - @filemtime($cacheFile);
                 $camLastChanged = @filemtime($cacheFile) ?: 0;
                 
-                // Unified staleness logic: warning and error thresholds based on refresh interval
-                $warningThreshold = $webcamRefresh * WEBCAM_STALENESS_WARNING_MULTIPLIER;
-                $errorThreshold = $webcamRefresh * WEBCAM_STALENESS_ERROR_MULTIPLIER;
+                // 3-tier staleness thresholds (from config with airport override)
+                $warningThreshold = getStaleWarningSeconds($airport);
+                $errorThreshold = getStaleErrorSeconds($airport);
+                $failclosedThreshold = getStaleFailclosedSeconds($airport);
                 
                 // Check for error files (pull cameras only)
                 $errorFile = $cacheJpg . '.error.json';
@@ -1056,20 +1066,20 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 if ($hasError || $inBackoff) {
                     $camStatus = 'degraded';
                     $camMessage = $hasError ? 'Has errors' : 'In backoff';
-                } elseif ($cacheAge < $webcamRefresh) {
+                } elseif ($cacheAge < $warningThreshold) {
                     $camStatus = 'operational';
                     $camMessage = 'Fresh';
                     $healthyCams++;
-                } elseif ($cacheAge < $warningThreshold) {
-                    $camStatus = 'operational';
-                    $camMessage = 'Stale but usable';
-                    $healthyCams++;
                 } elseif ($cacheAge < $errorThreshold) {
-                    $camStatus = 'degraded';
+                    $camStatus = 'operational';
                     $camMessage = 'Stale (warning)';
+                    $healthyCams++;
+                } elseif ($cacheAge < $failclosedThreshold) {
+                    $camStatus = 'degraded';
+                    $camMessage = 'Stale (error)';
                 } else {
                     $camStatus = 'down';
-                    $camMessage = 'Stale (error)';
+                    $camMessage = 'Stale (failclosed)';
                 }
             } else {
                 $camStatus = 'down';

@@ -255,13 +255,214 @@ function getBaseDomain(): string {
     return getGlobalConfig('base_domain', 'aviationwx.org');
 }
 
+// =============================================================================
+// STALENESS THRESHOLD HELPERS (3-Tier Model)
+// =============================================================================
+// Cascade: airport → global config → built-in default
+// METAR and NOTAM: global config → built-in default (no airport override)
+
 /**
- * Get maximum stale hours from global config
- * @return int Maximum stale hours (default: 3)
+ * Get stale warning threshold in seconds
+ * Cascade: airport → global config → built-in default
+ * 
+ * @param array|null $airport Airport config (for airport-level override)
+ * @return int Threshold in seconds (enforces minimum)
  */
-function getMaxStaleHours(): int {
-    return (int)getGlobalConfig('max_stale_hours', 3);
+function getStaleWarningSeconds(?array $airport = null): int {
+    // Airport-level override
+    if ($airport !== null && isset($airport['stale_warning_seconds'])) {
+        return max(MIN_STALE_WARNING_SECONDS, intval($airport['stale_warning_seconds']));
+    }
+    
+    // Global config
+    $global = getGlobalConfig('stale_warning_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_WARNING_SECONDS, intval($global));
+    }
+    
+    // Built-in default
+    return DEFAULT_STALE_WARNING_SECONDS;
 }
+
+/**
+ * Get stale error threshold in seconds
+ * Cascade: airport → global config → built-in default
+ * 
+ * @param array|null $airport Airport config (for airport-level override)
+ * @return int Threshold in seconds (enforces minimum)
+ */
+function getStaleErrorSeconds(?array $airport = null): int {
+    // Airport-level override
+    if ($airport !== null && isset($airport['stale_error_seconds'])) {
+        return max(MIN_STALE_ERROR_SECONDS, intval($airport['stale_error_seconds']));
+    }
+    
+    // Global config
+    $global = getGlobalConfig('stale_error_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_ERROR_SECONDS, intval($global));
+    }
+    
+    return DEFAULT_STALE_ERROR_SECONDS;
+}
+
+/**
+ * Get stale failclosed threshold in seconds
+ * This is the "stop showing data" threshold
+ * Cascade: airport → global config → built-in default
+ * 
+ * @param array|null $airport Airport config (for airport-level override)
+ * @return int Threshold in seconds (enforces minimum)
+ */
+function getStaleFailclosedSeconds(?array $airport = null): int {
+    // Airport-level override
+    if ($airport !== null && isset($airport['stale_failclosed_seconds'])) {
+        return max(MIN_STALE_FAILCLOSED_SECONDS, intval($airport['stale_failclosed_seconds']));
+    }
+    
+    // Global config
+    $global = getGlobalConfig('stale_failclosed_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_FAILCLOSED_SECONDS, intval($global));
+    }
+    
+    return DEFAULT_STALE_FAILCLOSED_SECONDS;
+}
+
+/**
+ * Get all staleness thresholds as an array
+ * Useful for passing to JavaScript or APIs
+ * 
+ * @param array|null $airport Airport config (for airport-level override)
+ * @return array ['warning_seconds' => int, 'error_seconds' => int, 'failclosed_seconds' => int]
+ */
+function getStalenessThresholds(?array $airport = null): array {
+    return [
+        'warning_seconds' => getStaleWarningSeconds($airport),
+        'error_seconds' => getStaleErrorSeconds($airport),
+        'failclosed_seconds' => getStaleFailclosedSeconds($airport),
+    ];
+}
+
+/**
+ * Get METAR stale warning threshold in seconds (global only)
+ * @return int Threshold in seconds
+ */
+function getMetarStaleWarningSeconds(): int {
+    $global = getGlobalConfig('metar_stale_warning_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_WARNING_SECONDS, intval($global));
+    }
+    return DEFAULT_METAR_STALE_WARNING_SECONDS;
+}
+
+/**
+ * Get METAR stale error threshold in seconds (global only)
+ * @return int Threshold in seconds
+ */
+function getMetarStaleErrorSeconds(): int {
+    $global = getGlobalConfig('metar_stale_error_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_ERROR_SECONDS, intval($global));
+    }
+    return DEFAULT_METAR_STALE_ERROR_SECONDS;
+}
+
+/**
+ * Get METAR stale failclosed threshold in seconds (global only)
+ * @return int Threshold in seconds
+ */
+function getMetarStaleFailclosedSeconds(): int {
+    $global = getGlobalConfig('metar_stale_failclosed_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_FAILCLOSED_SECONDS, intval($global));
+    }
+    return DEFAULT_METAR_STALE_FAILCLOSED_SECONDS;
+}
+
+/**
+ * Get all METAR staleness thresholds as an array (global only)
+ * @return array ['warning_seconds' => int, 'error_seconds' => int, 'failclosed_seconds' => int]
+ */
+function getMetarStalenessThresholds(): array {
+    return [
+        'warning_seconds' => getMetarStaleWarningSeconds(),
+        'error_seconds' => getMetarStaleErrorSeconds(),
+        'failclosed_seconds' => getMetarStaleFailclosedSeconds(),
+    ];
+}
+
+/**
+ * Get NOTAM stale warning threshold in seconds (global only)
+ * @return int Threshold in seconds
+ */
+function getNotamStaleWarningSeconds(): int {
+    $global = getGlobalConfig('notam_stale_warning_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_WARNING_SECONDS, intval($global));
+    }
+    return DEFAULT_NOTAM_STALE_WARNING_SECONDS;
+}
+
+/**
+ * Get NOTAM stale error threshold in seconds (global only)
+ * @return int Threshold in seconds
+ */
+function getNotamStaleErrorSeconds(): int {
+    $global = getGlobalConfig('notam_stale_error_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_ERROR_SECONDS, intval($global));
+    }
+    return DEFAULT_NOTAM_STALE_ERROR_SECONDS;
+}
+
+/**
+ * Get NOTAM stale failclosed threshold in seconds (global only)
+ * @return int Threshold in seconds
+ */
+function getNotamStaleFailclosedSeconds(): int {
+    $global = getGlobalConfig('notam_stale_failclosed_seconds');
+    if ($global !== null) {
+        return max(MIN_STALE_FAILCLOSED_SECONDS, intval($global));
+    }
+    return DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS;
+}
+
+/**
+ * Get all NOTAM staleness thresholds as an array (global only)
+ * @return array ['warning_seconds' => int, 'error_seconds' => int, 'failclosed_seconds' => int]
+ */
+function getNotamStalenessThresholds(): array {
+    return [
+        'warning_seconds' => getNotamStaleWarningSeconds(),
+        'error_seconds' => getNotamStaleErrorSeconds(),
+        'failclosed_seconds' => getNotamStaleFailclosedSeconds(),
+    ];
+}
+
+/**
+ * Determine staleness tier for a given age
+ * 
+ * @param int $ageSeconds Age of data in seconds
+ * @param array $thresholds ['warning_seconds' => int, 'error_seconds' => int, 'failclosed_seconds' => int]
+ * @return string 'fresh' | 'warning' | 'error' | 'failclosed'
+ */
+function getStaleTier(int $ageSeconds, array $thresholds): string {
+    if ($ageSeconds >= $thresholds['failclosed_seconds']) {
+        return 'failclosed';
+    }
+    if ($ageSeconds >= $thresholds['error_seconds']) {
+        return 'error';
+    }
+    if ($ageSeconds >= $thresholds['warning_seconds']) {
+        return 'warning';
+    }
+    return 'fresh';
+}
+
+// =============================================================================
+// END STALENESS THRESHOLD HELPERS
+// =============================================================================
 
 /**
  * Get default webcam refresh interval from global config
@@ -1887,9 +2088,44 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
             
-            if (isset($cfg['max_stale_hours'])) {
-                if (!is_int($cfg['max_stale_hours']) || $cfg['max_stale_hours'] < 1) {
-                    $errors[] = "config.max_stale_hours must be a positive integer";
+            // Validate staleness thresholds (3-tier model)
+            $stalenessKeys = [
+                'stale_warning_seconds' => MIN_STALE_WARNING_SECONDS,
+                'stale_error_seconds' => MIN_STALE_ERROR_SECONDS,
+                'stale_failclosed_seconds' => MIN_STALE_FAILCLOSED_SECONDS,
+                'metar_stale_warning_seconds' => MIN_STALE_WARNING_SECONDS,
+                'metar_stale_error_seconds' => MIN_STALE_ERROR_SECONDS,
+                'metar_stale_failclosed_seconds' => MIN_STALE_FAILCLOSED_SECONDS,
+                'notam_stale_warning_seconds' => MIN_STALE_WARNING_SECONDS,
+                'notam_stale_error_seconds' => MIN_STALE_ERROR_SECONDS,
+                'notam_stale_failclosed_seconds' => MIN_STALE_FAILCLOSED_SECONDS,
+            ];
+            
+            foreach ($stalenessKeys as $key => $minValue) {
+                if (isset($cfg[$key])) {
+                    if (!is_int($cfg[$key]) || $cfg[$key] < $minValue) {
+                        $errors[] = "config.{$key} must be an integer >= {$minValue} seconds";
+                    }
+                }
+            }
+            
+            // Validate staleness ordering (warning < error < failclosed) for each category
+            $stalenessCategories = [
+                '' => ['stale_warning_seconds', 'stale_error_seconds', 'stale_failclosed_seconds'],
+                'metar_' => ['metar_stale_warning_seconds', 'metar_stale_error_seconds', 'metar_stale_failclosed_seconds'],
+                'notam_' => ['notam_stale_warning_seconds', 'notam_stale_error_seconds', 'notam_stale_failclosed_seconds'],
+            ];
+            
+            foreach ($stalenessCategories as $prefix => $keys) {
+                $warning = $cfg[$keys[0]] ?? null;
+                $error = $cfg[$keys[1]] ?? null;
+                $failclosed = $cfg[$keys[2]] ?? null;
+                
+                if ($warning !== null && $error !== null && $warning >= $error) {
+                    $errors[] = "config.{$keys[0]} must be less than {$keys[1]}";
+                }
+                if ($error !== null && $failclosed !== null && $error >= $failclosed) {
+                    $errors[] = "config.{$keys[1]} must be less than {$keys[2]}";
                 }
             }
             
@@ -2124,6 +2360,33 @@ function validateAirportsJsonStructure(array $config): array {
             if (!validateRefreshInterval($val, 5)) {
                 $errors[] = "Airport '{$airportCode}' has invalid webcam_refresh_seconds: {$val} (must be integer >= 5 seconds)";
             }
+        }
+        
+        // Validate airport-level staleness thresholds (3-tier model)
+        $airportStalenessKeys = [
+            'stale_warning_seconds' => MIN_STALE_WARNING_SECONDS,
+            'stale_error_seconds' => MIN_STALE_ERROR_SECONDS,
+            'stale_failclosed_seconds' => MIN_STALE_FAILCLOSED_SECONDS,
+        ];
+        
+        foreach ($airportStalenessKeys as $key => $minValue) {
+            if (isset($airport[$key])) {
+                if (!is_int($airport[$key]) || $airport[$key] < $minValue) {
+                    $errors[] = "Airport '{$airportCode}' has invalid {$key}: must be integer >= {$minValue} seconds";
+                }
+            }
+        }
+        
+        // Validate staleness ordering at airport level
+        $warning = $airport['stale_warning_seconds'] ?? null;
+        $error = $airport['stale_error_seconds'] ?? null;
+        $failclosed = $airport['stale_failclosed_seconds'] ?? null;
+        
+        if ($warning !== null && $error !== null && $warning >= $error) {
+            $errors[] = "Airport '{$airportCode}': stale_warning_seconds must be less than stale_error_seconds";
+        }
+        if ($error !== null && $failclosed !== null && $error >= $failclosed) {
+            $errors[] = "Airport '{$airportCode}': stale_error_seconds must be less than stale_failclosed_seconds";
         }
         
         // Validate webcam history settings (per-airport overrides)

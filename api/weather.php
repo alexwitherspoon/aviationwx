@@ -274,11 +274,9 @@ function generateMockWeatherData($airportId, $airport) {
     if ($age < $airportWeatherRefresh) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
-            // Safety check: Check per-source staleness
-            $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-            $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+            // Safety check: Apply failclosed staleness (hide data too old to display)
             $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
-            nullStaleFieldsBySource($cached, $maxStaleSeconds, $maxStaleSecondsMetar, $isMetarOnly);
+            applyFailclosedStaleness($cached, $airport, $isMetarOnly);
             
             // Set cache headers for cached responses
             // Use s-maxage to control Cloudflare cache separately from browser cache
@@ -332,11 +330,9 @@ function generateMockWeatherData($airportId, $airport) {
         $age = time() - filemtime($weatherCacheFile);
         $staleData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($staleData)) {
-            // Safety check: Check per-source staleness
-            $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-            $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+            // Safety check: Apply failclosed staleness (hide data too old to display)
             $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
-            nullStaleFieldsBySource($staleData, $maxStaleSeconds, $maxStaleSecondsMetar, $isMetarOnly);
+            applyFailclosedStaleness($staleData, $airport, $isMetarOnly);
             
             $hasStaleCache = true;
             
@@ -679,9 +675,9 @@ function generateMockWeatherData($airportId, $airport) {
             $debugInfo['field_obs_times_ages'][$field] = $now - $obsTime;
         }
         $debugInfo['staleness_thresholds'] = [
-            'refresh_interval' => $airportWeatherRefresh,
-            'warning_threshold' => $airportWeatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER,
-            'error_threshold' => $airportWeatherRefresh * WEATHER_STALENESS_ERROR_MULTIPLIER,
+            'warning_seconds' => getStaleWarningSeconds($airport),
+            'error_seconds' => getStaleErrorSeconds($airport),
+            'failclosed_seconds' => getStaleFailclosedSeconds($airport),
         ];
         $payload['debug'] = $debugInfo;
     }

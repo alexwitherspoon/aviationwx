@@ -41,33 +41,60 @@ if (!defined('CURL_MULTI_OVERALL_TIMEOUT')) {
     define('CURL_MULTI_OVERALL_TIMEOUT', 15);
 }
 
-// Staleness thresholds
-if (!defined('MAX_STALE_HOURS')) {
-    define('MAX_STALE_HOURS', 3);
+// =============================================================================
+// STALENESS THRESHOLDS (3-Tier Model)
+// =============================================================================
+// Unified staleness model for webcams and weather data:
+//   - Warning: Data is older than expected but still useful (yellow indicator)
+//   - Error: Data is questionable, shown with strong warning (red indicator)
+//   - Failclosed: Data too old to display, hidden from user (placeholder shown)
+//
+// These are built-in defaults. Can be overridden in airports.json at:
+//   - Global level: config.stale_*_seconds
+//   - Airport level: airport.stale_*_seconds (webcams/weather only)
+//
+// METAR and NOTAM have separate global-only thresholds due to their nature.
+
+// --- General staleness (webcams, weather) ---
+// Warning tier: Show yellow indicator, data still useful
+if (!defined('DEFAULT_STALE_WARNING_SECONDS')) {
+    define('DEFAULT_STALE_WARNING_SECONDS', 600); // 10 minutes
 }
-if (!defined('DATA_OUTAGE_BANNER_HOURS')) {
-    define('DATA_OUTAGE_BANNER_HOURS', 1.5); // Show outage banner when all sources are stale for this duration
+if (!defined('MIN_STALE_WARNING_SECONDS')) {
+    define('MIN_STALE_WARNING_SECONDS', 300); // 5 minutes minimum
 }
+
+// Error tier: Show red indicator, data questionable but shown
+if (!defined('DEFAULT_STALE_ERROR_SECONDS')) {
+    define('DEFAULT_STALE_ERROR_SECONDS', 3600); // 60 minutes
+}
+if (!defined('MIN_STALE_ERROR_SECONDS')) {
+    define('MIN_STALE_ERROR_SECONDS', 3600); // 60 minutes minimum
+}
+
+// Failclosed tier: Stop displaying data entirely (show placeholder)
+if (!defined('DEFAULT_STALE_FAILCLOSED_SECONDS')) {
+    define('DEFAULT_STALE_FAILCLOSED_SECONDS', 10800); // 3 hours
+}
+if (!defined('MIN_STALE_FAILCLOSED_SECONDS')) {
+    define('MIN_STALE_FAILCLOSED_SECONDS', 3600); // 60 minutes minimum
+}
+
+// --- METAR-specific thresholds (global only) ---
+// METAR is published hourly, so longer thresholds are appropriate
+if (!defined('DEFAULT_METAR_STALE_WARNING_SECONDS')) {
+    define('DEFAULT_METAR_STALE_WARNING_SECONDS', 3600); // 1 hour
+}
+if (!defined('DEFAULT_METAR_STALE_ERROR_SECONDS')) {
+    define('DEFAULT_METAR_STALE_ERROR_SECONDS', 7200); // 2 hours
+}
+if (!defined('DEFAULT_METAR_STALE_FAILCLOSED_SECONDS')) {
+    define('DEFAULT_METAR_STALE_FAILCLOSED_SECONDS', 10800); // 3 hours
+}
+
+// --- Stale-while-revalidate for background refresh ---
 if (!defined('STALE_WHILE_REVALIDATE_SECONDS')) {
     define('STALE_WHILE_REVALIDATE_SECONDS', 300);
-}
-
-// Weather staleness thresholds
-// METAR-only source thresholds (METARs are published hourly, so hour-based thresholds are appropriate)
-if (!defined('WEATHER_STALENESS_WARNING_HOURS_METAR')) {
-    define('WEATHER_STALENESS_WARNING_HOURS_METAR', 1); // Warning at 1 hour for METAR-only sources
-}
-if (!defined('WEATHER_STALENESS_ERROR_HOURS_METAR')) {
-    define('WEATHER_STALENESS_ERROR_HOURS_METAR', 2); // Error at 2 hours for METAR-only sources
-}
-
-// Weather staleness multipliers (for non-METAR sources - Tempest, Ambient, WeatherLink, etc.)
-// These use multiplier-based thresholds similar to webcams
-if (!defined('WEATHER_STALENESS_WARNING_MULTIPLIER')) {
-    define('WEATHER_STALENESS_WARNING_MULTIPLIER', 5); // Warning at 5x refresh interval
-}
-if (!defined('WEATHER_STALENESS_ERROR_MULTIPLIER')) {
-    define('WEATHER_STALENESS_ERROR_MULTIPLIER', 10); // Error at 10x refresh interval
 }
 
 // Primary source recovery thresholds (for switching back from backup to primary)
@@ -110,8 +137,15 @@ if (!defined('NOTAM_CACHE_TTL_DEFAULT')) {
 if (!defined('NOTAM_TOKEN_EXPIRY_BUFFER')) {
     define('NOTAM_TOKEN_EXPIRY_BUFFER', 60); // Refresh token 1 min before expiry
 }
-if (!defined('NOTAM_STALE_THRESHOLD')) {
-    define('NOTAM_STALE_THRESHOLD', 900); // 15 minutes (consider stale)
+// NOTAM staleness thresholds (global only, 3-tier model)
+if (!defined('DEFAULT_NOTAM_STALE_WARNING_SECONDS')) {
+    define('DEFAULT_NOTAM_STALE_WARNING_SECONDS', 900); // 15 minutes
+}
+if (!defined('DEFAULT_NOTAM_STALE_ERROR_SECONDS')) {
+    define('DEFAULT_NOTAM_STALE_ERROR_SECONDS', 1800); // 30 minutes
+}
+if (!defined('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS')) {
+    define('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS', 3600); // 1 hour
 }
 if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
     define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius
@@ -288,12 +322,6 @@ if (!function_exists('get_debug_log_path_host')) {
 // Status page thresholds
 if (!defined('STATUS_RECENT_LOG_THRESHOLD_SECONDS')) {
     define('STATUS_RECENT_LOG_THRESHOLD_SECONDS', SECONDS_PER_HOUR); // Logs considered recent if within 1 hour
-}
-if (!defined('WEBCAM_STALENESS_WARNING_MULTIPLIER')) {
-    define('WEBCAM_STALENESS_WARNING_MULTIPLIER', 5); // Warning at 5x refresh interval
-}
-if (!defined('WEBCAM_STALENESS_ERROR_MULTIPLIER')) {
-    define('WEBCAM_STALENESS_ERROR_MULTIPLIER', 10); // Error at 10x refresh interval
 }
 
 // METAR observation time parsing thresholds

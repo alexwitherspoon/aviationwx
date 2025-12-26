@@ -4,25 +4,32 @@
  * 
  * Functions for working with cached weather data, including staleness checks
  * for data that may have aged since it was cached.
+ * 
+ * Uses 3-tier staleness model:
+ *   - Warning: Data is old but still useful (user messaging)
+ *   - Error: Data is questionable (stronger user messaging)
+ *   - Failclosed: Data too old to display (hidden from user)
  */
 
 require_once __DIR__ . '/../constants.php';
+require_once __DIR__ . '/../config.php';
 
 /**
- * Null out stale weather fields in cached data
+ * Null out stale weather fields in cached data (failclosed tier)
  * 
  * When serving cached data, fields may have become stale since caching.
- * This function nulls out fields that exceed staleness thresholds.
+ * This function nulls out fields that exceed the FAILCLOSED threshold,
+ * meaning they are too old to be shown to users.
  * 
  * @param array &$data Weather data array (modified in place)
- * @param int $maxStaleSeconds Maximum age for primary source fields
- * @param int|null $maxStaleSecondsMetar Maximum age for METAR fields (defaults to $maxStaleSeconds)
+ * @param int $failclosedSeconds Failclosed threshold for primary source fields
+ * @param int|null $failclosedSecondsMetar Failclosed threshold for METAR fields (defaults to $failclosedSeconds)
  * @param bool $isMetarOnly True if this is a METAR-only source
  * @return void
  */
-function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar = null, $isMetarOnly = false) {
-    if ($maxStaleSecondsMetar === null) {
-        $maxStaleSecondsMetar = $maxStaleSeconds;
+function nullStaleFieldsBySource(&$data, $failclosedSeconds, $failclosedSecondsMetar = null, $isMetarOnly = false) {
+    if ($failclosedSecondsMetar === null) {
+        $failclosedSecondsMetar = $failclosedSeconds;
     }
     
     $primarySourceFields = [
@@ -42,18 +49,18 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar
     $fieldObsTimeMap = $data['_field_obs_time_map'] ?? [];
     
     // For METAR-only sources, ALL fields come from METAR, so use METAR threshold for all fields
-    $thresholdForPrimaryFields = $isMetarOnly ? $maxStaleSecondsMetar : $maxStaleSeconds;
+    $thresholdForPrimaryFields = $isMetarOnly ? $failclosedSecondsMetar : $failclosedSeconds;
     
     // Check primary source fields - use per-field obs times if available
-    $primaryStale = false;
+    $primaryFailclosed = false;
     $primarySourceAge = PHP_INT_MAX;
     if (isset($data['last_updated_primary']) && $data['last_updated_primary'] > 0) {
         $primarySourceAge = $now - $data['last_updated_primary'];
-        $primaryStale = ($primarySourceAge >= $thresholdForPrimaryFields);
+        $primaryFailclosed = ($primarySourceAge >= $thresholdForPrimaryFields);
     } elseif (isset($data['last_updated_metar']) && $data['last_updated_metar'] > 0 && $isMetarOnly) {
         // For METAR-only sources, use METAR timestamp for primary fields
         $primarySourceAge = $now - $data['last_updated_metar'];
-        $primaryStale = ($primarySourceAge >= $thresholdForPrimaryFields);
+        $primaryFailclosed = ($primarySourceAge >= $thresholdForPrimaryFields);
     }
     
     foreach ($primarySourceFields as $field) {
@@ -65,21 +72,21 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar
         if (isset($fieldObsTimeMap[$field]) && $fieldObsTimeMap[$field] > 0) {
             $fieldAge = $now - $fieldObsTimeMap[$field];
             if ($fieldAge >= $thresholdForPrimaryFields) {
-                // This specific field is stale - reject it
+                // This specific field has reached failclosed tier - hide it
                 $data[$field] = null;
             }
-        } elseif ($primaryStale) {
-            // No per-field obs time - fall back to source-level staleness check
+        } elseif ($primaryFailclosed) {
+            // No per-field obs time - fall back to source-level failclosed check
             $data[$field] = null;
         }
     }
     
     // Check METAR source fields - use per-field obs times if available
-    $metarStale = false;
+    $metarFailclosed = false;
     $metarSourceAge = PHP_INT_MAX;
     if (isset($data['last_updated_metar']) && $data['last_updated_metar'] > 0) {
         $metarSourceAge = $now - $data['last_updated_metar'];
-        $metarStale = ($metarSourceAge >= $maxStaleSecondsMetar);
+        $metarFailclosed = ($metarSourceAge >= $failclosedSecondsMetar);
     }
     
     foreach ($metarSourceFields as $field) {
@@ -90,12 +97,12 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar
         // Check per-field observation time if available
         if (isset($fieldObsTimeMap[$field]) && $fieldObsTimeMap[$field] > 0) {
             $fieldAge = $now - $fieldObsTimeMap[$field];
-            if ($fieldAge >= $maxStaleSecondsMetar) {
-                // This specific field is stale - reject it
+            if ($fieldAge >= $failclosedSecondsMetar) {
+                // This specific field has reached failclosed tier - hide it
                 $data[$field] = null;
             }
-        } elseif ($metarStale) {
-            // No per-field obs time - fall back to source-level staleness check
+        } elseif ($metarFailclosed) {
+            // No per-field obs time - fall back to source-level failclosed check
             $data[$field] = null;
         }
     }
@@ -107,5 +114,22 @@ function nullStaleFieldsBySource(&$data, $maxStaleSeconds, $maxStaleSecondsMetar
             $data['flight_category'] = calculateFlightCategory($data);
         }
     }
+}
+
+/**
+ * Apply failclosed staleness check using config-based thresholds
+ * 
+ * Convenience function that gets thresholds from config and applies them.
+ * 
+ * @param array &$data Weather data array (modified in place)
+ * @param array|null $airport Airport config for threshold override
+ * @param bool $isMetarOnly True if this is a METAR-only source
+ * @return void
+ */
+function applyFailclosedStaleness(&$data, ?array $airport = null, bool $isMetarOnly = false): void {
+    $failclosedSeconds = getStaleFailclosedSeconds($airport);
+    $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
+    
+    nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar, $isMetarOnly);
 }
 

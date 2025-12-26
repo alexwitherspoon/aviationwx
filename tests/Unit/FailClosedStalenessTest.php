@@ -5,12 +5,18 @@
  * Tests the fail-closed behavior where fields without obs_time entries
  * or fields exceeding staleness thresholds are hidden from display.
  * This is a critical safety feature for aviation weather data.
+ * 
+ * Uses the 3-tier staleness model:
+ *   - Warning: Data is old but still useful (user messaging)
+ *   - Error: Data is questionable (stronger user messaging)
+ *   - Failclosed: Data too old to display (hidden from user)
  */
 
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../api/weather.php';
 require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/config.php';
 
 class FailClosedStalenessTest extends TestCase
 {
@@ -35,8 +41,8 @@ class FailClosedStalenessTest extends TestCase
         require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
-        $refreshInterval = 60;
-        $staleThreshold = $refreshInterval * WEATHER_STALENESS_ERROR_MULTIPLIER; // 600 seconds
+        // Use failclosed threshold (3 hours = 10800 seconds by default)
+        $failclosedThreshold = DEFAULT_STALE_FAILCLOSED_SECONDS;
         
         // Create data with per-field observation times
         $data = [
@@ -44,18 +50,18 @@ class FailClosedStalenessTest extends TestCase
             'wind_speed' => 10,
             'pressure' => 30.12,
             '_field_obs_time_map' => [
-                'temperature' => $now - 300,  // 5 minutes ago (fresh)
-                'wind_speed' => $now - 700,   // 11+ minutes ago (stale)
-                'pressure' => $now - 100,     // 1.5 minutes ago (fresh)
+                'temperature' => $now - 300,                    // 5 minutes ago (fresh)
+                'wind_speed' => $now - ($failclosedThreshold + 100),  // Over failclosed threshold (stale)
+                'pressure' => $now - 100,                       // 1.5 minutes ago (fresh)
             ],
             'last_updated_primary' => $now - 300,
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
         // Use nullStaleFieldsBySource which checks per-field obs times
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
         // Temperature should remain (fresh)
         $this->assertEquals(15.0, $data['temperature']);
@@ -87,10 +93,10 @@ class FailClosedStalenessTest extends TestCase
             'last_updated_primary' => $now - 300,
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
         // Temperature should remain (has obs_time and is fresh)
         $this->assertEquals(15.0, $data['temperature']);
@@ -100,69 +106,68 @@ class FailClosedStalenessTest extends TestCase
     }
     
     /**
-     * Test METAR field staleness with 2-hour threshold
+     * Test METAR field staleness with failclosed threshold
      */
-    public function testMetarFieldStaleness_TwoHourThreshold()
+    public function testMetarFieldStaleness_FailclosedThreshold()
     {
         require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
-        $metarThreshold = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600; // 2 hours = 7200 seconds
+        $metarFailclosedThreshold = getMetarStaleFailclosedSeconds(); // 3 hours by default
         
-        // Create METAR data with obs_time just over 2 hours
+        // Create METAR data with obs_time just over failclosed threshold
         $data = [
             'visibility' => 10.0,
             'ceiling' => 5000,
             '_field_obs_time_map' => [
-                'visibility' => $now - ($metarThreshold + 100),  // Just over 2 hours (stale)
-                'ceiling' => $now - ($metarThreshold - 100),     // Just under 2 hours (fresh)
+                'visibility' => $now - ($metarFailclosedThreshold + 100),  // Just over failclosed (stale)
+                'ceiling' => $now - ($metarFailclosedThreshold - 100),     // Just under failclosed (fresh)
             ],
-            'last_updated_metar' => $now - ($metarThreshold + 100),
+            'last_updated_metar' => $now - ($metarFailclosedThreshold + 100),
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
-        // Visibility should be nulled (over 2 hours)
+        // Visibility should be nulled (over failclosed threshold)
         $this->assertNull($data['visibility']);
         
-        // Ceiling should remain (under 2 hours)
+        // Ceiling should remain (under failclosed threshold)
         $this->assertEquals(5000, $data['ceiling']);
     }
     
     /**
-     * Test non-METAR field staleness with 10x multiplier threshold
+     * Test non-METAR field staleness with failclosed threshold
      */
-    public function testNonMetarFieldStaleness_TenXThreshold()
+    public function testNonMetarFieldStaleness_FailclosedThreshold()
     {
         require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
-        $refreshInterval = 60;
-        $staleThreshold = $refreshInterval * WEATHER_STALENESS_ERROR_MULTIPLIER; // 600 seconds
+        $failclosedThreshold = getStaleFailclosedSeconds(); // 3 hours by default
         
-        // Create data with obs_time just over 10x threshold
+        // Create data with obs_time just over failclosed threshold
         $data = [
             'temperature' => 15.0,
             'wind_speed' => 10,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($staleThreshold + 100),  // Just over 10x (stale)
-                'wind_speed' => $now - ($staleThreshold - 100),  // Just under 10x (fresh)
+                'temperature' => $now - ($failclosedThreshold + 100),  // Just over failclosed (stale)
+                'wind_speed' => $now - ($failclosedThreshold - 100),  // Just under failclosed (fresh)
             ],
             'last_updated_primary' => $now - 300,
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
-        // Temperature should be nulled (over 10x threshold)
+        // Temperature should be nulled (over failclosed threshold)
         $this->assertNull($data['temperature']);
         
-        // Wind speed should remain (under 10x threshold)
+        // Wind speed should remain (under failclosed threshold)
         $this->assertEquals(10, $data['wind_speed']);
     }
     
@@ -174,8 +179,7 @@ class FailClosedStalenessTest extends TestCase
         require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
-        $refreshInterval = 60;
-        $staleThreshold = $refreshInterval * WEATHER_STALENESS_ERROR_MULTIPLIER;
+        $failclosedThreshold = getStaleFailclosedSeconds();
         
         // Create data where source fields for calculated fields are stale
         $data = [
@@ -189,19 +193,19 @@ class FailClosedStalenessTest extends TestCase
             'pressure_altitude' => 1000,
             'density_altitude' => 1200,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($staleThreshold + 100),  // Stale
+                'temperature' => $now - ($failclosedThreshold + 100),  // Stale (over failclosed)
                 'dewpoint' => $now - 300,  // Fresh
-                'pressure' => $now - ($staleThreshold + 100),  // Stale
+                'pressure' => $now - ($failclosedThreshold + 100),  // Stale (over failclosed)
                 'wind_speed' => $now - 300,  // Fresh
                 'gust_speed' => $now - 300,  // Fresh
             ],
             'last_updated_primary' => $now - 300,
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
         // Source fields should be nulled if stale
         $this->assertNull($data['temperature']);
@@ -215,60 +219,58 @@ class FailClosedStalenessTest extends TestCase
     }
     
     /**
-     * Test that fields with valid obs_time but exceeding threshold are nulled
+     * Test that fields with valid obs_time but exceeding failclosed threshold are nulled
      */
     public function testFieldExceedingThresholdIsNulled()
     {
         require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
-        $refreshInterval = 60;
-        $staleThreshold = $refreshInterval * WEATHER_STALENESS_ERROR_MULTIPLIER; // 600 seconds
+        $failclosedThreshold = getStaleFailclosedSeconds();
         
-        // Create data where field has obs_time but exceeds threshold
+        // Create data where field has obs_time but exceeds failclosed threshold
         $data = [
             'temperature' => 15.0,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($staleThreshold + 1),  // 1 second over threshold
+                'temperature' => $now - ($failclosedThreshold + 1),  // 1 second over threshold
             ],
             'last_updated_primary' => $now - 300,
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
-        // Temperature should be nulled (exceeds threshold)
+        // Temperature should be nulled (exceeds failclosed threshold)
         $this->assertNull($data['temperature']);
     }
     
     /**
-     * Test that fields with valid obs_time under threshold are preserved
+     * Test that fields with valid obs_time under failclosed threshold are preserved
      */
     public function testFieldUnderThresholdIsPreserved()
     {
         require_once __DIR__ . '/../../lib/weather/cache-utils.php';
         
         $now = time();
-        $refreshInterval = 60;
-        $staleThreshold = $refreshInterval * WEATHER_STALENESS_ERROR_MULTIPLIER; // 600 seconds
+        $failclosedThreshold = getStaleFailclosedSeconds();
         
-        // Create data where field has obs_time and is under threshold
+        // Create data where field has obs_time and is under failclosed threshold
         $data = [
             'temperature' => 15.0,
             '_field_obs_time_map' => [
-                'temperature' => $now - ($staleThreshold - 1),  // 1 second under threshold
+                'temperature' => $now - ($failclosedThreshold - 1),  // 1 second under threshold
             ],
             'last_updated_primary' => $now - 300,
         ];
         
-        $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-        $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+        $failclosedSeconds = getStaleFailclosedSeconds();
+        $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
-        nullStaleFieldsBySource($data, $maxStaleSeconds, $maxStaleSecondsMetar);
+        nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
-        // Temperature should be preserved (under threshold)
+        // Temperature should be preserved (under failclosed threshold)
         $this->assertEquals(15.0, $data['temperature']);
     }
 }

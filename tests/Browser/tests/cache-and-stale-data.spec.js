@@ -277,16 +277,22 @@ test.describe('Cache and Stale Data Handling', () => {
       const refreshSeconds = Math.max(1, AIRPORT_DATA.weather_refresh_seconds || 60);
       
       if (isMetarOnly) {
+        // Use new 3-tier staleness thresholds
         return {
           isMetarOnly: true,
-          warningSeconds: WEATHER_STALENESS_WARNING_HOURS_METAR * 3600,
-          errorSeconds: WEATHER_STALENESS_ERROR_HOURS_METAR * 3600
+          warningSeconds: typeof METAR_STALE_WARNING_SECONDS !== 'undefined' 
+            ? METAR_STALE_WARNING_SECONDS : 3600,
+          errorSeconds: typeof METAR_STALE_ERROR_SECONDS !== 'undefined'
+            ? METAR_STALE_ERROR_SECONDS : 7200
         };
       } else {
+        // Use new 3-tier staleness thresholds
         return {
           isMetarOnly: false,
-          warningSeconds: refreshSeconds * WEATHER_STALENESS_WARNING_MULTIPLIER,
-          errorSeconds: refreshSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER
+          warningSeconds: typeof STALE_WARNING_SECONDS !== 'undefined'
+            ? STALE_WARNING_SECONDS : 600,
+          errorSeconds: typeof STALE_ERROR_SECONDS !== 'undefined'
+            ? STALE_ERROR_SECONDS : 3600
         };
       }
     });
@@ -321,27 +327,25 @@ test.describe('Cache and Stale Data Handling', () => {
     }
     
     // Get the actual stale threshold based on weather source type
-    // For non-METAR sources: threshold = refresh_interval * 5 (warning multiplier)
-    // For METAR-only sources: threshold = 1 hour
+    // Uses new 3-tier staleness model with explicit thresholds
     const staleThresholdInfo = await page.evaluate(() => {
       if (typeof AIRPORT_DATA === 'undefined' || !AIRPORT_DATA) {
-        return { isMetarOnly: false, thresholdSeconds: 300 }; // Default: 5 minutes (60s * 5)
+        // Default to warning threshold (10 min = 600s)
+        return { isMetarOnly: false, thresholdSeconds: 600 };
       }
       
       const isMetarOnly = AIRPORT_DATA.weather_source && 
                           AIRPORT_DATA.weather_source.type === 'metar';
-      const refreshSeconds = Math.max(1, AIRPORT_DATA.weather_refresh_seconds || 60);
-      const warningMultiplier = typeof WEATHER_STALENESS_WARNING_MULTIPLIER !== 'undefined' 
-        ? WEATHER_STALENESS_WARNING_MULTIPLIER 
-        : 5;
       
+      // Use new 3-tier staleness thresholds
       if (isMetarOnly) {
-        const warningHours = typeof WEATHER_STALENESS_WARNING_HOURS_METAR !== 'undefined'
-          ? WEATHER_STALENESS_WARNING_HOURS_METAR
-          : 1;
-        return { isMetarOnly: true, thresholdSeconds: warningHours * 3600 };
+        const warningSeconds = typeof METAR_STALE_WARNING_SECONDS !== 'undefined'
+          ? METAR_STALE_WARNING_SECONDS : 3600;
+        return { isMetarOnly: true, thresholdSeconds: warningSeconds };
       } else {
-        return { isMetarOnly: false, thresholdSeconds: refreshSeconds * warningMultiplier };
+        const warningSeconds = typeof STALE_WARNING_SECONDS !== 'undefined'
+          ? STALE_WARNING_SECONDS : 600;
+        return { isMetarOnly: false, thresholdSeconds: warningSeconds };
       }
     });
     

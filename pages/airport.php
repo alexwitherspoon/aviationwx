@@ -1205,10 +1205,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             require_once __DIR__ . '/../lib/constants.php';
             require_once __DIR__ . '/../lib/circuit-breaker.php';
             
-            $weatherRefresh = isset($airport['weather_refresh_seconds']) 
-                ? intval($airport['weather_refresh_seconds']) 
-                : getDefaultWeatherRefresh();
-            $staleThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+            // Use warning threshold to determine if source is healthy
+            $staleThreshold = getStaleWarningSeconds($airport);
             
             // Check if primary is fresh and not in circuit breaker
             $primaryCircuit = checkWeatherCircuitBreaker($airportId, 'primary');
@@ -1237,10 +1235,8 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     $backupActive = ($weatherData['backup_status'] === 'active');
                 } else {
                     // Fallback: calculate based on timestamps (for backward compatibility)
-                    $weatherRefresh = isset($airport['weather_refresh_seconds']) 
-                        ? intval($airport['weather_refresh_seconds']) 
-                        : getDefaultWeatherRefresh();
-                    $staleThreshold = $weatherRefresh * WEATHER_STALENESS_WARNING_MULTIPLIER;
+                    // Use warning threshold to determine freshness
+                    $staleThreshold = getStaleWarningSeconds($airport);
                     
                     $backupAge = isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0
                         ? time() - $weatherData['last_updated_backup']
@@ -1470,15 +1466,13 @@ const INITIAL_WEATHER_DATA = <?php
             require_once __DIR__ . '/../lib/constants.php';
             require_once __DIR__ . '/../lib/weather/cache-utils.php';
             
-            $defaultWeatherRefresh = getDefaultWeatherRefresh();
-            $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) 
-                ? intval($airport['weather_refresh_seconds']) 
-                : $defaultWeatherRefresh;
-            $maxStaleSeconds = MAX_STALE_HOURS * 3600;
-            $maxStaleSecondsMetar = WEATHER_STALENESS_ERROR_HOURS_METAR * 3600;
+            // Get failclosed thresholds for staleness checks
+            $failclosedSeconds = getStaleFailclosedSeconds($airport);
+            $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
             
-            // Null out stale fields before embedding
-            nullStaleFieldsBySource($cachedWeather, $maxStaleSeconds, $maxStaleSecondsMetar);
+            // Null out stale fields before embedding (using failclosed threshold)
+            $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
+            nullStaleFieldsBySource($cachedWeather, $failclosedSeconds, $failclosedSecondsMetar, $isMetarOnly);
             
             $initialWeatherData = $cachedWeather;
         }
@@ -1521,13 +1515,17 @@ const RUNWAYS = <?php
     }
 ?>;
 
-// Weather staleness thresholds (from constants.php)
-const WEATHER_STALENESS_WARNING_HOURS_METAR = <?= WEATHER_STALENESS_WARNING_HOURS_METAR ?>;
-const WEATHER_STALENESS_ERROR_HOURS_METAR = <?= WEATHER_STALENESS_ERROR_HOURS_METAR ?>;
-const WEATHER_STALENESS_WARNING_MULTIPLIER = <?= WEATHER_STALENESS_WARNING_MULTIPLIER ?>;
-const WEATHER_STALENESS_ERROR_MULTIPLIER = <?= WEATHER_STALENESS_ERROR_MULTIPLIER ?>;
-const MAX_STALE_HOURS = <?= MAX_STALE_HOURS ?>;
-const DATA_OUTAGE_BANNER_HOURS = <?= DATA_OUTAGE_BANNER_HOURS ?>;
+// Staleness thresholds (3-tier model from config)
+// Thresholds cascade: airport config → global config → built-in defaults
+const STALE_WARNING_SECONDS = <?= getStaleWarningSeconds($airport) ?>;
+const STALE_ERROR_SECONDS = <?= getStaleErrorSeconds($airport) ?>;
+const STALE_FAILCLOSED_SECONDS = <?= getStaleFailclosedSeconds($airport) ?>;
+
+// METAR-specific thresholds (global only)
+const METAR_STALE_WARNING_SECONDS = <?= getMetarStaleWarningSeconds() ?>;
+const METAR_STALE_ERROR_SECONDS = <?= getMetarStaleErrorSeconds() ?>;
+const METAR_STALE_FAILCLOSED_SECONDS = <?= getMetarStaleFailclosedSeconds() ?>;
+
 const SECONDS_PER_HOUR = 3600;
 
 // Production logging removed - only log errors in console
@@ -2786,20 +2784,19 @@ function updateWeatherTimestamp() {
     // Use METAR-specific thresholds when using METAR-only source
     // METARs are published hourly, so thresholds are based on hours, not minutes
     // For non-METAR sources, use multiplier-based thresholds (similar to webcams)
-    let staleThresholdSeconds, veryStaleThresholdSeconds;
+    // Use 3-tier staleness model (warning, error, failclosed)
+    // METAR has its own thresholds since it's only published hourly
+    let warningThreshold, errorThreshold;
     if (isMetarOnly) {
-        // METAR thresholds: warning at 1 hour, very stale at 2 hours
-        staleThresholdSeconds = WEATHER_STALENESS_WARNING_HOURS_METAR * SECONDS_PER_HOUR;
-        veryStaleThresholdSeconds = WEATHER_STALENESS_ERROR_HOURS_METAR * SECONDS_PER_HOUR;
+        warningThreshold = METAR_STALE_WARNING_SECONDS;
+        errorThreshold = METAR_STALE_ERROR_SECONDS;
     } else {
-        // Primary source thresholds: use multiplier-based approach (like webcams)
-        // Warning at 5x refresh interval, error at 10x refresh interval
-        staleThresholdSeconds = weatherRefreshSeconds * WEATHER_STALENESS_WARNING_MULTIPLIER;
-        veryStaleThresholdSeconds = weatherRefreshSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER;
+        warningThreshold = STALE_WARNING_SECONDS;
+        errorThreshold = STALE_ERROR_SECONDS;
     }
     
-    const isStale = diffSeconds >= staleThresholdSeconds;
-    const isVeryStale = diffSeconds >= veryStaleThresholdSeconds;
+    const isStale = diffSeconds >= warningThreshold;
+    const isVeryStale = diffSeconds >= errorThreshold;
     
     // Show/hide warning elements based on staleness
     const weatherWarningEl = document.getElementById('weather-timestamp-warning');
@@ -2932,7 +2929,8 @@ function checkAndUpdateOutageBanner() {
             return; // Banner doesn't exist (not in outage state)
         }
     
-    const outageThresholdSeconds = DATA_OUTAGE_BANNER_HOURS * SECONDS_PER_HOUR;
+    // Outage banner shows when data reaches failclosed tier (too old to display)
+    const outageThresholdSeconds = STALE_FAILCLOSED_SECONDS;
     const now = Math.floor(Date.now() / 1000);
     const sources = [];
     let newestTimestamp = 0;
@@ -3332,14 +3330,9 @@ function isFieldStale(fieldName, weatherData, refreshIntervalSeconds, isMetarFie
     const now = Math.floor(Date.now() / 1000);
     const age = now - obsTime;
     
-    // METAR fields: use hour-based threshold (2 hours)
-    if (isMetarField) {
-        const staleThreshold = WEATHER_STALENESS_ERROR_HOURS_METAR * SECONDS_PER_HOUR;
-        return age >= staleThreshold;
-    }
-    
-    // Non-METAR fields: use multiplier-based threshold (10x refresh interval)
-    const staleThreshold = refreshIntervalSeconds * WEATHER_STALENESS_ERROR_MULTIPLIER;
+    // Use failclosed threshold to determine if field should be hidden
+    // METAR fields use METAR-specific thresholds
+    const staleThreshold = isMetarField ? METAR_STALE_FAILCLOSED_SECONDS : STALE_FAILCLOSED_SECONDS;
     return age >= staleThreshold;
 }
 
@@ -4633,9 +4626,8 @@ function updateTimestampDisplay(elem, timestamp) {
     // Format relative time
     const relativeTime = formatRelativeTime(diffSeconds);
     
-    // Check if webcam is stale (exceeds MAX_STALE_HOURS) and show warning emoji
-    const maxStaleSeconds = MAX_STALE_HOURS * SECONDS_PER_HOUR;
-    const isStale = diffSeconds >= maxStaleSeconds;
+    // Check if webcam is stale (exceeds failclosed threshold) and show warning emoji
+    const isStale = diffSeconds >= STALE_FAILCLOSED_SECONDS;
     
     // Get camera index once and reuse it
     const camIndex = lastCamIndexForElem(elem);
@@ -5337,12 +5329,12 @@ const webcamErrorHandled = new Set();
 
 /**
  * Check if a webcam image is stale and should show placeholder
+ * Uses failclosed threshold - data too old to display
  * 
  * @param {number} camIndex - Camera index
- * @param {number} maxStaleHours - Maximum stale hours from config
  * @returns {boolean} True if webcam should show placeholder
  */
-function isWebcamStale(camIndex, maxStaleHours) {
+function isWebcamStale(camIndex) {
     const timestamp = CAM_TS[camIndex] || 0;
     if (timestamp <= 0) {
         return true; // No timestamp = stale
@@ -5350,9 +5342,8 @@ function isWebcamStale(camIndex, maxStaleHours) {
     
     const now = Math.floor(Date.now() / 1000);
     const age = now - timestamp;
-    const staleThreshold = maxStaleHours * SECONDS_PER_HOUR;
     
-    return age >= staleThreshold;
+    return age >= STALE_FAILCLOSED_SECONDS;
 }
 
 // Handle webcam image load errors - show placeholder image
@@ -5964,14 +5955,10 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
 
             // Check if webcam is stale AFTER getting new timestamp
             // This ensures we check staleness on the actual current image, not the old cached timestamp
-            const maxStaleHours = (AIRPORT_DATA && AIRPORT_DATA.max_stale_hours) 
-                ? AIRPORT_DATA.max_stale_hours 
-                : MAX_STALE_HOURS;
-            
             // Update CAM_TS with new timestamp before checking staleness
             CAM_TS[camIndex] = newTs;
             
-            if (isWebcamStale(camIndex, maxStaleHours)) {
+            if (isWebcamStale(camIndex)) {
                 // Webcam is stale - show placeholder instead of loading stale image
                 if (imgEl) {
                     imgEl.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;

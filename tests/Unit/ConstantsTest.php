@@ -27,11 +27,21 @@ class ConstantsTest extends TestCase
             'CACHE_FILE_MAX_SIZE',
             'CURL_TIMEOUT',
             'CONFIG_CACHE_TTL',
-            'MAX_STALE_HOURS',
-            'WEATHER_STALENESS_WARNING_HOURS_METAR',
-            'WEATHER_STALENESS_ERROR_HOURS_METAR',
-            'WEATHER_STALENESS_WARNING_MULTIPLIER',
-            'WEATHER_STALENESS_ERROR_MULTIPLIER',
+            // 3-tier staleness constants (general)
+            'DEFAULT_STALE_WARNING_SECONDS',
+            'DEFAULT_STALE_ERROR_SECONDS',
+            'DEFAULT_STALE_FAILCLOSED_SECONDS',
+            'MIN_STALE_WARNING_SECONDS',
+            'MIN_STALE_ERROR_SECONDS',
+            'MIN_STALE_FAILCLOSED_SECONDS',
+            // 3-tier staleness constants (METAR)
+            'DEFAULT_METAR_STALE_WARNING_SECONDS',
+            'DEFAULT_METAR_STALE_ERROR_SECONDS',
+            'DEFAULT_METAR_STALE_FAILCLOSED_SECONDS',
+            // 3-tier staleness constants (NOTAM)
+            'DEFAULT_NOTAM_STALE_WARNING_SECONDS',
+            'DEFAULT_NOTAM_STALE_ERROR_SECONDS',
+            'DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS',
             'STALE_WHILE_REVALIDATE_SECONDS',
         ];
         
@@ -70,12 +80,13 @@ class ConstantsTest extends TestCase
         // Cache TTL should be positive
         $this->assertGreaterThan(0, CONFIG_CACHE_TTL, 'CONFIG_CACHE_TTL should be positive');
         
-        // Staleness thresholds should be positive
-        $this->assertGreaterThan(0, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be positive');
-        $this->assertGreaterThan(0, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be positive');
-        $this->assertGreaterThan(0, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be positive');
-        $this->assertGreaterThan(0, WEATHER_STALENESS_WARNING_MULTIPLIER, 'WEATHER_STALENESS_WARNING_MULTIPLIER should be positive');
-        $this->assertGreaterThan(0, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be positive');
+        // 3-tier staleness thresholds should be positive
+        $this->assertGreaterThan(0, DEFAULT_STALE_WARNING_SECONDS, 'DEFAULT_STALE_WARNING_SECONDS should be positive');
+        $this->assertGreaterThan(0, DEFAULT_STALE_ERROR_SECONDS, 'DEFAULT_STALE_ERROR_SECONDS should be positive');
+        $this->assertGreaterThan(0, DEFAULT_STALE_FAILCLOSED_SECONDS, 'DEFAULT_STALE_FAILCLOSED_SECONDS should be positive');
+        $this->assertGreaterThan(0, DEFAULT_METAR_STALE_WARNING_SECONDS, 'DEFAULT_METAR_STALE_WARNING_SECONDS should be positive');
+        $this->assertGreaterThan(0, DEFAULT_METAR_STALE_ERROR_SECONDS, 'DEFAULT_METAR_STALE_ERROR_SECONDS should be positive');
+        $this->assertGreaterThan(0, DEFAULT_METAR_STALE_FAILCLOSED_SECONDS, 'DEFAULT_METAR_STALE_FAILCLOSED_SECONDS should be positive');
         $this->assertGreaterThan(0, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be positive');
     }
     
@@ -116,47 +127,78 @@ class ConstantsTest extends TestCase
     }
     
     /**
-     * Test that staleness thresholds are reasonable
+     * Test that 3-tier staleness thresholds are reasonable
      */
     public function testStalenessThresholds_AreReasonable()
     {
-        // MAX_STALE_HOURS should be reasonable (e.g., between 1 and 24 hours)
-        $this->assertGreaterThanOrEqual(1, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be >= 1 hour');
-        $this->assertLessThanOrEqual(24, MAX_STALE_HOURS, 'MAX_STALE_HOURS should be <= 24 hours');
+        // General staleness thresholds should follow: warning < error < failclosed
+        $this->assertLessThan(DEFAULT_STALE_ERROR_SECONDS, DEFAULT_STALE_WARNING_SECONDS, 
+            'DEFAULT_STALE_WARNING_SECONDS should be < DEFAULT_STALE_ERROR_SECONDS');
+        $this->assertLessThan(DEFAULT_STALE_FAILCLOSED_SECONDS, DEFAULT_STALE_ERROR_SECONDS, 
+            'DEFAULT_STALE_ERROR_SECONDS should be < DEFAULT_STALE_FAILCLOSED_SECONDS');
         
-        // WEATHER_STALENESS_ERROR_HOURS_METAR should be reasonable (e.g., between 1 and 24 hours)
-        // METARs are published hourly, so 2 hours is appropriate
-        $this->assertGreaterThanOrEqual(1, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be >= 1 hour');
-        $this->assertLessThanOrEqual(24, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be <= 24 hours');
-        // METAR threshold should typically be <= primary threshold (since METARs are less frequent)
-        $this->assertLessThanOrEqual(MAX_STALE_HOURS, WEATHER_STALENESS_ERROR_HOURS_METAR, 'WEATHER_STALENESS_ERROR_HOURS_METAR should be <= MAX_STALE_HOURS');
+        // Warning should be reasonable (5 min to 1 hour)
+        $this->assertGreaterThanOrEqual(300, DEFAULT_STALE_WARNING_SECONDS, 'DEFAULT_STALE_WARNING_SECONDS should be >= 5 min');
+        $this->assertLessThanOrEqual(3600, DEFAULT_STALE_WARNING_SECONDS, 'DEFAULT_STALE_WARNING_SECONDS should be <= 1 hour');
         
-        // STALE_WHILE_REVALIDATE_SECONDS should be reasonable (e.g., between 60 and 3600 seconds)
+        // Error should be reasonable (30 min to 6 hours)
+        $this->assertGreaterThanOrEqual(1800, DEFAULT_STALE_ERROR_SECONDS, 'DEFAULT_STALE_ERROR_SECONDS should be >= 30 min');
+        $this->assertLessThanOrEqual(21600, DEFAULT_STALE_ERROR_SECONDS, 'DEFAULT_STALE_ERROR_SECONDS should be <= 6 hours');
+        
+        // Failclosed should be reasonable (1 hour to 24 hours)
+        $this->assertGreaterThanOrEqual(3600, DEFAULT_STALE_FAILCLOSED_SECONDS, 'DEFAULT_STALE_FAILCLOSED_SECONDS should be >= 1 hour');
+        $this->assertLessThanOrEqual(86400, DEFAULT_STALE_FAILCLOSED_SECONDS, 'DEFAULT_STALE_FAILCLOSED_SECONDS should be <= 24 hours');
+        
+        // STALE_WHILE_REVALIDATE_SECONDS should be reasonable (60s to 1 hour)
         $this->assertGreaterThanOrEqual(60, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be >= 60 seconds');
         $this->assertLessThanOrEqual(3600, STALE_WHILE_REVALIDATE_SECONDS, 'STALE_WHILE_REVALIDATE_SECONDS should be <= 1 hour');
     }
     
     /**
-     * Test that weather staleness thresholds are reasonable
+     * Test that METAR staleness thresholds are reasonable
      */
-    public function testWeatherStalenessThresholds_AreReasonable()
+    public function testMetarStalenessThresholds_AreReasonable()
     {
-        // METAR warning threshold should be reasonable (e.g., between 0.5 and 12 hours)
-        $this->assertGreaterThanOrEqual(0.5, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be >= 0.5 hours');
-        $this->assertLessThanOrEqual(12, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be <= 12 hours');
+        // METAR staleness thresholds should follow: warning < error < failclosed
+        $this->assertLessThan(DEFAULT_METAR_STALE_ERROR_SECONDS, DEFAULT_METAR_STALE_WARNING_SECONDS, 
+            'DEFAULT_METAR_STALE_WARNING_SECONDS should be < DEFAULT_METAR_STALE_ERROR_SECONDS');
+        $this->assertLessThan(DEFAULT_METAR_STALE_FAILCLOSED_SECONDS, DEFAULT_METAR_STALE_ERROR_SECONDS, 
+            'DEFAULT_METAR_STALE_ERROR_SECONDS should be < DEFAULT_METAR_STALE_FAILCLOSED_SECONDS');
         
-        // METAR warning should be <= METAR error threshold
-        $this->assertLessThanOrEqual(WEATHER_STALENESS_ERROR_HOURS_METAR, WEATHER_STALENESS_WARNING_HOURS_METAR, 'WEATHER_STALENESS_WARNING_HOURS_METAR should be <= WEATHER_STALENESS_ERROR_HOURS_METAR');
+        // METAR thresholds should be longer than general thresholds (since METAR is hourly)
+        $this->assertGreaterThanOrEqual(DEFAULT_STALE_WARNING_SECONDS, DEFAULT_METAR_STALE_WARNING_SECONDS,
+            'DEFAULT_METAR_STALE_WARNING_SECONDS should be >= DEFAULT_STALE_WARNING_SECONDS');
+    }
+    
+    /**
+     * Test that NOTAM staleness thresholds are reasonable
+     */
+    public function testNotamStalenessThresholds_AreReasonable()
+    {
+        // NOTAM staleness thresholds should follow: warning < error < failclosed
+        $this->assertLessThan(DEFAULT_NOTAM_STALE_ERROR_SECONDS, DEFAULT_NOTAM_STALE_WARNING_SECONDS, 
+            'DEFAULT_NOTAM_STALE_WARNING_SECONDS should be < DEFAULT_NOTAM_STALE_ERROR_SECONDS');
+        $this->assertLessThan(DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS, DEFAULT_NOTAM_STALE_ERROR_SECONDS, 
+            'DEFAULT_NOTAM_STALE_ERROR_SECONDS should be < DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS');
+    }
+    
+    /**
+     * Test that minimum staleness thresholds are enforced
+     */
+    public function testMinimumStalenessThresholds_AreEnforced()
+    {
+        // Minimums should be positive
+        $this->assertGreaterThan(0, MIN_STALE_WARNING_SECONDS, 'MIN_STALE_WARNING_SECONDS should be positive');
+        $this->assertGreaterThan(0, MIN_STALE_ERROR_SECONDS, 'MIN_STALE_ERROR_SECONDS should be positive');
+        $this->assertGreaterThan(0, MIN_STALE_FAILCLOSED_SECONDS, 'MIN_STALE_FAILCLOSED_SECONDS should be positive');
         
-        // Weather multipliers should be reasonable (e.g., between 2 and 20)
-        $this->assertGreaterThanOrEqual(2, WEATHER_STALENESS_WARNING_MULTIPLIER, 'WEATHER_STALENESS_WARNING_MULTIPLIER should be >= 2');
-        $this->assertLessThanOrEqual(20, WEATHER_STALENESS_WARNING_MULTIPLIER, 'WEATHER_STALENESS_WARNING_MULTIPLIER should be <= 20');
-        
-        $this->assertGreaterThanOrEqual(2, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be >= 2');
-        $this->assertLessThanOrEqual(20, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be <= 20');
-        
-        // Error multiplier should be >= warning multiplier
-        $this->assertGreaterThanOrEqual(WEATHER_STALENESS_WARNING_MULTIPLIER, WEATHER_STALENESS_ERROR_MULTIPLIER, 'WEATHER_STALENESS_ERROR_MULTIPLIER should be >= WEATHER_STALENESS_WARNING_MULTIPLIER');
+        // Defaults should be >= minimums
+        $this->assertGreaterThanOrEqual(MIN_STALE_WARNING_SECONDS, DEFAULT_STALE_WARNING_SECONDS,
+            'DEFAULT_STALE_WARNING_SECONDS should be >= MIN_STALE_WARNING_SECONDS');
+        $this->assertGreaterThanOrEqual(MIN_STALE_ERROR_SECONDS, DEFAULT_STALE_ERROR_SECONDS,
+            'DEFAULT_STALE_ERROR_SECONDS should be >= MIN_STALE_ERROR_SECONDS');
+        $this->assertGreaterThanOrEqual(MIN_STALE_FAILCLOSED_SECONDS, DEFAULT_STALE_FAILCLOSED_SECONDS,
+            'DEFAULT_STALE_FAILCLOSED_SECONDS should be >= MIN_STALE_FAILCLOSED_SECONDS');
     }
     
     /**
