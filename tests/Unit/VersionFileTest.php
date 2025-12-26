@@ -40,7 +40,7 @@ class VersionFileTest extends TestCase
         $content = file_get_contents($this->versionExampleFile);
         $json = json_decode($content, true);
         
-        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'force_cleanup', 'max_no_update_days'];
+        $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'force_cleanup', 'max_no_update_days', 'stuck_client_cleanup'];
         
         foreach ($requiredFields as $field) {
             $this->assertArrayHasKey(
@@ -62,6 +62,7 @@ class VersionFileTest extends TestCase
         $this->assertIsString($json['deploy_date'], 'deploy_date should be a string');
         $this->assertIsBool($json['force_cleanup'], 'force_cleanup should be a boolean');
         $this->assertIsInt($json['max_no_update_days'], 'max_no_update_days should be an integer');
+        $this->assertIsBool($json['stuck_client_cleanup'], 'stuck_client_cleanup should be a boolean');
     }
     
     public function testVersionFile_IfExists_IsValidJson(): void
@@ -85,6 +86,7 @@ class VersionFileTest extends TestCase
         $content = file_get_contents($this->versionFile);
         $json = json_decode($content, true);
         
+        // Note: emergency_cleanup_enabled is optional for backwards compatibility
         $requiredFields = ['hash', 'hash_full', 'timestamp', 'deploy_date', 'force_cleanup', 'max_no_update_days'];
         
         foreach ($requiredFields as $field) {

@@ -113,9 +113,12 @@ class WebcamRefreshInitializationTest extends TestCase
     }
     
     /**
-     * Test that setInterval is called for webcam refresh
+     * Test that timer worker is set up for webcam refresh
+     * 
+     * The timer worker system uses registerTimer() instead of setInterval() for
+     * reliable refresh that isn't throttled in background tabs.
      */
-    public function testAirportPage_SetsWebcamRefreshInterval()
+    public function testAirportPage_SetsWebcamRefreshTimer()
     {
         $response = $this->makeRequest("?airport={$this->airport}");
         
@@ -126,27 +129,40 @@ class WebcamRefreshInitializationTest extends TestCase
         
         $html = $response['body'];
         
-        // Check that setInterval is called with safeSwapCameraImage
-        // Should have: setInterval(() => { safeSwapCameraImage(...); }, ...);
-        // Use more flexible matching to handle different code formats
-        $hasSetInterval = strpos($html, 'setInterval') !== false;
+        // Check that timer worker is created
+        $hasTimerWorker = strpos($html, 'aviationwxTimerWorker') !== false;
+        $hasRegisterTimer = strpos($html, 'registerTimer') !== false;
         $hasSafeSwap = strpos($html, 'safeSwapCameraImage') !== false;
         $hasWebcams = preg_match('/id=["\']webcam-\d+["\']/', $html);
         
         if (!$hasWebcams) {
-            $this->markTestSkipped('No webcams found - setInterval may not be needed');
+            $this->markTestSkipped('No webcams found - timer registration may not be needed');
             return;
         }
         
-        // Both should exist
-        $this->assertTrue($hasSetInterval, 'setInterval should be present in HTML');
+        // Timer worker and registerTimer should exist
+        $this->assertTrue($hasTimerWorker, 'aviationwxTimerWorker should be present in HTML');
+        $this->assertTrue($hasRegisterTimer, 'registerTimer function should be present in HTML');
         $this->assertTrue($hasSafeSwap, 'safeSwapCameraImage should be present in HTML');
+    }
+    
+    /**
+     * Test that timer-lifecycle.js is included
+     */
+    public function testAirportPage_IncludesTimerLifecycleScript()
+    {
+        $response = $this->makeRequest("?airport={$this->airport}");
         
-        // Both should exist - proximity check removed as HTML can be large
-        // The important thing is that both are present, not that they're immediately adjacent
-        if ($hasSetInterval && $hasSafeSwap) {
-            $this->assertTrue(true, 'Both setInterval and safeSwapCameraImage are present');
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
         }
+        
+        $html = $response['body'];
+        
+        // Check that timer-lifecycle.js is included with defer
+        $hasScript = preg_match('/timer-lifecycle\.js\?v=[a-f0-9]+.*defer/', $html);
+        $this->assertTrue((bool)$hasScript, 'timer-lifecycle.js should be included with cache-bust and defer');
     }
     
     /**

@@ -200,5 +200,83 @@ class VersionApiTest extends TestCase
         
         $this->assertEquals(405, $httpCode, 'POST requests should return 405 Method Not Allowed');
     }
+    
+    /**
+     * Test that airport page sets version cookie
+     */
+    public function testAirportPage_SetsVersionCookie(): void
+    {
+        $this->skipIfServerUnavailable();
+        
+        $url = self::$baseUrl . '/?airport=kspb';
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+        
+        if ($httpCode !== 200) {
+            $this->markTestSkipped('Airport page not available');
+            return;
+        }
+        
+        $headers = substr($response, 0, $headerSize);
+        
+        // Check for version cookie in Set-Cookie header
+        $hasVersionCookie = preg_match('/Set-Cookie:\s*aviationwx_v=[a-f0-9]+\.\d+/i', $headers);
+        
+        $this->assertTrue((bool)$hasVersionCookie, 'Airport page should set aviationwx_v cookie');
+    }
+    
+    /**
+     * Test that version cookie format matches expected pattern
+     */
+    public function testAirportPage_VersionCookieFormat(): void
+    {
+        $this->skipIfServerUnavailable();
+        
+        $url = self::$baseUrl . '/?airport=kspb';
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+        
+        if ($httpCode !== 200) {
+            $this->markTestSkipped('Airport page not available');
+            return;
+        }
+        
+        $headers = substr($response, 0, $headerSize);
+        
+        // Extract cookie value
+        if (preg_match('/Set-Cookie:\s*aviationwx_v=([^;]+)/i', $headers, $matches)) {
+            $cookieValue = $matches[1];
+            
+            // Should be in format: hash.timestamp
+            $parts = explode('.', $cookieValue);
+            $this->assertCount(2, $parts, 'Cookie value should have two parts (hash.timestamp)');
+            
+            // First part should be hex hash (7 chars)
+            $this->assertMatchesRegularExpression('/^[a-f0-9]{7}$/i', $parts[0], 'First part should be 7-char hex hash');
+            
+            // Second part should be Unix timestamp
+            $timestamp = (int)$parts[1];
+            $this->assertGreaterThan(1700000000, $timestamp, 'Timestamp should be recent');
+            $this->assertLessThan(time() + 86400, $timestamp, 'Timestamp should not be in far future');
+        } else {
+            $this->fail('Could not find aviationwx_v cookie in response');
+        }
+    }
 }
 
