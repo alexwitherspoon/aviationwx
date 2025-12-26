@@ -2,7 +2,12 @@
   "config": {
     "default_timezone": "UTC",
     "base_domain": "aviationwx.org",
-    "max_stale_hours": 3,
+    "dead_man_switch_days": 7,
+    "force_cleanup": false,
+    "stuck_client_cleanup": false,
+    "stale_warning_seconds": 600,
+    "stale_error_seconds": 3600,
+    "stale_failclosed_seconds": 10800,
     "webcam_refresh_default": 60,
     "weather_refresh_default": 60,
     "public_api": {

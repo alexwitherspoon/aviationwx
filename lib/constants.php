@@ -424,6 +424,62 @@ if (!defined('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD')) {
     define('WEBCAM_ERROR_BORDER_VARIANCE_THRESHOLD', 200); // Variance <200 in borders = uniform/error frame
 }
 
+// Uniform color detection (solid color = failed camera, lens cap, corruption)
+// A healthy webcam image will NEVER be all one color - even fog/night/snow has variance
+if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD')) {
+    define('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD', 25); // Max channel variance <25 = essentially one color
+}
+if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')) {
+    define('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE', 50); // Only need ~50 samples for this check
+}
+
+// Pixelation detection using Laplacian variance (low variance = overly smooth/pixelated)
+// Measures edge sharpness - healthy images have sharp edges, pixelated images are blurry
+// Conservative thresholds to avoid false positives (fog, overcast, snow are legitimately soft)
+// Phase-specific thresholds: day has more detail, night is naturally softer
+//
+// Laplacian variance values:
+// - Crisp daytime image: 500-2000+
+// - Foggy/overcast: 100-300
+// - Night with lights: 50-200
+// - Dark night: 20-100
+// - Severely pixelated/corrupted: <10
+//
+// Thresholds are set conservatively low to avoid false positives
+if (!defined('WEBCAM_PIXELATION_THRESHOLD_DAY')) {
+    define('WEBCAM_PIXELATION_THRESHOLD_DAY', 15); // Day: reject if variance < 15
+}
+if (!defined('WEBCAM_PIXELATION_THRESHOLD_CIVIL')) {
+    define('WEBCAM_PIXELATION_THRESHOLD_CIVIL', 10); // Civil twilight: lower threshold
+}
+if (!defined('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL')) {
+    define('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL', 8); // Nautical twilight: even lower
+}
+if (!defined('WEBCAM_PIXELATION_THRESHOLD_NIGHT')) {
+    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 5); // Night: very conservative (dark images are soft)
+}
+// Sample size for Laplacian calculation (grid of NxN samples across image)
+if (!defined('WEBCAM_PIXELATION_SAMPLE_GRID')) {
+    define('WEBCAM_PIXELATION_SAMPLE_GRID', 20); // 20x20 grid = 400 sample points
+}
+
+// EXIF timestamp validation (fail closed - reject images with invalid timestamps)
+// All webcam images must have valid EXIF DateTimeOriginal before acceptance
+// Server-generated images (RTSP/MJPEG) have EXIF added immediately after capture
+// Push camera images must have camera-provided EXIF with valid timestamps
+if (!defined('WEBCAM_EXIF_MAX_FUTURE_SECONDS')) {
+    define('WEBCAM_EXIF_MAX_FUTURE_SECONDS', 3600); // 1 hour future = reject (clock misconfiguration)
+}
+if (!defined('WEBCAM_EXIF_MAX_AGE_SECONDS')) {
+    define('WEBCAM_EXIF_MAX_AGE_SECONDS', 86400); // 24 hours old = reject (stale image)
+}
+if (!defined('WEBCAM_EXIF_MIN_VALID_YEAR')) {
+    define('WEBCAM_EXIF_MIN_VALID_YEAR', 2020); // Before 2020 = garbage/corrupted EXIF
+}
+if (!defined('WEBCAM_EXIF_MAX_VALID_YEAR')) {
+    define('WEBCAM_EXIF_MAX_VALID_YEAR', 2100); // After 2100 = garbage/corrupted EXIF
+}
+
 // Climate bounds for weather data validation (Earth extremes + 10% margin)
 // Used to validate weather data quality and reject clearly invalid values
 // Temperature: -89.2°C to 56.7°C (Vostok Station, Antarctica to Death Valley, USA)

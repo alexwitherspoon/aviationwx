@@ -2138,7 +2138,12 @@ class ConfigValidationTest extends TestCase
             'config' => [
                 'default_timezone' => 'UTC',
                 'base_domain' => 'aviationwx.org',
-                'max_stale_hours' => 3,
+                'dead_man_switch_days' => 7,
+                'force_cleanup' => false,
+                'stuck_client_cleanup' => false,
+                'stale_warning_seconds' => 600,
+                'stale_error_seconds' => 3600,
+                'stale_failclosed_seconds' => 10800,
                 'webcam_refresh_default' => 60,
                 'weather_refresh_default' => 60
             ],
@@ -2155,11 +2160,15 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid global config should pass validation');
     }
 
-    public function testGlobalConfig_InvalidMaxStaleHours()
+    /**
+     * Test that legacy max_stale_hours field is ignored (replaced by 3-tier staleness model)
+     * The validator should NOT fail on unknown fields - they're simply ignored.
+     */
+    public function testGlobalConfig_LegacyMaxStaleHoursIgnored()
     {
         $config = [
             'config' => [
-                'max_stale_hours' => -1
+                'max_stale_hours' => -1  // Invalid value, but should be ignored
             ],
             'airports' => [
                 'kspb' => [
@@ -2171,8 +2180,8 @@ class ConfigValidationTest extends TestCase
         ];
         
         $result = validateAirportsJsonStructure($config);
-        $this->assertFalse($result['valid'], 'Global config with invalid max_stale_hours should fail validation');
-        $this->assertStringContainsString('max_stale_hours must be a positive integer', implode(' ', $result['errors']));
+        // Legacy field is ignored, not validated - config should pass
+        $this->assertTrue($result['valid'], 'Legacy max_stale_hours should be ignored (replaced by 3-tier staleness model)');
     }
 
     public function testGlobalConfig_InvalidBaseDomain()
@@ -2957,6 +2966,657 @@ class ConfigValidationTest extends TestCase
         // the function returns an array and handles missing config gracefully
         $result = getDefaultPreferencesForAirport('nonexistent');
         $this->assertIsArray($result, 'Should return an array even for nonexistent airport');
+    }
+
+    // =========================================================================
+    // Client Version Management Settings Validation
+    // =========================================================================
+
+    /**
+     * Test dead_man_switch_days validation - Valid values
+     */
+    public function testDeadManSwitchDays_Valid()
+    {
+        // Valid: 0 (disabled)
+        $config = $this->createMinimalConfig();
+        $config['config']['dead_man_switch_days'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'dead_man_switch_days = 0 should be valid');
+
+        // Valid: positive integer
+        $config['config']['dead_man_switch_days'] = 7;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'dead_man_switch_days = 7 should be valid');
+
+        // Valid: large positive integer
+        $config['config']['dead_man_switch_days'] = 365;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'dead_man_switch_days = 365 should be valid');
+    }
+
+    /**
+     * Test dead_man_switch_days validation - Invalid values
+     */
+    public function testDeadManSwitchDays_Invalid()
+    {
+        // Invalid: negative
+        $config = $this->createMinimalConfig();
+        $config['config']['dead_man_switch_days'] = -1;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Negative dead_man_switch_days should be invalid');
+        $this->assertStringContainsString('dead_man_switch_days', implode(' ', $result['errors']));
+
+        // Invalid: string
+        $config['config']['dead_man_switch_days'] = '7';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String dead_man_switch_days should be invalid');
+
+        // Invalid: float
+        $config['config']['dead_man_switch_days'] = 7.5;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Float dead_man_switch_days should be invalid');
+    }
+
+    /**
+     * Test force_cleanup validation - Valid values
+     */
+    public function testForceCleanup_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        
+        // Valid: true
+        $config['config']['force_cleanup'] = true;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'force_cleanup = true should be valid');
+
+        // Valid: false
+        $config['config']['force_cleanup'] = false;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'force_cleanup = false should be valid');
+    }
+
+    /**
+     * Test force_cleanup validation - Invalid values
+     */
+    public function testForceCleanup_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+
+        // Invalid: integer (truthy)
+        $config['config']['force_cleanup'] = 1;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Integer force_cleanup should be invalid');
+        $this->assertStringContainsString('force_cleanup', implode(' ', $result['errors']));
+
+        // Invalid: string
+        $config['config']['force_cleanup'] = 'true';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String force_cleanup should be invalid');
+    }
+
+    /**
+     * Test stuck_client_cleanup validation - Valid values
+     */
+    public function testStuckClientCleanup_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        
+        // Valid: true
+        $config['config']['stuck_client_cleanup'] = true;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'stuck_client_cleanup = true should be valid');
+
+        // Valid: false
+        $config['config']['stuck_client_cleanup'] = false;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'stuck_client_cleanup = false should be valid');
+    }
+
+    /**
+     * Test stuck_client_cleanup validation - Invalid values
+     */
+    public function testStuckClientCleanup_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+
+        // Invalid: integer
+        $config['config']['stuck_client_cleanup'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Integer stuck_client_cleanup should be invalid');
+        $this->assertStringContainsString('stuck_client_cleanup', implode(' ', $result['errors']));
+
+        // Invalid: string
+        $config['config']['stuck_client_cleanup'] = 'false';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String stuck_client_cleanup should be invalid');
+    }
+
+    // =========================================================================
+    // Worker Pool Settings Validation
+    // =========================================================================
+
+    /**
+     * Test weather_worker_pool_size validation
+     */
+    public function testWeatherWorkerPoolSize_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['weather_worker_pool_size'] = 5;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'weather_worker_pool_size = 5 should be valid');
+
+        $config['config']['weather_worker_pool_size'] = 1;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'weather_worker_pool_size = 1 should be valid');
+    }
+
+    public function testWeatherWorkerPoolSize_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        
+        // Invalid: zero
+        $config['config']['weather_worker_pool_size'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'weather_worker_pool_size = 0 should be invalid');
+        $this->assertStringContainsString('weather_worker_pool_size', implode(' ', $result['errors']));
+
+        // Invalid: negative
+        $config['config']['weather_worker_pool_size'] = -1;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Negative weather_worker_pool_size should be invalid');
+
+        // Invalid: string
+        $config['config']['weather_worker_pool_size'] = '5';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String weather_worker_pool_size should be invalid');
+    }
+
+    /**
+     * Test webcam_worker_pool_size validation
+     */
+    public function testWebcamWorkerPoolSize_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['webcam_worker_pool_size'] = 5;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'webcam_worker_pool_size = 5 should be valid');
+    }
+
+    public function testWebcamWorkerPoolSize_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['webcam_worker_pool_size'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'webcam_worker_pool_size = 0 should be invalid');
+        $this->assertStringContainsString('webcam_worker_pool_size', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test worker_timeout_seconds validation
+     */
+    public function testWorkerTimeoutSeconds_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['worker_timeout_seconds'] = 90;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'worker_timeout_seconds = 90 should be valid');
+    }
+
+    public function testWorkerTimeoutSeconds_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['worker_timeout_seconds'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'worker_timeout_seconds = 0 should be invalid');
+        $this->assertStringContainsString('worker_timeout_seconds', implode(' ', $result['errors']));
+    }
+
+    // =========================================================================
+    // Scheduler Settings Validation
+    // =========================================================================
+
+    /**
+     * Test minimum_refresh_seconds validation
+     */
+    public function testMinimumRefreshSeconds_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['minimum_refresh_seconds'] = 5;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'minimum_refresh_seconds = 5 should be valid');
+    }
+
+    public function testMinimumRefreshSeconds_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['minimum_refresh_seconds'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'minimum_refresh_seconds = 0 should be invalid');
+        $this->assertStringContainsString('minimum_refresh_seconds', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test scheduler_config_reload_seconds validation
+     */
+    public function testSchedulerConfigReloadSeconds_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['scheduler_config_reload_seconds'] = 60;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'scheduler_config_reload_seconds = 60 should be valid');
+    }
+
+    public function testSchedulerConfigReloadSeconds_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['scheduler_config_reload_seconds'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'scheduler_config_reload_seconds = 0 should be invalid');
+        $this->assertStringContainsString('scheduler_config_reload_seconds', implode(' ', $result['errors']));
+    }
+
+    // =========================================================================
+    // NOTAM Settings Validation
+    // =========================================================================
+
+    /**
+     * Test notam_refresh_seconds validation
+     */
+    public function testNotamRefreshSeconds_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_refresh_seconds'] = 600;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'notam_refresh_seconds = 600 should be valid');
+
+        $config['config']['notam_refresh_seconds'] = 60;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'notam_refresh_seconds = 60 (minimum) should be valid');
+    }
+
+    public function testNotamRefreshSeconds_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        
+        // Invalid: below minimum (60)
+        $config['config']['notam_refresh_seconds'] = 30;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'notam_refresh_seconds = 30 should be invalid');
+        $this->assertStringContainsString('notam_refresh_seconds', implode(' ', $result['errors']));
+
+        // Invalid: zero
+        $config['config']['notam_refresh_seconds'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'notam_refresh_seconds = 0 should be invalid');
+    }
+
+    /**
+     * Test notam_cache_ttl_seconds validation
+     */
+    public function testNotamCacheTtlSeconds_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_cache_ttl_seconds'] = 3600;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'notam_cache_ttl_seconds = 3600 should be valid');
+    }
+
+    public function testNotamCacheTtlSeconds_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_cache_ttl_seconds'] = 30;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'notam_cache_ttl_seconds = 30 should be invalid');
+        $this->assertStringContainsString('notam_cache_ttl_seconds', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test notam_worker_pool_size validation
+     */
+    public function testNotamWorkerPoolSize_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_worker_pool_size'] = 1;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'notam_worker_pool_size = 1 should be valid');
+    }
+
+    public function testNotamWorkerPoolSize_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_worker_pool_size'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'notam_worker_pool_size = 0 should be invalid');
+        $this->assertStringContainsString('notam_worker_pool_size', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test notam_api_client_id validation
+     */
+    public function testNotamApiClientId_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_api_client_id'] = 'some-client-id-123';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'String notam_api_client_id should be valid');
+
+        // Empty string is valid (means not configured)
+        $config['config']['notam_api_client_id'] = '';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Empty notam_api_client_id should be valid');
+    }
+
+    public function testNotamApiClientId_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_api_client_id'] = 12345;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Integer notam_api_client_id should be invalid');
+        $this->assertStringContainsString('notam_api_client_id', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test notam_api_client_secret validation
+     */
+    public function testNotamApiClientSecret_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_api_client_secret'] = 'secret-key-xyz';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'String notam_api_client_secret should be valid');
+    }
+
+    public function testNotamApiClientSecret_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['notam_api_client_secret'] = 12345;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Integer notam_api_client_secret should be invalid');
+        $this->assertStringContainsString('notam_api_client_secret', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test notam_api_base_url validation
+     */
+    public function testNotamApiBaseUrl_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        
+        // Valid HTTPS URL
+        $config['config']['notam_api_base_url'] = 'https://api.example.com';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'HTTPS notam_api_base_url should be valid');
+
+        // Valid HTTP URL (for dev environments)
+        $config['config']['notam_api_base_url'] = 'http://localhost:8080';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'HTTP notam_api_base_url should be valid');
+    }
+
+    public function testNotamApiBaseUrl_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+
+        // Invalid: no protocol
+        $config['config']['notam_api_base_url'] = 'api.example.com';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'notam_api_base_url without protocol should be invalid');
+        $this->assertStringContainsString('notam_api_base_url', implode(' ', $result['errors']));
+
+        // Invalid: ftp protocol
+        $config['config']['notam_api_base_url'] = 'ftp://example.com';
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'FTP notam_api_base_url should be invalid');
+    }
+
+    // =========================================================================
+    // Public API Settings Validation
+    // =========================================================================
+
+    /**
+     * Test public_api section - Valid complete config
+     */
+    public function testPublicApi_ValidComplete()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'enabled' => true,
+            'version' => '1',
+            'rate_limits' => [
+                'anonymous' => [
+                    'requests_per_minute' => 20,
+                    'requests_per_hour' => 200,
+                    'requests_per_day' => 2000
+                ],
+                'partner' => [
+                    'requests_per_minute' => 120,
+                    'requests_per_hour' => 5000,
+                    'requests_per_day' => 50000
+                ]
+            ],
+            'bulk_max_airports' => 10,
+            'weather_history_enabled' => true,
+            'weather_history_retention_hours' => 24,
+            'attribution_text' => 'Weather data from AviationWX.org',
+            'partner_keys' => [
+                'ak_live_example1234567890abcd' => [
+                    'name' => 'Example Partner',
+                    'contact' => 'developer@example.com',
+                    'enabled' => true,
+                    'created' => '2024-01-01',
+                    'notes' => 'Example partner API key'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid complete public_api config should pass: ' . implode(', ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.enabled validation
+     */
+    public function testPublicApiEnabled_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['enabled' => 'yes'];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String public_api.enabled should be invalid');
+        $this->assertStringContainsString('public_api.enabled', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.version validation
+     */
+    public function testPublicApiVersion_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['version' => 1];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Integer public_api.version should be invalid');
+        $this->assertStringContainsString('public_api.version', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.bulk_max_airports validation
+     */
+    public function testPublicApiBulkMaxAirports_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['bulk_max_airports' => 0];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Zero bulk_max_airports should be invalid');
+        $this->assertStringContainsString('bulk_max_airports', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.rate_limits validation
+     */
+    public function testPublicApiRateLimits_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        
+        // Invalid: rate_limits must be object
+        $config['config']['public_api'] = ['rate_limits' => 'invalid'];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'String rate_limits should be invalid');
+        $this->assertStringContainsString('rate_limits', implode(' ', $result['errors']));
+
+        // Invalid: nested rate_limit value not positive
+        $config['config']['public_api'] = [
+            'rate_limits' => [
+                'anonymous' => ['requests_per_minute' => 0]
+            ]
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Zero requests_per_minute should be invalid');
+        $this->assertStringContainsString('requests_per_minute', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.partner_keys validation - Invalid key format
+     */
+    public function testPublicApiPartnerKeys_InvalidKeyFormat()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'partner_keys' => [
+                'invalid_key_format' => [
+                    'name' => 'Test Partner'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Invalid partner key format should fail');
+        $this->assertStringContainsString('ak_live_', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.partner_keys validation - Missing required name
+     */
+    public function testPublicApiPartnerKeys_MissingName()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'partner_keys' => [
+                'ak_live_valid123' => [
+                    'contact' => 'test@example.com'
+                    // Missing 'name'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Missing partner key name should fail');
+        $this->assertStringContainsString('name', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.partner_keys validation - Valid test key prefix
+     */
+    public function testPublicApiPartnerKeys_ValidTestKey()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = [
+            'partner_keys' => [
+                'ak_test_devkey123' => [
+                    'name' => 'Development Key',
+                    'enabled' => false
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid ak_test_ key should pass: ' . implode(', ', $result['errors']));
+    }
+
+    // =========================================================================
+    // Existing Config Fields - Ensure Still Validated
+    // =========================================================================
+
+    /**
+     * Test webcam_refresh_default validation
+     */
+    public function testWebcamRefreshDefault_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['webcam_refresh_default'] = 60;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'webcam_refresh_default = 60 should be valid');
+    }
+
+    public function testWebcamRefreshDefault_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['webcam_refresh_default'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'webcam_refresh_default = 0 should be invalid');
+        $this->assertStringContainsString('webcam_refresh_default', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test weather_refresh_default validation
+     */
+    public function testWeatherRefreshDefault_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['weather_refresh_default'] = 60;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'weather_refresh_default = 60 should be valid');
+    }
+
+    public function testWeatherRefreshDefault_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['weather_refresh_default'] = 0;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'weather_refresh_default = 0 should be invalid');
+        $this->assertStringContainsString('weather_refresh_default', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test metar_refresh_seconds validation
+     */
+    public function testMetarRefreshSeconds_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['metar_refresh_seconds'] = 60;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'metar_refresh_seconds = 60 should be valid');
+    }
+
+    public function testMetarRefreshSeconds_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['metar_refresh_seconds'] = 30;
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'metar_refresh_seconds = 30 should be invalid');
+        $this->assertStringContainsString('metar_refresh_seconds', implode(' ', $result['errors']));
+    }
+
+    // =========================================================================
+    // Helper Methods
+    // =========================================================================
+
+    /**
+     * Create a minimal valid config for testing
+     */
+    private function createMinimalConfig(): array
+    {
+        return [
+            'config' => [
+                'default_timezone' => 'UTC',
+                'base_domain' => 'aviationwx.org'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0
+                ]
+            ]
+        ];
     }
 }
 

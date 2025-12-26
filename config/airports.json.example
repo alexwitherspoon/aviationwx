@@ -1,7 +1,14 @@
 {
+  "_README": "EXAMPLE CONFIGURATION FOR DEVELOPMENT - Copy to config/airports.json",
+  "_MOCK_MODE": "This file uses test_ API keys and example.com URLs. Mock mode auto-activates: weather returns simulated data, webcams show placeholders. See docs/TESTING.md",
   "config": {
     "default_timezone": "UTC",
-    "base_domain": "aviationwx.org",
+    "base_domain": "localhost",
+    
+    "_comment_version": "Client version management. dead_man_switch_days=0 disables. force_cleanup triggers immediate cleanup for all clients.",
+    "dead_man_switch_days": 7,
+    "force_cleanup": false,
+    "stuck_client_cleanup": false,
     
     "_comment_staleness": "3-tier staleness thresholds (seconds). Can be overridden per-airport for webcams/weather.",
     "stale_warning_seconds": 600,
@@ -114,13 +121,13 @@
       },
       "weather_source": {
         "type": "tempest",
-        "station_id": "YOUR_STATION_ID",
-        "api_key": "YOUR_TEMPEST_API_KEY"
+        "station_id": "demo_149918",
+        "api_key": "test_tempest_api_key_demo"
       },
       "weather_source_backup": {
         "type": "ambient",
-        "api_key": "YOUR_BACKUP_API_KEY",
-        "application_key": "YOUR_BACKUP_APPLICATION_KEY"
+        "api_key": "test_ambient_api_key_demo",
+        "application_key": "test_ambient_app_key_demo"
       },
       "webcams": [
         {
@@ -341,8 +348,8 @@
       "nearby_metar_stations": ["KTMK"],
       "weather_source": {
         "type": "synopticdata",
-        "station_id": "YOUR_SYNOPTICDATA_STATION_ID",
-        "api_token": "your-synopticdata-api-token"
+        "station_id": "demo_AT297",
+        "api_token": "test_synoptic_api_token_demo"
       }
     },
     "cust": {

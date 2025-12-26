@@ -221,6 +221,106 @@ function isTestMode(): bool {
 }
 
 /**
+ * Check if external services should be mocked
+ * 
+ * Mock mode is designed for developers without access to production secrets.
+ * When active:
+ * - Weather API calls return simulated data (via lib/test-mocks.php)
+ * - Webcam fetches return placeholder images (via lib/mock-webcam.php)
+ * - All features remain functional for UI development
+ * 
+ * Mock mode activates when:
+ * - LOCAL_DEV_MOCK=1 environment variable is set, OR
+ * - APP_ENV=testing (always mocks in test mode), OR
+ * - Config contains test API keys (prefixed with test_ or demo_), OR
+ * - Webcam URLs point to example.com
+ * 
+ * ## Usage
+ * Developers without secrets can start with mock mode:
+ * ```bash
+ * cp config/airports.json.example config/airports.json
+ * make dev  # Auto-detects test keys, enables mocking
+ * ```
+ * 
+ * ## Related Files
+ * - lib/test-mocks.php: HTTP response mocking for weather APIs
+ * - lib/mock-webcam.php: Placeholder webcam image generation
+ * - tests/mock-weather-responses.php: Weather API mock responses
+ * 
+ * @return bool True if external services should be mocked
+ */
+function shouldMockExternalServices(): bool {
+    // Always mock in test mode
+    if (isTestMode()) {
+        return true;
+    }
+    
+    // Explicit mock mode via environment variable
+    $mockEnv = getenv('LOCAL_DEV_MOCK');
+    if ($mockEnv === '1' || $mockEnv === 'true') {
+        return true;
+    }
+    if ($mockEnv === '0' || $mockEnv === 'false') {
+        return false;
+    }
+    
+    // Auto-detect: check if config contains test markers
+    // Use loadConfigRaw to avoid circular dependency with loadConfig()
+    $configFile = getConfigFilePath();
+    if ($configFile && file_exists($configFile)) {
+        $content = @file_get_contents($configFile);
+        if ($content) {
+            // Check for test API keys
+            if (preg_match('/"api_key"\s*:\s*"(test_|demo_)/', $content)) {
+                return true;
+            }
+            // Check for example.com webcam URLs
+            if (strpos($content, 'example.com') !== false) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Get the resolved config file path without loading config
+ * 
+ * Helper function to determine which config file would be used.
+ * Used by shouldMockExternalServices() to avoid circular dependency.
+ * 
+ * @return string|null Path to config file, or null if not found
+ */
+function getConfigFilePath(): ?string {
+    // Check CONFIG_PATH environment variable first
+    $envConfigPath = getenv('CONFIG_PATH');
+    if ($envConfigPath && file_exists($envConfigPath) && is_file($envConfigPath)) {
+        return $envConfigPath;
+    }
+    
+    // Check secrets path (Docker mount)
+    $secretsPath = '/var/www/html/secrets/airports.json';
+    if (file_exists($secretsPath)) {
+        return $secretsPath;
+    }
+    
+    // Check default config path
+    $defaultPath = __DIR__ . '/../config/airports.json';
+    if (file_exists($defaultPath) && is_file($defaultPath)) {
+        return $defaultPath;
+    }
+    
+    // Check adjacent secrets repo (local dev)
+    $adjacentSecrets = __DIR__ . '/../../aviationwx.org-secrets/airports.json';
+    if (file_exists($adjacentSecrets)) {
+        return $adjacentSecrets;
+    }
+    
+    return null;
+}
+
+/**
  * Get global configuration value with fallback to default
  * @param string $key Configuration key
  * @param mixed $default Default value if not set
@@ -757,6 +857,144 @@ function validateDefaultPreferences(mixed $preferences, string $context): array 
         $validValues = VALID_PREFERENCE_VALUES[$key];
         if (!in_array($value, $validValues, true)) {
             $errors[] = "{$context}.default_preferences.{$key} has invalid value '{$value}'. Allowed: " . implode(', ', $validValues);
+        }
+    }
+    
+    return $errors;
+}
+
+/**
+ * Validate public_api configuration section
+ * 
+ * Validates the nested public_api configuration including:
+ * - enabled flag
+ * - version string
+ * - rate_limits (anonymous and partner)
+ * - bulk_max_airports
+ * - weather_history settings
+ * - partner_keys
+ * 
+ * @param mixed $publicApi The public_api config value to validate
+ * @return array Array of error messages (empty if valid)
+ */
+function validatePublicApiConfig(mixed $publicApi): array {
+    $errors = [];
+    
+    if (!is_array($publicApi)) {
+        $errors[] = "config.public_api must be an object";
+        return $errors;
+    }
+    
+    // enabled: boolean
+    if (isset($publicApi['enabled'])) {
+        if (!is_bool($publicApi['enabled'])) {
+            $errors[] = "config.public_api.enabled must be a boolean (true or false)";
+        }
+    }
+    
+    // version: string
+    if (isset($publicApi['version'])) {
+        if (!is_string($publicApi['version'])) {
+            $errors[] = "config.public_api.version must be a string";
+        }
+    }
+    
+    // bulk_max_airports: positive integer
+    if (isset($publicApi['bulk_max_airports'])) {
+        if (!is_int($publicApi['bulk_max_airports']) || $publicApi['bulk_max_airports'] < 1) {
+            $errors[] = "config.public_api.bulk_max_airports must be a positive integer";
+        }
+    }
+    
+    // weather_history_enabled: boolean
+    if (isset($publicApi['weather_history_enabled'])) {
+        if (!is_bool($publicApi['weather_history_enabled'])) {
+            $errors[] = "config.public_api.weather_history_enabled must be a boolean";
+        }
+    }
+    
+    // weather_history_retention_hours: positive integer
+    if (isset($publicApi['weather_history_retention_hours'])) {
+        if (!is_int($publicApi['weather_history_retention_hours']) || $publicApi['weather_history_retention_hours'] < 1) {
+            $errors[] = "config.public_api.weather_history_retention_hours must be a positive integer";
+        }
+    }
+    
+    // attribution_text: string
+    if (isset($publicApi['attribution_text'])) {
+        if (!is_string($publicApi['attribution_text'])) {
+            $errors[] = "config.public_api.attribution_text must be a string";
+        }
+    }
+    
+    // rate_limits: object with anonymous and partner sub-objects
+    if (isset($publicApi['rate_limits'])) {
+        if (!is_array($publicApi['rate_limits'])) {
+            $errors[] = "config.public_api.rate_limits must be an object";
+        } else {
+            $rateLimitTypes = ['anonymous', 'partner'];
+            $rateLimitFields = ['requests_per_minute', 'requests_per_hour', 'requests_per_day'];
+            
+            foreach ($rateLimitTypes as $type) {
+                if (isset($publicApi['rate_limits'][$type])) {
+                    if (!is_array($publicApi['rate_limits'][$type])) {
+                        $errors[] = "config.public_api.rate_limits.{$type} must be an object";
+                    } else {
+                        foreach ($rateLimitFields as $field) {
+                            if (isset($publicApi['rate_limits'][$type][$field])) {
+                                $val = $publicApi['rate_limits'][$type][$field];
+                                if (!is_int($val) || $val < 1) {
+                                    $errors[] = "config.public_api.rate_limits.{$type}.{$field} must be a positive integer";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // partner_keys: object with API key entries
+    if (isset($publicApi['partner_keys'])) {
+        if (!is_array($publicApi['partner_keys'])) {
+            $errors[] = "config.public_api.partner_keys must be an object";
+        } else {
+            foreach ($publicApi['partner_keys'] as $apiKey => $keyConfig) {
+                // Validate API key format: ak_live_ or ak_test_ prefix
+                if (!is_string($apiKey) || !preg_match('/^ak_(live|test)_[a-zA-Z0-9]+$/', $apiKey)) {
+                    $errors[] = "config.public_api.partner_keys key '{$apiKey}' must match format ak_live_* or ak_test_*";
+                }
+                
+                if (!is_array($keyConfig)) {
+                    $errors[] = "config.public_api.partner_keys.{$apiKey} must be an object";
+                    continue;
+                }
+                
+                // Required: name
+                if (!isset($keyConfig['name']) || !is_string($keyConfig['name']) || empty($keyConfig['name'])) {
+                    $errors[] = "config.public_api.partner_keys.{$apiKey}.name is required and must be a non-empty string";
+                }
+                
+                // Optional: contact (string)
+                if (isset($keyConfig['contact']) && !is_string($keyConfig['contact'])) {
+                    $errors[] = "config.public_api.partner_keys.{$apiKey}.contact must be a string";
+                }
+                
+                // Optional: enabled (boolean)
+                if (isset($keyConfig['enabled']) && !is_bool($keyConfig['enabled'])) {
+                    $errors[] = "config.public_api.partner_keys.{$apiKey}.enabled must be a boolean";
+                }
+                
+                // Optional: created (string, ideally date format)
+                if (isset($keyConfig['created']) && !is_string($keyConfig['created'])) {
+                    $errors[] = "config.public_api.partner_keys.{$apiKey}.created must be a string";
+                }
+                
+                // Optional: notes (string)
+                if (isset($keyConfig['notes']) && !is_string($keyConfig['notes'])) {
+                    $errors[] = "config.public_api.partner_keys.{$apiKey}.notes must be a string";
+                }
+            }
         }
     }
     
@@ -2177,6 +2415,130 @@ function validateAirportsJsonStructure(array $config): array {
             if (isset($cfg['default_preferences'])) {
                 $prefErrors = validateDefaultPreferences($cfg['default_preferences'], 'config');
                 $errors = array_merge($errors, $prefErrors);
+            }
+            
+            // =========================================================================
+            // Client Version Management Settings
+            // =========================================================================
+            
+            // dead_man_switch_days: Days without update before cleanup triggers (0 = disabled)
+            if (isset($cfg['dead_man_switch_days'])) {
+                if (!is_int($cfg['dead_man_switch_days']) || $cfg['dead_man_switch_days'] < 0) {
+                    $errors[] = "config.dead_man_switch_days must be a non-negative integer (0 = disabled)";
+                }
+            }
+            
+            // force_cleanup: Emergency flag to force all clients to cleanup
+            if (isset($cfg['force_cleanup'])) {
+                if (!is_bool($cfg['force_cleanup'])) {
+                    $errors[] = "config.force_cleanup must be a boolean (true or false)";
+                }
+            }
+            
+            // stuck_client_cleanup: Inject cleanup for clients stuck on old code
+            if (isset($cfg['stuck_client_cleanup'])) {
+                if (!is_bool($cfg['stuck_client_cleanup'])) {
+                    $errors[] = "config.stuck_client_cleanup must be a boolean (true or false)";
+                }
+            }
+            
+            // =========================================================================
+            // Worker Pool Settings
+            // =========================================================================
+            
+            // weather_worker_pool_size: Number of concurrent weather fetch workers
+            if (isset($cfg['weather_worker_pool_size'])) {
+                if (!is_int($cfg['weather_worker_pool_size']) || $cfg['weather_worker_pool_size'] < 1) {
+                    $errors[] = "config.weather_worker_pool_size must be a positive integer";
+                }
+            }
+            
+            // webcam_worker_pool_size: Number of concurrent webcam fetch workers
+            if (isset($cfg['webcam_worker_pool_size'])) {
+                if (!is_int($cfg['webcam_worker_pool_size']) || $cfg['webcam_worker_pool_size'] < 1) {
+                    $errors[] = "config.webcam_worker_pool_size must be a positive integer";
+                }
+            }
+            
+            // worker_timeout_seconds: Maximum time for a single worker task
+            if (isset($cfg['worker_timeout_seconds'])) {
+                if (!is_int($cfg['worker_timeout_seconds']) || $cfg['worker_timeout_seconds'] < 1) {
+                    $errors[] = "config.worker_timeout_seconds must be a positive integer";
+                }
+            }
+            
+            // =========================================================================
+            // Scheduler Settings
+            // =========================================================================
+            
+            // minimum_refresh_seconds: Minimum allowed refresh interval
+            if (isset($cfg['minimum_refresh_seconds'])) {
+                if (!is_int($cfg['minimum_refresh_seconds']) || $cfg['minimum_refresh_seconds'] < 1) {
+                    $errors[] = "config.minimum_refresh_seconds must be a positive integer";
+                }
+            }
+            
+            // scheduler_config_reload_seconds: How often scheduler reloads config
+            if (isset($cfg['scheduler_config_reload_seconds'])) {
+                if (!is_int($cfg['scheduler_config_reload_seconds']) || $cfg['scheduler_config_reload_seconds'] < 1) {
+                    $errors[] = "config.scheduler_config_reload_seconds must be a positive integer";
+                }
+            }
+            
+            // =========================================================================
+            // NOTAM Settings
+            // =========================================================================
+            
+            // notam_refresh_seconds: How often to refresh NOTAM data
+            if (isset($cfg['notam_refresh_seconds'])) {
+                if (!is_int($cfg['notam_refresh_seconds']) || $cfg['notam_refresh_seconds'] < 60) {
+                    $errors[] = "config.notam_refresh_seconds must be an integer >= 60";
+                }
+            }
+            
+            // notam_cache_ttl_seconds: How long to cache NOTAM data
+            if (isset($cfg['notam_cache_ttl_seconds'])) {
+                if (!is_int($cfg['notam_cache_ttl_seconds']) || $cfg['notam_cache_ttl_seconds'] < 60) {
+                    $errors[] = "config.notam_cache_ttl_seconds must be an integer >= 60";
+                }
+            }
+            
+            // notam_worker_pool_size: Number of concurrent NOTAM fetch workers
+            if (isset($cfg['notam_worker_pool_size'])) {
+                if (!is_int($cfg['notam_worker_pool_size']) || $cfg['notam_worker_pool_size'] < 1) {
+                    $errors[] = "config.notam_worker_pool_size must be a positive integer";
+                }
+            }
+            
+            // notam_api_client_id: FAA NOTAM API client ID (string)
+            if (isset($cfg['notam_api_client_id'])) {
+                if (!is_string($cfg['notam_api_client_id'])) {
+                    $errors[] = "config.notam_api_client_id must be a string";
+                }
+            }
+            
+            // notam_api_client_secret: FAA NOTAM API client secret (string)
+            if (isset($cfg['notam_api_client_secret'])) {
+                if (!is_string($cfg['notam_api_client_secret'])) {
+                    $errors[] = "config.notam_api_client_secret must be a string";
+                }
+            }
+            
+            // notam_api_base_url: FAA NOTAM API base URL
+            if (isset($cfg['notam_api_base_url'])) {
+                if (!is_string($cfg['notam_api_base_url']) || 
+                    (strpos($cfg['notam_api_base_url'], 'http://') !== 0 && 
+                     strpos($cfg['notam_api_base_url'], 'https://') !== 0)) {
+                    $errors[] = "config.notam_api_base_url must be a valid HTTP/HTTPS URL";
+                }
+            }
+            
+            // =========================================================================
+            // Public API Settings
+            // =========================================================================
+            if (isset($cfg['public_api'])) {
+                $apiErrors = validatePublicApiConfig($cfg['public_api']);
+                $errors = array_merge($errors, $apiErrors);
             }
         }
     }
