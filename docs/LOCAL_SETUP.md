@@ -8,66 +8,69 @@ Complete guide for setting up AviationWX.org for local development and testing.
 - **Git** installed
 - **Text editor** for configuration files
 
-**Note**: This guide uses Docker for a consistent development environment. For a minimal PHP-based setup (without Docker), see [LOCAL_COMMANDS.md](docs/LOCAL_COMMANDS.md) for quick reference commands.
-
 ## Quick Start
 
-### 1. Clone and Configure
+There are two setup paths depending on your access level:
+
+### Option A: With Production Config (Maintainers)
+
+For developers with access to the secrets repository:
 
 ```bash
-# Clone the repository
+# 1. Clone both repositories
 git clone https://github.com/alexwitherspoon/aviationwx.git
+git clone git@github.com:org/aviationwx.org-secrets.git
+
 cd aviationwx
 
-# Initialize environment (creates .env from env.example)
-make init
-```
+# 2. Copy and configure the override file
+cp docker/docker-compose.override.yml.example docker/docker-compose.override.yml
+# Edit docker-compose.override.yml to point to your secrets path
 
-### 2. Edit Configuration
-
-Edit `.env` with your settings:
-
-```bash
-# Open .env in your editor
-nano .env
-# or
-code .env
-```
-
-**Minimum required changes**:
-- Keep defaults for local development
-- Domain setting only matters for production
-
-### 3. Create airports.json
-
-```bash
-# Copy from example
-cp airports.json.example airports.json
-
-# Edit with your API keys
-nano airports.json
-```
-
-**Important**: `airports.json` is gitignored and will not be pushed to GitHub.
-
-### 4. Generate Configuration
-
-```bash
-# Generate nginx and other configs from .env
-make config
-```
-
-### 5. Start Docker
-
-```bash
-# Build and start containers
-make up
-
-# Or use the full dev command (init + up + logs)
+# 3. Start development server
 make dev
 ```
 
-### 6. Test
+This setup uses real API keys and real webcam sources.
+
+### Option B: With Mock Data (Contributors)
+
+For developers without access to production secrets:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
+
+# 2. Copy example config (mock mode auto-activates)
+make config-example
+# Or manually: cp config/airports.json.example config/airports.json
+
+# 3. Start development server
+make dev
+```
+
+**Mock mode** automatically activates because the example config contains `test_` API keys and `example.com` URLs. In mock mode:
+- Weather data returns simulated values
+- Webcams display placeholder images with airport ID
+- All UI features work for development
+- No real API calls are made
+
+### Verify Your Setup
+
+```bash
+# Check configuration status
+make config-check
+
+# Expected output for mock mode:
+# Config file: /path/to/config/airports.json
+# Test mode: NO
+# Mock mode: YES (external services will be mocked)
+# Production: NO
+# Airports: 5 (kspb, kczk, kpfc, cust, 4or9)
+```
+
+## Access the Application
 
 Visit in your browser:
 - Homepage: http://localhost:8080

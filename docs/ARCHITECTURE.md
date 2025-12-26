@@ -34,8 +34,9 @@ aviationwx.org/
 │   ├── partner-logo-cache.php # Partner logo caching
 │   ├── push-webcam-validator.php # Push webcam validation
 │   ├── vpn-routing.php       # VPN routing utilities
-│   ├── webcam-error-detector.php # Webcam error frame detection
+│   ├── webcam-error-detector.php # Webcam image validation (error frames, pixelation, uniform color)
 │   ├── webcam-format-generation.php # Shared format generation (WebP, AVIF, JPEG)
+│   ├── exif-utils.php        # EXIF timestamp reading, writing, and validation
 │   └── weather/
 │       ├── UnifiedFetcher.php # Unified weather fetch pipeline
 │       ├── WeatherAggregator.php # Multi-source aggregation logic
@@ -44,6 +45,7 @@ aviationwx.org/
 │       ├── daily-tracking.php # Daily high/low tracking
 │       ├── cache-utils.php   # Cache staleness utilities
 │       ├── source-timestamps.php # Timestamp extraction
+│       ├── utils.php         # Weather utilities (timezone, sunrise/sunset, daylight phases)
 │       ├── data/             # Data classes
 │       │   ├── WeatherSnapshot.php # Complete weather state from source
 │       │   ├── WeatherReading.php  # Single field measurement
@@ -70,7 +72,9 @@ aviationwx.org/
 │   └── crontab               # Cron job definitions
 ├── public/
 │   ├── css/styles.css        # Application styles
-│   ├── js/service-worker.js  # Service worker for offline support
+│   ├── js/
+│   │   ├── service-worker.js # Service worker for offline support
+│   │   └── timer-lifecycle.js # Timer lifecycle management (deferred)
 │   └── favicons/             # Favicon files
 ├── docker/                   # Docker configuration files
 └── tests/                    # Test files
@@ -154,6 +158,46 @@ aviationwx.org/
   - Automatic cache invalidation on file change
   - Validation functions
   - Airport ID extraction from requests
+  - Environment-aware config resolution
+  - Mock mode detection for development
+
+**Configuration Resolution Order**:
+1. `APP_ENV=testing` → `tests/Fixtures/airports.json.test`
+2. `CONFIG_PATH` env var → specified file
+3. `secrets/airports.json` → Docker secrets mount
+4. `config/airports.json` → local development
+
+**Key Functions**:
+- `loadConfig()`: Main entry point, returns validated config
+- `isTestMode()`: True when `APP_ENV=testing`
+- `isProduction()`: True in production environment
+- `shouldMockExternalServices()`: True when APIs should be mocked
+- `getConfigFilePath()`: Returns resolved config path
+
+**Mock Mode Detection**:
+Mock mode activates automatically when:
+- `LOCAL_DEV_MOCK=1` environment variable is set, OR
+- `APP_ENV=testing`, OR
+- Config contains test API keys (`test_*` or `demo_*` prefix), OR
+- Webcam URLs point to `example.com`
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.
+
+### Mock Infrastructure
+
+**`lib/test-mocks.php`**: HTTP response mocking for weather APIs
+- Intercepts `curl` and `file_get_contents` calls in test mode
+- Returns consistent mock responses for all weather providers
+- Enables deterministic testing without real API keys
+
+**`lib/mock-webcam.php`**: Placeholder webcam image generation
+- Generates identifiable placeholders with airport ID
+- Used when real webcams are unavailable
+- Includes timestamp for debugging refresh cycles
+
+**`tests/mock-weather-responses.php`**: Weather API mock data
+- Provides consistent values across all weather sources
+- Covers Tempest, Ambient, WeatherLink, METAR, etc.
 
 ### SEO System (`lib/seo.php`, `api/sitemap.php`)
 
@@ -207,7 +251,22 @@ aviationwx.org/
   - Fetches `/api/v1/version.php` during idle time (non-blocking)
   - Triggers full cleanup if no update in 7 days or if server sets `force_cleanup` flag
 - **Version File**: `config/version.json` generated during deploy with git hash and timestamp
+  - Configuration values sourced from `airports.json` config section
+- **Version Cookie** (`aviationwx_v`): Cross-subdomain cookie set on every response containing hash.timestamp
+  - Server detects stuck clients by missing/stale cookie
+  - Cleanup injected when `stuck_client_cleanup: true` in config
 - See [Operations Guide](OPERATIONS.md#client-version-management) for emergency cleanup procedures
+
+**Timer Worker System**:
+- **Web Worker** (inline Blob URL): Provides reliable timer management not throttled in background tabs
+- **Timer Lifecycle** (`public/js/timer-lifecycle.js`): Deferred script handling visibility, health monitoring, and cleanup
+- **Platform-Aware**:
+  - Desktop: 1-second tick resolution, continues in background tabs
+  - Mobile: 10-second tick resolution, pauses when tab is hidden
+- **Used For**:
+  - Webcam refresh (per-camera intervals, typically 60-900 seconds)
+  - Weather refresh (configurable, default 60 seconds)
+- **Fallback**: Graceful degradation to setInterval if Workers unavailable
 
 ## Data Flow
 

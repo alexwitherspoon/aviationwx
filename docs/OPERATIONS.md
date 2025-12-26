@@ -334,7 +334,8 @@ If you need to force ALL clients to clear their caches and reload:
        "timestamp": 1735142400,
        "deploy_date": "2025-12-25T12:00:00Z",
        "force_cleanup": true,
-       "max_no_update_days": 7
+       "max_no_update_days": 7,
+       "stuck_client_cleanup": false
    }
    ```
 
@@ -353,14 +354,38 @@ If you need to force ALL clients to clear their caches and reload:
 The `config/version.json` file is automatically generated during deployment by `scripts/deploy-update-cache-version.sh`. It contains:
 - Git hash of the current deployment
 - Deploy timestamp
-- Configuration for the dead man's switch
+- Configuration for the dead man's switch (sourced from `airports.json`)
 
-**Note**: This file is gitignored and only exists in production.
+**Note**: This file is gitignored and generated at deploy time. Configuration values are read from `airports.json` global config section.
 
-### Dead Man's Switch Thresholds
+### Configuration in airports.json
 
-- **max_no_update_days**: Days without SW update before cleanup (default: 7)
-- Cleanup also triggers if client build is older than threshold AND has no update record
+Add these to the `config` section of `airports.json` to control version management:
+
+```json
+{
+  "config": {
+    "dead_man_switch_days": 7,
+    "force_cleanup": false,
+    "stuck_client_cleanup": false,
+    ...
+  }
+}
+```
+
+- **dead_man_switch_days**: Days without SW update before cleanup triggers (default: 7, set to 0 to disable)
+- **force_cleanup**: Emergency flag to force ALL clients to cleanup immediately (default: false)
+- **stuck_client_cleanup**: Inject cleanup for clients stuck on old code (default: false)
+
+### Stuck Client Cleanup
+
+The `stuck_client_cleanup` flag controls server-side injection of cleanup scripts for clients stuck on old code:
+
+- **`false`** (default): Disabled. Safe default for normal operation.
+- **`true`**: Injects cleanup scripts for clients missing the version cookie but having other aviationwx cookies.
+
+**When to enable:**
+Set `stuck_client_cleanup: true` in `airports.json` temporarily after major deployments to catch clients stuck on old code. After 30-60 days, set it back to `false`.
 
 ### Monitoring
 

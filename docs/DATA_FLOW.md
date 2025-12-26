@@ -726,6 +726,14 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
    - Verifies file exists and has content
    - Checks file size > 0
    - Validates JPEG format (if GD available)
+   - **Uniform Color Detection**: Rejects solid color images (lens cap, dead camera, corruption)
+   - **Pixelation Detection**: Rejects severely pixelated images using Laplacian variance
+     - Uses phase-aware thresholds (day/twilight/night)
+     - Night images use more lenient thresholds (naturally softer)
+   - **Blue Iris Error Detection**: Rejects error frames with grey borders and white text
+   - **EXIF Timestamp Validation**: Rejects images with invalid/missing timestamps
+     - Server-generated images (RTSP/MJPEG) have EXIF added immediately after capture
+     - Push camera images must have camera-provided EXIF
 
 7. **Format Generation** (if successful)
    - Generates WebP and AVIF formats for modern browsers

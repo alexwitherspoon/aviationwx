@@ -17,7 +17,8 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 
 ## Quick Links
 
-- 🚀 **[Getting Started](docs/LOCAL_SETUP.md)** - Local development setup
+- 🚀 **[Getting Started](docs/LOCAL_SETUP.md)** - Local development setup (with or without secrets)
+- 🧪 **[Testing Guide](docs/TESTING.md)** - Test strategy, running tests, mock mode
 - 🖥️ **[Deploy to Production](docs/DEPLOYMENT.md)** - Complete deployment guide
 - 📖 **[Configure Airports](docs/CONFIGURATION.md)** - Add and configure airports
 - 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - System design and components
@@ -100,22 +101,33 @@ See [API documentation](https://api.aviationwx.org) for full endpoint details, a
 
 ### For Developers
 
+**Option A: With mock data (new contributors)**
 ```bash
-# Clone repository
+# Clone and start with example config
 git clone https://github.com/alexwitherspoon/aviationwx.git
 cd aviationwx
 
-# Initialize and start
-make init        # Create .env from example
-make config      # Generate configs
-cp config/airports.json.example config/airports.json
-# Edit config/airports.json with your API keys
-make up          # Start Docker containers
+make config-example  # Copy example config (mock mode auto-activates)
+make dev             # Start development server
 
 # Access: http://localhost:8080
+# Mock mode: Weather shows simulated data, webcams show placeholders
 ```
 
-See [Local Development Setup](docs/LOCAL_SETUP.md) for complete instructions.
+**Option B: With real data (maintainers with secrets)**
+```bash
+# Clone and configure with production secrets
+git clone https://github.com/alexwitherspoon/aviationwx.git
+cd aviationwx
+
+# Configure docker-compose.override.yml to mount your secrets
+cp docker/docker-compose.override.yml.example docker/docker-compose.override.yml
+# Edit docker-compose.override.yml with your secrets path
+
+make dev  # Start with real data
+```
+
+See [Local Development Setup](docs/LOCAL_SETUP.md) for complete instructions and [Testing Guide](docs/TESTING.md) for test configuration.
 
 ### For Airport Operators
 

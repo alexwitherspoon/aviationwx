@@ -14,7 +14,6 @@ All configuration lives in a single `airports.json` file with two sections:
 |--------|---------|-------------|
 | `default_timezone` | `UTC` | Fallback timezone for airports |
 | `base_domain` | `aviationwx.org` | Base domain for subdomains |
-| `max_stale_hours` | `3` | Hours before data considered stale |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
 | `metar_refresh_seconds` | `60` | METAR refresh interval (min: 60) |
@@ -33,6 +32,20 @@ All configuration lives in a single `airports.json` file with two sections:
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
 | `notam_api_client_secret` | — | NOTAM API client secret |
+| **Client Version Management** |||
+| `dead_man_switch_days` | `7` | Days without update before cleanup (0 = disabled) |
+| `force_cleanup` | `false` | Emergency flag to force all clients to cleanup |
+| `stuck_client_cleanup` | `false` | Inject cleanup for clients stuck on old code |
+| **Staleness Thresholds (3-tier model)** |||
+| `stale_warning_seconds` | `600` | Warning tier threshold (yellow indicator) |
+| `stale_error_seconds` | `3600` | Error tier threshold (red indicator) |
+| `stale_failclosed_seconds` | `10800` | Failclosed tier (hide stale data) |
+| `metar_stale_warning_seconds` | `3600` | METAR warning threshold |
+| `metar_stale_error_seconds` | `7200` | METAR error threshold |
+| `metar_stale_failclosed_seconds` | `10800` | METAR failclosed threshold |
+| `notam_stale_warning_seconds` | `900` | NOTAM warning threshold |
+| `notam_stale_error_seconds` | `1800` | NOTAM error threshold |
+| `notam_stale_failclosed_seconds` | `3600` | NOTAM failclosed threshold |
 
 ### Airport Options (`airports.{id}` section)
 
@@ -128,7 +141,14 @@ Unit toggle defaults resolve in this order (first match wins):
   "config": {
     "default_timezone": "UTC",
     "base_domain": "aviationwx.org",
-    "max_stale_hours": 3,
+    
+    "dead_man_switch_days": 7,
+    "force_cleanup": false,
+    "stuck_client_cleanup": false,
+    
+    "stale_warning_seconds": 600,
+    "stale_error_seconds": 3600,
+    "stale_failclosed_seconds": 10800,
     
     "webcam_refresh_default": 60,
     "weather_refresh_default": 60,
