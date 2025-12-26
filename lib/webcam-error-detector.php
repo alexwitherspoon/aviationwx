@@ -1,18 +1,28 @@
 <?php
 /**
  * Webcam Error Frame Detector
- * Detects Blue Iris error frames and other invalid webcam images
+ * 
+ * Detects invalid webcam images including:
+ * - Blue Iris error frames (grey borders with white text)
+ * - Uniform color images (lens cap, dead camera, corruption)
+ * - Pixelated/low-quality images (Laplacian variance detection)
+ * 
+ * Uses phase-aware thresholds for pixelation (day/twilight/night).
  */
 
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/weather/utils.php';
 
 /**
  * Check if an image appears to be an error frame
  * 
- * Detects Blue Iris error frames by analyzing grey border patterns and embedded image structures.
- * Error frames typically have grey borders (where text overlays appear) with embedded content in center.
+ * Detects various image quality issues:
+ * 1. Uniform color (lens cap, dead camera, corruption)
+ * 2. Pixelation (low Laplacian variance) - phase-aware thresholds
+ * 3. Blue Iris error frames (grey borders with white text)
  * 
  * @param string $imagePath Path to image file (JPEG)
+ * @param array|null $airport Airport config for phase-aware pixelation threshold (optional)
  * @return array {
  *   'is_error' => bool,        // True if image appears to be an error frame
  *   'confidence' => float,     // Confidence score (0.0 to 1.0)
@@ -20,7 +30,7 @@ require_once __DIR__ . '/constants.php';
  *   'reasons' => array         // Array of detection reason strings
  * }
  */
-function detectErrorFrame(string $imagePath): array {
+function detectErrorFrame(string $imagePath, ?array $airport = null): array {
     if (!file_exists($imagePath) || !is_readable($imagePath)) {
         return ['is_error' => true, 'confidence' => 1.0, 'error_score' => 1.0, 'reasons' => ['file_not_readable']];
     }
@@ -48,6 +58,34 @@ function detectErrorFrame(string $imagePath): array {
     if ($width < WEBCAM_ERROR_MIN_WIDTH || $height < WEBCAM_ERROR_MIN_HEIGHT) {
         imagedestroy($img);
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
+    }
+    
+    // UNIFORM COLOR CHECK: Earliest definitive rejection
+    // A healthy webcam image will NEVER be all one color (variance <1%)
+    // This catches: lens caps, dead cameras, corrupted files, solid error screens
+    $uniformCheck = detectUniformColor($img, $width, $height);
+    if ($uniformCheck['is_uniform']) {
+        imagedestroy($img);
+        return [
+            'is_error' => true, 
+            'confidence' => 1.0, 
+            'error_score' => 1.0, 
+            'reasons' => [$uniformCheck['reason']]
+        ];
+    }
+    
+    // PIXELATION CHECK: Detect overly smooth/blocky images using Laplacian variance
+    // Uses phase-aware thresholds (day/twilight/night) for accuracy
+    // Hard fail: pixelated images are rejected
+    $pixelationCheck = detectPixelation($img, $width, $height, $airport);
+    if ($pixelationCheck['is_pixelated']) {
+        imagedestroy($img);
+        return [
+            'is_error' => true,
+            'confidence' => 0.9, // High confidence but not absolute (phase detection could be off)
+            'error_score' => 0.9,
+            'reasons' => [$pixelationCheck['reason']]
+        ];
     }
     
     $reasons = [];
@@ -233,6 +271,304 @@ function calculateVariance(array $values): float {
     }
     
     return $variance / $count;
+}
+
+/**
+ * Detect if image is essentially one uniform color
+ * 
+ * Checks if an image has extremely low color variance, indicating a failed camera,
+ * corrupted file, lens cap, or solid color error screen. A healthy webcam image
+ * will always have some variance - even fog/night/snow has significant variance
+ * due to sensor noise and natural gradients.
+ * 
+ * Samples ~50 pixels distributed across the image for efficiency.
+ * Checks both brightness variance AND color channel variance to catch:
+ * - Solid black (lens cap, dead camera)
+ * - Solid grey (some error states)
+ * - Solid color (some cameras output solid blue/green on failure)
+ * 
+ * @param resource $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @return array {
+ *   'is_uniform' => bool,      // True if image is essentially one color
+ *   'variance' => float,       // Calculated max variance across channels
+ *   'dominant_color' => array, // [r, g, b] average color
+ *   'reason' => string         // Descriptive reason string for logging
+ * }
+ */
+function detectUniformColor($img, int $width, int $height): array {
+    $sampleSize = defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE') 
+        ? WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE 
+        : 50;
+    $threshold = defined('WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD') 
+        ? WEBCAM_ERROR_UNIFORM_COLOR_VARIANCE_THRESHOLD 
+        : 25;
+    
+    // Sample pixels in a grid pattern across the image
+    $gridSize = (int)ceil(sqrt($sampleSize));
+    $stepX = max(1, (int)floor($width / $gridSize));
+    $stepY = max(1, (int)floor($height / $gridSize));
+    
+    $redValues = [];
+    $greenValues = [];
+    $blueValues = [];
+    $brightnessValues = [];
+    
+    for ($y = (int)floor($stepY / 2); $y < $height; $y += $stepY) {
+        for ($x = (int)floor($stepX / 2); $x < $width; $x += $stepX) {
+            $rgb = imagecolorat($img, $x, $y);
+            $r = ($rgb >> 16) & 0xFF;
+            $g = ($rgb >> 8) & 0xFF;
+            $b = $rgb & 0xFF;
+            
+            $redValues[] = $r;
+            $greenValues[] = $g;
+            $blueValues[] = $b;
+            $brightnessValues[] = ($r + $g + $b) / 3;
+        }
+    }
+    
+    if (count($brightnessValues) < 10) {
+        // Not enough samples - can't determine, assume not uniform
+        return ['is_uniform' => false, 'variance' => 999, 'dominant_color' => [0, 0, 0], 'reason' => ''];
+    }
+    
+    // Calculate variance for each channel and brightness
+    $brightnessVariance = calculateVariance($brightnessValues);
+    $redVariance = calculateVariance($redValues);
+    $greenVariance = calculateVariance($greenValues);
+    $blueVariance = calculateVariance($blueValues);
+    
+    // Combined color variance (max of all channels)
+    // Using max ensures we catch both greyscale and colored solid images
+    $maxVariance = max($brightnessVariance, $redVariance, $greenVariance, $blueVariance);
+    
+    // Calculate dominant color for logging
+    $avgR = (int)round(array_sum($redValues) / count($redValues));
+    $avgG = (int)round(array_sum($greenValues) / count($greenValues));
+    $avgB = (int)round(array_sum($blueValues) / count($blueValues));
+    $avgBrightness = ($avgR + $avgG + $avgB) / 3;
+    
+    if ($maxVariance < $threshold) {
+        // Determine what kind of solid color it is for clearer logging
+        $colorDesc = '';
+        if ($avgBrightness < 20) {
+            $colorDesc = 'solid_black';
+        } elseif ($avgBrightness > 235) {
+            $colorDesc = 'solid_white';
+        } elseif (abs($avgR - $avgG) < 15 && abs($avgG - $avgB) < 15) {
+            $colorDesc = 'solid_grey';
+        } else {
+            // Colored solid (e.g., blue screen, green failure)
+            $colorDesc = 'solid_color';
+        }
+        
+        return [
+            'is_uniform' => true,
+            'variance' => $maxVariance,
+            'dominant_color' => [$avgR, $avgG, $avgB],
+            'reason' => sprintf('%s_variance_%.1f_rgb_%d_%d_%d', 
+                $colorDesc, $maxVariance, $avgR, $avgG, $avgB)
+        ];
+    }
+    
+    return [
+        'is_uniform' => false,
+        'variance' => $maxVariance,
+        'dominant_color' => [$avgR, $avgG, $avgB],
+        'reason' => ''
+    ];
+}
+
+/**
+ * Detect pixelation/low quality using Laplacian variance
+ * 
+ * The Laplacian operator detects edges by measuring second-order derivatives.
+ * High variance = sharp edges = good quality image
+ * Low variance = smooth/blurry = pixelated or low quality
+ * 
+ * Uses grayscale brightness for edge detection (faster than per-channel).
+ * Samples on a grid for efficiency rather than every pixel.
+ * 
+ * @param resource $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @return array {
+ *   'variance' => float,     // Laplacian variance (higher = sharper)
+ *   'mean' => float,         // Mean Laplacian value
+ *   'sample_count' => int    // Number of samples taken
+ * }
+ */
+function calculateLaplacianVariance($img, int $width, int $height): array {
+    $gridSize = defined('WEBCAM_PIXELATION_SAMPLE_GRID') 
+        ? WEBCAM_PIXELATION_SAMPLE_GRID 
+        : 20;
+    
+    // Calculate step sizes for grid sampling
+    // Leave 1-pixel border to allow Laplacian calculation
+    $stepX = max(1, (int)floor(($width - 2) / $gridSize));
+    $stepY = max(1, (int)floor(($height - 2) / $gridSize));
+    
+    $laplacianValues = [];
+    
+    // Pre-calculate brightness for sampled pixels + neighbors
+    // This is more efficient than calling imagecolorat multiple times per pixel
+    $brightnessCache = [];
+    
+    for ($y = 1; $y < $height - 1; $y += $stepY) {
+        for ($x = 1; $x < $width - 1; $x += $stepX) {
+            // Get brightness for center and 4 neighbors
+            $center = getPixelBrightness($img, $x, $y, $brightnessCache);
+            $top = getPixelBrightness($img, $x, $y - 1, $brightnessCache);
+            $bottom = getPixelBrightness($img, $x, $y + 1, $brightnessCache);
+            $left = getPixelBrightness($img, $x - 1, $y, $brightnessCache);
+            $right = getPixelBrightness($img, $x + 1, $y, $brightnessCache);
+            
+            // Laplacian: 4*center - (top + bottom + left + right)
+            // This measures how different the center is from its neighbors
+            $laplacian = 4 * $center - ($top + $bottom + $left + $right);
+            $laplacianValues[] = abs($laplacian); // Use absolute value
+        }
+    }
+    
+    if (count($laplacianValues) < 10) {
+        // Not enough samples
+        return ['variance' => 0.0, 'mean' => 0.0, 'sample_count' => 0];
+    }
+    
+    $mean = array_sum($laplacianValues) / count($laplacianValues);
+    $variance = calculateVariance($laplacianValues);
+    
+    return [
+        'variance' => $variance,
+        'mean' => $mean,
+        'sample_count' => count($laplacianValues)
+    ];
+}
+
+/**
+ * Get pixel brightness with caching
+ * 
+ * @param resource $img GD image resource
+ * @param int $x X coordinate
+ * @param int $y Y coordinate
+ * @param array &$cache Brightness cache (passed by reference)
+ * @return float Brightness (0-255)
+ */
+function getPixelBrightness($img, int $x, int $y, array &$cache): float {
+    $key = "{$x},{$y}";
+    
+    if (!isset($cache[$key])) {
+        $rgb = imagecolorat($img, $x, $y);
+        $r = ($rgb >> 16) & 0xFF;
+        $g = ($rgb >> 8) & 0xFF;
+        $b = $rgb & 0xFF;
+        $cache[$key] = ($r + $g + $b) / 3.0;
+    }
+    
+    return $cache[$key];
+}
+
+/**
+ * Get pixelation threshold based on daylight phase
+ * 
+ * Returns the appropriate Laplacian variance threshold for the current
+ * lighting conditions. Night images are naturally softer, so thresholds
+ * are more lenient.
+ * 
+ * @param array|null $airport Airport config with lat/lon (null = use day threshold)
+ * @param int|null $timestamp Unix timestamp (null = now)
+ * @return float Laplacian variance threshold
+ */
+function getPixelationThreshold(?array $airport = null, ?int $timestamp = null): float {
+    // If no airport provided, use conservative day threshold
+    if ($airport === null || !isset($airport['lat']) || !isset($airport['lon'])) {
+        return defined('WEBCAM_PIXELATION_THRESHOLD_DAY') 
+            ? WEBCAM_PIXELATION_THRESHOLD_DAY 
+            : 15.0;
+    }
+    
+    $phase = getDaylightPhase($airport, $timestamp);
+    
+    switch ($phase) {
+        case DAYLIGHT_PHASE_DAY:
+            return defined('WEBCAM_PIXELATION_THRESHOLD_DAY') 
+                ? WEBCAM_PIXELATION_THRESHOLD_DAY 
+                : 15.0;
+                
+        case DAYLIGHT_PHASE_CIVIL_TWILIGHT:
+            return defined('WEBCAM_PIXELATION_THRESHOLD_CIVIL') 
+                ? WEBCAM_PIXELATION_THRESHOLD_CIVIL 
+                : 10.0;
+                
+        case DAYLIGHT_PHASE_NAUTICAL_TWILIGHT:
+            return defined('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL') 
+                ? WEBCAM_PIXELATION_THRESHOLD_NAUTICAL 
+                : 8.0;
+                
+        case DAYLIGHT_PHASE_NIGHT:
+        default:
+            return defined('WEBCAM_PIXELATION_THRESHOLD_NIGHT') 
+                ? WEBCAM_PIXELATION_THRESHOLD_NIGHT 
+                : 5.0;
+    }
+}
+
+/**
+ * Detect pixelation in image
+ * 
+ * Uses Laplacian variance with phase-aware thresholds.
+ * Hard fail: images below threshold are rejected.
+ * 
+ * @param resource $img GD image resource
+ * @param int $width Image width
+ * @param int $height Image height
+ * @param array|null $airport Airport config for phase-aware threshold (null = day threshold)
+ * @return array {
+ *   'is_pixelated' => bool,  // True if image fails pixelation check
+ *   'variance' => float,     // Measured Laplacian variance
+ *   'threshold' => float,    // Threshold used for comparison
+ *   'phase' => string,       // Daylight phase used
+ *   'reason' => string       // Descriptive reason for logging
+ * }
+ */
+function detectPixelation($img, int $width, int $height, ?array $airport = null): array {
+    // Get phase-appropriate threshold
+    $phase = ($airport !== null && isset($airport['lat']) && isset($airport['lon']))
+        ? getDaylightPhase($airport)
+        : DAYLIGHT_PHASE_DAY;
+    $threshold = getPixelationThreshold($airport);
+    
+    // Calculate Laplacian variance
+    $laplacian = calculateLaplacianVariance($img, $width, $height);
+    
+    if ($laplacian['sample_count'] < 10) {
+        // Not enough samples to determine - don't fail
+        return [
+            'is_pixelated' => false,
+            'variance' => 0.0,
+            'threshold' => $threshold,
+            'phase' => $phase,
+            'reason' => 'insufficient_samples'
+        ];
+    }
+    
+    $isPixelated = $laplacian['variance'] < $threshold;
+    
+    $reason = '';
+    if ($isPixelated) {
+        $reason = sprintf('pixelated_variance_%.1f_threshold_%.1f_phase_%s',
+            $laplacian['variance'], $threshold, $phase);
+    }
+    
+    return [
+        'is_pixelated' => $isPixelated,
+        'variance' => $laplacian['variance'],
+        'threshold' => $threshold,
+        'phase' => $phase,
+        'reason' => $reason
+    ];
 }
 
 /**
