@@ -15,7 +15,7 @@ services:
     # - 8080 (HTTP, Apache, internal - behind nginx on port 80)
     # - 2121 (FTP/FTPS)
     # - 2222 (SFTP)
-    # - 50000-50099 (FTP passive mode, 100 ports)
+    # - 50000-51000 (FTP passive mode, 1001 ports)
     volumes:
       # Mount airports.json from user home directory (deployed by secrets repo GitHub Actions)
       # PRODUCTION: This file MUST exist - application will fail if missing (no fallback to test files)

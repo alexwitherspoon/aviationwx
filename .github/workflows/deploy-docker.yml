@@ -996,7 +996,7 @@ jobs:
             sudo ufw allow 443/tcp comment 'HTTPS (Nginx)' || true
             sudo ufw allow 2121/tcp comment 'FTP/FTPS (Push webcams)' || true
             sudo ufw allow 2222/tcp comment 'SFTP (Push webcams)' || true
-            sudo ufw allow 50000:50100/tcp comment 'FTP passive mode (Push webcams)' || true
+            sudo ufw allow 50000:51000/tcp comment 'FTP passive mode (Push webcams)' || true
             sudo ufw allow 22/tcp comment 'SSH (System access)' || true
             sudo ufw status numbered
           fi

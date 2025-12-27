@@ -3,14 +3,14 @@
 # Usage: ./generate-ftp-ports.sh [min_port] [max_port]
 #
 # Examples:
+#   ./generate-ftp-ports.sh 50000 51000  # 1001 ports (default)
 #   ./generate-ftp-ports.sh 50000 50099  # 100 ports
-#   ./generate-ftp-ports.sh 50000 50049  # 50 ports
-#   ./generate-ftp-ports.sh              # Default: 50000-50099
+#   ./generate-ftp-ports.sh              # Default: 50000-51000
 
 set -euo pipefail
 
 MIN_PORT="${1:-50000}"
-MAX_PORT="${2:-50099}"
+MAX_PORT="${2:-51000}"
 
 # Validate inputs
 if ! [[ "$MIN_PORT" =~ ^[0-9]+$ ]] || ! [[ "$MAX_PORT" =~ ^[0-9]+$ ]]; then
