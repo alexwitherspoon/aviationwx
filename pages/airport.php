@@ -1752,6 +1752,21 @@ try {
         
         aviationwxTimerWorker.onerror = function(e) {
             console.error('[TimerWorker] Error:', e.message);
+            // Activate fallback when worker fails to load (CSP, etc.)
+            if (!usingFallbackTimer) {
+                usingFallbackTimer = true;
+                aviationwxTimerWorker = null;
+                window.aviationwxTimerWorker = null;
+                // Re-register any existing callbacks with fallback system
+                if (typeof window.createFallbackTimerSystem === 'function' && timerCallbacks.size > 0) {
+                    const fallback = window.createFallbackTimerSystem();
+                    window.aviationwxFallbackTimer = fallback;
+                    for (const [id, callback] of timerCallbacks) {
+                        // Default to 60s interval for re-registered timers
+                        fallback.register(id, 60000, callback);
+                    }
+                }
+            }
         };
         
         // Make worker available globally for timer-lifecycle.js
