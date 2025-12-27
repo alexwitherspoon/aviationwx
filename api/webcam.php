@@ -25,20 +25,6 @@ require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 
-// VPN routing is optional - only required if VPN features are used
-$vpnRoutingFile = __DIR__ . '/../lib/vpn-routing.php';
-if (file_exists($vpnRoutingFile)) {
-    require_once $vpnRoutingFile;
-} else {
-    // Define stub function if VPN routing file doesn't exist
-    if (!function_exists('verifyVpnForCamera')) {
-        function verifyVpnForCamera($airportId, $cam) {
-            // VPN routing not available - assume VPN not required
-            return true;
-        }
-    }
-}
-
 // Include circuit breaker functions
 require_once __DIR__ . '/../lib/circuit-breaker.php';
 // Include webcam format generation functions
@@ -1532,20 +1518,11 @@ function triggerWebcamBackgroundRefresh($airportId, $camIndex, $cam, $cacheDir, 
  * @param array $cam Camera configuration array
  * @param string $cacheFile Target JPG cache file path
  * @param string $cacheWebp Target WEBP cache file path
- * @return bool True on success, false on failure or skip (circuit breaker, VPN down)
+ * @return bool True on success, false on failure or skip (circuit breaker open)
  */
 function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $cacheWebp) {
     $url = $cam['url'];
     $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
-    
-    // Check VPN connection if required
-    if (!verifyVpnForCamera($airportId, $cam)) {
-        aviationwx_log('warning', 'webcam fetch skipped - VPN connection down', [
-            'airport' => $airportId,
-            'cam' => $camIndex
-        ], 'app');
-        return false; // VPN required but not up, skip fetch
-    }
     
     // Note: Circuit breaker check is handled by caller (triggerWebcamBackgroundRefresh)
     // This allows bypassing circuit breaker for very stale cache

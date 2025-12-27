@@ -208,7 +208,7 @@
           "refresh_seconds": 30
         },
         {
-          "name": "VPN Camera (Private IP)",
+          "name": "Private Network Camera (RTSP)",
           "url": "rtsp://192.168.1.100:554/stream1",
           "type": "rtsp",
           "rtsp_transport": "tcp",

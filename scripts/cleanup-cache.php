@@ -81,7 +81,6 @@ require_once __DIR__ . '/../lib/config.php';
 define('CLEANUP_RATE_LIMIT_AGE', 86400);          // 24 hours
 define('CLEANUP_WEBCAM_ERROR_AGE', 604800);       // 7 days
 define('CLEANUP_OUTAGE_STATE_AGE', 2592000);      // 30 days
-define('CLEANUP_VPN_STATUS_AGE', 86400);          // 1 day (should be updated frequently)
 
 // Layer 2: Backup cleanup (more generous - safety net)
 define('CLEANUP_WEATHER_HISTORY_AGE', 172800);    // 48 hours (primary: 24h)

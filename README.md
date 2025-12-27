@@ -69,7 +69,6 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Security**: Input validation, rate limiting, sanitized error messages
 - **SEO**: Dynamic sitemap, structured data (JSON-LD), Open Graph tags
 - **Monitoring**: Status page with real-time system health
-- **VPN Support**: Optional VPN for accessing private camera networks
 
 ## Public API
 

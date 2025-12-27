@@ -708,21 +708,17 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
    - If cache age < refresh interval, skip fetch
    - Refresh interval: Per-camera `refresh_seconds`, or airport default, or global default
 
-3. **VPN Check** (if configured)
-   - Verifies VPN connection is up for cameras requiring VPN
-   - Skips fetch if VPN down
-
-4. **Circuit Breaker Check**
+3. **Circuit Breaker Check**
    - Checks if camera is in backoff period
    - Skips fetch if circuit breaker open
    - Error severity affects backoff duration
 
-5. **Source-Specific Fetch**
+4. **Source-Specific Fetch**
    - Calls appropriate fetch function based on source type
    - Handles errors and retries
    - Records success/failure for circuit breaker
 
-6. **Image Validation**
+5. **Image Validation**
    - Verifies file exists and has content
    - Checks file size > 0
    - Validates JPEG format (if GD available)
@@ -735,14 +731,14 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
      - Server-generated images (RTSP/MJPEG) have EXIF added immediately after capture
      - Push camera images must have camera-provided EXIF
 
-7. **Format Generation** (if successful)
+6. **Format Generation** (if successful)
    - Generates WebP and AVIF formats for modern browsers
    - Uses ffmpeg with quality settings
    - Runs asynchronously (non-blocking) using `exec() &`
    - Automatically syncs mtime to match source image's capture time
    - All formats cached: `.jpg`, `.webp`, and `.avif`
 
-8. **Lock Release**
+7. **Lock Release**
    - Releases file lock
    - Cleans up lock file
 

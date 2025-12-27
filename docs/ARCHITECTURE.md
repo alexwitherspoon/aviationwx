@@ -33,7 +33,6 @@ aviationwx.org/
 │   ├── address-formatter.php # Address formatting utilities
 │   ├── partner-logo-cache.php # Partner logo caching
 │   ├── push-webcam-validator.php # Push webcam validation
-│   ├── vpn-routing.php       # VPN routing utilities
 │   ├── webcam-error-detector.php # Webcam image validation (error frames, pixelation, uniform color)
 │   ├── webcam-format-generation.php # Shared format generation (WebP, AVIF, JPEG)
 │   ├── exif-utils.php        # EXIF timestamp reading, writing, and validation

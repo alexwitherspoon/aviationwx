@@ -34,23 +34,3 @@ services:
     environment:
       # Point CONFIG_PATH to secrets location (must match volume mount above)
       - CONFIG_PATH=/var/www/html/secrets/airports.json
-
-  vpn-server:
-    volumes:
-      - ../config:/var/www/html/config:ro
-      - ../tests:/var/www/html/tests:ro
-      - vpn-config:/etc/ipsec-shared:ro
-      # TODO: Update this path to match your airports.json location
-      # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
-
-  vpn-manager:
-    volumes:
-      - ../config:/var/www/html/config:ro
-      - ../tests:/var/www/html/tests:ro
-      - /tmp/aviationwx-cache:/var/www/html/cache
-      - vpn-config:/etc/ipsec-shared
-      # TODO: Update this path to match your airports.json location
-      # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
-    environment:
-      - CONFIG_PATH=/var/www/html/secrets/airports.json
-

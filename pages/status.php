@@ -11,10 +11,6 @@ require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/process-utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 
-// VPN routing is optional - only required if VPN features are used
-// The checkVpnStatus function below doesn't actually use any functions from vpn-routing.php
-// It just reads the cache file directly, so we don't need to require it
-
 // Prevent caching (only in web context, not CLI)
 if (php_sapi_name() !== 'cli' && !headers_sent()) {
     header('Content-Type: text/html; charset=utf-8');
@@ -603,68 +599,6 @@ function checkFtpSftpServices(): array {
 }
 
 /**
- * Check VPN status for airport
- * 
- * @param string $airportId Airport identifier
- * @param array $airport Airport configuration array
- * @return array|null {
- *   'name' => string,
- *   'status' => 'operational'|'down',
- *   'message' => string,
- *   'lastChanged' => int
- * }|null Returns null if VPN is not enabled for this airport
- */
-function checkVpnStatus(string $airportId, array $airport): ?array {
-    $vpn = $airport['vpn'] ?? null;
-    
-    if (!$vpn || !($vpn['enabled'] ?? false)) {
-        return null; // No VPN, don't show status
-    }
-    
-    $statusFile = __DIR__ . '/../cache/vpn-status.json';
-    if (!file_exists($statusFile)) {
-        return [
-            'name' => 'VPN Connection',
-            'status' => 'down',
-            'message' => 'VPN status unavailable',
-            'lastChanged' => 0
-        ];
-    }
-    
-    // Use @ to suppress errors for non-critical file operations
-    // We handle failures explicitly with fallback mechanisms below
-    $statusData = @json_decode(file_get_contents($statusFile), true);
-    $connectionName = $vpn['connection_name'] ?? "{$airportId}_vpn";
-    $connStatus = $statusData['connections'][$connectionName] ?? null;
-    
-    if (!$connStatus) {
-        return [
-            'name' => 'VPN Connection',
-            'status' => 'down',
-            'message' => 'VPN connection not found',
-            'lastChanged' => 0
-        ];
-    }
-    
-    $status = $connStatus['status'] === 'up' ? 'operational' : 'down';
-    $lastConnected = $connStatus['last_connected'] ?? 0;
-    $message = $status === 'operational' 
-        ? 'VPN connected' 
-        : 'VPN disconnected';
-    
-    if ($lastConnected > 0) {
-        $message .= ' (last connected: ' . formatRelativeTime($lastConnected) . ')';
-    }
-    
-    return [
-        'name' => 'VPN Connection',
-        'status' => $status,
-        'message' => $message,
-        'lastChanged' => $lastConnected
-    ];
-}
-
-/**
  * Check airport health
  * 
  * @param string $airportId Airport identifier
@@ -1154,12 +1088,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
         ];
     }
     
-    // Check VPN status if VPN is enabled
-    $vpnStatus = checkVpnStatus($airportId, $airport);
-    if ($vpnStatus !== null) {
-        $health['components']['vpn'] = $vpnStatus;
-    }
-    
     // Determine overall airport status
     // Check all components including individual sources for weather and webcams
     $hasDown = false;
@@ -1187,7 +1115,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 }
             }
         }
-        // Check other components (VPN, etc.) that have direct status
+        // Check other components that have direct status
         elseif (isset($comp['status'])) {
             if ($comp['status'] === 'down') {
                 $hasDown = true;
@@ -2013,7 +1941,7 @@ if (php_sapi_name() === 'cli') {
                         </li>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <!-- Other components (VPN, etc.) - show with status indicator -->
+                        <!-- Other components - show with status indicator -->
                         <li class="component-item">
                             <div class="component-info">
                                 <div class="component-name"><?php echo htmlspecialchars($component['name']); ?></div>

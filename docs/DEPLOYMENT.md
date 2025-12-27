@@ -671,8 +671,5 @@ See [Security Guide](SECURITY.md) for detailed security information.
 - Set up automated backups
 - Add additional airports (see [Configuration Guide](CONFIGURATION.md))
 - Customize webcam refresh intervals
-- Set up VPN for remote sites (see [VPN Guide](VPN.md))
 
 For local development, see [Local Development Setup](LOCAL_SETUP.md).
-
-For VPN configuration, see [VPN Guide](VPN.md).

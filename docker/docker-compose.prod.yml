@@ -54,62 +54,6 @@ services:
         max-file: "10"
         tag: "{{.Name}}/{{.ID}}"
 
-  # VPN Server - strongSwan IPsec server
-  vpn-server:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.vpn-server
-    image: aviationwx-vpn-server
-    container_name: aviationwx-vpn
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    volumes:
-      - /home/aviationwx/airports.json:/var/www/html/config/airports.json:ro
-      - vpn-config:/etc/ipsec-shared:ro
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "ipsec", "status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "10"
-        tag: "{{.Name}}/{{.ID}}"
-
-  # VPN Manager - Manages VPN connections and configuration
-  vpn-manager:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.vpn-manager
-    image: aviationwx-vpn-manager
-    container_name: aviationwx-vpn-manager
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    volumes:
-      - /home/aviationwx/airports.json:/var/www/html/config/airports.json:ro
-      - /tmp/aviationwx-cache:/var/www/html/cache
-      - vpn-config:/etc/ipsec-shared
-    environment:
-      - CONFIG_PATH=/var/www/html/config/airports.json
-      - STATUS_FILE=/var/www/html/cache/vpn-status.json
-    restart: unless-stopped
-    depends_on:
-      - vpn-server
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "10"
-        tag: "{{.Name}}/{{.ID}}"
-
   # Optional: Nginx reverse proxy
   nginx:
     image: nginx:alpine
@@ -131,7 +75,3 @@ services:
         max-size: "10m"
         max-file: "10"
         tag: "{{.Name}}/{{.ID}}"
-
-volumes:
-  vpn-config:
-

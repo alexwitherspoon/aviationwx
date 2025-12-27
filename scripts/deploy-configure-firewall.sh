@@ -14,8 +14,6 @@ PORTS=(
     "2222:tcp:SFTP (Push webcams)"
     "50000:50019:tcp:FTP passive mode (Push webcams)"
     "22:tcp:SSH (System access)"
-    "500:udp:IPsec IKE (VPN)"
-    "4500:udp:IPsec NAT-T (VPN)"
 )
 
 # Ports to explicitly deny (internal services that should not be publicly accessible)
