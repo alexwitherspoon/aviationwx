@@ -1,4 +1,4 @@
-# 13 - AviationWX Bridge (Optional Image Upload Tool)
+# 10 - AviationWX Bridge (Optional Image Upload Tool)
 
 ## What is the AviationWX Bridge?
 
@@ -31,7 +31,7 @@ Think of it as a dedicated "camera assistant" that sits on your local network an
 +-----------------------------------------------------------------------------+
 ```
 
-**This is optional.** Many airports work great with cameras that upload directly to AviationWX (see Guide 09). The Bridge is here for when that's not possible or when you want extra reliability.
+**This is optional.** Many airports work great with cameras that upload directly to AviationWX (see Guide 08). The Bridge is here for when that's not possible or when you want extra reliability.
 
 ---
 
@@ -234,7 +234,7 @@ The Bridge uses `ffmpeg` for RTSP extraction, which gives more control over qual
 
 The AviationWX Bridge uses the same credential process as direct camera uploads:
 
-1. **Submit your airport** following Guide 11
+1. **Submit your airport** following Guide 12
 2. **Request "Bridge" credentials** in your email (mention you're using the AviationWX Bridge)
 3. **Receive upload details** (server, port, username, password)
 4. **Enter credentials** in the Bridge web console
@@ -343,7 +343,8 @@ Before setting up a Bridge, confirm:
 
 ## Next
 
-- If you haven't submitted your airport yet, see **Guide 11 - Submit a New Airport**
+- If you haven't submitted your airport yet, see **Guide 12 - Submit a New Airport**
 - For camera framing and siting, see **Guide 02 - Location & Siting**
-- For direct camera FTP setup (when cameras support it), see **Guide 09 - Camera Configuration**
+- For direct camera FTP setup (when cameras support it), see **Guide 08 - Camera Configuration**
+
 

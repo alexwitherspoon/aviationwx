@@ -13,7 +13,7 @@ Need help at any point?
 ---
 
 ## How to use these guides
-Most installs follow the same “pick a path” sequence:
+Most installs follow the same "pick a path" sequence:
 
 1) **Get permission and alignment**
 - [01 - Permission Packet](01-permission-packet.md)
@@ -31,23 +31,23 @@ Most installs follow the same “pick a path” sequence:
 
 5) **Pick equipment and configure it**
 - [07 - Equipment Recommendations](07-equipment-recommendations.md)
-- [09 - Camera Configuration](09-camera-configuration.md)
-- [10 - Weather Station Configuration](10-weather-station-configuration.md)
-- [13 - AviationWX Bridge](13-aviationwx-bridge.md) *(optional - for cameras without FTP)*
+- [08 - Camera Configuration](08-camera-configuration.md)
+- [09 - Weather Station Configuration](09-weather-station-configuration.md)
+- [10 - AviationWX Bridge](10-aviationwx-bridge.md) *(optional - for cameras without FTP)*
 
 6) **Install, hand off, and operate**
-- [08 - Installation Planning & Handoff](08-installation-planning-and-handoff.md)
+- [11 - Installation Planning & Handoff](11-installation-planning-and-handoff.md)
 
 7) **Submit the airport for review and inclusion**
-- [11 - Submit a New Airport to AviationWX](11-submit-an-airport-to-aviationwx.md)
+- [12 - Submit a New Airport to AviationWX](12-submit-an-airport-to-aviationwx.md)
 
 8) **Learn how to use the dashboard**
-- [12 - Using the Airport Dashboard](12-using-the-airport-dashboard.md)
+- [13 - Using the Airport Dashboard](13-using-the-airport-dashboard.md)
 
 ---
 
 ## What AviationWX is (plain language)
-AviationWX provides a clean, fast dashboard for each airport that focuses on the most practical “right now” information:
+AviationWX provides a clean, fast dashboard for each airport that focuses on the most practical "right now" information:
 - one or more still-image views (updated every 1-15 minutes)
 - local weather data (official sources when available, plus on-site sensors when helpful)
 

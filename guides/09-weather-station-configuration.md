@@ -1,4 +1,4 @@
-# 10 - Weather Station Configuration (Tempest / Davis / Ambient)
+# 09 - Weather Station Configuration (Tempest / Davis / Ambient)
 
 ## Goal
 Set up a weather station so it provides **useful, trustworthy local observations** that can complement official sources.
@@ -8,13 +8,13 @@ This guide assumes you have already decided:
 - where the station will be mounted (Guides 02-03)
 - how it will be powered and connected (Guides 05-06)
 
-## What “good weather data” means (plain language)
+## What "good weather data" means (plain language)
 A good install produces readings that are:
 - **representative** of conditions at the airport (not a sheltered corner)
 - **consistent** over time (no wild spikes from poor placement)
 - **interpretable** by pilots (wind/temperature/pressure trends make sense)
 
-You don’t need perfection. You need “trustworthy enough” to support better decisions.
+You don't need perfection. You need "trustworthy enough" to support better decisions.
 
 ## The most important rule: wind exposure
 **Wind sampling matters.** Whenever possible, mount the wind sensor with **unobstructed exposure**, ideally **at the top of an approved pole, building, or structure**.
@@ -24,16 +24,16 @@ Avoid:
 - rooftop turbulence zones and heat sources
 - places where trees, buildings, or terrain block a large portion of the wind
 
-If you can’t get good wind exposure, it is usually better to:
+If you can't get good wind exposure, it is usually better to:
 - change location, or
-- treat the wind reading as “low confidence” and emphasize other fields (temperature/pressure/rain), or
+- treat the wind reading as "low confidence" and emphasize other fields (temperature/pressure/rain), or
 - use an official airport wind source if one exists nearby.
 
 ## Quick pick-your-path
-- If you’re installing **Tempest** → go to **Tempest setup**
-- If you’re installing **Davis Vantage Pro2** → go to **Davis setup**
-- If you’re installing **Ambient WS‑2902** → go to **Ambient setup**
-- If you’re integrating an existing station → go to **Existing station integration checklist**
+- If you're installing **Tempest** → go to **Tempest setup**
+- If you're installing **Davis Vantage Pro2** → go to **Davis setup**
+- If you're installing **Ambient WS‑2902** → go to **Ambient setup**
+- If you're integrating an existing station → go to **Existing station integration checklist**
 
 ---
 
@@ -44,14 +44,14 @@ If you can’t get good wind exposure, it is usually better to:
 - ☐ Confirm the station is physically secure and serviceable
 - ☐ Configure connectivity so it auto-recovers after power outages
 - ☐ Run sanity checks after install (see below)
-- ☐ Document ownership, maintenance, and how to verify health (Guide 08)
+- ☐ Document ownership, maintenance, and how to verify health (Guide 11)
 
 ---
 
 ## Tempest setup (recommended default)
 
 ### Why Tempest works well for this project
-- strong “community deployment” fit: relatively simple install and good usefulness for pilots
+- strong "community deployment" fit: relatively simple install and good usefulness for pilots
 - good value per dollar
 
 ### Install checklist (Tempest)
@@ -77,7 +77,7 @@ If you can’t get good wind exposure, it is usually better to:
 - ☐ Mount for unobstructed wind exposure (top of approved structure preferred)
 - ☐ Confirm the full sensor suite is installed correctly and level as required
 - ☐ Confirm data is accessible through your chosen connectivity path
-- ☐ Validate “looks reasonable” readings for 24-72 hours
+- ☐ Validate "looks reasonable" readings for 24-72 hours
 
 ### Practical notes
 - Davis installs tend to reward careful mounting and cable hygiene
@@ -88,7 +88,7 @@ If you can’t get good wind exposure, it is usually better to:
 ## Ambient WS‑2902 setup (budget-friendly option)
 
 ### Why Ambient can be useful
-- a common “prove value” station
+- a common "prove value" station
 - often the fastest path to getting basic local conditions online
 
 ### Install checklist (Ambient)
@@ -115,7 +115,7 @@ Do these checks after install and then occasionally during maintenance.
 
 ### Wind
 - Does wind direction make sense relative to known conditions?
-- Is wind speed “plausible” (not constantly zero unless it’s truly calm)?
+- Is wind speed "plausible" (not constantly zero unless it's truly calm)?
 - Do gusts and lulls look realistic, not like random spikes?
 
 ### Temperature
@@ -130,7 +130,7 @@ Do these checks after install and then occasionally during maintenance.
 - Does precipitation correlate with what you can see / local reports?
 - Is it falsely triggered by sprinklers, roof runoff, or splashing?
 
-If any of these are wildly off, fix siting first. Sensor “calibration” rarely beats good placement.
+If any of these are wildly off, fix siting first. Sensor "calibration" rarely beats good placement.
 
 ---
 
@@ -153,3 +153,4 @@ If any of these are wildly off, fix siting first. Sensor “calibration” rarel
 
 ## Next
 Next guide will cover **how to submit a new airport feed to AviationWX for review and inclusion**, including the validation process for image quality, data sanity, and operational expectations.
+

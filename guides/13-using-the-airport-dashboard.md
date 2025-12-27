@@ -1,4 +1,4 @@
-# 12 - Using the Airport Dashboard (Pilot's Quick Reference)
+# 13 - Using the Airport Dashboard (Pilot's Quick Reference)
 
 ## What is this?
 This guide helps you get the most out of an AviationWX airport dashboard. Think of it as the "controls overview" screen before the game starts - we'll show you where everything is, what it does, and let you learn by exploring.
@@ -24,10 +24,10 @@ For deeper research, every dashboard includes links to trusted external resource
 +-----------------------------------------------------------------------------+
 |  [ Search by name, ICAO, IATA, or FAA code... ]     [ Nearby Airports ]     |
 +-----------------------------------------------------------------------------+
-                                     |
-         +---------------------------+---------------------------+
-         |                           |                           |
-         v                           v                           v
+                                    |
+        +---------------------------+---------------------------+
+        |                           |                           |
+        v                           v                           v
 +-------------------+     +-------------------+     +-------------------+
 |      WEBCAMS      |     |  CURRENT WEATHER  |     |    RUNWAY WIND    |
 |                   |     |                   |     |                   |
@@ -35,8 +35,8 @@ For deeper research, every dashboard includes links to trusted external resource
 |   for 24-hour     |     |   IFR / LIFR      |     |    crosswind      |
 |   history         |     |                   |     |    components     |
 +-------------------+     +-------------------+     +-------------------+
-                                     |
-                                     v
+                                    |
+                                    v
 +-----------------------------------------------------------------------------+
 |  AIRPORT INFO: Runways  *  Frequencies  *  Elevation  *  External Links     |
 +-----------------------------------------------------------------------------+
@@ -317,10 +317,10 @@ Click any toggle button to cycle through options. Your preferences are saved aut
 +-----------------------------------------------------------------------------+
 |  [ Search by name, ICAO, IATA, or FAA code...                          ]    |
 +-----------------------------------------------------------------------------+
-                                     |
-                         Start typing to search
-                                     |
-                                     v
+                                    |
+                        Start typing to search
+                                    |
+                                    v
 +-----------------------------------------------------------------------------+
 |  Scappoose Industrial Airpark               KSPB                   12.3 mi  |
 +-----------------------------------------------------------------------------+
@@ -344,8 +344,8 @@ Click **"Nearby Airports"** to see other airports within 200 miles, sorted by di
 +-----------------------------------------------------------------------------+
 |  [ Nearby Airports v ]                                                      |
 +-----------------------------------------------------------------------------+
-                                     |
-                                     v
+                                    |
+                                    v
 +-----------------------------------------------------------------------------+
 |  Pearson Field                              KVUO                    8.1 mi  |
 |  Scappoose Industrial                       KSPB                   12.3 mi  |
@@ -455,10 +455,10 @@ Want to display an AviationWX dashboard on your own website, FBO lobby screen, o
 +-----------------------------------------------------------------------------+
 |  Want to add this dashboard to your website?          [ Create Embed -> ]   |
 +-----------------------------------------------------------------------------+
-                                     |
-                     Click to open the Embed Configurator
-                                     |
-                                     v
+                                    |
+                    Click to open the Embed Configurator
+                                    |
+                                    v
 +-----------------------------------------------------------------------------+
 |  EMBED CONFIGURATOR                                                         |
 +-----------------------------------------------------------------------------+
@@ -564,3 +564,4 @@ The real power of AviationWX is **visual verification**. Use the dashboard like 
 - **Technical documentation:** [docs/](https://github.com/alexwitherspoon/aviationwx/tree/main/docs)
 - **Report an issue:** [GitHub Issues](https://github.com/alexwitherspoon/aviationwx/issues)
 - **Contact:** `contact@aviationwx.org`
+

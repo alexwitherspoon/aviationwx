@@ -1,4 +1,4 @@
-# 11 - Submit a New Airport to AviationWX (What to send + what happens next)
+# 12 - Submit a New Airport to AviationWX (What to send + what happens next)
 
 ## Goal
 Make it easy for a normal, non-technical airport volunteer to send AviationWX the information needed to:
@@ -10,25 +10,25 @@ Make it easy for a normal, non-technical airport volunteer to send AviationWX th
 **Send everything to:** `contact@aviationwx.org`
 
 ## Need help?
-If you’re not sure how to find your weather station API details or camera connection information, **reach out anyway**.
-I’m happy to help you gather the required details and pick the simplest working setup for your airport.
+If you're not sure how to find your weather station API details or camera connection information, **reach out anyway**.
+I'm happy to help you gather the required details and pick the simplest working setup for your airport.
 
-> Tip: You do *not* need to invent your own dashboard or data pipeline. AviationWX is designed so local groups can focus on installing reliable equipment while the shared platform handles the dashboard, formatting, and “freshness” indicators.
+> Tip: You do *not* need to invent your own dashboard or data pipeline. AviationWX is designed so local groups can focus on installing reliable equipment while the shared platform handles the dashboard, formatting, and "freshness" indicators.
 
 ---
 
 ## Step 0 - Before you send anything
-If you get stuck at any point, email `contact@aviationwx.org` and we’ll help you through it.
+If you get stuck at any point, email `contact@aviationwx.org` and we'll help you through it.
 
-Please review these guides first (they’ll save time):
+Please review these guides first (they'll save time):
 - **Guide 01 - Permission Packet** (permission + privacy expectations)
 - **Guide 07 - Equipment Recommendations** (tested weather stations + cameras)
-- **Guide 09 - Camera Configuration** (FTP/FTPs/SFTP recommended path)
-- **Guide 10 - Weather Station Configuration** (siting + sanity checks)
+- **Guide 08 - Camera Configuration** (FTP/FTPs/SFTP recommended path)
+- **Guide 09 - Weather Station Configuration** (siting + sanity checks)
 
 ---
 
-## Step 1 - The “airport basics” checklist (copy/paste)
+## Step 1 - The "airport basics" checklist (copy/paste)
 In your email, include:
 
 - **Airport identifier:** (ICAO / FAA / IATA)
@@ -36,7 +36,7 @@ In your email, include:
 - **City / State / Country:**  
 - **Who is the local steward / maintainer?** (name + phone/email)  
 - **Who approved the install?** (airport owner/sponsor/manager or stewardship group)  
-- **Install location summary:** (e.g., “hangar roof”, “existing pole near …”)  
+- **Install location summary:** (e.g., "hangar roof", "existing pole near …")  
 - **Power source:** (grid / solar+battery / hybrid)  
 - **Internet source:** (LAN / Wi‑Fi / LTE / Starlink / point-to-point)  
 - **Target update cadence:** (typical: 1-15 minutes)
@@ -55,8 +55,8 @@ Please send:
 - **Tempest Access Token** (personal access token is best)
 
 How to find/create these:
-- Tempest’s API uses a URL pattern like: `.../observations/station/[your_station_id]?token=[your_access_token]` (so we need both the station ID and token).  
-- Tempest also supports creating a personal access token in the Tempest settings (“Data Authorizations”).
+- Tempest's API uses a URL pattern like: `.../observations/station/[your_station_id]?token=[your_access_token]` (so we need both the station ID and token).  
+- Tempest also supports creating a personal access token in the Tempest settings ("Data Authorizations").
 
 References (if you want the official docs):
 ```text
@@ -74,7 +74,7 @@ Please send:
 - **Station ID** (if you have it / can find it)
 
 How to find/create these:
-- WeatherLink’s v2 tutorial explains generating a v2 API Key and Secret from your WeatherLink account page.
+- WeatherLink's v2 tutorial explains generating a v2 API Key and Secret from your WeatherLink account page.
 - Treat the **API Secret as sensitive** (it should not be posted publicly).
 
 References:
@@ -103,7 +103,7 @@ https://ambientweather.docs.apiary.io/
 ```
 
 ### Option D - Official airport weather source (ASOS/AWOS)
-If you’re using an official airport weather feed:
+If you're using an official airport weather feed:
 - tell us **what the airport identifier is**
 - and whether the field has **ASOS / AWOS** (and which one, if known)
 
@@ -119,13 +119,13 @@ This is the simplest and usually produces the best still-image quality.
 
 **What to send**
 - Camera brand + model (example: Reolink RLC‑810WA)
-- “I want scheduled JPEG uploads” (FTP/FTPs/SFTP)
+- "I want scheduled JPEG uploads" (FTP/FTPs/SFTP)
 - Desired upload interval (start at 5 minutes unless you have a reason not to)
 
 **What happens next**
 - AviationWX will reply with the **upload destination details** (server/port/username/path), so you can configure the camera.
 
-If you’re using Reolink, their support doc shows the general steps to enable FTP and set an upload schedule:
+If you're using Reolink, their support doc shows the general steps to enable FTP and set an upload schedule:
 
 ```text
 https://support.reolink.com/hc/en-us/articles/360020081034-How-to-Set-up-FTP-for-Reolink-Products/
@@ -140,14 +140,14 @@ https://support.reolink.com/hc/en-us/articles/360020081034-How-to-Set-up-FTP-for
 ### Option C - Snapshot URL (HTTP/HTTPS)
 **What to send**
 - Snapshot URL
-- Any credentials required (again: a dedicated “AviationWX” view-only account is ideal)
+- Any credentials required (again: a dedicated "AviationWX" view-only account is ideal)
 
 > Security note: please do **not** send your personal admin login if you can avoid it. When possible, create a dedicated read-only account for the camera/stream and share that instead.
 
 ---
 
-## Step 4 - “What good looks like” (validation checklist)
-After you email us, we’ll validate:
+## Step 4 - "What good looks like" (validation checklist)
+After you email us, we'll validate:
 
 ### Camera validation
 - The view is useful for pilots (see Guide 02: horizon + runway/approach context)
@@ -156,15 +156,15 @@ After you email us, we’ll validate:
 - The install respects permission + privacy expectations (Guide 01)
 
 ### Weather validation
-- Readings look reasonable (Guide 10 sanity checks)
+- Readings look reasonable (Guide 09 sanity checks)
 - Wind exposure is adequate (or limitations are clearly noted)
 - Updates are consistent over 24-72 hours
 
 ### Operations validation
 - A local maintainer exists (and has access)
-- There’s a reasonable plan to keep it alive (and to remove it cleanly if needed)
+- There's a reasonable plan to keep it alive (and to remove it cleanly if needed)
 
-If something doesn’t pass, that’s normal - we’ll tell you exactly what to adjust, and we’ll re-test.
+If something doesn't pass, that's normal - we'll tell you exactly what to adjust, and we'll re-test.
 
 ---
 
@@ -199,11 +199,12 @@ Attachments:
 
 ---
 
-## “Nerdy” reference (optional)
-If you’re technical (or helping someone technical), the full configuration reference lives here:
+## "Nerdy" reference (optional)
+If you're technical (or helping someone technical), the full configuration reference lives here:
 
 ```text
 https://github.com/alexwitherspoon/aviationwx/blob/main/docs/CONFIGURATION.md
 ```
 
-But you don’t need to read that to submit an airport - the checklists above are enough.
+But you don't need to read that to submit an airport - the checklists above are enough.
+

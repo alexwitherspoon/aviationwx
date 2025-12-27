@@ -119,7 +119,7 @@ When multiple sources exist, the goal is to present the most useful “right now
 - Who will maintain it and where spare parts live:
 
 ## Next
-Move to **Installation Planning** (we can add this as Guide 08), or loop back and confirm your choices:
+Move to **Camera Configuration** (Guide 08), **Weather Station Configuration** (Guide 09), or loop back and confirm your choices:
 - permission (Guide 01)
 - siting (Guide 02)
 - mounting (Guide 03)

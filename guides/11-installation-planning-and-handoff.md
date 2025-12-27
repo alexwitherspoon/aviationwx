@@ -1,7 +1,7 @@
-# 08 - Installation Planning & Handoff
+# 11 - Installation Planning & Handoff
 
 ## Goal
-Get from “approved idea” → “working, maintainable installation” with:
+Get from "approved idea" → "working, maintainable installation" with:
 - clear ownership,
 - clean installs,
 - reliable updates,
@@ -28,7 +28,7 @@ This guide ties together the earlier choices:
 
 ## Phase 1 - Plan
 
-### Define the “owner” (don’t skip this)
+### Define the "owner" (don't skip this)
 Write down who owns what:
 
 - **Airport sponsor/owner:** ____________________
@@ -46,8 +46,8 @@ If any of these are unclear, pause. Ambiguity becomes downtime later.
 - Power option: A / B / C / D (Guide 05)
 - Internet option: A / B / C / D / E (Guide 06)
 
-### Set acceptance criteria (what “done” means)
-A good “go-live” definition:
+### Set acceptance criteria (what "done" means)
+A good "go-live" definition:
 - Camera view is **useful** (per Guide 02)
 - Weather station readings look **reasonable** for the field
 - Uploads are consistent for at least **24-72 hours**
@@ -60,18 +60,18 @@ A good “go-live” definition:
 
 ### Pre-stage checklist
 - ☐ Inventory all parts (camera(s), mounts, fasteners, cables, weather station, network gear)
-- ☐ Label each device (simple labels are fine: “CAM1”, “CAM2”, “WX”, “ROUTER”)
+- ☐ Label each device (simple labels are fine: "CAM1", "CAM2", "WX", "ROUTER")
 - ☐ Configure camera upload method (FTP/FTPs/SFTP or RTSP or snapshot URL)
 - ☐ Configure update interval (start conservative; 5 minutes is often a great default)
-- ☐ Confirm time/date settings (so timestamps and “freshness” behave)
-- ☐ Confirm credentials are stored responsibly (and not only in one person’s head)
+- ☐ Confirm time/date settings (so timestamps and "freshness" behave)
+- ☐ Confirm credentials are stored responsibly (and not only in one person's head)
 - ☐ Dry-run the complete data path on a bench (camera → internet → destination)
 
 ### Bring spares (cheap insurance)
 Recommended spares:
 - ☐ extra SD card (if used), extra ethernet cable, spare power supply/PoE injector
 - ☐ extra mounting hardware / zip ties / weatherproof tape / grommets
-- ☐ a simple “known-good” test cable and small switch (optional)
+- ☐ a simple "known-good" test cable and small switch (optional)
 
 ---
 
@@ -111,12 +111,12 @@ Recommended spares:
 - ☐ Confirm each camera view is correct and useful (Guide 02)
 - ☐ Confirm the weather station is reporting and looks reasonable
 - ☐ Confirm uploads are arriving on schedule
-- ☐ Confirm the “freshness” of updates is easy to verify
+- ☐ Confirm the "freshness" of updates is easy to verify
 - ☐ Confirm the install does not create obvious privacy issues (Guide 01)
 - ☐ Reboot test: power-cycle the network gear and confirm it recovers without intervention
 
-### “Looks reasonable” sanity checks (plain language)
-- Wind direction roughly matches what you’d expect for the field and conditions
+### "Looks reasonable" sanity checks (plain language)
+- Wind direction roughly matches what you'd expect for the field and conditions
 - Temperature is not obviously heat-soaked (e.g., not wildly warmer than nearby)
 - Pressure trend is plausible
 - Camera exposure is usable (not constantly blown out or too dark)
@@ -128,11 +128,11 @@ Recommended spares:
 ### Handoff checklist (pilots love checklists)
 - ☐ Identify the primary local maintainer and a backup contact
 - ☐ Document how to access equipment (keys, escort rules, contact numbers)
-- ☐ Document how to verify the system is healthy (simple “green checks”)
+- ☐ Document how to verify the system is healthy (simple "green checks")
 - ☐ Document how to reboot safely (what to power-cycle first)
 - ☐ Document who pays for ongoing costs (LTE plan, Starlink, etc.)
 - ☐ Store credentials and configuration in a shared, controlled location
-- ☐ Agree on an “if it breaks” plan and expected response time (even if informal)
+- ☐ Agree on an "if it breaks" plan and expected response time (even if informal)
 
 ### Minimal documentation template (copy/paste)
 - **Airport:** ________
@@ -143,7 +143,7 @@ Recommended spares:
 - **Internet:** ________
 - **Update interval:** ________
 - **Who maintains it:** ________
-- **How to verify it’s working:** ________
+- **How to verify it's working:** ________
 - **How to reboot it:** ________
 - **Spare parts location:** ________
 - **Install date:** ________
@@ -156,14 +156,14 @@ Recommended spares:
 ### Suggested maintenance cadence
 - **Monthly:** quick visual inspection (mount stability, cable wear, cleanliness)
 - **Seasonally:** review camera framing (tree growth), weather station exposure, solar panel cleanliness (if applicable)
-- **After storms:** quick “is it alive?” check
+- **After storms:** quick "is it alive?" check
 
 ### Common issues and simple fixes
 - **No updates after an outage:** reboot network gear; confirm auto-reconnect settings
 - **Camera view degraded:** clean lens, check focus, confirm mount stability
 - **Weather readings look wrong:** check for new obstructions or heat sources
 
-If you can’t solve it quickly, it’s okay-ask for help (airport sponsor/manager, local community, AviationWX support).
+If you can't solve it quickly, it's okay-ask for help (airport sponsor/manager, local community, AviationWX support).
 
 ---
 
@@ -187,3 +187,4 @@ Every install should have a graceful exit plan.
 ## Example
 A working example dashboard:
 - kspb.aviationwx.org
+

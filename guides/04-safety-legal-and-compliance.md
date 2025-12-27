@@ -13,7 +13,7 @@ If you’re new to this project, start with **Guide 01 - Permission Packet** fir
 2. **Pick a safe location** that doesn’t create hazards and produces reliable data (Guide 02 + Guide 03).  
 3. **Ask one key question:** *Does this installation require FAA/State notice or review (Part 77 / 7460-1 / ALP)?*  
 4. **Install safely** (work plan + escort if needed; avoid runway/taxiway safety areas; treat trenches and ladders as hazards).  
-5. **Validate and monitor** after install (Guide 11 submission + review).
+5. **Validate and monitor** after install (Guide 12 submission + review).
 
 ---
 
@@ -201,7 +201,7 @@ Example (Oregon):
    - “Does this belong on the ALP or require ADO coordination?”  
 4. **If filing is needed**, file via **OE/AAA** and follow sponsor/state instructions.  
 5. **Install with a safety mindset**: escort if required; stage equipment away from operations; avoid creating holes/trenches/hazards.  
-6. **Submit to AviationWX for review** (Guide 11). We’ll validate camera usefulness, data quality, and reliability.
+6. **Submit to AviationWX for review** (Guide 12). We'll validate camera usefulness, data quality, and reliability.
 
 ---
 
