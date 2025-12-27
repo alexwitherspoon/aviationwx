@@ -99,18 +99,19 @@ last_restart_time["vsftpd"]=0
 last_restart_time["sshd"]=0
 last_restart_time["cron"]=0
 
-# Custom restart function for vsftpd (handles dual-instance mode)
+# Restart function for vsftpd
 restart_vsftpd() {
-    # Check if dual-instance configs exist (dual-stack mode)
-    if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ] || [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
-        log_message "WARN" "vsftpd is in dual-instance mode - restart requires container restart"
-        log_message "WARN" "Manual restart via watchdog not supported for dual-instance mode"
-        log_message "WARN" "Please restart the container to recover vsftpd service"
-        return 1
-    else
-        # Single instance mode - use service command
-        service vsftpd start
+    # Kill any existing vsftpd process
+    pkill -x vsftpd 2>/dev/null || true
+    sleep 1
+    
+    # Start vsftpd with the main config
+    if [ -f "/etc/vsftpd/vsftpd.conf" ]; then
+        vsftpd /etc/vsftpd/vsftpd.conf &
         return $?
+    else
+        log_message "ERROR" "vsftpd.conf not found"
+        return 1
     fi
 }
 
@@ -118,24 +119,19 @@ restart_vsftpd() {
 log_message "INFO" "Service watchdog started"
 
 while true; do
-    # For vsftpd, use custom restart function if dual-instance configs exist
-    if [ -f "/etc/vsftpd/vsftpd_ipv4.conf" ] || [ -f "/etc/vsftpd/vsftpd_ipv6.conf" ]; then
-        # Dual-instance mode: check if running, but don't try to restart via service
-        if ! pgrep -x vsftpd > /dev/null; then
-            log_message "ERROR" "vsftpd is down in dual-instance mode - container restart required"
-        fi
-    else
-        # Single instance mode: use standard restart
-        check_and_restart_service "vsftpd" "vsftpd" "service vsftpd start"
+    # Check vsftpd
+    if ! pgrep -x vsftpd > /dev/null; then
+        log_message "WARN" "vsftpd is down, attempting restart"
+        restart_vsftpd
     fi
+    
     check_and_restart_service "sshd" "sshd" "service ssh start"
-    # Check and restart cron - use check_and_restart_service which handles pgrep internally
-    # Add explicit check for debugging
+    
+    # Check and restart cron
     if ! pgrep -x cron > /dev/null 2>&1; then
-        log_message "WARN" "Cron process not found via pgrep -x cron, calling check_and_restart_service"
+        log_message "WARN" "Cron process not found, calling check_and_restart_service"
     fi
     check_and_restart_service "cron" "cron" "cron"
     
     sleep 30
 done
-

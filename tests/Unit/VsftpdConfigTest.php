@@ -12,14 +12,16 @@ use PHPUnit\Framework\TestCase;
 class VsftpdConfigTest extends TestCase
 {
     /**
-     * Test IPv4 vsftpd config syntax is valid
+     * Test vsftpd config syntax is valid
+     * 
+     * Uses single dual-stack config file that handles both IPv4 and IPv6
      */
-    public function testVsftpdIpv4Config_IsValid()
+    public function testVsftpdConfig_IsValid()
     {
-        $configPath = __DIR__ . '/../../docker/vsftpd_ipv4.conf';
+        $configPath = __DIR__ . '/../../docker/vsftpd.conf';
         
         if (!file_exists($configPath)) {
-            $this->markTestSkipped('vsftpd_ipv4.conf not found');
+            $this->markTestSkipped('vsftpd.conf not found');
             return;
         }
         
@@ -41,55 +43,16 @@ class VsftpdConfigTest extends TestCase
         );
         
         if ($hasCriticalError) {
-            $this->fail("vsftpd IPv4 config has syntax errors:\n" . $outputStr);
+            $this->fail("vsftpd config has syntax errors:\n" . $outputStr);
         }
         
-        $this->assertTrue(true, 'IPv4 config syntax is valid');
+        $this->assertTrue(true, 'Config syntax is valid');
     }
     
     /**
-     * Test IPv6 vsftpd config syntax is valid
-     * 
-     * Note: This only validates syntax, not IPv6 availability
+     * Test that config has dual-stack settings
      */
-    public function testVsftpdIpv6Config_IsValid()
-    {
-        $configPath = __DIR__ . '/../../docker/vsftpd_ipv6.conf';
-        
-        if (!file_exists($configPath)) {
-            $this->markTestSkipped('vsftpd_ipv6.conf not found');
-            return;
-        }
-        
-        // Test config syntax using vsftpd -olisten=NO (validates without starting)
-        $output = [];
-        $returnCode = 0;
-        exec("vsftpd -olisten=NO {$configPath} 2>&1", $output, $returnCode);
-        
-        // vsftpd returns 0 on success, but may output warnings
-        // Check for critical errors (not just warnings)
-        $outputStr = implode("\n", $output);
-        
-        // Config is valid if vsftpd doesn't exit with error
-        // Warnings about missing directories/files or IPv6 unavailability are OK
-        $hasCriticalError = (
-            $returnCode !== 0 &&
-            strpos($outputStr, 'listening on') === false &&
-            strpos($outputStr, 'ERROR') !== false &&
-            strpos($outputStr, 'IPv6') === false  // IPv6 unavailability is not a syntax error
-        );
-        
-        if ($hasCriticalError) {
-            $this->fail("vsftpd IPv6 config has syntax errors:\n" . $outputStr);
-        }
-        
-        $this->assertTrue(true, 'IPv6 config syntax is valid');
-    }
-    
-    /**
-     * Test base vsftpd config syntax is valid
-     */
-    public function testVsftpdBaseConfig_IsValid()
+    public function testVsftpdConfig_HasDualStackSettings()
     {
         $configPath = __DIR__ . '/../../docker/vsftpd.conf';
         
@@ -98,24 +61,12 @@ class VsftpdConfigTest extends TestCase
             return;
         }
         
-        // Test config syntax using vsftpd -olisten=NO
-        $output = [];
-        $returnCode = 0;
-        exec("vsftpd -olisten=NO {$configPath} 2>&1", $output, $returnCode);
+        $configContent = file_get_contents($configPath);
         
-        $outputStr = implode("\n", $output);
-        
-        $hasCriticalError = (
-            $returnCode !== 0 &&
-            strpos($outputStr, 'listening on') === false &&
-            strpos($outputStr, 'ERROR') !== false
-        );
-        
-        if ($hasCriticalError) {
-            $this->fail("vsftpd base config has syntax errors:\n" . $outputStr);
-        }
-        
-        $this->assertTrue(true, 'Base config syntax is valid');
+        // Dual-stack config should have listen=NO and listen_ipv6=YES
+        $this->assertStringContainsString('listen=NO', $configContent, 
+            'Config should have listen=NO for dual-stack mode');
+        $this->assertStringContainsString('listen_ipv6=YES', $configContent, 
+            'Config should have listen_ipv6=YES for dual-stack mode');
     }
 }
-

@@ -677,7 +677,7 @@ ls -la /etc/letsencrypt/live/aviationwx.org/
 openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -dates
 
 # Check vsftpd SSL status
-docker compose -f docker/docker-compose.prod.yml exec web grep "^ssl_enable=" /etc/vsftpd/vsftpd_ipv4.conf
+docker compose -f docker/docker-compose.prod.yml exec web grep "^ssl_enable=" /etc/vsftpd/vsftpd.conf
 
 # Enable SSL manually if needed
 docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
