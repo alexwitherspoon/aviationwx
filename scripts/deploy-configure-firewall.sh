@@ -1,12 +1,15 @@
 #!/bin/bash
 # Configure firewall ports for all production services
-# This script ensures all required ports are open in ufw
+# This script is DECLARATIVE - it ensures the firewall matches the desired state
+# by adding missing rules AND removing stale/orphaned rules.
 
 set -e
 
-# Ports required for production services
+# =============================================================================
+# DESIRED STATE: Define all ports that SHOULD be open
+# =============================================================================
 # Format: PORT:PROTOCOL:DESCRIPTION
-# Note: SSH (22) is typically already configured, but included for completeness
+# Note: SSH (22) is PROTECTED and will never be removed
 PORTS=(
     "80:tcp:HTTP (Nginx)"
     "443:tcp:HTTPS (Nginx)"
@@ -21,7 +24,23 @@ DENY_PORTS=(
     "8080:tcp:Apache (internal, behind nginx - should only be accessible from localhost)"
 )
 
-echo "Configuring firewall ports for production services..."
+# Protected ports that should NEVER be removed (safety net)
+PROTECTED_PORTS=("22/tcp" "22")
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+# Set to "true" to enable cleanup of stale rules (recommended for production)
+CLEANUP_STALE_RULES="${CLEANUP_STALE_RULES:-true}"
+
+# Set to "true" for dry-run mode (shows what would be done without making changes)
+DRY_RUN="${DRY_RUN:-false}"
+
+echo "=============================================="
+echo "Firewall Configuration (Declarative Mode)"
+echo "=============================================="
+echo "Cleanup stale rules: ${CLEANUP_STALE_RULES}"
+echo "Dry run: ${DRY_RUN}"
 echo ""
 
 # Check if ufw is installed
@@ -39,20 +58,130 @@ else
     SUDO=""
 fi
 
-# Enable ufw if not already enabled (non-interactive)
-if ! $SUDO ufw status | grep -q "Status: active"; then
-    echo "Enabling ufw..."
-    echo "y" | $SUDO ufw --force enable
+# Build list of desired port/protocol combinations for comparison
+declare -A DESIRED_ALLOW_RULES
+declare -A DESIRED_DENY_RULES
+
+for port_config in "${PORTS[@]}"; do
+    IFS=':' read -ra parts <<< "$port_config"
+    if [[ "${parts[1]}" =~ ^[0-9]+$ ]]; then
+        # Port range
+        port_range="${parts[0]}:${parts[1]}"
+        protocol="${parts[2]}"
+        DESIRED_ALLOW_RULES["${port_range}/${protocol}"]=1
+    else
+        # Single port
+        port="${parts[0]}"
+        protocol="${parts[1]}"
+        DESIRED_ALLOW_RULES["${port}/${protocol}"]=1
+    fi
+done
+
+for deny_config in "${DENY_PORTS[@]}"; do
+    IFS=':' read -ra parts <<< "$deny_config"
+    port="${parts[0]}"
+    protocol="${parts[1]}"
+    DESIRED_DENY_RULES["${port}/${protocol}"]=1
+done
+
+# =============================================================================
+# STEP 1: Remove stale/orphaned rules
+# =============================================================================
+if [ "$CLEANUP_STALE_RULES" = "true" ]; then
+    echo "Step 1: Checking for stale firewall rules..."
+    echo ""
+    
+    # Get current rules with numbers (for deletion)
+    # Parse ufw status numbered output to find rules to remove
+    RULES_TO_DELETE=()
+    
+    while IFS= read -r line; do
+        # Match lines like: [ 1] 500/udp ALLOW IN Anywhere
+        if [[ "$line" =~ ^\[\ *([0-9]+)\]\ +([0-9:]+)/([a-z]+)\ +(ALLOW|DENY) ]]; then
+            rule_num="${BASH_REMATCH[1]}"
+            port="${BASH_REMATCH[2]}"
+            protocol="${BASH_REMATCH[3]}"
+            action="${BASH_REMATCH[4]}"
+            port_proto="${port}/${protocol}"
+            
+            # Check if this is a protected port
+            is_protected=false
+            for protected in "${PROTECTED_PORTS[@]}"; do
+                if [[ "$port_proto" == "$protected" || "$port" == "$protected" ]]; then
+                    is_protected=true
+                    break
+                fi
+            done
+            
+            if [ "$is_protected" = "true" ]; then
+                echo "  🔒 Protected: ${port_proto} (${action}) - will not remove"
+                continue
+            fi
+            
+            # Check if rule is in our desired state
+            if [ "$action" = "ALLOW" ]; then
+                if [ -z "${DESIRED_ALLOW_RULES[$port_proto]}" ]; then
+                    echo "  🗑️  Stale ALLOW rule: ${port_proto} - marked for removal"
+                    RULES_TO_DELETE+=("$port_proto:ALLOW")
+                fi
+            elif [ "$action" = "DENY" ]; then
+                if [ -z "${DESIRED_DENY_RULES[$port_proto]}" ]; then
+                    echo "  🗑️  Stale DENY rule: ${port_proto} - marked for removal"
+                    RULES_TO_DELETE+=("$port_proto:DENY")
+                fi
+            fi
+        fi
+    done < <($SUDO ufw status numbered 2>/dev/null)
+    
+    # Delete stale rules (in reverse order to preserve rule numbers)
+    if [ ${#RULES_TO_DELETE[@]} -gt 0 ]; then
+        echo ""
+        echo "Removing ${#RULES_TO_DELETE[@]} stale rule(s)..."
+        for rule in "${RULES_TO_DELETE[@]}"; do
+            port_proto="${rule%:*}"
+            action="${rule##*:}"
+            if [ "$DRY_RUN" = "true" ]; then
+                echo "  [DRY RUN] Would delete: ${action} ${port_proto}"
+            else
+                echo "  Deleting: ${action} ${port_proto}"
+                if [ "$action" = "ALLOW" ]; then
+                    $SUDO ufw delete allow "${port_proto}" 2>/dev/null || true
+                else
+                    $SUDO ufw delete deny "${port_proto}" 2>/dev/null || true
+                fi
+            fi
+        done
+        echo "✓ Stale rules removed"
+    else
+        echo "✓ No stale rules found"
+    fi
+    echo ""
 fi
 
-# Configure each port
+# =============================================================================
+# STEP 2: Enable ufw if not already enabled
+# =============================================================================
+echo "Step 2: Ensuring ufw is enabled..."
+if ! $SUDO ufw status | grep -q "Status: active"; then
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "  [DRY RUN] Would enable ufw"
+    else
+        echo "  Enabling ufw..."
+        echo "y" | $SUDO ufw --force enable
+    fi
+fi
+echo "✓ ufw is active"
+echo ""
+
+# =============================================================================
+# STEP 3: Add/verify required ALLOW rules
+# =============================================================================
+echo "Step 3: Configuring required ALLOW rules..."
 for port_config in "${PORTS[@]}"; do
-    # Split by colon - handle both single ports and port ranges
     IFS=':' read -ra parts <<< "$port_config"
     
-    # Check if second part is a number (indicating port range like 50000:50100:tcp:desc)
     if [[ "${parts[1]}" =~ ^[0-9]+$ ]]; then
-        # Port range format: PORT_START:PORT_END:PROTOCOL:DESCRIPTION
+        # Port range format
         port_start="${parts[0]}"
         port_end="${parts[1]}"
         protocol="${parts[2]}"
@@ -60,50 +189,64 @@ for port_config in "${PORTS[@]}"; do
         port_range="${port_start}:${port_end}"
         
         if $SUDO ufw status | grep -q "${port_range}/${protocol}"; then
-            echo "✓ Port range ${port_range}/${protocol} (${description}) already configured"
+            echo "  ✓ ${port_range}/${protocol} (${description}) - already configured"
         else
-            echo "Adding port range ${port_range}/${protocol} (${description})..."
-            $SUDO ufw allow ${port_range}/${protocol} comment "${description}"
-            echo "✓ Port range ${port_range}/${protocol} added"
+            if [ "$DRY_RUN" = "true" ]; then
+                echo "  [DRY RUN] Would add: ${port_range}/${protocol} (${description})"
+            else
+                echo "  + Adding ${port_range}/${protocol} (${description})..."
+                $SUDO ufw allow ${port_range}/${protocol} comment "${description}"
+            fi
         fi
     else
-        # Single port format: PORT:PROTOCOL:DESCRIPTION
+        # Single port format
         port="${parts[0]}"
         protocol="${parts[1]}"
         description="${parts[2]}"
         
-        if $SUDO ufw status | grep -q "^${port}/${protocol}"; then
-            echo "✓ Port ${port}/${protocol} (${description}) already configured"
+        if $SUDO ufw status | grep -q "${port}/${protocol}.*ALLOW"; then
+            echo "  ✓ ${port}/${protocol} (${description}) - already configured"
         else
-            echo "Adding port ${port}/${protocol} (${description})..."
-            $SUDO ufw allow ${port}/${protocol} comment "${description}"
-            echo "✓ Port ${port}/${protocol} added"
+            if [ "$DRY_RUN" = "true" ]; then
+                echo "  [DRY RUN] Would add: ${port}/${protocol} (${description})"
+            else
+                echo "  + Adding ${port}/${protocol} (${description})..."
+                $SUDO ufw allow ${port}/${protocol} comment "${description}"
+            fi
         fi
     fi
 done
-
-# Configure ports to deny (internal services)
 echo ""
-echo "Configuring firewall to deny internal ports from external access..."
+
+# =============================================================================
+# STEP 4: Add/verify required DENY rules
+# =============================================================================
+echo "Step 4: Configuring required DENY rules..."
 for deny_config in "${DENY_PORTS[@]}"; do
-    # Split by colon
     IFS=':' read -ra parts <<< "$deny_config"
     port="${parts[0]}"
     protocol="${parts[1]}"
     description="${parts[2]}"
     
-    # Check if deny rule already exists
-    if $SUDO ufw status | grep -qE "^${port}/${protocol}.*DENY"; then
-        echo "✓ Port ${port}/${protocol} (${description}) already denied"
+    if $SUDO ufw status | grep -qE "${port}/${protocol}.*DENY"; then
+        echo "  ✓ ${port}/${protocol} (${description}) - already denied"
     else
-        echo "Denying port ${port}/${protocol} (${description})..."
-        $SUDO ufw deny ${port}/${protocol} comment "${description}"
-        echo "✓ Port ${port}/${protocol} denied"
+        if [ "$DRY_RUN" = "true" ]; then
+            echo "  [DRY RUN] Would deny: ${port}/${protocol} (${description})"
+        else
+            echo "  + Denying ${port}/${protocol} (${description})..."
+            $SUDO ufw deny ${port}/${protocol} comment "${description}"
+        fi
     fi
 done
-
 echo ""
-echo "Current firewall status:"
+
+# =============================================================================
+# FINAL: Show current status
+# =============================================================================
+echo "=============================================="
+echo "Final Firewall Status:"
+echo "=============================================="
 $SUDO ufw status numbered
 
 echo ""
