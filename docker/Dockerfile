@@ -56,10 +56,8 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 # Copy configuration files (rarely change)
 COPY config/crontab /etc/cron.d/aviationwx-cron
 COPY docker/docker-entrypoint.sh /usr/local/bin/
-# vsftpd dual-stack configuration (IPv4 and IPv6 instances)
-# Base config removed - using only dual configs for cleaner architecture
-COPY docker/vsftpd_ipv4.conf /etc/vsftpd/vsftpd_ipv4.conf
-COPY docker/vsftpd_ipv6.conf /etc/vsftpd/vsftpd_ipv6.conf
+# vsftpd dual-stack configuration (single instance handles both IPv4 and IPv6)
+COPY docker/vsftpd.conf /etc/vsftpd/vsftpd.conf
 COPY docker/pam-vsftpd /etc/pam.d/vsftpd
 COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
@@ -85,8 +83,7 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/enable-vsftpd-ssl.sh \
     && chmod +x /usr/local/bin/create-sftp-user.sh \
     && chmod +x /usr/local/bin/resolve-upload-ip.sh \
-    && chmod 644 /etc/vsftpd/vsftpd_ipv4.conf \
-    && chmod 644 /etc/vsftpd/vsftpd_ipv6.conf \
+    && chmod 644 /etc/vsftpd/vsftpd.conf \
     && chmod 644 /etc/ssh/sshd_config \
     && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx \
     && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
