@@ -42,6 +42,22 @@ A URL returns a current still image.
 - very simple when available
 - but vendor support varies a lot (and some require cloud accounts or are unreliable)
 
+### Option D - AviationWX Bridge (for cameras without upload capability)
+A small local device captures images from your cameras and uploads them to AviationWX.
+
+**Why this is useful**
+- works with cameras that **don't support scheduled FTP uploads** (e.g., UniFi Protect, NVR systems)
+- provides **higher reliability** with local queuing and automatic retry
+- handles **RTSP-only cameras** with better quality than remote frame extraction
+- unified solution for **mixed camera types** at a single airport
+
+**When to consider the Bridge**
+- your camera system doesn't offer FTP/FTPs/SFTP uploads
+- you want extra reliability for remote or solar-powered installations
+- you have multiple camera types that need unified handling
+
+See **Guide 13 - AviationWX Bridge** for details.
+
 ---
 
 ## “Known-good defaults” (start here)

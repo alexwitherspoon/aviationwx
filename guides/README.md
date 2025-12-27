@@ -33,6 +33,7 @@ Most installs follow the same “pick a path” sequence:
 - [07 - Equipment Recommendations](07-equipment-recommendations.md)
 - [09 - Camera Configuration](09-camera-configuration.md)
 - [10 - Weather Station Configuration](10-weather-station-configuration.md)
+- [13 - AviationWX Bridge](13-aviationwx-bridge.md) *(optional - for cameras without FTP)*
 
 6) **Install, hand off, and operate**
 - [08 - Installation Planning & Handoff](08-installation-planning-and-handoff.md)
