@@ -92,18 +92,25 @@ if [ "$CLEANUP_STALE_RULES" = "true" ]; then
     echo "Step 1: Checking for stale firewall rules..."
     echo ""
     
-    # Get current rules with numbers (for deletion)
-    # Parse ufw status numbered output to find rules to remove
+    # Get current rules and compare against desired state
+    # We parse the simple 'ufw status' output which is more reliable
     RULES_TO_DELETE=()
     
     while IFS= read -r line; do
-        # Match lines like: [ 1] 500/udp ALLOW IN Anywhere
-        if [[ "$line" =~ ^\[\ *([0-9]+)\]\ +([0-9:]+)/([a-z]+)\ +(ALLOW|DENY) ]]; then
-            rule_num="${BASH_REMATCH[1]}"
-            port="${BASH_REMATCH[2]}"
-            protocol="${BASH_REMATCH[3]}"
-            action="${BASH_REMATCH[4]}"
+        # Skip header lines and empty lines
+        [[ "$line" =~ ^To|^--|^Status|^$ ]] && continue
+        
+        # Parse lines like: "50000:50019/tcp            ALLOW       Anywhere"
+        # or: "22/tcp                     ALLOW       Anywhere                   # SSH"
+        # Extract port/protocol and action
+        if [[ "$line" =~ ^([0-9:]+)/([a-z]+)[[:space:]]+(ALLOW|DENY) ]]; then
+            port="${BASH_REMATCH[1]}"
+            protocol="${BASH_REMATCH[2]}"
+            action="${BASH_REMATCH[3]}"
             port_proto="${port}/${protocol}"
+            
+            # Skip IPv6 rules (they have "(v6)" in them) - we handle them separately
+            [[ "$line" =~ \(v6\) ]] && continue
             
             # Check if this is a protected port
             is_protected=false
@@ -132,9 +139,9 @@ if [ "$CLEANUP_STALE_RULES" = "true" ]; then
                 fi
             fi
         fi
-    done < <($SUDO ufw status numbered 2>/dev/null)
+    done < <($SUDO ufw status 2>/dev/null)
     
-    # Delete stale rules (in reverse order to preserve rule numbers)
+    # Delete stale rules
     if [ ${#RULES_TO_DELETE[@]} -gt 0 ]; then
         echo ""
         echo "Removing ${#RULES_TO_DELETE[@]} stale rule(s)..."
@@ -145,10 +152,13 @@ if [ "$CLEANUP_STALE_RULES" = "true" ]; then
                 echo "  [DRY RUN] Would delete: ${action} ${port_proto}"
             else
                 echo "  Deleting: ${action} ${port_proto}"
+                # Use --force to avoid confirmation prompts, try both with and without 'IN'
                 if [ "$action" = "ALLOW" ]; then
-                    $SUDO ufw delete allow "${port_proto}" 2>/dev/null || true
+                    $SUDO ufw --force delete allow "${port_proto}" 2>/dev/null || \
+                    $SUDO ufw --force delete allow in "${port_proto}" 2>/dev/null || true
                 else
-                    $SUDO ufw delete deny "${port_proto}" 2>/dev/null || true
+                    $SUDO ufw --force delete deny "${port_proto}" 2>/dev/null || \
+                    $SUDO ufw --force delete deny in "${port_proto}" 2>/dev/null || true
                 fi
             fi
         done
