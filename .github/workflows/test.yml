@@ -29,10 +29,10 @@ jobs:
           extensions: apcu, gd, zip, curl, exif
           coverage: pcov
       
-      - name: Install exiftool
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libimage-exiftool-perl
+          sudo apt-get install -y libimage-exiftool-perl ffmpeg
       
       - name: Cache Composer dependencies
         uses: actions/cache@v4

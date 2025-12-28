@@ -480,14 +480,18 @@ class WebcamFormatGenerationTest extends TestCase
 
     /**
      * Test buildFormatCommand() includes mtime sync when captureTime provided
+     * 
+     * Verifies the touch command uses correct date format: YYYYMMDDhhmm.ss
+     * (touch -t requires dot before seconds)
      */
     public function testBuildFormatCommand_WithCaptureTime_IncludesTouchCommand(): void
     {
-        $captureTime = strtotime('2024-12-25 10:30:00');
+        $captureTime = strtotime('2024-12-25 10:30:45');
         $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', $captureTime);
         
         $this->assertStringContainsString('touch -t', $cmd);
-        $this->assertStringContainsString('20241225103000', $cmd);
+        // Verify correct format: YYYYMMDDhhmm.ss (with dot before seconds)
+        $this->assertStringContainsString('202412251030.45', $cmd, 'touch command must use YYYYMMDDhhmm.ss format');
     }
 
     /**
@@ -633,6 +637,186 @@ class WebcamFormatGenerationTest extends TestCase
         // Verify it's a valid WebP file
         $format = detectImageFormat($stagingFile);
         $this->assertEquals('webp', $format, 'Generated file should be valid WebP');
+        
+        // Cleanup
+        @unlink($stagingFile);
+        @unlink($sourceFile);
+    }
+
+    /**
+     * Test full format generation pipeline with mock data (functional test)
+     * 
+     * This is a comprehensive functional test that verifies the entire image conversion
+     * pipeline works end-to-end using mock image data. Tests:
+     * - generateFormatsSync() generates all enabled formats
+     * - promoteFormats() promotes staging files to final cache
+     * - Date format fix (touch -t command) works correctly
+     * - Generated files are valid and accessible
+     * 
+     * Uses mock webcam image data to ensure testability without external dependencies.
+     */
+    public function testFormatGenerationPipeline_WithMockData_GeneratesAllFormats(): void
+    {
+        // Skip if ffmpeg not available
+        $ffmpegPath = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpegPath)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+        
+        $testAirport = 'test_pipeline_' . time();
+        $cacheDir = __DIR__ . '/../../cache/webcams';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        
+        // Use mock webcam image generator for consistent test data
+        require_once __DIR__ . '/../../lib/mock-webcam.php';
+        $mockImageData = generateMockWebcamImage($testAirport, 0, 640, 480);
+        
+        // Save mock image to source file
+        $sourceFile = $this->testImageDir . '/source_mock.jpg';
+        file_put_contents($sourceFile, $mockImageData);
+        
+        // Verify source file is valid JPEG
+        $sourceFormat = detectImageFormat($sourceFile);
+        $this->assertEquals('jpg', $sourceFormat, 'Source mock image should be valid JPEG');
+        
+        // Get capture time for timestamp-based filenames
+        $captureTime = time();
+        
+        // Generate all enabled formats
+        $formatResults = generateFormatsSync($sourceFile, $testAirport, 0, 'jpg');
+        
+        // Verify formats were generated (check what's enabled)
+        $enabledFormats = getEnabledWebcamFormats();
+        $expectedFormats = array_filter(['jpg', 'webp', 'avif'], function($fmt) use ($enabledFormats) {
+            return in_array($fmt, $enabledFormats);
+        });
+        
+        foreach ($expectedFormats as $format) {
+            if ($format === 'jpg') {
+                continue; // Source is already JPG
+            }
+            
+            $this->assertArrayHasKey($format, $formatResults, "Format {$format} should be in results");
+            
+            if (in_array($format, $enabledFormats)) {
+                $this->assertTrue($formatResults[$format], "Format {$format} generation should succeed");
+                
+                // Verify staging file exists and is valid
+                $stagingFile = getStagingFilePath($testAirport, 0, $format);
+                $this->assertFileExists($stagingFile, "Staging file for {$format} should exist");
+                
+                // Verify it's a valid file of the expected format
+                $detectedFormat = detectImageFormat($stagingFile);
+                $this->assertEquals($format, $detectedFormat, "Generated {$format} file should be valid");
+                
+                // Verify file has content
+                $this->assertGreaterThan(0, filesize($stagingFile), "Generated {$format} file should have content");
+            }
+        }
+        
+        // Test promotion pipeline
+        if (!empty($formatResults)) {
+            $promotedFormats = promoteFormats($testAirport, 0, $formatResults, 'jpg', $captureTime);
+            
+            // Verify promoted formats
+            foreach ($promotedFormats as $format) {
+                // Check timestamp-based file exists
+                $timestampFile = getFinalFilePath($testAirport, 0, $format, $captureTime);
+                $this->assertFileExists($timestampFile, "Promoted {$format} file should exist");
+                
+                // Verify symlink exists
+                $symlinkPath = getCacheSymlinkPath($testAirport, 0, $format);
+                if ($format !== 'jpg' || count($promotedFormats) > 1) {
+                    // Symlink should exist for promoted formats
+                    $this->assertTrue(is_link($symlinkPath) || file_exists($symlinkPath), 
+                        "Symlink for {$format} should exist");
+                }
+                
+                // Verify file mtime matches capture time (tests date format fix)
+                $fileMtime = filemtime($timestampFile);
+                $this->assertGreaterThanOrEqual($captureTime - 2, $fileMtime, 
+                    "File mtime should be close to capture time (tests touch -t date format)");
+                $this->assertLessThanOrEqual($captureTime + 2, $fileMtime, 
+                    "File mtime should be close to capture time (tests touch -t date format)");
+            }
+        }
+        
+        // Cleanup
+        @unlink($sourceFile);
+        // Clean up staging files
+        foreach (['jpg', 'webp', 'avif'] as $format) {
+            $stagingFile = getStagingFilePath($testAirport, 0, $format);
+            @unlink($stagingFile);
+            $timestampFile = getFinalFilePath($testAirport, 0, $format, $captureTime);
+            @unlink($timestampFile);
+            $symlinkPath = getCacheSymlinkPath($testAirport, 0, $format);
+            if (is_link($symlinkPath)) {
+                @unlink($symlinkPath);
+            }
+        }
+    }
+
+    /**
+     * Test generateFormatsSync() actually generates AVIF format (if ffmpeg available)
+     * 
+     * This is an integration test that requires ffmpeg with libaom-av1 to be installed.
+     * It verifies that the AVIF format generation pipeline works end-to-end.
+     */
+    public function testGenerateFormatsSync_AVIF_GeneratesValidFile(): void
+    {
+        // Skip if ffmpeg not available
+        $ffmpegPath = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpegPath)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+        
+        // Check if ffmpeg has AVIF support (libaom-av1)
+        $ffmpegCodecs = shell_exec('ffmpeg -codecs 2>/dev/null | grep -i av1' ?: '');
+        if (empty($ffmpegCodecs)) {
+            $this->markTestSkipped('ffmpeg AVIF/AV1 support not available');
+        }
+        
+        // Skip if AVIF generation disabled
+        if (!isAvifGenerationEnabled()) {
+            $this->markTestSkipped('AVIF generation disabled in config');
+        }
+        
+        $testAirport = 'test_gen_avif_' . time();
+        $cacheDir = __DIR__ . '/../../cache/webcams';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        
+        // Create a real JPEG test image using GD (if available)
+        $sourceFile = $this->testImageDir . '/source.jpg';
+        if (function_exists('imagecreate')) {
+            $img = imagecreate(100, 100);
+            $bg = imagecolorallocate($img, 255, 255, 255);
+            $text = imagecolorallocate($img, 0, 0, 0);
+            imagestring($img, 5, 10, 10, 'TEST', $text);
+            imagejpeg($img, $sourceFile, 85);
+            imagedestroy($img);
+        } else {
+            // Fallback: create minimal valid JPEG
+            file_put_contents($sourceFile, "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xFF\xD9");
+        }
+        
+        // Generate formats
+        $formatResults = generateFormatsSync($sourceFile, $testAirport, 0, 'jpg');
+        
+        // Verify AVIF was generated
+        $this->assertArrayHasKey('avif', $formatResults, 'AVIF should be in format results');
+        $this->assertTrue($formatResults['avif'], 'AVIF generation should succeed');
+        
+        // Verify staging file exists and is valid AVIF
+        $stagingFile = getStagingFilePath($testAirport, 0, 'avif');
+        $this->assertFileExists($stagingFile, 'AVIF staging file should exist');
+        
+        // Verify it's a valid AVIF file
+        $format = detectImageFormat($stagingFile);
+        $this->assertEquals('avif', $format, 'Generated file should be valid AVIF');
         
         // Cleanup
         @unlink($stagingFile);

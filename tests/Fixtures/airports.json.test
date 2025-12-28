@@ -10,6 +10,8 @@
     "stale_failclosed_seconds": 10800,
     "webcam_refresh_default": 60,
     "weather_refresh_default": 60,
+    "webcam_generate_webp": true,
+    "webcam_generate_avif": true,
     "public_api": {
       "enabled": true,
       "version": "1",
