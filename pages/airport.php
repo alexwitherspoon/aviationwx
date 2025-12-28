@@ -4331,8 +4331,7 @@ const WebcamPlayer = {
         this.camIndex = camIndex;
         this.camName = camName;
         
-        // Determine preferred format based on browser support
-        this.preferredFormat = determinePreferredFormat();
+        this.preferredFormat = determinePreferredFormat(camIndex);
 
         // Show player immediately with current image
         img.src = currentImageSrc;
@@ -4366,6 +4365,18 @@ const WebcamPlayer = {
                 this.frames = data.frames;
                 this.timezone = data.timezone || 'UTC';
                 this.currentIndex = data.current_index || 0;
+                
+                // Store server-enabled formats from history API (fallback if mtime endpoint hasn't been called yet)
+                if (data.enabledFormats && Array.isArray(data.enabledFormats)) {
+                    if (!window.SERVER_ENABLED_FORMATS) {
+                        window.SERVER_ENABLED_FORMATS = {};
+                    }
+                    if (!window.SERVER_ENABLED_FORMATS[camIndex]) {
+                        window.SERVER_ENABLED_FORMATS[camIndex] = data.enabledFormats;
+                        this.preferredFormat = determinePreferredFormat(camIndex);
+                    }
+                }
+                
                 this.initTimeline();
                 this.preloadFrames();
                 document.querySelector('.webcam-player-controls').style.display = '';
@@ -5643,17 +5654,23 @@ function setupWebcamRefresh(camIndex, baseInterval) {
 }
 
 /**
- * Determine preferred format based on browser support
+ * Determine preferred format based on browser support and server-enabled formats
  * 
  * Uses user agent detection (more reliable than canvas.toDataURL).
  * Falls back to canvas.toDataURL() if user agent detection fails.
+ * Respects server-enabled formats to avoid requesting disabled formats.
  * 
+ * @param {number} camIndex Camera index (optional, for per-camera format cache)
  * @returns {string} Preferred format: 'avif', 'webp', or 'jpg'
  */
-function determinePreferredFormat() {
-    // Cache result to avoid repeated detection
-    if (window._cachedPreferredFormat !== undefined) {
-        return window._cachedPreferredFormat;
+function determinePreferredFormat(camIndex = null) {
+    const serverFormats = (camIndex !== null && window.SERVER_ENABLED_FORMATS && window.SERVER_ENABLED_FORMATS[camIndex]) 
+        ? window.SERVER_ENABLED_FORMATS[camIndex] 
+        : null;
+    
+    const cacheKey = camIndex !== null ? `_cachedPreferredFormat_${camIndex}` : '_cachedPreferredFormat';
+    if (window[cacheKey] !== undefined) {
+        return window[cacheKey];
     }
     
     const ua = navigator.userAgent;
@@ -5666,55 +5683,57 @@ function determinePreferredFormat() {
     // Version thresholds: Chrome 85+, Edge 122+, Firefox 93+, Safari 16+ support AVIF
     // Chrome 23+, Edge 18+, Firefox 65+, Safari 14+ support WebP
     
+    const isFormatEnabled = (format) => {
+        if (!serverFormats) return true; // Assume enabled if unknown (backward compatible)
+        return serverFormats.includes(format);
+    };
+    
+    const setCachedFormat = (format) => {
+        window[cacheKey] = format;
+        return format;
+    };
+    
     if (isChrome) {
         const chromeMatch = ua.match(/Chrome\/(\d+)/i);
         const chromeVersion = chromeMatch ? parseInt(chromeMatch[1]) : 0;
-        if (chromeVersion >= 85) {
-            window._cachedPreferredFormat = 'avif';
-            return 'avif';
+        if (chromeVersion >= 85 && isFormatEnabled('avif')) {
+            return setCachedFormat('avif');
         }
-        if (chromeVersion >= 23) {
-            window._cachedPreferredFormat = 'webp';
-            return 'webp';
+        if (chromeVersion >= 23 && isFormatEnabled('webp')) {
+            return setCachedFormat('webp');
         }
     }
     
     if (isEdge) {
         const edgeMatch = ua.match(/Edg\/(\d+)/i);
         const edgeVersion = edgeMatch ? parseInt(edgeMatch[1]) : 0;
-        if (edgeVersion >= 122) {
-            window._cachedPreferredFormat = 'avif';
-            return 'avif';
+        if (edgeVersion >= 122 && isFormatEnabled('avif')) {
+            return setCachedFormat('avif');
         }
-        if (edgeVersion >= 18) {
-            window._cachedPreferredFormat = 'webp';
-            return 'webp';
+        if (edgeVersion >= 18 && isFormatEnabled('webp')) {
+            return setCachedFormat('webp');
         }
     }
     
     if (isFirefox) {
         const firefoxMatch = ua.match(/Firefox\/(\d+)/i);
         const firefoxVersion = firefoxMatch ? parseInt(firefoxMatch[1]) : 0;
-        if (firefoxVersion >= 93) {
-            window._cachedPreferredFormat = 'avif';
-            return 'avif';
+        if (firefoxVersion >= 93 && isFormatEnabled('avif')) {
+            return setCachedFormat('avif');
         }
-        if (firefoxVersion >= 65) {
-            window._cachedPreferredFormat = 'webp';
-            return 'webp';
+        if (firefoxVersion >= 65 && isFormatEnabled('webp')) {
+            return setCachedFormat('webp');
         }
     }
     
     if (isSafari) {
         const safariMatch = ua.match(/Version\/(\d+)/i);
         const safariVersion = safariMatch ? parseInt(safariMatch[1]) : 0;
-        if (safariVersion >= 16) {
-            window._cachedPreferredFormat = 'avif';
-            return 'avif';
+        if (safariVersion >= 16 && isFormatEnabled('avif')) {
+            return setCachedFormat('avif');
         }
-        if (safariVersion >= 14) {
-            window._cachedPreferredFormat = 'webp';
-            return 'webp';
+        if (safariVersion >= 14 && isFormatEnabled('webp')) {
+            return setCachedFormat('webp');
         }
     }
     
@@ -5725,9 +5744,8 @@ function determinePreferredFormat() {
     
     try {
         const avifDataUrl = canvas.toDataURL('image/avif');
-        if (avifDataUrl && avifDataUrl.indexOf('data:image/avif') === 0) {
-            window._cachedPreferredFormat = 'avif';
-            return 'avif';
+        if (avifDataUrl && avifDataUrl.indexOf('data:image/avif') === 0 && isFormatEnabled('avif')) {
+            return setCachedFormat('avif');
         }
     } catch (e) {
         // AVIF not supported
@@ -5735,17 +5753,18 @@ function determinePreferredFormat() {
     
     try {
         const webpDataUrl = canvas.toDataURL('image/webp');
-        if (webpDataUrl && webpDataUrl.indexOf('data:image/webp') === 0) {
-            window._cachedPreferredFormat = 'webp';
-            return 'webp';
+        if (webpDataUrl && webpDataUrl.indexOf('data:image/webp') === 0 && isFormatEnabled('webp')) {
+            return setCachedFormat('webp');
         }
     } catch (e) {
         // WebP not supported
     }
     
-    // Default to WebP for unknown modern browsers
-    window._cachedPreferredFormat = 'webp';
-    return 'webp';
+    // Default to WebP if enabled, otherwise JPG
+    if (isFormatEnabled('webp')) {
+        return setCachedFormat('webp');
+    }
+    return setCachedFormat('jpg');
 }
 
 /**
@@ -6289,8 +6308,14 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             const ready = json.formatReady || {};
             const hasExisting = hasExistingImage(camIndex);
             
-            // Determine preferred format based on browser support
-            const preferredFormat = determinePreferredFormat();
+            if (json.enabledFormats && Array.isArray(json.enabledFormats)) {
+                if (!window.SERVER_ENABLED_FORMATS) {
+                    window.SERVER_ENABLED_FORMATS = {};
+                }
+                window.SERVER_ENABLED_FORMATS[camIndex] = json.enabledFormats;
+            }
+            
+            const preferredFormat = determinePreferredFormat(camIndex);
             
             // Build image URL with timestamp parameter (immutable cache busting)
             // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}

@@ -164,6 +164,7 @@ echo json_encode([
     'frames' => $frameList,
     'current_index' => count($frameList) > 0 ? count($frameList) - 1 : 0,
     'timezone' => $airport['timezone'] ?? 'UTC',
-    'max_frames' => getWebcamHistoryMaxFrames($airportId)
+    'max_frames' => getWebcamHistoryMaxFrames($airportId),
+    'enabledFormats' => getEnabledWebcamFormats()
 ]);
 

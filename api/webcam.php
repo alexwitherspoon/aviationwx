@@ -397,7 +397,8 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
         'success' => $mtime > 0,
         'timestamp' => $mtime,
         'size' => $size,
-        'formatReady' => $formatReady
+        'formatReady' => $formatReady,
+        'enabledFormats' => $enabledFormats
     ]);
     exit;
 }
