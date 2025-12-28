@@ -71,14 +71,14 @@ function handleGetWebcamImage(array $params, array $context): void
         $format = 'jpg';
     }
     
-    // Build cache file path
-    $cacheDir = __DIR__ . '/../../cache/webcams/' . $airportId;
+    // Build cache file path (format: {airportId}_{camIndex}.{ext})
+    $cacheDir = __DIR__ . '/../../cache/webcams';
     $extension = $format === 'jpg' ? 'jpg' : $format;
-    $cacheFile = $cacheDir . '/cam' . $camIndex . '.' . $extension;
+    $cacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $extension;
     
     // Fall back to JPG if requested format doesn't exist
     if (!file_exists($cacheFile) && $format !== 'jpg') {
-        $cacheFile = $cacheDir . '/cam' . $camIndex . '.jpg';
+        $cacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
         $format = 'jpg';
     }
     
