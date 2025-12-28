@@ -512,15 +512,21 @@ function harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig = n
 /**
  * Move image to cache and generate missing formats
  * 
+ * Uses staging workflow: writes to .tmp files, generates all formats in parallel,
+ * then promotes all successful formats atomically.
+ * 
  * Keeps original format as primary, generates missing formats.
  * PNG is always converted to JPEG (we don't serve PNG).
  * 
  * @param string $sourceFile Source file path in upload directory
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @return string|false Cache file path on success, false on failure
+ * @return string|false Primary cache file path on success, false on failure
  */
 function moveToCache($sourceFile, $airportId, $camIndex) {
+    // Cleanup any stale staging files from crashed workers
+    cleanupStagingFiles($airportId, $camIndex);
+    
     // Validate source file
     if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
         aviationwx_log('error', 'moveToCache: source file invalid', [
@@ -568,19 +574,20 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    // Determine primary cache file
+    // Determine primary format and staging file
     // PNG is always converted to JPEG (we don't serve PNG)
     if ($format === 'png') {
         $primaryFormat = 'jpg';
-        $primaryCacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
+        $stagingFile = getStagingFilePath($airportId, $camIndex, 'jpg');
         
-        // Convert PNG to JPEG
-        if (!convertPngToJpeg($sourceFile, $primaryCacheFile)) {
+        // Convert PNG to JPEG in staging
+        if (!convertPngToJpeg($sourceFile, $stagingFile)) {
             aviationwx_log('error', 'moveToCache: PNG to JPEG conversion failed', [
                 'source' => $sourceFile,
                 'airport' => $airportId,
                 'cam' => $camIndex
             ], 'app');
+            cleanupStagingFiles($airportId, $camIndex);
             return false;
         }
         
@@ -589,45 +596,68 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     } else {
         // Keep original format (JPEG, WebP, or AVIF)
         $primaryFormat = $format;
-        $primaryCacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $primaryFormat;
+        $stagingFile = getStagingFilePath($airportId, $camIndex, $primaryFormat);
         
-        // Atomic move
-        if (!@rename($sourceFile, $primaryCacheFile)) {
+        // Move to staging
+        if (!@rename($sourceFile, $stagingFile)) {
             $error = error_get_last();
-            aviationwx_log('error', 'moveToCache: rename failed', [
+            aviationwx_log('error', 'moveToCache: rename to staging failed', [
                 'source' => $sourceFile,
-                'dest' => $primaryCacheFile,
+                'dest' => $stagingFile,
                 'error' => $error['message'] ?? 'unknown'
             ], 'app');
+            cleanupStagingFiles($airportId, $camIndex);
             return false;
         }
     }
     
-    // Verify primary file exists
-    if (!file_exists($primaryCacheFile) || filesize($primaryCacheFile) === 0) {
-        aviationwx_log('error', 'moveToCache: primary cache file invalid', [
-            'cache_file' => $primaryCacheFile
+    // Verify staging file exists
+    if (!file_exists($stagingFile) || filesize($stagingFile) === 0) {
+        aviationwx_log('error', 'moveToCache: staging file invalid', [
+            'staging_file' => $stagingFile
         ], 'app');
+        cleanupStagingFiles($airportId, $camIndex);
         return false;
     }
     
-    // Generate missing formats in background (non-blocking)
-    // Only generate formats that don't already exist
-    // Mtime sync happens automatically during generation
-    if ($primaryFormat !== 'jpg') {
-        generateJpeg($primaryCacheFile, $airportId, $camIndex);
-    }
-    if ($primaryFormat !== 'webp') {
-        generateWebp($primaryCacheFile, $airportId, $camIndex);
-    }
-    if ($primaryFormat !== 'avif') {
-        generateAvif($primaryCacheFile, $airportId, $camIndex);
+    // Generate all other formats in parallel (synchronous wait)
+    // All formats are written to staging files (.tmp)
+    $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
+    
+    // Promote all successful staging files to final cache location
+    $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $primaryFormat);
+    
+    if (empty($promotedFormats)) {
+        aviationwx_log('error', 'moveToCache: no formats promoted', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'primary_format' => $primaryFormat
+        ], 'app');
+        cleanupStagingFiles($airportId, $camIndex);
+        return false;
     }
     
-    // Save frame to history (if enabled for this airport)
-    saveFrameToHistory($primaryCacheFile, $airportId, $camIndex);
+    // Save all promoted formats to history (if enabled for this airport)
+    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats);
     
-    return $primaryCacheFile;
+    // Log final result
+    $allRequestedFormats = [$primaryFormat];
+    if ($primaryFormat !== 'jpg') $allRequestedFormats[] = 'jpg';
+    if (isWebpGenerationEnabled() && $primaryFormat !== 'webp') $allRequestedFormats[] = 'webp';
+    if (isAvifGenerationEnabled() && $primaryFormat !== 'avif') $allRequestedFormats[] = 'avif';
+    $failedFormats = array_diff($allRequestedFormats, $promotedFormats);
+    
+    if (!empty($failedFormats)) {
+        aviationwx_log('warning', 'moveToCache: partial format generation', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'formats_promoted' => $promotedFormats,
+            'formats_failed' => array_values($failedFormats)
+        ], 'app');
+    }
+    
+    // Return primary cache file path
+    return getFinalFilePath($airportId, $camIndex, $primaryFormat);
 }
 
 

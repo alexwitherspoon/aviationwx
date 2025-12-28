@@ -21,7 +21,7 @@ function getWebcamHistoryDir(string $airportId, int $camIndex): string {
 }
 
 /**
- * Save frame to history
+ * Save frame to history (single format - legacy)
  * 
  * Called after successful webcam update. Copies the current frame to the
  * history directory with a timestamp-based filename.
@@ -30,6 +30,7 @@ function getWebcamHistoryDir(string $airportId, int $camIndex): string {
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @return bool True on success, false if history disabled or on error
+ * @deprecated Use saveAllFormatsToHistory() for multi-format support
  */
 function saveFrameToHistory(string $sourceFile, string $airportId, int $camIndex): bool {
     // Check if history enabled for this airport
@@ -105,13 +106,143 @@ function saveFrameToHistory(string $sourceFile, string $airportId, int $camIndex
 }
 
 /**
- * Get list of available history frames
+ * Save all promoted formats to history
  * 
- * Returns an array of frames sorted by timestamp (oldest first).
+ * Called after successful format generation and promotion. Copies all promoted
+ * format files to the history directory with timestamp-based filenames.
+ * 
+ * Storage is cheap, CPU is expensive - we save all formats to avoid
+ * regenerating them later for time-lapse or other features.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @return array Array of frames: [['timestamp' => int, 'filename' => string], ...]
+ * @param array $promotedFormats Array of promoted format extensions: ['jpg', 'webp', 'avif']
+ * @return array Results: ['format' => bool success, ...]
+ */
+function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promotedFormats): array {
+    $results = [];
+    
+    // Check if history enabled for this airport
+    if (!isWebcamHistoryEnabledForAirport($airportId)) {
+        return $results;
+    }
+    
+    if (empty($promotedFormats)) {
+        return $results;
+    }
+    
+    $historyDir = getWebcamHistoryDir($airportId, $camIndex);
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    
+    // Create history directory if needed
+    if (!is_dir($historyDir)) {
+        if (!@mkdir($historyDir, 0755, true)) {
+            aviationwx_log('error', 'webcam history: failed to create directory', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'dir' => $historyDir
+            ], 'app');
+            return $results;
+        }
+    }
+    
+    // Get capture timestamp from the first available format (they should all have the same mtime)
+    $timestamp = 0;
+    foreach ($promotedFormats as $format) {
+        $sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+        if (file_exists($sourceFile)) {
+            $timestamp = getHistoryImageCaptureTime($sourceFile);
+            if ($timestamp > 0) {
+                break;
+            }
+        }
+    }
+    
+    if ($timestamp <= 0) {
+        $timestamp = time();
+    }
+    
+    // Detect if this is a bridge upload for logging (check any format)
+    $isBridgeUpload = false;
+    foreach ($promotedFormats as $format) {
+        $sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+        if (file_exists($sourceFile) && isBridgeUpload($sourceFile)) {
+            $isBridgeUpload = true;
+            break;
+        }
+    }
+    
+    $savedFormats = [];
+    
+    // Save each promoted format to history
+    foreach ($promotedFormats as $format) {
+        $sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+        $destFile = $historyDir . '/' . $timestamp . '.' . $format;
+        
+        // Skip if source doesn't exist
+        if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
+            $results[$format] = false;
+            continue;
+        }
+        
+        // Don't overwrite existing frame with same timestamp
+        if (file_exists($destFile)) {
+            $results[$format] = true;
+            $savedFormats[] = $format;
+            continue;
+        }
+        
+        // Copy (not move) - source file is still needed as current
+        if (@copy($sourceFile, $destFile)) {
+            $results[$format] = true;
+            $savedFormats[] = $format;
+        } else {
+            aviationwx_log('error', 'webcam history: failed to copy format', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'format' => $format,
+                'source' => $sourceFile,
+                'dest' => $destFile
+            ], 'app');
+            $results[$format] = false;
+        }
+    }
+    
+    // Log with source indicator
+    if (!empty($savedFormats)) {
+        if ($isBridgeUpload) {
+            aviationwx_log('debug', 'webcam history: saved bridge frames (UTC)', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'timestamp' => $timestamp,
+                'formats' => $savedFormats,
+                'source' => 'bridge'
+            ], 'app');
+        } else {
+            aviationwx_log('debug', 'webcam history: saved frames', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'timestamp' => $timestamp,
+                'formats' => $savedFormats
+            ], 'app');
+        }
+    }
+    
+    // Cleanup old frames (all formats)
+    cleanupHistoryFramesAllFormats($airportId, $camIndex);
+    
+    return $results;
+}
+
+/**
+ * Get list of available history frames
+ * 
+ * Returns an array of frames sorted by timestamp (oldest first).
+ * Each frame includes all available formats for that timestamp.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return array Array of frames: [['timestamp' => int, 'filename' => string, 'formats' => ['jpg', 'webp']], ...]
  */
 function getHistoryFrames(string $airportId, int $camIndex): array {
     $historyDir = getWebcamHistoryDir($airportId, $camIndex);
@@ -120,21 +251,39 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         return [];
     }
     
-    $files = glob($historyDir . '/*.jpg');
-    if ($files === false) {
+    // Get all image files
+    $allFiles = glob($historyDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
+    if ($allFiles === false) {
         return [];
     }
     
-    $frames = [];
+    // Group by timestamp
+    $timestampGroups = [];
     
-    foreach ($files as $file) {
-        $basename = basename($file, '.jpg');
-        if (is_numeric($basename)) {
-            $frames[] = [
-                'timestamp' => (int)$basename,
-                'filename' => basename($file)
-            ];
+    foreach ($allFiles as $file) {
+        $basename = basename($file);
+        if (preg_match('/^(\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
+            $timestamp = (int)$matches[1];
+            $format = $matches[2];
+            
+            if (!isset($timestampGroups[$timestamp])) {
+                $timestampGroups[$timestamp] = [];
+            }
+            $timestampGroups[$timestamp][] = $format;
         }
+    }
+    
+    // Build frames array
+    $frames = [];
+    foreach ($timestampGroups as $timestamp => $formats) {
+        // Primary filename is always JPG if available, otherwise first format
+        $primaryFormat = in_array('jpg', $formats) ? 'jpg' : $formats[0];
+        
+        $frames[] = [
+            'timestamp' => $timestamp,
+            'filename' => $timestamp . '.' . $primaryFormat,
+            'formats' => $formats
+        ];
     }
     
     // Sort by timestamp ascending (oldest first for playback)
@@ -183,6 +332,75 @@ function cleanupHistoryFrames(string $airportId, int $camIndex): void {
             'airport' => $airportId,
             'cam' => $camIndex,
             'removed' => $removedCount,
+            'max_frames' => $maxFrames
+        ], 'app');
+    }
+}
+
+/**
+ * Remove frames exceeding max count (all formats)
+ * 
+ * Keeps the most recent N frame sets based on airport configuration.
+ * A frame set is all formats for a single timestamp.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return void
+ */
+function cleanupHistoryFramesAllFormats(string $airportId, int $camIndex): void {
+    $maxFrames = getWebcamHistoryMaxFrames($airportId);
+    $historyDir = getWebcamHistoryDir($airportId, $camIndex);
+    
+    if (!is_dir($historyDir)) {
+        return;
+    }
+    
+    // Get all files in history directory
+    $allFiles = glob($historyDir . '/*.*');
+    if ($allFiles === false || empty($allFiles)) {
+        return;
+    }
+    
+    // Group files by timestamp (extract timestamp from filename)
+    $timestampGroups = [];
+    foreach ($allFiles as $file) {
+        $basename = basename($file);
+        // Parse timestamp from filename: "1703700000.jpg" or "1703700000.webp" etc
+        if (preg_match('/^(\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
+            $timestamp = (int)$matches[1];
+            if (!isset($timestampGroups[$timestamp])) {
+                $timestampGroups[$timestamp] = [];
+            }
+            $timestampGroups[$timestamp][] = $file;
+        }
+    }
+    
+    // If we have fewer timestamps than max, nothing to clean
+    if (count($timestampGroups) <= $maxFrames) {
+        return;
+    }
+    
+    // Sort timestamps ascending (oldest first)
+    ksort($timestampGroups);
+    
+    // Remove oldest timestamp groups to stay within limit
+    $toRemove = array_slice(array_keys($timestampGroups), 0, count($timestampGroups) - $maxFrames);
+    $removedCount = 0;
+    
+    foreach ($toRemove as $timestamp) {
+        foreach ($timestampGroups[$timestamp] as $file) {
+            if (@unlink($file)) {
+                $removedCount++;
+            }
+        }
+    }
+    
+    if ($removedCount > 0) {
+        aviationwx_log('debug', 'webcam history: cleaned up old frame sets', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'timestamps_removed' => count($toRemove),
+            'files_removed' => $removedCount,
             'max_frames' => $maxFrames
         ], 'app');
     }
@@ -355,6 +573,7 @@ function parseGPSTimestamp(array $gps): int {
 /**
  * Get total size of history for an airport camera
  * 
+ * Includes all format files (jpg, webp, avif).
  * Useful for monitoring disk usage.
  * 
  * @param string $airportId Airport ID
@@ -368,7 +587,7 @@ function getHistoryDiskUsage(string $airportId, int $camIndex): int {
         return 0;
     }
     
-    $files = glob($historyDir . '/*.jpg');
+    $files = glob($historyDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
     if ($files === false) {
         return 0;
     }

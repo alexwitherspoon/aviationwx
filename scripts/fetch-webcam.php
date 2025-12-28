@@ -826,10 +826,13 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         return false;
     }
     
+    // Cleanup any stale staging files from crashed workers
+    cleanupStagingFiles($airportId, $camIndex);
+    
     $camStartTime = microtime(true);
     $cacheFileBase = $cacheDir . '/' . $airportId . '_' . $camIndex;
     $cacheFile = $cacheFileBase . '.jpg';
-    $cacheWebp = $cacheFileBase . '.webp';
+    $stagingFile = getStagingFilePath($airportId, $camIndex, 'jpg');
     $camName = $cam['name'] ?? "Cam {$camIndex}";
     $url = $cam['url'] ?? '';
     
@@ -839,21 +842,30 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         if (function_exists('generateMockWebcamImage')) {
             $mockData = generateMockWebcamImage($airportId, $camIndex);
             
-            // Write atomically
-            $tempFile = $cacheFile . '.tmp.' . getmypid();
-            if (@file_put_contents($tempFile, $mockData) !== false) {
-                @rename($tempFile, $cacheFile);
+            // Write to staging file
+            if (@file_put_contents($stagingFile, $mockData) !== false) {
+                // Generate formats from staging (parallel, sync)
+                $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, 'jpg');
+                
+                // Promote all successful formats
+                $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg');
+                
+                // Save all formats to history
+                if (!empty($promotedFormats)) {
+                    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats);
+                }
                 
                 aviationwx_log('info', 'webcam mock generated', [
                     'invocation_id' => $invocationId,
                     'trigger' => $triggerType,
                     'airport' => $airportId,
                     'cam' => $camIndex,
-                    'mock_mode' => true
+                    'mock_mode' => true,
+                    'formats_promoted' => $promotedFormats
                 ], 'app');
                 
                 releaseCameraLock($lockFp);
-                return true;
+                return !empty($promotedFormats);
             }
         }
     }
@@ -909,34 +921,35 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
     
     $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
     
+    // Fetch to staging file (.tmp) instead of directly to cache
     $fetchStartTime = microtime(true);
     $success = false;
     switch ($sourceType) {
         case 'rtsp':
             $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: RTSP_DEFAULT_TIMEOUT);
             $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : RTSP_MAX_RUNTIME;
-            $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, RTSP_DEFAULT_RETRIES, $maxRuntime);
+            $success = fetchRTSPFrame($url, $stagingFile, $transport, $fetchTimeout, RTSP_DEFAULT_RETRIES, $maxRuntime);
             break;
             
         case 'static_jpeg':
         case 'static_png':
-            $success = fetchStaticImage($url, $cacheFile);
+            $success = fetchStaticImage($url, $stagingFile);
             break;
             
         case 'mjpeg':
         default:
-            $success = fetchMJPEGStream($url, $cacheFile);
+            $success = fetchMJPEGStream($url, $stagingFile);
             break;
     }
     $fetchDuration = round((microtime(true) - $fetchStartTime) * 1000, 2);
     
-    if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
+    if ($success && file_exists($stagingFile) && filesize($stagingFile) > 0) {
         recordSuccess($airportId, $camIndex);
-        $size = filesize($cacheFile);
+        $size = filesize($stagingFile);
         
-        // Add AviationWX.org attribution metadata (IPTC/XMP)
+        // Add AviationWX.org attribution metadata (IPTC/XMP) to staging file
         $airportName = $airport['name'] ?? null;
-        addAviationWxMetadata($cacheFile, $airportId, $camIndex, $airportName);
+        addAviationWxMetadata($stagingFile, $airportId, $camIndex, $airportName);
         
         aviationwx_log('info', 'webcam fetch success', [
             'invocation_id' => $invocationId,
@@ -948,29 +961,54 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             'fetch_duration_ms' => $fetchDuration
         ], 'app');
         
-        // Generate WEBP and AVIF in background (non-blocking with mtime sync)
-        // Mtime sync happens automatically during generation via shell command chaining
-        generateWebp($cacheFile, $airportId, $camIndex);
-        generateAvif($cacheFile, $airportId, $camIndex);
+        // Generate all enabled formats in parallel (synchronous wait)
+        // All formats are written to staging files (.tmp)
+        $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, 'jpg');
         
-        // Save frame to history (if enabled for this airport)
-        saveFrameToHistory($cacheFile, $airportId, $camIndex);
+        // Promote all successful staging files to final cache location
+        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg');
         
-        aviationwx_log('info', 'webcam format generation started', [
-            'invocation_id' => $invocationId,
-            'trigger' => $triggerType,
-            'airport' => $airportId,
-            'cam' => $camIndex
-        ], 'app');
+        // Save all promoted formats to history (if enabled for this airport)
+        if (!empty($promotedFormats)) {
+            saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats);
+        }
+        
+        // Log final result
+        $allRequestedFormats = ['jpg'];
+        if (isWebpGenerationEnabled()) $allRequestedFormats[] = 'webp';
+        if (isAvifGenerationEnabled()) $allRequestedFormats[] = 'avif';
+        $failedFormats = array_diff($allRequestedFormats, $promotedFormats);
+        
+        if (empty($failedFormats)) {
+            aviationwx_log('info', 'webcam processing complete', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'formats_promoted' => $promotedFormats
+            ], 'app');
+        } else {
+            aviationwx_log('warning', 'webcam partial format generation', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'formats_promoted' => $promotedFormats,
+                'formats_failed' => array_values($failedFormats)
+            ], 'app');
+        }
         
         $lockFile = "/tmp/webcam_lock_{$airportId}_{$camIndex}.lock";
         if (file_exists($lockFile)) {
             @unlink($lockFile);
         }
         releaseCameraLock($lockFp);
-        return true;
+        return !empty($promotedFormats);
     } else {
-        $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
+        // Cleanup any staging files on failure
+        cleanupStagingFiles($airportId, $camIndex);
+        
+        $lastErr = @json_decode(@file_get_contents($stagingFile . '.error.json'), true);
         $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
         recordFailure($airportId, $camIndex, $sev);
         

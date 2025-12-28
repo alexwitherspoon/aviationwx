@@ -5,10 +5,20 @@
  * Shared functions for generating image formats (WebP, AVIF, JPEG) from source images.
  * Used by both push webcam processing and fetched webcam processing.
  * 
+ * Generation modes:
+ * - Async (legacy): Run in background with exec() &
+ * - Sync parallel: Generate all formats in parallel, wait for completion, then promote atomically
+ * 
  * All generation functions:
- * - Run asynchronously (exec() &) for non-blocking behavior
  * - Automatically sync mtime to match source file's capture time
  * - Support any source format (JPEG, PNG, WebP, AVIF)
+ * 
+ * Staging workflow (new):
+ * 1. Write source to .tmp staging file
+ * 2. Generate all enabled formats as .tmp files (parallel)
+ * 3. Wait for all to complete (or timeout)
+ * 4. Atomically promote all successful .tmp files to final
+ * 5. Save all promoted formats to history
  */
 
 require_once __DIR__ . '/constants.php';
@@ -149,6 +159,408 @@ function convertPngToJpeg($pngFile, $jpegFile) {
     
     @unlink($tmpFile);
     return false;
+}
+
+/**
+ * Get format generation timeout in seconds
+ * 
+ * Uses half of the worker timeout to leave headroom for fetch, validation, etc.
+ * 
+ * @return int Timeout in seconds (default: 45)
+ */
+function getFormatGenerationTimeout(): int {
+    return (int)(getWorkerTimeout() / 2);
+}
+
+/**
+ * Get staging file path for a format
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $format Format extension (jpg, webp, avif)
+ * @return string Staging file path with .tmp suffix
+ */
+function getStagingFilePath(string $airportId, int $camIndex, string $format): string {
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    return $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format . '.tmp';
+}
+
+/**
+ * Get final cache file path for a format
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $format Format extension (jpg, webp, avif)
+ * @return string Final cache file path
+ */
+function getFinalFilePath(string $airportId, int $camIndex, string $format): string {
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    return $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+}
+
+/**
+ * Cleanup stale staging files for a camera
+ * 
+ * Called at start of processing to clean up orphaned .tmp files from crashed workers.
+ * Also called on failure to clean up partial staging files.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return int Number of files cleaned up
+ */
+function cleanupStagingFiles(string $airportId, int $camIndex): int {
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    $pattern = $cacheDir . '/' . $airportId . '_' . $camIndex . '.*.tmp';
+    
+    $files = glob($pattern);
+    if ($files === false || empty($files)) {
+        return 0;
+    }
+    
+    $cleaned = 0;
+    foreach ($files as $file) {
+        if (@unlink($file)) {
+            $cleaned++;
+        }
+    }
+    
+    if ($cleaned > 0) {
+        aviationwx_log('debug', 'webcam staging cleanup', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'files_removed' => $cleaned
+        ], 'app');
+    }
+    
+    return $cleaned;
+}
+
+/**
+ * Build ffmpeg command for format generation (without background execution)
+ * 
+ * @param string $sourceFile Source image file path
+ * @param string $destFile Destination file path
+ * @param string $format Target format (webp, avif, jpg)
+ * @param int $captureTime Source capture time for mtime sync
+ * @return string Shell command string
+ */
+function buildFormatCommand(string $sourceFile, string $destFile, string $format, int $captureTime): string {
+    switch ($format) {
+        case 'webp':
+            $cmd = sprintf(
+                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
+                escapeshellarg($sourceFile),
+                escapeshellarg($destFile)
+            );
+            break;
+            
+        case 'avif':
+            $cmd = sprintf(
+                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+                escapeshellarg($sourceFile),
+                escapeshellarg($destFile)
+            );
+            break;
+            
+        case 'jpg':
+        default:
+            $cmd = sprintf(
+                "ffmpeg -hide_banner -loglevel error -y -i %s -q:v 2 %s",
+                escapeshellarg($sourceFile),
+                escapeshellarg($destFile)
+            );
+            break;
+    }
+    
+    // Chain mtime sync after generation (only if capture time available)
+    if ($captureTime > 0) {
+        $dateStr = date('YmdHis', $captureTime);
+        $cmdSync = sprintf("touch -t %s %s", $dateStr, escapeshellarg($destFile));
+        $cmd = $cmd . ' && ' . $cmdSync;
+    }
+    
+    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
+    if (isExiftoolAvailable()) {
+        $cmdExif = sprintf(
+            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s",
+            escapeshellarg($sourceFile),
+            escapeshellarg($destFile)
+        );
+        $cmd = $cmd . ' && ' . $cmdExif;
+    }
+    
+    return $cmd;
+}
+
+/**
+ * Generate all enabled formats synchronously in parallel
+ * 
+ * Spawns format generation processes in parallel, waits for all to complete
+ * (or timeout), then returns results for each format.
+ * 
+ * @param string $sourceFile Source image file path (staging .tmp file)
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string $sourceFormat Format of source file (jpg, webp, avif)
+ * @return array Results: ['format' => bool success, ...]
+ */
+function generateFormatsSync(string $sourceFile, string $airportId, int $camIndex, string $sourceFormat): array {
+    $timeout = getFormatGenerationTimeout();
+    $deadline = time() + $timeout;
+    $captureTime = getSourceCaptureTime($sourceFile);
+    
+    $results = [];
+    $processes = [];
+    
+    // Determine which formats to generate
+    $formatsToGenerate = [];
+    
+    // Always need JPG (if source isn't JPG)
+    if ($sourceFormat !== 'jpg') {
+        $formatsToGenerate[] = 'jpg';
+    }
+    
+    // WebP if enabled and source isn't WebP
+    if (isWebpGenerationEnabled() && $sourceFormat !== 'webp') {
+        $formatsToGenerate[] = 'webp';
+    }
+    
+    // AVIF if enabled and source isn't AVIF
+    if (isAvifGenerationEnabled() && $sourceFormat !== 'avif') {
+        $formatsToGenerate[] = 'avif';
+    }
+    
+    // If no formats to generate, return early
+    if (empty($formatsToGenerate)) {
+        return $results;
+    }
+    
+    aviationwx_log('info', 'webcam format generation starting', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'source_format' => $sourceFormat,
+        'formats_to_generate' => $formatsToGenerate,
+        'timeout_seconds' => $timeout
+    ], 'app');
+    
+    // Start all format generation processes in parallel
+    foreach ($formatsToGenerate as $format) {
+        $destFile = getStagingFilePath($airportId, $camIndex, $format);
+        $cmd = buildFormatCommand($sourceFile, $destFile, $format, $captureTime);
+        
+        // Redirect stderr to stdout for capture
+        $cmd = $cmd . ' 2>&1';
+        
+        $descriptorSpec = [
+            0 => ['pipe', 'r'], // stdin
+            1 => ['pipe', 'w'], // stdout
+            2 => ['pipe', 'w'], // stderr
+        ];
+        
+        $process = @proc_open($cmd, $descriptorSpec, $pipes);
+        
+        if (is_resource($process)) {
+            // Close stdin immediately
+            @fclose($pipes[0]);
+            
+            // Set stdout to non-blocking for polling
+            stream_set_blocking($pipes[1], false);
+            stream_set_blocking($pipes[2], false);
+            
+            $processes[$format] = [
+                'handle' => $process,
+                'pipes' => $pipes,
+                'dest' => $destFile,
+                'started' => microtime(true)
+            ];
+            
+            aviationwx_log('debug', 'webcam format process started', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'format' => $format
+            ], 'app');
+        } else {
+            $results[$format] = false;
+            aviationwx_log('error', 'webcam format process failed to start', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'format' => $format
+            ], 'app');
+        }
+    }
+    
+    // Wait for all processes to complete (or timeout)
+    while (!empty($processes) && time() < $deadline) {
+        foreach ($processes as $format => $proc) {
+            $status = @proc_get_status($proc['handle']);
+            
+            if (!$status['running']) {
+                // Process finished
+                $elapsed = round((microtime(true) - $proc['started']) * 1000, 2);
+                $exitCode = $status['exitcode'];
+                
+                // Read any remaining output
+                $stdout = @stream_get_contents($proc['pipes'][1]);
+                $stderr = @stream_get_contents($proc['pipes'][2]);
+                
+                // Close pipes
+                @fclose($proc['pipes'][1]);
+                @fclose($proc['pipes'][2]);
+                @proc_close($proc['handle']);
+                
+                // Check success: exit code 0 and file exists with size > 0
+                $success = ($exitCode === 0 && file_exists($proc['dest']) && filesize($proc['dest']) > 0);
+                $results[$format] = $success;
+                
+                if ($success) {
+                    aviationwx_log('info', 'webcam format generation complete', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'format' => $format,
+                        'duration_ms' => $elapsed,
+                        'size_bytes' => filesize($proc['dest'])
+                    ], 'app');
+                } else {
+                    aviationwx_log('warning', 'webcam format generation failed', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'format' => $format,
+                        'exit_code' => $exitCode,
+                        'duration_ms' => $elapsed,
+                        'stderr' => substr($stderr, 0, 200)
+                    ], 'app');
+                    
+                    // Clean up failed staging file
+                    if (file_exists($proc['dest'])) {
+                        @unlink($proc['dest']);
+                    }
+                }
+                
+                unset($processes[$format]);
+            }
+        }
+        
+        // Small sleep to avoid busy-waiting
+        if (!empty($processes)) {
+            usleep(50000); // 50ms
+        }
+    }
+    
+    // Handle any remaining processes (timed out)
+    foreach ($processes as $format => $proc) {
+        aviationwx_log('warning', 'webcam format generation timeout', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'format' => $format,
+            'timeout_seconds' => $timeout
+        ], 'app');
+        
+        // Terminate the process
+        @proc_terminate($proc['handle'], SIGTERM);
+        usleep(100000); // 100ms grace period
+        
+        $status = @proc_get_status($proc['handle']);
+        if ($status['running']) {
+            @proc_terminate($proc['handle'], SIGKILL);
+        }
+        
+        // Close pipes
+        @fclose($proc['pipes'][1]);
+        @fclose($proc['pipes'][2]);
+        @proc_close($proc['handle']);
+        
+        // Clean up partial file
+        if (file_exists($proc['dest'])) {
+            @unlink($proc['dest']);
+        }
+        
+        $results[$format] = false;
+    }
+    
+    return $results;
+}
+
+/**
+ * Promote staging files to final cache location
+ * 
+ * Atomically renames .tmp files to their final locations.
+ * Only promotes formats that generated successfully.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param array $formatResults Results from generateFormatsSync: ['format' => bool, ...]
+ * @param string $sourceFormat The original source format (always promoted)
+ * @return array Promoted formats: ['jpg', 'webp', ...]
+ */
+function promoteFormats(string $airportId, int $camIndex, array $formatResults, string $sourceFormat): array {
+    $promoted = [];
+    
+    // Always try to promote the source format first
+    $sourceStagingFile = getStagingFilePath($airportId, $camIndex, $sourceFormat);
+    $sourceFinalFile = getFinalFilePath($airportId, $camIndex, $sourceFormat);
+    
+    if (file_exists($sourceStagingFile)) {
+        if (@rename($sourceStagingFile, $sourceFinalFile)) {
+            $promoted[] = $sourceFormat;
+        } else {
+            aviationwx_log('error', 'webcam source promotion failed', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'format' => $sourceFormat,
+                'error' => error_get_last()['message'] ?? 'unknown'
+            ], 'app');
+        }
+    }
+    
+    // Promote generated formats
+    foreach ($formatResults as $format => $success) {
+        if (!$success) {
+            continue;
+        }
+        
+        $stagingFile = getStagingFilePath($airportId, $camIndex, $format);
+        $finalFile = getFinalFilePath($airportId, $camIndex, $format);
+        
+        if (file_exists($stagingFile)) {
+            if (@rename($stagingFile, $finalFile)) {
+                $promoted[] = $format;
+            } else {
+                aviationwx_log('error', 'webcam format promotion failed', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'format' => $format,
+                    'error' => error_get_last()['message'] ?? 'unknown'
+                ], 'app');
+            }
+        }
+    }
+    
+    // Log promotion result
+    $allFormats = array_merge([$sourceFormat], array_keys(array_filter($formatResults)));
+    $failedFormats = array_diff($allFormats, $promoted);
+    
+    if (empty($failedFormats)) {
+        aviationwx_log('info', 'webcam formats promoted successfully', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'formats' => $promoted
+        ], 'app');
+    } elseif (!empty($promoted)) {
+        aviationwx_log('warning', 'webcam partial format promotion', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'promoted' => $promoted,
+            'failed' => $failedFormats
+        ], 'app');
+    } else {
+        aviationwx_log('error', 'webcam format promotion failed completely', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'formats_attempted' => $allFormats
+        ], 'app');
+    }
+    
+    return $promoted;
 }
 
 /**
