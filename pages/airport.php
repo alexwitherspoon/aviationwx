@@ -4289,17 +4289,36 @@ const WebcamPlayer = {
 
     // Get the best available format for a frame
     getFrameFormat(frame) {
-        // Check if frame has our preferred format
-        if (frame.formats && frame.formats.includes(this.preferredFormat)) {
+        if (!frame.formats || frame.formats.length === 0) {
+            return 'jpg'; // Default fallback
+        }
+        
+        // First, try the browser's preferred format (if available in frame)
+        // This respects browser capabilities detected by determinePreferredFormat()
+        if (frame.formats.includes(this.preferredFormat)) {
             return this.preferredFormat;
         }
-        // Fall back through formats in preference order
-        if (frame.formats) {
-            if (this.preferredFormat === 'avif' && frame.formats.includes('webp')) {
+        
+        // Fall back to best available format that browser supports
+        // preferredFormat indicates browser capability:
+        // - 'avif' = browser supports avif, webp, and jpg
+        // - 'webp' = browser supports webp and jpg (not avif)
+        // - 'jpg' = browser only supports jpg
+        if (this.preferredFormat === 'avif') {
+            // Browser supports avif - try avif, then webp, then jpg
+            if (frame.formats.includes('avif')) {
+                return 'avif';
+            }
+            if (frame.formats.includes('webp')) {
+                return 'webp';
+            }
+        } else if (this.preferredFormat === 'webp') {
+            // Browser supports webp (not avif) - try webp, then jpg
+            if (frame.formats.includes('webp')) {
                 return 'webp';
             }
         }
-        // Default to jpg (always available)
+        // JPG is always available and always supported
         return 'jpg';
     },
 
