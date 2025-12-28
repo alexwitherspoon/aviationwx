@@ -437,5 +437,202 @@ class WebcamHistoryTest extends TestCase
         $result = parseGPSTimestamp($gps);
         $this->assertGreaterThan(0, $result);
     }
+
+    /**
+     * Test getHistoryFrames() returns frames with formats array
+     */
+    public function testGetHistoryFrames_ReturnsFormatsArray(): void
+    {
+        $testAirport = 'test_frames_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        // Create history directory
+        @mkdir($historyDir, 0755, true);
+        
+        $timestamp = time() - 60;
+        
+        // Create multiple format files for the same timestamp
+        @file_put_contents($historyDir . '/' . $timestamp . '.jpg', 'test jpg');
+        @file_put_contents($historyDir . '/' . $timestamp . '.webp', 'test webp');
+        
+        $frames = getHistoryFrames($testAirport, 0);
+        
+        $this->assertCount(1, $frames);
+        $this->assertEquals($timestamp, $frames[0]['timestamp']);
+        $this->assertArrayHasKey('formats', $frames[0]);
+        $this->assertContains('jpg', $frames[0]['formats']);
+        $this->assertContains('webp', $frames[0]['formats']);
+        
+        // Cleanup
+        @unlink($historyDir . '/' . $timestamp . '.jpg');
+        @unlink($historyDir . '/' . $timestamp . '.webp');
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test getHistoryFrames() returns multiple frames sorted by timestamp
+     */
+    public function testGetHistoryFrames_SortsByTimestamp(): void
+    {
+        $testAirport = 'test_sort_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        $ts1 = time() - 120;
+        $ts2 = time() - 60;
+        $ts3 = time();
+        
+        // Create files in random order
+        @file_put_contents($historyDir . '/' . $ts2 . '.jpg', 'test');
+        @file_put_contents($historyDir . '/' . $ts3 . '.jpg', 'test');
+        @file_put_contents($historyDir . '/' . $ts1 . '.jpg', 'test');
+        
+        $frames = getHistoryFrames($testAirport, 0);
+        
+        $this->assertCount(3, $frames);
+        $this->assertEquals($ts1, $frames[0]['timestamp']);
+        $this->assertEquals($ts2, $frames[1]['timestamp']);
+        $this->assertEquals($ts3, $frames[2]['timestamp']);
+        
+        // Cleanup
+        @unlink($historyDir . '/' . $ts1 . '.jpg');
+        @unlink($historyDir . '/' . $ts2 . '.jpg');
+        @unlink($historyDir . '/' . $ts3 . '.jpg');
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test getHistoryDiskUsage() includes all format files
+     */
+    public function testGetHistoryDiskUsage_IncludesAllFormats(): void
+    {
+        $testAirport = 'test_disk_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        $timestamp = time();
+        $jpgContent = str_repeat('j', 1000);
+        $webpContent = str_repeat('w', 500);
+        $avifContent = str_repeat('a', 300);
+        
+        @file_put_contents($historyDir . '/' . $timestamp . '.jpg', $jpgContent);
+        @file_put_contents($historyDir . '/' . $timestamp . '.webp', $webpContent);
+        @file_put_contents($historyDir . '/' . $timestamp . '.avif', $avifContent);
+        
+        $usage = getHistoryDiskUsage($testAirport, 0);
+        
+        // Should sum all format sizes
+        $expectedSize = strlen($jpgContent) + strlen($webpContent) + strlen($avifContent);
+        $this->assertEquals($expectedSize, $usage);
+        
+        // Cleanup
+        @unlink($historyDir . '/' . $timestamp . '.jpg');
+        @unlink($historyDir . '/' . $timestamp . '.webp');
+        @unlink($historyDir . '/' . $timestamp . '.avif');
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test getHistoryDiskUsage() returns 0 for non-existent directory
+     */
+    public function testGetHistoryDiskUsage_NonExistentDir_ReturnsZero(): void
+    {
+        $usage = getHistoryDiskUsage('nonexistent_airport_' . time(), 0);
+        $this->assertEquals(0, $usage);
+    }
+
+    /**
+     * Test cleanupHistoryFramesAllFormats() removes all formats for old timestamps
+     */
+    public function testCleanupHistoryFramesAllFormats_RemovesAllFormatsForOldTimestamps(): void
+    {
+        $testAirport = 'test_cleanup_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        // Create 5 frame sets (exceed default max of 3 from test config)
+        $timestamps = [];
+        for ($i = 0; $i < 5; $i++) {
+            $ts = time() - (300 - $i * 60); // Oldest first
+            $timestamps[] = $ts;
+            @file_put_contents($historyDir . '/' . $ts . '.jpg', 'test');
+            @file_put_contents($historyDir . '/' . $ts . '.webp', 'test');
+        }
+        
+        // Run cleanup (should keep most recent frames)
+        cleanupHistoryFramesAllFormats($testAirport, 0);
+        
+        // Check that frames were cleaned up
+        $remainingFrames = getHistoryFrames($testAirport, 0);
+        $maxFrames = getWebcamHistoryMaxFrames($testAirport);
+        
+        // Should have at most maxFrames
+        $this->assertLessThanOrEqual($maxFrames, count($remainingFrames));
+        
+        // Cleanup remaining files
+        foreach ($remainingFrames as $frame) {
+            foreach ($frame['formats'] as $fmt) {
+                @unlink($historyDir . '/' . $frame['timestamp'] . '.' . $fmt);
+            }
+        }
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test saveAllFormatsToHistory() returns results for each format
+     */
+    public function testSaveAllFormatsToHistory_ReturnsResultsForEachFormat(): void
+    {
+        // Skip if history is not enabled for test airport
+        if (!isWebcamHistoryEnabledForAirport('kspb')) {
+            $this->markTestSkipped('History not enabled for test airport');
+        }
+        
+        $cacheDir = __DIR__ . '/../../cache/webcams';
+        $testAirport = 'kspb';
+        $timestamp = time();
+        
+        // Create cache files that would be "promoted"
+        $jpgFile = $cacheDir . '/' . $testAirport . '_0.jpg';
+        $webpFile = $cacheDir . '/' . $testAirport . '_0.webp';
+        
+        // Create test JPEG with proper structure
+        $jpeg = "\xFF\xD8\xFF\xE0" . str_repeat("\x00", 200) . "\xFF\xD9";
+        @file_put_contents($jpgFile, $jpeg);
+        @file_put_contents($webpFile, $jpeg);
+        
+        // Set mtime
+        @touch($jpgFile, $timestamp);
+        @touch($webpFile, $timestamp);
+        
+        $results = saveAllFormatsToHistory($testAirport, 0, ['jpg', 'webp']);
+        
+        $this->assertArrayHasKey('jpg', $results);
+        $this->assertArrayHasKey('webp', $results);
+        $this->assertTrue($results['jpg']);
+        $this->assertTrue($results['webp']);
+        
+        // Cleanup
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        $files = glob($historyDir . '/*.*');
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @unlink($jpgFile);
+        @unlink($webpFile);
+    }
+
+    /**
+     * Test saveAllFormatsToHistory() returns empty array when history disabled
+     */
+    public function testSaveAllFormatsToHistory_HistoryDisabled_ReturnsEmptyArray(): void
+    {
+        // Use an airport ID that definitely won't have history enabled
+        $results = saveAllFormatsToHistory('nonexistent_no_history_' . time(), 0, ['jpg', 'webp']);
+        $this->assertEmpty($results);
+    }
 }
 

@@ -107,10 +107,10 @@ function cleanTestCache(): void {
         }
     }
     
-    // Clean webcams directory (all image formats)
+    // Clean webcams directory (all image formats and staging files)
     $webcamsDir = $cacheDir . '/webcams';
     if (is_dir($webcamsDir)) {
-        $imagePatterns = ['*.jpg', '*.webp', '*.avif'];
+        $imagePatterns = ['*.jpg', '*.webp', '*.avif', '*.tmp'];
         foreach ($imagePatterns as $pattern) {
             $files = glob($webcamsDir . '/' . $pattern);
             foreach ($files as $file) {

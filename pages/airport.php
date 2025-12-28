@@ -4151,6 +4151,7 @@ const WebcamPlayer = {
     controlsVisible: true,
     hideTimeout: null,
     hideUIMode: false,  // Kiosk/signage mode
+    preferredFormat: 'jpg',  // Preferred image format (avif, webp, jpg)
 
     // Update URL to reflect current state (for sharing)
     updateURL() {
@@ -4286,6 +4287,28 @@ const WebcamPlayer = {
         this.updateURL();
     },
 
+    // Get the best available format for a frame
+    getFrameFormat(frame) {
+        // Check if frame has our preferred format
+        if (frame.formats && frame.formats.includes(this.preferredFormat)) {
+            return this.preferredFormat;
+        }
+        // Fall back through formats in preference order
+        if (frame.formats) {
+            if (this.preferredFormat === 'avif' && frame.formats.includes('webp')) {
+                return 'webp';
+            }
+        }
+        // Default to jpg (always available)
+        return 'jpg';
+    },
+
+    // Build URL for a frame with format parameter
+    getFrameUrl(frame) {
+        const format = this.getFrameFormat(frame);
+        return frame.url + '&fmt=' + format;
+    },
+
     async open(airportId, camIndex, camName, currentImageSrc, options = {}) {
         const player = document.getElementById('webcam-player');
         const img = document.getElementById('webcam-player-image');
@@ -4295,6 +4318,9 @@ const WebcamPlayer = {
         this.airportId = airportId;
         this.camIndex = camIndex;
         this.camName = camName;
+        
+        // Determine preferred format based on browser support
+        this.preferredFormat = determinePreferredFormat();
 
         // Show player immediately with current image
         img.src = currentImageSrc;
@@ -4480,13 +4506,17 @@ const WebcamPlayer = {
 
         timeline.value = index;
 
+        // Build cache key including format
+        const format = this.getFrameFormat(frame);
+        const cacheKey = `${frame.timestamp}_${format}`;
+
         // Use preloaded image if available
-        if (this.preloadedImages[frame.timestamp]) {
-            img.src = this.preloadedImages[frame.timestamp];
+        if (this.preloadedImages[cacheKey]) {
+            img.src = this.preloadedImages[cacheKey];
             img.classList.remove('loading');
         } else {
             img.classList.add('loading');
-            img.src = frame.url;
+            img.src = this.getFrameUrl(frame);
             img.onload = () => img.classList.remove('loading');
         }
 
@@ -4501,15 +4531,19 @@ const WebcamPlayer = {
             if (!this.active) break;
 
             const img = new Image();
+            const format = this.getFrameFormat(frame);
+            const cacheKey = `${frame.timestamp}_${format}`;
+            const frameUrl = this.getFrameUrl(frame);
+            
             await new Promise((resolve) => {
                 img.onload = () => {
-                    this.preloadedImages[frame.timestamp] = img.src;
+                    this.preloadedImages[cacheKey] = img.src;
                     loaded++;
                     bar.style.width = `${(loaded / this.frames.length) * 100}%`;
                     resolve();
                 };
                 img.onerror = resolve;
-                img.src = frame.url;
+                img.src = frameUrl;
             });
         }
 

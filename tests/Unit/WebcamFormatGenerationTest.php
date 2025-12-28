@@ -278,5 +278,262 @@ class WebcamFormatGenerationTest extends TestCase
         // For now, we'll test the logic with a note that it requires config setup
         $this->markTestIncomplete('Requires config mocking - test manually with airports.json');
     }
+
+    /**
+     * Test getFormatGenerationTimeout() returns positive integer
+     */
+    public function testGetFormatGenerationTimeout_ReturnsPositiveInteger(): void
+    {
+        $timeout = getFormatGenerationTimeout();
+        $this->assertIsInt($timeout);
+        $this->assertGreaterThan(0, $timeout);
+    }
+
+    /**
+     * Test getFormatGenerationTimeout() returns half of worker timeout
+     */
+    public function testGetFormatGenerationTimeout_ReturnsHalfOfWorkerTimeout(): void
+    {
+        $workerTimeout = getWorkerTimeout();
+        $formatTimeout = getFormatGenerationTimeout();
+        $this->assertEquals((int)($workerTimeout / 2), $formatTimeout);
+    }
+
+    /**
+     * Test getStagingFilePath() returns correct path format
+     */
+    public function testGetStagingFilePath_ReturnsCorrectPathFormat(): void
+    {
+        $path = getStagingFilePath('kspb', 0, 'jpg');
+        $this->assertStringContainsString('cache/webcams', $path);
+        $this->assertStringContainsString('kspb_0.jpg.tmp', $path);
+    }
+
+    /**
+     * Test getStagingFilePath() works for different formats
+     */
+    public function testGetStagingFilePath_WorksForDifferentFormats(): void
+    {
+        $jpgPath = getStagingFilePath('kspb', 0, 'jpg');
+        $webpPath = getStagingFilePath('kspb', 0, 'webp');
+        $avifPath = getStagingFilePath('kspb', 0, 'avif');
+        
+        $this->assertStringEndsWith('.jpg.tmp', $jpgPath);
+        $this->assertStringEndsWith('.webp.tmp', $webpPath);
+        $this->assertStringEndsWith('.avif.tmp', $avifPath);
+    }
+
+    /**
+     * Test getStagingFilePath() works for different camera indices
+     */
+    public function testGetStagingFilePath_WorksForDifferentCamIndices(): void
+    {
+        $path0 = getStagingFilePath('kspb', 0, 'jpg');
+        $path1 = getStagingFilePath('kspb', 1, 'jpg');
+        $path2 = getStagingFilePath('kspb', 2, 'jpg');
+        
+        $this->assertStringContainsString('kspb_0.jpg.tmp', $path0);
+        $this->assertStringContainsString('kspb_1.jpg.tmp', $path1);
+        $this->assertStringContainsString('kspb_2.jpg.tmp', $path2);
+    }
+
+    /**
+     * Test getFinalFilePath() returns correct path format
+     */
+    public function testGetFinalFilePath_ReturnsCorrectPathFormat(): void
+    {
+        $path = getFinalFilePath('kspb', 0, 'jpg');
+        $this->assertStringContainsString('cache/webcams', $path);
+        $this->assertStringContainsString('kspb_0.jpg', $path);
+        $this->assertFalse(str_ends_with($path, '.tmp'), 'Final path should not end with .tmp');
+    }
+
+    /**
+     * Test getFinalFilePath() works for different formats
+     */
+    public function testGetFinalFilePath_WorksForDifferentFormats(): void
+    {
+        $jpgPath = getFinalFilePath('kspb', 0, 'jpg');
+        $webpPath = getFinalFilePath('kspb', 0, 'webp');
+        $avifPath = getFinalFilePath('kspb', 0, 'avif');
+        
+        $this->assertStringEndsWith('.jpg', $jpgPath);
+        $this->assertStringEndsWith('.webp', $webpPath);
+        $this->assertStringEndsWith('.avif', $avifPath);
+    }
+
+    /**
+     * Test cleanupStagingFiles() returns 0 when no files exist
+     */
+    public function testCleanupStagingFiles_NoFiles_ReturnsZero(): void
+    {
+        // Use a non-existent airport ID to ensure no files exist
+        $result = cleanupStagingFiles('nonexistent_airport_' . time(), 0);
+        $this->assertEquals(0, $result);
+    }
+
+    /**
+     * Test cleanupStagingFiles() removes .tmp files
+     */
+    public function testCleanupStagingFiles_RemovesTmpFiles(): void
+    {
+        $cacheDir = __DIR__ . '/../../cache/webcams';
+        $testAirport = 'test_cleanup_' . time();
+        
+        // Create test .tmp files
+        $tmpFiles = [
+            $cacheDir . '/' . $testAirport . '_0.jpg.tmp',
+            $cacheDir . '/' . $testAirport . '_0.webp.tmp',
+            $cacheDir . '/' . $testAirport . '_0.avif.tmp'
+        ];
+        
+        // Ensure cache directory exists
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        
+        // Create the test files
+        foreach ($tmpFiles as $file) {
+            @file_put_contents($file, 'test content');
+        }
+        
+        // Verify files were created
+        $this->assertFileExists($tmpFiles[0]);
+        
+        // Run cleanup
+        $result = cleanupStagingFiles($testAirport, 0);
+        
+        // Verify all files were removed
+        $this->assertEquals(3, $result);
+        foreach ($tmpFiles as $file) {
+            $this->assertFileDoesNotExist($file);
+        }
+    }
+
+    /**
+     * Test buildFormatCommand() generates valid WebP command
+     */
+    public function testBuildFormatCommand_Webp_ContainsCorrectParameters(): void
+    {
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', time());
+        
+        $this->assertStringContainsString('ffmpeg', $cmd);
+        $this->assertStringContainsString('-i', $cmd);
+        $this->assertStringContainsString('/source/file.jpg', $cmd);
+        $this->assertStringContainsString('/dest/file.webp', $cmd);
+        $this->assertStringContainsString('-q:v 30', $cmd);
+        $this->assertStringContainsString('nice -n -1', $cmd);
+    }
+
+    /**
+     * Test buildFormatCommand() generates valid AVIF command
+     */
+    public function testBuildFormatCommand_Avif_ContainsCorrectParameters(): void
+    {
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.avif', 'avif', time());
+        
+        $this->assertStringContainsString('ffmpeg', $cmd);
+        $this->assertStringContainsString('libaom-av1', $cmd);
+        $this->assertStringContainsString('/source/file.jpg', $cmd);
+        $this->assertStringContainsString('/dest/file.avif', $cmd);
+        $this->assertStringContainsString('-crf 30', $cmd);
+        $this->assertStringContainsString('nice -n -1', $cmd);
+    }
+
+    /**
+     * Test buildFormatCommand() generates valid JPG command
+     */
+    public function testBuildFormatCommand_Jpg_ContainsCorrectParameters(): void
+    {
+        $cmd = buildFormatCommand('/source/file.png', '/dest/file.jpg', 'jpg', time());
+        
+        $this->assertStringContainsString('ffmpeg', $cmd);
+        $this->assertStringContainsString('/source/file.png', $cmd);
+        $this->assertStringContainsString('/dest/file.jpg', $cmd);
+        $this->assertStringContainsString('-q:v 2', $cmd);
+    }
+
+    /**
+     * Test buildFormatCommand() includes mtime sync when captureTime provided
+     */
+    public function testBuildFormatCommand_WithCaptureTime_IncludesTouchCommand(): void
+    {
+        $captureTime = strtotime('2024-12-25 10:30:00');
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', $captureTime);
+        
+        $this->assertStringContainsString('touch -t', $cmd);
+        $this->assertStringContainsString('20241225103000', $cmd);
+    }
+
+    /**
+     * Test buildFormatCommand() skips mtime sync when captureTime is 0
+     */
+    public function testBuildFormatCommand_ZeroCaptureTime_SkipsTouchCommand(): void
+    {
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', 0);
+        
+        $this->assertStringNotContainsString('touch -t', $cmd);
+    }
+
+    /**
+     * Test promoteFormats() returns empty array when no formats to promote
+     */
+    public function testPromoteFormats_NoFormats_ReturnsSourceFormatIfExists(): void
+    {
+        // Create a staging file for this test
+        $testAirport = 'test_promote_' . time();
+        $stagingFile = getStagingFilePath($testAirport, 0, 'jpg');
+        $cacheDir = dirname($stagingFile);
+        
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        
+        // Create staging file
+        @file_put_contents($stagingFile, 'test jpg content');
+        
+        // Promote with empty format results
+        $result = promoteFormats($testAirport, 0, [], 'jpg');
+        
+        // Should have promoted the source format
+        $this->assertContains('jpg', $result);
+        
+        // Cleanup
+        @unlink(getFinalFilePath($testAirport, 0, 'jpg'));
+    }
+
+    /**
+     * Test promoteFormats() promotes successful formats only
+     */
+    public function testPromoteFormats_PromotesSuccessfulFormatsOnly(): void
+    {
+        $testAirport = 'test_promote_partial_' . time();
+        $cacheDir = __DIR__ . '/../../cache/webcams';
+        
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        
+        // Create staging files for jpg and webp (avif will be marked as failed)
+        @file_put_contents(getStagingFilePath($testAirport, 0, 'jpg'), 'test jpg');
+        @file_put_contents(getStagingFilePath($testAirport, 0, 'webp'), 'test webp');
+        
+        // Promote with mixed results (webp success, avif failed)
+        $formatResults = ['webp' => true, 'avif' => false];
+        $result = promoteFormats($testAirport, 0, $formatResults, 'jpg');
+        
+        // Should include jpg and webp, not avif
+        $this->assertContains('jpg', $result);
+        $this->assertContains('webp', $result);
+        $this->assertNotContains('avif', $result);
+        
+        // Verify final files exist
+        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'jpg'));
+        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'webp'));
+        
+        // Cleanup
+        @unlink(getFinalFilePath($testAirport, 0, 'jpg'));
+        @unlink(getFinalFilePath($testAirport, 0, 'webp'));
+    }
 }
 

@@ -7,10 +7,12 @@
  * 
  * Endpoints:
  *   GET /api/webcam-history.php?id={airport}&cam={index}
- *     Returns JSON manifest of available frames
+ *     Returns JSON manifest of available frames with format availability
  * 
- *   GET /api/webcam-history.php?id={airport}&cam={index}&ts={timestamp}
- *     Returns the JPEG image for that timestamp
+ *   GET /api/webcam-history.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}
+ *     Returns the image for that timestamp in requested format
+ *     fmt: 'jpg' (default), 'webp', or 'avif'
+ *     Falls back to JPG if requested format not available
  * 
  * Response (manifest):
  * {
@@ -18,7 +20,11 @@
  *   "airport": "kspb",
  *   "cam": 0,
  *   "frames": [
- *     { "timestamp": 1735084200, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1735084200" },
+ *     { 
+ *       "timestamp": 1735084200, 
+ *       "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1735084200",
+ *       "formats": ["jpg", "webp", "avif"]
+ *     },
  *     ...
  *   ],
  *   "current_index": 11,
@@ -29,10 +35,18 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
 
+// Supported image formats with MIME types
+$supportedFormats = [
+    'jpg' => 'image/jpeg',
+    'webp' => 'image/webp',
+    'avif' => 'image/avif'
+];
+
 // Get parameters
 $airportId = isset($_GET['id']) ? strtolower(trim($_GET['id'])) : '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 $timestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
+$requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
 
 // Validate airport ID
 if (empty($airportId)) {
@@ -64,7 +78,21 @@ if (!isset($airport['webcams']) || !isset($airport['webcams'][$camIndex])) {
 // If timestamp provided, serve the actual image
 if ($timestamp !== null) {
     $historyDir = getWebcamHistoryDir($airportId, $camIndex);
-    $imageFile = $historyDir . '/' . $timestamp . '.jpg';
+    
+    // Validate requested format
+    if (!isset($supportedFormats[$requestedFormat])) {
+        $requestedFormat = 'jpg';
+    }
+    
+    // Try requested format first, fall back to JPG
+    $imageFile = $historyDir . '/' . $timestamp . '.' . $requestedFormat;
+    $servedFormat = $requestedFormat;
+    
+    if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
+        // Fall back to JPG
+        $imageFile = $historyDir . '/' . $timestamp . '.jpg';
+        $servedFormat = 'jpg';
+    }
     
     if (!file_exists($imageFile)) {
         header('Content-Type: application/json');
@@ -83,11 +111,16 @@ if ($timestamp !== null) {
         exit;
     }
     
-    // Serve image with aggressive cache headers (timestamp makes URL immutable)
-    header('Content-Type: image/jpeg');
+    // Serve image with aggressive cache headers (timestamp+format makes URL immutable)
+    header('Content-Type: ' . $supportedFormats[$servedFormat]);
     header('Cache-Control: public, max-age=31536000, immutable');
     header('Content-Length: ' . filesize($imageFile));
     header('X-Content-Type-Options: nosniff');
+    
+    // Tell client which format was actually served (useful for debugging/fallback detection)
+    if ($servedFormat !== $requestedFormat) {
+        header('X-Served-Format: ' . $servedFormat);
+    }
     
     readfile($imageFile);
     exit;
@@ -111,7 +144,7 @@ if (!$historyEnabled) {
     exit;
 }
 
-// Get available frames
+// Get available frames (includes format availability per frame)
 $frames = getHistoryFrames($airportId, $camIndex);
 $baseUrl = '/api/webcam-history.php?id=' . urlencode($airportId) . '&cam=' . $camIndex;
 
@@ -119,7 +152,8 @@ $frameList = [];
 foreach ($frames as $frame) {
     $frameList[] = [
         'timestamp' => $frame['timestamp'],
-        'url' => $baseUrl . '&ts=' . $frame['timestamp']
+        'url' => $baseUrl . '&ts=' . $frame['timestamp'],
+        'formats' => $frame['formats'] ?? ['jpg']
     ];
 }
 
