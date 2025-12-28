@@ -646,9 +646,6 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     // Save all promoted formats to history (if enabled for this airport)
     saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
     
-    // Cleanup old format files (migration: remove non-symlink files using old naming)
-    cleanupOldFormatFiles($airportId, $camIndex);
-    
     // Cleanup old timestamp files (keep only recent ones to prevent disk space issues)
     cleanupOldTimestampFiles($airportId, $camIndex, 5);
     

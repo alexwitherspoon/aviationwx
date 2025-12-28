@@ -267,59 +267,6 @@ function cleanupStagingFiles(string $airportId, int $camIndex): int {
 }
 
 /**
- * Cleanup old format cache files (migration helper)
- * 
- * Removes old format files ({airport}_{camIndex}.{format}) that are not symlinks.
- * These are legacy files from before timestamp-based naming was introduced.
- * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @return int Number of files cleaned up
- */
-function cleanupOldFormatFiles(string $airportId, int $camIndex): int {
-    $cacheDir = __DIR__ . '/../cache/webcams';
-    $pattern = $cacheDir . '/' . $airportId . '_' . $camIndex . '.*';
-    
-    $files = glob($pattern);
-    if ($files === false || empty($files)) {
-        return 0;
-    }
-    
-    $cleaned = 0;
-    foreach ($files as $file) {
-        // Skip symlinks (they're the new format, pointing to timestamp files)
-        if (is_link($file)) {
-            continue;
-        }
-        
-        // Skip staging files (handled separately)
-        if (strpos(basename($file), '.tmp') !== false) {
-            continue;
-        }
-        
-        // Only remove old format files (not timestamp-based)
-        $basename = basename($file);
-        // Old format: {airport}_{camIndex}.{format} (e.g., kspb_0.jpg)
-        // New format: {timestamp}.{format} (e.g., 1703700000.jpg)
-        if (preg_match('/^' . preg_quote($airportId, '/') . '_' . $camIndex . '\.(jpg|webp|avif)$/', $basename)) {
-            if (@unlink($file)) {
-                $cleaned++;
-            }
-        }
-    }
-    
-    if ($cleaned > 0) {
-        aviationwx_log('debug', 'webcam old format cleanup', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'files_removed' => $cleaned
-        ], 'app');
-    }
-    
-    return $cleaned;
-}
-
-/**
  * Cleanup old timestamp-based cache files
  * 
  * Keeps only the most recent N timestamp files to prevent disk space issues.
