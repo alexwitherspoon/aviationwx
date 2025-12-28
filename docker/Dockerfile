@@ -31,11 +31,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     fail2ban \
     iptables \
     jq \
+    libcap2-bin \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip pcntl \
     && pecl channel-update pecl.php.net \
     && pecl install -a apcu \
     && docker-php-ext-enable apcu \
+    && setcap cap_sys_nice+ep /usr/bin/nice \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable Apache mod_rewrite

@@ -378,16 +378,18 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, int $keepCou
 function buildFormatCommand(string $sourceFile, string $destFile, string $format, int $captureTime): string {
     switch ($format) {
         case 'webp':
+            // Explicitly specify format with -f webp (required when using .tmp extension)
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
+                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
                 escapeshellarg($sourceFile),
                 escapeshellarg($destFile)
             );
             break;
             
         case 'avif':
+            // Explicitly specify format with -f avif (required when using .tmp extension)
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
                 escapeshellarg($sourceFile),
                 escapeshellarg($destFile)
             );

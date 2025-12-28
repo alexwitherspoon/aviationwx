@@ -434,31 +434,33 @@ class WebcamFormatGenerationTest extends TestCase
     }
 
     /**
-     * Test buildFormatCommand() generates valid WebP command
+     * Test buildFormatCommand() generates valid WebP command with -f webp flag
      */
     public function testBuildFormatCommand_Webp_ContainsCorrectParameters(): void
     {
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', time());
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp.tmp', 'webp', time());
         
         $this->assertStringContainsString('ffmpeg', $cmd);
         $this->assertStringContainsString('-i', $cmd);
         $this->assertStringContainsString('/source/file.jpg', $cmd);
-        $this->assertStringContainsString('/dest/file.webp', $cmd);
+        $this->assertStringContainsString('/dest/file.webp.tmp', $cmd);
+        $this->assertStringContainsString('-f webp', $cmd, 'WebP command must include -f webp flag for .tmp extension');
         $this->assertStringContainsString('-q:v 30', $cmd);
         $this->assertStringContainsString('nice -n -1', $cmd);
     }
 
     /**
-     * Test buildFormatCommand() generates valid AVIF command
+     * Test buildFormatCommand() generates valid AVIF command with -f avif flag
      */
     public function testBuildFormatCommand_Avif_ContainsCorrectParameters(): void
     {
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.avif', 'avif', time());
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.avif.tmp', 'avif', time());
         
         $this->assertStringContainsString('ffmpeg', $cmd);
         $this->assertStringContainsString('libaom-av1', $cmd);
         $this->assertStringContainsString('/source/file.jpg', $cmd);
-        $this->assertStringContainsString('/dest/file.avif', $cmd);
+        $this->assertStringContainsString('/dest/file.avif.tmp', $cmd);
+        $this->assertStringContainsString('-f avif', $cmd, 'AVIF command must include -f avif flag for .tmp extension');
         $this->assertStringContainsString('-crf 30', $cmd);
         $this->assertStringContainsString('nice -n -1', $cmd);
     }
@@ -576,6 +578,65 @@ class WebcamFormatGenerationTest extends TestCase
         if (is_link($symlinkWebp)) {
             @unlink($symlinkWebp);
         }
+    }
+
+    /**
+     * Test generateFormatsSync() actually generates WebP format (if ffmpeg available)
+     * 
+     * This is an integration test that requires ffmpeg to be installed.
+     * It verifies that the format generation pipeline works end-to-end.
+     */
+    public function testGenerateFormatsSync_WebP_GeneratesValidFile(): void
+    {
+        // Skip if ffmpeg not available
+        $ffmpegPath = trim(shell_exec('which ffmpeg 2>/dev/null') ?: '');
+        if (empty($ffmpegPath)) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+        
+        // Skip if WebP generation disabled
+        if (!isWebpGenerationEnabled()) {
+            $this->markTestSkipped('WebP generation disabled in config');
+        }
+        
+        $testAirport = 'test_gen_' . time();
+        $cacheDir = __DIR__ . '/../../cache/webcams';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        
+        // Create a real JPEG test image using GD (if available)
+        $sourceFile = $this->testImageDir . '/source.jpg';
+        if (function_exists('imagecreate')) {
+            $img = imagecreate(100, 100);
+            $bg = imagecolorallocate($img, 255, 255, 255);
+            $text = imagecolorallocate($img, 0, 0, 0);
+            imagestring($img, 5, 10, 10, 'TEST', $text);
+            imagejpeg($img, $sourceFile, 85);
+            imagedestroy($img);
+        } else {
+            // Fallback: create minimal valid JPEG
+            file_put_contents($sourceFile, "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xFF\xD9");
+        }
+        
+        // Generate formats
+        $formatResults = generateFormatsSync($sourceFile, $testAirport, 0, 'jpg');
+        
+        // Verify WebP was generated
+        $this->assertArrayHasKey('webp', $formatResults, 'WebP should be in format results');
+        $this->assertTrue($formatResults['webp'], 'WebP generation should succeed');
+        
+        // Verify staging file exists and is valid WebP
+        $stagingFile = getStagingFilePath($testAirport, 0, 'webp');
+        $this->assertFileExists($stagingFile, 'WebP staging file should exist');
+        
+        // Verify it's a valid WebP file
+        $format = detectImageFormat($stagingFile);
+        $this->assertEquals('webp', $format, 'Generated file should be valid WebP');
+        
+        // Cleanup
+        @unlink($stagingFile);
+        @unlink($sourceFile);
     }
 }
 

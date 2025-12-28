@@ -975,44 +975,47 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     <div class="webcam-container">
                         <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: 16/9; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
                         <?php
-                        // Generate cache-friendly immutable hash from mtime (for CDN compatibility)
-                        // Cache is at root level, not in pages directory
-                        // Use EXIF capture time when available for accurate timestamp display
-                        // HTML images do NOT use fmt= parameter - server respects Accept header, always returns 200
                         $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
                         $mtimeJpg = 0;
-                        $sizeJpg = 0;
                         foreach (['.jpg', '.webp'] as $ext) {
                             $filePath = $base . $ext;
                             if (file_exists($filePath)) {
-                                // Use EXIF capture time if available, otherwise filemtime
                                 $mtimeJpg = getImageCaptureTimeForPage($filePath);
-                                $sizeJpg = filesize($filePath);
                                 break;
                             }
                         }
-                        // Use timestamp-based URL for automatic cache busting
-                        // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}
-                        // Server will serve from timestamp-based file with immutable cache headers
+                        
+                        $enabledFormats = getEnabledWebcamFormats();
+                        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
+                        $host = htmlspecialchars($_SERVER['HTTP_HOST']);
+                        $baseUrl = $protocol . '://' . $host . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $index . '&ts=' . $mtimeJpg;
                         ?>
-                        <img id="webcam-<?= $index ?>" 
-                             src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&ts=<?= $mtimeJpg ?>"
-                             data-initial-timestamp="<?= $mtimeJpg ?>" 
-                             alt="<?= htmlspecialchars($cam['name']) ?> webcam - click to view 24-hour history"
-                             title="<?= htmlspecialchars($cam['name']) ?> – Tap to view 24-hour history"
-                             aria-label="<?= htmlspecialchars($cam['name']) ?> webcam - tap to view 24-hour time-lapse history"
-                             role="button"
-                             tabindex="0"
-                             class="webcam-image"
-                             width="1600"
-                             height="900"
-                             style="aspect-ratio: 16/9; width: 100%; height: auto; position: relative; z-index: 2;"
-                             fetchpriority="high"
-                             decoding="async"
-                             onerror="handleWebcamError(<?= $index ?>, this)"
-                             onload="const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
-                             onclick="openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.src)"
-                             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.src)}">
+                        <picture>
+                            <?php if (in_array('avif', $enabledFormats)): ?>
+                            <source srcset="<?= $baseUrl ?>&fmt=avif" type="image/avif">
+                            <?php endif; ?>
+                            <?php if (in_array('webp', $enabledFormats)): ?>
+                            <source srcset="<?= $baseUrl ?>&fmt=webp" type="image/webp">
+                            <?php endif; ?>
+                            <img id="webcam-<?= $index ?>" 
+                                 src="<?= $baseUrl ?>&fmt=jpg"
+                                 data-initial-timestamp="<?= $mtimeJpg ?>" 
+                                 alt="<?= htmlspecialchars($cam['name']) ?> webcam - click to view 24-hour history"
+                                 title="<?= htmlspecialchars($cam['name']) ?> – Tap to view 24-hour history"
+                                 aria-label="<?= htmlspecialchars($cam['name']) ?> webcam - tap to view 24-hour time-lapse history"
+                                 role="button"
+                                 tabindex="0"
+                                 class="webcam-image"
+                                 width="1600"
+                                 height="900"
+                                 style="aspect-ratio: 16/9; width: 100%; height: auto; position: relative; z-index: 2;"
+                                 fetchpriority="high"
+                                 decoding="async"
+                                 onerror="handleWebcamError(<?= $index ?>, this)"
+                                 onload="observeWebcamFormat(<?= $index ?>, this); const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
+                                 onclick="openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.currentSrc || this.src)"
+                                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.currentSrc || this.src)}">
+                        </picture>
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
@@ -4290,27 +4293,17 @@ const WebcamPlayer = {
     // Get the best available format for a frame
     getFrameFormat(frame) {
         if (!frame.formats || frame.formats.length === 0) {
-            return 'jpg'; // Default fallback
+            return 'jpg';
         }
         
-        // Try browser's preferred format first (if available in frame)
+        // preferredFormat already represents best format (browser preference intersected with server formats)
         if (frame.formats.includes(this.preferredFormat)) {
             return this.preferredFormat;
         }
         
-        // Fall back to best available format based on browser capability
-        // preferredFormat indicates what formats the browser supports
-        if (this.preferredFormat === 'avif') {
-            if (frame.formats.includes('avif')) {
-                return 'avif';
-            }
-            if (frame.formats.includes('webp')) {
-                return 'webp';
-            }
-        } else if (this.preferredFormat === 'webp') {
-            if (frame.formats.includes('webp')) {
-                return 'webp';
-            }
+        // Fallback: if preferred format not available for this frame, use best available
+        if (this.preferredFormat === 'avif' && frame.formats.includes('webp')) {
+            return 'webp';
         }
         return 'jpg';
     },
@@ -4331,7 +4324,8 @@ const WebcamPlayer = {
         this.camIndex = camIndex;
         this.camName = camName;
         
-        this.preferredFormat = determinePreferredFormat(camIndex);
+        // Format preference will be set from history API response
+        this.preferredFormat = 'jpg';
 
         // Show player immediately with current image
         img.src = currentImageSrc;
@@ -4366,15 +4360,8 @@ const WebcamPlayer = {
                 this.timezone = data.timezone || 'UTC';
                 this.currentIndex = data.current_index || 0;
                 
-                // Store server-enabled formats from history API (fallback if mtime endpoint hasn't been called yet)
                 if (data.enabledFormats && Array.isArray(data.enabledFormats)) {
-                    if (!window.SERVER_ENABLED_FORMATS) {
-                        window.SERVER_ENABLED_FORMATS = {};
-                    }
-                    if (!window.SERVER_ENABLED_FORMATS[camIndex]) {
-                        window.SERVER_ENABLED_FORMATS[camIndex] = data.enabledFormats;
-                        this.preferredFormat = determinePreferredFormat(camIndex);
-                    }
+                    this.preferredFormat = getPreferredFormat(data.enabledFormats);
                 }
                 
                 this.initTimeline();
@@ -5173,7 +5160,8 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
             // For first webcam (LCP element), delay timestamp check to avoid competing with LCP load
             const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
             if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
-                // Image already loaded, check timestamp after delay
+                // Image already loaded, observe format immediately and check timestamp after delay
+                observeWebcamFormat(<?= $index ?>, imgEl<?= $index ?>);
                 setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
             } else {
                 // Image not loaded yet, wait for load event, then delay timestamp check
@@ -5654,117 +5642,60 @@ function setupWebcamRefresh(camIndex, baseInterval) {
 }
 
 /**
- * Determine preferred format based on browser support and server-enabled formats
+ * Observe format from picture element and store in localStorage
  * 
- * Uses user agent detection (more reliable than canvas.toDataURL).
- * Falls back to canvas.toDataURL() if user agent detection fails.
- * Respects server-enabled formats to avoid requesting disabled formats.
+ * Extracts format from currentSrc URL and stores browser preference.
+ * Called on image load events to detect which format browser selected.
  * 
- * @param {number} camIndex Camera index (optional, for per-camera format cache)
+ * @param {number} camIndex Camera index
+ * @param {HTMLImageElement} img Image element
+ */
+function observeWebcamFormat(camIndex, img) {
+    const currentSrc = img.currentSrc || img.src;
+    const formatMatch = currentSrc.match(/[&?]fmt=([^&]+)/);
+    
+    if (formatMatch) {
+        const format = formatMatch[1].toLowerCase();
+        if (['avif', 'webp', 'jpg', 'jpeg'].includes(format)) {
+            const normalizedFormat = format === 'jpeg' ? 'jpg' : format;
+            try {
+                localStorage.setItem('webcam_format_pref', normalizedFormat);
+            } catch (e) {
+                // localStorage not available (private browsing, etc.)
+            }
+        }
+    }
+}
+
+/**
+ * Get preferred format from localStorage with server format intersection
+ * 
+ * Reads browser preference from localStorage and intersects with server-enabled formats.
+ * Falls back to 'jpg' if preference not available or not supported by server.
+ * 
+ * @param {Array<string>} serverFormats Server-enabled formats (from mtime response)
  * @returns {string} Preferred format: 'avif', 'webp', or 'jpg'
  */
-function determinePreferredFormat(camIndex = null) {
-    const serverFormats = (camIndex !== null && window.SERVER_ENABLED_FORMATS && window.SERVER_ENABLED_FORMATS[camIndex]) 
-        ? window.SERVER_ENABLED_FORMATS[camIndex] 
-        : null;
-    
-    const cacheKey = camIndex !== null ? `_cachedPreferredFormat_${camIndex}` : '_cachedPreferredFormat';
-    if (window[cacheKey] !== undefined) {
-        return window[cacheKey];
-    }
-    
-    const ua = navigator.userAgent;
-    const uaLower = ua.toLowerCase();
-    const isChrome = uaLower.includes('chrome') && !uaLower.includes('edg');
-    const isEdge = uaLower.includes('edg');
-    const isFirefox = uaLower.includes('firefox');
-    const isSafari = uaLower.includes('safari') && !uaLower.includes('chrome');
-    
-    // Version thresholds: Chrome 85+, Edge 122+, Firefox 93+, Safari 16+ support AVIF
-    // Chrome 23+, Edge 18+, Firefox 65+, Safari 14+ support WebP
-    
-    const isFormatEnabled = (format) => {
-        if (!serverFormats) return true; // Assume enabled if unknown (backward compatible)
-        return serverFormats.includes(format);
-    };
-    
-    const setCachedFormat = (format) => {
-        window[cacheKey] = format;
-        return format;
-    };
-    
-    if (isChrome) {
-        const chromeMatch = ua.match(/Chrome\/(\d+)/i);
-        const chromeVersion = chromeMatch ? parseInt(chromeMatch[1]) : 0;
-        if (chromeVersion >= 85 && isFormatEnabled('avif')) {
-            return setCachedFormat('avif');
-        }
-        if (chromeVersion >= 23 && isFormatEnabled('webp')) {
-            return setCachedFormat('webp');
-        }
-    }
-    
-    if (isEdge) {
-        const edgeMatch = ua.match(/Edg\/(\d+)/i);
-        const edgeVersion = edgeMatch ? parseInt(edgeMatch[1]) : 0;
-        if (edgeVersion >= 122 && isFormatEnabled('avif')) {
-            return setCachedFormat('avif');
-        }
-        if (edgeVersion >= 18 && isFormatEnabled('webp')) {
-            return setCachedFormat('webp');
-        }
-    }
-    
-    if (isFirefox) {
-        const firefoxMatch = ua.match(/Firefox\/(\d+)/i);
-        const firefoxVersion = firefoxMatch ? parseInt(firefoxMatch[1]) : 0;
-        if (firefoxVersion >= 93 && isFormatEnabled('avif')) {
-            return setCachedFormat('avif');
-        }
-        if (firefoxVersion >= 65 && isFormatEnabled('webp')) {
-            return setCachedFormat('webp');
-        }
-    }
-    
-    if (isSafari) {
-        const safariMatch = ua.match(/Version\/(\d+)/i);
-        const safariVersion = safariMatch ? parseInt(safariMatch[1]) : 0;
-        if (safariVersion >= 16 && isFormatEnabled('avif')) {
-            return setCachedFormat('avif');
-        }
-        if (safariVersion >= 14 && isFormatEnabled('webp')) {
-            return setCachedFormat('webp');
-        }
-    }
-    
-    // Fallback: Try canvas.toDataURL() detection
-    const canvas = document.createElement('canvas');
-    canvas.width = 1;
-    canvas.height = 1;
+function getPreferredFormat(serverFormats) {
+    let browserPref = 'jpg';
     
     try {
-        const avifDataUrl = canvas.toDataURL('image/avif');
-        if (avifDataUrl && avifDataUrl.indexOf('data:image/avif') === 0 && isFormatEnabled('avif')) {
-            return setCachedFormat('avif');
+        const stored = localStorage.getItem('webcam_format_pref');
+        if (stored && ['avif', 'webp', 'jpg'].includes(stored)) {
+            browserPref = stored;
         }
     } catch (e) {
-        // AVIF not supported
+        // localStorage not available
     }
     
-    try {
-        const webpDataUrl = canvas.toDataURL('image/webp');
-        if (webpDataUrl && webpDataUrl.indexOf('data:image/webp') === 0 && isFormatEnabled('webp')) {
-            return setCachedFormat('webp');
-        }
-    } catch (e) {
-        // WebP not supported
+    // Intersect browser preference with server-enabled formats
+    if (browserPref === 'avif' && serverFormats && serverFormats.includes('avif')) {
+        return 'avif';
     }
-    
-    // Default to WebP if enabled, otherwise JPG
-    if (isFormatEnabled('webp')) {
-        return setCachedFormat('webp');
+    if (browserPref === 'webp' && serverFormats && serverFormats.includes('webp')) {
+        return 'webp';
     }
-    return setCachedFormat('jpg');
+    return 'jpg';
 }
 
 /**
@@ -6198,8 +6129,15 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
             // Format ready - load immediately
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
+            
+            // Store format preference from successful request
+            try {
+                localStorage.setItem('webcam_format_pref', preferredFormat);
+            } catch (e) {
+                // localStorage not available
+            }
+            
             updateImageSilently(camIndex, blobUrl, jpegTimestamp);
-            // Track successful image load
             CAM_LAST_FETCH[camIndex] = Date.now();
             return;
         }
@@ -6308,14 +6246,11 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             const ready = json.formatReady || {};
             const hasExisting = hasExistingImage(camIndex);
             
-            if (json.enabledFormats && Array.isArray(json.enabledFormats)) {
-                if (!window.SERVER_ENABLED_FORMATS) {
-                    window.SERVER_ENABLED_FORMATS = {};
-                }
-                window.SERVER_ENABLED_FORMATS[camIndex] = json.enabledFormats;
-            }
+            const serverFormats = (json.enabledFormats && Array.isArray(json.enabledFormats)) 
+                ? json.enabledFormats 
+                : ['jpg'];
             
-            const preferredFormat = determinePreferredFormat(camIndex);
+            const preferredFormat = getPreferredFormat(serverFormats);
             
             // Build image URL with timestamp parameter (immutable cache busting)
             // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}
