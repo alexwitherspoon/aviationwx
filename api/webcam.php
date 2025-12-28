@@ -221,6 +221,8 @@ header('X-Request-ID: ' . $reqId);
 $rawIdentifier = $_GET['id'] ?? $_GET['airport'] ?? '';
 // Support both 'cam' and 'index' parameters for backward compatibility
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : (isset($_GET['index']) ? intval($_GET['index']) : 0);
+// Support timestamp parameter for timestamp-based URLs (immutable cache busting)
+$requestedTimestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
 
 if (empty($rawIdentifier)) {
     aviationwx_log('error', 'webcam missing airport identifier', [], 'user');
@@ -536,7 +538,24 @@ function getImageCaptureTime($filePath) {
 function getCacheFile(string $airportId, int $camIndex, string $format): string {
     $cacheDir = __DIR__ . '/../cache/webcams';
     $base = $cacheDir . '/' . $airportId . '_' . $camIndex;
-    return $base . '.' . $format;
+    $symlinkPath = $base . '.' . $format;
+    
+    // Resolve symlink to actual timestamp-based file
+    // If symlink exists, readlink() returns the target
+    // If not a symlink or doesn't exist, return the symlink path (backward compatible)
+    if (is_link($symlinkPath)) {
+        $target = readlink($symlinkPath);
+        if ($target !== false) {
+            // If relative path, resolve it
+            if ($target[0] !== '/') {
+                $target = dirname($symlinkPath) . '/' . $target;
+            }
+            return $target;
+        }
+    }
+    
+    // Fallback: return symlink path (for backward compatibility or if symlink doesn't exist)
+    return $symlinkPath;
 }
 
 /**
@@ -1147,6 +1166,50 @@ if (!is_dir($cacheDir) || !is_readable($cacheDir)) {
 $formatStatus = getFormatStatus($airportId, $camIndex);
 $refreshInterval = getRefreshIntervalForCamera($airportId, $config, $cam);
 $enabledFormats = getEnabledWebcamFormats();
+
+// Handle timestamp-based URL request (immutable cache busting)
+if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
+    // Determine requested format
+    $requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
+    if (!in_array($requestedFormat, ['jpg', 'webp', 'avif'])) {
+        $requestedFormat = 'jpg';
+    }
+    
+    // Check if timestamp-based file exists
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    $timestampFile = $cacheDir . '/' . $requestedTimestamp . '.' . $requestedFormat;
+    
+    // Try requested format first, fall back to JPG
+    if (!file_exists($timestampFile) && $requestedFormat !== 'jpg') {
+        $timestampFile = $cacheDir . '/' . $requestedTimestamp . '.jpg';
+        $requestedFormat = 'jpg';
+    }
+    
+    if (file_exists($timestampFile)) {
+        // Validate file is within cache directory (security check)
+        $realPath = realpath($timestampFile);
+        $realCacheDir = realpath($cacheDir);
+        if ($realPath !== false && $realCacheDir !== false && strpos($realPath, $realCacheDir) === 0) {
+            // Serve timestamp-based file with immutable cache headers
+            $mimeType = $requestedFormat === 'webp' ? 'image/webp' : ($requestedFormat === 'avif' ? 'image/avif' : 'image/jpeg');
+            $mtime = @filemtime($timestampFile);
+            
+            header('Content-Type: ' . $mimeType);
+            header('Cache-Control: public, max-age=31536000, immutable');
+            header('Content-Length: ' . filesize($timestampFile));
+            header('X-Content-Type-Options: nosniff');
+            if ($mtime !== false) {
+                header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+            }
+            
+            readfile($timestampFile);
+            exit;
+        }
+    }
+    
+    // Timestamp file doesn't exist - fall through to normal serving (backward compatible)
+    // This allows URLs with ts= to work even if that specific timestamp isn't available
+}
 
 // No source image
 if (!$formatStatus['jpg']['valid']) {

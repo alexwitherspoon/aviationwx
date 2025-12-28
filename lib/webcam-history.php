@@ -111,15 +111,17 @@ function saveFrameToHistory(string $sourceFile, string $airportId, int $camIndex
  * Called after successful format generation and promotion. Copies all promoted
  * format files to the history directory with timestamp-based filenames.
  * 
+ * With timestamp-based cache files, we can copy directly from cache using the timestamp.
  * Storage is cheap, CPU is expensive - we save all formats to avoid
  * regenerating them later for time-lapse or other features.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param array $promotedFormats Array of promoted format extensions: ['jpg', 'webp', 'avif']
+ * @param int $timestamp Unix timestamp for the image (0 to auto-detect)
  * @return array Results: ['format' => bool success, ...]
  */
-function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promotedFormats): array {
+function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promotedFormats, int $timestamp = 0): array {
     $results = [];
     
     // Check if history enabled for this airport
@@ -146,14 +148,28 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
         }
     }
     
-    // Get capture timestamp from the first available format (they should all have the same mtime)
-    $timestamp = 0;
-    foreach ($promotedFormats as $format) {
-        $sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
-        if (file_exists($sourceFile)) {
-            $timestamp = getHistoryImageCaptureTime($sourceFile);
-            if ($timestamp > 0) {
-                break;
+    // Get timestamp if not provided (from symlink target or file mtime)
+    if ($timestamp <= 0) {
+        foreach ($promotedFormats as $format) {
+            // Try to resolve symlink to get timestamp file
+            $symlinkPath = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+            if (is_link($symlinkPath)) {
+                $target = readlink($symlinkPath);
+                if ($target !== false) {
+                    // Extract timestamp from filename (e.g., "1703700000.jpg" -> 1703700000)
+                    if (preg_match('/^(\d+)\.' . preg_quote($format, '/') . '$/', basename($target), $matches)) {
+                        $timestamp = (int)$matches[1];
+                        break;
+                    }
+                }
+            }
+            // Fallback: get from file mtime
+            $sourceFile = is_link($symlinkPath) ? ($cacheDir . '/' . basename(readlink($symlinkPath))) : $symlinkPath;
+            if (file_exists($sourceFile)) {
+                $timestamp = getHistoryImageCaptureTime($sourceFile);
+                if ($timestamp > 0) {
+                    break;
+                }
             }
         }
     }
@@ -165,8 +181,8 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
     // Detect if this is a bridge upload for logging (check any format)
     $isBridgeUpload = false;
     foreach ($promotedFormats as $format) {
-        $sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
-        if (file_exists($sourceFile) && isBridgeUpload($sourceFile)) {
+        $timestampFile = $cacheDir . '/' . $timestamp . '.' . $format;
+        if (file_exists($timestampFile) && isBridgeUpload($timestampFile)) {
             $isBridgeUpload = true;
             break;
         }
@@ -174,9 +190,9 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
     
     $savedFormats = [];
     
-    // Save each promoted format to history
+    // Save each promoted format to history (copy from timestamp-based cache files)
     foreach ($promotedFormats as $format) {
-        $sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+        $sourceFile = $cacheDir . '/' . $timestamp . '.' . $format;
         $destFile = $historyDir . '/' . $timestamp . '.' . $format;
         
         // Skip if source doesn't exist
@@ -192,7 +208,7 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
             continue;
         }
         
-        // Copy (not move) - source file is still needed as current
+        // Copy (not move) - source file is still needed as current cache
         if (@copy($sourceFile, $destFile)) {
             $results[$format] = true;
             $savedFormats[] = $format;

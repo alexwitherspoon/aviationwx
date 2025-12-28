@@ -338,13 +338,14 @@ class WebcamFormatGenerationTest extends TestCase
     }
 
     /**
-     * Test getFinalFilePath() returns correct path format
+     * Test getFinalFilePath() returns timestamp-based path format
      */
-    public function testGetFinalFilePath_ReturnsCorrectPathFormat(): void
+    public function testGetFinalFilePath_ReturnsTimestampBasedPath(): void
     {
-        $path = getFinalFilePath('kspb', 0, 'jpg');
+        $timestamp = 1703700000;
+        $path = getFinalFilePath('kspb', 0, 'jpg', $timestamp);
         $this->assertStringContainsString('cache/webcams', $path);
-        $this->assertStringContainsString('kspb_0.jpg', $path);
+        $this->assertStringEndsWith('1703700000.jpg', $path);
         $this->assertFalse(str_ends_with($path, '.tmp'), 'Final path should not end with .tmp');
     }
 
@@ -353,13 +354,35 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetFinalFilePath_WorksForDifferentFormats(): void
     {
-        $jpgPath = getFinalFilePath('kspb', 0, 'jpg');
-        $webpPath = getFinalFilePath('kspb', 0, 'webp');
-        $avifPath = getFinalFilePath('kspb', 0, 'avif');
+        $timestamp = 1703700000;
+        $jpgPath = getFinalFilePath('kspb', 0, 'jpg', $timestamp);
+        $webpPath = getFinalFilePath('kspb', 0, 'webp', $timestamp);
+        $avifPath = getFinalFilePath('kspb', 0, 'avif', $timestamp);
         
-        $this->assertStringEndsWith('.jpg', $jpgPath);
-        $this->assertStringEndsWith('.webp', $webpPath);
-        $this->assertStringEndsWith('.avif', $avifPath);
+        $this->assertStringEndsWith('1703700000.jpg', $jpgPath);
+        $this->assertStringEndsWith('1703700000.webp', $webpPath);
+        $this->assertStringEndsWith('1703700000.avif', $avifPath);
+    }
+
+    /**
+     * Test getCacheSymlinkPath() returns correct symlink path
+     */
+    public function testGetCacheSymlinkPath_ReturnsCorrectPath(): void
+    {
+        $path = getCacheSymlinkPath('kspb', 0, 'jpg');
+        $this->assertStringContainsString('cache/webcams', $path);
+        $this->assertStringEndsWith('kspb_0.jpg', $path);
+    }
+
+    /**
+     * Test getTimestampCacheFilePath() returns timestamp-based path
+     */
+    public function testGetTimestampCacheFilePath_ReturnsTimestampPath(): void
+    {
+        $timestamp = 1703700000;
+        $path = getTimestampCacheFilePath($timestamp, 'jpg');
+        $this->assertStringContainsString('cache/webcams', $path);
+        $this->assertStringEndsWith('1703700000.jpg', $path);
     }
 
     /**
@@ -484,6 +507,7 @@ class WebcamFormatGenerationTest extends TestCase
         $testAirport = 'test_promote_' . time();
         $stagingFile = getStagingFilePath($testAirport, 0, 'jpg');
         $cacheDir = dirname($stagingFile);
+        $timestamp = time();
         
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
@@ -493,13 +517,18 @@ class WebcamFormatGenerationTest extends TestCase
         @file_put_contents($stagingFile, 'test jpg content');
         
         // Promote with empty format results
-        $result = promoteFormats($testAirport, 0, [], 'jpg');
+        $result = promoteFormats($testAirport, 0, [], 'jpg', $timestamp);
         
         // Should have promoted the source format
         $this->assertContains('jpg', $result);
         
         // Cleanup
-        @unlink(getFinalFilePath($testAirport, 0, 'jpg'));
+        $timestampFile = getFinalFilePath($testAirport, 0, 'jpg', $timestamp);
+        $symlink = getCacheSymlinkPath($testAirport, 0, 'jpg');
+        @unlink($timestampFile);
+        if (is_link($symlink)) {
+            @unlink($symlink);
+        }
     }
 
     /**
@@ -509,6 +538,7 @@ class WebcamFormatGenerationTest extends TestCase
     {
         $testAirport = 'test_promote_partial_' . time();
         $cacheDir = __DIR__ . '/../../cache/webcams';
+        $timestamp = time();
         
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
@@ -520,20 +550,32 @@ class WebcamFormatGenerationTest extends TestCase
         
         // Promote with mixed results (webp success, avif failed)
         $formatResults = ['webp' => true, 'avif' => false];
-        $result = promoteFormats($testAirport, 0, $formatResults, 'jpg');
+        $result = promoteFormats($testAirport, 0, $formatResults, 'jpg', $timestamp);
         
         // Should include jpg and webp, not avif
         $this->assertContains('jpg', $result);
         $this->assertContains('webp', $result);
         $this->assertNotContains('avif', $result);
         
-        // Verify final files exist
-        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'jpg'));
-        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'webp'));
+        // Verify timestamp files exist
+        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'jpg', $timestamp));
+        $this->assertFileExists(getFinalFilePath($testAirport, 0, 'webp', $timestamp));
+        
+        // Verify symlinks exist
+        $this->assertTrue(is_link(getCacheSymlinkPath($testAirport, 0, 'jpg')));
+        $this->assertTrue(is_link(getCacheSymlinkPath($testAirport, 0, 'webp')));
         
         // Cleanup
-        @unlink(getFinalFilePath($testAirport, 0, 'jpg'));
-        @unlink(getFinalFilePath($testAirport, 0, 'webp'));
+        @unlink(getFinalFilePath($testAirport, 0, 'jpg', $timestamp));
+        @unlink(getFinalFilePath($testAirport, 0, 'webp', $timestamp));
+        $symlinkJpg = getCacheSymlinkPath($testAirport, 0, 'jpg');
+        $symlinkWebp = getCacheSymlinkPath($testAirport, 0, 'webp');
+        if (is_link($symlinkJpg)) {
+            @unlink($symlinkJpg);
+        }
+        if (is_link($symlinkWebp)) {
+            @unlink($symlinkWebp);
+        }
     }
 }
 

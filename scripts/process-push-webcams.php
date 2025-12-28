@@ -620,12 +620,18 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
+    // Get timestamp from staging file (for timestamp-based filenames)
+    $timestamp = getSourceCaptureTime($stagingFile);
+    if ($timestamp <= 0) {
+        $timestamp = time();
+    }
+    
     // Generate all other formats in parallel (synchronous wait)
     // All formats are written to staging files (.tmp)
     $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
     
-    // Promote all successful staging files to final cache location
-    $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $primaryFormat);
+    // Promote all successful staging files to final cache location (with timestamp for filename)
+    $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $primaryFormat, $timestamp);
     
     if (empty($promotedFormats)) {
         aviationwx_log('error', 'moveToCache: no formats promoted', [
@@ -638,7 +644,13 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     }
     
     // Save all promoted formats to history (if enabled for this airport)
-    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats);
+    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
+    
+    // Cleanup old format files (migration: remove non-symlink files using old naming)
+    cleanupOldFormatFiles($airportId, $camIndex);
+    
+    // Cleanup old timestamp files (keep only recent ones to prevent disk space issues)
+    cleanupOldTimestampFiles($airportId, $camIndex, 5);
     
     // Log final result
     $allRequestedFormats = [$primaryFormat];

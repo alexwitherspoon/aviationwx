@@ -991,12 +991,12 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                 break;
                             }
                         }
-                        // Match webcam.php hash generation: airport_id + cam_index + fmt + mtime + size
-                        // Use 'jpg' for hash since HTML image doesn't specify format (server decides)
-                        $imgHash = substr(md5($airportId . '_' . $index . '_jpg_' . $mtimeJpg . '_' . $sizeJpg), 0, 8);
+                        // Use timestamp-based URL for automatic cache busting
+                        // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}
+                        // Server will serve from timestamp-based file with immutable cache headers
                         ?>
                         <img id="webcam-<?= $index ?>" 
-                             src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&v=<?= $imgHash ?>"
+                             src="<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http' ?>://<?= htmlspecialchars($_SERVER['HTTP_HOST']) ?>/webcam.php?id=<?= urlencode($airportId) ?>&cam=<?= $index ?>&ts=<?= $mtimeJpg ?>"
                              data-initial-timestamp="<?= $mtimeJpg ?>" 
                              alt="<?= htmlspecialchars($cam['name']) ?> webcam - click to view 24-hour history"
                              title="<?= htmlspecialchars($cam['name']) ?> – Tap to view 24-hour history"
@@ -4293,19 +4293,14 @@ const WebcamPlayer = {
             return 'jpg'; // Default fallback
         }
         
-        // First, try the browser's preferred format (if available in frame)
-        // This respects browser capabilities detected by determinePreferredFormat()
+        // Try browser's preferred format first (if available in frame)
         if (frame.formats.includes(this.preferredFormat)) {
             return this.preferredFormat;
         }
         
-        // Fall back to best available format that browser supports
-        // preferredFormat indicates browser capability:
-        // - 'avif' = browser supports avif, webp, and jpg
-        // - 'webp' = browser supports webp and jpg (not avif)
-        // - 'jpg' = browser only supports jpg
+        // Fall back to best available format based on browser capability
+        // preferredFormat indicates what formats the browser supports
         if (this.preferredFormat === 'avif') {
-            // Browser supports avif - try avif, then webp, then jpg
             if (frame.formats.includes('avif')) {
                 return 'avif';
             }
@@ -4313,12 +4308,10 @@ const WebcamPlayer = {
                 return 'webp';
             }
         } else if (this.preferredFormat === 'webp') {
-            // Browser supports webp (not avif) - try webp, then jpg
             if (frame.formats.includes('webp')) {
                 return 'webp';
             }
         }
-        // JPG is always available and always supported
         return 'jpg';
     },
 
@@ -5652,18 +5645,107 @@ function setupWebcamRefresh(camIndex, baseInterval) {
 /**
  * Determine preferred format based on browser support
  * 
+ * Uses user agent detection (more reliable than canvas.toDataURL).
+ * Falls back to canvas.toDataURL() if user agent detection fails.
+ * 
  * @returns {string} Preferred format: 'avif', 'webp', or 'jpg'
  */
 function determinePreferredFormat() {
-    // Check browser support (simple detection)
+    // Cache result to avoid repeated detection
+    if (window._cachedPreferredFormat !== undefined) {
+        return window._cachedPreferredFormat;
+    }
+    
+    const ua = navigator.userAgent;
+    const uaLower = ua.toLowerCase();
+    const isChrome = uaLower.includes('chrome') && !uaLower.includes('edg');
+    const isEdge = uaLower.includes('edg');
+    const isFirefox = uaLower.includes('firefox');
+    const isSafari = uaLower.includes('safari') && !uaLower.includes('chrome');
+    
+    // Version thresholds: Chrome 85+, Edge 122+, Firefox 93+, Safari 16+ support AVIF
+    // Chrome 23+, Edge 18+, Firefox 65+, Safari 14+ support WebP
+    
+    if (isChrome) {
+        const chromeMatch = ua.match(/Chrome\/(\d+)/i);
+        const chromeVersion = chromeMatch ? parseInt(chromeMatch[1]) : 0;
+        if (chromeVersion >= 85) {
+            window._cachedPreferredFormat = 'avif';
+            return 'avif';
+        }
+        if (chromeVersion >= 23) {
+            window._cachedPreferredFormat = 'webp';
+            return 'webp';
+        }
+    }
+    
+    if (isEdge) {
+        const edgeMatch = ua.match(/Edg\/(\d+)/i);
+        const edgeVersion = edgeMatch ? parseInt(edgeMatch[1]) : 0;
+        if (edgeVersion >= 122) {
+            window._cachedPreferredFormat = 'avif';
+            return 'avif';
+        }
+        if (edgeVersion >= 18) {
+            window._cachedPreferredFormat = 'webp';
+            return 'webp';
+        }
+    }
+    
+    if (isFirefox) {
+        const firefoxMatch = ua.match(/Firefox\/(\d+)/i);
+        const firefoxVersion = firefoxMatch ? parseInt(firefoxMatch[1]) : 0;
+        if (firefoxVersion >= 93) {
+            window._cachedPreferredFormat = 'avif';
+            return 'avif';
+        }
+        if (firefoxVersion >= 65) {
+            window._cachedPreferredFormat = 'webp';
+            return 'webp';
+        }
+    }
+    
+    if (isSafari) {
+        const safariMatch = ua.match(/Version\/(\d+)/i);
+        const safariVersion = safariMatch ? parseInt(safariMatch[1]) : 0;
+        if (safariVersion >= 16) {
+            window._cachedPreferredFormat = 'avif';
+            return 'avif';
+        }
+        if (safariVersion >= 14) {
+            window._cachedPreferredFormat = 'webp';
+            return 'webp';
+        }
+    }
+    
+    // Fallback: Try canvas.toDataURL() detection
     const canvas = document.createElement('canvas');
-    if (canvas.toDataURL('image/avif').indexOf('data:image/avif') === 0) {
-        return 'avif';
+    canvas.width = 1;
+    canvas.height = 1;
+    
+    try {
+        const avifDataUrl = canvas.toDataURL('image/avif');
+        if (avifDataUrl && avifDataUrl.indexOf('data:image/avif') === 0) {
+            window._cachedPreferredFormat = 'avif';
+            return 'avif';
+        }
+    } catch (e) {
+        // AVIF not supported
     }
-    if (canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0) {
-        return 'webp';
+    
+    try {
+        const webpDataUrl = canvas.toDataURL('image/webp');
+        if (webpDataUrl && webpDataUrl.indexOf('data:image/webp') === 0) {
+            window._cachedPreferredFormat = 'webp';
+            return 'webp';
+        }
+    } catch (e) {
+        // WebP not supported
     }
-    return 'jpg';
+    
+    // Default to WebP for unknown modern browsers
+    window._cachedPreferredFormat = 'webp';
+    return 'webp';
 }
 
 /**
@@ -5723,14 +5805,18 @@ function updateImageSilently(camIndex, blobUrl, timestamp) {
     if (img) {
         const oldSrc = img.src;
         img.src = blobUrl;
+        
         if (timestamp) {
             img.dataset.initialTimestamp = timestamp.toString();
+            img.setAttribute('data-ts', timestamp.toString()); // Set data-ts for timestamp comparison
             CAM_TS[camIndex] = timestamp;
         }
         
-        // Cleanup old blob URL if it was a blob
+        // Cleanup old blob URL if it was a blob (after a delay to ensure new image loads)
         if (oldSrc.startsWith('blob:')) {
-            URL.revokeObjectURL(oldSrc);
+            setTimeout(() => {
+                URL.revokeObjectURL(oldSrc);
+            }, 100);
         }
         
         // Update timestamp display silently
@@ -6206,9 +6292,10 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             // Determine preferred format based on browser support
             const preferredFormat = determinePreferredFormat();
             
-            // Build image URL with explicit fmt parameter (triggers 202 logic if generating)
-            const hash = calculateImageHash(AIRPORT_ID, camIndex, preferredFormat, newTs, json.size || 0);
-            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&fmt=${preferredFormat}&v=${hash}`;
+            // Build image URL with timestamp parameter (immutable cache busting)
+            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}
+            // This ensures automatic cache busting when timestamp changes
+            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&ts=${newTs}&fmt=${preferredFormat}`;
             
             // Log successful update
             console.log('[Webcam ' + camIndex + '] Updating - new image at ' + new Date(newTs * 1000).toLocaleTimeString() + ' (format: ' + preferredFormat + ')');

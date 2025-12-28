@@ -844,15 +844,21 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             
             // Write to staging file
             if (@file_put_contents($stagingFile, $mockData) !== false) {
+                // Get timestamp from source file
+                $timestamp = getSourceCaptureTime($stagingFile);
+                if ($timestamp <= 0) {
+                    $timestamp = time();
+                }
+                
                 // Generate formats from staging (parallel, sync)
                 $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, 'jpg');
                 
-                // Promote all successful formats
-                $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg');
+                // Promote all successful formats (with timestamp for filename)
+                $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
                 
                 // Save all formats to history
                 if (!empty($promotedFormats)) {
-                    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats);
+                    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
                 }
                 
                 aviationwx_log('info', 'webcam mock generated', [
@@ -961,17 +967,29 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             'fetch_duration_ms' => $fetchDuration
         ], 'app');
         
+        // Get timestamp from source file (for timestamp-based filenames)
+        $timestamp = getSourceCaptureTime($stagingFile);
+        if ($timestamp <= 0) {
+            $timestamp = time();
+        }
+        
         // Generate all enabled formats in parallel (synchronous wait)
         // All formats are written to staging files (.tmp)
         $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, 'jpg');
         
-        // Promote all successful staging files to final cache location
-        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg');
+        // Promote all successful staging files to final cache location (with timestamp for filename)
+        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
         
         // Save all promoted formats to history (if enabled for this airport)
         if (!empty($promotedFormats)) {
-            saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats);
+            saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
         }
+        
+        // Cleanup old format files (migration: remove non-symlink files using old naming)
+        cleanupOldFormatFiles($airportId, $camIndex);
+        
+        // Cleanup old timestamp files (keep only recent ones to prevent disk space issues)
+        cleanupOldTimestampFiles($airportId, $camIndex, 5);
         
         // Log final result
         $allRequestedFormats = ['jpg'];
