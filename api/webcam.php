@@ -723,6 +723,8 @@ function getFormatStatus(string $airportId, int $camIndex): array {
         return substr($header, 0, 4) === 'RIFF' && strpos($header, 'WEBP') !== false;
     };
     
+    $webpValidResult = $webpStat && $webpStat['size'] > 0 ? $isValidWebp($cacheWebp) : false;
+    
     return [
         'jpg' => [
             'exists' => $jpgStat !== false,
@@ -734,7 +736,7 @@ function getFormatStatus(string $airportId, int $camIndex): array {
             'exists' => $webpStat !== false,
             'size' => $webpStat ? $webpStat['size'] : 0,
             'mtime' => $webpStat ? $webpStat['mtime'] : 0,
-            'valid' => $webpStat && $webpStat['size'] > 0 && $isValidWebp($cacheWebp)
+            'valid' => $webpValidResult
         ],
         'avif' => [
             'exists' => $avifStat !== false,
@@ -1391,7 +1393,19 @@ if (!$isCurrentCycle && areAllFormatsFromSameCycle($formatStatus, $jpegMtime, $r
 if ($formatStatus[$preferredFormat]['valid']) {
     // Preferred format ready - serve it
     $mtime = $formatStatus[$preferredFormat]['mtime'];
-    $filePath = getCacheFile($airportId, $camIndex, $preferredFormat);// If cache is stale, serve file without exiting so we can trigger background refresh
+    $filePath = getCacheFile($airportId, $camIndex, $preferredFormat);
+    
+    aviationwx_log('info', 'webcam serving preferred format', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'format' => $preferredFormat,
+        'fmt_param' => $fmt ?? 'auto',
+        'is_current_cycle' => $isCurrentCycle,
+        'file_size' => filesize($filePath),
+        'mtime' => $mtime
+    ], 'user');
+    
+    // If cache is stale, serve file without exiting so we can trigger background refresh
     if (!$isCurrentCycle) {
         serve200Response($filePath, getMimeTypeForFormat($preferredFormat), $mtime, $refreshInterval, false);
         triggerWebcamBackgroundRefresh($airportId, $camIndex, $cam, $cacheDir, $cacheJpg, $cacheWebp, $refreshInterval, $mtime, $reqId);
@@ -1413,6 +1427,15 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
         // This handles cases where format generation failed or wasn't triggered
         require_once __DIR__ . '/../lib/webcam-format-generation.php';
         $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg');
+        
+        aviationwx_log('info', 'webcam triggering on-demand format generation', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'preferred_format' => $preferredFormat,
+            'fmt_param' => $fmt ?? 'auto',
+            'source_exists' => file_exists($cacheJpg),
+            'source_size' => file_exists($cacheJpg) ? filesize($cacheJpg) : 0
+        ], 'app');
         
         if (file_exists($cacheJpg) && filesize($cacheJpg) > 0) {
             // Get timestamp from source file
@@ -1440,8 +1463,23 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
             if ($formatStatus[$preferredFormat]['valid']) {
                 $mtime = $formatStatus[$preferredFormat]['mtime'];
                 $filePath = getCacheFile($airportId, $camIndex, $preferredFormat);
+                
+                aviationwx_log('info', 'webcam format generation succeeded, serving', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'format' => $preferredFormat,
+                    'file_size' => filesize($filePath)
+                ], 'app');
+                
                 serve200Response($filePath, getMimeTypeForFormat($preferredFormat), $mtime, $refreshInterval);
                 exit;
+            } else {
+                aviationwx_log('warning', 'webcam format generation completed but format still invalid', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'format' => $preferredFormat,
+                    'format_results' => $formatResults
+                ], 'app');
             }
         }
         
@@ -1454,6 +1492,14 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
 // Not explicit request OR old cycle OR generation failed → serve best available immediately
 $mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex);
 if ($mostEfficient) {
+    aviationwx_log('info', 'webcam serving fallback format', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'preferred_format' => $preferredFormat,
+        'served_format' => substr($mostEfficient['file'], -4) === 'webp' ? 'webp' : (substr($mostEfficient['file'], -5) === 'avif' ? 'avif' : 'jpg'),
+        'fmt_param' => $fmt ?? 'auto',
+        'reason' => $isExplicitFormatRequest ? 'explicit_request_not_ready' : 'auto_fallback'
+    ], 'user');
     // Get mtime from format status based on file extension
     $filePath = $mostEfficient['file'];
     if (substr($filePath, -5) === '.webp') {

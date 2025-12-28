@@ -438,11 +438,6 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
  * @return array Results: ['format' => bool success, ...]
  */
 function generateFormatsSync(string $sourceFile, string $airportId, int $camIndex, string $sourceFormat): array {
-    // #region agent log
-    $logPath = __DIR__ . '/../.cursor/debug.log';
-    @file_put_contents($logPath, json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'F', 'location' => 'webcam-format-generation.php:440', 'message' => 'generateFormatsSync called', 'data' => ['airport' => $airportId, 'cam' => $camIndex, 'source_file' => $sourceFile, 'source_format' => $sourceFormat, 'source_exists' => file_exists($sourceFile), 'webp_enabled' => isWebpGenerationEnabled(), 'avif_enabled' => isAvifGenerationEnabled(), 'timestamp' => time()], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-    // #endregion
-    
     $timeout = getFormatGenerationTimeout();
     $deadline = time() + $timeout;
     $captureTime = getSourceCaptureTime($sourceFile);
@@ -468,10 +463,6 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
         $formatsToGenerate[] = 'avif';
     }
     
-    // #region agent log
-    @file_put_contents($logPath, json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'F', 'location' => 'webcam-format-generation.php:468', 'message' => 'Formats to generate determined', 'data' => ['airport' => $airportId, 'cam' => $camIndex, 'formats_to_generate' => $formatsToGenerate, 'timestamp' => time()], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-    // #endregion
-    
     // If no formats to generate, return early
     if (empty($formatsToGenerate)) {
         return $results;
@@ -481,8 +472,13 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
         'airport' => $airportId,
         'cam' => $camIndex,
         'source_format' => $sourceFormat,
+        'source_exists' => file_exists($sourceFile),
+        'source_size' => file_exists($sourceFile) ? filesize($sourceFile) : 0,
         'formats_to_generate' => $formatsToGenerate,
-        'timeout_seconds' => $timeout
+        'webp_enabled' => isWebpGenerationEnabled(),
+        'avif_enabled' => isAvifGenerationEnabled(),
+        'timeout_seconds' => $timeout,
+        'capture_time' => $captureTime
     ], 'app');
     
     // Start all format generation processes in parallel
@@ -554,18 +550,14 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
                 $success = ($exitCode === 0 && file_exists($proc['dest']) && filesize($proc['dest']) > 0);
                 $results[$format] = $success;
                 
-                // #region agent log
-                $logPath = __DIR__ . '/../.cursor/debug.log';
-                @file_put_contents($logPath, json_encode(['sessionId' => 'debug-session', 'runId' => 'run1', 'hypothesisId' => 'F', 'location' => 'webcam-format-generation.php:545', 'message' => 'Format generation result', 'data' => ['airport' => $airportId, 'cam' => $camIndex, 'format' => $format, 'success' => $success, 'exit_code' => $exitCode, 'file_exists' => file_exists($proc['dest']), 'file_size' => file_exists($proc['dest']) ? filesize($proc['dest']) : 0, 'dest_file' => $proc['dest'], 'stderr_preview' => substr($stderr, 0, 200), 'timestamp' => time()], 'timestamp' => time() * 1000]) . "\n", FILE_APPEND);
-                // #endregion
-                
                 if ($success) {
                     aviationwx_log('info', 'webcam format generation complete', [
                         'airport' => $airportId,
                         'cam' => $camIndex,
                         'format' => $format,
                         'duration_ms' => $elapsed,
-                        'size_bytes' => filesize($proc['dest'])
+                        'size_bytes' => filesize($proc['dest']),
+                        'dest_file' => basename($proc['dest'])
                     ], 'app');
                 } else {
                     aviationwx_log('warning', 'webcam format generation failed', [
@@ -574,7 +566,10 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
                         'format' => $format,
                         'exit_code' => $exitCode,
                         'duration_ms' => $elapsed,
-                        'stderr' => substr($stderr, 0, 200)
+                        'file_exists' => file_exists($proc['dest']),
+                        'file_size' => file_exists($proc['dest']) ? filesize($proc['dest']) : 0,
+                        'dest_file' => $proc['dest'],
+                        'stderr_preview' => substr($stderr, 0, 500)
                     ], 'app');
                     
                     // Clean up failed staging file
