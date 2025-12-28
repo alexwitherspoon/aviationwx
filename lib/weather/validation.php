@@ -4,10 +4,130 @@
  * 
  * Functions for validating weather data against climate bounds and field relationships.
  * Ensures data quality by rejecting clearly invalid values (earth extremes + 10% margin).
+ * 
+ * Integration: Called by UnifiedFetcher after aggregation to catch:
+ * - Unit conversion errors (e.g., pressure in wrong units)
+ * - API format changes (e.g., new API version returning different units)
+ * - Sensor malfunctions (e.g., stuck or erratic readings)
  */
 
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/../logger.php';
+
+/**
+ * Validate all weather fields in aggregated data
+ * 
+ * Checks each field against climate bounds and logs warnings for out-of-bounds values.
+ * For safety-critical fields (pressure, temperature), values that are dangerously
+ * out of range are nulled out to prevent incorrect calculations.
+ * 
+ * @param array $data Aggregated weather data
+ * @param string $airportId Airport identifier for logging
+ * @return array Weather data with invalid values handled
+ */
+function validateWeatherData(array $data, string $airportId): array {
+    // Fields to validate with their context requirements
+    $fieldsToValidate = [
+        // Core measurements
+        'temperature' => [],
+        'dewpoint' => ['temperature' => $data['temperature'] ?? null],
+        'humidity' => [],
+        'pressure' => [],
+        'wind_speed' => [],
+        'wind_direction' => [],
+        'gust_speed' => ['wind_speed' => $data['wind_speed'] ?? null],
+        'visibility' => [],
+        'ceiling' => [],
+        'precip_accum' => [],
+    ];
+    
+    $validationIssues = [];
+    
+    foreach ($fieldsToValidate as $field => $context) {
+        if (!isset($data[$field]) || $data[$field] === null) {
+            continue;
+        }
+        
+        $validation = validateWeatherField($field, $data[$field], null, $context);
+        
+        if (!$validation['valid']) {
+            $validationIssues[] = [
+                'field' => $field,
+                'value' => $data[$field],
+                'reason' => $validation['reason'],
+            ];
+            
+            // For safety-critical fields with extreme errors, null out the value
+            // This prevents dangerous calculations (e.g., pressure altitude from bad pressure)
+            if (shouldNullInvalidField($field, $data[$field], $validation['reason'])) {
+                aviationwx_log('warning', "Weather validation: {$field} nulled for safety", [
+                    'airport' => $airportId,
+                    'field' => $field,
+                    'value' => $data[$field],
+                    'reason' => $validation['reason'],
+                    'action' => 'nulled_for_safety',
+                ]);
+                
+                $data[$field] = null;
+            } else {
+                // Log warning but keep the value (might be legitimate extreme weather)
+                aviationwx_log('warning', "Weather validation: {$field} out of bounds", [
+                    'airport' => $airportId,
+                    'field' => $field,
+                    'value' => $data[$field],
+                    'reason' => $validation['reason'],
+                    'action' => 'kept_with_warning',
+                ]);
+            }
+        }
+    }
+    
+    // Add validation metadata if there were issues
+    if (!empty($validationIssues)) {
+        $data['_validation_issues'] = $validationIssues;
+    }
+    
+    return $data;
+}
+
+/**
+ * Determine if an invalid field value should be nulled out
+ * 
+ * Safety-critical fields with extreme errors are nulled to prevent
+ * dangerous calculations. Less critical fields are kept with a warning.
+ * 
+ * @param string $field Field name
+ * @param mixed $value Field value
+ * @param string $reason Validation failure reason
+ * @return bool True if field should be nulled
+ */
+function shouldNullInvalidField(string $field, $value, string $reason): bool {
+    // Always null pressure if it's way off - it affects pressure/density altitude
+    if ($field === 'pressure') {
+        $numValue = (float)$value;
+        // If pressure is more than 2x the max reasonable value, null it
+        // Normal max is ~35 inHg, so >70 is clearly wrong
+        if ($numValue > 70 || $numValue < 10) {
+            return true;
+        }
+    }
+    
+    // Always null temperature if extremely out of bounds
+    if ($field === 'temperature') {
+        $numValue = (float)$value;
+        // If temperature is way beyond earth records, null it
+        // Records: -89.2°C (Antarctica) to 56.7°C (Death Valley)
+        // Use wider margins for edge cases
+        if ($numValue > 70 || $numValue < -100) {
+            return true;
+        }
+    }
+    
+    // For other fields, keep the value with a warning
+    // (might be legitimate extreme weather conditions)
+    return false;
+}
 
 /**
  * Check if a null value is valid for a specific field

@@ -25,8 +25,10 @@ require_once __DIR__ . '/adapter/weatherlink-v1.php';
 require_once __DIR__ . '/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
 require_once __DIR__ . '/calculator.php';
+require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../circuit-breaker.php';
+require_once __DIR__ . '/../logger.php';
 
 use AviationWX\Weather\Data\WeatherSnapshot;
 use AviationWX\Weather\WeatherAggregator;
@@ -70,8 +72,26 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     $aggregator = new WeatherAggregator();
     $result = $aggregator->aggregate($snapshots, $maxAges);
     
+    // Validate and fix pressure if it's clearly in wrong units
+    // Normal pressure range is 28-32 inHg. Values > 100 indicate unit conversion issues.
+    // Common issues:
+    // - Value in hundredths of inHg (e.g., 3038.93 = 30.3893 inHg) - divide by 100
+    // - Value from Pa->inHg conversion when API returned Pa instead of hPa - divide by 100
+    if (isset($result['pressure']) && is_numeric($result['pressure'])) {
+        $pressure = (float)$result['pressure'];
+        if ($pressure > 100) {
+            // Pressure is ~100x too high, likely in wrong units - divide by 100
+            $result['pressure'] = $pressure / 100.0;
+        }
+    }
+    
+    // Validate all weather fields against climate bounds
+    // This catches unit conversion errors, API format changes, and sensor malfunctions
+    $result = validateWeatherData($result, $airportId);
+    
     // Add calculated fields
     $result = addCalculatedFields($result, $airport);
+    
     
     // Add metadata
     $result['airport_id'] = $airportId;

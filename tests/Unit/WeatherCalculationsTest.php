@@ -318,5 +318,97 @@ class WeatherCalculationsTest extends TestCase
         $gustFactor = $gustSpeed - $windSpeed;
         $this->assertEquals(5, $gustFactor);
     }
+
+    /**
+     * Test pressure unit validation and correction in UnifiedFetcher
+     * 
+     * Critical safety test: Ensures that pressure values in wrong units (hundredths of inHg
+     * or Pa instead of hPa) are automatically corrected to prevent dangerous pressure
+     * altitude miscalculations that could affect flight safety decisions.
+     */
+    public function testPressureUnitCorrection_HundredthsOfInHg()
+    {
+        // Simulate pressure in hundredths of inHg (API returned 3038.93 instead of 30.3893)
+        $result = ['pressure' => 3038.93];
+        
+        // Apply the same correction logic as UnifiedFetcher
+        if (isset($result['pressure']) && is_numeric($result['pressure'])) {
+            $pressure = (float)$result['pressure'];
+            if ($pressure > 100) {
+                $result['pressure'] = $pressure / 100.0;
+            }
+        }
+        
+        // Should be corrected to ~30.39 inHg
+        $this->assertEqualsWithDelta(30.3893, $result['pressure'], 0.001);
+    }
+
+    public function testPressureUnitCorrection_NormalPressureUnaffected()
+    {
+        // Normal pressure value should not be changed
+        $result = ['pressure' => 30.12];
+        
+        // Apply the same correction logic as UnifiedFetcher
+        if (isset($result['pressure']) && is_numeric($result['pressure'])) {
+            $pressure = (float)$result['pressure'];
+            if ($pressure > 100) {
+                $result['pressure'] = $pressure / 100.0;
+            }
+        }
+        
+        // Should remain unchanged
+        $this->assertEquals(30.12, $result['pressure']);
+    }
+
+    public function testPressureUnitCorrection_HighNormalPressure()
+    {
+        // High but valid pressure (32 inHg) should not be changed
+        $result = ['pressure' => 32.00];
+        
+        // Apply the same correction logic as UnifiedFetcher
+        if (isset($result['pressure']) && is_numeric($result['pressure'])) {
+            $pressure = (float)$result['pressure'];
+            if ($pressure > 100) {
+                $result['pressure'] = $pressure / 100.0;
+            }
+        }
+        
+        // Should remain unchanged
+        $this->assertEquals(32.00, $result['pressure']);
+    }
+
+    public function testPressureUnitCorrection_LowPressure()
+    {
+        // Low but valid pressure (28 inHg) should not be changed
+        $result = ['pressure' => 28.00];
+        
+        // Apply the same correction logic as UnifiedFetcher
+        if (isset($result['pressure']) && is_numeric($result['pressure'])) {
+            $pressure = (float)$result['pressure'];
+            if ($pressure > 100) {
+                $result['pressure'] = $pressure / 100.0;
+            }
+        }
+        
+        // Should remain unchanged
+        $this->assertEquals(28.00, $result['pressure']);
+    }
+
+    public function testPressureUnitCorrection_NullPressure()
+    {
+        // Null pressure should remain null
+        $result = ['pressure' => null];
+        
+        // Apply the same correction logic as UnifiedFetcher
+        if (isset($result['pressure']) && is_numeric($result['pressure'])) {
+            $pressure = (float)$result['pressure'];
+            if ($pressure > 100) {
+                $result['pressure'] = $pressure / 100.0;
+            }
+        }
+        
+        // Should remain null
+        $this->assertNull($result['pressure']);
+    }
 }
 

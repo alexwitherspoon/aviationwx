@@ -67,8 +67,10 @@ function calculatePressureAltitude($weather, $airport) {
     $stationElevation = $airport['elevation_ft'];
     $pressureInHg = $weather['pressure'];
     
+    
     // Calculate pressure altitude
     $pressureAlt = $stationElevation + (29.92 - $pressureInHg) * 1000;
+    
     
     return round($pressureAlt);
 }

@@ -997,6 +997,24 @@ These conversions happen when parsing data from external APIs to standardize to 
 - Millibars/hectopascals to inches of mercury: `inHg = mb / 33.8639`
   - Used by: Tempest WeatherFlow API, METAR API (aviationweather.gov)
   - Note: Ambient Weather provides pressure in inHg directly. METAR API returns altim in hPa (hectopascals/millibars) and requires conversion.
+- **Safety Validation**: After aggregation, if pressure > 100 inHg (impossible value), the system automatically divides by 100 to correct unit issues.
+  - Catches API responses in wrong units (hundredths of inHg, or Pascals instead of hectopascals)
+  - Normal atmospheric pressure range is 28-32 inHg, so values > 100 indicate a unit conversion problem
+  - Critical for flight safety: incorrect pressure causes dangerous pressure altitude miscalculations
+
+**Weather Data Validation Layer**:
+
+After aggregation, all weather fields pass through `validateWeatherData()` in `lib/weather/validation.php`. This defense-in-depth layer:
+
+1. **Checks each field against climate bounds** - Validates temperature, pressure, humidity, wind, etc. are within physically possible ranges
+2. **Nulls dangerously out-of-range values** - For safety-critical fields like pressure (>70 or <10 inHg) and temperature (>70°C or <-100°C), invalid values are nulled to prevent dangerous calculations
+3. **Logs warnings for monitoring** - All out-of-bounds values are logged with field name, value, and reason
+4. **Records validation metadata** - Issues are recorded in `_validation_issues` field for API consumers
+
+This catches:
+- API format changes (e.g., new API version returning different units)
+- Sensor malfunctions (e.g., stuck or erratic readings)
+- Unit conversion errors that slip through adapter-specific fixes
 
 **Precipitation**:
 - Millimeters to inches: `inches = mm × 0.0393701`

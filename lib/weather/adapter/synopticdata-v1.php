@@ -317,12 +317,20 @@ function parseSynopticDataResponse(?string $response): ?array {
     }
     if ($pressure !== null && is_numeric($pressure)) {
         // Convert mb/hPa to inHg if from sea_level_pressure or pressure
-        // Altimeter is already in inHg, so no conversion needed
+        // Altimeter from SynopticData is in hundredths of inHg (e.g., 3038.93 = 30.3893 inHg)
+        // Normal inHg range is 28-32, so values > 100 indicate hundredths format
         if ($pressureSource === 'sea_level_pressure' || $pressureSource === 'pressure') {
             $pressure = (float)$pressure / 33.8639;
         } else {
-            // Altimeter is already in inHg
-            $pressure = (float)$pressure;
+            // Altimeter: check if in hundredths of inHg (value > 100) or already in inHg
+            $pressureFloat = (float)$pressure;
+            if ($pressureFloat > 100) {
+                // Value is in hundredths of inHg, convert to inHg
+                $pressure = $pressureFloat / 100.0;
+            } else {
+                // Value is already in inHg
+                $pressure = $pressureFloat;
+            }
         }
     } else {
         $pressure = null;
