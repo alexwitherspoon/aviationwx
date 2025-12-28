@@ -274,10 +274,11 @@ function validateWeatherField(string $field, $value, ?string $unit = null, array
     
     // IMPORTANT: Check for sentinel values BEFORE bounds validation
     // Sentinel values represent "unlimited" conditions and should pass validation
-    if ($field === 'visibility' && $numValue === UNLIMITED_VISIBILITY_SM) {
+    // Use loose comparison to handle float/int type differences
+    if ($field === 'visibility' && abs($numValue - UNLIMITED_VISIBILITY_SM) < 0.01) {
         return ['valid' => true, 'reason' => 'unlimited_visibility'];
     }
-    if ($field === 'ceiling' && $numValue === UNLIMITED_CEILING_FT) {
+    if ($field === 'ceiling' && abs($numValue - UNLIMITED_CEILING_FT) < 0.01) {
         return ['valid' => true, 'reason' => 'unlimited_ceiling'];
     }
     
