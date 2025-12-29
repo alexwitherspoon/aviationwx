@@ -704,7 +704,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
         case 'jpg':
         case 'jpeg':
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v 2 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v 2 %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
                 escapeshellarg($destFile)
@@ -713,7 +713,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
             
         case 'webp':
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
                 escapeshellarg($destFile)
@@ -722,7 +722,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
             
         case 'avif':
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
                 escapeshellarg($destFile)
@@ -732,7 +732,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
         default:
             // Fallback for unknown formats - treat as JPEG
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v 2 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v 2 %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
                 escapeshellarg($destFile)
@@ -774,7 +774,7 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
         case 'webp':
             // Explicitly specify format with -f webp (required when using .tmp extension)
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
                 escapeshellarg($sourceFile),
                 escapeshellarg($destFile)
             );
@@ -783,7 +783,7 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
         case 'avif':
             // Explicitly specify format with -f avif (required when using .tmp extension)
             $cmd = sprintf(
-                "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
                 escapeshellarg($sourceFile),
                 escapeshellarg($destFile)
             );
@@ -1831,9 +1831,9 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
     // Get source capture time before starting generation
     $captureTime = getSourceCaptureTime($sourceFile);
     
-    // Build ffmpeg command with nice -1
+    // Build ffmpeg command with nice 10 (low priority to avoid interfering with normal operations)
     $cmdWebp = sprintf(
-        "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
+        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
         escapeshellarg($sourceFile),
         escapeshellarg($cacheWebp)
     );
@@ -1918,13 +1918,13 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
     // Get source capture time before starting generation
     $captureTime = getSourceCaptureTime($sourceFile);
     
-    // Build ffmpeg command for AVIF encoding with nice -1
+    // Build ffmpeg command for AVIF encoding with nice 10 (low priority to avoid interfering with normal operations)
     // -c:v libaom-av1: Use AV1 codec (AVIF uses AV1)
     // -crf 30: Quality setting (similar to WebP's -q:v 30)
     // -b:v 0: Use CRF mode (quality-based, not bitrate)
     // -cpu-used 4: Speed vs quality balance (0-8, 4 is balanced)
     $cmdAvif = sprintf(
-        "nice -n -1 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
         escapeshellarg($sourceFile),
         escapeshellarg($cacheAvif)
     );

@@ -782,25 +782,25 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - System generates JPEG, WebP, and AVIF formats from source images (if enabled in config)
 - Format generation is globally configurable via `webcam_generate_webp` and `webcam_generate_avif` flags
 - Default: Formats disabled (only JPEG generated) to control resource usage
-- All generation runs asynchronously (non-blocking) using `exec() &` with `nice -n -1` priority
+- All generation runs synchronously in parallel with `nice -n 10` priority (low priority to avoid interfering with normal operations)
 - Mtime automatically synced to match source image's capture time (EXIF or filemtime)
 - Formats generated in background, may not be immediately available
 - Generation jobs are logged (start and result) for monitoring and troubleshooting
 
 **JPEG to WebP**:
-- Uses ffmpeg: `nice -n -1 ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
+- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
 - Quality: 30 (0-100 scale, higher = better quality)
 - Compression: Level 6 (0-6 scale)
-- Priority: `nice -n -1` (background job, doesn't interfere with main site rendering)
+- Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
 - Mtime sync: `touch -t {timestamp} output.webp` (chained after generation)
 - Only runs if `webcam_generate_webp` is enabled in config
 
 **JPEG to AVIF**:
-- Uses ffmpeg: `nice -n -1 ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 output.avif`
+- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 output.avif`
 - Quality: CRF 30 (similar quality to WebP's -q:v 30)
 - Codec: libaom-av1 (AV1 codec for AVIF format)
 - Speed: cpu-used 4 (balanced speed vs quality, 0-8 scale)
-- Priority: `nice -n -1` (background job, doesn't interfere with main site rendering)
+- Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
 - Mtime sync: `touch -t {timestamp} output.avif` (chained after generation)
 - Only runs if `webcam_generate_avif` is enabled in config
 - Note: AVIF generation can take 15+ seconds; may timeout on slow systems

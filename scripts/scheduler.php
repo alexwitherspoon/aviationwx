@@ -111,9 +111,10 @@ $lockFp = acquireLock($lockFile);
 $pid = getmypid();
 $startTime = time();
 
-// Set scheduler to low priority (nice 10) to avoid blocking user requests
+// Set scheduler to normal priority (nice 0) for responsive coordination
+// Scheduler is I/O-bound (config reloads, worker management), not CPU-intensive
 // Workers run at nice 5, user requests at nice 0 (default)
-$schedulerNice = 10;
+$schedulerNice = 0;
 if (function_exists('proc_nice')) {
     $niceResult = @proc_nice($schedulerNice);
     if ($niceResult === false) {
