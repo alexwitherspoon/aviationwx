@@ -182,6 +182,17 @@ foreach ($frames as $frame) {
     ];
 }
 
+// Calculate refresh interval for this camera (per-cam, airport-level, or global default)
+$defaultWebcamRefresh = getDefaultWebcamRefresh();
+$airportWebcamRefresh = isset($airport['webcam_refresh_seconds']) 
+    ? intval($airport['webcam_refresh_seconds']) 
+    : $defaultWebcamRefresh;
+$cam = $airport['webcams'][$camIndex];
+$perCamRefresh = isset($cam['refresh_seconds']) 
+    ? intval($cam['refresh_seconds']) 
+    : $airportWebcamRefresh;
+$refreshInterval = max(60, $perCamRefresh); // Enforce minimum 60 seconds
+
 echo json_encode([
     'enabled' => true,
     'airport' => $airportId,
@@ -190,6 +201,7 @@ echo json_encode([
     'current_index' => count($frameList) > 0 ? count($frameList) - 1 : 0,
     'timezone' => $airport['timezone'] ?? 'UTC',
     'max_frames' => getWebcamHistoryMaxFrames($airportId),
-    'enabledFormats' => getEnabledWebcamFormats()
+    'enabledFormats' => getEnabledWebcamFormats(),
+    'refresh_interval' => $refreshInterval
 ]);
 

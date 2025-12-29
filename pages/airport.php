@@ -4202,6 +4202,10 @@ const WebcamPlayer = {
     hideUIMode: false,  // Kiosk/signage mode
     preferredFormat: 'jpg',  // Preferred image format (avif, webp, jpg)
     preferredVariant: 'primary',  // Preferred image variant (thumb, small, medium, large, primary, full)
+    // Rolling window refresh
+    refreshInterval: 60,  // Refresh interval in seconds (from API)
+    refreshTimer: null,  // Interval timer for refreshing frames
+    isRefreshing: false,  // Guard against overlapping refresh calls
 
     // Update URL to reflect current state (for sharing)
     updateURL() {
@@ -4410,6 +4414,7 @@ const WebcamPlayer = {
                 this.frames = data.frames;
                 this.timezone = data.timezone || 'UTC';
                 this.currentIndex = data.current_index || 0;
+                this.refreshInterval = data.refresh_interval || 60;
                 
                 if (data.enabledFormats && Array.isArray(data.enabledFormats)) {
                     this.preferredFormat = getPreferredFormat(data.enabledFormats);
@@ -4421,6 +4426,9 @@ const WebcamPlayer = {
                 this.initTimeline();
                 this.preloadFrames();
                 document.querySelector('.webcam-player-controls').style.display = '';
+                
+                // Start periodic refresh for rolling window
+                this.startRefreshTimer();
                 
                 // Auto-play if requested
                 if (options.autoplay && this.frames.length > 1) {
@@ -4446,6 +4454,7 @@ const WebcamPlayer = {
         if (!this.active) return;
 
         this.stop();
+        this.stopRefreshTimer();
         this.clearHideTimer();
         this.active = false;
         this.hideUIMode = false;
@@ -4561,7 +4570,15 @@ const WebcamPlayer = {
     },
 
     goToFrame(index) {
-        if (index < 0 || index >= this.frames.length) return;
+        // If no frames available, return early
+        if (this.frames.length === 0) return;
+        
+        // Handle out of bounds - clamp to valid range
+        if (index < 0) {
+            index = 0;
+        } else if (index >= this.frames.length) {
+            index = this.frames.length - 1;
+        }
 
         this.currentIndex = index;
         const frame = this.frames[index];
@@ -4657,6 +4674,141 @@ const WebcamPlayer = {
         // Show controls when stopped
         if (!this.hideUIMode) {
             this.showControls();
+        }
+    },
+
+    // Start periodic refresh timer for rolling window
+    // Refreshes regardless of playing/paused state
+    startRefreshTimer() {
+        this.stopRefreshTimer(); // Clear any existing timer
+        
+        if (!this.active || this.refreshInterval < 60) return;
+        
+        const intervalMs = this.refreshInterval * 1000;
+        this.refreshTimer = setInterval(() => {
+            if (this.active) {
+                this.refreshFrames();
+            }
+        }, intervalMs);
+    },
+
+    // Stop refresh timer
+    stopRefreshTimer() {
+        if (this.refreshTimer) {
+            clearInterval(this.refreshTimer);
+            this.refreshTimer = null;
+        }
+    },
+
+    // Refresh frames from API and merge with existing frames
+    // Always refreshes (regardless of playing/paused state)
+    // Maintains rolling window (max_frames limit)
+    async refreshFrames() {
+        if (!this.active || !this.airportId || this.camIndex === null) return;
+        
+        // Guard against overlapping refresh calls
+        if (this.isRefreshing) return;
+        this.isRefreshing = true;
+
+        try {
+            const response = await fetch(`/api/webcam-history.php?id=${encodeURIComponent(this.airportId)}&cam=${this.camIndex}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+
+            if (!data.enabled || !data.frames || data.frames.length === 0) {
+                return; // No frames available, keep existing frames
+            }
+
+            // Store current frame info for position preservation
+            const currentFrame = this.frames[this.currentIndex];
+            const currentTimestamp = currentFrame ? currentFrame.timestamp : null;
+            const oldFramesLength = this.frames.length;
+            const wasAtEnd = currentFrame && this.currentIndex === oldFramesLength - 1;
+            const wasPlaying = this.playing;
+
+            // Apply rolling window: always cap at max_frames (most recent N frames)
+            const maxFrames = data.max_frames || 12;
+            const framesToKeep = data.frames.slice(-maxFrames);
+            
+            // Edge case: no frames to keep
+            if (framesToKeep.length === 0) {
+                return;
+            }
+            
+            // Check if frames changed (new frames added or old ones removed)
+            const existingTimestamps = new Set(this.frames.map(f => f.timestamp));
+            const newTimestamps = new Set(framesToKeep.map(f => f.timestamp));
+            const hasChanges = this.frames.length !== framesToKeep.length || 
+                              ![...existingTimestamps].every(ts => newTimestamps.has(ts));
+
+            if (hasChanges) {
+                // Update frames to rolling window
+                this.frames = framesToKeep;
+
+                // Update current index based on current frame position
+                if (currentTimestamp !== null) {
+                    // Find the frame with the same timestamp, or next available if removed
+                    let newIndex = this.frames.findIndex(f => f.timestamp === currentTimestamp);
+                    
+                    if (newIndex >= 0) {
+                        // Current frame still exists - keep position
+                        this.currentIndex = newIndex;
+                    } else {
+                        // Current frame was removed - find next available frame
+                        // Look for the first frame at or after the current timestamp
+                        newIndex = this.frames.findIndex(f => f.timestamp >= currentTimestamp);
+                        
+                        if (newIndex >= 0) {
+                            // Found a frame at or after current timestamp
+                            this.currentIndex = newIndex;
+                        } else {
+                            // All frames are older than current (shouldn't happen with rolling window)
+                            // Jump to newest frame
+                            this.currentIndex = Math.max(0, this.frames.length - 1);
+                        }
+                    }
+                } else {
+                    // No current frame, go to newest
+                    this.currentIndex = Math.max(0, this.frames.length - 1);
+                }
+
+                // Special handling for playback at end when new frames arrive
+                if (wasAtEnd && wasPlaying && this.frames.length > oldFramesLength) {
+                    // We were at the end and playing, new frames were added
+                    // Stay at the old end position so playback continues naturally into new frames
+                    const oldEndIndex = Math.max(0, oldFramesLength - 1);
+                    if (oldEndIndex < this.frames.length - 1) {
+                        // Only adjust if we're not already at the new end
+                        this.currentIndex = oldEndIndex;
+                    }
+                }
+
+                // Update timeline
+                this.initTimeline();
+                
+                // Preload new frames in background (non-blocking)
+                this.preloadFrames();
+                
+                // Update display if current frame changed or user is paused/scrubbing
+                const frameChanged = currentTimestamp === null || 
+                                    this.frames[this.currentIndex]?.timestamp !== currentTimestamp;
+                
+                if (frameChanged || !wasPlaying) {
+                    // Current frame was removed/changed or user is scrubbing/paused
+                    // Update display to show current/next available frame
+                    this.goToFrame(this.currentIndex);
+                }
+                // If playing and frame didn't change, play interval will continue naturally
+            }
+        } catch (error) {
+            console.error('Failed to refresh webcam history:', error);
+            // Silently fail - keep existing frames
+        } finally {
+            this.isRefreshing = false;
         }
     },
 
