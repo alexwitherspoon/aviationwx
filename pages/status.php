@@ -1165,7 +1165,10 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $camName = $cam['name'] ?? "Webcam {$idx}";
             
             // Check cache files using new structure (per-airport/per-camera directories)
-            // webcam-format-generation.php is already included at top of file
+            // Ensure webcam-format-generation.php is loaded (defensive check for CI/test environments)
+            if (!function_exists('getCacheFile')) {
+                require_once __DIR__ . '/../lib/webcam-format-generation.php';
+            }
             $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
             $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
             
@@ -1584,6 +1587,8 @@ if (isPublicApiEnabled()) {
 }
 
 // Get airport health for each configured airport
+// Note: checkAirportHealth() uses getCacheFile() from webcam-format-generation.php
+// which is already included at the top of this file
 $airportHealth = [];
 if (isset($config['airports']) && is_array($config['airports'])) {
     foreach ($config['airports'] as $airportId => $airport) {
