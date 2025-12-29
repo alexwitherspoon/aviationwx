@@ -98,6 +98,8 @@
       "lon": -122.8618333,
       "elevation_ft": 58,
       "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
       "webcam_refresh_seconds": 60,
       "weather_refresh_seconds": 60,
       "webcam_history_enabled": true,
@@ -311,6 +313,8 @@
       "lon": -121.8788889,
       "elevation_ft": 151,
       "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
       "runways": [
         {
           "name": "06/24",
@@ -336,6 +340,8 @@
       "lon": -123.9618944,
       "elevation_ft": 10,
       "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
       "runways": [
         {
           "name": "14/32",
@@ -364,6 +370,9 @@
       "lon": -122.0,
       "elevation_ft": 100,
       "timezone": "America/Los_Angeles",
+      "access_type": "private",
+      "permission_required": true,
+      "tower_status": "non_towered",
       "runways": [
         {
           "name": "18/36",
@@ -402,6 +411,9 @@
       "lon": -122.2691641,
       "elevation_ft": 500,
       "timezone": "America/Los_Angeles",
+      "access_type": "private",
+      "permission_required": false,
+      "tower_status": "non_towered",
       "note": "Example of airport with 'formerly' field. This airport was previously known as S48. NOTAMs issued before the rename may still reference the old identifier (S48), so we include it in the 'formerly' array to ensure those NOTAMs are matched correctly."
     }
   }

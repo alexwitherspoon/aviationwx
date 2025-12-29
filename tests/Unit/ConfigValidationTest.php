@@ -668,6 +668,175 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString("missing required field: 'lon'", implode(' ', $result['errors']));
     }
 
+    public function testAirportStructure_MissingAccessType()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport missing access_type should fail validation');
+        $this->assertStringContainsString("missing required field: 'access_type'", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_MissingTowerStatus()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport missing tower_status should fail validation');
+        $this->assertStringContainsString("missing required field: 'tower_status'", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_InvalidAccessType()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'invalid',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport with invalid access_type should fail validation');
+        $this->assertStringContainsString("invalid access_type", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_InvalidTowerStatus()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'invalid'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport with invalid tower_status should fail validation');
+        $this->assertStringContainsString("invalid tower_status", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_PrivateMissingPermissionRequired()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'private',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Private airport missing permission_required should fail validation');
+        $this->assertStringContainsString("permission_required field set", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_PermissionRequiredWithPublicAccess()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'permission_required' => true
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Public airport with permission_required should fail validation');
+        $this->assertStringContainsString("permission_required set but access_type is not 'private'", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_ValidPublicNonTowered()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid public non-towered airport should pass validation');
+    }
+
+    public function testAirportStructure_ValidPrivateWithPermission()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'private',
+                    'permission_required' => true,
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid private airport with permission required should pass validation');
+    }
+
+    public function testAirportStructure_ValidPrivateWithoutPermission()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'private',
+                    'permission_required' => false,
+                    'tower_status' => 'towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid private airport without permission required should pass validation');
+    }
+
     public function testAirportStructure_InvalidLatitude()
     {
         $config = [

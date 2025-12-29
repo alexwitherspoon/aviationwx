@@ -80,7 +80,16 @@ function airportExists($airportId) {
 }
 
 /**
- * Validate airport configuration
+ * Validate airport configuration form data
+ * 
+ * Validates all required fields and format constraints for airport configuration.
+ * Returns validation result with error messages.
+ * 
+ * @param array $formData Form submission data
+ * @return array {
+ *   'valid' => bool,    // True if validation passes
+ *   'errors' => array   // Array of error messages
+ * }
  */
 function validateAirportConfig($formData) {
     $errors = [];
@@ -108,6 +117,31 @@ function validateAirportConfig($formData) {
         $errors[] = 'Longitude must be between -180 and 180';
     }
     
+    // Access type (required)
+    $accessType = $formData['access_type'] ?? '';
+    if (empty($accessType)) {
+        $errors[] = 'Access type is required';
+    } elseif (!in_array($accessType, ['public', 'private'], true)) {
+        $errors[] = 'Access type must be "public" or "private"';
+    }
+    
+    // Permission required (required if private)
+    if ($accessType === 'private') {
+        if (!isset($formData['permission_required'])) {
+            $errors[] = 'Permission required field is required when access type is private';
+        } elseif (!is_bool($formData['permission_required']) && $formData['permission_required'] !== '0' && $formData['permission_required'] !== '1') {
+            $errors[] = 'Permission required must be a boolean value';
+        }
+    }
+    
+    // Tower status (required)
+    $towerStatus = $formData['tower_status'] ?? '';
+    if (empty($towerStatus)) {
+        $errors[] = 'Tower status is required';
+    } elseif (!in_array($towerStatus, ['towered', 'non_towered'], true)) {
+        $errors[] = 'Tower status must be "towered" or "non_towered"';
+    }
+    
     // Webcams
     if (isset($formData['webcams']) && is_array($formData['webcams'])) {
         foreach ($formData['webcams'] as $idx => $cam) {
@@ -133,7 +167,6 @@ function validateAirportConfig($formData) {
     // Weather source validation
     $weatherType = $formData['weather_type'] ?? '';
     if ($weatherType === 'ambient') {
-        // All 3 fields are required for Ambient Weather
         if (empty(trim($formData['ambient_api_key'] ?? ''))) {
             $errors[] = 'Ambient Weather API Key is required';
         }
@@ -141,14 +174,32 @@ function validateAirportConfig($formData) {
             $errors[] = 'Ambient Weather Application Key is required';
         }
         $macAddress = trim($formData['ambient_mac_address'] ?? '');
-        if (empty($macAddress)) {
-            $errors[] = 'Ambient Weather Device MAC Address is required';
-        } else {
-            // Basic MAC address format validation (allows colons, hyphens, or no separators)
+        if (!empty($macAddress)) {
             $macAddressClean = preg_replace('/[:\-]/', '', $macAddress);
             if (!preg_match('/^[0-9A-Fa-f]{12}$/', $macAddressClean)) {
                 $errors[] = 'Ambient Weather MAC Address must be a valid format (e.g., AA:BB:CC:DD:EE:FF)';
             }
+        }
+    } elseif ($weatherType === 'weatherlink') {
+        if (empty(trim($formData['weatherlink_api_key'] ?? ''))) {
+            $errors[] = 'WeatherLink API Key is required';
+        }
+        if (empty(trim($formData['weatherlink_api_secret'] ?? ''))) {
+            $errors[] = 'WeatherLink API Secret is required';
+        }
+    } elseif ($weatherType === 'synopticdata') {
+        if (empty(trim($formData['synopticdata_api_token'] ?? ''))) {
+            $errors[] = 'SynopticData API Token is required';
+        }
+    } elseif ($weatherType === 'pwsweather') {
+        if (empty(trim($formData['pwsweather_client_id'] ?? ''))) {
+            $errors[] = 'PWSWeather Client ID is required';
+        }
+        if (empty(trim($formData['pwsweather_client_secret'] ?? ''))) {
+            $errors[] = 'PWSWeather Client Secret is required';
+        }
+        if (empty(trim($formData['pwsweather_station_id'] ?? ''))) {
+            $errors[] = 'PWSWeather Station ID is required';
         }
     }
     
@@ -159,7 +210,14 @@ function validateAirportConfig($formData) {
 }
 
 /**
- * Generate JSON snippet
+ * Generate airports.json configuration snippet from form data
+ * 
+ * Processes validated form data and generates a complete airport configuration
+ * object ready for insertion into airports.json. Handles all airport fields
+ * including identifiers, status flags, weather sources, webcams, and metadata.
+ * 
+ * @param array $formData Validated form submission data
+ * @return string JSON-encoded airport configuration (pretty-printed)
  */
 function generateConfigSnippet($formData) {
     $airportId = strtolower(trim($formData['airport_id'] ?? ''));
@@ -172,17 +230,21 @@ function generateConfigSnippet($formData) {
     
     $airport = &$config['airports'][$airportId];
     
-    // Basic info
+    // ============================================================================
+    // Basic Information
+    // ============================================================================
     $airport['name'] = trim($formData['airport_name'] ?? '');
     $airport['icao'] = strtoupper($airportId);
     
-    // Use 'lat' and 'lon' to match existing config format
+    // Coordinates (required)
     if (!empty($formData['latitude'] ?? '')) {
         $airport['lat'] = floatval($formData['latitude']);
     }
     if (!empty($formData['longitude'] ?? '')) {
         $airport['lon'] = floatval($formData['longitude']);
     }
+    
+    // Location
     if (!empty($formData['elevation'] ?? '')) {
         $airport['elevation_ft'] = intval($formData['elevation']);
     }
@@ -193,7 +255,147 @@ function generateConfigSnippet($formData) {
         $airport['address'] = trim($formData['address']);
     }
     
-    // Weather source
+    // ============================================================================
+    // Identifiers
+    // ============================================================================
+    if (!empty($formData['iata'] ?? '')) {
+        $iata = strtoupper(trim($formData['iata']));
+        // Validate IATA format: exactly 3 uppercase letters
+        if (preg_match('/^[A-Z]{3}$/', $iata) === 1) {
+            $airport['iata'] = $iata;
+        }
+    }
+    if (!empty($formData['faa'] ?? '')) {
+        $faa = strtoupper(trim($formData['faa']));
+        // Validate FAA format: 3-4 alphanumeric characters
+        if (preg_match('/^[A-Z0-9]{3,4}$/', $faa) === 1) {
+            $airport['faa'] = $faa;
+        }
+    }
+    if (!empty($formData['formerly'] ?? '')) {
+        $formerly = array_filter(array_map('trim', explode(',', $formData['formerly'])));
+        if (!empty($formerly)) {
+            // Sanitize former identifiers (uppercase, alphanumeric only, 3-4 chars)
+            $sanitized = array_map(function($id) {
+                $id = strtoupper(preg_replace('/[^A-Z0-9]/', '', trim($id)));
+                return (strlen($id) >= 3 && strlen($id) <= 4) ? $id : null;
+            }, $formerly);
+            $sanitized = array_filter($sanitized, function($id) {
+                return $id !== null;
+            });
+            if (!empty($sanitized)) {
+                $airport['formerly'] = array_values($sanitized);
+            }
+        }
+    }
+    
+    // ============================================================================
+    // Status Flags
+    // ============================================================================
+    $airport['enabled'] = isset($formData['enabled']) && ($formData['enabled'] === '1' || $formData['enabled'] === true);
+    $airport['maintenance'] = isset($formData['maintenance']) && ($formData['maintenance'] === '1' || $formData['maintenance'] === true);
+    
+    // ============================================================================
+    // Access & Tower Status (Required)
+    // ============================================================================
+    if (!empty($formData['access_type'] ?? '')) {
+        $accessType = $formData['access_type'];
+        // Validate against allowed values (already validated in validateAirportConfig, but double-check)
+        if (in_array($accessType, ['public', 'private'], true)) {
+            $airport['access_type'] = $accessType;
+        }
+    }
+    if (!empty($formData['tower_status'] ?? '')) {
+        $towerStatus = $formData['tower_status'];
+        // Validate against allowed values (already validated in validateAirportConfig, but double-check)
+        if (in_array($towerStatus, ['towered', 'non_towered'], true)) {
+            $airport['tower_status'] = $towerStatus;
+        }
+    }
+    
+    // Permission required (only for private airports)
+    if (($formData['access_type'] ?? '') === 'private') {
+        $airport['permission_required'] = isset($formData['permission_required']) && ($formData['permission_required'] === '1' || $formData['permission_required'] === true);
+    }
+    
+    // ============================================================================
+    // Refresh Overrides
+    // ============================================================================
+    if (!empty($formData['webcam_refresh_seconds'] ?? '')) {
+        $refresh = intval($formData['webcam_refresh_seconds']);
+        if ($refresh >= 5) {
+            $airport['webcam_refresh_seconds'] = $refresh;
+        }
+    }
+    if (!empty($formData['weather_refresh_seconds'] ?? '')) {
+        $refresh = intval($formData['weather_refresh_seconds']);
+        if ($refresh >= 5) {
+            $airport['weather_refresh_seconds'] = $refresh;
+        }
+    }
+    
+    // ============================================================================
+    // Feature Overrides
+    // ============================================================================
+    if (isset($formData['webcam_history_enabled'])) {
+        $airport['webcam_history_enabled'] = ($formData['webcam_history_enabled'] === '1' || $formData['webcam_history_enabled'] === true);
+    }
+    if (!empty($formData['webcam_history_max_frames'] ?? '')) {
+        $frames = intval($formData['webcam_history_max_frames']);
+        if ($frames > 0) {
+            $airport['webcam_history_max_frames'] = $frames;
+        }
+    }
+    
+    // Default preferences (validate against allowed values)
+    $defaultPrefs = [];
+    $validPrefs = [
+        'time_format' => ['12hr', '24hr'],
+        'temp_unit' => ['F', 'C'],
+        'distance_unit' => ['ft', 'm'],
+        'baro_unit' => ['inHg', 'hPa', 'mmHg'],
+        'wind_speed_unit' => ['kts', 'mph', 'km/h', 'm/s']
+    ];
+    
+    if (!empty($formData['pref_time_format'] ?? '')) {
+        $value = $formData['pref_time_format'];
+        if (in_array($value, $validPrefs['time_format'], true)) {
+            $defaultPrefs['time_format'] = $value;
+        }
+    }
+    if (!empty($formData['pref_temp_unit'] ?? '')) {
+        $value = $formData['pref_temp_unit'];
+        if (in_array($value, $validPrefs['temp_unit'], true)) {
+            $defaultPrefs['temp_unit'] = $value;
+        }
+    }
+    if (!empty($formData['pref_distance_unit'] ?? '')) {
+        $value = $formData['pref_distance_unit'];
+        if (in_array($value, $validPrefs['distance_unit'], true)) {
+            $defaultPrefs['distance_unit'] = $value;
+        }
+    }
+    if (!empty($formData['pref_baro_unit'] ?? '')) {
+        $value = $formData['pref_baro_unit'];
+        if (in_array($value, $validPrefs['baro_unit'], true)) {
+            $defaultPrefs['baro_unit'] = $value;
+        }
+    }
+    if (!empty($formData['pref_wind_speed_unit'] ?? '')) {
+        $value = $formData['pref_wind_speed_unit'];
+        if (in_array($value, $validPrefs['wind_speed_unit'], true)) {
+            $defaultPrefs['wind_speed_unit'] = $value;
+        }
+    }
+    if (!empty($defaultPrefs)) {
+        $airport['default_preferences'] = $defaultPrefs;
+    }
+    
+    // ============================================================================
+    // Weather Sources
+    // ============================================================================
+    
+    // Primary weather source
     if (!empty($formData['weather_type'] ?? '')) {
         $weatherType = $formData['weather_type'];
         $airport['weather_source'] = [];
@@ -203,15 +405,38 @@ function generateConfigSnippet($formData) {
             if (!empty($formData['tempest_station_id'] ?? '')) {
                 $airport['weather_source']['station_id'] = trim($formData['tempest_station_id']);
             }
+            if (!empty($formData['tempest_api_key'] ?? '')) {
+                $airport['weather_source']['api_key'] = trim($formData['tempest_api_key']);
+            }
         } elseif ($weatherType === 'ambient') {
             $airport['weather_source']['type'] = 'ambient';
-            // All 3 fields are required and validated
             $airport['weather_source']['api_key'] = trim($formData['ambient_api_key'] ?? '');
             $airport['weather_source']['application_key'] = trim($formData['ambient_application_key'] ?? '');
             $macAddress = trim($formData['ambient_mac_address'] ?? '');
-            // Sanitize MAC address (remove whitespace, normalize)
             $macAddress = preg_replace('/\s+/', '', $macAddress);
-            $airport['weather_source']['mac_address'] = $macAddress;
+            if (!empty($macAddress)) {
+                $airport['weather_source']['mac_address'] = $macAddress;
+            }
+        } elseif ($weatherType === 'weatherlink') {
+            $airport['weather_source']['type'] = 'weatherlink';
+            $airport['weather_source']['api_key'] = trim($formData['weatherlink_api_key'] ?? '');
+            $airport['weather_source']['api_secret'] = trim($formData['weatherlink_api_secret'] ?? '');
+            if (!empty($formData['weatherlink_station_id'] ?? '')) {
+                $airport['weather_source']['station_id'] = trim($formData['weatherlink_station_id']);
+            }
+        } elseif ($weatherType === 'synopticdata') {
+            $airport['weather_source']['type'] = 'synopticdata';
+            $airport['weather_source']['api_token'] = trim($formData['synopticdata_api_token'] ?? '');
+            if (!empty($formData['synopticdata_station_id'] ?? '')) {
+                $airport['weather_source']['station_id'] = trim($formData['synopticdata_station_id']);
+            }
+        } elseif ($weatherType === 'pwsweather') {
+            $airport['weather_source']['type'] = 'pwsweather';
+            $airport['weather_source']['client_id'] = trim($formData['pwsweather_client_id'] ?? '');
+            $airport['weather_source']['client_secret'] = trim($formData['pwsweather_client_secret'] ?? '');
+            if (!empty($formData['pwsweather_station_id'] ?? '')) {
+                $airport['weather_source']['station_id'] = trim($formData['pwsweather_station_id']);
+            }
         } elseif ($weatherType === 'metar') {
             $airport['weather_source']['type'] = 'metar';
             if (!empty($formData['metar_station_id'] ?? '')) {
@@ -219,6 +444,64 @@ function generateConfigSnippet($formData) {
             } else {
                 $airport['weather_source']['station_id'] = strtoupper($airportId);
             }
+        }
+    }
+    
+    // Backup weather source
+    if (!empty($formData['weather_backup_type'] ?? '')) {
+        $backupType = $formData['weather_backup_type'];
+        $airport['weather_source_backup'] = [];
+        
+        if ($backupType === 'tempest') {
+            $airport['weather_source_backup']['type'] = 'tempest';
+            if (!empty($formData['backup_tempest_station_id'] ?? '')) {
+                $airport['weather_source_backup']['station_id'] = trim($formData['backup_tempest_station_id']);
+            }
+            if (!empty($formData['backup_tempest_api_key'] ?? '')) {
+                $airport['weather_source_backup']['api_key'] = trim($formData['backup_tempest_api_key']);
+            }
+        } elseif ($backupType === 'ambient') {
+            $airport['weather_source_backup']['type'] = 'ambient';
+            $airport['weather_source_backup']['api_key'] = trim($formData['backup_ambient_api_key'] ?? '');
+            $airport['weather_source_backup']['application_key'] = trim($formData['backup_ambient_application_key'] ?? '');
+            $macAddress = trim($formData['backup_ambient_mac_address'] ?? '');
+            $macAddress = preg_replace('/\s+/', '', $macAddress);
+            if (!empty($macAddress)) {
+                $airport['weather_source_backup']['mac_address'] = $macAddress;
+            }
+        } elseif ($backupType === 'weatherlink') {
+            $airport['weather_source_backup']['type'] = 'weatherlink';
+            $airport['weather_source_backup']['api_key'] = trim($formData['backup_weatherlink_api_key'] ?? '');
+            $airport['weather_source_backup']['api_secret'] = trim($formData['backup_weatherlink_api_secret'] ?? '');
+            if (!empty($formData['backup_weatherlink_station_id'] ?? '')) {
+                $airport['weather_source_backup']['station_id'] = trim($formData['backup_weatherlink_station_id']);
+            }
+        } elseif ($backupType === 'synopticdata') {
+            $airport['weather_source_backup']['type'] = 'synopticdata';
+            $airport['weather_source_backup']['api_token'] = trim($formData['backup_synopticdata_api_token'] ?? '');
+            if (!empty($formData['backup_synopticdata_station_id'] ?? '')) {
+                $airport['weather_source_backup']['station_id'] = trim($formData['backup_synopticdata_station_id']);
+            }
+        } elseif ($backupType === 'pwsweather') {
+            $airport['weather_source_backup']['type'] = 'pwsweather';
+            $airport['weather_source_backup']['client_id'] = trim($formData['backup_pwsweather_client_id'] ?? '');
+            $airport['weather_source_backup']['client_secret'] = trim($formData['backup_pwsweather_client_secret'] ?? '');
+            if (!empty($formData['backup_pwsweather_station_id'] ?? '')) {
+                $airport['weather_source_backup']['station_id'] = trim($formData['backup_pwsweather_station_id']);
+            }
+        }
+    }
+    
+    // METAR station (can be standalone or with weather_source)
+    if (!empty($formData['metar_station'] ?? '')) {
+        $airport['metar_station'] = strtoupper(trim($formData['metar_station']));
+    }
+    
+    // Nearby METAR stations
+    if (!empty($formData['nearby_metar_stations'] ?? '')) {
+        $stations = array_filter(array_map('trim', explode(',', $formData['nearby_metar_stations'])));
+        if (!empty($stations)) {
+            $airport['nearby_metar_stations'] = array_map('strtoupper', array_values($stations));
         }
     }
     
@@ -314,6 +597,9 @@ function generateConfigSnippet($formData) {
         }
     }
     
+    // ============================================================================
+    // Services
+    // ============================================================================
     if (!empty($formData['services'] ?? '')) {
         $serviceList = array_filter(array_map('trim', explode(',', $formData['services'])));
         if (!empty($serviceList)) {
@@ -351,6 +637,72 @@ function generateConfigSnippet($formData) {
                 $airport['services'] = $services;
             }
         }
+    }
+    
+    // ============================================================================
+    // Partners
+    // ============================================================================
+    if (isset($formData['partners']) && is_array($formData['partners'])) {
+        $partners = [];
+        foreach ($formData['partners'] as $partner) {
+            if (empty($partner['name'] ?? '')) continue;
+            
+            $partnerData = [
+                'name' => trim($partner['name'])
+            ];
+            
+            if (!empty($partner['url'] ?? '')) {
+                $partnerData['url'] = trim($partner['url']);
+            }
+            if (!empty($partner['logo'] ?? '')) {
+                $partnerData['logo'] = trim($partner['logo']);
+            }
+            if (!empty($partner['description'] ?? '')) {
+                $partnerData['description'] = trim($partner['description']);
+            }
+            
+            $partners[] = $partnerData;
+        }
+        if (!empty($partners)) {
+            $airport['partners'] = $partners;
+        }
+    }
+    
+    // ============================================================================
+    // Links
+    // ============================================================================
+    if (isset($formData['links']) && is_array($formData['links'])) {
+        $links = [];
+        foreach ($formData['links'] as $link) {
+            if (empty($link['label'] ?? '') || empty($link['url'] ?? '')) continue;
+            
+            $links[] = [
+                'label' => trim($link['label']),
+                'url' => trim($link['url'])
+            ];
+        }
+        if (!empty($links)) {
+            $airport['links'] = $links;
+        }
+    }
+    
+    // ============================================================================
+    // Link Overrides
+    // ============================================================================
+    if (!empty($formData['airnav_url'] ?? '')) {
+        $airport['airnav_url'] = trim($formData['airnav_url']);
+    }
+    if (!empty($formData['skyvector_url'] ?? '')) {
+        $airport['skyvector_url'] = trim($formData['skyvector_url']);
+    }
+    if (!empty($formData['aopa_url'] ?? '')) {
+        $airport['aopa_url'] = trim($formData['aopa_url']);
+    }
+    if (!empty($formData['faa_weather_url'] ?? '')) {
+        $airport['faa_weather_url'] = trim($formData['faa_weather_url']);
+    }
+    if (!empty($formData['foreflight_url'] ?? '')) {
+        $airport['foreflight_url'] = trim($formData['foreflight_url']);
     }
     
     return json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -690,7 +1042,185 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     <div class="form-group">
                         <label for="address">Address</label>
                         <input type="text" id="address" name="address"
-                               value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
+                               value="<?= htmlspecialchars($_POST['address'] ?? '') ?>"
+                               placeholder="City, State">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="access_type">Access Type <span class="required">*</span></label>
+                            <select id="access_type" name="access_type" required>
+                                <option value="">Select...</option>
+                                <option value="public" <?= ($_POST['access_type'] ?? '') === 'public' ? 'selected' : '' ?>>Public</option>
+                                <option value="private" <?= ($_POST['access_type'] ?? '') === 'private' ? 'selected' : '' ?>>Private</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="tower_status">Tower Status <span class="required">*</span></label>
+                            <select id="tower_status" name="tower_status" required>
+                                <option value="">Select...</option>
+                                <option value="towered" <?= ($_POST['tower_status'] ?? '') === 'towered' ? 'selected' : '' ?>>Towered</option>
+                                <option value="non_towered" <?= ($_POST['tower_status'] ?? '') === 'non_towered' ? 'selected' : '' ?>>Non-Towered</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="permission_required_group" style="display: none;">
+                        <label>
+                            <input type="checkbox" id="permission_required" name="permission_required" value="1"
+                                   <?= isset($_POST['permission_required']) && $_POST['permission_required'] ? 'checked' : '' ?>>
+                            Permission Required to Land
+                        </label>
+                        <div class="help-text">Check this box if prior permission is required to land at this private airport</div>
+                    </div>
+                </div>
+                
+                <!-- Identifiers -->
+                <div class="form-section">
+                    <h2>Identifiers</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="iata">IATA Code</label>
+                            <input type="text" id="iata" name="iata" 
+                                   value="<?= htmlspecialchars($_POST['iata'] ?? '') ?>"
+                                   placeholder="SPB" maxlength="3" pattern="[A-Z]{3}">
+                            <div class="help-text">3-letter IATA code (optional)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="faa">FAA Identifier</label>
+                            <input type="text" id="faa" name="faa" 
+                                   value="<?= htmlspecialchars($_POST['faa'] ?? '') ?>"
+                                   placeholder="03S" maxlength="4">
+                            <div class="help-text">FAA LID (3-4 characters, optional)</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="formerly">Former Identifiers</label>
+                        <input type="text" id="formerly" name="formerly"
+                               value="<?= htmlspecialchars($_POST['formerly'] ?? '') ?>"
+                               placeholder="S48, OLD1, OLD2">
+                        <div class="help-text">Comma-separated list of previous identifiers (for NOTAM matching)</div>
+                    </div>
+                </div>
+                
+                <!-- Status Flags -->
+                <div class="form-section">
+                    <h2>Status</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="enabled" value="1"
+                                       <?= isset($_POST['enabled']) && $_POST['enabled'] ? 'checked' : '' ?>>
+                                Enabled
+                            </label>
+                            <div class="help-text">Airport must be enabled to be accessible</div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="maintenance" value="1"
+                                       <?= isset($_POST['maintenance']) && $_POST['maintenance'] ? 'checked' : '' ?>>
+                                Maintenance Mode
+                            </label>
+                            <div class="help-text">Shows maintenance banner on airport page</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Refresh Overrides -->
+                <div class="form-section">
+                    <h2>Refresh Overrides</h2>
+                    <div class="help-text" style="margin-bottom: 1rem;">Override global refresh intervals for this airport</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="webcam_refresh_seconds">Webcam Refresh (seconds)</label>
+                            <input type="number" id="webcam_refresh_seconds" name="webcam_refresh_seconds"
+                                   value="<?= htmlspecialchars($_POST['webcam_refresh_seconds'] ?? '') ?>"
+                                   min="5" step="1">
+                            <div class="help-text">Minimum: 5 seconds</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="weather_refresh_seconds">Weather Refresh (seconds)</label>
+                            <input type="number" id="weather_refresh_seconds" name="weather_refresh_seconds"
+                                   value="<?= htmlspecialchars($_POST['weather_refresh_seconds'] ?? '') ?>"
+                                   min="5" step="1">
+                            <div class="help-text">Minimum: 5 seconds</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Feature Overrides -->
+                <div class="form-section">
+                    <h2>Feature Overrides</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="webcam_history_enabled" value="1"
+                                       <?= isset($_POST['webcam_history_enabled']) && $_POST['webcam_history_enabled'] ? 'checked' : '' ?>>
+                                Enable Webcam History
+                            </label>
+                            <div class="help-text">Enable time-lapse for this airport</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="webcam_history_max_frames">Max History Frames</label>
+                            <input type="number" id="webcam_history_max_frames" name="webcam_history_max_frames"
+                                   value="<?= htmlspecialchars($_POST['webcam_history_max_frames'] ?? '') ?>"
+                                   min="1" step="1">
+                            <div class="help-text">Maximum frames to store for time-lapse</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Default Unit Preferences</label>
+                        <div class="form-row" style="margin-top: 0.5rem;">
+                            <div class="form-group">
+                                <label for="pref_time_format">Time Format</label>
+                                <select id="pref_time_format" name="pref_time_format">
+                                    <option value="">Default</option>
+                                    <option value="12hr" <?= ($_POST['pref_time_format'] ?? '') === '12hr' ? 'selected' : '' ?>>12 Hour</option>
+                                    <option value="24hr" <?= ($_POST['pref_time_format'] ?? '') === '24hr' ? 'selected' : '' ?>>24 Hour</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="pref_temp_unit">Temperature</label>
+                                <select id="pref_temp_unit" name="pref_temp_unit">
+                                    <option value="">Default</option>
+                                    <option value="F" <?= ($_POST['pref_temp_unit'] ?? '') === 'F' ? 'selected' : '' ?>>Fahrenheit</option>
+                                    <option value="C" <?= ($_POST['pref_temp_unit'] ?? '') === 'C' ? 'selected' : '' ?>>Celsius</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="pref_distance_unit">Distance</label>
+                                <select id="pref_distance_unit" name="pref_distance_unit">
+                                    <option value="">Default</option>
+                                    <option value="ft" <?= ($_POST['pref_distance_unit'] ?? '') === 'ft' ? 'selected' : '' ?>>Feet</option>
+                                    <option value="m" <?= ($_POST['pref_distance_unit'] ?? '') === 'm' ? 'selected' : '' ?>>Meters</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="pref_baro_unit">Barometric Pressure</label>
+                                <select id="pref_baro_unit" name="pref_baro_unit">
+                                    <option value="">Default</option>
+                                    <option value="inHg" <?= ($_POST['pref_baro_unit'] ?? '') === 'inHg' ? 'selected' : '' ?>>inHg</option>
+                                    <option value="hPa" <?= ($_POST['pref_baro_unit'] ?? '') === 'hPa' ? 'selected' : '' ?>>hPa</option>
+                                    <option value="mmHg" <?= ($_POST['pref_baro_unit'] ?? '') === 'mmHg' ? 'selected' : '' ?>>mmHg</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="pref_wind_speed_unit">Wind Speed</label>
+                                <select id="pref_wind_speed_unit" name="pref_wind_speed_unit">
+                                    <option value="">Default</option>
+                                    <option value="kts" <?= ($_POST['pref_wind_speed_unit'] ?? '') === 'kts' ? 'selected' : '' ?>>Knots</option>
+                                    <option value="mph" <?= ($_POST['pref_wind_speed_unit'] ?? '') === 'mph' ? 'selected' : '' ?>>MPH</option>
+                                    <option value="km/h" <?= ($_POST['pref_wind_speed_unit'] ?? '') === 'km/h' ? 'selected' : '' ?>>km/h</option>
+                                    <option value="m/s" <?= ($_POST['pref_wind_speed_unit'] ?? '') === 'm/s' ? 'selected' : '' ?>>m/s</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -699,15 +1229,19 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     <h2>Weather Source</h2>
                     
                     <div class="form-group">
-                        <label for="weather_type">Weather Source Type</label>
+                        <label for="weather_type">Primary Weather Source Type</label>
                         <select id="weather_type" name="weather_type">
                             <option value="">None</option>
                             <option value="metar" <?= ($_POST['weather_type'] ?? '') === 'metar' ? 'selected' : '' ?>>METAR (Aviation Weather)</option>
                             <option value="tempest" <?= ($_POST['weather_type'] ?? '') === 'tempest' ? 'selected' : '' ?>>Tempest Weather Station</option>
                             <option value="ambient" <?= ($_POST['weather_type'] ?? '') === 'ambient' ? 'selected' : '' ?>>Ambient Weather</option>
+                            <option value="weatherlink" <?= ($_POST['weather_type'] ?? '') === 'weatherlink' ? 'selected' : '' ?>>Davis WeatherLink</option>
+                            <option value="synopticdata" <?= ($_POST['weather_type'] ?? '') === 'synopticdata' ? 'selected' : '' ?>>SynopticData</option>
+                            <option value="pwsweather" <?= ($_POST['weather_type'] ?? '') === 'pwsweather' ? 'selected' : '' ?>>PWSWeather (AerisWeather)</option>
                         </select>
                     </div>
                     
+                    <!-- METAR Config -->
                     <div id="weather_metar" class="weather-config" style="display: none;">
                         <div class="form-group">
                             <label for="metar_station_id">Station ID</label>
@@ -718,14 +1252,21 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         </div>
                     </div>
                     
+                    <!-- Tempest Config -->
                     <div id="weather_tempest" class="weather-config" style="display: none;">
                         <div class="form-group">
                             <label for="tempest_station_id">Station ID <span class="required">*</span></label>
                             <input type="text" id="tempest_station_id" name="tempest_station_id"
                                    value="<?= htmlspecialchars($_POST['tempest_station_id'] ?? '') ?>" required>
                         </div>
+                        <div class="form-group">
+                            <label for="tempest_api_key">API Key</label>
+                            <input type="text" id="tempest_api_key" name="tempest_api_key"
+                                   value="<?= htmlspecialchars($_POST['tempest_api_key'] ?? '') ?>">
+                        </div>
                     </div>
                     
+                    <!-- Ambient Config -->
                     <div id="weather_ambient" class="weather-config" style="display: none;">
                         <div class="form-group">
                             <label for="ambient_api_key">API Key <span class="required">*</span></label>
@@ -740,14 +1281,180 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                             <small class="form-text text-muted">Get from <a href="https://dashboard.ambientweather.net/account" target="_blank">AmbientWeather.net Account Settings</a> → API Keys → Create Application Key (scroll to bottom)</small>
                         </div>
                         <div class="form-group">
-                            <label for="ambient_mac_address">Device MAC Address <span class="required">*</span></label>
+                            <label for="ambient_mac_address">Device MAC Address</label>
                             <input type="text" id="ambient_mac_address" name="ambient_mac_address"
                                    value="<?= htmlspecialchars($_POST['ambient_mac_address'] ?? '') ?>"
-                                   placeholder="AA:BB:CC:DD:EE:FF" required
+                                   placeholder="AA:BB:CC:DD:EE:FF"
                                    pattern="([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})|[0-9A-Fa-f]{12}"
                                    title="MAC address format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF or AABBCCDDEEFF">
-                            <small class="form-text text-muted">Find your device MAC address at <a href="https://dashboard.ambientweather.net/devices" target="_blank">dashboard.ambientweather.net/devices</a></small>
+                            <small class="form-text text-muted">Optional - uses first device if omitted. Find at <a href="https://dashboard.ambientweather.net/devices" target="_blank">dashboard.ambientweather.net/devices</a></small>
                         </div>
+                    </div>
+                    
+                    <!-- WeatherLink Config -->
+                    <div id="weather_weatherlink" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="weatherlink_api_key">API Key <span class="required">*</span></label>
+                            <input type="text" id="weatherlink_api_key" name="weatherlink_api_key"
+                                   value="<?= htmlspecialchars($_POST['weatherlink_api_key'] ?? '') ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="weatherlink_api_secret">API Secret <span class="required">*</span></label>
+                            <input type="text" id="weatherlink_api_secret" name="weatherlink_api_secret"
+                                   value="<?= htmlspecialchars($_POST['weatherlink_api_secret'] ?? '') ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="weatherlink_station_id">Station ID</label>
+                            <input type="text" id="weatherlink_station_id" name="weatherlink_station_id"
+                                   value="<?= htmlspecialchars($_POST['weatherlink_station_id'] ?? '') ?>">
+                            <div class="help-text">Optional - required for some API versions</div>
+                        </div>
+                    </div>
+                    
+                    <!-- SynopticData Config -->
+                    <div id="weather_synopticdata" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="synopticdata_api_token">API Token <span class="required">*</span></label>
+                            <input type="text" id="synopticdata_api_token" name="synopticdata_api_token"
+                                   value="<?= htmlspecialchars($_POST['synopticdata_api_token'] ?? '') ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="synopticdata_station_id">Station ID</label>
+                            <input type="text" id="synopticdata_station_id" name="synopticdata_station_id"
+                                   value="<?= htmlspecialchars($_POST['synopticdata_station_id'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <!-- PWSWeather Config -->
+                    <div id="weather_pwsweather" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="pwsweather_client_id">Client ID (AerisWeather) <span class="required">*</span></label>
+                            <input type="text" id="pwsweather_client_id" name="pwsweather_client_id"
+                                   value="<?= htmlspecialchars($_POST['pwsweather_client_id'] ?? '') ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="pwsweather_client_secret">Client Secret (AerisWeather) <span class="required">*</span></label>
+                            <input type="text" id="pwsweather_client_secret" name="pwsweather_client_secret"
+                                   value="<?= htmlspecialchars($_POST['pwsweather_client_secret'] ?? '') ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="pwsweather_station_id">Station ID <span class="required">*</span></label>
+                            <input type="text" id="pwsweather_station_id" name="pwsweather_station_id"
+                                   value="<?= htmlspecialchars($_POST['pwsweather_station_id'] ?? '') ?>" required>
+                        </div>
+                    </div>
+                    
+                    <!-- Backup Weather Source -->
+                    <div class="form-group" style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #eee;">
+                        <label for="weather_backup_type">Backup Weather Source Type</label>
+                        <select id="weather_backup_type" name="weather_backup_type">
+                            <option value="">None</option>
+                            <option value="tempest" <?= ($_POST['weather_backup_type'] ?? '') === 'tempest' ? 'selected' : '' ?>>Tempest Weather Station</option>
+                            <option value="ambient" <?= ($_POST['weather_backup_type'] ?? '') === 'ambient' ? 'selected' : '' ?>>Ambient Weather</option>
+                            <option value="weatherlink" <?= ($_POST['weather_backup_type'] ?? '') === 'weatherlink' ? 'selected' : '' ?>>Davis WeatherLink</option>
+                            <option value="synopticdata" <?= ($_POST['weather_backup_type'] ?? '') === 'synopticdata' ? 'selected' : '' ?>>SynopticData</option>
+                            <option value="pwsweather" <?= ($_POST['weather_backup_type'] ?? '') === 'pwsweather' ? 'selected' : '' ?>>PWSWeather (AerisWeather)</option>
+                        </select>
+                        <div class="help-text">Activates automatically when primary source exceeds 5× refresh interval</div>
+                    </div>
+                    
+                    <!-- Backup Weather Configs (similar structure, prefixed with backup_) -->
+                    <div id="weather_backup_tempest" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="backup_tempest_station_id">Station ID</label>
+                            <input type="text" id="backup_tempest_station_id" name="backup_tempest_station_id"
+                                   value="<?= htmlspecialchars($_POST['backup_tempest_station_id'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_tempest_api_key">API Key</label>
+                            <input type="text" id="backup_tempest_api_key" name="backup_tempest_api_key"
+                                   value="<?= htmlspecialchars($_POST['backup_tempest_api_key'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div id="weather_backup_ambient" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="backup_ambient_api_key">API Key</label>
+                            <input type="text" id="backup_ambient_api_key" name="backup_ambient_api_key"
+                                   value="<?= htmlspecialchars($_POST['backup_ambient_api_key'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_ambient_application_key">Application Key</label>
+                            <input type="text" id="backup_ambient_application_key" name="backup_ambient_application_key"
+                                   value="<?= htmlspecialchars($_POST['backup_ambient_application_key'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_ambient_mac_address">Device MAC Address</label>
+                            <input type="text" id="backup_ambient_mac_address" name="backup_ambient_mac_address"
+                                   value="<?= htmlspecialchars($_POST['backup_ambient_mac_address'] ?? '') ?>"
+                                   placeholder="AA:BB:CC:DD:EE:FF">
+                        </div>
+                    </div>
+                    
+                    <div id="weather_backup_weatherlink" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="backup_weatherlink_api_key">API Key</label>
+                            <input type="text" id="backup_weatherlink_api_key" name="backup_weatherlink_api_key"
+                                   value="<?= htmlspecialchars($_POST['backup_weatherlink_api_key'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_weatherlink_api_secret">API Secret</label>
+                            <input type="text" id="backup_weatherlink_api_secret" name="backup_weatherlink_api_secret"
+                                   value="<?= htmlspecialchars($_POST['backup_weatherlink_api_secret'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_weatherlink_station_id">Station ID</label>
+                            <input type="text" id="backup_weatherlink_station_id" name="backup_weatherlink_station_id"
+                                   value="<?= htmlspecialchars($_POST['backup_weatherlink_station_id'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div id="weather_backup_synopticdata" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="backup_synopticdata_api_token">API Token</label>
+                            <input type="text" id="backup_synopticdata_api_token" name="backup_synopticdata_api_token"
+                                   value="<?= htmlspecialchars($_POST['backup_synopticdata_api_token'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_synopticdata_station_id">Station ID</label>
+                            <input type="text" id="backup_synopticdata_station_id" name="backup_synopticdata_station_id"
+                                   value="<?= htmlspecialchars($_POST['backup_synopticdata_station_id'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div id="weather_backup_pwsweather" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="backup_pwsweather_client_id">Client ID (AerisWeather)</label>
+                            <input type="text" id="backup_pwsweather_client_id" name="backup_pwsweather_client_id"
+                                   value="<?= htmlspecialchars($_POST['backup_pwsweather_client_id'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_pwsweather_client_secret">Client Secret (AerisWeather)</label>
+                            <input type="text" id="backup_pwsweather_client_secret" name="backup_pwsweather_client_secret"
+                                   value="<?= htmlspecialchars($_POST['backup_pwsweather_client_secret'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_pwsweather_station_id">Station ID</label>
+                            <input type="text" id="backup_pwsweather_station_id" name="backup_pwsweather_station_id"
+                                   value="<?= htmlspecialchars($_POST['backup_pwsweather_station_id'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <!-- METAR Station (can be standalone) -->
+                    <div class="form-group" style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #eee;">
+                        <label for="metar_station">METAR Station ID</label>
+                        <input type="text" id="metar_station" name="metar_station"
+                               value="<?= htmlspecialchars($_POST['metar_station'] ?? '') ?>"
+                               placeholder="KSPB">
+                        <div class="help-text">Primary METAR station (can be used standalone or with weather_source)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="nearby_metar_stations">Nearby METAR Stations</label>
+                        <input type="text" id="nearby_metar_stations" name="nearby_metar_stations"
+                               value="<?= htmlspecialchars($_POST['nearby_metar_stations'] ?? '') ?>"
+                               placeholder="KVUO, KHIO">
+                        <div class="help-text">Comma-separated list of fallback METAR stations</div>
                     </div>
                 </div>
                 
@@ -798,6 +1505,89 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     </div>
                 </div>
                 
+                <!-- Partners -->
+                <div class="form-section">
+                    <h2>Partners</h2>
+                    <div class="help-text" style="margin-bottom: 1rem;">Organizations that support this airport</div>
+                    <div id="partners-container">
+                        <?php
+                        $partnerCount = 0;
+                        if (isset($_POST['partners']) && is_array($_POST['partners'])) {
+                            $partnerCount = count($_POST['partners']);
+                            foreach ($_POST['partners'] as $idx => $partner) {
+                                renderPartnerForm($idx, $partner);
+                            }
+                        }
+                        if ($partnerCount === 0) {
+                            renderPartnerForm(0, []);
+                        }
+                        ?>
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="addPartner()">+ Add Partner</button>
+                </div>
+                
+                <!-- Links -->
+                <div class="form-section">
+                    <h2>Custom Links</h2>
+                    <div class="help-text" style="margin-bottom: 1rem;">External links to display on the airport page</div>
+                    <div id="links-container">
+                        <?php
+                        $linkCount = 0;
+                        if (isset($_POST['links']) && is_array($_POST['links'])) {
+                            $linkCount = count($_POST['links']);
+                            foreach ($_POST['links'] as $idx => $link) {
+                                renderLinkForm($idx, $link);
+                            }
+                        }
+                        if ($linkCount === 0) {
+                            renderLinkForm(0, []);
+                        }
+                        ?>
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="addLink()">+ Add Link</button>
+                </div>
+                
+                <!-- Link Overrides -->
+                <div class="form-section">
+                    <h2>Link Overrides</h2>
+                    <div class="help-text" style="margin-bottom: 1rem;">Override default links to aviation resources</div>
+                    
+                    <div class="form-group">
+                        <label for="airnav_url">AirNav URL</label>
+                        <input type="url" id="airnav_url" name="airnav_url"
+                               value="<?= htmlspecialchars($_POST['airnav_url'] ?? '') ?>"
+                               placeholder="https://www.airnav.com/airport/KSPB">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="skyvector_url">SkyVector URL</label>
+                        <input type="url" id="skyvector_url" name="skyvector_url"
+                               value="<?= htmlspecialchars($_POST['skyvector_url'] ?? '') ?>"
+                               placeholder="https://skyvector.com/airport/KSPB">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="aopa_url">AOPA URL</label>
+                        <input type="url" id="aopa_url" name="aopa_url"
+                               value="<?= htmlspecialchars($_POST['aopa_url'] ?? '') ?>"
+                               placeholder="https://www.aopa.org/destinations/airports/KSPB">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="faa_weather_url">FAA Weather URL</label>
+                        <input type="url" id="faa_weather_url" name="faa_weather_url"
+                               value="<?= htmlspecialchars($_POST['faa_weather_url'] ?? '') ?>"
+                               placeholder="https://weathercams.faa.gov/...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="foreflight_url">ForeFlight URL</label>
+                        <input type="url" id="foreflight_url" name="foreflight_url"
+                               value="<?= htmlspecialchars($_POST['foreflight_url'] ?? '') ?>"
+                               placeholder="foreflightmobile://maps/search?q=KSPB">
+                    </div>
+                </div>
+                
                 <div style="margin-top: 2rem; text-align: center;">
                     <button type="submit" class="btn">Generate Configuration</button>
                 </div>
@@ -812,9 +1602,33 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
     <script>
         let webcamIndex = <?= $webcamCount ?>;
         
+        // Access type toggle for permission_required field
+        document.getElementById('access_type').addEventListener('change', function() {
+            const accessType = this.value;
+            const permissionGroup = document.getElementById('permission_required_group');
+            if (accessType === 'private') {
+                permissionGroup.style.display = 'block';
+            } else {
+                permissionGroup.style.display = 'none';
+                document.getElementById('permission_required').checked = false;
+            }
+        });
+        
+        // Initialize permission_required visibility on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const accessType = document.getElementById('access_type').value;
+            const permissionGroup = document.getElementById('permission_required_group');
+            if (accessType === 'private') {
+                permissionGroup.style.display = 'block';
+            }
+        });
+        
         // Show/hide weather config based on type
         document.getElementById('weather_type').addEventListener('change', function() {
-            document.querySelectorAll('.weather-config').forEach(el => el.style.display = 'none');
+            // Hide all primary weather configs
+            document.querySelectorAll('#weather_metar, #weather_tempest, #weather_ambient, #weather_weatherlink, #weather_synopticdata, #weather_pwsweather').forEach(el => {
+                if (el) el.style.display = 'none';
+            });
             const type = this.value;
             if (type) {
                 const el = document.getElementById('weather_' + type);
@@ -822,10 +1636,30 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
             }
         });
         
+        // Show/hide backup weather config based on type
+        document.getElementById('weather_backup_type').addEventListener('change', function() {
+            // Hide all backup weather configs
+            document.querySelectorAll('#weather_backup_tempest, #weather_backup_ambient, #weather_backup_weatherlink, #weather_backup_synopticdata, #weather_backup_pwsweather').forEach(el => {
+                if (el) el.style.display = 'none';
+            });
+            const type = this.value;
+            if (type) {
+                const el = document.getElementById('weather_backup_' + type);
+                if (el) el.style.display = 'block';
+            }
+        });
+        
         // Initialize weather config display
         const weatherType = document.getElementById('weather_type').value;
         if (weatherType) {
-            document.getElementById('weather_' + weatherType).style.display = 'block';
+            const el = document.getElementById('weather_' + weatherType);
+            if (el) el.style.display = 'block';
+        }
+        
+        const backupWeatherType = document.getElementById('weather_backup_type').value;
+        if (backupWeatherType) {
+            const el = document.getElementById('weather_backup_' + backupWeatherType);
+            if (el) el.style.display = 'block';
         }
         
         // Add webcam
@@ -841,6 +1675,72 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
         
         // Remove webcam
         function removeWebcam(btn) {
+            btn.closest('.camera-item').remove();
+        }
+        
+        // Partner management
+        let partnerIndex = <?= isset($_POST['partners']) && is_array($_POST['partners']) ? count($_POST['partners']) : 0 ?>;
+        
+        function addPartner() {
+            partnerIndex++;
+            const container = document.getElementById('partners-container');
+            const div = document.createElement('div');
+            div.className = 'camera-item';
+            div.innerHTML = `
+                <div class="camera-header">
+                    <h4>Partner ${partnerIndex}</h4>
+                    <button type="button" class="btn btn-remove" onclick="removePartner(this)">Remove</button>
+                </div>
+                <div class="form-group">
+                    <label>Partner Name <span class="required">*</span></label>
+                    <input type="text" name="partners[${partnerIndex}][name]" required>
+                </div>
+                <div class="form-group">
+                    <label>URL</label>
+                    <input type="url" name="partners[${partnerIndex}][url]">
+                </div>
+                <div class="form-group">
+                    <label>Logo URL</label>
+                    <input type="url" name="partners[${partnerIndex}][logo]">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="partners[${partnerIndex}][description]" rows="2"></textarea>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+        
+        function removePartner(btn) {
+            btn.closest('.camera-item').remove();
+        }
+        
+        // Link management
+        let linkIndex = <?= isset($_POST['links']) && is_array($_POST['links']) ? count($_POST['links']) : 0 ?>;
+        
+        function addLink() {
+            linkIndex++;
+            const container = document.getElementById('links-container');
+            const div = document.createElement('div');
+            div.className = 'camera-item';
+            div.innerHTML = `
+                <div class="camera-header">
+                    <h4>Link ${linkIndex}</h4>
+                    <button type="button" class="btn btn-remove" onclick="removeLink(this)">Remove</button>
+                </div>
+                <div class="form-group">
+                    <label>Link Label <span class="required">*</span></label>
+                    <input type="text" name="links[${linkIndex}][label]" required>
+                </div>
+                <div class="form-group">
+                    <label>URL <span class="required">*</span></label>
+                    <input type="url" name="links[${linkIndex}][url]" required>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+        
+        function removeLink(btn) {
             btn.closest('.camera-item').remove();
         }
         
@@ -1054,7 +1954,14 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
 
 <?php
 /**
- * Render webcam form (for server-side rendering)
+ * Render webcam form fields (for server-side rendering)
+ * 
+ * Generates HTML form fields for a single webcam configuration.
+ * Supports both pull (MJPEG/RTSP/static) and push (FTP/SFTP) camera types.
+ * 
+ * @param int $idx Zero-based camera index
+ * @param array $cam Existing camera configuration data (for pre-filling form)
+ * @return void Outputs HTML directly
  */
 function renderWebcamForm($idx, $cam) {
     $type = $cam['type'] ?? 'pull';
@@ -1174,6 +2081,81 @@ function renderWebcamForm($idx, $cam) {
         
         <div class="form-row">
             <div class="form-group">
+        </div>
+    </div>
+    <?php
+}
+
+/**
+ * Render partner form fields (for server-side rendering)
+ * 
+ * Generates HTML form fields for a single partner organization.
+ * 
+ * @param int $idx Zero-based partner index
+ * @param array $partner Existing partner configuration data (for pre-filling form)
+ * @return void Outputs HTML directly
+ */
+function renderPartnerForm($idx, $partner) {
+    ?>
+    <div class="camera-item">
+        <div class="camera-header">
+            <h4>Partner <?= $idx + 1 ?></h4>
+            <button type="button" class="btn btn-remove" onclick="removePartner(this)">Remove</button>
+        </div>
+        
+        <div class="form-group">
+            <label>Partner Name <span class="required">*</span></label>
+            <input type="text" name="partners[<?= $idx ?>][name]" 
+                   value="<?= htmlspecialchars($partner['name'] ?? '') ?>" required>
+        </div>
+        
+        <div class="form-group">
+            <label>URL</label>
+            <input type="url" name="partners[<?= $idx ?>][url]" 
+                   value="<?= htmlspecialchars($partner['url'] ?? '') ?>">
+        </div>
+        
+        <div class="form-group">
+            <label>Logo URL</label>
+            <input type="url" name="partners[<?= $idx ?>][logo]" 
+                   value="<?= htmlspecialchars($partner['logo'] ?? '') ?>">
+        </div>
+        
+        <div class="form-group">
+            <label>Description</label>
+            <textarea name="partners[<?= $idx ?>][description]" rows="2"><?= htmlspecialchars($partner['description'] ?? '') ?></textarea>
+        </div>
+    </div>
+    <?php
+}
+
+/**
+ * Render link form fields (for server-side rendering)
+ * 
+ * Generates HTML form fields for a single custom external link.
+ * 
+ * @param int $idx Zero-based link index
+ * @param array $link Existing link configuration data (for pre-filling form)
+ * @return void Outputs HTML directly
+ */
+function renderLinkForm($idx, $link) {
+    ?>
+    <div class="camera-item">
+        <div class="camera-header">
+            <h4>Link <?= $idx + 1 ?></h4>
+            <button type="button" class="btn btn-remove" onclick="removeLink(this)">Remove</button>
+        </div>
+        
+        <div class="form-group">
+            <label>Link Label <span class="required">*</span></label>
+            <input type="text" name="links[<?= $idx ?>][label]" 
+                   value="<?= htmlspecialchars($link['label'] ?? '') ?>" required>
+        </div>
+        
+        <div class="form-group">
+            <label>URL <span class="required">*</span></label>
+            <input type="url" name="links[<?= $idx ?>][url]" 
+                   value="<?= htmlspecialchars($link['url'] ?? '') ?>" required>
         </div>
     </div>
     <?php

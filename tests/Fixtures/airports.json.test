@@ -53,6 +53,8 @@
       "lon": -122.8618333,
       "elevation_ft": 58,
       "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
       "weather_source": {
         "type": "tempest",
         "station_id": "12345",
@@ -106,6 +108,8 @@
       "lon": -122.5950944,
       "elevation_ft": 30,
       "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "towered",
       "weather_source": {
         "type": "metar"
       },
@@ -129,6 +133,8 @@
       "lon": -122.3088,
       "elevation_ft": 433,
       "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "towered",
       "weather_source": {
         "type": "ambient",
         "api_key": "test_ambient_api_key",
@@ -153,6 +159,8 @@
       "lon": -104.6737,
       "elevation_ft": 5431,
       "timezone": "America/Denver",
+      "access_type": "public",
+      "tower_status": "towered",
       "weather_source": {
         "type": "weatherlink",
         "api_key": "test_weatherlink_api_key",
@@ -179,6 +187,9 @@
       "lon": -122.261,
       "elevation_ft": 1000,
       "timezone": "America/Los_Angeles",
+      "access_type": "private",
+      "permission_required": false,
+      "tower_status": "non_towered",
       "weather_source": {
         "type": "metar"
       }

@@ -2652,10 +2652,43 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Required fields
-        $requiredFields = ['name', 'lat', 'lon'];
+        $requiredFields = ['name', 'lat', 'lon', 'access_type', 'tower_status'];
         foreach ($requiredFields as $field) {
             if (!isset($airport[$field])) {
                 $errors[] = "Airport '{$airportCode}' missing required field: '{$field}'";
+            }
+        }
+        
+        // Validate access_type
+        if (isset($airport['access_type'])) {
+            $accessType = $airport['access_type'];
+            if (!in_array($accessType, ['public', 'private'], true)) {
+                $errors[] = "Airport '{$airportCode}' has invalid access_type: '{$accessType}' (must be 'public' or 'private')";
+            }
+            
+            // If private, permission_required must be set
+            if ($accessType === 'private' && !isset($airport['permission_required'])) {
+                $errors[] = "Airport '{$airportCode}' with access_type 'private' must have permission_required field set";
+            }
+        }
+        
+        // Validate permission_required (only relevant for private airports)
+        if (isset($airport['permission_required'])) {
+            $permissionRequired = $airport['permission_required'];
+            if (!is_bool($permissionRequired)) {
+                $errors[] = "Airport '{$airportCode}' permission_required must be a boolean (true or false)";
+            }
+            // Warn if permission_required is set but access_type is not private
+            if (isset($airport['access_type']) && $airport['access_type'] !== 'private') {
+                $errors[] = "Airport '{$airportCode}' has permission_required set but access_type is not 'private'";
+            }
+        }
+        
+        // Validate tower_status
+        if (isset($airport['tower_status'])) {
+            $towerStatus = $airport['tower_status'];
+            if (!in_array($towerStatus, ['towered', 'non_towered'], true)) {
+                $errors[] = "Airport '{$airportCode}' has invalid tower_status: '{$towerStatus}' (must be 'towered' or 'non_towered')";
             }
         }
         

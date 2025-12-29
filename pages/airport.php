@@ -1122,6 +1122,52 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     $formattedAddress = formatAddressEnvelope($airport['address']);
                 }
                 
+                // Access Type field
+                $accessType = $airport['access_type'] ?? null;
+                if ($accessType):
+                    $accessEmoji = '';
+                    $accessText = '';
+                    $permissionRequired = isset($airport['permission_required']) && $airport['permission_required'] === true;
+                    
+                    if ($accessType === 'public') {
+                        $accessEmoji = '🛫';
+                        $accessText = 'Public';
+                    } elseif ($accessType === 'private') {
+                        $accessEmoji = 'Ⓡ';
+                        $accessText = 'Private';
+                        if ($permissionRequired) {
+                            $accessEmoji .= '🔑';
+                            $accessText .= ' (Permission Required)';
+                        }
+                    }
+                ?>
+                <div class="info-item">
+                    <span class="label">Access:</span>
+                    <span class="value"><?= $accessEmoji ?> <?= htmlspecialchars($accessText) ?></span>
+                </div>
+                <?php endif; ?>
+                
+                <?php
+                // Tower Status field
+                $towerStatus = $airport['tower_status'] ?? null;
+                if ($towerStatus):
+                    $towerEmoji = '';
+                    $towerText = '';
+                    
+                    if ($towerStatus === 'towered') {
+                        $towerEmoji = '🗼';
+                        $towerText = 'Towered';
+                    } elseif ($towerStatus === 'non_towered') {
+                        $towerText = 'Non-Towered';
+                    }
+                ?>
+                <div class="info-item">
+                    <span class="label">Tower:</span>
+                    <span class="value"><?= $towerEmoji ? $towerEmoji . ' ' : '' ?><?= htmlspecialchars($towerText) ?></span>
+                </div>
+                <?php endif; ?>
+                
+                <?php
                 // Only show location if we have either coordinates or address
                 if ((!empty($geoUrl) || !empty($addressText)) && !empty($addressText)):
                 ?>
