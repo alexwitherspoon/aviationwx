@@ -30,12 +30,14 @@ class WebcamFormat202Test extends TestCase
     {
         parent::setUp();
         $this->baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $this->cacheDir = __DIR__ . '/../../cache/webcams';
-        $this->cacheJpg = $this->cacheDir . '/' . $this->airport . '_' . $this->camIndex . '.jpg';
-        $this->cacheWebp = $this->cacheDir . '/' . $this->airport . '_' . $this->camIndex . '.webp';
-        $this->cacheAvif = $this->cacheDir . '/' . $this->airport . '_' . $this->camIndex . '.avif';
+        $this->cacheJpg = getCacheFile($this->airport, $this->camIndex, 'jpg', 'primary');
+        $this->cacheWebp = getCacheFile($this->airport, $this->camIndex, 'webp', 'primary');
+        $this->cacheAvif = getCacheFile($this->airport, $this->camIndex, 'avif', 'primary');
         $this->placeholderPath = __DIR__ . '/../../public/images/placeholder.jpg';
         
+        // Ensure cache directory exists (getCacheFile creates it, but ensure parent exists)
         if (!is_dir($this->cacheDir)) {
             @mkdir($this->cacheDir, 0755, true);
         }

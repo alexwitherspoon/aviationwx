@@ -170,13 +170,12 @@ class WebcamRefreshInitializationTest extends TestCase
      */
     public function testAirportPage_CamTsUsesCorrectTimestamps()
     {
-        $cacheDir = __DIR__ . '/../../cache/webcams';
-        $base = $cacheDir . '/' . $this->airport . '_0';
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         
         // Check both possible cache files (page uses first one found)
         $cacheFiles = [];
-        foreach (['.jpg', '.webp'] as $ext) {
-            $filePath = $base . $ext;
+        foreach (['jpg', 'webp'] as $format) {
+            $filePath = getCacheFile($this->airport, 0, $format, 'primary');
             if (file_exists($filePath)) {
                 $cacheFiles[] = $filePath;
             }

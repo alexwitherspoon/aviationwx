@@ -19,6 +19,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
+require_once __DIR__ . '/../lib/webcam-format-generation.php';
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -293,7 +294,7 @@ while ($running) {
                     }
                     
                     // Check cache age (stateless - use filemtime)
-                    $cacheFile = __DIR__ . "/../cache/webcams/{$airportId}_{$index}.jpg";
+                    $cacheFile = getCacheFile($airportId, $index, 'jpg', 'primary');
                     $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
                     
                     // Check if update needed

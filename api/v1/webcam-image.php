@@ -71,14 +71,28 @@ function handleGetWebcamImage(array $params, array $context): void
         $format = 'jpg';
     }
     
-    // Build cache file path (format: {airportId}_{camIndex}.{ext})
-    $cacheDir = __DIR__ . '/../../cache/webcams';
-    $extension = $format === 'jpg' ? 'jpg' : $format;
-    $cacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $extension;
+    // Get requested size (variant)
+    $size = $_GET['size'] ?? 'primary';
+    $validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
+    if (!in_array($size, $validSizes)) {
+        $size = 'primary';
+    }
+    
+    // Build cache file path using getCacheFile helper
+    require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+    $cacheFile = getCacheFile($airportId, $camIndex, $format, $size);
+    
+    // Fall back to primary if variant doesn't exist
+    if (!file_exists($cacheFile) && $size !== 'primary') {
+        $cacheFile = getCacheFile($airportId, $camIndex, $format, 'primary');
+    }
     
     // Fall back to JPG if requested format doesn't exist
     if (!file_exists($cacheFile) && $format !== 'jpg') {
-        $cacheFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
+        $cacheFile = getCacheFile($airportId, $camIndex, 'jpg', $size);
+        if (!file_exists($cacheFile) && $size !== 'primary') {
+            $cacheFile = getCacheFile($airportId, $camIndex, 'jpg', 'primary');
+        }
         $format = 'jpg';
     }
     

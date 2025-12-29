@@ -591,13 +591,13 @@ class WebcamHistoryTest extends TestCase
             $this->markTestSkipped('History not enabled for test airport');
         }
         
-        $cacheDir = __DIR__ . '/../../cache/webcams';
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $testAirport = 'kspb';
         $timestamp = time();
         
         // Create cache files that would be "promoted"
-        $jpgFile = $cacheDir . '/' . $testAirport . '_0.jpg';
-        $webpFile = $cacheDir . '/' . $testAirport . '_0.webp';
+        $jpgFile = getCacheFile($testAirport, 0, 'jpg', 'primary');
+        $webpFile = getCacheFile($testAirport, 0, 'webp', 'primary');
         
         // Create test JPEG with proper structure
         $jpeg = "\xFF\xD8\xFF\xE0" . str_repeat("\x00", 200) . "\xFF\xD9";

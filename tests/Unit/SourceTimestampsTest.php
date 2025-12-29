@@ -36,10 +36,11 @@ class SourceTimestampsTest extends TestCase
     
     private function cleanupTestFiles(): void
     {
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $files = [
             $this->cacheDir . '/weather_' . $this->testAirportId . '.json',
-            $this->cacheDir . '/webcams/' . $this->testAirportId . '_0.jpg',
-            $this->cacheDir . '/webcams/' . $this->testAirportId . '_0.webp'
+            getCacheFile($this->testAirportId, 0, 'jpg', 'primary'),
+            getCacheFile($this->testAirportId, 0, 'webp', 'primary')
         ];
         
         foreach ($files as $file) {
@@ -176,11 +177,12 @@ class SourceTimestampsTest extends TestCase
         ];
         
         // Create webcam cache file
-        $webcamDir = $this->cacheDir . '/webcams';
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamDir = dirname($webcamFile);
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
         }
-        $webcamFile = $webcamDir . '/' . $this->testAirportId . '_0.jpg';
         $webcamTimestamp = time() - 1800; // 30 minutes ago
         touch($webcamFile, $webcamTimestamp);
         
@@ -264,7 +266,8 @@ class SourceTimestampsTest extends TestCase
         $olderTimestamp = time() - 3600; // 1 hour ago
         $newerTimestamp = time() - 1800; // 30 minutes ago
         
-        touch($webcamDir . '/' . $this->testAirportId . '_0.jpg', $olderTimestamp);
+        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        touch($webcamFile, $olderTimestamp);
         touch($webcamDir . '/' . $this->testAirportId . '_1.jpg', $newerTimestamp);
         
         $result = getSourceTimestamps($this->testAirportId, $airport);

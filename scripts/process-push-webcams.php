@@ -626,25 +626,62 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         $timestamp = time();
     }
     
-    // Generate all other formats in parallel (synchronous wait)
-    // All formats are written to staging files (.tmp)
-    $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
-    
-    // Promote all successful staging files to final cache location (with timestamp for filename)
-    $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $primaryFormat, $timestamp);
-    
-    if (empty($promotedFormats)) {
-        aviationwx_log('error', 'moveToCache: no formats promoted', [
+    // Get input dimensions for variant generation
+    $inputDimensions = getImageDimensions($stagingFile);
+    if ($inputDimensions === null) {
+        aviationwx_log('warning', 'moveToCache: unable to detect image dimensions, falling back to format-only generation', [
             'airport' => $airportId,
-            'cam' => $camIndex,
-            'primary_format' => $primaryFormat
+            'cam' => $camIndex
         ], 'app');
-        cleanupStagingFiles($airportId, $camIndex);
-        return false;
+        // Fallback to old format-only generation
+        $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
+        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $primaryFormat, $timestamp);
+        if (empty($promotedFormats)) {
+            aviationwx_log('error', 'moveToCache: no formats promoted', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'primary_format' => $primaryFormat
+            ], 'app');
+            cleanupStagingFiles($airportId, $camIndex);
+            return false;
+        }
+        saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
+    } else {
+        // Generate all variants and formats in parallel (synchronous wait)
+        // All variants × formats are written to staging files (.tmp)
+        $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, $primaryFormat, $inputDimensions);
+        
+        // Promote all successful staging files to final cache location (with timestamp for filename)
+        $promotedVariants = promoteVariants(
+            $airportId,
+            $camIndex,
+            $variantResult['results'],
+            $primaryFormat,
+            $timestamp,
+            $variantResult['delete_original'],
+            $variantResult['delete_original'] ? $stagingFile : null
+        );
+        
+        if (empty($promotedVariants)) {
+            aviationwx_log('error', 'moveToCache: no variants promoted', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'primary_format' => $primaryFormat
+            ], 'app');
+            cleanupStagingFiles($airportId, $camIndex);
+            return false;
+        }
+        
+        // Save all promoted variants to history (if enabled for this airport)
+        saveAllVariantsToHistory($airportId, $camIndex, $promotedVariants, $timestamp);
+        
+        // Convert for logging compatibility
+        $promotedFormats = [];
+        foreach ($promotedVariants as $variant => $formats) {
+            $promotedFormats = array_merge($promotedFormats, $formats);
+        }
+        $promotedFormats = array_unique($promotedFormats);
     }
-    
-    // Save all promoted formats to history (if enabled for this airport)
-    saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
     
     // Cleanup old timestamp files (keep only recent ones to prevent disk space issues)
     cleanupOldTimestampFiles($airportId, $camIndex, 5);
@@ -665,8 +702,8 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         ], 'app');
     }
     
-    // Return primary cache file path
-    return getFinalFilePath($airportId, $camIndex, $primaryFormat);
+    // Return primary cache file path (primary variant)
+    return getFinalFilePath($airportId, $camIndex, $primaryFormat, $timestamp, 'primary');
 }
 
 

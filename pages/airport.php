@@ -992,13 +992,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                         ?>
                         <picture>
                             <?php if (in_array('avif', $enabledFormats)): ?>
-                            <source srcset="<?= $baseUrl ?>&fmt=avif" type="image/avif">
+                            <source srcset="<?= $baseUrl ?>&fmt=avif&size=primary" type="image/avif">
                             <?php endif; ?>
                             <?php if (in_array('webp', $enabledFormats)): ?>
-                            <source srcset="<?= $baseUrl ?>&fmt=webp" type="image/webp">
+                            <source srcset="<?= $baseUrl ?>&fmt=webp&size=primary" type="image/webp">
                             <?php endif; ?>
                             <img id="webcam-<?= $index ?>" 
-                                 src="<?= $baseUrl ?>&fmt=jpg"
+                                 src="<?= $baseUrl ?>&fmt=jpg&size=primary"
                                  data-initial-timestamp="<?= $mtimeJpg ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?> webcam - click to view 24-hour history"
                                  title="<?= htmlspecialchars($cam['name']) ?> – Tap to view 24-hour history"
@@ -4155,6 +4155,7 @@ const WebcamPlayer = {
     hideTimeout: null,
     hideUIMode: false,  // Kiosk/signage mode
     preferredFormat: 'jpg',  // Preferred image format (avif, webp, jpg)
+    preferredVariant: 'primary',  // Preferred image variant (thumb, small, medium, large, primary, full)
 
     // Update URL to reflect current state (for sharing)
     updateURL() {
@@ -4311,7 +4312,11 @@ const WebcamPlayer = {
     // Build URL for a frame with format parameter
     getFrameUrl(frame) {
         const format = this.getFrameFormat(frame);
-        return frame.url + '&fmt=' + format;
+        // Check if frame has variants, use preferred variant if available
+        const variant = (frame.variants && frame.variants.includes(this.preferredVariant)) 
+            ? this.preferredVariant 
+            : (frame.variants && frame.variants.length > 0 ? frame.variants[0] : 'primary');
+        return frame.url + '&fmt=' + format + '&size=' + variant;
     },
 
     async open(airportId, camIndex, camName, currentImageSrc, options = {}) {
@@ -4363,6 +4368,9 @@ const WebcamPlayer = {
                 if (data.enabledFormats && Array.isArray(data.enabledFormats)) {
                     this.preferredFormat = getPreferredFormat(data.enabledFormats);
                 }
+                
+                // Set preferred variant based on viewport and stored preference
+                this.preferredVariant = getPreferredVariant();
                 
                 this.initTimeline();
                 this.preloadFrames();
@@ -5578,7 +5586,14 @@ function handleWebcamError(camIndex, img) {
     }
     
     webcamErrorHandled.add(errorKey);
-    console.error('Webcam image failed to load:', img.src);
+    
+    // Extract format and variant from image URL for logging
+    const formatMatch = img.src.match(/[&?]fmt=([^&]+)/);
+    const variantMatch = img.src.match(/[&?]size=([^&]+)/);
+    const format = formatMatch ? formatMatch[1] : 'unknown';
+    const variant = variantMatch ? variantMatch[1] : 'unknown';
+    
+    console.error(`[Webcam ${camIndex}] Image failed to load - format: ${format}, variant: ${variant}, URL: ${img.src}`);
     const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
     if (skeleton) skeleton.style.display = 'none';
     
@@ -5642,10 +5657,10 @@ function setupWebcamRefresh(camIndex, baseInterval) {
 }
 
 /**
- * Observe format from picture element and store in localStorage
+ * Observe format and variant from picture element and store in localStorage
  * 
- * Extracts format from currentSrc URL and stores browser preference.
- * Called on image load events to detect which format browser selected.
+ * Extracts format and size from currentSrc URL and stores browser preferences.
+ * Called on image load events to detect which format and variant browser selected.
  * 
  * @param {number} camIndex Camera index
  * @param {HTMLImageElement} img Image element
@@ -5653,17 +5668,41 @@ function setupWebcamRefresh(camIndex, baseInterval) {
 function observeWebcamFormat(camIndex, img) {
     const currentSrc = img.currentSrc || img.src;
     const formatMatch = currentSrc.match(/[&?]fmt=([^&]+)/);
+    const sizeMatch = currentSrc.match(/[&?]size=([^&]+)/);
+    
+    let detectedFormat = null;
+    let detectedVariant = null;
     
     if (formatMatch) {
         const format = formatMatch[1].toLowerCase();
         if (['avif', 'webp', 'jpg', 'jpeg'].includes(format)) {
             const normalizedFormat = format === 'jpeg' ? 'jpg' : format;
+            detectedFormat = normalizedFormat;
             try {
                 localStorage.setItem('webcam_format_pref', normalizedFormat);
             } catch (e) {
                 // localStorage not available (private browsing, etc.)
             }
         }
+    }
+    
+    if (sizeMatch) {
+        const size = sizeMatch[1].toLowerCase();
+        if (['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(size)) {
+            detectedVariant = size;
+            try {
+                localStorage.setItem('webcam_size_pref', size);
+            } catch (e) {
+                // localStorage not available (private browsing, etc.)
+            }
+        }
+    }
+    
+    // Log detected format and variant for debugging
+    if (detectedFormat || detectedVariant) {
+        const formatStr = detectedFormat || 'unknown';
+        const variantStr = detectedVariant || 'unknown';
+        console.log(`[Webcam ${camIndex}] Browser selected format: ${formatStr}, variant: ${variantStr}`);
     }
 }
 
@@ -5696,6 +5735,40 @@ function getPreferredFormat(serverFormats) {
         return 'webp';
     }
     return 'jpg';
+}
+
+/**
+ * Get preferred variant based on viewport and stored preference
+ * 
+ * Uses viewport-based detection by default, with stored preference as override.
+ * Falls back to 'primary' if preference not available.
+ * 
+ * @returns {string} Preferred variant: 'thumb', 'small', 'medium', 'large', 'primary', or 'full'
+ */
+function getPreferredVariant() {
+    // Check for stored preference first
+    try {
+        const stored = localStorage.getItem('webcam_size_pref');
+        if (stored && ['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(stored)) {
+            return stored;
+        }
+    } catch (e) {
+        // localStorage not available
+    }
+    
+    // Viewport-based detection
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    
+    if (viewportWidth < 768) {
+        // Mobile: use small or medium
+        return 'small';
+    } else if (viewportWidth < 1024) {
+        // Tablet: use medium or large
+        return 'medium';
+    } else {
+        // Desktop: use primary or full
+        return 'primary';
+    }
 }
 
 /**
@@ -5972,6 +6045,11 @@ function startFormatRetry(camIndex, data) {
     cancelFormatRetry(camIndex);
     
     const { preferred_url, format, jpeg_timestamp, estimated_ready_seconds } = data;
+    const variantMatch = preferred_url ? preferred_url.match(/[&?]size=([^&]+)/) : null;
+    const variant = variantMatch ? variantMatch[1] : 'primary';
+    
+    console.log(`[Webcam ${camIndex}] Starting format retry - format: ${format}, variant: ${variant}, estimated: ${estimated_ready_seconds || 'unknown'}s`);
+    
     const abortController = new AbortController();
     const maxWait = 10000; // 10 seconds max
     const startTime = Date.now();
@@ -6017,6 +6095,10 @@ function startFormatRetry(camIndex, data) {
             // Check if format is now available (lightweight check)
             if (mtimeData.formatReady && mtimeData.formatReady[format]) {
                 // Format ready! Request the image
+                const variantMatch = preferred_url.match(/[&?]size=([^&]+)/);
+                const variant = variantMatch ? variantMatch[1] : 'primary';
+                console.log(`[Webcam ${camIndex}] Format ready after retry - format: ${format}, variant: ${variant}`);
+                
                 try {
                     const imageResponse = await fetch(preferred_url, {
                         signal: abortController.signal,
@@ -6028,6 +6110,7 @@ function startFormatRetry(camIndex, data) {
                         // Success - upgrade image silently
                         const blob = await imageResponse.blob();
                         const blobUrl = URL.createObjectURL(blob);
+                        console.log(`[Webcam ${camIndex}] Upgraded to preferred format - format: ${format}, variant: ${variant}`);
                         updateImageSilently(camIndex, blobUrl, mtimeData.timestamp);
                         window.formatRetries.delete(camIndex);
                         return;
@@ -6035,6 +6118,7 @@ function startFormatRetry(camIndex, data) {
                 } catch (error) {
                     if (error.name !== 'AbortError') {
                         // Network error - retry with backoff
+                        console.warn(`[Webcam ${camIndex}] Retry failed - format: ${format}, variant: ${variant}, error: ${error.message}`);
                         scheduleNextRetry();
                     }
                     return;
@@ -6042,6 +6126,10 @@ function startFormatRetry(camIndex, data) {
             }
             
             // Format not ready yet - schedule next check
+            retryCount++;
+            const variantMatch = preferred_url.match(/[&?]size=([^&]+)/);
+            const variant = variantMatch ? variantMatch[1] : 'primary';
+            console.log(`[Webcam ${camIndex}] Format not ready (retry ${retryCount}) - format: ${format}, variant: ${variant}`);
             scheduleNextRetry();
             
         } catch (error) {
@@ -6091,13 +6179,19 @@ function startFormatRetry(camIndex, data) {
 async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
     const { format, fallback_url, preferred_url, estimated_ready_seconds } = data;
     
+    // Extract variant from URLs for logging
+    const variantMatch = preferred_url ? preferred_url.match(/[&?]size=([^&]+)/) : null;
+    const variant = variantMatch ? variantMatch[1] : 'primary';
+    
     // Special case: JPEG is generating (our fallback)
     if (format === 'jpg') {
+        console.warn(`[Webcam ${camIndex}] JPEG generating (fallback) - variant: ${variant}, estimated: ${estimated_ready_seconds || 'unknown'}s`);
         await handleJpegGenerating(camIndex, hasExisting, data);
         return;
     }
     
     // Preferred format (WebP/AVIF) is generating
+    console.log(`[Webcam ${camIndex}] ${format.toUpperCase()} generating - variant: ${variant}, estimated: ${estimated_ready_seconds || 'unknown'}s, using fallback`);
     if (!hasExisting) {
         // Initial load: use fallback immediately, no waiting
         await loadImageFromUrl(fallback_url, camIndex, jpegTimestamp);
@@ -6119,6 +6213,12 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
  * @param {number} jpegTimestamp JPEG timestamp from mtime endpoint
  */
 async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {
+    // Extract variant from URL for logging
+    const variantMatch = url.match(/[&?]size=([^&]+)/);
+    const requestedVariant = variantMatch ? variantMatch[1] : 'primary';
+    
+    console.log(`[Webcam ${camIndex}] Requesting image - format: ${preferredFormat}, variant: ${requestedVariant}`);
+    
     try {
         const response = await fetch(url, {
             cache: 'no-store',
@@ -6137,6 +6237,7 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
                 // localStorage not available
             }
             
+            console.log(`[Webcam ${camIndex}] Image loaded successfully - format: ${preferredFormat}, variant: ${requestedVariant}`);
             updateImageSilently(camIndex, blobUrl, jpegTimestamp);
             CAM_LAST_FETCH[camIndex] = Date.now();
             return;
@@ -6145,6 +6246,7 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
         if (response.status === 202) {
             // Format generating
             const data = await response.json();
+            console.log(`[Webcam ${camIndex}] Format generating (202) - format: ${preferredFormat}, variant: ${requestedVariant}, estimated: ${data.estimated_ready_seconds || 'unknown'}s`);
             await handle202Response(camIndex, data, hasExisting, jpegTimestamp);
             return;
         }
@@ -6153,6 +6255,7 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
         
     } catch (error) {
         // Network error - use fallback
+        console.error(`[Webcam ${camIndex}] Request failed - format: ${preferredFormat}, variant: ${requestedVariant}, error: ${error.message}`);
         handleRequestError(error, camIndex, hasExisting);
     }
 }
@@ -6251,14 +6354,15 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                 : ['jpg'];
             
             const preferredFormat = getPreferredFormat(serverFormats);
+            const preferredVariant = getPreferredVariant();
             
-            // Build image URL with timestamp parameter (immutable cache busting)
-            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}
+            // Build image URL with timestamp and variant parameters (immutable cache busting)
+            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}&size={variant}
             // This ensures automatic cache busting when timestamp changes
-            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&ts=${newTs}&fmt=${preferredFormat}`;
+            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&ts=${newTs}&fmt=${preferredFormat}&size=${preferredVariant}`;
             
             // Log successful update
-            console.log('[Webcam ' + camIndex + '] Updating - new image at ' + new Date(newTs * 1000).toLocaleTimeString() + ' (format: ' + preferredFormat + ')');
+            console.log('[Webcam ' + camIndex + '] Updating - new image at ' + new Date(newTs * 1000).toLocaleTimeString() + ' (format: ' + preferredFormat + ', variant: ' + preferredVariant + ')');
             
             // Request preferred format (explicit fmt= triggers 202 if generating)
             loadWebcamImage(camIndex, imageUrl, preferredFormat, hasExisting, newTs);

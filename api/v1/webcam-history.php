@@ -98,31 +98,27 @@ function handleGetWebcamHistory(array $params, array $context): void
  */
 function handleGetFrameList(string $airportId, int $camIndex, array $airport): void
 {
-    $historyDir = __DIR__ . '/../../cache/webcams/' . $airportId . '/history/cam' . $camIndex;
+    require_once __DIR__ . '/../../lib/webcam-history.php';
     
-    $frames = [];
+    $frames = getHistoryFrames($airportId, $camIndex);
     
-    if (is_dir($historyDir)) {
-        $files = glob($historyDir . '/*.jpg');
-        
-        foreach ($files as $file) {
-            $basename = basename($file, '.jpg');
-            // Filename format: {timestamp}.jpg
-            if (is_numeric($basename)) {
-                $timestamp = (int)$basename;
-                $frames[] = [
-                    'timestamp' => $timestamp,
-                    'timestamp_iso' => gmdate('c', $timestamp),
-                    'url' => '/v1/airports/' . $airportId . '/webcams/' . $camIndex . '/history?ts=' . $timestamp,
-                ];
-            }
-        }
-        
-        // Sort by timestamp descending (newest first)
-        usort($frames, function ($a, $b) {
-            return $b['timestamp'] - $a['timestamp'];
-        });
+    $frameList = [];
+    foreach ($frames as $frame) {
+        $frameList[] = [
+            'timestamp' => $frame['timestamp'],
+            'timestamp_iso' => gmdate('c', $frame['timestamp']),
+            'url' => '/v1/airports/' . $airportId . '/webcams/' . $camIndex . '/history?ts=' . $frame['timestamp'],
+            'formats' => $frame['formats'] ?? ['jpg'],
+            'variants' => $frame['variants'] ?? ['primary']
+        ];
     }
+    
+    // Sort by timestamp descending (newest first)
+    usort($frameList, function ($a, $b) {
+        return $b['timestamp'] - $a['timestamp'];
+    });
+    
+    $frames = $frameList;
     
     // Get max frames setting
     $maxFrames = $airport['webcam_history_max_frames'] ?? 12;
@@ -155,8 +151,41 @@ function handleGetFrameList(string $airportId, int $camIndex, array $airport): v
  */
 function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timestamp): void
 {
-    $historyDir = __DIR__ . '/../../cache/webcams/' . $airportId . '/history/cam' . $camIndex;
-    $frameFile = $historyDir . '/' . $timestamp . '.jpg';
+    require_once __DIR__ . '/../../lib/webcam-history.php';
+    
+    // Get requested format and size
+    $format = $_GET['fmt'] ?? 'jpg';
+    if (!in_array($format, ['jpg', 'webp', 'avif'])) {
+        $format = 'jpg';
+    }
+    
+    $size = $_GET['size'] ?? 'primary';
+    $validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
+    if (!in_array($size, $validSizes)) {
+        $size = 'primary';
+    }
+    
+    $historyDir = getWebcamHistoryDir($airportId, $camIndex);
+    
+    // Try variant-based file first, fall back to primary, then old naming
+    $frameFile = $historyDir . '/' . $timestamp . '_' . $size . '.' . $format;
+    if (!file_exists($frameFile)) {
+        if ($size !== 'primary') {
+            $frameFile = $historyDir . '/' . $timestamp . '_primary.' . $format;
+        }
+        if (!file_exists($frameFile) && $format !== 'jpg') {
+            $frameFile = $historyDir . '/' . $timestamp . '_' . $size . '.jpg';
+            $format = 'jpg';
+        }
+        if (!file_exists($frameFile)) {
+            // Fallback to old naming
+            $frameFile = $historyDir . '/' . $timestamp . '.' . $format;
+            if (!file_exists($frameFile) && $format !== 'jpg') {
+                $frameFile = $historyDir . '/' . $timestamp . '.jpg';
+                $format = 'jpg';
+            }
+        }
+    }
     
     if (!file_exists($frameFile)) {
         sendPublicApiError(

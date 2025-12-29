@@ -757,6 +757,56 @@ function getEnabledWebcamFormats(): array {
 }
 
 /**
+ * Get image primary size from config
+ * 
+ * Returns the configured primary image size, defaulting to 1920x1080.
+ * 
+ * @return string Resolution string in format "WIDTHxHEIGHT" (e.g., "1920x1080")
+ */
+function getImagePrimarySize(): string {
+    return getGlobalConfig('image_primary_size', '1920x1080');
+}
+
+/**
+ * Get image max resolution from config
+ * 
+ * Returns the configured maximum image resolution, defaulting to 3840x2160 (4K).
+ * Images larger than this will be downscaled.
+ * 
+ * @return string Resolution string in format "WIDTHxHEIGHT" (e.g., "3840x2160")
+ */
+function getImageMaxResolution(): string {
+    return getGlobalConfig('image_max_resolution', '3840x2160');
+}
+
+/**
+ * Get image aspect ratio from config
+ * 
+ * Returns the configured target aspect ratio, defaulting to "16:9".
+ * 
+ * @return string Aspect ratio string (e.g., "16:9")
+ */
+function getImageAspectRatio(): string {
+    return getGlobalConfig('image_aspect_ratio', '16:9');
+}
+
+/**
+ * Get list of image variants to generate
+ * 
+ * Returns the configured list of variant names to generate.
+ * Defaults to ["thumb", "small", "medium", "large"].
+ * 
+ * @return array Array of variant name strings
+ */
+function getImageVariants(): array {
+    $variants = getGlobalConfig('image_variants', null);
+    if ($variants === null || !is_array($variants)) {
+        return ['thumb', 'small', 'medium', 'large'];
+    }
+    return $variants;
+}
+
+/**
  * Check if webcam history is enabled for an airport
  * 
  * Checks airport-specific setting first, falls back to global default.

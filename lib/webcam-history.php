@@ -17,7 +17,7 @@ require_once __DIR__ . '/logger.php';
  * @return string Path to history directory
  */
 function getWebcamHistoryDir(string $airportId, int $camIndex): string {
-    return __DIR__ . '/../cache/webcams/' . $airportId . '_' . $camIndex . '_history';
+    return __DIR__ . '/../cache/webcams/' . $airportId . '/' . $camIndex . '/history';
 }
 
 /**
@@ -251,6 +251,100 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
 }
 
 /**
+ * Save all variants to history
+ * 
+ * Saves all generated variants × formats to history directory.
+ * Variants are stored with naming: {timestamp}_{variant}.{format}
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param array $promotedVariants Array: ['variant' => ['format1', 'format2', ...], ...]
+ * @param int $timestamp Unix timestamp for the image
+ * @return array Results: ['variant_format' => bool success, ...]
+ */
+function saveAllVariantsToHistory(string $airportId, int $camIndex, array $promotedVariants, int $timestamp = 0): array {
+    $results = [];
+    
+    // Check if history enabled for this airport
+    if (!isWebcamHistoryEnabledForAirport($airportId)) {
+        return $results;
+    }
+    
+    if (empty($promotedVariants)) {
+        return $results;
+    }
+    
+    $historyDir = getWebcamHistoryDir($airportId, $camIndex);
+    $cacheDir = __DIR__ . '/../cache/webcams';
+    
+    // Create history directory if needed
+    if (!is_dir($historyDir)) {
+        if (!@mkdir($historyDir, 0755, true)) {
+            aviationwx_log('error', 'webcam history: failed to create directory', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'dir' => $historyDir
+            ], 'app');
+            return $results;
+        }
+    }
+    
+    // Get timestamp if not provided
+    if ($timestamp <= 0) {
+        $timestamp = time();
+    }
+    
+    require_once __DIR__ . '/webcam-format-generation.php';
+    
+    // Copy each variant × format to history
+    foreach ($promotedVariants as $variant => $formats) {
+        foreach ($formats as $format) {
+            // Source: cache file with variant naming
+            $sourceFile = getTimestampCacheFilePath($airportId, $camIndex, $timestamp, $format, $variant);
+            
+            if (!file_exists($sourceFile)) {
+                continue;
+            }
+            
+            // Destination: history file with same naming
+            $destFile = $historyDir . '/' . $timestamp . '_' . $variant . '.' . $format;
+            
+            // Don't overwrite existing frame with same timestamp
+            if (file_exists($destFile)) {
+                $results[$variant . '_' . $format] = true;
+                continue;
+            }
+            
+            // Copy to history
+            if (@copy($sourceFile, $destFile)) {
+                $results[$variant . '_' . $format] = true;
+                
+                aviationwx_log('debug', 'webcam history: saved variant', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'timestamp' => $timestamp,
+                    'variant' => $variant,
+                    'format' => $format
+                ], 'app');
+            } else {
+                $results[$variant . '_' . $format] = false;
+                aviationwx_log('error', 'webcam history: failed to copy variant', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'timestamp' => $timestamp,
+                    'variant' => $variant,
+                    'format' => $format,
+                    'source' => $sourceFile,
+                    'dest' => $destFile
+                ], 'app');
+            }
+        }
+    }
+    
+    return $results;
+}
+
+/**
  * Get list of available history frames
  * 
  * Returns an array of frames sorted by timestamp (oldest first).
@@ -267,38 +361,57 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         return [];
     }
     
-    // Get all image files
+    // Get all image files (supports both old and new naming)
     $allFiles = glob($historyDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
     if ($allFiles === false) {
         return [];
     }
     
-    // Group by timestamp
+    // Group by timestamp and variant
     $timestampGroups = [];
     
     foreach ($allFiles as $file) {
         $basename = basename($file);
-        if (preg_match('/^(\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
+        // Match both old format (timestamp.format) and new format (timestamp_variant.format)
+        if (preg_match('/^(\d+)(?:_([^\.]+))?\.(jpg|webp|avif)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
-            $format = $matches[2];
+            $variant = $matches[2] ?? 'primary'; // Default to primary for old naming
+            $format = $matches[3];
             
             if (!isset($timestampGroups[$timestamp])) {
-                $timestampGroups[$timestamp] = [];
+                $timestampGroups[$timestamp] = [
+                    'formats' => [],
+                    'variants' => []
+                ];
             }
-            $timestampGroups[$timestamp][] = $format;
+            
+            if (!in_array($format, $timestampGroups[$timestamp]['formats'])) {
+                $timestampGroups[$timestamp]['formats'][] = $format;
+            }
+            
+            if (!isset($timestampGroups[$timestamp]['variants'][$variant])) {
+                $timestampGroups[$timestamp]['variants'][$variant] = [];
+            }
+            if (!in_array($format, $timestampGroups[$timestamp]['variants'][$variant])) {
+                $timestampGroups[$timestamp]['variants'][$variant][] = $format;
+            }
         }
     }
     
     // Build frames array
     $frames = [];
-    foreach ($timestampGroups as $timestamp => $formats) {
+    foreach ($timestampGroups as $timestamp => $data) {
+        $formats = $data['formats'];
+        $variants = $data['variants'];
+        
         // Primary filename is always JPG if available, otherwise first format
         $primaryFormat = in_array('jpg', $formats) ? 'jpg' : $formats[0];
         
         $frames[] = [
             'timestamp' => $timestamp,
-            'filename' => $timestamp . '.' . $primaryFormat,
-            'formats' => $formats
+            'filename' => $timestamp . '_primary.' . $primaryFormat,
+            'formats' => $formats,
+            'variants' => array_keys($variants) // List of available variants
         ];
     }
     

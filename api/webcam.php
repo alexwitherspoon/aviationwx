@@ -223,6 +223,13 @@ $rawIdentifier = $_GET['id'] ?? $_GET['airport'] ?? '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : (isset($_GET['index']) ? intval($_GET['index']) : 0);
 // Support timestamp parameter for timestamp-based URLs (immutable cache busting)
 $requestedTimestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
+// Support size parameter for variant selection (thumb, small, medium, large, primary, full)
+$requestedSize = isset($_GET['size']) ? strtolower(trim($_GET['size'])) : 'primary';
+// Validate size parameter
+$validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
+if (!in_array($requestedSize, $validSizes)) {
+    $requestedSize = 'primary'; // Default to primary
+}
 
 if (empty($rawIdentifier)) {
     aviationwx_log('error', 'webcam missing airport identifier', [], 'user');
@@ -273,10 +280,9 @@ if ($camIndex > $maxCamIndex || !isset($config['airports'][$airportId]['webcams'
 
 $cam = $config['airports'][$airportId]['webcams'][$camIndex];
 $cacheDir = __DIR__ . '/../cache/webcams';
-$base = $cacheDir . '/' . $airportId . '_' . $camIndex;
-$cacheJpg = $base . '.jpg';
-$cacheWebp = $base . '.webp';
-$cacheAvif = $base . '.avif';
+$cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', 'primary');
+$cacheWebp = getCacheFile($airportId, $camIndex, 'webp', 'primary');
+$cacheAvif = getCacheFile($airportId, $camIndex, 'avif', 'primary');
 
 // Create cache directory if it doesn't exist
 // Check parent directory first, then create with proper error handling
@@ -357,7 +363,7 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
         header('X-RateLimit-Reset: ' . (int)$rl['reset']);
     }
     // Use optimized format status check
-    $formatStatus = getFormatStatus($airportId, $camIndex);
+    $formatStatus = getFormatStatus($airportId, $camIndex, $requestedSize);
     $enabledFormats = getEnabledWebcamFormats();
     
     // Get JPEG timestamp (preferred for EXIF capture time)
@@ -529,54 +535,6 @@ function getImageCaptureTime($filePath) {
 }
 
 /**
- * Get cache file path for format
- * 
- * @param string $airportId Airport ID
- * @param int $camIndex Camera index
- * @param string $format Format: 'jpg', 'webp', or 'avif'
- * @return string Cache file path
- */
-function getCacheFile(string $airportId, int $camIndex, string $format): string {
-    $cacheDir = __DIR__ . '/../cache/webcams';
-    $base = $cacheDir . '/' . $airportId . '_' . $camIndex;
-    $symlinkPath = $base . '.' . $format;
-    
-    // Resolve symlink to actual timestamp-based file
-    // If symlink exists, readlink() returns the target
-    if (is_link($symlinkPath)) {
-        $target = readlink($symlinkPath);
-        if ($target !== false) {
-            // If relative path, resolve it
-            if ($target[0] !== '/') {
-                $target = dirname($symlinkPath) . '/' . $target;
-            }
-            return $target;
-        }
-    }
-    
-    // Symlink doesn't exist - check if we can find timestamp-based file from JPG symlink
-    // This handles cases where format generation created the file but symlink wasn't created yet
-    $jpgSymlinkPath = $base . '.jpg';
-    if (is_link($jpgSymlinkPath)) {
-        $jpgTarget = readlink($jpgSymlinkPath);
-        if ($jpgTarget !== false) {
-            // Extract timestamp from JPG filename (e.g., "1766944401.jpg")
-            $jpgBasename = basename($jpgTarget);
-            if (preg_match('/^(\d+)\.jpg$/', $jpgBasename, $matches)) {
-                $timestamp = $matches[1];
-                $timestampFile = $cacheDir . '/' . $timestamp . '.' . $format;
-                if (file_exists($timestampFile)) {
-                    return $timestampFile;
-                }
-            }
-        }
-    }
-    
-    // Fallback: return symlink path (for backward compatibility or if symlink doesn't exist)
-    return $symlinkPath;
-}
-
-/**
  * Build webcam URL with hash
  * 
  * @param string $airportId Airport ID
@@ -693,10 +651,10 @@ function areAllFormatsFromSameCycle(array $formatStatus, int $jpegMtime, int $re
  * @param int $camIndex Camera index
  * @return array Status array with keys: jpg, webp, avif (each with exists, size, mtime, valid)
  */
-function getFormatStatus(string $airportId, int $camIndex): array {
-    $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg');
-    $cacheWebp = getCacheFile($airportId, $camIndex, 'webp');
-    $cacheAvif = getCacheFile($airportId, $camIndex, 'avif');
+function getFormatStatus(string $airportId, int $camIndex, string $variant = 'primary'): array {
+    $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', $variant);
+    $cacheWebp = getCacheFile($airportId, $camIndex, 'webp', $variant);
+    $cacheAvif = getCacheFile($airportId, $camIndex, 'avif', $variant);
     
     // Single stat() call per file (returns size, mtime, etc.)
     $jpgStat = @stat($cacheJpg);
@@ -727,18 +685,21 @@ function getFormatStatus(string $airportId, int $camIndex): array {
     
     return [
         'jpg' => [
+            'file' => $cacheJpg,
             'exists' => $jpgStat !== false,
             'size' => $jpgStat ? $jpgStat['size'] : 0,
             'mtime' => $jpgStat ? $jpgStat['mtime'] : 0,
             'valid' => $jpgStat && $jpgStat['size'] > 0 && $isValidJpeg($cacheJpg)
         ],
         'webp' => [
+            'file' => $cacheWebp,
             'exists' => $webpStat !== false,
             'size' => $webpStat ? $webpStat['size'] : 0,
             'mtime' => $webpStat ? $webpStat['mtime'] : 0,
             'valid' => $webpValidResult
         ],
         'avif' => [
+            'file' => $cacheAvif,
             'exists' => $avifStat !== false,
             'size' => $avifStat ? $avifStat['size'] : 0,
             'mtime' => $avifStat ? $avifStat['mtime'] : 0,
@@ -831,14 +792,14 @@ function isFormatGenerating(string $format, array $formatStatus, int $jpegMtime,
  * @param int $camIndex Camera index
  * @return array|null Format data array with keys: file, type, priority, or null if none available
  */
-function findMostEfficientFormat(array $formatStatus, string $airportId, int $camIndex): ?array {
+function findMostEfficientFormat(array $formatStatus, string $airportId, int $camIndex, string $variant = 'primary'): ?array {
     $enabledFormats = getEnabledWebcamFormats();
     $candidates = [];
     
     // Priority order: AVIF (1) > WebP (2) > JPEG (3)
     if (in_array('avif', $enabledFormats) && $formatStatus['avif']['valid']) {
         $candidates[] = [
-            'file' => getCacheFile($airportId, $camIndex, 'avif'),
+            'file' => getCacheFile($airportId, $camIndex, 'avif', $variant),
             'type' => 'image/avif',
             'priority' => 1
         ];
@@ -846,7 +807,7 @@ function findMostEfficientFormat(array $formatStatus, string $airportId, int $ca
     
     if (in_array('webp', $enabledFormats) && $formatStatus['webp']['valid']) {
         $candidates[] = [
-            'file' => getCacheFile($airportId, $camIndex, 'webp'),
+            'file' => getCacheFile($airportId, $camIndex, 'webp', $variant),
             'type' => 'image/webp',
             'priority' => 2
         ];
@@ -854,7 +815,7 @@ function findMostEfficientFormat(array $formatStatus, string $airportId, int $ca
     
     if (in_array('jpg', $enabledFormats) && $formatStatus['jpg']['valid']) {
         $candidates[] = [
-            'file' => getCacheFile($airportId, $camIndex, 'jpg'),
+            'file' => getCacheFile($airportId, $camIndex, 'jpg', $variant),
             'type' => 'image/jpeg',
             'priority' => 3
         ];
@@ -1183,7 +1144,7 @@ if (!is_dir($cacheDir) || !is_readable($cacheDir)) {
 }
 
 // Get format status (optimized, single stat() per file)
-$formatStatus = getFormatStatus($airportId, $camIndex);
+$formatStatus = getFormatStatus($airportId, $camIndex, $requestedSize);
 $refreshInterval = getRefreshIntervalForCamera($airportId, $config, $cam);
 $enabledFormats = getEnabledWebcamFormats();
 
@@ -1195,19 +1156,19 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
         $requestedFormat = 'jpg';
     }
     
-    // Check if timestamp-based file exists
-    $cacheDir = __DIR__ . '/../cache/webcams';
-    $timestampFile = $cacheDir . '/' . $requestedTimestamp . '.' . $requestedFormat;
+    // Look up timestamp-based file in airport/camera-specific directory
+    $timestampFile = getTimestampCacheFilePath($airportId, $camIndex, $requestedTimestamp, $requestedFormat, $requestedSize);
     
     // Try requested format first, fall back to JPG
     if (!file_exists($timestampFile) && $requestedFormat !== 'jpg') {
-        $timestampFile = $cacheDir . '/' . $requestedTimestamp . '.jpg';
+        $timestampFile = getTimestampCacheFilePath($airportId, $camIndex, $requestedTimestamp, 'jpg', $requestedSize);
         $requestedFormat = 'jpg';
     }
     
     if (file_exists($timestampFile)) {
         // Validate file is within cache directory (security check)
         $realPath = realpath($timestampFile);
+        $cacheDir = getWebcamCacheDir($airportId, $camIndex);
         $realCacheDir = realpath($cacheDir);
         if ($realPath !== false && $realCacheDir !== false && strpos($realPath, $realCacheDir) === 0) {
             // Serve timestamp-based file with immutable cache headers
@@ -1230,7 +1191,7 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
     // Timestamp file doesn't exist - check if requested timestamp matches current image
     // If it matches, use symlink (format may still be generating)
     // If it doesn't match, fall through to normal serving (serves current image)
-    $currentCacheFile = getCacheFile($airportId, $camIndex, 'jpg');
+    $currentCacheFile = getCacheFile($airportId, $camIndex, 'jpg', $requestedSize);
     $currentTimestamp = getImageCaptureTime($currentCacheFile);
     if ($currentTimestamp === 0) {
         $currentTimestamp = $formatStatus['jpg']['mtime'] ?? 0;
@@ -1263,7 +1224,7 @@ if (!$formatStatus['jpg']['valid']) {
     exit;
 }
 
-$jpegMtime = getImageCaptureTime(getCacheFile($airportId, $camIndex, 'jpg'));
+$jpegMtime = getImageCaptureTime(getCacheFile($airportId, $camIndex, 'jpg', $requestedSize));
 $isCurrentCycle = isFromCurrentRefreshCycle($jpegMtime, $refreshInterval);// Determine if this is an explicit format request (fmt=webp or fmt=avif)
 $isExplicitFormatRequest = isset($_GET['fmt']) && 
                           in_array(strtolower(trim($_GET['fmt'])), ['webp', 'avif']);
@@ -1325,7 +1286,7 @@ if (!in_array($preferredFormat, $enabledFormats)) {
 // Check rate limiting (before format logic)
 // If rate limited, serve best available format immediately
 if ($isRateLimited) {
-    $mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex);
+    $mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex, $requestedSize);
     if ($mostEfficient) {
         // Get mtime from format status based on file extension
         $filePath = $mostEfficient['file'];
@@ -1353,7 +1314,7 @@ if ($isRateLimited) {
 // STALE STATE: All formats from same old cycle (webcam source failed)
 if (!$isCurrentCycle && areAllFormatsFromSameCycle($formatStatus, $jpegMtime, $refreshInterval)) {
     // Serve most efficient format available (AVIF > WebP > JPEG)
-    $mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex);
+    $mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex, $requestedSize);
     if ($mostEfficient) {
         // Get mtime from format status based on file extension
         $filePath = $mostEfficient['file'];
@@ -1380,12 +1341,12 @@ if (!$isCurrentCycle && areAllFormatsFromSameCycle($formatStatus, $jpegMtime, $r
     
     // If cache is stale, serve file without exiting so we can trigger background refresh
     if (!$isCurrentCycle) {
-        serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtimeFallback, $refreshInterval, false);
+        serve200Response(getCacheFile($airportId, $camIndex, 'jpg', $requestedSize), 'image/jpeg', $jpegMtimeFallback, $refreshInterval, false);
         triggerWebcamBackgroundRefresh($airportId, $camIndex, $cam, $cacheDir, $cacheJpg, $cacheWebp, $refreshInterval, $jpegMtimeFallback, $reqId);
         exit;
     }
     
-    serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtimeFallback, $refreshInterval);
+    serve200Response(getCacheFile($airportId, $camIndex, 'jpg', $requestedSize), 'image/jpeg', $jpegMtimeFallback, $refreshInterval);
     exit;
 }
 
@@ -1393,7 +1354,8 @@ if (!$isCurrentCycle && areAllFormatsFromSameCycle($formatStatus, $jpegMtime, $r
 if ($formatStatus[$preferredFormat]['valid']) {
     // Preferred format ready - serve it
     $mtime = $formatStatus[$preferredFormat]['mtime'];
-    $filePath = getCacheFile($airportId, $camIndex, $preferredFormat);
+    // Use file path from format status to ensure consistency
+    $filePath = $formatStatus[$preferredFormat]['file'];
     
     aviationwx_log('info', 'webcam serving preferred format', [
         'airport' => $airportId,
@@ -1426,7 +1388,7 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
         // Format not generating but should be - trigger generation now
         // This handles cases where format generation failed or wasn't triggered
         require_once __DIR__ . '/../lib/webcam-format-generation.php';
-        $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg');
+        $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', $requestedSize);
         
         aviationwx_log('info', 'webcam triggering on-demand format generation', [
             'airport' => $airportId,
@@ -1457,12 +1419,13 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
             }
             
             // Re-check format status after generation
-            $formatStatus = getFormatStatus($airportId, $camIndex);
+            $formatStatus = getFormatStatus($airportId, $camIndex, $requestedSize);
             
             // If format is now ready, serve it
             if ($formatStatus[$preferredFormat]['valid']) {
                 $mtime = $formatStatus[$preferredFormat]['mtime'];
-                $filePath = getCacheFile($airportId, $camIndex, $preferredFormat);
+                // Use file path from format status to ensure consistency
+                $filePath = $formatStatus[$preferredFormat]['file'];
                 
                 aviationwx_log('info', 'webcam format generation succeeded, serving', [
                     'airport' => $airportId,
@@ -1490,7 +1453,7 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
 }
 
 // Not explicit request OR old cycle OR generation failed → serve best available immediately
-$mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex);
+$mostEfficient = findMostEfficientFormat($formatStatus, $airportId, $camIndex, $requestedSize);
 if ($mostEfficient) {
     aviationwx_log('info', 'webcam serving fallback format', [
         'airport' => $airportId,
@@ -1526,12 +1489,12 @@ $jpegMtime = $formatStatus['jpg']['mtime'];
 
 // If cache is stale, serve file without exiting so we can trigger background refresh
 if (!$isCurrentCycle) {
-    serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtime, $refreshInterval, false);
+    serve200Response(getCacheFile($airportId, $camIndex, 'jpg', $requestedSize), 'image/jpeg', $jpegMtime, $refreshInterval, false);
     triggerWebcamBackgroundRefresh($airportId, $camIndex, $cam, $cacheDir, $cacheJpg, $cacheWebp, $refreshInterval, $jpegMtime, $reqId);
     exit;
 }
 
-serve200Response(getCacheFile($airportId, $camIndex, 'jpg'), 'image/jpeg', $jpegMtime, $refreshInterval);
+serve200Response(getCacheFile($airportId, $camIndex, 'jpg', $requestedSize), 'image/jpeg', $jpegMtime, $refreshInterval);
 exit;
 
 /**

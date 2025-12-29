@@ -218,20 +218,21 @@ cleanupFilesByPattern(
 );
 
 // Webcam images (7 days - should be updated continuously)
+// New directory structure: cache/webcams/{airportId}/{camIndex}/*.{format}
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*.jpg',
+    $cacheDir . '/webcams/*/*.jpg',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*.webp',
+    $cacheDir . '/webcams/*/*.webp',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam WebP images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*.avif',
+    $cacheDir . '/webcams/*/*.avif',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam AVIF images (backup)',
     $stats, $dryRun, $verbose
@@ -805,17 +806,18 @@ function cleanupOrphanedAirportFiles(
     }
     
     // Check webcam directories for orphaned airports
-    $webcamDirs = glob($cacheDir . '/webcams/*_*');
+    // New structure: cache/webcams/{airportId}/{camIndex}/
+    $webcamDirs = glob($cacheDir . '/webcams/*');
     if ($webcamDirs !== false) {
         foreach ($webcamDirs as $dir) {
             if (!is_dir($dir)) {
                 continue;
             }
             
-            // Extract airport ID from directory name (format: airportid_camindex or airportid_camindex_history)
+            // Extract airport ID from directory name (format: {airportId})
             $basename = basename($dir);
-            if (preg_match('/^([a-z0-9]+)_\d+(_history)?$/i', $basename, $matches)) {
-                $airportId = strtolower($matches[1]);
+            if (preg_match('/^[a-z0-9]+$/i', $basename)) {
+                $airportId = strtolower($basename);
                 
                 if (!in_array($airportId, array_map('strtolower', $configuredAirports))) {
                     // Get directory age from newest file

@@ -39,11 +39,12 @@ class OutageDetectionTest extends TestCase
     
     private function cleanupTestFiles(): void
     {
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $files = [
             $this->cacheDir . '/weather_' . $this->testAirportId . '.json',
             $this->cacheDir . '/outage_' . $this->testAirportId . '.json',
-            $this->cacheDir . '/webcams/' . $this->testAirportId . '_0.jpg',
-            $this->cacheDir . '/webcams/' . $this->testAirportId . '_0.webp'
+            getCacheFile($this->testAirportId, 0, 'jpg', 'primary'),
+            getCacheFile($this->testAirportId, 0, 'webp', 'primary')
         ];
         
         foreach ($files as $file) {
@@ -265,7 +266,12 @@ class OutageDetectionTest extends TestCase
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
         }
-        $webcamFile = $webcamDir . '/' . $this->testAirportId . '_0.jpg';
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamDir = dirname($webcamFile);
+        if (!is_dir($webcamDir)) {
+            mkdir($webcamDir, 0755, true);
+        }
         $webcamTimestamp = time() - (2 * 3600); // 2 hours ago
         touch($webcamFile, $webcamTimestamp);
         
@@ -339,7 +345,12 @@ class OutageDetectionTest extends TestCase
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
         }
-        $webcamFile = $webcamDir . '/' . $this->testAirportId . '_0.jpg';
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamDir = dirname($webcamFile);
+        if (!is_dir($webcamDir)) {
+            mkdir($webcamDir, 0755, true);
+        }
         $staleTimestamp = time() - (2 * 3600);
         touch($webcamFile, $staleTimestamp);
         

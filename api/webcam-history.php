@@ -47,6 +47,12 @@ $airportId = isset($_GET['id']) ? strtolower(trim($_GET['id'])) : '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 $timestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
 $requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
+$requestedSize = isset($_GET['size']) ? strtolower(trim($_GET['size'])) : 'primary';
+// Validate size parameter
+$validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
+if (!in_array($requestedSize, $validSizes)) {
+    $requestedSize = 'primary'; // Default to primary
+}
 
 // Validate airport ID
 if (empty($airportId)) {
@@ -84,14 +90,32 @@ if ($timestamp !== null) {
         $requestedFormat = 'jpg';
     }
     
-    // Try requested format first, fall back to JPG
-    $imageFile = $historyDir . '/' . $timestamp . '.' . $requestedFormat;
+    // Try requested variant and format first, fall back to primary, then JPG
+    $imageFile = $historyDir . '/' . $timestamp . '_' . $requestedSize . '.' . $requestedFormat;
     $servedFormat = $requestedFormat;
+    $servedSize = $requestedSize;
     
-    if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
-        // Fall back to JPG
-        $imageFile = $historyDir . '/' . $timestamp . '.jpg';
-        $servedFormat = 'jpg';
+    if (!file_exists($imageFile)) {
+        // Fall back to primary variant
+        if ($requestedSize !== 'primary') {
+            $imageFile = $historyDir . '/' . $timestamp . '_primary.' . $requestedFormat;
+            $servedSize = 'primary';
+        }
+        
+        // Fall back to JPG if format not available
+        if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
+            $imageFile = $historyDir . '/' . $timestamp . '_' . $servedSize . '.jpg';
+            $servedFormat = 'jpg';
+        }
+        
+        // Final fallback: old naming (no variant)
+        if (!file_exists($imageFile)) {
+            $imageFile = $historyDir . '/' . $timestamp . '.' . $requestedFormat;
+            if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
+                $imageFile = $historyDir . '/' . $timestamp . '.jpg';
+                $servedFormat = 'jpg';
+            }
+        }
     }
     
     if (!file_exists($imageFile)) {
@@ -153,7 +177,8 @@ foreach ($frames as $frame) {
     $frameList[] = [
         'timestamp' => $frame['timestamp'],
         'url' => $baseUrl . '&ts=' . $frame['timestamp'],
-        'formats' => $frame['formats'] ?? ['jpg']
+        'formats' => $frame['formats'] ?? ['jpg'],
+        'variants' => $frame['variants'] ?? ['primary'] // Available variants for this frame
     ];
 }
 

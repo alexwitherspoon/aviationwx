@@ -227,15 +227,17 @@ class WebcamApiHelperTest extends TestCase
      */
     public function testGetFormatStatus_AllFormatsExist(): void
     {
-        // Create test files in cache directory
-        $cacheDir = __DIR__ . '/../../cache/webcams';
+        // Create test files in cache directory using getCacheFile
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $jpgFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'jpg', 'primary');
+        $webpFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'webp', 'primary');
+        $avifFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'avif', 'primary');
+        
+        // Ensure directories exist
+        $cacheDir = dirname(dirname($jpgFile));
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
         }
-        
-        $jpgFile = $cacheDir . '/' . $this->testAirportId . '_' . $this->testCamIndex . '.jpg';
-        $webpFile = $cacheDir . '/' . $this->testAirportId . '_' . $this->testCamIndex . '.webp';
-        $avifFile = $cacheDir . '/' . $this->testAirportId . '_' . $this->testCamIndex . '.avif';
         
         // Create valid test files
         file_put_contents($jpgFile, "\xFF\xD8\xFF\xD9");
