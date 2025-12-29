@@ -349,6 +349,7 @@ function saveAllVariantsToHistory(string $airportId, int $camIndex, array $promo
  * 
  * Returns an array of frames sorted by timestamp (oldest first).
  * Each frame includes all available formats for that timestamp.
+ * Limits results to the configured max_frames count and time window.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
@@ -417,6 +418,37 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
     
     // Sort by timestamp ascending (oldest first for playback)
     usort($frames, fn($a, $b) => $a['timestamp'] - $b['timestamp']);
+    
+    // Get configuration limits
+    $maxFrames = getWebcamHistoryMaxFrames($airportId);
+    $config = loadConfig();
+    
+    // Get refresh interval for this airport (used to calculate time window)
+    $refreshInterval = getDefaultWebcamRefresh();
+    if ($config !== null && isset($config['airports'][$airportId])) {
+        $airport = $config['airports'][$airportId];
+        if (isset($airport['webcam_refresh_seconds'])) {
+            $refreshInterval = max(60, intval($airport['webcam_refresh_seconds']));
+        }
+    }
+    
+    // Calculate time cutoff: max_frames * refresh_interval seconds ago
+    // This ensures we don't show frames older than the configured retention window
+    $now = time();
+    $timeCutoff = $now - ($maxFrames * $refreshInterval);
+    
+    // Filter frames: must be within time window
+    $frames = array_filter($frames, function($frame) use ($timeCutoff) {
+        return $frame['timestamp'] >= $timeCutoff;
+    });
+    
+    // Re-index array after filtering
+    $frames = array_values($frames);
+    
+    // Limit to max_frames count (keep most recent N frames)
+    if (count($frames) > $maxFrames) {
+        $frames = array_slice($frames, -$maxFrames);
+    }
     
     return $frames;
 }
@@ -494,8 +526,9 @@ function cleanupHistoryFramesAllFormats(string $airportId, int $camIndex): void 
     $timestampGroups = [];
     foreach ($allFiles as $file) {
         $basename = basename($file);
-        // Parse timestamp from filename: "1703700000.jpg" or "1703700000.webp" etc
-        if (preg_match('/^(\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
+        // Parse timestamp from filename: supports both old format (timestamp.format) and new format (timestamp_variant.format)
+        // Examples: "1703700000.jpg", "1703700000_primary.jpg", "1703700000_primary.webp"
+        if (preg_match('/^(\d+)(?:_([^\.]+))?\.(jpg|webp|avif)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             if (!isset($timestampGroups[$timestamp])) {
                 $timestampGroups[$timestamp] = [];

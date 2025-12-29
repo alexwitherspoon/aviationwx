@@ -634,5 +634,189 @@ class WebcamHistoryTest extends TestCase
         $results = saveAllFormatsToHistory('nonexistent_no_history_' . time(), 0, ['jpg', 'webp']);
         $this->assertEmpty($results);
     }
+
+    /**
+     * Test cleanupHistoryFramesAllFormats() handles variant-based filenames
+     */
+    public function testCleanupHistoryFramesAllFormats_VariantBasedFilenames_RemovesOldFrames(): void
+    {
+        $testAirport = 'test_variant_cleanup_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        // Create frames with variant-based naming (new format)
+        $timestamps = [];
+        for ($i = 0; $i < 5; $i++) {
+            $ts = time() - (300 - $i * 60);
+            $timestamps[] = $ts;
+            // Create variant-based filenames (timestamp_variant.format)
+            @file_put_contents($historyDir . '/' . $ts . '_primary.jpg', 'test jpg');
+            @file_put_contents($historyDir . '/' . $ts . '_primary.webp', 'test webp');
+            @file_put_contents($historyDir . '/' . $ts . '_primary.avif', 'test avif');
+        }
+        
+        // Run cleanup
+        cleanupHistoryFramesAllFormats($testAirport, 0);
+        
+        // Verify cleanup worked - should keep only max_frames most recent
+        $maxFrames = getWebcamHistoryMaxFrames($testAirport);
+        $remainingFiles = glob($historyDir . '/*.*');
+        $remainingTimestamps = [];
+        
+        foreach ($remainingFiles as $file) {
+            $basename = basename($file);
+            if (preg_match('/^(\d+)(?:_([^\.]+))?\.(jpg|webp|avif)$/', $basename, $matches)) {
+                $ts = (int)$matches[1];
+                if (!in_array($ts, $remainingTimestamps)) {
+                    $remainingTimestamps[] = $ts;
+                }
+            }
+        }
+        
+        $this->assertLessThanOrEqual($maxFrames, count($remainingTimestamps), 
+            'Should not exceed max_frames timestamp groups');
+        
+        // Cleanup
+        foreach ($remainingFiles as $file) {
+            @unlink($file);
+        }
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test getHistoryFrames() limits results to max_frames count
+     */
+    public function testGetHistoryFrames_ExceedsMaxFrames_LimitsToMaxFrames(): void
+    {
+        $testAirport = 'test_limit_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        $maxFrames = getWebcamHistoryMaxFrames($testAirport);
+        $totalFrames = $maxFrames + 5; // Create more than max
+        
+        // Create frames with timestamps in the past (within time window)
+        $now = time();
+        $refreshInterval = 60; // Default refresh
+        for ($i = 0; $i < $totalFrames; $i++) {
+            $ts = $now - (($totalFrames - $i) * $refreshInterval);
+            @file_put_contents($historyDir . '/' . $ts . '.jpg', 'test');
+        }
+        
+        $frames = getHistoryFrames($testAirport, 0);
+        
+        // Should be limited to max_frames
+        $this->assertLessThanOrEqual($maxFrames, count($frames), 
+            'Should return at most max_frames frames');
+        
+        // Should return the most recent frames
+        if (count($frames) > 0) {
+            $oldestReturned = $frames[0]['timestamp'];
+            $newestReturned = $frames[count($frames) - 1]['timestamp'];
+            $this->assertGreaterThanOrEqual($oldestReturned, $now - ($maxFrames * $refreshInterval),
+                'Oldest frame should be within time window');
+            $this->assertLessThanOrEqual($newestReturned, $now,
+                'Newest frame should not be in the future');
+        }
+        
+        // Cleanup
+        $files = glob($historyDir . '/*.*');
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test getHistoryFrames() excludes frames older than time cutoff
+     */
+    public function testGetHistoryFrames_FramesOlderThanTimeWindow_ExcludesOldFrames(): void
+    {
+        $testAirport = 'test_timecutoff_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        $maxFrames = getWebcamHistoryMaxFrames($testAirport);
+        $refreshInterval = 60; // Default refresh interval
+        $timeWindow = $maxFrames * $refreshInterval;
+        
+        $now = time();
+        
+        // Create frames within time window
+        $ts1 = $now - ($timeWindow / 2);
+        @file_put_contents($historyDir . '/' . $ts1 . '.jpg', 'test');
+        
+        // Create frames outside time window (too old)
+        $ts2 = $now - ($timeWindow + 100);
+        @file_put_contents($historyDir . '/' . $ts2 . '.jpg', 'test');
+        
+        // Create recent frame
+        $ts3 = $now - 30;
+        @file_put_contents($historyDir . '/' . $ts3 . '.jpg', 'test');
+        
+        $frames = getHistoryFrames($testAirport, 0);
+        
+        // Should only include frames within time window
+        foreach ($frames as $frame) {
+            $this->assertGreaterThanOrEqual($frame['timestamp'], $now - $timeWindow,
+                'All frames should be within time window');
+            $this->assertNotEquals($ts2, $frame['timestamp'],
+                'Old frame outside time window should be excluded');
+        }
+        
+        // Should include frames within window
+        $timestamps = array_column($frames, 'timestamp');
+        $this->assertContains($ts1, $timestamps, 'Frame within window should be included');
+        $this->assertContains($ts3, $timestamps, 'Recent frame should be included');
+        
+        // Cleanup
+        $files = glob($historyDir . '/*.*');
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @rmdir($historyDir);
+    }
+
+    /**
+     * Test getHistoryFrames() handles both old and new filename formats
+     */
+    public function testGetHistoryFrames_MixedFilenameFormats_ReturnsAllFrames(): void
+    {
+        $testAirport = 'test_mixed_formats_' . time();
+        $historyDir = getWebcamHistoryDir($testAirport, 0);
+        
+        @mkdir($historyDir, 0755, true);
+        
+        $now = time();
+        
+        // Create frame with old format (timestamp.format)
+        $ts1 = $now - 60;
+        @file_put_contents($historyDir . '/' . $ts1 . '.jpg', 'test old format');
+        
+        // Create frame with new format (timestamp_variant.format)
+        $ts2 = $now - 30;
+        @file_put_contents($historyDir . '/' . $ts2 . '_primary.jpg', 'test new format');
+        @file_put_contents($historyDir . '/' . $ts2 . '_primary.webp', 'test new format webp');
+        
+        $frames = getHistoryFrames($testAirport, 0);
+        
+        // Should return both frames
+        $this->assertGreaterThanOrEqual(2, count($frames), 
+            'Should include frames from both naming formats');
+        
+        $timestamps = array_column($frames, 'timestamp');
+        $this->assertContains($ts1, $timestamps, 'Old format frame should be included');
+        $this->assertContains($ts2, $timestamps, 'New format frame should be included');
+        
+        // Cleanup
+        $files = glob($historyDir . '/*.*');
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @rmdir($historyDir);
+    }
 }
 
