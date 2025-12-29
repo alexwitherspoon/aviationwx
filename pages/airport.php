@@ -4206,6 +4206,7 @@ const WebcamPlayer = {
     refreshInterval: 60,  // Refresh interval in seconds (from API)
     refreshTimer: null,  // Interval timer for refreshing frames
     isRefreshing: false,  // Guard against overlapping refresh calls
+    savedScrollY: 0,  // Store scroll position when opening player (for mobile viewport fix)
 
     // Update URL to reflect current state (for sharing)
     updateURL() {
@@ -4397,10 +4398,12 @@ const WebcamPlayer = {
             this.hideControls();
         }
 
-        // Prevent body scroll
+        // Prevent body scroll - store scroll position first (fixes mobile viewport issue)
+        this.savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
         document.body.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
         document.body.style.width = '100%';
+        document.body.style.top = `-${this.savedScrollY}px`;
 
         // Update URL (don't push state, use replaceState for clean back behavior)
         this.updateURL();
@@ -4463,10 +4466,18 @@ const WebcamPlayer = {
         player.classList.remove('active');
         player.classList.remove('controls-hidden');
 
-        // Restore body scroll
+        // Restore body scroll and scroll position (fixes mobile viewport issue)
         document.body.style.overflow = '';
         document.body.style.position = '';
         document.body.style.width = '';
+        document.body.style.top = '';
+        
+        // Restore scroll position after a brief delay to ensure styles are applied
+        // Use requestAnimationFrame to ensure DOM has updated
+        requestAnimationFrame(() => {
+            window.scrollTo(0, this.savedScrollY);
+            this.savedScrollY = 0; // Reset for next time
+        });
 
         // Clean up
         this.preloadedImages = {};
