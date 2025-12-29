@@ -1167,10 +1167,23 @@ function checkAirportHealth(string $airportId, array $airport): array {
             // Check cache files using new structure (per-airport/per-camera directories)
             // Ensure webcam-format-generation.php is loaded (defensive check for CI/test environments)
             if (!function_exists('getCacheFile')) {
-                require_once __DIR__ . '/../lib/webcam-format-generation.php';
+                $webcamFormatFile = __DIR__ . '/../lib/webcam-format-generation.php';
+                if (file_exists($webcamFormatFile)) {
+                    require_once $webcamFormatFile;
+                }
+                // If still not available after require, use fallback path construction
+                if (!function_exists('getCacheFile')) {
+                    $cacheDir = __DIR__ . '/../cache/webcams/' . $airportId . '/' . $idx;
+                    $cacheJpg = $cacheDir . '/current.jpg';
+                    $cacheWebp = $cacheDir . '/current.webp';
+                } else {
+                    $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
+                    $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
+                }
+            } else {
+                $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
+                $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
             }
-            $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
-            $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
             
             // Check if cache files exist and are readable
             $cacheExists = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
