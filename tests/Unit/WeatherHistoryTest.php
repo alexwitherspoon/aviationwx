@@ -282,5 +282,68 @@ class WeatherHistoryTest extends TestCase
         $this->assertEquals(270, $obs['wind_direction']);
         $this->assertEquals('VFR', $obs['flight_category']);
     }
+    
+    /**
+     * Weather history should store source attribution
+     */
+    public function testAppendWeatherHistory_StoresSourceAttribution(): void
+    {
+        $weather = [
+            'obs_time_primary' => time(),
+            'temperature' => 15.5,
+            'wind_speed' => 8,
+            'visibility' => 10.0
+        ];
+        
+        $fieldSourceMap = [
+            'temperature' => 'tempest',
+            'wind_speed' => 'tempest',
+            'wind_direction' => 'tempest',
+            'visibility' => 'metar',
+            'ceiling' => 'metar'
+        ];
+        
+        appendWeatherHistory($this->testAirportId, $weather, $fieldSourceMap);
+        $history = getWeatherHistory($this->testAirportId);
+        
+        $obs = $history['observations'][0];
+        
+        // Should have field_sources map
+        $this->assertArrayHasKey('field_sources', $obs, 'Should have field_sources');
+        $this->assertIsArray($obs['field_sources'], 'field_sources should be an array');
+        $this->assertEquals('tempest', $obs['field_sources']['temperature'], 'Temperature should be from tempest');
+        $this->assertEquals('metar', $obs['field_sources']['visibility'], 'Visibility should be from metar');
+        
+        // Should have sources array
+        $this->assertArrayHasKey('sources', $obs, 'Should have sources array');
+        $this->assertIsArray($obs['sources'], 'sources should be an array');
+        $this->assertContains('tempest', $obs['sources'], 'Should include tempest in sources');
+        $this->assertContains('metar', $obs['sources'], 'Should include metar in sources');
+        $this->assertCount(2, $obs['sources'], 'Should have 2 unique sources');
+    }
+    
+    /**
+     * Weather history should handle missing source attribution gracefully
+     */
+    public function testAppendWeatherHistory_HandlesMissingSourceAttribution(): void
+    {
+        $weather = [
+            'obs_time_primary' => time(),
+            'temperature' => 15.5
+        ];
+        
+        // Append without source map
+        appendWeatherHistory($this->testAirportId, $weather);
+        $history = getWeatherHistory($this->testAirportId);
+        
+        $obs = $history['observations'][0];
+        
+        // Should still have the weather data
+        $this->assertEquals(15.5, $obs['temperature']);
+        
+        // Should not have source attribution if not provided
+        $this->assertArrayNotHasKey('field_sources', $obs, 'Should not have field_sources if not provided');
+        $this->assertArrayNotHasKey('sources', $obs, 'Should not have sources if not provided');
+    }
 }
 

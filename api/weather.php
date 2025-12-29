@@ -16,6 +16,7 @@ require_once __DIR__ . '/../lib/weather/calculator.php';
 require_once __DIR__ . '/../lib/weather/daily-tracking.php';
 require_once __DIR__ . '/../lib/weather/UnifiedFetcher.php';
 require_once __DIR__ . '/../lib/weather/cache-utils.php';
+require_once __DIR__ . '/../lib/weather/history.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
@@ -616,6 +617,9 @@ function generateMockWeatherData($airportId, $airport) {
     // Set recovery cycles (legacy field, keep for compatibility)
     $weatherData['primary_recovery_cycles'] = 0;
     
+    // Capture field source map for history before removing it
+    $historySourceMap = $fieldSourceMap;
+    
     // Remove internal fields before caching and sending response
     // Strip internal fields before API response
     unset($weatherData['_field_source_map']);
@@ -640,14 +644,18 @@ function generateMockWeatherData($airportId, $airport) {
             'cache_size' => $cacheWriteResult,
             'last_updated' => $weatherData['last_updated'] ?? null
         ], 'app');
+        
+        // Append to weather history with source attribution
+        appendWeatherHistory($airportId, $weatherData, $historySourceMap);
     }
 
     // If we served stale data, we're in background refresh mode
     // Don't send headers or output again (already sent to client)
+    // History was already appended above after cache write
     if ($hasStaleCache) {
-    // Just update the cache silently in background
-    aviationwx_log('info', 'background refresh completed successfully', ['airport' => $airportId], 'app');
-    exit;
+        // Just update the cache silently in background
+        aviationwx_log('info', 'background refresh completed successfully', ['airport' => $airportId], 'app');
+        exit;
     }
 
     // Build ETag for response based on content

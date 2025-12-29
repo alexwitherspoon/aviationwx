@@ -25,41 +25,41 @@ Weather data is fetched from multiple sources and combined to provide a complete
 
 ### Fetching Strategy
 
-The system uses two fetching strategies:
+The system uses **parallel fetching** for all configured sources:
 
-1. **Asynchronous Fetching** (Parallel Requests)
-   - Used when both primary source and METAR are needed
-   - Fetches both sources simultaneously using `curl_multi`
-   - Faster overall response time
-   - Used for: Tempest, Ambient Weather, PWSWeather.com, SynopticData.com sources
-   - **Backup Source**: Fetched in parallel when primary exceeds 4x refresh interval (warm-up period)
+- **Unified Fetcher**: Fetches all sources simultaneously using `curl_multi`
+- **Sources Fetched**: Primary source, additional sources (if configured), backup source (if configured), and METAR
+- **Circuit Breaker**: Each source has independent circuit breaker protection (skips sources in backoff)
+- **Parallel Execution**: All sources are fetched concurrently for maximum speed
+- **Source Priority**: Handled during aggregation, not during fetching
 
-2. **Synchronous Fetching** (Sequential Requests)
-   - Used when async is not applicable
-   - Fetches primary source first, then METAR if needed
-   - Used for: WeatherLink (requires custom headers), METAR-only sources
+**Source Configuration**:
+1. **Primary Source** (`weather_source`): Main weather data provider
+2. **Additional Sources** (`sources` array): Multiple additional sources can be configured
+3. **Backup Source** (`weather_source_backup`): Legacy backup source (treated as another source in aggregation)
+4. **METAR** (`metar_station`): Aviation weather supplement
 
 ### Backup Weather Source
 
 **Purpose**: Provides redundancy when primary weather source becomes stale or fails.
 
-**Activation Logic**:
-- **4x Threshold (Warm-up)**: Backup fetching begins when primary age >= 4x refresh interval
-- **5x Threshold (Activation)**: Backup data is ready when primary exceeds 5x refresh interval
-- **Continuous Fetching**: Backup continues fetching on every cycle while primary is stale
-- **Field-Level Fallback**: Each weather field uses the best available data from primary or backup
+**Current Implementation**:
+- Backup source is treated as another source in the unified aggregation system
+- Fetched in parallel with all other sources on every weather fetch
+- No special activation thresholds - always fetched if configured
+- Circuit breaker protection applies (backup can be skipped if in backoff)
 
-**Fetching Flow**:
-1. Check if backup should be fetched (4x threshold or missing fields)
-2. Fetch backup in parallel with primary and METAR (if applicable)
-3. Parse backup data using same adapters as primary
-4. Store backup timestamps (`last_updated_backup`, `obs_time_backup`)
-5. Merge with primary on field-by-field basis
+**Activation Detection**:
+- Backup is considered "active" when it's providing data for any fields
+- Determined by `backup_status` field in cache (set during aggregation)
+- Backup is active when: backup has fresh data AND primary is stale (exceeds warning threshold)
+- Used for display purposes (showing which sources are providing data)
 
-**Recovery Logic**:
-- Primary must be healthy (fresh and valid) for 5 consecutive cycles before switching back
-- Recovery counter resets to 0 on any staleness or invalid field
-- Prevents rapid switching between sources (hysteresis)
+**Field-Level Aggregation**:
+- Each weather field uses the best available data from all sources
+- Aggregator selects best value based on freshness, validity, and source priority
+- Backup data is used automatically when it's fresher or primary is unavailable
+- No manual switching logic - aggregation handles it automatically
 
 ### Primary Weather Sources
 
@@ -224,41 +224,50 @@ Both primary and METAR sources have independent circuit breakers:
 
 ### Data Aggregation (Unified Fetcher)
 
-The new unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` to combine data from all configured sources:
+The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` to combine data from all configured sources:
 
-1. **Source Priority** (highest to lowest):
+1. **Source Configuration**:
+   - All sources (primary, additional sources array, backup, METAR) are fetched in parallel
+   - Sources are identified by type (tempest, ambient, weatherlink, pwsweather, synopticdata, metar, backup)
+   - Circuit breaker protection applies to each source independently
+
+2. **Source Priority** (for field selection, highest to lowest):
    - Tempest
    - Ambient
    - WeatherLink
    - PWSWeather
    - SynopticData
    - METAR
+   - Backup (lowest priority, used when primary is unavailable)
 
-2. **Field-Specific Rules**:
+3. **Field-Specific Rules**:
    - **Wind Group** (speed, direction, gust): Must come from single source as a complete unit
    - **Visibility, Ceiling, Cloud Cover**: METAR is always preferred when available
    - **Other Fields**: Freshest valid data wins among all configured sources
 
-3. **Aggregation Process**:
-   1. Fetch all configured sources in parallel
+4. **Aggregation Process**:
+   1. Fetch all configured sources in parallel using `curl_multi`
    2. Parse each response into `WeatherSnapshot` with per-field observation times
    3. For each field, select best value based on:
       - Is field from preferred source type?
       - Is data within max acceptable age for this source?
       - Is observation time newer than other sources?
    4. Build aggregated result with `_field_source_map` and `_field_obs_time_map`
+   5. Validate all fields against climate bounds (catches unit errors, sensor malfunctions)
+   6. Fix pressure unit issues automatically (values > 100 inHg divided by 100)
 
-4. **Data Classes**:
+5. **Data Classes**:
    - `WeatherSnapshot`: Complete weather state from one source
    - `WeatherReading`: Single field value with source and observation time
    - `WindGroup`: Grouped wind fields ensuring consistency
 
-5. **Max Acceptable Ages** (per source type):
+6. **Max Acceptable Ages** (per source type, used for staleness checks):
    - Tempest: 300 seconds (5 minutes)
    - Ambient/WeatherLink: 300 seconds (5 minutes)
    - PWSWeather: 600 seconds (10 minutes)
    - SynopticData: 900 seconds (15 minutes)
    - METAR: 7200 seconds (2 hours)
+   - Backup: Uses same thresholds as its source type
 
 
 ---
@@ -592,6 +601,39 @@ When new data is fetched but some fields are missing:
 - Daily tracking (temp_high_today, peak_gust_today, etc.)
 - Timestamps (last_updated, obs_time_primary, etc.)
 - Flight category and CSS class
+
+### Weather History Storage
+
+**Purpose**: Maintains a rolling 24-hour history of weather observations for API access and analysis.
+
+**Location**: `cache/weather_history_{airport_id}.json`
+
+**Storage Format**: JSON file containing:
+- `airport_id`: Airport identifier
+- `updated_at`: Last update timestamp
+- `retention_hours`: Retention period (default: 24 hours)
+- `observations`: Array of historical observations
+
+**Observation Structure**: Each observation includes:
+- Weather field values (temperature, wind, pressure, etc.)
+- `obs_time`: Unix timestamp of observation
+- `obs_time_iso`: ISO 8601 formatted timestamp
+- `field_sources`: Map of field names to source identifiers (e.g., `{"temperature": "tempest", "visibility": "metar"}`)
+- `sources`: Array of all unique sources used in this observation (e.g., `["metar", "tempest"]`)
+
+**Source Attribution**:
+- Each observation records which source provided each field via `field_sources` map
+- The `sources` array lists all unique sources that contributed data to the observation
+- Source identifiers match those used in aggregation (e.g., `"tempest"`, `"metar"`, `"ambient"`, `"weatherlink"`, `"pwsweather"`, `"synopticdata"`, `"backup"`)
+- Only included when source information is available (backward compatible with older observations)
+
+**Append Logic**:
+- Observations are appended when weather cache is updated
+- Deduplication: Only stores observations with unique `obs_time` values
+- Automatic pruning: Removes observations older than retention period
+- Safety limit: Maximum 1,500 observations per airport
+
+**API Access**: Available via Public API endpoint `/v1/airports/{id}/weather/history` with optional time filtering and resolution downsampling (all, hourly, 15min).
 
 ### Refresh Intervals
 

@@ -75,7 +75,7 @@ function handleGetWeatherHistory(array $params, array $context): void
     
     // Format observations for response
     $observations = array_map(function ($obs) {
-        return [
+        $formatted = [
             'obs_time' => $obs['obs_time'] ?? null,
             'obs_time_iso' => $obs['obs_time_iso'] ?? null,
             'temperature' => $obs['temperature'] ?? null,
@@ -91,6 +91,16 @@ function handleGetWeatherHistory(array $params, array $context): void
             'cloud_cover' => $obs['cloud_cover'] ?? null,
             'flight_category' => $obs['flight_category'] ?? null,
         ];
+        
+        // Add source attribution if available
+        if (isset($obs['field_sources']) && is_array($obs['field_sources'])) {
+            $formatted['field_sources'] = $obs['field_sources'];
+        }
+        if (isset($obs['sources']) && is_array($obs['sources'])) {
+            $formatted['sources'] = $obs['sources'];
+        }
+        
+        return $formatted;
     }, $history['observations']);
     
     // Build metadata

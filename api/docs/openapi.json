@@ -766,6 +766,30 @@
             "format": "date-time",
             "description": "When data was last updated",
             "nullable": true
+          },
+          "field_sources": {
+            "type": "object",
+            "description": "Source attribution for each field (only present in historical observations)",
+            "additionalProperties": {
+              "type": "string",
+              "description": "Source identifier (e.g., 'tempest', 'metar', 'ambient')"
+            },
+            "nullable": true,
+            "example": {
+              "temperature": "tempest",
+              "wind_speed": "tempest",
+              "visibility": "metar"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "description": "All unique sources used in this observation (only present in historical observations)",
+            "items": {
+              "type": "string",
+              "description": "Source identifier"
+            },
+            "nullable": true,
+            "example": ["metar", "tempest"]
           }
         }
       },

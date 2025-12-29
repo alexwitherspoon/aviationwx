@@ -20,9 +20,10 @@ define('WEATHER_HISTORY_MAX_OBSERVATIONS', 1500);
  * 
  * @param string $airportId Airport ID
  * @param array $weather Weather data from cache
+ * @param array|null $fieldSourceMap Optional field-to-source mapping (if not in $weather)
  * @return bool True if observation was appended
  */
-function appendWeatherHistory(string $airportId, array $weather): bool
+function appendWeatherHistory(string $airportId, array $weather, ?array $fieldSourceMap = null): bool
 {
     if (!isPublicApiWeatherHistoryEnabled()) {
         return false;
@@ -34,7 +35,6 @@ function appendWeatherHistory(string $airportId, array $weather): bool
         return false;
     }
     
-    $historyFile = getWeatherHistoryFilePath($airportId);
     $history = loadWeatherHistory($airportId);
     
     // Check if this observation is new (different from last)
@@ -45,6 +45,13 @@ function appendWeatherHistory(string $airportId, array $weather): bool
             return false;
         }
     }
+    
+    // Get field source map (from parameter or weather data)
+    $sourceMap = $fieldSourceMap ?? $weather['_field_source_map'] ?? [];
+    
+    // Extract all unique sources used in this observation
+    $sourcesUsed = array_values(array_unique(array_filter($sourceMap)));
+    sort($sourcesUsed); // Sort for consistency
     
     // Create observation record with minimal but complete data
     $observation = [
@@ -65,6 +72,14 @@ function appendWeatherHistory(string $airportId, array $weather): bool
         'density_altitude' => $weather['density_altitude'] ?? null,
         'pressure_altitude' => $weather['pressure_altitude'] ?? null,
     ];
+    
+    // Add source attribution
+    if (!empty($sourceMap)) {
+        $observation['field_sources'] = $sourceMap;
+    }
+    if (!empty($sourcesUsed)) {
+        $observation['sources'] = $sourcesUsed;
+    }
     
     // Append observation
     $history['observations'][] = $observation;
