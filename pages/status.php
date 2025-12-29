@@ -90,6 +90,121 @@ function formatAbsoluteTime(int $timestamp): string {
 }
 
 /**
+ * Calculate memory averages from historical snapshots
+ * 
+ * Stores periodic memory snapshots and calculates rolling averages
+ * similar to CPU load averages (1min, 5min, 15min).
+ * 
+ * @param int $currentMemory Current memory usage in bytes
+ * @return array {
+ *   '1min' => float|null,
+ *   '5min' => float|null,
+ *   '15min' => float|null
+ * }
+ */
+function calculateMemoryAverages(int $currentMemory): array {
+    $cacheFile = __DIR__ . '/../cache/memory_history.json';
+    $cacheDir = dirname($cacheFile);
+    $now = time();
+    
+    // Ensure cache directory exists
+    if (!is_dir($cacheDir)) {
+        @mkdir($cacheDir, 0755, true);
+    }
+    
+    // Load existing snapshots
+    // Use @ to suppress errors for non-critical file operations
+    // We handle failures explicitly with fallback mechanisms below
+    $snapshots = [];
+    if (file_exists($cacheFile)) {
+        $content = @file_get_contents($cacheFile);
+        if ($content !== false) {
+            $data = @json_decode($content, true);
+            if (is_array($data) && isset($data['snapshots']) && is_array($data['snapshots'])) {
+                $snapshots = $data['snapshots'];
+            }
+        }
+    }
+    
+    // Add current snapshot (only if enough time has passed since last snapshot, or if empty)
+    // Sample every 5 seconds to avoid excessive writes
+    $shouldAddSnapshot = true;
+    if (!empty($snapshots)) {
+        $lastSnapshot = end($snapshots);
+        $lastTime = $lastSnapshot['timestamp'] ?? 0;
+        if (($now - $lastTime) < 5) {
+            $shouldAddSnapshot = false;
+        }
+    }
+    
+    if ($shouldAddSnapshot) {
+        $snapshots[] = [
+            'timestamp' => $now,
+            'memory_bytes' => $currentMemory
+        ];
+    }
+    
+    // Prune old snapshots (keep last 20 minutes worth, sampling every ~5 seconds = ~240 snapshots max)
+    $cutoffTime = $now - (20 * 60);
+    $snapshots = array_values(array_filter(
+        $snapshots,
+        function($snapshot) use ($cutoffTime) {
+            return isset($snapshot['timestamp']) && $snapshot['timestamp'] >= $cutoffTime;
+        }
+    ));
+    
+    // Save updated snapshots (only if we added a new one)
+    // Use file locking to prevent race conditions in concurrent environments
+    // Use @ to suppress errors for non-critical metrics (memory averages are informational)
+    if ($shouldAddSnapshot) {
+        $data = [
+            'updated_at' => $now,
+            'snapshots' => $snapshots
+        ];
+        @file_put_contents($cacheFile, json_encode($data), LOCK_EX);
+    }
+    
+    // Calculate averages for 1min, 5min, 15min periods
+    $averages = [
+        '1min' => null,
+        '5min' => null,
+        '15min' => null
+    ];
+    
+    $periods = [
+        '1min' => 60,
+        '5min' => 300,
+        '15min' => 900
+    ];
+    
+    foreach ($periods as $period => $seconds) {
+        $cutoff = $now - $seconds;
+        $periodSnapshots = array_filter(
+            $snapshots,
+            function($snapshot) use ($cutoff) {
+                return isset($snapshot['timestamp']) && $snapshot['timestamp'] >= $cutoff;
+            }
+        );
+        
+        if (!empty($periodSnapshots)) {
+            $sum = 0;
+            $count = 0;
+            foreach ($periodSnapshots as $snapshot) {
+                if (isset($snapshot['memory_bytes'])) {
+                    $sum += $snapshot['memory_bytes'];
+                    $count++;
+                }
+            }
+            if ($count > 0) {
+                $averages[$period] = round($sum / $count, 0);
+            }
+        }
+    }
+    
+    return $averages;
+}
+
+/**
  * Get node performance metrics from container perspective
  * 
  * @return array {
@@ -99,6 +214,11 @@ function formatAbsoluteTime(int $timestamp): string {
  *     '15min' => float|null
  *   },
  *   'memory_used_bytes' => int|null,
+ *   'memory_average' => array{
+ *     '1min' => float|null,
+ *     '5min' => float|null,
+ *     '15min' => float|null
+ *   },
  *   'storage_used_bytes' => int,
  *   'storage_breakdown' => array{
  *     'cache' => int,
@@ -115,6 +235,11 @@ function getNodePerformance(): array {
             '15min' => null
         ],
         'memory_used_bytes' => null,
+        'memory_average' => [
+            '1min' => null,
+            '5min' => null,
+            '15min' => null
+        ],
         'storage_used_bytes' => null
     ];
     
@@ -164,6 +289,12 @@ function getNodePerformance(): array {
     }
     
     $performance['memory_used_bytes'] = $memoryUsed;
+    
+    // Calculate memory averages from historical snapshots
+    if ($memoryUsed !== null) {
+        $memoryAverages = calculateMemoryAverages($memoryUsed);
+        $performance['memory_average'] = $memoryAverages;
+    }
     
     // Storage Usage - Calculate actual size of all data directories
     // Includes cache, uploads, and logs for complete picture
@@ -2060,7 +2191,28 @@ if (php_sapi_name() === 'cli') {
                     </div>
                     <div class="metric-inline">
                         <span class="metric-label-inline">Memory</span>
-                        <span class="metric-value-inline"><?php echo formatBytes($nodePerformance['memory_used_bytes']); ?></span>
+                        <span class="metric-value-inline">
+                            <?php 
+                            $memoryAvg = $nodePerformance['memory_average'] ?? null;
+                            if ($memoryAvg && ($memoryAvg['1min'] !== null || $memoryAvg['5min'] !== null || $memoryAvg['15min'] !== null)) {
+                                // Show averages if available
+                                $parts = [];
+                                if ($memoryAvg['1min'] !== null) {
+                                    $parts[] = formatBytes((int)$memoryAvg['1min']) . ' <span class="metric-sub">(1m)</span>';
+                                }
+                                if ($memoryAvg['5min'] !== null) {
+                                    $parts[] = formatBytes((int)$memoryAvg['5min']) . ' <span class="metric-sub">(5m)</span>';
+                                }
+                                if ($memoryAvg['15min'] !== null) {
+                                    $parts[] = formatBytes((int)$memoryAvg['15min']) . ' <span class="metric-sub">(15m)</span>';
+                                }
+                                echo implode(' ', $parts);
+                            } else {
+                                // Fallback to current value if averages not available
+                                echo formatBytes($nodePerformance['memory_used_bytes']);
+                            }
+                            ?>
+                        </span>
                     </div>
                     <div class="metric-inline" title="Cache: <?php echo formatBytes($nodePerformance['storage_breakdown']['cache']); ?>, Uploads: <?php echo formatBytes($nodePerformance['storage_breakdown']['uploads']); ?>, Logs: <?php echo formatBytes($nodePerformance['storage_breakdown']['logs']); ?>">
                         <span class="metric-label-inline">Storage</span>
