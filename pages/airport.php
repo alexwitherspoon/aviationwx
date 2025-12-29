@@ -4212,8 +4212,9 @@ const WebcamPlayer = {
     updateURL() {
         const params = new URLSearchParams(window.location.search);
         
-        if (this.active && this.camIndex !== null) {
-            params.set('cam', this.camIndex);
+        if (this.active && this.camIndex !== null && this.camIndex !== undefined) {
+            // Explicitly convert to string to handle camIndex=0 correctly
+            params.set('cam', String(this.camIndex));
             if (this.playing) {
                 params.set('autoplay', '1');
             } else {
@@ -4231,8 +4232,9 @@ const WebcamPlayer = {
         }
         
         // Build clean URL (convert autoplay=1 to just autoplay, etc.)
+        // Only apply to boolean parameters, not numeric ones like 'cam'
         let paramStr = params.toString();
-        paramStr = paramStr.replace(/=1(&|$)/g, '$1').replace(/&$/, '');
+        paramStr = paramStr.replace(/(autoplay|hideui)=1(&|$)/g, '$1$2').replace(/&$/, '');
         
         const newURL = paramStr 
             ? `${window.location.pathname}?${paramStr}`
@@ -4427,6 +4429,8 @@ const WebcamPlayer = {
                 this.preferredVariant = getPreferredVariant();
                 
                 this.initTimeline();
+                // Display the current frame immediately so navigation works right away
+                this.goToFrame(this.currentIndex);
                 this.preloadFrames();
                 document.querySelector('.webcam-player-controls').style.display = '';
                 
@@ -4824,11 +4828,13 @@ const WebcamPlayer = {
     },
 
     prev() {
+        if (this.frames.length === 0) return;
         this.stop();
         this.goToFrame(Math.max(0, this.currentIndex - 1));
     },
 
     next() {
+        if (this.frames.length === 0) return;
         this.stop();
         this.goToFrame(Math.min(this.frames.length - 1, this.currentIndex + 1));
     },

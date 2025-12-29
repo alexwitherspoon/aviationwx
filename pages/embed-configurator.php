@@ -934,7 +934,8 @@ $baseUrl = getBaseUrl();
             params.set('style', state.style);
             params.set('theme', state.theme);
             if (state.style === 'webcam' || state.style === 'full') {
-                params.set('webcam', state.webcam);
+                // Explicitly convert to string to handle webcam=0 correctly
+                params.set('webcam', String(state.webcam));
             }
             if (state.style === 'dual') {
                 params.set('cams', state.cams.slice(0, 2).join(','));
@@ -942,8 +943,9 @@ $baseUrl = getBaseUrl();
             if (state.style === 'multi') {
                 params.set('cams', state.cams.slice(0, 4).join(','));
             }
-            params.set('width', state.width);
-            params.set('height', state.height);
+            // Explicitly convert to string to handle width=0 or height=0 correctly
+            params.set('width', String(state.width));
+            params.set('height', String(state.height));
             params.set('target', state.target);
             if (state.tempUnit !== 'F') params.set('temp', state.tempUnit);
             if (state.distUnit !== 'ft') params.set('dist', state.distUnit);
