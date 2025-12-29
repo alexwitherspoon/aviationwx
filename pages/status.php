@@ -10,6 +10,7 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/process-utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
+require_once __DIR__ . '/../lib/webcam-format-generation.php';
 
 // Prevent caching (only in web context, not CLI)
 if (php_sapi_name() !== 'cli' && !headers_sent()) {
@@ -434,6 +435,233 @@ function checkSystemHealth(): array {
             'config_airports_count' => $schedulerStatus['config_airports_count'],
             'config_last_reload' => $schedulerStatus['config_last_reload']
         ]
+    ];
+    
+    // Check webcam variant generation health
+    $variantHealth = checkVariantGenerationHealth();
+    $health['components']['variant_generation'] = $variantHealth;
+    
+    return $health;
+}
+
+/**
+ * Check webcam variant generation health
+ * 
+ * Analyzes recent logs and cache state to determine variant generation system health.
+ * 
+ * @return array {
+ *   'name' => string,
+ *   'status' => 'operational'|'degraded'|'down',
+ *   'message' => string,
+ *   'lastChanged' => int,
+ *   'metrics' => array
+ * }
+ */
+function checkVariantGenerationHealth(): array {
+    $health = [
+        'name' => 'Webcam Variant Generation',
+        'status' => 'operational',
+        'message' => 'Variant generation operational',
+        'lastChanged' => 0,
+        'metrics' => []
+    ];
+    
+    // Parse recent logs for variant generation activity
+    $logFile = AVIATIONWX_APP_LOG_FILE;
+    if (!file_exists($logFile) || !is_readable($logFile)) {
+        $health['status'] = 'degraded';
+        $health['message'] = 'Log file not available';
+        return $health;
+    }
+    
+    // Read last 1000 lines of log file with proper error handling
+    $lines = [];
+    $maxLines = 1000;
+    $maxFileSize = 50 * 1024 * 1024; // 50MB limit for safety
+    
+    // Check file size first to avoid reading huge files
+    $fileSize = @filesize($logFile);
+    if ($fileSize === false || $fileSize > $maxFileSize) {
+        // File too large or unreadable - use exec tail for efficiency
+        if (function_exists('exec')) {
+            @exec('tail -n ' . $maxLines . ' ' . escapeshellarg($logFile) . ' 2>/dev/null', $lines, $exitCode);
+            if ($exitCode !== 0 || empty($lines)) {
+                // Fallback: try reading last portion of file
+                $handle = @fopen($logFile, 'r');
+                if ($handle !== false) {
+                    // Seek to end minus reasonable buffer
+                    $seekPos = max(0, $fileSize - (500 * 1024)); // Last 500KB
+                    @fseek($handle, $seekPos);
+                    $content = @stream_get_contents($handle);
+                    @fclose($handle);
+                    if ($content !== false) {
+                        $allLines = explode("\n", $content);
+                        $lines = array_slice($allLines, -$maxLines);
+                    }
+                }
+            }
+        } else {
+            // No exec available - read last portion safely
+            $handle = @fopen($logFile, 'r');
+            if ($handle !== false) {
+                $seekPos = max(0, $fileSize - (500 * 1024)); // Last 500KB
+                @fseek($handle, $seekPos);
+                $content = @stream_get_contents($handle);
+                @fclose($handle);
+                if ($content !== false) {
+                    $allLines = explode("\n", $content);
+                    $lines = array_slice($allLines, -$maxLines);
+                }
+            }
+        }
+    } else {
+        // File is reasonable size - use exec tail if available, otherwise read file
+        if (function_exists('exec')) {
+            @exec('tail -n ' . $maxLines . ' ' . escapeshellarg($logFile) . ' 2>/dev/null', $lines);
+        } else {
+            $content = @file_get_contents($logFile);
+            if ($content !== false) {
+                $allLines = explode("\n", $content);
+                $lines = array_slice($allLines, -$maxLines);
+            }
+        }
+    }
+    
+    $now = time();
+    $oneHourAgo = $now - 3600;
+    $recentGenerations = [];
+    $recentPromotions = [];
+    $recentFailures = [];
+    $totalAttempted = 0;
+    $totalSuccessful = 0;
+    $totalPromoted = 0;
+    $totalPromotionAttempts = 0;
+    
+    // Parse log lines for variant generation events
+    foreach ($lines as $line) {
+        if (empty(trim($line))) continue;
+        
+        // Try to parse JSON log entries
+        $json = @json_decode($line, true);
+        if (!is_array($json) || !isset($json['message'])) continue;
+        
+        $message = $json['message'] ?? '';
+        $context = $json['context'] ?? [];
+        $timestamp = isset($json['ts']) ? @strtotime($json['ts']) : 0;
+        
+        if ($timestamp < $oneHourAgo || $timestamp === false) continue;
+        
+        // Track variant generation completions
+        if ($message === 'webcam variant generation completed') {
+            $successCount = $context['success_count'] ?? 0;
+            $totalCount = $context['total_count'] ?? 0;
+            $airport = $context['airport'] ?? 'unknown';
+            $cam = $context['cam'] ?? 'unknown';
+            
+            $totalAttempted += $totalCount;
+            $totalSuccessful += $successCount;
+            
+            $recentGenerations[] = [
+                'timestamp' => $timestamp,
+                'airport' => $airport,
+                'cam' => $cam,
+                'success_count' => $successCount,
+                'total_count' => $totalCount,
+                'success_rate' => $totalCount > 0 ? ($successCount / $totalCount) : 0
+            ];
+        }
+        
+        // Track promotion results
+        if ($message === 'webcam variants promoted successfully' || 
+            $message === 'webcam partial variant promotion' ||
+            $message === 'webcam variant promotion failed completely') {
+            
+            $promotedCount = $context['promoted_count'] ?? $context['total_formats'] ?? 0;
+            $attemptedCount = $context['attempted_count'] ?? 0;
+            $airport = $context['airport'] ?? 'unknown';
+            $cam = $context['cam'] ?? 'unknown';
+            
+            $totalPromotionAttempts += $attemptedCount;
+            $totalPromoted += $promotedCount;
+            
+            $recentPromotions[] = [
+                'timestamp' => $timestamp,
+                'airport' => $airport,
+                'cam' => $cam,
+                'promoted_count' => $promotedCount,
+                'attempted_count' => $attemptedCount,
+                'status' => $message
+            ];
+            
+            if ($message === 'webcam variant promotion failed completely') {
+                $recentFailures[] = [
+                    'timestamp' => $timestamp,
+                    'airport' => $airport,
+                    'cam' => $cam,
+                    'attempted_count' => $attemptedCount
+                ];
+            }
+        }
+    }
+    
+    // Calculate metrics
+    $generationSuccessRate = $totalAttempted > 0 ? ($totalSuccessful / $totalAttempted) : 1.0;
+    $promotionSuccessRate = $totalPromotionAttempts > 0 ? ($totalPromoted / $totalPromotionAttempts) : 1.0;
+    
+    // Find most recent activity
+    $lastGeneration = null;
+    $lastPromotion = null;
+    if (!empty($recentGenerations)) {
+        usort($recentGenerations, function($a, $b) { return $b['timestamp'] - $a['timestamp']; });
+        $lastGeneration = $recentGenerations[0];
+    }
+    if (!empty($recentPromotions)) {
+        usort($recentPromotions, function($a, $b) { return $b['timestamp'] - $a['timestamp']; });
+        $lastPromotion = $recentPromotions[0];
+    }
+    
+    $mostRecentActivity = max(
+        $lastGeneration['timestamp'] ?? 0,
+        $lastPromotion['timestamp'] ?? 0
+    );
+    
+    // Determine status
+    $status = 'operational';
+    $message = 'Variant generation operational';
+    
+    if ($totalAttempted === 0 && $totalPromotionAttempts === 0) {
+        // No recent activity - check if this is expected (system just started, etc.)
+        $status = 'degraded';
+        $message = 'No recent variant generation activity';
+    } elseif ($generationSuccessRate < 0.5) {
+        $status = 'down';
+        $message = sprintf('Low generation success rate: %.1f%%', $generationSuccessRate * 100);
+    } elseif ($promotionSuccessRate < 0.5) {
+        $status = 'down';
+        $message = sprintf('Low promotion success rate: %.1f%%', $promotionSuccessRate * 100);
+    } elseif ($generationSuccessRate < 0.8 || $promotionSuccessRate < 0.8) {
+        $status = 'degraded';
+        $message = sprintf('Degraded: %.1f%% generation, %.1f%% promotion', 
+            $generationSuccessRate * 100, $promotionSuccessRate * 100);
+    } elseif (!empty($recentFailures)) {
+        $status = 'degraded';
+        $message = sprintf('Operational with %d recent promotion failure(s)', count($recentFailures));
+    } else {
+        $message = sprintf('Healthy: %.1f%% generation, %.1f%% promotion', 
+            $generationSuccessRate * 100, $promotionSuccessRate * 100);
+    }
+    
+    $health['status'] = $status;
+    $health['message'] = $message;
+    $health['lastChanged'] = $mostRecentActivity;
+    $health['metrics'] = [
+        'generation_success_rate' => round($generationSuccessRate * 100, 1),
+        'promotion_success_rate' => round($promotionSuccessRate * 100, 1),
+        'total_generations_last_hour' => count($recentGenerations),
+        'total_promotions_last_hour' => count($recentPromotions),
+        'total_failures_last_hour' => count($recentFailures),
+        'last_generation' => $lastGeneration,
+        'last_promotion' => $lastPromotion
     ];
     
     return $health;
@@ -936,18 +1164,42 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $cameraType = $isPush ? 'Push' : 'Pull';
             $camName = $cam['name'] ?? "Webcam {$idx}";
             
-            // Use resolved cache directory path for file checks
-            $cacheJpg = $webcamCacheDirResolved . '/' . $airportId . '_' . $idx . '.jpg';
-            $cacheWebp = $webcamCacheDirResolved . '/' . $airportId . '_' . $idx . '.webp';
+            // Check cache files using new structure (per-airport/per-camera directories)
+            // webcam-format-generation.php is already included at top of file
+            $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
+            $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
             
             // Check if cache files exist and are readable
-            // Use same path resolution as webcam API (normalize path to handle symlinks)
-            // Use @ to suppress errors for non-critical file operations
-            // We handle failures explicitly with fallback mechanisms below
-            $cacheJpgResolved = @realpath($cacheJpg) ?: $cacheJpg;
-            $cacheWebpResolved = @realpath($cacheWebp) ?: $cacheWebp;
-            $cacheExists = (@file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved)) 
-                        || (@file_exists($cacheWebpResolved) && @is_readable($cacheWebpResolved));
+            $cacheExists = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
+                        || (@file_exists($cacheWebp) && @is_readable($cacheWebp));
+            
+            // Check variant availability
+            $variants = ['thumb', 'small', 'medium', 'large', 'primary'];
+            $formats = ['jpg', 'webp'];
+            $variantAvailability = [];
+            $totalVariants = count($variants) * count($formats);
+            $availableVariants = 0;
+            
+            foreach ($variants as $variant) {
+                foreach ($formats as $format) {
+                    // Get most recent file for this variant/format
+                    $cacheDir = getWebcamCacheDir($airportId, $idx);
+                    // Check directory exists before glob (getWebcamCacheDir creates it, but verify)
+                    if (is_dir($cacheDir) && is_readable($cacheDir)) {
+                        $pattern = $cacheDir . '/*_' . $variant . '.' . $format;
+                        $files = @glob($pattern);
+                        $available = !empty($files);
+                        if ($available) {
+                            $availableVariants++;
+                        }
+                        $variantAvailability[$variant . '_' . $format] = $available;
+                    } else {
+                        $variantAvailability[$variant . '_' . $format] = false;
+                    }
+                }
+            }
+            
+            $variantCoverage = $totalVariants > 0 ? ($availableVariants / $totalVariants) : 0;
             
             // Get refresh seconds (min 60)
             $webcamRefresh = isset($cam['refresh_seconds']) 
@@ -962,11 +1214,9 @@ function checkAirportHealth(string $airportId, array $airport): array {
             
             if ($cacheExists) {
                 // Determine which file to use (prefer JPG, fallback to WEBP)
-                // Use @ to suppress errors for non-critical file operations
-                // We handle failures explicitly with fallback mechanisms below
-                $cacheFile = (@file_exists($cacheJpgResolved) && @is_readable($cacheJpgResolved)) 
-                           ? $cacheJpgResolved 
-                           : $cacheWebpResolved;
+                $cacheFile = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
+                           ? $cacheJpg 
+                           : $cacheWebp;
                 $cacheAge = time() - @filemtime($cacheFile);
                 $camLastChanged = @filemtime($cacheFile) ?: 0;
                 
@@ -1026,12 +1276,34 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 }
             }
             
+            // Build detailed message with variant coverage
+            $detailedMessage = $camMessage;
+            if ($cacheExists && isset($variantCoverage)) {
+                $coveragePercent = round($variantCoverage * 100);
+                if ($variantCoverage >= 0.9) {
+                    $detailedMessage .= " • {$coveragePercent}% variants available";
+                } elseif ($variantCoverage >= 0.5) {
+                    $detailedMessage .= " • {$coveragePercent}% variants (degraded)";
+                    if ($camStatus === 'operational') {
+                        $camStatus = 'degraded';
+                    }
+                } else {
+                    $detailedMessage .= " • {$coveragePercent}% variants (low coverage)";
+                    if ($camStatus === 'operational') {
+                        $camStatus = 'degraded';
+                    }
+                }
+            }
+            
             // Add per-camera component
             $webcamComponents[] = [
                 'name' => "{$camName} ({$cameraType})",
                 'status' => $camStatus,
-                'message' => $camMessage,
-                'lastChanged' => $camLastChanged
+                'message' => $detailedMessage,
+                'lastChanged' => $camLastChanged,
+                'variant_coverage' => isset($variantCoverage) ? round($variantCoverage * 100, 1) : null,
+                'available_variants' => isset($availableVariants) ? $availableVariants : null,
+                'total_variants' => isset($totalVariants) ? $totalVariants : null
             ];
             
             // Track issues for aggregate message
@@ -1799,6 +2071,19 @@ if (php_sapi_name() === 'cli') {
                         <div class="component-info">
                             <div class="component-name"><?php echo htmlspecialchars($component['name']); ?></div>
                             <div class="component-message"><?php echo htmlspecialchars($component['message']); ?></div>
+                            <?php if (isset($component['metrics']) && is_array($component['metrics']) && !empty($component['metrics'])): ?>
+                            <div class="component-metrics" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">
+                                <?php if (isset($component['metrics']['generation_success_rate'])): ?>
+                                Generation: <?php echo htmlspecialchars($component['metrics']['generation_success_rate']); ?>% success
+                                <?php endif; ?>
+                                <?php if (isset($component['metrics']['promotion_success_rate'])): ?>
+                                · Promotion: <?php echo htmlspecialchars($component['metrics']['promotion_success_rate']); ?>% success
+                                <?php endif; ?>
+                                <?php if (isset($component['metrics']['total_generations_last_hour'])): ?>
+                                · <?php echo htmlspecialchars($component['metrics']['total_generations_last_hour']); ?> generations (1h)
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
                             <?php if (isset($component['lastChanged']) && $component['lastChanged'] > 0): ?>
                             <div class="component-timestamp">
                                 Last changed: <?php echo formatRelativeTime($component['lastChanged']); ?>

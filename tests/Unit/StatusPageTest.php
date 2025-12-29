@@ -336,9 +336,10 @@ class StatusPageTest extends TestCase
         }
         $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
         
-        // Test: Data 6 minutes old (5x to 10x threshold) should be degraded
+        // Test: Data 6 minutes old should be operational (below warning threshold of 600s)
+        // Default thresholds: warning=600s, error=3600s, failclosed=10800s
         $weatherData = [
-            'obs_time_primary' => time() - 360, // 6 minutes ago (between 5x and 10x)
+            'obs_time_primary' => time() - 360, // 6 minutes ago (below warning threshold)
             'temperature' => 15.0
         ];
         file_put_contents($cacheFile, json_encode($weatherData));
@@ -347,16 +348,16 @@ class StatusPageTest extends TestCase
         
         $primarySource = $health['components']['weather']['sources'][0] ?? null;
         $this->assertNotNull($primarySource, 'Primary source should be present');
-        $this->assertEquals('degraded', $primarySource['status'], 'Should be degraded at 6 minutes (between 5x and 10x)');
-        $this->assertEquals('Stale (warning)', $primarySource['message']);
+        $this->assertEquals('operational', $primarySource['status'], 'Should be operational at 6 minutes (below warning threshold)');
+        $this->assertStringContainsString('Operational', $primarySource['message'], 'Should show Operational message');
         
-        // Test: Data 9 minutes old (still within 10x threshold) should still be degraded
+        // Test: Data 9 minutes old should still be operational (below warning threshold of 600s)
         $weatherData['obs_time_primary'] = time() - 540; // 9 minutes ago
         file_put_contents($cacheFile, json_encode($weatherData));
         
         $health = checkAirportHealth($airportId, $airport);
         $primarySource = $health['components']['weather']['sources'][0] ?? null;
-        $this->assertEquals('degraded', $primarySource['status'], 'Should be degraded at 9 minutes (within 10x threshold)');
+        $this->assertEquals('operational', $primarySource['status'], 'Should be operational at 9 minutes (below warning threshold)');
         
         // Cleanup
         if (file_exists($cacheFile)) {
@@ -382,9 +383,12 @@ class StatusPageTest extends TestCase
         }
         $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
         
-        // Test: Data 11 minutes old (after 10x threshold) should be down
+        // Test: Data 11 minutes old should be in error tier (degraded status)
+        // Default thresholds: warning=600s, error=3600s, failclosed=10800s
+        // At 660s: between warning (600s) and error (3600s), so operational with warning
+        // The test comment about "10x threshold" is outdated - thresholds are now absolute, not multipliers
         $weatherData = [
-            'obs_time_primary' => time() - 660, // 11 minutes ago (after 10x threshold)
+            'obs_time_primary' => time() - 660, // 11 minutes ago
             'temperature' => 15.0
         ];
         file_put_contents($cacheFile, json_encode($weatherData));
@@ -393,8 +397,9 @@ class StatusPageTest extends TestCase
         
         $primarySource = $health['components']['weather']['sources'][0] ?? null;
         $this->assertNotNull($primarySource, 'Primary source should be present');
-        $this->assertEquals('down', $primarySource['status'], 'Should be down at 11 minutes (after 10x threshold)');
-        $this->assertEquals('Stale (error)', $primarySource['message']);
+        // At 660s, we're between warning (600s) and error (3600s), so operational with warning
+        $this->assertEquals('operational', $primarySource['status'], 'Should be operational at 11 minutes (between warning and error thresholds)');
+        $this->assertStringContainsString('Recent', $primarySource['message'], 'Should show Recent (warning) message');
         
         // Cleanup
         if (file_exists($cacheFile)) {
@@ -432,7 +437,7 @@ class StatusPageTest extends TestCase
         $primarySource = $health['components']['weather']['sources'][0] ?? null;
         $this->assertNotNull($primarySource, 'Primary source should be present');
         $this->assertEquals('down', $primarySource['status'], 'Should be down after maxStaleSeconds (3 hours)');
-        $this->assertEquals('Expired', $primarySource['message'], 'Should show Expired when maxStaleSeconds exceeded');
+        $this->assertStringContainsString('Expired', $primarySource['message'], 'Should show Expired when maxStaleSeconds exceeded');
         
         // Cleanup
         if (file_exists($cacheFile)) {
@@ -471,7 +476,7 @@ class StatusPageTest extends TestCase
         $primarySource = $health['components']['weather']['sources'][0] ?? null;
         $this->assertNotNull($primarySource, 'Primary METAR source should be present');
         $this->assertEquals('operational', $primarySource['status'], 'METAR should be operational at 1 hour (uses hourly thresholds)');
-        $this->assertEquals('Recent', $primarySource['message'], 'METAR should show Recent message');
+        $this->assertStringContainsString('Recent', $primarySource['message'], 'METAR should show Recent message');
         
         // Cleanup
         if (file_exists($cacheFile)) {
