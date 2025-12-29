@@ -1065,6 +1065,103 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             </div>
         </section>
 
+        <!-- Build weather sources for attribution -->
+        <?php
+        // Collect unique weather data sources by name (dynamically based on active sources)
+        $weatherSources = [];
+        
+        // Load weather cache to check source status
+        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+        $weatherData = null;
+        if (file_exists($weatherCacheFile)) {
+            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
+        }
+        
+        // Check if primary is healthy (not stale, not failed)
+        $primaryHealthy = false;
+        if (isset($airport['weather_source']) && !empty($airport['weather_source']) && isset($airport['weather_source']['type'])) {
+            require_once __DIR__ . '/../lib/constants.php';
+            require_once __DIR__ . '/../lib/circuit-breaker.php';
+            
+            // Use warning threshold to determine if source is healthy
+            $staleThreshold = getStaleWarningSeconds($airport);
+            
+            // Check if primary is fresh and not in circuit breaker
+            $primaryCircuit = checkWeatherCircuitBreaker($airportId, 'primary');
+            $primaryAge = PHP_INT_MAX;
+            if (is_array($weatherData) && isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
+                $primaryAge = time() - $weatherData['last_updated_primary'];
+            }
+            
+            $primaryHealthy = !$primaryCircuit['skip'] && $primaryAge < $staleThreshold;
+            
+            // Add primary source if healthy
+            if ($primaryHealthy) {
+                $sourceInfo = getWeatherSourceInfo($airport['weather_source']['type']);
+                if ($sourceInfo !== null) {
+                    $weatherSources[] = $sourceInfo;
+                }
+            }
+        }
+        
+        // Check if backup is active (providing data - backup has fresh data and primary is stale)
+        $backupActive = false;
+        if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup']) && isset($airport['weather_source_backup']['type'])) {
+            if (is_array($weatherData)) {
+                // Use backup_status from cache if available (more accurate than calculating)
+                if (isset($weatherData['backup_status'])) {
+                    $backupActive = ($weatherData['backup_status'] === 'active');
+                } else {
+                    // Fallback: calculate based on timestamps (for backward compatibility)
+                    // Use warning threshold to determine freshness
+                    $staleThreshold = getStaleWarningSeconds($airport);
+                    
+                    $backupAge = isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0
+                        ? time() - $weatherData['last_updated_backup']
+                        : PHP_INT_MAX;
+                    $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
+                        ? time() - $weatherData['last_updated_primary']
+                        : PHP_INT_MAX;
+                    
+                    // Backup is active if it has fresh data and primary is stale
+                    $backupActive = ($backupAge < $staleThreshold) && ($primaryAge >= $staleThreshold);
+                }
+            }
+            
+            // Add backup source if active
+            if ($backupActive) {
+                $backupSourceInfo = getWeatherSourceInfo($airport['weather_source_backup']['type']);
+                if ($backupSourceInfo !== null) {
+                    $weatherSources[] = $backupSourceInfo;
+                }
+            }
+        }
+        
+        // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
+        // Only add if not already using METAR as primary source AND metar_station is configured
+        $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
+        $metarInfo = getWeatherSourceInfo('metar');
+        $metarDisplayName = $metarInfo !== null ? $metarInfo['name'] : 'Aviation Weather';
+        $hasAviationWeather = false;
+        foreach ($weatherSources as $source) {
+            if ($source['name'] === $metarDisplayName) {
+                $hasAviationWeather = true;
+                break;
+            }
+        }
+        
+        if (!$hasAviationWeather && 
+            in_array($sourceType, ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'synopticdata'])) {
+            // Show METAR source if metar_station is configured
+            if (isMetarEnabled($airport)) {
+                $metarInfo = getWeatherSourceInfo('metar');
+                if ($metarInfo !== null) {
+                    $weatherSources[] = $metarInfo;
+                }
+            }
+        }
+        ?>
+
         <!-- Runway Wind Visual -->
         <section class="wind-visual-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -1084,6 +1181,19 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     <!-- Wind details will be populated by JavaScript -->
                 </div>
             </div>
+            <?php if (!empty($weatherSources)): ?>
+            <div class="data-sources-content" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
+                <div class="data-sources-list" style="text-align: center; font-size: 0.85rem; color: #555;">
+                    <span class="data-sources-label">Weather data at this airport from </span>
+                    <?php foreach ($weatherSources as $index => $source): ?>
+                    <a href="<?= htmlspecialchars($source['url']) ?>" target="_blank" rel="noopener" class="data-source-link">
+                        <?= htmlspecialchars($source['name']) ?>
+                    </a>
+                    <?php if ($index < count($weatherSources) - 1): ?><span class="data-source-separator"> & </span><?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
         </section>
         <?php endif; ?>
 
@@ -1357,105 +1467,11 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
 
         <!-- Partnerships & Credits -->
         <?php
-        // Collect unique weather data sources by name (dynamically based on active sources)
-        $weatherSources = [];
-        
-        // Load weather cache to check source status
-        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
-        $weatherData = null;
-        if (file_exists($weatherCacheFile)) {
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-        }
-        
-        // Check if primary is healthy (not stale, not failed)
-        $primaryHealthy = false;
-        if (isset($airport['weather_source']) && !empty($airport['weather_source']) && isset($airport['weather_source']['type'])) {
-            require_once __DIR__ . '/../lib/constants.php';
-            require_once __DIR__ . '/../lib/circuit-breaker.php';
-            
-            // Use warning threshold to determine if source is healthy
-            $staleThreshold = getStaleWarningSeconds($airport);
-            
-            // Check if primary is fresh and not in circuit breaker
-            $primaryCircuit = checkWeatherCircuitBreaker($airportId, 'primary');
-            $primaryAge = PHP_INT_MAX;
-            if (is_array($weatherData) && isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
-                $primaryAge = time() - $weatherData['last_updated_primary'];
-            }
-            
-            $primaryHealthy = !$primaryCircuit['skip'] && $primaryAge < $staleThreshold;
-            
-            // Add primary source if healthy
-            if ($primaryHealthy) {
-                $sourceInfo = getWeatherSourceInfo($airport['weather_source']['type']);
-                if ($sourceInfo !== null) {
-                    $weatherSources[] = $sourceInfo;
-                }
-            }
-        }
-        
-        // Check if backup is active (providing data - backup has fresh data and primary is stale)
-        $backupActive = false;
-        if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup']) && isset($airport['weather_source_backup']['type'])) {
-            if (is_array($weatherData)) {
-                // Use backup_status from cache if available (more accurate than calculating)
-                if (isset($weatherData['backup_status'])) {
-                    $backupActive = ($weatherData['backup_status'] === 'active');
-                } else {
-                    // Fallback: calculate based on timestamps (for backward compatibility)
-                    // Use warning threshold to determine freshness
-                    $staleThreshold = getStaleWarningSeconds($airport);
-                    
-                    $backupAge = isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0
-                        ? time() - $weatherData['last_updated_backup']
-                        : PHP_INT_MAX;
-                    $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
-                        ? time() - $weatherData['last_updated_primary']
-                        : PHP_INT_MAX;
-                    
-                    // Backup is active if it has fresh data and primary is stale
-                    $backupActive = ($backupAge < $staleThreshold) && ($primaryAge >= $staleThreshold);
-                }
-            }
-            
-            // Add backup source if active
-            if ($backupActive) {
-                $backupSourceInfo = getWeatherSourceInfo($airport['weather_source_backup']['type']);
-                if ($backupSourceInfo !== null) {
-                    $weatherSources[] = $backupSourceInfo;
-                }
-            }
-        }
-        
-        // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
-        // Only add if not already using METAR as primary source AND metar_station is configured
-        $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
-        $metarInfo = getWeatherSourceInfo('metar');
-        $metarDisplayName = $metarInfo !== null ? $metarInfo['name'] : 'Aviation Weather';
-        $hasAviationWeather = false;
-        foreach ($weatherSources as $source) {
-            if ($source['name'] === $metarDisplayName) {
-                $hasAviationWeather = true;
-                break;
-            }
-        }
-        
-        if (!$hasAviationWeather && 
-            in_array($sourceType, ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'synopticdata'])) {
-            // Show METAR source if metar_station is configured
-            if (isMetarEnabled($airport)) {
-                $metarInfo = getWeatherSourceInfo('metar');
-                if ($metarInfo !== null) {
-                    $weatherSources[] = $metarInfo;
-                }
-            }
-        }
-        
         // Get partners from new partners[] array
         $partners = $airport['partners'] ?? [];
         
-        // Only show section if we have partners or data sources
-        if (!empty($partners) || !empty($weatherSources)):
+        // Only show section if we have partners
+        if (!empty($partners)):
         ?>
         <section class="partnerships-section">
             <div class="partnerships-container">
@@ -1476,20 +1492,6 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                 <span class="partner-name"><?= htmlspecialchars($partner['name']) ?></span>
                             </a>
                         </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <?php endif; ?>
-                
-                <?php if (!empty($weatherSources)): ?>
-                <div class="data-sources-content">
-                    <div class="data-sources-list">
-                        <span class="data-sources-label">Weather data at this airport from </span>
-                        <?php foreach ($weatherSources as $index => $source): ?>
-                        <a href="<?= htmlspecialchars($source['url']) ?>" target="_blank" rel="noopener" class="data-source-link">
-                            <?= htmlspecialchars($source['name']) ?>
-                        </a>
-                        <?php if ($index < count($weatherSources) - 1): ?><span class="data-source-separator"> & </span><?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
