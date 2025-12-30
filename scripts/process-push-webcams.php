@@ -814,9 +814,15 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null, $maxMtime = null) 
  * @return void
  */
 function processPushCamera($airportId, $camIndex, $cam, $airport) {
-    // Files uploaded directly to chroot root directory
-    $chrootDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex;
+    // Airport-scoped directory: /uploads/{airport}/{username}/
+    $username = $cam['push_config']['username'] ?? null;
     
+    if (!$username) {
+        return false; // No username configured
+    }
+    
+    $baseDir = __DIR__ . '/../cache/webcam/uploads/';
+    $chrootDir = $baseDir . $airportId . '/' . $username;
     $uploadDir = $chrootDir . '/';
     
     // Quick check: if directory doesn't exist or has no files, exit immediately

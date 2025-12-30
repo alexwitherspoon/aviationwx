@@ -1,122 +1,129 @@
 #!/bin/bash
 # Diagnostic script for FTP/FTPS upload permissions
-# Usage: ./diagnose-ftp-permissions.sh [airport_id] [cam_index]
-# Example: ./diagnose-ftp-permissions.sh kczk 0
+# Usage: ./diagnose-ftp-permissions.sh <airport_id> <username>
+# Example: ./diagnose-ftp-permissions.sh kczk kczkcam1
+#
+# Directory structure: /cache/webcam/uploads/{airport}/{username}/
 
 set -euo pipefail
 
 AIRPORT_ID="${1:-}"
-CAM_INDEX="${2:-}"
+USERNAME="${2:-}"
 
-if [ -z "$AIRPORT_ID" ] || [ -z "$CAM_INDEX" ]; then
-    echo "Usage: $0 <airport_id> <cam_index>"
-    echo "Example: $0 kczk 0"
+if [ -z "$AIRPORT_ID" ] || [ -z "$USERNAME" ]; then
+    echo "Usage: $0 <airport_id> <username>"
+    echo "Example: $0 kczk kczkcam1"
     exit 1
 fi
 
-UPLOADS_BASE="/var/www/html/uploads/webcams"
-CHROOT_DIR="${UPLOADS_BASE}/${AIRPORT_ID}_${CAM_INDEX}"
-
-echo "=== FTP Permissions Diagnostic for ${AIRPORT_ID}_${CAM_INDEX} ==="
-echo ""
-
-# Check if directory exists
-echo "1. Checking directory existence..."
-if [ ! -d "$CHROOT_DIR" ]; then
-    echo "   ❌ ERROR: Chroot directory does not exist: $CHROOT_DIR"
-    exit 1
-else
-    echo "   ✓ Chroot directory exists: $CHROOT_DIR"
-fi
-echo ""
-
-# Check chroot directory permissions
-echo "2. Checking chroot directory permissions..."
-CHROOT_STAT=$(stat -c "%U:%G %a" "$CHROOT_DIR" 2>/dev/null || stat -f "%Su:%Sg %OLp" "$CHROOT_DIR" 2>/dev/null)
-CHROOT_OWNER=$(echo "$CHROOT_STAT" | awk '{print $1}')
-CHROOT_PERMS=$(echo "$CHROOT_STAT" | awk '{print $2}')
-
-echo "   Chroot directory: $CHROOT_DIR"
-echo "   Owner:Group: $CHROOT_OWNER"
-echo "   Permissions: $CHROOT_PERMS"
-
-# Check if www-data user exists
-if id "www-data" &>/dev/null; then
-    WWW_DATA_UID=$(id -u www-data)
-    WWW_DATA_GID=$(id -g www-data)
-    echo "   www-data UID:GID: $WWW_DATA_UID:$WWW_DATA_GID"
-    
-    if [[ "$CHROOT_OWNER" == "www-data:www-data" ]]; then
-        echo "   ✓ Ownership is correct (www-data:www-data required for FTP guest user)"
-    else
-        echo "   ❌ ERROR: Ownership should be www-data:www-data"
-        echo "      Current: $CHROOT_OWNER"
-        echo "      Required: www-data:www-data"
-    fi
-else
-    echo "   ❌ ERROR: www-data user does not exist!"
-fi
-
-# Check write permissions
-if [[ "$CHROOT_PERMS" =~ ^[0-7][0-7][2-7]$ ]] || [[ "$CHROOT_PERMS" =~ ^[0-7][2-7][0-7]$ ]]; then
-    echo "   ✓ Permissions allow writing (owner/group have write permission)"
-else
-    echo "   ❌ ERROR: Permissions do not allow writing"
-    echo "      Recommended: 0775 (rwxrwxr-x)"
-fi
-echo ""
-
-# Test write access as www-data
-echo "3. Testing write access as www-data..."
-if id "www-data" &>/dev/null; then
-    TEST_FILE="${CHROOT_DIR}/.permission_test_$$"
-    if sudo -u www-data touch "$TEST_FILE" 2>/dev/null; then
-        echo "   ✓ Write test passed (can create files in chroot root)"
-        sudo -u www-data rm -f "$TEST_FILE" 2>/dev/null || true
-    else
-        echo "   ❌ ERROR: Write test failed (cannot create files as www-data)"
-        echo "      This is the root cause of the upload failure!"
-    fi
-else
-    echo "   ⚠️  Skipped (www-data user does not exist)"
-fi
-echo ""
-
-# Check vsftpd user config
-echo "4. Checking vsftpd user configuration..."
-USERNAME="${AIRPORT_ID}_${CAM_INDEX}"
+# Directory paths
+UPLOADS_BASE="/var/www/html/cache/webcam/uploads"
+AIRPORT_DIR="${UPLOADS_BASE}/${AIRPORT_ID}"
+UPLOAD_DIR="${AIRPORT_DIR}/${USERNAME}"
 USER_CONFIG="/etc/vsftpd/users/${USERNAME}"
 
-if [ -f "$USER_CONFIG" ]; then
-    echo "   ✓ User config file exists: $USER_CONFIG"
-    echo "   Contents:"
-    cat "$USER_CONFIG" | sed 's/^/      /'
+echo "=== FTP Permissions Diagnostic for ${AIRPORT_ID}/${USERNAME} ==="
+echo ""
+
+# Check directory structure
+echo "1. Checking directory structure..."
+echo "   Base: $UPLOADS_BASE"
+if [ -d "$UPLOADS_BASE" ]; then
+    BASE_STAT=$(stat -c "%U:%G %a" "$UPLOADS_BASE" 2>/dev/null || stat -f "%Su:%Sg %OLp" "$UPLOADS_BASE" 2>/dev/null)
+    echo "   ✓ Exists: $BASE_STAT"
+else
+    echo "   ❌ Does not exist"
+fi
+
+echo "   Airport: $AIRPORT_DIR"
+if [ -d "$AIRPORT_DIR" ]; then
+    AIRPORT_STAT=$(stat -c "%U:%G %a" "$AIRPORT_DIR" 2>/dev/null || stat -f "%Su:%Sg %OLp" "$AIRPORT_DIR" 2>/dev/null)
+    echo "   ✓ Exists: $AIRPORT_STAT"
+else
+    echo "   ❌ Does not exist"
+fi
+
+echo "   Upload: $UPLOAD_DIR"
+if [ -d "$UPLOAD_DIR" ]; then
+    UPLOAD_STAT=$(stat -c "%U:%G %a" "$UPLOAD_DIR" 2>/dev/null || stat -f "%Su:%Sg %OLp" "$UPLOAD_DIR" 2>/dev/null)
+    echo "   ✓ Exists: $UPLOAD_STAT"
     
-    EXPECTED_ROOT="local_root=${CHROOT_DIR}"
-    if grep -q "^${EXPECTED_ROOT}$" "$USER_CONFIG" || grep -q "^local_root=${CHROOT_DIR}$" "$USER_CONFIG"; then
-        echo "   ✓ local_root is correctly set to chroot directory"
+    # Check ownership
+    if [[ "$UPLOAD_STAT" == *"ftp:ftp"* ]]; then
+        echo "   ✓ Ownership correct (ftp:ftp)"
     else
-        echo "   ❌ WARNING: local_root may not match expected chroot directory"
+        echo "   ⚠️  Ownership should be ftp:ftp"
     fi
 else
-    echo "   ❌ ERROR: User config file does not exist: $USER_CONFIG"
-    echo "      This means the FTP user may not be properly configured!"
+    echo "   ❌ Does not exist - run fix-ftp-permissions.sh"
+fi
+echo ""
+
+# Check per-user vsftpd config
+echo "2. Checking per-user vsftpd config..."
+if [ -f "$USER_CONFIG" ]; then
+    echo "   ✓ Config exists: $USER_CONFIG"
+    echo "   Content:"
+    cat "$USER_CONFIG" | sed 's/^/      /'
+    
+    # Verify local_root matches
+    EXPECTED_ROOT="local_root=${UPLOAD_DIR}"
+    if grep -q "^${EXPECTED_ROOT}$" "$USER_CONFIG"; then
+        echo "   ✓ local_root is correctly set"
+    else
+        echo "   ⚠️  local_root may not match expected path"
+        echo "      Expected: $EXPECTED_ROOT"
+    fi
+else
+    echo "   ❌ Config does not exist: $USER_CONFIG"
+fi
+echo ""
+
+# Check vsftpd main config
+echo "3. Checking vsftpd main config..."
+VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
+if [ -f "$VSFTPD_CONF" ]; then
+    echo "   ✓ Main config exists"
+    if grep -q "^user_config_dir=" "$VSFTPD_CONF"; then
+        USER_CONFIG_DIR=$(grep "^user_config_dir=" "$VSFTPD_CONF" | cut -d= -f2)
+        echo "   ✓ user_config_dir=$USER_CONFIG_DIR"
+    else
+        echo "   ⚠️  user_config_dir not set - per-user configs won't be read!"
+    fi
+else
+    echo "   ❌ Main config not found"
+fi
+echo ""
+
+# Check vsftpd process
+echo "4. Checking vsftpd process..."
+if pgrep -x vsftpd > /dev/null; then
+    echo "   ✓ vsftpd is running"
+    ps aux | grep vsftpd | grep -v grep | sed 's/^/      /'
+else
+    echo "   ❌ vsftpd is not running"
+fi
+echo ""
+
+# Check virtual users database
+echo "5. Checking virtual users..."
+VSFTPD_USERS="/etc/vsftpd/virtual_users.txt"
+if [ -f "$VSFTPD_USERS" ]; then
+    if grep -q "^${USERNAME}$" "$VSFTPD_USERS"; then
+        echo "   ✓ User ${USERNAME} exists in virtual_users.txt"
+    else
+        echo "   ❌ User ${USERNAME} not found in virtual_users.txt"
+    fi
+else
+    echo "   ❌ virtual_users.txt not found"
 fi
 echo ""
 
 # Summary
 echo "=== Summary ==="
+echo "Expected setup:"
+echo "1. Upload directory: ${UPLOAD_DIR} (ftp:ftp, 755)"
+echo "2. Per-user config: ${USER_CONFIG} with local_root=${UPLOAD_DIR}"
+echo "3. vsftpd.conf must have: user_config_dir=/etc/vsftpd/users"
+echo "4. User must exist in /etc/vsftpd/virtual_users.txt"
 echo ""
-echo "For FTP uploads to work:"
-echo "1. Chroot directory must exist and be owned by www-data:www-data with 0775 permissions"
-echo "2. Parent directories must be root-owned for chroot security"
-echo "3. www-data user must be able to write to the chroot directory"
-echo "4. vsftpd user config must set local_root to the chroot directory"
-echo ""
-echo "When uploading via FTP:"
-echo "- You will be chrooted to: $CHROOT_DIR"
-echo "- You can upload directly to / (the chroot root)"
-echo "- Upload path should be: /your-file.jpg (relative to chroot)"
-echo "- No need to navigate to a subdirectory!"
-echo ""
-
