@@ -278,36 +278,15 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
     foreach ($files as $file) {
         // Check if file is fully written (only wait if we have a candidate)
         if (isFileFullyWritten($file, $maxWaitSeconds, $startTime)) {
-            // #region agent log
-            $debugLogPath = '/var/www/html/.cursor/debug.log';
-            @mkdir(dirname($debugLogPath), 0755, true);
-            $logEntry = json_encode(['location' => 'process-push-webcams.php:findNewestValidImage', 'message' => 'validating file', 'data' => ['file' => basename($file)], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H1-EXIF']) . "\n";
-            @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
-            // #endregion
-            
             // Push cameras may not have EXIF - add from file mtime before validation
             // Server-fetched webcams have EXIF added after capture, but push cameras bypass that step
-            $hadExif = hasExifTimestamp($file);
-            if (!$hadExif) {
-                $exifAdded = ensureExifTimestamp($file);
-                // #region agent log
-                $logEntry = json_encode(['location' => 'process-push-webcams.php:findNewestValidImage', 'message' => 'added EXIF timestamp', 'data' => ['file' => basename($file), 'had_exif' => $hadExif, 'exif_added' => $exifAdded], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H1-EXIF']) . "\n";
-                @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
-                // #endregion
+            if (!hasExifTimestamp($file)) {
+                ensureExifTimestamp($file);
             }
             
             // Validate image (with per-camera limits and airport for phase-aware detection)
             if (validateImageFile($file, $pushConfig, $airport)) {
-                // #region agent log
-                $logEntry = json_encode(['location' => 'process-push-webcams.php:findNewestValidImage', 'message' => 'validation PASSED', 'data' => ['file' => basename($file)], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H1-EXIF']) . "\n";
-                @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
-                // #endregion
                 return $file;
-            } else {
-                // #region agent log
-                $logEntry = json_encode(['location' => 'process-push-webcams.php:findNewestValidImage', 'message' => 'validation FAILED', 'data' => ['file' => basename($file)], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H1-EXIF']) . "\n";
-                @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
-                // #endregion
             }
         }
     }
@@ -435,20 +414,11 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
         return false;
     }
     
-    // #region agent log setup
-    $debugLogPath = '/var/www/html/.cursor/debug.log';
-    @mkdir(dirname($debugLogPath), 0755, true);
-    // #endregion
-    
     // Validate image content (error frame, uniform color, pixelation, etc.)
     // Only for JPEG which detectErrorFrame supports
     // Pass airport for phase-aware pixelation thresholds
     if ($format === 'jpeg') {
         $errorCheck = detectErrorFrame($file, $airport);
-        // #region agent log
-        $logEntry = json_encode(['location' => 'process-push-webcams.php:validateImageFile', 'message' => 'error frame check', 'data' => ['file' => basename($file), 'is_error' => $errorCheck['is_error'], 'confidence' => $errorCheck['confidence'], 'reasons' => $errorCheck['reasons'] ?? []], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H2-pixelation']) . "\n";
-        @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
-        // #endregion
         if ($errorCheck['is_error']) {
             aviationwx_log('warning', 'push webcam error frame detected, rejecting', [
                 'file' => basename($file),
@@ -461,10 +431,6 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
     
     // Validate EXIF timestamp (push cameras must have camera-provided EXIF)
     $exifCheck = validateExifTimestamp($file);
-    // #region agent log
-    $logEntry = json_encode(['location' => 'process-push-webcams.php:validateImageFile', 'message' => 'EXIF timestamp check', 'data' => ['file' => basename($file), 'valid' => $exifCheck['valid'], 'reason' => $exifCheck['reason'] ?? 'ok', 'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H1-EXIF']) . "\n";
-    @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
-    // #endregion
     if (!$exifCheck['valid']) {
         aviationwx_log('warning', 'push webcam EXIF timestamp invalid, rejecting', [
             'file' => basename($file),
