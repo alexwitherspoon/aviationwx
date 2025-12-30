@@ -155,8 +155,9 @@ cleanupFilesByPattern(
 );
 
 // Webcam error files (7 days)
+// New structure: webcams/{airportId}/{camIndex}/*.error.json
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*.error.json',
+    CACHE_WEBCAMS_DIR . '/*/*/*.error.json',
     CLEANUP_WEBCAM_ERROR_AGE,
     'Webcam error files',
     $stats, $dryRun, $verbose
@@ -222,19 +223,19 @@ cleanupFilesByPattern(
 // Webcam images (7 days - should be updated continuously)
 // Structure: cache/webcams/{airportId}/{camIndex}/*.{format}
 cleanupFilesByPattern(
-    CACHE_WEBCAMS_DIR . '/*/*.jpg',
+    CACHE_WEBCAMS_DIR . '/*/*/*.jpg',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    CACHE_WEBCAMS_DIR . '/*/*.webp',
+    CACHE_WEBCAMS_DIR . '/*/*/*.webp',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam WebP images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    CACHE_WEBCAMS_DIR . '/*/*.avif',
+    CACHE_WEBCAMS_DIR . '/*/*/*.avif',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam AVIF images (backup)',
     $stats, $dryRun, $verbose
@@ -575,7 +576,9 @@ function cleanupWebcamHistoryFrames(
     bool $dryRun,
     bool $verbose
 ): void {
-    $historyDirs = glob($webcamsDir . '/*_history');
+    // New structure: cache/webcams/{airportId}/{camIndex}/history/
+    // Find all history directories using the new nested structure
+    $historyDirs = glob($webcamsDir . '/*/*/history');
     if ($historyDirs === false || empty($historyDirs)) {
         if ($verbose) {
             echo "  Webcam history frames: No history directories found\n";
@@ -588,8 +591,14 @@ function cleanupWebcamHistoryFrames(
     $bytesFreed = 0;
     
     foreach ($historyDirs as $dir) {
-        $files = glob($dir . '/*.jpg');
-        if ($files === false) {
+        // Clean up all image formats (jpg, webp, avif) and variants
+        $files = array_merge(
+            glob($dir . '/*.jpg') ?: [],
+            glob($dir . '/*.webp') ?: [],
+            glob($dir . '/*.avif') ?: []
+        );
+        
+        if (empty($files)) {
             continue;
         }
         
@@ -606,7 +615,11 @@ function cleanupWebcamHistoryFrames(
                 $size = @filesize($file) ?: 0;
                 
                 if ($verbose) {
-                    echo "  🗑️  " . basename($dir) . "/" . basename($file) . " (age: " . formatAge($age) . ")\n";
+                    // Show airport/cam/history/filename for clarity
+                    $parts = explode('/', $dir);
+                    $camIndex = $parts[count($parts) - 2] ?? '?';
+                    $airportId = $parts[count($parts) - 3] ?? '?';
+                    echo "  🗑️  {$airportId}/{$camIndex}/history/" . basename($file) . " (age: " . formatAge($age) . ")\n";
                 }
                 
                 if (!$dryRun) {

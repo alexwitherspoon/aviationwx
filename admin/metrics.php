@@ -44,10 +44,9 @@ if (file_exists($airportsConfig)) {
         foreach ($cfg['airports'] as $airportId => $airport) {
             $cams = $airport['webcams'] ?? [];
             foreach ($cams as $idx => $_) {
-                $base = $cacheDir . '/' . strtolower($airportId) . '_' . $idx;
-                $jpg = $base . '.jpg';
-                $webp = $base . '.webp';
-                
+                // Use new cache path structure: webcams/{airportId}/{camIndex}/current.{format}
+                $jpg = getCacheSymlinkPath(strtolower($airportId), $idx, 'jpg');
+                $webp = getCacheSymlinkPath(strtolower($airportId), $idx, 'webp');
 
                 $labels = ['airport' => strtolower($airportId), 'cam' => (string)$idx];
 
