@@ -435,14 +435,17 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
         return false;
     }
     
+    // #region agent log setup
+    $debugLogPath = '/var/www/html/.cursor/debug.log';
+    @mkdir(dirname($debugLogPath), 0755, true);
+    // #endregion
+    
     // Validate image content (error frame, uniform color, pixelation, etc.)
     // Only for JPEG which detectErrorFrame supports
     // Pass airport for phase-aware pixelation thresholds
     if ($format === 'jpeg') {
         $errorCheck = detectErrorFrame($file, $airport);
         // #region agent log
-        $debugLogPath = '/var/www/html/.cursor/debug.log';
-        @mkdir(dirname($debugLogPath), 0755, true);
         $logEntry = json_encode(['location' => 'process-push-webcams.php:validateImageFile', 'message' => 'error frame check', 'data' => ['file' => basename($file), 'is_error' => $errorCheck['is_error'], 'confidence' => $errorCheck['confidence'], 'reasons' => $errorCheck['reasons'] ?? []], 'timestamp' => time() * 1000, 'sessionId' => 'debug-session', 'hypothesisId' => 'H2-pixelation']) . "\n";
         @file_put_contents($debugLogPath, $logEntry, FILE_APPEND);
         // #endregion
