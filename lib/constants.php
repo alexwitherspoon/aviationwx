@@ -182,7 +182,7 @@ if (!defined('CONFIG_CACHE_TTL')) {
     define('CONFIG_CACHE_TTL', 3600); // 1 hour
 }
 if (!defined('PLACEHOLDER_CACHE_TTL')) {
-    define('PLACEHOLDER_CACHE_TTL', 3600); // 1 hour
+    define('PLACEHOLDER_CACHE_TTL', 60); // 1 minute - short TTL so browsers re-check quickly when webcam becomes available
 }
 if (!defined('PARTNER_LOGO_CACHE_TTL')) {
     define('PARTNER_LOGO_CACHE_TTL', 2592000); // 30 days
