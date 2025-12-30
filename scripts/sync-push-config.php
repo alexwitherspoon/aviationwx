@@ -402,13 +402,14 @@ function validateConfigBeforeApply($configFile) {
 /**
  * Ensure base webcams directory exists with correct permissions (root:root)
  * 
- * Creates the base uploads/webcams directory if it doesn't exist and sets
+ * Creates the base cache/webcam/uploads directory if it doesn't exist and sets
  * correct ownership (root:root) required for SFTP chroot functionality.
+ * This matches the vsftpd local_root configuration.
  * 
  * @return string Path to webcams base directory
  */
 function ensureWebcamsBaseDirectory() {
-    $webcamsBaseDir = __DIR__ . '/../uploads/webcams';
+    $webcamsBaseDir = __DIR__ . '/../cache/webcam/uploads';
     
     if (!is_dir($webcamsBaseDir)) {
         @mkdir($webcamsBaseDir, 0775, true);
@@ -472,7 +473,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null) {
  * @return void
  */
 function removeCameraDirectory($airportId, $camIndex) {
-    $uploadDir = __DIR__ . '/../uploads/webcams/' . $airportId . '_' . $camIndex;
+    $uploadDir = __DIR__ . '/../cache/webcam/uploads/' . $airportId . '_' . $camIndex;
     
     if (!is_dir($uploadDir)) {
         return;
@@ -529,7 +530,7 @@ function removeCameraDirectory($airportId, $camIndex) {
  * @return array Array of camera arrays with 'airport' and 'cam' keys
  */
 function getExistingPushCameras() {
-    $uploadBaseDir = __DIR__ . '/../uploads/webcams';
+    $uploadBaseDir = __DIR__ . '/../cache/webcam/uploads';
     $cameras = [];
     
     if (!is_dir($uploadBaseDir)) {
@@ -618,7 +619,7 @@ function saveUsernameMapping($mapping) {
 }
 
 /**
- * Validate username format (14 alphanumeric characters)
+ * Validate username format (14 characters or less, alphanumeric, no spaces)
  * 
  * Validates that a username matches the required format for push webcam accounts.
  * 
@@ -626,10 +627,13 @@ function saveUsernameMapping($mapping) {
  * @return bool True if username is valid, false otherwise
  */
 function validateUsername($username) {
-    if (strlen($username) !== 14) {
+    if (strlen($username) > 14) {
         return false;
     }
-    return preg_match('/^[a-zA-Z0-9]{14}$/', $username) === 1;
+    if (preg_match('/\s/', $username)) {
+        return false;
+    }
+    return preg_match('/^[a-zA-Z0-9]+$/', $username) === 1;
 }
 
 /**
@@ -680,7 +684,7 @@ function userExists($username) {
  * @return bool True on success, false on failure
  */
 function createSftpUser($airportId, $camIndex, $username, $password) {
-    $chrootDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}";
+    $chrootDir = __DIR__ . "/../cache/webcam/uploads/{$airportId}_{$camIndex}";
     
     $cmd = sprintf(
         '/usr/local/bin/create-sftp-user.sh %s %s %s 2>&1',
@@ -999,7 +1003,7 @@ function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
             'airport' => $airportId,
             'cam' => $camIndex,
             'username' => $username,
-            'expected' => '14 alphanumeric characters'
+            'expected' => '14 characters or less, alphanumeric, no spaces'
         ], 'app');
         return false;
     }
@@ -1115,7 +1119,7 @@ function syncAllPushCameras($config) {
                     if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
                         // Verify permissions for FTP/FTPS (createFtpUser sets them, but verify)
                         if (in_array(strtolower($protocol), ['ftp', 'ftps'])) {
-                            $chrootDir = __DIR__ . "/../uploads/webcams/{$airportId}_{$camIndex}";
+                            $chrootDir = __DIR__ . "/../cache/webcam/uploads/{$airportId}_{$camIndex}";
                             if (is_dir($chrootDir)) {
                                 $wwwDataInfo = @posix_getpwnam('www-data');
                                 if ($wwwDataInfo !== false) {
@@ -1220,6 +1224,8 @@ function syncPushConfig() {
     $lastSync = getLastSyncTimestamp();
     
     $databaseCorrupted = isVsftpdDatabaseCorrupted();
+    $databaseMissing = !file_exists('/etc/vsftpd/virtual_users.db');
+    
     if ($databaseCorrupted) {
         aviationwx_log('warning', 'sync-push-config: vsftpd database appears corrupted, attempting rebuild', [
             'db_file' => '/etc/vsftpd/virtual_users.db',
@@ -1229,11 +1235,21 @@ function syncPushConfig() {
         if (rebuildVsftpdDatabase()) {
             aviationwx_log('info', 'sync-push-config: Database rebuilt successfully, continuing with sync', [], 'app');
         } else {
-            aviationwx_log('warning', 'sync-push-config: Database rebuild failed, will rebuild during full sync', [            ], 'app');
+            aviationwx_log('warning', 'sync-push-config: Database rebuild failed, will rebuild during full sync', [], 'app');
         }
     } else {
-        if ($configMtime <= $lastSync) {
+        // Skip sync if config hasn't changed AND database exists
+        // Force sync if database is missing (first run or after deletion)
+        if ($configMtime <= $lastSync && !$databaseMissing) {
+            aviationwx_log('debug', 'sync-push-config: config unchanged since last sync, skipping', [
+                'last_sync' => $lastSync,
+                'config_mtime' => $configMtime
+            ], 'app');
             return;
+        }
+        
+        if ($databaseMissing) {
+            aviationwx_log('info', 'sync-push-config: database missing, forcing sync', [], 'app');
         }
     }
     
