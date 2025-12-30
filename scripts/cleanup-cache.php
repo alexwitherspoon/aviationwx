@@ -771,16 +771,20 @@ function cleanupOrphanedAirportFiles(
     $orphanedDeleted = 0;
     $orphanedBytes = 0;
     
-    // Patterns that include airport ID
+    // Patterns that include airport ID with their directories
     $patterns = [
-        'weather_*.json' => '/weather_([a-z0-9]+)\.json$/i',
-        'weather_history_*.json' => '/weather_history_([a-z0-9]+)\.json$/i',
-        'outage_*.json' => '/outage_([a-z0-9]+)\.json$/i',
-        'notam/*.json' => '/\/([a-z0-9]+)\.json$/i',
+        // New structure: cache/weather/{airport}.json
+        [CACHE_WEATHER_DIR . '/*.json', '/\/([a-z0-9]+)\.json$/i'],
+        // New structure: cache/weather/history/{airport}.json
+        [CACHE_WEATHER_HISTORY_DIR . '/*.json', '/\/([a-z0-9]+)\.json$/i'],
+        // Outage files in cache root
+        [CACHE_BASE_DIR . '/outage_*.json', '/outage_([a-z0-9]+)\.json$/i'],
+        // NOTAM files
+        [CACHE_NOTAM_DIR . '/*.json', '/\/([a-z0-9]+)\.json$/i'],
     ];
     
-    foreach ($patterns as $glob => $regex) {
-        $files = glob($cacheDir . '/' . $glob);
+    foreach ($patterns as [$globPattern, $regex]) {
+        $files = glob($globPattern);
         if ($files === false) {
             continue;
         }

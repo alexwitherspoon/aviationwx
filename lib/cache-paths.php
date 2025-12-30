@@ -148,6 +148,21 @@ function getWebcamCurrentPath(string $airportId, int $camIndex, string $format =
 }
 
 /**
+ * Get path to webcam cache symlink (alias for getWebcamCurrentPath)
+ * 
+ * This function is provided for backwards compatibility with existing code.
+ * New code should use getWebcamCurrentPath() instead.
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param string $format Image format (jpg, webp, avif)
+ * @return string Full path to current symlink
+ */
+function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): string {
+    return getWebcamCurrentPath($airportId, $camIndex, $format);
+}
+
+/**
  * Get path to timestamped webcam image
  * 
  * @param string $airportId Airport identifier

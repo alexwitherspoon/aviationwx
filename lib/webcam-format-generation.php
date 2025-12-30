@@ -331,22 +331,7 @@ function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timest
     return $cacheDir . '/' . $timestamp . '_' . $variant . '.' . $format;
 }
 
-/**
- * Get symlink path for current cache file
- * 
- * Symlink points to latest timestamp-based file for easy lookup.
- * Stored in airport/camera-specific directory.
- * Format: cache/webcams/{airportId}/{camIndex}/current.{format}
- * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @param string $format Format extension (jpg, webp, avif)
- * @return string Symlink path
- */
-function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): string {
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    return $cacheDir . '/current.' . $format;
-}
+// getCacheSymlinkPath() is now defined in cache-paths.php
 
 /**
  * Get cache file path for a webcam image

@@ -330,9 +330,8 @@ if ($webcamResponse !== false && strlen($webcamResponse) > 10) {
 $success = array_merge($success, $apiTests);
 
 // Check cache directory for weather cache
-// Cache is at root level, not in admin directory
-$weatherCacheDir = __DIR__ . '/../cache';
-$weatherCacheFiles = glob($weatherCacheDir . '/weather_*.json');
+// Use centralized cache paths
+$weatherCacheFiles = glob(CACHE_WEATHER_DIR . '/*.json');
 if (count($weatherCacheFiles) > 0) {
     $success[] = "📊 Weather cache: " . count($weatherCacheFiles) . " file(s)";
 }

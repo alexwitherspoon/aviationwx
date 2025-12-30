@@ -284,12 +284,9 @@ class StatusPageTest extends TestCase
             'weather_refresh_seconds' => 60 // 60-second refresh
         ];
         
-        // Create temporary weather cache file
-        $cacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        // Create temporary weather cache file using centralized paths
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $cacheFile = getWeatherCachePath($airportId);
         
         // Test: Data 1 minute old (within refresh interval) should be operational
         $weatherData = [
@@ -330,12 +327,9 @@ class StatusPageTest extends TestCase
             'weather_refresh_seconds' => 60 // 60-second refresh
         ];
         
-        // Create temporary weather cache file
-        $cacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        // Create temporary weather cache file using centralized paths
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $cacheFile = getWeatherCachePath($airportId);
         
         // Test: Data 6 minutes old should be operational (below warning threshold of 600s)
         // Default thresholds: warning=600s, error=3600s, failclosed=10800s
@@ -377,12 +371,9 @@ class StatusPageTest extends TestCase
             'weather_refresh_seconds' => 60 // 60-second refresh
         ];
         
-        // Create temporary weather cache file
-        $cacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        // Create temporary weather cache file using centralized paths
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $cacheFile = getWeatherCachePath($airportId);
         
         // Test: Data 11 minutes old should be in error tier (degraded status)
         // Default thresholds: warning=600s, error=3600s, failclosed=10800s
@@ -419,12 +410,9 @@ class StatusPageTest extends TestCase
             'weather_refresh_seconds' => 1800 // 30-minute refresh (error threshold would be 5 hours, but maxStaleSeconds is 3 hours)
         ];
         
-        // Create temporary weather cache file
-        $cacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        // Create temporary weather cache file using centralized paths
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $cacheFile = getWeatherCachePath($airportId);
         
         // Test: Data 4 hours old (exceeds maxStaleSeconds of 3 hours) should be down with "Expired"
         $weatherData = [
@@ -457,12 +445,9 @@ class StatusPageTest extends TestCase
             'weather_refresh_seconds' => 60
         ];
         
-        // Create temporary weather cache file
-        $cacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
+        // Create temporary weather cache file using centralized paths
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $cacheFile = getWeatherCachePath($airportId);
         
         // Test: METAR data 1 hour old should be operational (uses METAR thresholds, not multipliers)
         $weatherData = [

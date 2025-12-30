@@ -444,8 +444,8 @@ function checkSystemHealth(): array {
                 }
             }
         }
-        // Check weather cache files
-        $weatherFiles = glob($cacheDir . '/weather_*.json');
+        // Check weather cache files (new location: cache/weather/*.json)
+        $weatherFiles = glob(CACHE_WEATHER_DIR . '/*.json');
         if ($weatherFiles) {
             foreach ($weatherFiles as $file) {
                 $mtime = filemtime($file);

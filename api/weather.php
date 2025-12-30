@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
@@ -242,12 +243,9 @@ function generateMockWeatherData($airportId, $airport) {
     $defaultWeatherRefresh = getDefaultWeatherRefresh();
     $airportWeatherRefresh = isset($airport['weather_refresh_seconds']) ? intval($airport['weather_refresh_seconds']) : $defaultWeatherRefresh;
 
-    // Cached weather path
-    $weatherCacheDir = __DIR__ . '/../cache';
-    if (!file_exists($weatherCacheDir)) {
-    @mkdir($weatherCacheDir, 0755, true);
-    }
-    $weatherCacheFile = $weatherCacheDir . '/weather_' . $airportId . '.json';
+    // Cached weather path - use centralized cache paths
+    ensureCacheDir(CACHE_WEATHER_DIR);
+    $weatherCacheFile = getWeatherCachePath($airportId);
 
     // nullStaleFieldsBySource is defined in lib/weather/staleness.php (required at top of file)
     // No need to redefine it here - use the existing function

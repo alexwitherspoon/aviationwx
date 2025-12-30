@@ -193,7 +193,7 @@ class OutageDetectionTest extends TestCase
         file_put_contents($outageStateFile, json_encode($outageState));
         
         // Create fresh weather cache (recovery)
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $freshTimestamp = time() - 60; // 1 minute ago
         $weatherData = [
             'obs_time_primary' => $freshTimestamp,
@@ -237,7 +237,7 @@ class OutageDetectionTest extends TestCase
         file_put_contents($outageStateFile, json_encode($outageState));
         
         // Create fresh weather cache (recovery)
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $freshTimestamp = time() - 60;
         $weatherData = [
             'obs_time_primary' => $freshTimestamp,

@@ -86,7 +86,7 @@ class SourceTimestampsTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $timestamp = time() - 1800; // 30 minutes ago
         $weatherData = [
             'last_updated_primary' => $timestamp, // No obs_time_primary
@@ -125,7 +125,7 @@ class SourceTimestampsTest extends TestCase
             'metar_station' => 'KSPB'
         ];
         
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $timestamp = time() - 7200; // 2 hours ago
         $weatherData = [
             'obs_time_metar' => $timestamp,
@@ -151,7 +151,7 @@ class SourceTimestampsTest extends TestCase
             'weather_source' => ['type' => 'metar']
         ];
         
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $timestamp = time() - 3600;
         $weatherData = [
             'obs_time_metar' => $timestamp,
@@ -236,7 +236,7 @@ class SourceTimestampsTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         file_put_contents($weatherCacheFile, 'invalid json{');
         
         $result = getSourceTimestamps($this->testAirportId, $airport);
