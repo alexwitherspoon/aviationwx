@@ -717,7 +717,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
                 "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f webp -q:v %d -compression_level %d -preset default %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
-                WEBCAM_WEBP_QUALITY,
+                getWebcamWebpQuality(),
                 WEBCAM_WEBP_COMPRESSION_LEVEL,
                 escapeshellarg($destFile)
             );
@@ -728,7 +728,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
                 "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
-                WEBCAM_AVIF_CRF,
+                getWebcamAvifCrf(),
                 WEBCAM_AVIF_CPU_USED,
                 escapeshellarg($destFile)
             );
@@ -782,7 +782,7 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
             $cmd = sprintf(
                 "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f webp -q:v %d -compression_level %d -preset default %s",
                 escapeshellarg($sourceFile),
-                WEBCAM_WEBP_QUALITY,
+                getWebcamWebpQuality(),
                 WEBCAM_WEBP_COMPRESSION_LEVEL,
                 escapeshellarg($destFile)
             );
@@ -793,7 +793,7 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
             $cmd = sprintf(
                 "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
                 escapeshellarg($sourceFile),
-                WEBCAM_AVIF_CRF,
+                getWebcamAvifCrf(),
                 WEBCAM_AVIF_CPU_USED,
                 escapeshellarg($destFile)
             );
@@ -804,7 +804,7 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
             $cmd = sprintf(
                 "ffmpeg -hide_banner -loglevel error -y -i %s -q:v %d %s",
                 escapeshellarg($sourceFile),
-                WEBCAM_JPEG_QUALITY,
+                getWebcamJpegQuality(),
                 escapeshellarg($destFile)
             );
             break;
@@ -1846,7 +1846,7 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
     $cmdWebp = sprintf(
         "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v %d -compression_level %d -preset default %s",
         escapeshellarg($sourceFile),
-        WEBCAM_WEBP_QUALITY,
+        getWebcamWebpQuality(),
         WEBCAM_WEBP_COMPRESSION_LEVEL,
         escapeshellarg($cacheWebp)
     );
