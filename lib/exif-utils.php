@@ -686,26 +686,52 @@ function isTimestampReasonable(int $timestamp, int $fileMtime): bool {
  * Tries to parse timestamp from filename first (more accurate for IP cameras),
  * falls back to file modification time if no valid timestamp found in filename.
  * 
+ * Logs when filename timestamp differs significantly from mtime (>5 minutes),
+ * which may indicate timezone configuration issues.
+ * 
  * @param string $filePath Path to image file
  * @return int Unix timestamp for EXIF
  */
 function getTimestampForExif(string $filePath): int {
+    // Get file mtime for comparison
+    $mtime = @filemtime($filePath);
+    if ($mtime === false) {
+        $mtime = time();
+    }
+    
     // Try to extract from filename first
     $filenameTs = parseFilenameTimestamp($filePath);
     
     if ($filenameTs['found']) {
+        $difference = abs($filenameTs['timestamp'] - $mtime);
+        
+        // Log when using filename timestamp
         aviationwx_log('debug', 'using filename timestamp for EXIF', [
             'file' => basename($filePath),
             'pattern' => $filenameTs['pattern'],
-            'timestamp' => date('Y-m-d H:i:s', $filenameTs['timestamp'])
+            'timestamp' => date('Y-m-d H:i:s', $filenameTs['timestamp']),
+            'mtime' => date('Y-m-d H:i:s', $mtime),
+            'difference_seconds' => $difference
         ], 'app');
+        
+        // Warn if filename timestamp differs from mtime by more than 5 minutes
+        // This could indicate timezone misconfiguration between camera and server
+        if ($difference > 300) {
+            $diffMinutes = round($difference / 60, 1);
+            $diffHours = round($difference / 3600, 1);
+            
+            aviationwx_log('warning', 'filename timestamp differs significantly from file mtime', [
+                'file' => basename($filePath),
+                'filename_timestamp' => date('Y-m-d H:i:s', $filenameTs['timestamp']),
+                'file_mtime' => date('Y-m-d H:i:s', $mtime),
+                'difference_minutes' => $diffMinutes,
+                'difference_hours' => $diffHours,
+                'pattern' => $filenameTs['pattern'],
+                'note' => 'This may indicate timezone misconfiguration between camera and server'
+            ], 'app');
+        }
+        
         return $filenameTs['timestamp'];
-    }
-    
-    // Fall back to file mtime
-    $mtime = @filemtime($filePath);
-    if ($mtime === false) {
-        $mtime = time();
     }
     
     return $mtime;

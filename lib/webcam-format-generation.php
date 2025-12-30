@@ -704,27 +704,32 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
         case 'jpg':
         case 'jpeg':
             $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v 2 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v %d %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
+                WEBCAM_JPEG_QUALITY,
                 escapeshellarg($destFile)
             );
             break;
             
         case 'webp':
             $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f webp -q:v %d -compression_level %d -preset default %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
+                WEBCAM_WEBP_QUALITY,
+                WEBCAM_WEBP_COMPRESSION_LEVEL,
                 escapeshellarg($destFile)
             );
             break;
             
         case 'avif':
             $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
+                WEBCAM_AVIF_CRF,
+                WEBCAM_AVIF_CPU_USED,
                 escapeshellarg($destFile)
             );
             break;
@@ -732,9 +737,10 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
         default:
             // Fallback for unknown formats - treat as JPEG
             $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v 2 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v %d %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
+                WEBCAM_JPEG_QUALITY,
                 escapeshellarg($destFile)
             );
             break;
@@ -774,8 +780,10 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
         case 'webp':
             // Explicitly specify format with -f webp (required when using .tmp extension)
             $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f webp -q:v 30 -compression_level 6 -preset default %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f webp -q:v %d -compression_level %d -preset default %s",
                 escapeshellarg($sourceFile),
+                WEBCAM_WEBP_QUALITY,
+                WEBCAM_WEBP_COMPRESSION_LEVEL,
                 escapeshellarg($destFile)
             );
             break;
@@ -783,8 +791,10 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
         case 'avif':
             // Explicitly specify format with -f avif (required when using .tmp extension)
             $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
                 escapeshellarg($sourceFile),
+                WEBCAM_AVIF_CRF,
+                WEBCAM_AVIF_CPU_USED,
                 escapeshellarg($destFile)
             );
             break;
@@ -792,8 +802,9 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
         case 'jpg':
         default:
             $cmd = sprintf(
-                "ffmpeg -hide_banner -loglevel error -y -i %s -q:v 2 %s",
+                "ffmpeg -hide_banner -loglevel error -y -i %s -q:v %d %s",
                 escapeshellarg($sourceFile),
+                WEBCAM_JPEG_QUALITY,
                 escapeshellarg($destFile)
             );
             break;
@@ -1833,8 +1844,10 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
     
     // Build ffmpeg command with nice 10 (low priority to avoid interfering with normal operations)
     $cmdWebp = sprintf(
-        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v 30 -compression_level 6 -preset default %s",
+        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v %d -compression_level %d -preset default %s",
         escapeshellarg($sourceFile),
+        WEBCAM_WEBP_QUALITY,
+        WEBCAM_WEBP_COMPRESSION_LEVEL,
         escapeshellarg($cacheWebp)
     );
     
@@ -1920,12 +1933,14 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
     
     // Build ffmpeg command for AVIF encoding with nice 10 (low priority to avoid interfering with normal operations)
     // -c:v libaom-av1: Use AV1 codec (AVIF uses AV1)
-    // -crf 30: Quality setting (similar to WebP's -q:v 30)
+    // -crf: Quality setting (0=lossless, 23=high quality, 30+=medium quality)
     // -b:v 0: Use CRF mode (quality-based, not bitrate)
-    // -cpu-used 4: Speed vs quality balance (0-8, 4 is balanced)
+    // -cpu-used: Speed vs quality balance (0-8, 4 is balanced)
     $cmdAvif = sprintf(
-        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 %s",
+        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
         escapeshellarg($sourceFile),
+        WEBCAM_AVIF_CRF,
+        WEBCAM_AVIF_CPU_USED,
         escapeshellarg($cacheAvif)
     );
     
@@ -2002,8 +2017,9 @@ function generateJpeg($sourceFile, $airportId, $camIndex) {
     
     // Build ffmpeg command
     $cmdJpeg = sprintf(
-        "ffmpeg -hide_banner -loglevel error -y -i %s -q:v 2 %s",
+        "ffmpeg -hide_banner -loglevel error -y -i %s -q:v %d %s",
         escapeshellarg($sourceFile),
+        WEBCAM_JPEG_QUALITY,
         escapeshellarg($cacheJpeg)
     );
     

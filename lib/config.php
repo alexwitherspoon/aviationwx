@@ -757,6 +757,42 @@ function getEnabledWebcamFormats(): array {
 }
 
 /**
+ * Get WebP quality setting
+ * 
+ * Returns configured WebP quality (0-100 scale, higher = better).
+ * Can be overridden in airports.json config.webcam_webp_quality
+ * 
+ * @return int WebP quality value (default: 80)
+ */
+function getWebcamWebpQuality(): int {
+    return (int)getGlobalConfig('webcam_webp_quality', WEBCAM_WEBP_QUALITY);
+}
+
+/**
+ * Get AVIF CRF (quality) setting
+ * 
+ * Returns configured AVIF CRF value (0-63 scale, lower = better).
+ * Can be overridden in airports.json config.webcam_avif_crf
+ * 
+ * @return int AVIF CRF value (default: 23)
+ */
+function getWebcamAvifCrf(): int {
+    return (int)getGlobalConfig('webcam_avif_crf', WEBCAM_AVIF_CRF);
+}
+
+/**
+ * Get JPEG quality setting
+ * 
+ * Returns configured JPEG quality (1-31 scale for ffmpeg, lower = better).
+ * Can be overridden in airports.json config.webcam_jpeg_quality
+ * 
+ * @return int JPEG quality value (default: 2)
+ */
+function getWebcamJpegQuality(): int {
+    return (int)getGlobalConfig('webcam_jpeg_quality', WEBCAM_JPEG_QUALITY);
+}
+
+/**
  * Get image primary size from config
  * 
  * Returns the configured primary image size, defaulting to 1920x1080.
