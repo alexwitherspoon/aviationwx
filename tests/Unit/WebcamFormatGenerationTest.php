@@ -443,7 +443,7 @@ class WebcamFormatGenerationTest extends TestCase
         $this->assertStringContainsString('/source/file.jpg', $cmd);
         $this->assertStringContainsString('/dest/file.webp.tmp', $cmd);
         $this->assertStringContainsString('-f webp', $cmd, 'WebP command must include -f webp flag for .tmp extension');
-        $this->assertStringContainsString('-q:v 30', $cmd);
+        $this->assertStringContainsString('-q:v ' . getWebcamWebpQuality(), $cmd, 'WebP command must use configured quality');
         $this->assertStringContainsString('nice -n 10', $cmd);
     }
 
@@ -459,7 +459,7 @@ class WebcamFormatGenerationTest extends TestCase
         $this->assertStringContainsString('/source/file.jpg', $cmd);
         $this->assertStringContainsString('/dest/file.avif.tmp', $cmd);
         $this->assertStringContainsString('-f avif', $cmd, 'AVIF command must include -f avif flag for .tmp extension');
-        $this->assertStringContainsString('-crf 30', $cmd);
+        $this->assertStringContainsString('-crf ' . getWebcamAvifCrf(), $cmd, 'AVIF command must use configured CRF');
         $this->assertStringContainsString('nice -n 10', $cmd);
     }
 
@@ -473,7 +473,7 @@ class WebcamFormatGenerationTest extends TestCase
         $this->assertStringContainsString('ffmpeg', $cmd);
         $this->assertStringContainsString('/source/file.png', $cmd);
         $this->assertStringContainsString('/dest/file.jpg', $cmd);
-        $this->assertStringContainsString('-q:v 2', $cmd);
+        $this->assertStringContainsString('-q:v ' . getWebcamJpegQuality(), $cmd, 'JPEG command must use configured quality');
     }
 
     /**

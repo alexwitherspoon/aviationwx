@@ -707,7 +707,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
                 "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v %d %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
-                WEBCAM_JPEG_QUALITY,
+                getWebcamJpegQuality(),
                 escapeshellarg($destFile)
             );
             break;
@@ -740,7 +740,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
                 "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f image2 -q:v %d %s",
                 escapeshellarg($sourceFile),
                 $scaleFilter,
-                WEBCAM_JPEG_QUALITY,
+                getWebcamJpegQuality(),
                 escapeshellarg($destFile)
             );
             break;
@@ -1939,7 +1939,7 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
     $cmdAvif = sprintf(
         "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
         escapeshellarg($sourceFile),
-        WEBCAM_AVIF_CRF,
+        getWebcamAvifCrf(),
         WEBCAM_AVIF_CPU_USED,
         escapeshellarg($cacheAvif)
     );
@@ -2019,7 +2019,7 @@ function generateJpeg($sourceFile, $airportId, $camIndex) {
     $cmdJpeg = sprintf(
         "ffmpeg -hide_banner -loglevel error -y -i %s -q:v %d %s",
         escapeshellarg($sourceFile),
-        WEBCAM_JPEG_QUALITY,
+        getWebcamJpegQuality(),
         escapeshellarg($cacheJpeg)
     );
     

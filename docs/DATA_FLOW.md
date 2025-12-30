@@ -830,16 +830,16 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Generation jobs are logged (start and result) for monitoring and troubleshooting
 
 **JPEG to WebP**:
-- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -q:v 30 -compression_level 6 output.webp`
-- Quality: 30 (0-100 scale, higher = better quality)
+- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -q:v 80 -compression_level 6 output.webp`
+- Quality: 80 (0-100 scale, higher = better quality) - configurable via `config.webcam_webp_quality`
 - Compression: Level 6 (0-6 scale)
 - Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
 - Mtime sync: `touch -t {timestamp} output.webp` (chained after generation)
 - Only runs if `webcam_generate_webp` is enabled in config
 
 **JPEG to AVIF**:
-- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 30 -b:v 0 -cpu-used 4 output.avif`
-- Quality: CRF 30 (similar quality to WebP's -q:v 30)
+- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 23 -b:v 0 -cpu-used 4 output.avif`
+- Quality: CRF 23 (0-63 scale, lower = better quality) - configurable via `config.webcam_avif_crf`
 - Codec: libaom-av1 (AV1 codec for AVIF format)
 - Speed: cpu-used 4 (balanced speed vs quality, 0-8 scale)
 - Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
