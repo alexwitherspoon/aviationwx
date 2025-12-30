@@ -899,27 +899,51 @@ function cleanupOrphanedAirportFiles(
 }
 
 /**
- * Cleanup empty directories
+ * Cleanup empty directories (recursive, depth-first)
+ * 
+ * Recursively scans directories and removes empty ones from the bottom up.
+ * This ensures that nested empty directories are cleaned in a single pass.
+ * For example: webcams/kspb/0/history/ -> webcams/kspb/0/ -> webcams/kspb/
+ * 
+ * @param string $path Root path to scan
+ * @param array &$stats Statistics array
+ * @param bool $dryRun If true, don't actually delete
+ * @param bool $verbose If true, print detailed output
+ * @param bool $isRoot If true, this is the top-level call (don't delete the root itself)
  */
 function cleanupEmptyDirectories(
     string $path,
     array &$stats,
     bool $dryRun,
-    bool $verbose
+    bool $verbose,
+    bool $isRoot = true
 ): void {
     if (!is_dir($path)) {
         return;
     }
     
-    $removed = 0;
+    static $removed = 0;
+    if ($isRoot) {
+        $removed = 0;
+    }
+    
     $dirs = glob($path . '/*', GLOB_ONLYDIR);
     
     if ($dirs === false) {
         return;
     }
     
+    // Depth-first: recurse into subdirectories first
     foreach ($dirs as $dir) {
-        // Check if directory is empty
+        cleanupEmptyDirectories($dir, $stats, $dryRun, $verbose, false);
+    }
+    
+    // Now check all entries (files and remaining directories)
+    foreach ($dirs as $dir) {
+        if (!is_dir($dir)) {
+            continue; // Already removed in recursion
+        }
+        
         $files = @scandir($dir);
         if ($files === false) {
             continue;
@@ -930,7 +954,9 @@ function cleanupEmptyDirectories(
         
         if (empty($files)) {
             if ($verbose) {
-                echo "  🗑️  Empty directory: " . basename($dir) . "\n";
+                // Show relative path from cache root for clarity
+                $relativePath = str_replace(CACHE_BASE_DIR . '/', '', $dir);
+                echo "  🗑️  Empty directory: {$relativePath}\n";
             }
             
             if (!$dryRun) {
@@ -945,7 +971,7 @@ function cleanupEmptyDirectories(
         }
     }
     
-    if ($removed > 0) {
+    if ($isRoot && $removed > 0) {
         $action = $dryRun ? 'Would remove' : 'Removed';
         echo "  Empty directories in " . basename($path) . ": {$action} {$removed}\n";
     }
