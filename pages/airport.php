@@ -4201,8 +4201,8 @@ const WebcamPlayer = {
     controlsVisible: true,
     hideTimeout: null,
     hideUIMode: false,  // Kiosk/signage mode
-    preferredFormat: 'jpg',  // Preferred image format (avif, webp, jpg)
-    preferredVariant: 'primary',  // Preferred image variant (thumb, small, medium, large, primary, full)
+    enabledFormats: ['jpg'],  // Server-enabled formats for <picture> element
+    variantWidths: {},  // Variant widths for srcset (from API)
     // Rolling window refresh
     refreshInterval: 60,  // Refresh interval in seconds (from API)
     refreshTimer: null,  // Interval timer for refreshing frames
@@ -4405,9 +4405,6 @@ const WebcamPlayer = {
         this.airportId = airportId;
         this.camIndex = camIndex;
         this.camName = camName;
-        
-        // Format preference will be set from history API response
-        this.preferredFormat = 'jpg';
 
         // Show player immediately with current image
         img.src = currentImageSrc;

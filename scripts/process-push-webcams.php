@@ -531,8 +531,11 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
     @unlink($stagingFile);
     
     // Also cleanup any variant staging files that were created
-    $stagingPattern = $cameraDir . '/staging.*';
-    foreach (glob($stagingPattern) as $stageFile) {
+    // Matches both 'staging_*' (from generateVariantsSync) and 'history_staging_*' patterns
+    foreach (glob($cameraDir . '/staging*.tmp') as $stageFile) {
+        @unlink($stageFile);
+    }
+    foreach (glob($cameraDir . '/history_staging_*.tmp') as $stageFile) {
         @unlink($stageFile);
     }
     
