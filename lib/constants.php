@@ -621,13 +621,13 @@ if (!defined('UNLIMITED_CEILING_FT')) {
 // These can be overridden in airports.json config section
 
 // WebP quality (0-100 scale, higher = better quality, larger file)
-// Recommended range: 75-90 for good balance
+// Recommended range: 85-95 for high quality
 // - 50-60: Noticeable artifacts, small files
-// - 75-80: Good quality, moderate compression (recommended)
-// - 85-90: High quality, larger files
-// - 100: Lossless (very large)
+// - 75-80: Good quality, moderate compression
+// - 85-90: High quality, larger files (recommended for aviation safety)
+// - 95-100: Near-lossless / lossless (very large)
 if (!defined('WEBCAM_WEBP_QUALITY')) {
-    define('WEBCAM_WEBP_QUALITY', 80);
+    define('WEBCAM_WEBP_QUALITY', 90);
 }
 
 // WebP compression level (0-6, higher = better compression but slower)
@@ -637,14 +637,15 @@ if (!defined('WEBCAM_WEBP_COMPRESSION_LEVEL')) {
 }
 
 // AVIF CRF (Constant Rate Factor, 0-63 scale, lower = better quality)
-// Recommended range: 20-30 for good balance
+// Recommended range: 0-18 for high quality (aviation safety critical)
 // - 0: Lossless
+// - 1-5: Near-lossless, excellent quality (recommended for aviation safety)
 // - 18-22: Very high quality (visually lossless)
-// - 23-28: High quality, good compression (recommended)
+// - 23-28: High quality, good compression
 // - 30-40: Medium quality, noticeable artifacts
 // - 50+: Low quality
 if (!defined('WEBCAM_AVIF_CRF')) {
-    define('WEBCAM_AVIF_CRF', 23);
+    define('WEBCAM_AVIF_CRF', 2);
 }
 
 // AVIF encoding speed (0-8, higher = faster but lower quality)
@@ -655,10 +656,11 @@ if (!defined('WEBCAM_AVIF_CPU_USED')) {
 
 // JPEG quality (1-31 scale for ffmpeg, lower = better quality)
 // This is the inverse of typical JPEG quality scales!
-// - 1-2: Highest quality (recommended)
+// - 1: Maximum quality (recommended for aviation safety)
+// - 2-3: Very high quality
 // - 3-5: High quality
 // - 10+: Visible artifacts
 if (!defined('WEBCAM_JPEG_QUALITY')) {
-    define('WEBCAM_JPEG_QUALITY', 2);
+    define('WEBCAM_JPEG_QUALITY', 1);
 }
 
