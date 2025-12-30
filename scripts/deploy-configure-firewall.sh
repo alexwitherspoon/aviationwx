@@ -260,6 +260,54 @@ echo "Final Firewall Status:"
 echo "=============================================="
 $SUDO ufw status numbered
 
+# =============================================================================
+# STEP 5: Ensure explicit iptables rules (safety net for DROP policy)
+# =============================================================================
+# When default iptables policy is DROP, ufw rules may not be sufficient.
+# Add explicit ACCEPT rules at the beginning of INPUT chain as a safety measure.
+# This ensures ports are accessible even if ufw integration has issues.
+echo "Step 5: Ensuring explicit iptables rules for critical ports..."
+CRITICAL_PORTS=("2121" "2222" "50000:51000")
+
+for port in "${CRITICAL_PORTS[@]}"; do
+    # Check if rule already exists (anywhere in the chain)
+    if $SUDO iptables -C INPUT -p tcp --dport ${port} -j ACCEPT 2>/dev/null; then
+        echo "  ✓ iptables rule for ${port}/tcp already exists"
+    else
+        if [ "$DRY_RUN" = "true" ]; then
+            echo "  [DRY RUN] Would add iptables rule: ${port}/tcp"
+        else
+            echo "  + Adding explicit iptables rule for ${port}/tcp..."
+            # Insert at position 1 to ensure it's before ufw chains
+            $SUDO iptables -I INPUT 1 -p tcp --dport ${port} -j ACCEPT
+        fi
+    fi
+done
+
+# Save iptables rules if iptables-persistent is available
+if command -v iptables-save >/dev/null 2>&1; then
+    if [ -d "/etc/iptables" ]; then
+        if [ "$DRY_RUN" = "true" ]; then
+            echo "  [DRY RUN] Would save iptables rules to /etc/iptables/rules.v4"
+        else
+            echo "  Saving iptables rules..."
+            $SUDO mkdir -p /etc/iptables
+            $SUDO iptables-save | $SUDO tee /etc/iptables/rules.v4 >/dev/null || true
+        fi
+    fi
+fi
+
+echo "✓ iptables rules verified"
+echo ""
+
+# =============================================================================
+# FINAL: Show current status
+# =============================================================================
+echo "=============================================="
+echo "Final Firewall Status:"
+echo "=============================================="
+$SUDO ufw status numbered
+
 echo ""
 echo "✓ Firewall configuration complete"
 
