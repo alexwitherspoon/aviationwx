@@ -456,7 +456,7 @@ if (!defined('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL')) {
     define('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL', 8); // Nautical twilight: even lower
 }
 if (!defined('WEBCAM_PIXELATION_THRESHOLD_NIGHT')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 5); // Night: very conservative (dark images are soft)
+    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 3); // Night: very conservative (dark images are soft, Reolink cameras have low variance ~3.2)
 }
 // Sample size for Laplacian calculation (grid of NxN samples across image)
 if (!defined('WEBCAM_PIXELATION_SAMPLE_GRID')) {
