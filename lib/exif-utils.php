@@ -471,15 +471,12 @@ function formatExifValidationResult(array $result): string {
  * - YYYY-MM-DD_HH-MM-SS (e.g., 2025-12-29_21-04-21)
  * - YYYY_MM_DD_HH_MM_SS (e.g., 2025_12_29_21_04_21)
  * - YYYYMMDDTHHmmss (ISO-like, e.g., 20251229T210421)
+ * - Unix timestamps (10 digits)
  * 
- * Validation ensures:
- * - Year is reasonable (2020-2030)
- * - Month is 1-12
- * - Day is 1-31 (basic check)
- * - Hour is 0-23
- * - Minute is 0-59
- * - Second is 0-59
- * - Timestamp is within reasonable range of file mtime (±24 hours)
+ * Validation uses rolling windows based on current server time:
+ * - Year: current year -5 to +1 years
+ * - Unix timestamp: current time ±5 years
+ * - All timestamps must be within ±24 hours of file mtime
  * 
  * @param string $filePath Path to file (uses basename for parsing)
  * @return array {
@@ -566,11 +563,16 @@ function parseFilenameTimestamp(string $filePath): array {
         }
     }
     
-    // Pattern 5: Unix timestamp (10 digits, 1600000000-1900000000 range = ~2020-2030)
+    // Pattern 5: Unix timestamp (10 digits within rolling window)
     // Example: webcam_1767072037.jpg
-    if (preg_match('/\b(1[6-8]\d{8})\b/', $filenameNoExt, $matches)) {
+    // Use rolling window: current time ±5 years
+    if (preg_match('/\b(\d{10})\b/', $filenameNoExt, $matches)) {
         $unixTs = intval($matches[1]);
-        if (isTimestampReasonable($unixTs, $fileMtime)) {
+        $fiveYearsSeconds = 5 * 365 * 24 * 60 * 60;
+        $minUnix = time() - $fiveYearsSeconds;
+        $maxUnix = time() + (365 * 24 * 60 * 60); // 1 year in future
+        
+        if ($unixTs >= $minUnix && $unixTs <= $maxUnix && isTimestampReasonable($unixTs, $fileMtime)) {
             $result['found'] = true;
             $result['timestamp'] = $unixTs;
             $result['pattern'] = 'unix_timestamp';
@@ -583,6 +585,10 @@ function parseFilenameTimestamp(string $filePath): array {
 
 /**
  * Parse and validate timestamp components
+ * 
+ * Uses a rolling window for year validation based on current server time:
+ * - Minimum: current year - 5 years (accommodates old uploads/delays)
+ * - Maximum: current year + 1 year (accommodates timezone differences)
  * 
  * @param string $year Year (4 digits)
  * @param string $month Month (2 digits)
@@ -600,8 +606,13 @@ function parseTimestampComponents(string $year, string $month, string $day, stri
     $i = intval($minute);
     $s = intval($second);
     
+    // Rolling year window based on current time
+    $currentYear = intval(date('Y'));
+    $minYear = $currentYear - 5;  // Allow up to 5 years in the past
+    $maxYear = $currentYear + 1;  // Allow 1 year in the future (timezone edge cases)
+    
     // Validate ranges
-    if ($y < 2020 || $y > 2030) return null;  // Reasonable year range
+    if ($y < $minYear || $y > $maxYear) return null;
     if ($m < 1 || $m > 12) return null;
     if ($d < 1 || $d > 31) return null;
     if ($h < 0 || $h > 23) return null;
