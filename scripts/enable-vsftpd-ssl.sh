@@ -69,10 +69,19 @@ enable_ssl_in_config() {
     sed -i 's/^# ssl_enable=YES/ssl_enable=YES/' "$config_file"
     
     # Allow both FTP and FTPS (optional encryption)
+    # Ensure these are explicitly set to NO for compatibility with various clients
     sed -i 's/^# force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
     sed -i 's/^force_local_data_ssl=YES/force_local_data_ssl=NO/' "$config_file"
     sed -i 's/^# force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
     sed -i 's/^force_local_logins_ssl=YES/force_local_logins_ssl=NO/' "$config_file"
+    
+    # Ensure these settings exist (add if missing)
+    if ! grep -q "^force_local_data_ssl=" "$config_file" 2>/dev/null; then
+        echo "force_local_data_ssl=NO" >> "$config_file"
+    fi
+    if ! grep -q "^force_local_logins_ssl=" "$config_file" 2>/dev/null; then
+        echo "force_local_logins_ssl=NO" >> "$config_file"
+    fi
     
     # Enable TLS versions for camera compatibility
     sed -i 's/^# ssl_tlsv1=YES/ssl_tlsv1=YES/' "$config_file"
@@ -80,11 +89,19 @@ enable_ssl_in_config() {
     sed -i '/^ssl_tlsv1_1=/d' "$config_file" 2>/dev/null || true
     sed -i '/^ssl_tlsv1_2=/d' "$config_file" 2>/dev/null || true
     
-    # Disable insecure SSL versions
+    # Disable insecure SSL versions (security requirement)
     sed -i 's/^# ssl_sslv2=NO/ssl_sslv2=NO/' "$config_file"
     sed -i 's/^ssl_sslv2=YES/ssl_sslv2=NO/' "$config_file"
     sed -i 's/^# ssl_sslv3=NO/ssl_sslv3=NO/' "$config_file"
     sed -i 's/^ssl_sslv3=YES/ssl_sslv3=NO/' "$config_file"
+    
+    # Ensure these are explicitly set (add if missing)
+    if ! grep -q "^ssl_sslv2=" "$config_file" 2>/dev/null; then
+        echo "ssl_sslv2=NO" >> "$config_file"
+    fi
+    if ! grep -q "^ssl_sslv3=" "$config_file" 2>/dev/null; then
+        echo "ssl_sslv3=NO" >> "$config_file"
+    fi
     
     # SSL/TLS settings
     sed -i 's/^# require_ssl_reuse=NO/require_ssl_reuse=NO/' "$config_file"
