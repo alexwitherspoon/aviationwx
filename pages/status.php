@@ -415,8 +415,8 @@ function checkSystemHealth(): array {
     ];
     
     // Check cache directories
-    $cacheDir = __DIR__ . '/../cache';
-    $webcamCacheDir = __DIR__ . '/../cache/webcams';
+    $cacheDir = CACHE_BASE_DIR;
+    $webcamCacheDir = CACHE_WEBCAMS_DIR;
     $cacheExists = is_dir($cacheDir);
     $cacheWritable = $cacheExists && is_writable($cacheDir);
     $webcamCacheExists = is_dir($webcamCacheDir);
@@ -1171,7 +1171,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
         // Check if backup is active (providing data for any fields)
         // Use backup_status from cache if available (more accurate than calculating)
         $backupActive = false;
-        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($airportId);
         if (file_exists($weatherCacheFile)) {
             $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
             if (is_array($weatherData)) {
@@ -1270,7 +1270,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     // Check webcam caches - per-camera status
     // Use shared helper for timestamps, but we still need per-camera status
-    $webcamCacheDir = __DIR__ . '/../cache/webcams';
+    $webcamCacheDir = CACHE_WEBCAMS_DIR;
     $webcamCacheDirResolved = @realpath($webcamCacheDir) ?: $webcamCacheDir;
     $webcams = $airport['webcams'] ?? [];
     $webcamStatus = 'operational';
@@ -1304,7 +1304,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 }
                 // If still not available after require, use fallback path construction
                 if (!function_exists('getCacheFile')) {
-                    $cacheDir = __DIR__ . '/../cache/webcams/' . $airportId . '/' . $idx;
+                    $cacheDir = getWebcamCameraDir($airportId, $idx);
                     $cacheJpg = $cacheDir . '/current.jpg';
                     $cacheWebp = $cacheDir . '/current.webp';
                 } else {

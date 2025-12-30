@@ -28,6 +28,7 @@ if (!defined('AVIATIONWX_LOG_FILE')) {
 
 // Include core application files for testing (only those that don't have endpoint logic)
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../api/weather.php'; // api/weather.php now has a conditional to prevent endpoint execution
@@ -69,37 +70,64 @@ function isRunningInCI(): bool {
  * Preserves reference data files (mappings, ourairports data, push_webcams)
  */
 function cleanTestCache(): void {
-    $cacheDir = __DIR__ . '/../cache';
+    $cacheDir = CACHE_BASE_DIR;
     if (!is_dir($cacheDir)) {
         return;
     }
     
     // Files to clean (test-affected)
     $filesToClean = [
-        'backoff.json',
-        'peak_gusts.json',
-        'temp_extremes.json',
+        CACHE_BACKOFF_FILE,
+        CACHE_PEAK_GUSTS_FILE,
+        CACHE_TEMP_EXTREMES_FILE,
     ];
     
-    // Patterns to clean
-    $patterns = [
-        'weather_*.json',
-        'outage_*.json',
-        'rate_limit_*.json',
-        '*.backup',
+    // Patterns to clean in weather directory
+    $weatherPatterns = [
+        CACHE_WEATHER_DIR . 'weather_*.json',
+        CACHE_WEATHER_DIR . 'outage_*.json',
+    ];
+    
+    // Patterns to clean in rate limits directory
+    $rateLimitPatterns = [
+        CACHE_RATE_LIMITS_DIR . '*.json',
+    ];
+    
+    // Patterns to clean in base cache directory
+    $basePatterns = [
+        $cacheDir . '/*.backup',
     ];
     
     // Clean specific files
     foreach ($filesToClean as $file) {
-        $filePath = $cacheDir . '/' . $file;
-        if (is_file($filePath)) {
-            @unlink($filePath);
+        if (is_file($file)) {
+            @unlink($file);
         }
     }
     
-    // Clean files matching patterns
-    foreach ($patterns as $pattern) {
-        $files = glob($cacheDir . '/' . $pattern);
+    // Clean files matching weather patterns
+    foreach ($weatherPatterns as $pattern) {
+        $files = glob($pattern);
+        foreach ($files as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    }
+    
+    // Clean files matching rate limit patterns
+    foreach ($rateLimitPatterns as $pattern) {
+        $files = glob($pattern);
+        foreach ($files as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    }
+    
+    // Clean files matching base patterns
+    foreach ($basePatterns as $pattern) {
+        $files = glob($pattern);
         foreach ($files as $file) {
             if (is_file($file)) {
                 @unlink($file);
@@ -108,7 +136,7 @@ function cleanTestCache(): void {
     }
     
     // Clean webcams directory (all image formats and staging files)
-    $webcamsDir = $cacheDir . '/webcams';
+    $webcamsDir = CACHE_WEBCAMS_DIR;
     if (is_dir($webcamsDir)) {
         $imagePatterns = ['*.jpg', '*.webp', '*.avif', '*.tmp'];
         foreach ($imagePatterns as $pattern) {

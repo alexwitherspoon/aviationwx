@@ -1,6 +1,7 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../scripts/fetch-webcam.php';
 
 class WebcamBackoffTest extends TestCase
@@ -12,13 +13,10 @@ class WebcamBackoffTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->backoffFile = __DIR__ . '/../../cache/backoff.json';
+        $this->backoffFile = CACHE_BACKOFF_FILE;
         
         // Ensure cache directory exists
-        $cacheDir = dirname($this->backoffFile);
-        if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
-        }
+        ensureCacheDir(dirname($this->backoffFile));
         
         // Clean up backoff file before each test
         if (file_exists($this->backoffFile)) {

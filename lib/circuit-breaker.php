@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/cache-paths.php';
 
 /**
  * Base circuit breaker check
@@ -271,16 +272,12 @@ function recordCircuitBreakerSuccessBase($key, $backoffFile) {
  * }
  */
 function checkWeatherCircuitBreaker($airportId, $sourceType) {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0, 'failures' => 0];
-        }
+    if (!ensureCacheDir(CACHE_BASE_DIR)) {
+        error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0, 'failures' => 0];
     }
-    $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
-    return checkCircuitBreakerBase($key, $backoffFile);
+    return checkCircuitBreakerBase($key, CACHE_BACKOFF_FILE);
 }
 
 /**
@@ -293,16 +290,12 @@ function checkWeatherCircuitBreaker($airportId, $sourceType) {
  * @return void
  */
 function recordWeatherFailure($airportId, $sourceType, $severity = 'transient', $httpCode = null) {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return;
-        }
+    if (!ensureCacheDir(CACHE_BASE_DIR)) {
+        error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
+        return;
     }
-    $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
-    recordCircuitBreakerFailureBase($key, $backoffFile, $severity, $httpCode);
+    recordCircuitBreakerFailureBase($key, CACHE_BACKOFF_FILE, $severity, $httpCode);
 }
 
 /**
@@ -313,9 +306,8 @@ function recordWeatherFailure($airportId, $sourceType, $severity = 'transient', 
  * @return void
  */
 function recordWeatherSuccess($airportId, $sourceType) {
-    $backoffFile = __DIR__ . '/../cache/backoff.json';
     $key = $airportId . '_weather_' . $sourceType;
-    recordCircuitBreakerSuccessBase($key, $backoffFile);
+    recordCircuitBreakerSuccessBase($key, CACHE_BACKOFF_FILE);
 }
 
 /**
@@ -331,16 +323,12 @@ function recordWeatherSuccess($airportId, $sourceType) {
  * }
  */
 function checkWebcamCircuitBreaker($airportId, $camIndex) {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0, 'failures' => 0];
-        }
+    if (!ensureCacheDir(CACHE_BASE_DIR)) {
+        error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0, 'failures' => 0];
     }
-    $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_' . $camIndex;
-    return checkCircuitBreakerBase($key, $backoffFile);
+    return checkCircuitBreakerBase($key, CACHE_BACKOFF_FILE);
 }
 
 /**
@@ -352,16 +340,12 @@ function checkWebcamCircuitBreaker($airportId, $camIndex) {
  * @return void
  */
 function recordWebcamFailure($airportId, $camIndex, $severity = 'transient') {
-    $cacheDir = __DIR__ . '/../cache';
-    if (!file_exists($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            error_log("Failed to create cache directory: {$cacheDir}");
-            return;
-        }
+    if (!ensureCacheDir(CACHE_BASE_DIR)) {
+        error_log("Failed to create cache directory: " . CACHE_BASE_DIR);
+        return;
     }
-    $backoffFile = $cacheDir . '/backoff.json';
     $key = $airportId . '_' . $camIndex;
-    recordCircuitBreakerFailureBase($key, $backoffFile, $severity);
+    recordCircuitBreakerFailureBase($key, CACHE_BACKOFF_FILE, $severity);
 }
 
 /**
@@ -372,8 +356,7 @@ function recordWebcamFailure($airportId, $camIndex, $severity = 'transient') {
  * @return void
  */
 function recordWebcamSuccess($airportId, $camIndex) {
-    $backoffFile = __DIR__ . '/../cache/backoff.json';
     $key = $airportId . '_' . $camIndex;
-    recordCircuitBreakerSuccessBase($key, $backoffFile);
+    recordCircuitBreakerSuccessBase($key, CACHE_BACKOFF_FILE);
 }
 

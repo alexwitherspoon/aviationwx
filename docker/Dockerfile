@@ -101,16 +101,14 @@ RUN mkdir -p /var/www/html/cache/webcams \
     && chown -R www-data:www-data /var/www/html/cache
 
 # Create directories for FTP/SFTP uploads
-# Uses cache/webcam/uploads/ to match vsftpd local_root configuration
+# Uses cache/uploads/ to match vsftpd local_root configuration
 # Parent directories must be root-owned for SFTP chroot to work
-RUN mkdir -p /var/www/html/cache/webcam/uploads \
+RUN mkdir -p /var/www/html/cache/uploads \
     && mkdir -p /etc/vsftpd/users \
     && mkdir -p /var/run/vsftpd/empty \
     && mkdir -p /var/backups/aviationwx \
-    && chown root:root /var/www/html/cache/webcam \
-    && chmod 755 /var/www/html/cache/webcam \
-    && chown root:root /var/www/html/cache/webcam/uploads \
-    && chmod 755 /var/www/html/cache/webcam/uploads
+    && chown root:root /var/www/html/cache/uploads \
+    && chmod 755 /var/www/html/cache/uploads
 # Note: getent is provided by glibc (already in base image)
 # dnsutils provides dig as fallback, but getent should be sufficient
 

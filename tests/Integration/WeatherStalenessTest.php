@@ -2,6 +2,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
 
 class WeatherStalenessTest extends TestCase
 {
@@ -13,10 +14,8 @@ class WeatherStalenessTest extends TestCase
     {
         parent::setUp();
         $this->baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
-        $this->cacheFile = __DIR__ . '/../../cache/weather_' . $this->airport . '.json';
-        if (!is_dir(dirname($this->cacheFile))) {
-            @mkdir(dirname($this->cacheFile), 0755, true);
-        }
+        $this->cacheFile = getWeatherCachePath($this->airport);
+        ensureCacheDir(dirname($this->cacheFile));
     }
 
     /**

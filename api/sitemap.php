@@ -9,6 +9,7 @@
 header('Content-Type: application/xml; charset=utf-8');
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 // Load configuration
 $config = loadConfig();
@@ -57,7 +58,7 @@ foreach ($enabledAirports as $airportId => $airport) {
     
     // Determine lastmod date
     // Try to get from weather cache file modification time
-    $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+    $weatherCacheFile = getWeatherCachePath($airportId);
     $lastmod = date('Y-m-d'); // Default to today
     
     if (file_exists($weatherCacheFile)) {

@@ -8,6 +8,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/process-utils.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../pages/status.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
 
@@ -134,11 +135,11 @@ class StatusPageTest extends TestCase
         ];
         
         // Create temporary weather cache file with METAR data
-        $cacheDir = __DIR__ . '/../../cache';
+        $cacheFile = getWeatherCachePath($airportId);
+        $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0755, true);
         }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
         
         // Test: METAR data 1 hour old should be operational
         $weatherData = [
@@ -184,11 +185,11 @@ class StatusPageTest extends TestCase
         ];
         
         // Create temporary weather cache file with METAR data
-        $cacheDir = __DIR__ . '/../../cache';
+        $cacheFile = getWeatherCachePath($airportId);
+        $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0755, true);
         }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
         
         // Test: METAR data 2.5 hours old should be degraded
         $weatherData = [
@@ -234,11 +235,11 @@ class StatusPageTest extends TestCase
         ];
         
         // Create temporary weather cache file with METAR data
-        $cacheDir = __DIR__ . '/../../cache';
+        $cacheFile = getWeatherCachePath($airportId);
+        $cacheDir = dirname($cacheFile);
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0755, true);
         }
-        $cacheFile = $cacheDir . '/weather_' . $airportId . '.json';
         
         // Test: METAR data 4 hours old should be down
         $weatherData = [

@@ -8,6 +8,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
 
 class OurAirportsTest extends TestCase
 {
@@ -19,8 +20,8 @@ class OurAirportsTest extends TestCase
         parent::setUp();
         
         // Backup original cache file if it exists
-        $this->originalCacheFile = __DIR__ . '/../../cache/ourairports_data.json';
-        $this->testCacheFile = __DIR__ . '/../../cache/ourairports_data.json.test';
+        $this->originalCacheFile = CACHE_BASE_DIR . '/ourairports_data.json';
+        $this->testCacheFile = CACHE_BASE_DIR . '/ourairports_data.json.test';
         
         if (file_exists($this->originalCacheFile)) {
             @copy($this->originalCacheFile, $this->testCacheFile);

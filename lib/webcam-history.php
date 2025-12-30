@@ -8,17 +8,9 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/cache-paths.php';
 
-/**
- * Get history directory path for a camera
- * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @return string Path to history directory
- */
-function getWebcamHistoryDir(string $airportId, int $camIndex): string {
-    return __DIR__ . '/../cache/webcams/' . $airportId . '/' . $camIndex . '/history';
-}
+// Note: getWebcamHistoryDir() is now provided by cache-paths.php
 
 /**
  * Save frame to history (single format - legacy)
@@ -134,7 +126,6 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
     }
     
     $historyDir = getWebcamHistoryDir($airportId, $camIndex);
-    $cacheDir = __DIR__ . '/../cache/webcams';
     
     // Create history directory if needed
     if (!is_dir($historyDir)) {
@@ -152,7 +143,7 @@ function saveAllFormatsToHistory(string $airportId, int $camIndex, array $promot
     if ($timestamp <= 0) {
         foreach ($promotedFormats as $format) {
             // Try to resolve symlink to get timestamp file
-            $symlinkPath = $cacheDir . '/' . $airportId . '_' . $camIndex . '.' . $format;
+            $symlinkPath = getCacheSymlinkPath($airportId, $camIndex, $format);
             if (is_link($symlinkPath)) {
                 $target = readlink($symlinkPath);
                 if ($target !== false) {
@@ -275,7 +266,6 @@ function saveAllVariantsToHistory(string $airportId, int $camIndex, array $promo
     }
     
     $historyDir = getWebcamHistoryDir($airportId, $camIndex);
-    $cacheDir = __DIR__ . '/../cache/webcams';
     
     // Create history directory if needed
     if (!is_dir($historyDir)) {

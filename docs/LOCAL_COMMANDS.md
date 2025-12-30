@@ -40,7 +40,7 @@ Tests the weather API and shows formatted JSON response.
 ### 4. View Cached Images
 ```bash
 # List cached webcam images (cache location depends on deployment)
-ls -lh cache/webcams/
+ls -lh cache/webcams/*/
 ```
 Lists cached webcam images with sizes and timestamps.
 
@@ -84,7 +84,7 @@ aviationwx.org/
 ├── airports.json                # Airport configuration
 ├── styles.css                   # Styling
 # Cache directory structure (location depends on deployment)
-# cache/webcams/  # Cached webcam images
+# cache/webcams/{airport}/{cam}/  # Cached webcam images per camera
 │       ├── kspb_0.jpg          # Webcam 1
 │       └── kspb_1.jpg          # Webcam 2
 └── ...

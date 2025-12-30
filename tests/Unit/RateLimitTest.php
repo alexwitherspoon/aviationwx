@@ -5,6 +5,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/rate-limit.php';
 
 class RateLimitTest extends TestCase
@@ -14,10 +15,8 @@ class RateLimitTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->testCacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($this->testCacheDir)) {
-            @mkdir($this->testCacheDir, 0755, true);
-        }
+        $this->testCacheDir = CACHE_BASE_DIR;
+        ensureCacheDir($this->testCacheDir);
     }
     
     protected function tearDown(): void

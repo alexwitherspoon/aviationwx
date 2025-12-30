@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 // Get embed parameters
 $embedAirportId = $_GET['embed_airport'] ?? $_GET['airport'] ?? '';
@@ -168,7 +169,7 @@ if ($airport && !isAirportEnabled($airport)) {
 // Get weather data if airport found
 $weather = null;
 if ($airport && $airportId) {
-    $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+    $weatherCacheFile = getWeatherCachePath($airportId);
     if (file_exists($weatherCacheFile)) {
         $weatherData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($weatherData)) {

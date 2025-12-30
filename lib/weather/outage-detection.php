@@ -162,9 +162,8 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
         if ($outageStart === 0 && isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0) {
             $webcamNewestMtime = 0;
             foreach ($airport['webcams'] as $index => $cam) {
-                $base = __DIR__ . '/../../cache/webcams/' . $airportId . '_' . $index;
-                foreach (['.jpg', '.webp'] as $ext) {
-                    $filePath = $base . $ext;
+                foreach (['jpg', 'webp'] as $format) {
+                    $filePath = getCacheSymlinkPath($airportId, $index, $format);
                     if (file_exists($filePath)) {
                         // Use @ to suppress errors for non-critical file operations
                         // We handle failures explicitly with fallback mechanisms below

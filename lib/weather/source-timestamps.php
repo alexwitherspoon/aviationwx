@@ -6,6 +6,8 @@
  * Used by both outage detection and status page to ensure consistency.
  */
 
+require_once __DIR__ . '/../cache-paths.php';
+
 /**
  * Get timestamps for all configured data sources for an airport
  * 
@@ -69,7 +71,7 @@ function getSourceTimestamps(string $airportId, array $airport): array {
     // Check primary weather source (if configured)
     if (isset($airport['weather_source']) && !empty($airport['weather_source'])) {
         $result['primary']['available'] = true;
-        $weatherCacheFile = __DIR__ . '/../../cache/weather_' . $airportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($airportId);
         
         if (file_exists($weatherCacheFile)) {
             // Use @ to suppress errors for non-critical file operations
@@ -95,7 +97,7 @@ function getSourceTimestamps(string $airportId, array $airport): array {
     // Check backup weather source (if configured)
     if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup'])) {
         $result['backup']['available'] = true;
-        $weatherCacheFile = __DIR__ . '/../../cache/weather_' . $airportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($airportId);
         
         if (file_exists($weatherCacheFile)) {
             // Use @ to suppress errors for non-critical file operations
@@ -129,7 +131,7 @@ function getSourceTimestamps(string $airportId, array $airport): array {
     
     if ($hasMetar) {
         $result['metar']['available'] = true;
-        $weatherCacheFile = __DIR__ . '/../../cache/weather_' . $airportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($airportId);
         
         if (file_exists($weatherCacheFile)) {
             // Use @ to suppress errors for non-critical file operations
@@ -160,12 +162,11 @@ function getSourceTimestamps(string $airportId, array $airport): array {
         $webcamNewestTimestamp = 0;
         
         foreach ($airport['webcams'] as $index => $cam) {
-            $base = __DIR__ . '/../../cache/webcams/' . $airportId . '_' . $index;
             $webcamTimestamp = 0;
             
-            // Try to get timestamp from JPG or WebP file
-            foreach (['.jpg', '.webp'] as $ext) {
-                $filePath = $base . $ext;
+            // Try to get timestamp from JPG or WebP file using new path structure
+            foreach (['jpg', 'webp'] as $format) {
+                $filePath = getCacheSymlinkPath($airportId, $index, $format);
                 if (file_exists($filePath)) {
                     // Try EXIF first if available, then fallback to filemtime
                     if (function_exists('exif_read_data')) {

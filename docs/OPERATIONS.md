@@ -246,7 +246,7 @@ docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep schedule
 docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php --worker kspb 0
 
 # Check cache directory (location depends on deployment)
-ls -lh cache/webcams/
+ls -lh cache/webcams/*/
 ```
 
 #### Configuration Issues

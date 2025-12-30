@@ -975,10 +975,9 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                     <div class="webcam-container">
                         <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: 16/9; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
                         <?php
-                        $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
                         $mtimeJpg = 0;
-                        foreach (['.jpg', '.webp'] as $ext) {
-                            $filePath = $base . $ext;
+                        foreach (['jpg', 'webp'] as $ext) {
+                            $filePath = getCacheSymlinkPath($airportId, $index, $ext);
                             if (file_exists($filePath)) {
                                 $mtimeJpg = getImageCaptureTimeForPage($filePath);
                                 break;
@@ -1071,7 +1070,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         $weatherSources = [];
         
         // Load weather cache to check source status
-        $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($airportId);
         $weatherData = null;
         if (file_exists($weatherCacheFile)) {
             $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
@@ -1627,7 +1626,7 @@ const AIRPORT_DATA = <?php
 // Initial weather data (embedded from cache for immediate display)
 const INITIAL_WEATHER_DATA = <?php
     // Load cached weather data for immediate display
-    $weatherCacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+    $weatherCacheFile = getWeatherCachePath($airportId);
     $initialWeatherData = null;
     if (file_exists($weatherCacheFile)) {
         $cachedWeather = @json_decode(@file_get_contents($weatherCacheFile), true);
@@ -5228,10 +5227,9 @@ let webcamVisibilityDebounceTimer = null; // Debounce visibility/focus events
 // Initialize CAM_TS with server-side timestamps from initial image load
 // Uses EXIF capture time when available, otherwise falls back to filemtime
 <?php foreach ($airport['webcams'] as $index => $cam): 
-    $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
     $initialMtime = 0;
-    foreach (['.jpg', '.webp'] as $ext) {
-        $filePath = $base . $ext;
+    foreach (['jpg', 'webp'] as $ext) {
+        $filePath = getCacheSymlinkPath($airportId, $index, $ext);
         if (file_exists($filePath)) {
             $initialMtime = getImageCaptureTimeForPage($filePath);
             break;
@@ -5244,10 +5242,9 @@ CAM_TS[<?= $index ?>] = <?= $initialMtime ?>;
 // Initialize timestamp displays after DOM is ready
 function initializeWebcamTimestamps() {
     <?php foreach ($airport['webcams'] as $index => $cam): 
-        $base = __DIR__ . '/../cache/webcams/' . $airportId . '_' . $index;
         $initialMtime = 0;
-        foreach (['.jpg', '.webp'] as $ext) {
-            $filePath = $base . $ext;
+        foreach (['jpg', 'webp'] as $ext) {
+            $filePath = getCacheSymlinkPath($airportId, $index, $ext);
             if (file_exists($filePath)) {
                 $initialMtime = getImageCaptureTimeForPage($filePath);
                 break;

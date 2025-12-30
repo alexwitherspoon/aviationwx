@@ -7,6 +7,7 @@ header('Expires: 0');
 // Load SEO utilities and config (for getGitSha function)
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 // Encode email body for mailto: URLs with readable formatting
 // Uses rawurlencode (%20 for spaces) and %0A for newlines to ensure proper display in email clients
@@ -1313,7 +1314,7 @@ Best regards,
                 
                 // Always reads fresh from disk (no PHP-level caching) to ensure up-to-date data
                 function getAirportWeather($airportId) {
-                    $cacheFile = __DIR__ . '/../cache/weather_' . $airportId . '.json';
+                    $cacheFile = getWeatherCachePath($airportId);
                     if (file_exists($cacheFile)) {
                         // Clear opcache to ensure fresh read
                         if (function_exists('opcache_invalidate')) {

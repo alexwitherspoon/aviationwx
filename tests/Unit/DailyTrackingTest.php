@@ -7,6 +7,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../api/weather.php';
 
 class DailyTrackingTest extends TestCase
@@ -21,16 +22,12 @@ class DailyTrackingTest extends TestCase
         $this->testCacheDir = sys_get_temp_dir() . '/aviationwx_test_' . uniqid();
         mkdir($this->testCacheDir, 0755, true);
         
-        // Override cache directory in weather.php functions (would need refactoring for full isolation)
-        // For now, we'll clean up actual cache files after tests
-        $this->peakGustFile = __DIR__ . '/../../cache/peak_gusts.json';
-        $this->tempExtremesFile = __DIR__ . '/../../cache/temp_extremes.json';
+        // Use centralized cache paths
+        $this->peakGustFile = CACHE_PEAK_GUSTS_FILE;
+        $this->tempExtremesFile = CACHE_TEMP_EXTREMES_FILE;
         
         // Ensure cache directory exists
-        $cacheDir = dirname($this->peakGustFile);
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
+        ensureCacheDir(dirname($this->peakGustFile));
         
         // Backup existing files if they exist
         if (file_exists($this->peakGustFile)) {

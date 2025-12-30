@@ -305,7 +305,7 @@ Fetch image (HTTP/MJPEG/RTSP)
   ↓
 Generate formats (JPEG, WebP, AVIF) - async, non-blocking
   ↓
-Save to cache/webcams/
+Save to cache/webcams/{airport}/{cam}/
   ↓
 
 User Request → webcam.php

@@ -1121,18 +1121,10 @@ if ($config === null || !is_array($config)) {
     die("Error: Could not load configuration\n");
 }
 
-// Cache is at root level, not in scripts directory
-$cacheDir = __DIR__ . '/../cache/webcams';
-if (!is_dir($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
-
-// Ensure backoff cache file directory exists
-$backoffFile = __DIR__ . '/../cache/backoff.json';
-$backoffDir = dirname($backoffFile);
-if (!is_dir($backoffDir)) {
-    @mkdir($backoffDir, 0755, true);
-}
+// Ensure cache directories exist
+$cacheDir = CACHE_WEBCAMS_DIR;
+ensureCacheDir($cacheDir);
+ensureCacheDir(CACHE_BASE_DIR);
 
 // Worker mode: process single camera and exit
 if ($isWorkerMode) {

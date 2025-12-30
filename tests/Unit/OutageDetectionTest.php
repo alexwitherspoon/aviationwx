@@ -9,6 +9,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/logger.php';
 require_once __DIR__ . '/../../lib/weather/source-timestamps.php';
@@ -22,10 +23,11 @@ class OutageDetectionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->cacheDir = __DIR__ . '/../../cache';
+        $this->cacheDir = CACHE_BASE_DIR;
         if (!is_dir($this->cacheDir)) {
-            mkdir($this->cacheDir, 0755, true);
+            ensureCacheDir($this->cacheDir);
         }
+        ensureCacheDir(CACHE_WEATHER_DIR);
         
         // Clean up any existing test files
         $this->cleanupTestFiles();
@@ -41,10 +43,10 @@ class OutageDetectionTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $files = [
-            $this->cacheDir . '/weather_' . $this->testAirportId . '.json',
-            $this->cacheDir . '/outage_' . $this->testAirportId . '.json',
-            getCacheFile($this->testAirportId, 0, 'jpg', 'primary'),
-            getCacheFile($this->testAirportId, 0, 'webp', 'primary')
+            getWeatherCachePath($this->testAirportId),
+            getOutageCachePath($this->testAirportId),
+            getCacheSymlinkPath($this->testAirportId, 0, 'jpg'),
+            getCacheSymlinkPath($this->testAirportId, 0, 'webp')
         ];
         
         foreach ($files as $file) {
@@ -79,7 +81,7 @@ class OutageDetectionTest extends TestCase
         ];
         
         // Create stale weather cache (2 hours old)
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $staleTimestamp = time() - (2 * 3600);
         $weatherData = [
             'obs_time_primary' => $staleTimestamp,
@@ -107,8 +109,8 @@ class OutageDetectionTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
-        $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $outageStateFile = getOutageCachePath($this->testAirportId);
         $staleTimestamp = time() - (2 * 3600);
         $weatherData = [
             'obs_time_primary' => $staleTimestamp,
@@ -141,8 +143,8 @@ class OutageDetectionTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
-        $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $outageStateFile = getOutageCachePath($this->testAirportId);
         
         // Create existing outage state file with original start time
         $originalStartTime = time() - (3 * 3600); // 3 hours ago
@@ -180,7 +182,7 @@ class OutageDetectionTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
+        $outageStateFile = getOutageCachePath($this->testAirportId);
         
         // Create outage state file
         $outageStartTime = time() - (3 * 3600);
@@ -222,7 +224,7 @@ class OutageDetectionTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
+        $outageStateFile = getOutageCachePath($this->testAirportId);
         
         // Create outage state file with last_checked beyond grace period
         // Use failclosed threshold as the grace period
@@ -262,12 +264,10 @@ class OutageDetectionTest extends TestCase
         ];
         
         // Create webcam cache file (no weather cache)
-        $webcamDir = $this->cacheDir . '/webcams';
-        if (!is_dir($webcamDir)) {
-            mkdir($webcamDir, 0755, true);
-        }
+        $webcamDir = CACHE_WEBCAMS_DIR;
+        ensureCacheDir($webcamDir);
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
         $webcamDir = dirname($webcamFile);
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
@@ -282,7 +282,7 @@ class OutageDetectionTest extends TestCase
         $this->assertGreaterThan(0, $result['newest_timestamp']);
         
         // Verify outage state file was created with webcam timestamp
-        $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
+        $outageStateFile = getOutageCachePath($this->testAirportId);
         $this->assertFileExists($outageStateFile);
         $outageState = json_decode(file_get_contents($outageStateFile), true);
         // Allow small tolerance for file system timestamp precision
@@ -298,13 +298,13 @@ class OutageDetectionTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        $outageStateFile = $this->cacheDir . '/outage_' . $this->testAirportId . '.json';
+        $outageStateFile = getOutageCachePath($this->testAirportId);
         
         // Create invalid outage state file
         file_put_contents($outageStateFile, 'invalid json{');
         
         // Create fresh weather cache
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $freshTimestamp = time() - 60;
         $weatherData = [
             'obs_time_primary' => $freshTimestamp,
@@ -332,7 +332,7 @@ class OutageDetectionTest extends TestCase
         ];
         
         // Create fresh weather cache
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $freshTimestamp = time() - 60;
         $weatherData = [
             'obs_time_primary' => $freshTimestamp,
@@ -341,12 +341,10 @@ class OutageDetectionTest extends TestCase
         file_put_contents($weatherCacheFile, json_encode($weatherData));
         
         // Create stale webcam (but weather is fresh, so no outage)
-        $webcamDir = $this->cacheDir . '/webcams';
-        if (!is_dir($webcamDir)) {
-            mkdir($webcamDir, 0755, true);
-        }
+        $webcamDir = CACHE_WEBCAMS_DIR;
+        ensureCacheDir($webcamDir);
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
         $webcamDir = dirname($webcamFile);
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);

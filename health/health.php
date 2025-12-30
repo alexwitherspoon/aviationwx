@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -22,9 +23,8 @@ if ($ff && strpos($ff, 'ffmpeg version') !== false) {
 }
 
 // cache dir
-$cacheDir = __DIR__ . '/../cache/webcams';
-$status['webcam_cache_dir']['exists'] = is_dir($cacheDir);
-$status['webcam_cache_dir']['writable'] = is_dir($cacheDir) && is_writable($cacheDir);
+$status['webcam_cache_dir']['exists'] = is_dir(CACHE_WEBCAMS_DIR);
+$status['webcam_cache_dir']['writable'] = is_dir(CACHE_WEBCAMS_DIR) && is_writable(CACHE_WEBCAMS_DIR);
 
 aviationwx_log('info', 'health probe', $status, 'app');
 echo json_encode($status);

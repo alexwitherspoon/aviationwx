@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
 
 /**
  * Handle GET /v1/airports/{id}/weather request
@@ -94,7 +95,7 @@ function handleGetWeather(array $params, array $context): void
  */
 function getWeatherFromCache(string $airportId): ?array
 {
-    $cacheFile = __DIR__ . '/../../cache/weather_' . $airportId . '.json';
+    $cacheFile = getWeatherCachePath($airportId);
     
     if (!file_exists($cacheFile)) {
         return null;

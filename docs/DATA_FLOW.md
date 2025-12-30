@@ -441,7 +441,7 @@ The system tracks daily extremes that reset at local midnight:
 **Function**: `getSourceTimestamps($airportId, $airport)` in `lib/weather/source-timestamps.php`
 
 **Extraction Logic**:
-- **Primary Weather**: Reads from `cache/weather_{airport_id}.json`
+- **Primary Weather**: Reads from `cache/weather/{airport_id}.json`
   - Prefers `obs_time_primary`, falls back to `last_updated_primary`
   - Returns timestamp, age, and availability status
 - **METAR**: Reads from same cache file
@@ -593,7 +593,7 @@ When new data is fetched but some fields are missing:
 
 ### Cache File Structure
 
-**Location**: `cache/weather_{airport_id}.json`
+**Location**: `cache/weather/{airport_id}.json`
 
 **Content**: Complete weather data object with all fields:
 - Raw measurements (temperature, wind, etc.)
@@ -606,7 +606,7 @@ When new data is fetched but some fields are missing:
 
 **Purpose**: Maintains a rolling 24-hour history of weather observations for API access and analysis.
 
-**Location**: `cache/weather_history_{airport_id}.json`
+**Location**: `cache/weather/history/{airport_id}.json`
 
 **Storage Format**: JSON file containing:
 - `airport_id`: Airport identifier
@@ -806,10 +806,12 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 
 ### Image Caching
 
-**Cache Location**: `cache/webcams/{airport_id}_{cam_index}.{ext}`
+**Cache Location**: `cache/webcams/{airport_id}/{cam_index}/`
 
-**File Naming**: `{airport_id}_{cam_index}.{ext}`
-- Example: `kspb_0.jpg`, `kspb_0.webp`, `kspb_0.avif`
+**File Naming**: 
+- Current: `current.{ext}` - symlink to latest timestamped image
+- Timestamped: `{timestamp}_{variant}.{ext}` - actual image files
+- Example: `cache/webcams/kspb/0/current.jpg`, `cache/webcams/kspb/0/1703980800_primary.jpg`
 - Formats: JPEG (`.jpg`), WebP (`.webp`), AVIF (`.avif`)
 
 **Atomic Writes**:

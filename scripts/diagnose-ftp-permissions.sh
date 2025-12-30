@@ -3,7 +3,7 @@
 # Usage: ./diagnose-ftp-permissions.sh <airport_id> <username>
 # Example: ./diagnose-ftp-permissions.sh kczk kczkcam1
 #
-# Directory structure: /cache/webcam/uploads/{airport}/{username}/
+# Directory structure: /cache/uploads/{airport}/{username}/
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ if [ -z "$AIRPORT_ID" ] || [ -z "$USERNAME" ]; then
 fi
 
 # Directory paths
-UPLOADS_BASE="/var/www/html/cache/webcam/uploads"
+UPLOADS_BASE="/var/www/html/cache/uploads"
 AIRPORT_DIR="${UPLOADS_BASE}/${AIRPORT_ID}"
 UPLOAD_DIR="${AIRPORT_DIR}/${USERNAME}"
 USER_CONFIG="/etc/vsftpd/users/${USERNAME}"

@@ -4,6 +4,7 @@
  * Check system status and configuration
  */
 
+require_once __DIR__ . '/../lib/cache-paths.php';
 header('Content-Type: text/html; charset=utf-8');
 
 $issues = [];
@@ -52,10 +53,8 @@ if (file_exists($configFile)) {
 }
 
 // Check cache directory with actual write test
-// Cache is at root level, not in admin directory
-$cacheDir = __DIR__ . '/../cache/webcams';
-$cacheTestFile = $cacheDir . '/.writable_test';
-if (is_dir($cacheDir)) {
+$cacheTestFile = CACHE_WEBCAMS_DIR . '/.writable_test';
+if (is_dir(CACHE_WEBCAMS_DIR)) {
     $success[] = "✅ cache/webcams directory exists";
     
     // Test actual writability by creating a test file
@@ -63,13 +62,13 @@ if (is_dir($cacheDir)) {
         @unlink($cacheTestFile);
         $success[] = "✅ cache/webcams is writable (test write successful)";
     } else {
-        $perms = substr(sprintf('%o', fileperms($cacheDir)), -4);
-        $owner = @fileowner($cacheDir);
+        $perms = substr(sprintf('%o', fileperms(CACHE_WEBCAMS_DIR)), -4);
+        $owner = @fileowner(CACHE_WEBCAMS_DIR);
         $issues[] = "❌ cache/webcams is not writable (perms: {$perms}, owner: {$owner})";
     }
     
-    // Show cache stats
-    $cacheFiles = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
+    // Show cache stats (recursive in new directory structure)
+    $cacheFiles = glob(CACHE_WEBCAMS_DIR . '/*/*/*.{jpg,webp}', GLOB_BRACE) ?: [];
     $cacheCount = count($cacheFiles);
     $cacheSize = 0;
     foreach ($cacheFiles as $file) {
@@ -221,11 +220,9 @@ if ($ffmpegCheck && strpos($ffmpegCheck, 'ffmpeg version') !== false) {
 }
 
 // Check RTSP error statistics from cache
-// Cache is at root level, not in admin directory
-$cacheDir = __DIR__ . '/../cache/webcams';
 $errorCounts = ['timeout' => 0, 'auth' => 0, 'tls' => 0, 'dns' => 0, 'connection' => 0, 'unknown' => 0];
-if (is_dir($cacheDir)) {
-    foreach (glob($cacheDir . '/*.error.json') as $errorFile) {
+if (is_dir(CACHE_WEBCAMS_DIR)) {
+    foreach (glob(CACHE_WEBCAMS_DIR . '/*/*/*.error.json') as $errorFile) {
         $errorData = @json_decode(file_get_contents($errorFile), true);
         if ($errorData && isset($errorData['code'])) {
             $code = $errorData['code'];

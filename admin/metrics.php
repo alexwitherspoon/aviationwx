@@ -1,16 +1,6 @@
-// Error rate metrics (requires APCu)
-if (function_exists('apcu_fetch')) {
-    $errorCount = apcu_fetch('aviationwx_error_events');
-    $now = time();
-    if (is_array($errorCount)) {
-        $recent = array_values(array_filter($errorCount, fn($t) => $t >= ($now - 3600)));
-        metric('app_errors_last_hour', count($recent));
-    } else {
-        metric('app_errors_last_hour', 0);
-    }
-}
 <?php
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 header('Content-Type: text/plain');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -31,15 +21,13 @@ metric('app_up', 1);
 metric('php_info', 1, ['version' => PHP_VERSION]);
 
 // Cache dir metrics
-// Cache is at root level, not in admin directory
-$cacheDir = __DIR__ . '/../cache/webcams';
-metric('webcam_cache_exists', is_dir($cacheDir) ? 1 : 0);
-metric('webcam_cache_writable', (is_dir($cacheDir) && is_writable($cacheDir)) ? 1 : 0);
+metric('webcam_cache_exists', is_dir(CACHE_WEBCAMS_DIR) ? 1 : 0);
+metric('webcam_cache_writable', (is_dir(CACHE_WEBCAMS_DIR) && is_writable(CACHE_WEBCAMS_DIR)) ? 1 : 0);
 
-// Count cached files by format
+// Count cached files by format (recursive in new directory structure)
 $counts = ['jpg' => 0, 'webp' => 0];
-if (is_dir($cacheDir)) {
-    foreach (glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE) ?: [] as $f) {
+if (is_dir(CACHE_WEBCAMS_DIR)) {
+    foreach (glob(CACHE_WEBCAMS_DIR . '/*/*/*.{jpg,webp}', GLOB_BRACE) ?: [] as $f) {
         $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
         if (isset($counts[$ext])) $counts[$ext]++;
     }
@@ -87,10 +75,8 @@ if (file_exists($airportsConfig)) {
                 }
 
                 // Circuit breaker/backoff state
-                // Cache is at root level, not in admin directory
-                $backoff = __DIR__ . '/../cache/backoff.json';
-                if (file_exists($backoff)) {
-                    $bo = json_decode(@file_get_contents($backoff), true) ?: [];
+                if (file_exists(CACHE_BACKOFF_FILE)) {
+                    $bo = json_decode(@file_get_contents(CACHE_BACKOFF_FILE), true) ?: [];
                     $key = strtolower($airportId) . '_' . $idx;
                     $st = $bo[$key] ?? [];
                     $remaining = max(0, (int)($st['next_allowed_time'] ?? 0) - $now);

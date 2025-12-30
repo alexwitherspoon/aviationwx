@@ -5,6 +5,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/public-api/rate-limit.php';
 
 class PublicApiRateLimitTest extends TestCase
@@ -27,10 +28,8 @@ class PublicApiRateLimitTest extends TestCase
         $this->testConfigFile = $this->testConfigDir . '/airports.json';
         
         // Create test cache directory
-        $this->testCacheDir = __DIR__ . '/../../cache/rate_limits';
-        if (!is_dir($this->testCacheDir)) {
-            @mkdir($this->testCacheDir, 0755, true);
-        }
+        $this->testCacheDir = CACHE_RATE_LIMITS_DIR;
+        ensureCacheDir($this->testCacheDir);
         
         // Create config with API enabled
         $this->createTestConfig([

@@ -279,14 +279,14 @@ if ($camIndex > $maxCamIndex || !isset($config['airports'][$airportId]['webcams'
 }
 
 $cam = $config['airports'][$airportId]['webcams'][$camIndex];
-$cacheDir = __DIR__ . '/../cache/webcams';
+$cacheDir = CACHE_WEBCAMS_DIR;
 $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', 'primary');
 $cacheWebp = getCacheFile($airportId, $camIndex, 'webp', 'primary');
 $cacheAvif = getCacheFile($airportId, $camIndex, 'avif', 'primary');
 
 // Create cache directory if it doesn't exist
 // Check parent directory first, then create with proper error handling
-$parentDir = dirname($cacheDir);
+$parentDir = CACHE_BASE_DIR;
 $currentUser = function_exists('posix_geteuid') ? posix_geteuid() : null;
 $currentUserInfo = $currentUser !== null && function_exists('posix_getpwuid') ? posix_getpwuid($currentUser) : null;
 

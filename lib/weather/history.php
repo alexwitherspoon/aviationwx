@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/../public-api/config.php';
 require_once __DIR__ . '/../logger.php';
+require_once __DIR__ . '/../cache-paths.php';
 
 // Maximum observations to store (safety limit)
 define('WEATHER_HISTORY_MAX_OBSERVATIONS', 1500);
@@ -204,8 +205,7 @@ function downsampleWeatherObservations(array $observations, string $resolution):
  */
 function getWeatherHistoryFilePath(string $airportId): string
 {
-    $cacheDir = __DIR__ . '/../../cache';
-    return $cacheDir . '/weather_history_' . $airportId . '.json';
+    return getWeatherHistoryCachePath($airportId);
 }
 
 /**
@@ -252,15 +252,12 @@ function loadWeatherHistory(string $airportId): array
 function saveWeatherHistory(string $airportId, array $history): bool
 {
     $file = getWeatherHistoryFilePath($airportId);
-    $cacheDir = dirname($file);
     
-    if (!is_dir($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            aviationwx_log('error', 'weather history: failed to create cache dir', [
-                'dir' => $cacheDir,
-            ], 'app');
-            return false;
-        }
+    if (!ensureCacheDir(CACHE_WEATHER_HISTORY_DIR)) {
+        aviationwx_log('error', 'weather history: failed to create cache dir', [
+            'dir' => CACHE_WEATHER_HISTORY_DIR,
+        ], 'app');
+        return false;
     }
     
     $result = @file_put_contents($file, json_encode($history), LOCK_EX);

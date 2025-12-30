@@ -25,6 +25,7 @@ require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/exif-utils.php';
+require_once __DIR__ . '/cache-paths.php';
 
 /**
  * Detect image format from file headers
@@ -302,8 +303,7 @@ function getStagingFilePath(string $airportId, int $camIndex, string $format, st
  * @return string Cache directory path
  */
 function getWebcamCacheDir(string $airportId, int $camIndex): string {
-    $baseDir = __DIR__ . '/../cache/webcams';
-    $dir = $baseDir . '/' . $airportId . '/' . $camIndex;
+    $dir = getWebcamCameraDir($airportId, $camIndex);
     
     // Ensure directory exists
     if (!is_dir($dir)) {
@@ -1822,12 +1822,12 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    $cacheDir = __DIR__ . '/../cache/webcams';
+    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
     if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
         return false;
     }
     
-    $cacheWebp = $cacheDir . '/' . $airportId . '_' . $camIndex . '.webp';
+    $cacheWebp = getCacheSymlinkPath($airportId, $camIndex, 'webp');
     
     // Log job start
     aviationwx_log('info', 'webcam format generation job started', [
@@ -1911,12 +1911,12 @@ function generateAvif($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    $cacheDir = __DIR__ . '/../cache/webcams';
+    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
     if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
         return false;
     }
     
-    $cacheAvif = $cacheDir . '/' . $airportId . '_' . $camIndex . '.avif';
+    $cacheAvif = getCacheSymlinkPath($airportId, $camIndex, 'avif');
     
     // Log job start
     aviationwx_log('info', 'webcam format generation job started', [
@@ -2000,12 +2000,12 @@ function generateJpeg($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    $cacheDir = __DIR__ . '/../cache/webcams';
+    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
     if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
         return false;
     }
     
-    $cacheJpeg = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
+    $cacheJpeg = getCacheSymlinkPath($airportId, $camIndex, 'jpg');
     
     // Skip if already exists
     if (file_exists($cacheJpeg)) {

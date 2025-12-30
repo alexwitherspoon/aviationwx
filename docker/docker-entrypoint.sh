@@ -89,7 +89,8 @@ echo "✓ Scheduler started (PID: $SCHEDULER_PID)"
 echo "Initializing cache directory..."
 CACHE_DIR="/var/www/html/cache"
 WEBCAM_CACHE_DIR="${CACHE_DIR}/webcams"
-PUSH_WEBCAM_CACHE_DIR="${CACHE_DIR}/push_webcams"
+WEATHER_CACHE_DIR="${CACHE_DIR}/weather"
+UPLOADS_CACHE_DIR="${CACHE_DIR}/uploads"
 
 # Create cache directories if they don't exist
 if [ ! -d "${CACHE_DIR}" ]; then
@@ -102,9 +103,10 @@ if [ ! -d "${WEBCAM_CACHE_DIR}" ]; then
     mkdir -p "${WEBCAM_CACHE_DIR}"
 fi
 
-if [ ! -d "${PUSH_WEBCAM_CACHE_DIR}" ]; then
-    echo "Creating push webcam cache directory: ${PUSH_WEBCAM_CACHE_DIR}"
-    mkdir -p "${PUSH_WEBCAM_CACHE_DIR}"
+if [ ! -d "${WEATHER_CACHE_DIR}" ]; then
+    echo "Creating weather cache directory: ${WEATHER_CACHE_DIR}"
+    mkdir -p "${WEATHER_CACHE_DIR}"
+    mkdir -p "${WEATHER_CACHE_DIR}/history"
 fi
 
 # Set ownership to www-data:www-data (UID 33, GID 33)
@@ -121,8 +123,8 @@ if [ -d "${CACHE_DIR}" ]; then
     if [ -d "${WEBCAM_CACHE_DIR}" ]; then
         chmod 775 "${WEBCAM_CACHE_DIR}" 2>/dev/null || true
     fi
-    if [ -d "${PUSH_WEBCAM_CACHE_DIR}" ]; then
-        chmod 775 "${PUSH_WEBCAM_CACHE_DIR}" 2>/dev/null || true
+    if [ -d "${WEATHER_CACHE_DIR}" ]; then
+        chmod 775 "${WEATHER_CACHE_DIR}" 2>/dev/null || true
     fi
     
     echo "✓ Cache directory initialized"
@@ -180,30 +182,21 @@ else
     echo "⚠️  Warning: Log directory does not exist and could not be created"
 fi
 
-# Initialize uploads directory (ephemeral, inside container only)
+# Initialize uploads directory (under cache/ for push webcam FTP/SFTP uploads)
 # Parent directories must be owned by root for SFTP chroot to work
 echo "Initializing uploads directory..."
-UPLOADS_DIR="/var/www/html/uploads"
-UPLOADS_WEBCAMS_DIR="${UPLOADS_DIR}/webcams"
+UPLOADS_DIR="${CACHE_DIR}/uploads"
 
-# Create uploads directories if they don't exist
+# Create uploads directory if it doesn't exist
 if [ ! -d "${UPLOADS_DIR}" ]; then
     echo "Creating uploads directory: ${UPLOADS_DIR}"
     mkdir -p "${UPLOADS_DIR}"
-fi
-
-if [ ! -d "${UPLOADS_WEBCAMS_DIR}" ]; then
-    echo "Creating webcams upload directory: ${UPLOADS_WEBCAMS_DIR}"
-    mkdir -p "${UPLOADS_WEBCAMS_DIR}"
 fi
 
 # Set ownership to root:root for chroot requirements
 # All parent directories must be root-owned for SSH chroot to work
 chown root:root "${UPLOADS_DIR}" 2>/dev/null || true
 chmod 755 "${UPLOADS_DIR}" 2>/dev/null || true
-
-chown root:root "${UPLOADS_WEBCAMS_DIR}" 2>/dev/null || true
-chmod 755 "${UPLOADS_WEBCAMS_DIR}" 2>/dev/null || true
 
 echo "✓ Uploads directory initialized"
 

@@ -541,12 +541,9 @@ class WebcamFormatGenerationTest extends TestCase
     public function testPromoteFormats_PromotesSuccessfulFormatsOnly(): void
     {
         $testAirport = 'test_promote_partial_' . time();
-        $cacheDir = __DIR__ . '/../../cache/webcams';
         $timestamp = time();
         
-        if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
-        }
+        ensureCacheDir(CACHE_WEBCAMS_DIR);
         
         // Create staging files for jpg and webp (avif will be marked as failed)
         @file_put_contents(getStagingFilePath($testAirport, 0, 'jpg', 'primary'), 'test jpg');
@@ -602,10 +599,7 @@ class WebcamFormatGenerationTest extends TestCase
         }
         
         $testAirport = 'test_gen_' . time();
-        $cacheDir = __DIR__ . '/../../cache/webcams';
-        if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
-        }
+        ensureCacheDir(CACHE_WEBCAMS_DIR);
         
         // Create a real JPEG test image using GD (if available)
         $sourceFile = $this->testImageDir . '/source.jpg';
@@ -662,9 +656,9 @@ class WebcamFormatGenerationTest extends TestCase
         }
         
         $testAirport = 'test_pipeline_' . time();
-        $cacheDir = __DIR__ . '/../../cache/webcams';
+        $cacheDir = CACHE_WEBCAMS_DIR;
         if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
+            ensureCacheDir($cacheDir);
         }
         
         // Use mock webcam image generator for consistent test data

@@ -14,6 +14,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
 
 // Parse command line arguments
@@ -41,20 +42,16 @@ if (!is_dir($historyDir)) {
 }
 
 // Check for source webcam image
-$cacheDir = __DIR__ . '/../cache/webcams';
-$sourceFile = $cacheDir . '/' . $airportId . '_' . $camIndex . '.jpg';
+$cacheDir = CACHE_WEBCAMS_DIR;
+$sourceFile = getCacheSymlinkPath($airportId, $camIndex, 'jpg');
 
 // Create placeholder if no source exists
 if (!file_exists($sourceFile)) {
     echo "No existing webcam image found. Creating placeholder...\n";
     
     // Ensure cache dir exists
-    if (!is_dir($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            echo "ERROR: Failed to create cache directory\n";
-            exit(1);
-        }
-    }
+    $camDir = getWebcamCameraDir($airportId, $camIndex);
+    ensureCacheDir($camDir);
     
     // Create a simple test image
     $img = imagecreatetruecolor(1600, 900);

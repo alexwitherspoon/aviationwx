@@ -8,6 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../../lib/constants.php';
 
@@ -19,10 +20,9 @@ class SourceTimestampsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->cacheDir = __DIR__ . '/../../cache';
-        if (!is_dir($this->cacheDir)) {
-            mkdir($this->cacheDir, 0755, true);
-        }
+        $this->cacheDir = CACHE_BASE_DIR;
+        ensureCacheDir($this->cacheDir);
+        ensureCacheDir(CACHE_WEATHER_DIR);
         
         // Clean up any existing test files
         $this->cleanupTestFiles();
@@ -38,9 +38,9 @@ class SourceTimestampsTest extends TestCase
     {
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $files = [
-            $this->cacheDir . '/weather_' . $this->testAirportId . '.json',
-            getCacheFile($this->testAirportId, 0, 'jpg', 'primary'),
-            getCacheFile($this->testAirportId, 0, 'webp', 'primary')
+            getWeatherCachePath($this->testAirportId),
+            getCacheSymlinkPath($this->testAirportId, 0, 'jpg'),
+            getCacheSymlinkPath($this->testAirportId, 0, 'webp')
         ];
         
         foreach ($files as $file) {
@@ -60,7 +60,7 @@ class SourceTimestampsTest extends TestCase
         ];
         
         // Create weather cache file with primary timestamp
-        $weatherCacheFile = $this->cacheDir . '/weather_' . $this->testAirportId . '.json';
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $timestamp = time() - 3600; // 1 hour ago
         $weatherData = [
             'obs_time_primary' => $timestamp,
@@ -178,7 +178,7 @@ class SourceTimestampsTest extends TestCase
         
         // Create webcam cache file
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
         $webcamDir = dirname($webcamFile);
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
@@ -258,17 +258,17 @@ class SourceTimestampsTest extends TestCase
             ]
         ];
         
-        $webcamDir = $this->cacheDir . '/webcams';
-        if (!is_dir($webcamDir)) {
-            mkdir($webcamDir, 0755, true);
-        }
+        $webcamDir = CACHE_WEBCAMS_DIR;
+        ensureCacheDir($webcamDir);
         
         $olderTimestamp = time() - 3600; // 1 hour ago
         $newerTimestamp = time() - 1800; // 30 minutes ago
         
-        $webcamFile = getCacheFile($this->testAirportId, 0, 'jpg', 'primary');
+        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
         touch($webcamFile, $olderTimestamp);
-        touch($webcamDir . '/' . $this->testAirportId . '_1.jpg', $newerTimestamp);
+        $cam1Dir = getWebcamCameraDir($this->testAirportId, 1);
+        ensureCacheDir($cam1Dir);
+        touch($cam1Dir . '/current.jpg', $newerTimestamp);
         
         $result = getSourceTimestamps($this->testAirportId, $airport);
         

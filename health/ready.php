@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -18,12 +19,11 @@ if (!file_exists($configPath) || !is_readable($configPath)) {
 
 // Cache directories
 $cacheOk = true;
-foreach (['/../cache', '/../cache/webcams'] as $rel) {
-    $p = __DIR__ . $rel;
-    if (!is_dir($p)) {
-        @mkdir($p, 0777, true);
+foreach ([CACHE_BASE_DIR, CACHE_WEBCAMS_DIR] as $cacheDir) {
+    if (!is_dir($cacheDir)) {
+        @mkdir($cacheDir, 0777, true);
     }
-    if (!is_writable($p)) {
+    if (!is_writable($cacheDir)) {
         $cacheOk = false;
     }
 }

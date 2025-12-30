@@ -14,6 +14,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
 
 class WebcamFormat202Test extends TestCase
 {
@@ -31,16 +32,15 @@ class WebcamFormat202Test extends TestCase
         parent::setUp();
         $this->baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $this->cacheDir = __DIR__ . '/../../cache/webcams';
-        $this->cacheJpg = getCacheFile($this->airport, $this->camIndex, 'jpg', 'primary');
-        $this->cacheWebp = getCacheFile($this->airport, $this->camIndex, 'webp', 'primary');
-        $this->cacheAvif = getCacheFile($this->airport, $this->camIndex, 'avif', 'primary');
+        $this->cacheDir = CACHE_WEBCAMS_DIR;
+        $this->cacheJpg = getCacheSymlinkPath($this->airport, $this->camIndex, 'jpg');
+        $this->cacheWebp = getCacheSymlinkPath($this->airport, $this->camIndex, 'webp');
+        $this->cacheAvif = getCacheSymlinkPath($this->airport, $this->camIndex, 'avif');
         $this->placeholderPath = __DIR__ . '/../../public/images/placeholder.jpg';
         
-        // Ensure cache directory exists (getCacheFile creates it, but ensure parent exists)
-        if (!is_dir($this->cacheDir)) {
-            @mkdir($this->cacheDir, 0755, true);
-        }
+        // Ensure cache directory exists
+        ensureCacheDir($this->cacheDir);
+        ensureCacheDir(getWebcamCameraDir($this->airport, $this->camIndex));
     }
     
     protected function tearDown(): void

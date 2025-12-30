@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 header('Content-Type: text/plain; charset=utf-8');
 
@@ -17,9 +18,9 @@ $currentGroup = posix_getgrgid(posix_getegid());
 echo "Current Process User: " . ($currentUser['name'] ?? 'unknown') . " (UID: " . posix_geteuid() . ")\n";
 echo "Current Process Group: " . ($currentGroup['name'] ?? 'unknown') . " (GID: " . posix_getegid() . ")\n\n";
 
-// Check cache directory paths
-$cacheDir = __DIR__ . '/../cache';
-$webcamCacheDir = __DIR__ . '/../cache/webcams';
+// Check cache directory paths using centralized constants
+$cacheDir = CACHE_BASE_DIR;
+$webcamCacheDir = CACHE_WEBCAMS_DIR;
 
 echo "Cache Directory Paths:\n";
 echo "  Base: " . $cacheDir . "\n";

@@ -723,8 +723,11 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | File | Purpose |
 |------|---------|
 | `config/airports.json` | All configuration |
-| `cache/weather_{airport}.json` | Cached weather data |
-| `cache/webcams/{airport}_{cam}.jpg` | Cached webcam images |
-| `cache/webcam-history/` | Time-lapse frames |
+| `cache/weather/{airport}.json` | Cached weather data |
+| `cache/weather/history/{airport}.json` | Weather history (24h) |
+| `cache/webcams/{airport}/{cam}/` | Webcam images per camera |
+| `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
+| `cache/webcams/{airport}/{cam}/history/` | Time-lapse frames |
+| `cache/uploads/{airport}/{username}/` | FTP/SFTP push uploads |
 | `cache/peak_gusts.json` | Daily peak gust tracking |
 | `cache/temp_extremes.json` | Daily temperature extremes |

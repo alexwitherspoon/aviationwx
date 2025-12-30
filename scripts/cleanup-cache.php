@@ -72,6 +72,7 @@ chdir(__DIR__ . '/..');
 // Load required files
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 // ============================================================================
 // CONFIGURATION - Cleanup Thresholds (in seconds)
@@ -126,7 +127,7 @@ if ($dryRun) {
 echo "\n";
 
 // Check disk usage first
-$cacheDir = __DIR__ . '/../cache';
+$cacheDir = CACHE_BASE_DIR;
 $apiCacheDir = __DIR__ . '/../api/cache';
 $scriptsCacheDir = __DIR__ . '/../scripts/cache';
 checkDiskUsage($cacheDir);
@@ -186,8 +187,9 @@ echo "LAYER 2: Backup Cleanup (safety net)\n";
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
 // Weather history files (48 hours - primary is 24h)
+// New structure: cache/weather/history/{airport}.json
 cleanupFilesByPattern(
-    $cacheDir . '/weather_history_*.json',
+    CACHE_WEATHER_HISTORY_DIR . '/*.json',
     CLEANUP_WEATHER_HISTORY_AGE,
     'Weather history files (backup)',
     $stats, $dryRun, $verbose
@@ -195,68 +197,84 @@ cleanupFilesByPattern(
 
 // Webcam history frames (7 days - primary is frame count)
 cleanupWebcamHistoryFrames(
-    $cacheDir . '/webcams',
+    CACHE_WEBCAMS_DIR,
     CLEANUP_WEBCAM_HISTORY_AGE,
     $stats, $dryRun, $verbose
 );
 
 // Weather cache files (7 days - should be updated continuously)
+// New structure: cache/weather/{airport}.json
 cleanupFilesByPattern(
-    $cacheDir . '/weather_*.json',
+    CACHE_WEATHER_DIR . '/*.json',
     CLEANUP_WEATHER_CACHE_AGE,
     'Weather cache files (backup)',
-    $stats, $dryRun, $verbose,
-    ['weather_history_*.json'] // Exclude history files (handled separately)
+    $stats, $dryRun, $verbose
 );
 
 // NOTAM cache files (24 hours - primary is 1 hour refresh)
 cleanupFilesByPattern(
-    $cacheDir . '/notam/*.json',
+    CACHE_NOTAM_DIR . '/*.json',
     CLEANUP_NOTAM_CACHE_AGE,
     'NOTAM cache files (backup)',
     $stats, $dryRun, $verbose
 );
 
 // Webcam images (7 days - should be updated continuously)
-// New directory structure: cache/webcams/{airportId}/{camIndex}/*.{format}
+// Structure: cache/webcams/{airportId}/{camIndex}/*.{format}
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*/*.jpg',
+    CACHE_WEBCAMS_DIR . '/*/*.jpg',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*/*.webp',
+    CACHE_WEBCAMS_DIR . '/*/*.webp',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam WebP images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    $cacheDir . '/webcams/*/*.avif',
+    CACHE_WEBCAMS_DIR . '/*/*.avif',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam AVIF images (backup)',
     $stats, $dryRun, $verbose
 );
 
 // Clean stale entries in peak_gusts.json and temp_extremes.json
-// Check both main cache dir and api/cache dir (used by some scripts)
-foreach ([$cacheDir, $apiCacheDir] as $dir) {
-    cleanupDailyTrackingEntries(
-        $dir . '/peak_gusts.json',
-        CLEANUP_PEAK_GUST_AGE,
-        'Peak gusts entries in ' . basename(dirname($dir)) . '/' . basename($dir),
-        $stats, $dryRun, $verbose
-    );
-    cleanupDailyTrackingEntries(
-        $dir . '/temp_extremes.json',
-        CLEANUP_TEMP_EXTREMES_AGE,
-        'Temperature extremes entries in ' . basename(dirname($dir)) . '/' . basename($dir),
-        $stats, $dryRun, $verbose
-    );
-}
+cleanupDailyTrackingEntries(
+    CACHE_PEAK_GUSTS_FILE,
+    CLEANUP_PEAK_GUST_AGE,
+    'Peak gusts entries',
+    $stats, $dryRun, $verbose
+);
+cleanupDailyTrackingEntries(
+    CACHE_TEMP_EXTREMES_FILE,
+    CLEANUP_TEMP_EXTREMES_AGE,
+    'Temperature extremes entries',
+    $stats, $dryRun, $verbose
+);
+// Also check api/cache dir (used by some scripts)
+cleanupDailyTrackingEntries(
+    $apiCacheDir . '/peak_gusts.json',
+    CLEANUP_PEAK_GUST_AGE,
+    'Peak gusts entries (api cache)',
+    $stats, $dryRun, $verbose
+);
+cleanupDailyTrackingEntries(
+    $apiCacheDir . '/temp_extremes.json',
+    CLEANUP_TEMP_EXTREMES_AGE,
+    'Temperature extremes entries (api cache)',
+    $stats, $dryRun, $verbose
+);
 
-// Clean stale entries in backoff.json (check all cache locations)
-foreach ([$cacheDir, $apiCacheDir, $scriptsCacheDir] as $dir) {
+// Clean stale entries in backoff.json
+cleanupBackoffEntries(
+    CACHE_BACKOFF_FILE,
+    CLEANUP_BACKOFF_ENTRY_AGE,
+    $stats, $dryRun, $verbose
+);
+// Also check api/cache and scripts/cache dirs
+foreach ([$apiCacheDir, $scriptsCacheDir] as $dir) {
     cleanupBackoffEntries(
         $dir . '/backoff.json',
         CLEANUP_BACKOFF_ENTRY_AGE,
@@ -266,25 +284,25 @@ foreach ([$cacheDir, $apiCacheDir, $scriptsCacheDir] as $dir) {
 
 // External data caches (generous thresholds)
 cleanupFilesByAge(
-    $cacheDir . '/ourairports_data.json',
+    CACHE_OURAIRPORTS_FILE,
     CLEANUP_OURAIRPORTS_AGE,
     'OurAirports data cache',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByAge(
-    $cacheDir . '/icao_airports.json',
+    CACHE_ICAO_AIRPORTS_FILE,
     CLEANUP_ICAO_AIRPORTS_AGE,
     'ICAO airports cache',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByAge(
-    $cacheDir . '/iata_to_icao_mapping.json',
+    CACHE_IATA_MAPPING_FILE,
     CLEANUP_MAPPING_CACHE_AGE,
     'IATA to ICAO mapping cache',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByAge(
-    $cacheDir . '/faa_to_icao_mapping.json',
+    CACHE_FAA_MAPPING_FILE,
     CLEANUP_MAPPING_CACHE_AGE,
     'FAA to ICAO mapping cache',
     $stats, $dryRun, $verbose
@@ -299,7 +317,7 @@ echo "LAYER 3: Orphan Cleanup (removed airports)\n";
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
 cleanupOrphanedAirportFiles(
-    $cacheDir,
+    CACHE_BASE_DIR,
     $configuredAirports,
     CLEANUP_ORPHAN_AGE,
     $stats, $dryRun, $verbose
@@ -313,7 +331,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "LAYER 4: Empty Directory Cleanup\n";
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
-cleanupEmptyDirectories($cacheDir . '/webcams', $stats, $dryRun, $verbose);
+cleanupEmptyDirectories(CACHE_WEBCAMS_DIR, $stats, $dryRun, $verbose);
+cleanupEmptyDirectories(CACHE_UPLOADS_DIR, $stats, $dryRun, $verbose);
+cleanupEmptyDirectories(CACHE_WEATHER_DIR, $stats, $dryRun, $verbose);
+cleanupEmptyDirectories(CACHE_WEATHER_HISTORY_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/notam', $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/rate_limits', $stats, $dryRun, $verbose);
 

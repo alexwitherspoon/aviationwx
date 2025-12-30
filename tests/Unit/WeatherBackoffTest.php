@@ -8,6 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../api/weather.php';
 
 class WeatherBackoffTest extends TestCase
@@ -20,8 +21,11 @@ class WeatherBackoffTest extends TestCase
     {
         parent::setUp();
         
-        // Use a test backoff file
-        $this->backoffFile = __DIR__ . '/../../cache/backoff.json';
+        // Use the backoff file from centralized cache paths
+        $this->backoffFile = CACHE_BACKOFF_FILE;
+        
+        // Ensure cache directory exists
+        ensureCacheDir(dirname($this->backoffFile));
         
         // Clean up any existing backoff state for test airport
         $this->cleanupBackoffState();

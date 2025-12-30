@@ -11,6 +11,7 @@ require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/exif-utils.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 // Verify exiftool is available at startup (required for EXIF validation)
 try {
@@ -157,26 +158,25 @@ function checkInodeUsage($path) {
  * 
  * Retrieves the timestamp of the last successfully processed image for a camera.
  * Used to skip already-processed files and prevent duplicate processing.
+ * State is stored per-camera in the webcams directory structure.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @return int Unix timestamp of last processed file, or 0 if none
  */
 function getLastProcessedTime($airportId, $camIndex) {
-    $trackDir = __DIR__ . '/../cache/push_webcams';
-    $trackFile = $trackDir . '/last_processed.json';
+    $stateFile = getWebcamStatePath($airportId, $camIndex);
     
-    if (!file_exists($trackFile)) {
+    if (!file_exists($stateFile)) {
         return 0;
     }
     
-    $data = @json_decode(@file_get_contents($trackFile), true);
+    $data = @json_decode(@file_get_contents($stateFile), true);
     if (!is_array($data)) {
         return 0;
     }
     
-    $key = $airportId . '_' . $camIndex;
-    return isset($data[$key]) ? intval($data[$key]) : 0;
+    return isset($data['last_processed']) ? intval($data['last_processed']) : 0;
 }
 
 /**
@@ -184,36 +184,37 @@ function getLastProcessedTime($airportId, $camIndex) {
  * 
  * Updates the timestamp of the last successfully processed image for a camera.
  * Uses file locking to ensure atomic updates in concurrent environments.
+ * State is stored per-camera in the webcams directory structure.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @return void
  */
 function updateLastProcessedTime($airportId, $camIndex) {
-    $trackDir = __DIR__ . '/../cache/push_webcams';
-    $trackFile = $trackDir . '/last_processed.json';
+    $stateFile = getWebcamStatePath($airportId, $camIndex);
+    $stateDir = dirname($stateFile);
     
-    if (!is_dir($trackDir)) {
-        @mkdir($trackDir, 0755, true);
+    if (!is_dir($stateDir)) {
+        @mkdir($stateDir, 0755, true);
     }
     
     // Use file locking for atomic update
-    $fp = @fopen($trackFile, 'c+');
+    $fp = @fopen($stateFile, 'c+');
     if (!$fp) {
         return;
     }
     
     if (@flock($fp, LOCK_EX)) {
         $data = [];
-        if (filesize($trackFile) > 0) {
+        $size = @filesize($stateFile);
+        if ($size !== false && $size > 0) {
             $content = @stream_get_contents($fp);
             if ($content) {
                 $data = @json_decode($content, true) ?: [];
             }
         }
         
-        $key = $airportId . '_' . $camIndex;
-        $data[$key] = time();
+        $data['last_processed'] = time();
         
         @ftruncate($fp, 0);
         @rewind($fp);
@@ -552,19 +553,16 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    $cacheDir = __DIR__ . '/../cache/webcams';
-    if (!is_dir($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
-            aviationwx_log('error', 'moveToCache: cache directory creation failed', [
-                'dir' => $cacheDir
-            ], 'app');
-            return false;
-        }
+    if (!ensureCacheDir(CACHE_WEBCAMS_DIR)) {
+        aviationwx_log('error', 'moveToCache: cache directory creation failed', [
+            'dir' => CACHE_WEBCAMS_DIR
+        ], 'app');
+        return false;
     }
     
-    if (!is_writable($cacheDir)) {
+    if (!is_writable(CACHE_WEBCAMS_DIR)) {
         aviationwx_log('error', 'moveToCache: cache directory not writable', [
-            'dir' => $cacheDir
+            'dir' => CACHE_WEBCAMS_DIR
         ], 'app');
         return false;
     }
@@ -827,9 +825,7 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         return false; // No username configured
     }
     
-    $baseDir = __DIR__ . '/../cache/webcam/uploads/';
-    $chrootDir = $baseDir . $airportId . '/' . $username;
-    $uploadDir = $chrootDir . '/';
+    $uploadDir = getWebcamUploadDir($airportId, $username) . '/';
     
     // Quick check: if directory doesn't exist or has no files, exit immediately
     if (!is_dir($uploadDir)) {

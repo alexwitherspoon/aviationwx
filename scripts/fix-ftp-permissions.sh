@@ -3,7 +3,7 @@
 # Usage: ./fix-ftp-permissions.sh <airport_id> <username>
 # Example: ./fix-ftp-permissions.sh kczk kczkcam1
 # 
-# Directory structure: /cache/webcam/uploads/{airport}/{username}/
+# Directory structure: /cache/uploads/{airport}/{username}/
 # This provides namespace isolation - cameras can only access their airport's folder
 
 set -euo pipefail
@@ -15,7 +15,7 @@ if [ -z "$AIRPORT_ID" ] || [ -z "$USERNAME" ]; then
     echo "Usage: $0 <airport_id> <username>"
     echo "Example: $0 kczk kczkcam1"
     echo ""
-    echo "Directory structure: /cache/webcam/uploads/{airport}/{username}/"
+    echo "Directory structure: /cache/uploads/{airport}/{username}/"
     exit 1
 fi
 
@@ -26,7 +26,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Directory paths
-UPLOADS_BASE="/var/www/html/cache/webcam/uploads"
+UPLOADS_BASE="/var/www/html/cache/uploads"
 AIRPORT_DIR="${UPLOADS_BASE}/${AIRPORT_ID}"
 UPLOAD_DIR="${AIRPORT_DIR}/${USERNAME}"
 

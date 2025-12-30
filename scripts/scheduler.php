@@ -256,7 +256,7 @@ while ($running) {
                 $refreshInterval = max($minRefresh, $refreshInterval);
                 
                 // Check cache age (stateless - use filemtime)
-                $cacheFile = __DIR__ . "/../cache/weather_{$airportId}.json";
+                $cacheFile = getWeatherCachePath($airportId);
                 $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
                 
                 // Check if update needed
