@@ -4345,32 +4345,55 @@ const WebcamPlayer = {
         this.updateURL();
     },
 
-    // Get the best available format for a frame
-    getFrameFormat(frame) {
-        if (!frame.formats || frame.formats.length === 0) {
-            return 'jpg';
+    // Build srcset string for a frame with all available sizes
+    // Browser will choose best size based on viewport and device pixel ratio
+    buildSrcset(frame, format) {
+        const parts = [];
+        const variants = frame.variants || ['primary'];
+        
+        for (const variant of variants) {
+            const width = this.variantWidths[variant];
+            if (width) {
+                parts.push(`${frame.url}&fmt=${format}&size=${variant} ${width}w`);
+            }
         }
         
-        // preferredFormat already represents best format (browser preference intersected with server formats)
-        if (frame.formats.includes(this.preferredFormat)) {
-            return this.preferredFormat;
+        // If no variants matched, add a default
+        if (parts.length === 0) {
+            parts.push(`${frame.url}&fmt=${format}&size=primary 1920w`);
         }
         
-        // Fallback: if preferred format not available for this frame, use best available
-        if (this.preferredFormat === 'avif' && frame.formats.includes('webp')) {
-            return 'webp';
-        }
-        return 'jpg';
+        return parts.join(', ');
     },
 
-    // Build URL for a frame with format parameter
-    getFrameUrl(frame) {
-        const format = this.getFrameFormat(frame);
-        // Check if frame has variants, use preferred variant if available
-        const variant = (frame.variants && frame.variants.includes(this.preferredVariant)) 
-            ? this.preferredVariant 
-            : (frame.variants && frame.variants.length > 0 ? frame.variants[0] : 'primary');
-        return frame.url + '&fmt=' + format + '&size=' + variant;
+    // Create a <picture> element for a frame with native browser format/size selection
+    createPictureElement(frame) {
+        const picture = document.createElement('picture');
+        
+        // Sizes attribute - player is typically fullscreen or ~80vw
+        const sizes = '(max-width: 768px) 100vw, 80vw';
+        
+        // Add sources for modern formats (AVIF > WebP) if available for this frame
+        for (const format of ['avif', 'webp']) {
+            if (this.enabledFormats.includes(format) && frame.formats.includes(format)) {
+                const source = document.createElement('source');
+                source.type = `image/${format}`;
+                source.srcset = this.buildSrcset(frame, format);
+                source.sizes = sizes;
+                picture.appendChild(source);
+            }
+        }
+        
+        // JPEG fallback with srcset (always available)
+        const img = document.createElement('img');
+        img.srcset = this.buildSrcset(frame, 'jpg');
+        img.sizes = sizes;
+        img.src = frame.url + '&fmt=jpg&size=medium'; // explicit fallback
+        img.alt = 'Webcam history frame';
+        img.loading = 'eager'; // we want to preload these
+        picture.appendChild(img);
+        
+        return { picture, img };
     },
 
     async open(airportId, camIndex, camName, currentImageSrc, options = {}) {
@@ -4422,12 +4445,11 @@ const WebcamPlayer = {
                 this.currentIndex = data.current_index || 0;
                 this.refreshInterval = data.refresh_interval || 60;
                 
-                if (data.enabledFormats && Array.isArray(data.enabledFormats)) {
-                    this.preferredFormat = getPreferredFormat(data.enabledFormats);
-                }
-                
-                // Set preferred variant based on viewport and stored preference
-                this.preferredVariant = getPreferredVariant();
+                // Store enabled formats and variant widths for <picture> element building
+                this.enabledFormats = data.enabledFormats || ['jpg'];
+                this.variantWidths = data.variantWidths || {
+                    thumb: 160, small: 320, medium: 640, large: 1280, primary: 1920
+                };
                 
                 this.initTimeline();
                 // Display the current frame immediately so navigation works right away
@@ -4603,18 +4625,32 @@ const WebcamPlayer = {
 
         timeline.value = index;
 
-        // Build cache key including format
-        const format = this.getFrameFormat(frame);
-        const cacheKey = `${frame.timestamp}_${format}`;
-
-        // Use preloaded image if available
+        // Use preloaded image URL if available (browser already chose best format/size)
+        const cacheKey = frame.timestamp;
         if (this.preloadedImages[cacheKey]) {
             img.src = this.preloadedImages[cacheKey];
             img.classList.remove('loading');
         } else {
+            // Fallback: create picture element on-demand and use its selection
             img.classList.add('loading');
-            img.src = this.getFrameUrl(frame);
-            img.onload = () => img.classList.remove('loading');
+            const { picture, img: pictureImg } = this.createPictureElement(frame);
+            
+            // Append temporarily to DOM to trigger browser loading
+            picture.style.position = 'absolute';
+            picture.style.visibility = 'hidden';
+            document.body.appendChild(picture);
+            
+            pictureImg.onload = () => {
+                // Use currentSrc which is the URL the browser actually chose
+                img.src = pictureImg.currentSrc || pictureImg.src;
+                img.classList.remove('loading');
+                this.preloadedImages[cacheKey] = img.src;
+                document.body.removeChild(picture);
+            };
+            pictureImg.onerror = () => {
+                img.classList.remove('loading');
+                document.body.removeChild(picture);
+            };
         }
 
         this.updateTimestampDisplay();
@@ -4624,26 +4660,46 @@ const WebcamPlayer = {
         const bar = document.getElementById('webcam-player-loading-bar');
         let loaded = 0;
 
+        // Create a hidden container for preloading picture elements
+        const preloadContainer = document.createElement('div');
+        preloadContainer.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;visibility:hidden';
+        document.body.appendChild(preloadContainer);
+
         for (const frame of this.frames) {
             if (!this.active) break;
 
-            const img = new Image();
-            const format = this.getFrameFormat(frame);
-            const cacheKey = `${frame.timestamp}_${format}`;
-            const frameUrl = this.getFrameUrl(frame);
+            const cacheKey = frame.timestamp;
+            
+            // Skip if already preloaded
+            if (this.preloadedImages[cacheKey]) {
+                loaded++;
+                bar.style.width = `${(loaded / this.frames.length) * 100}%`;
+                continue;
+            }
+
+            // Create picture element with native browser format/size selection
+            const { picture, img } = this.createPictureElement(frame);
+            preloadContainer.appendChild(picture);
             
             await new Promise((resolve) => {
                 img.onload = () => {
-                    this.preloadedImages[cacheKey] = img.src;
+                    // Store the URL the browser actually chose (currentSrc)
+                    // This respects browser format support and viewport size
+                    this.preloadedImages[cacheKey] = img.currentSrc || img.src;
                     loaded++;
                     bar.style.width = `${(loaded / this.frames.length) * 100}%`;
                     resolve();
                 };
-                img.onerror = resolve;
-                img.src = frameUrl;
+                img.onerror = () => {
+                    loaded++;
+                    bar.style.width = `${(loaded / this.frames.length) * 100}%`;
+                    resolve();
+                };
             });
         }
 
+        // Cleanup preload container
+        document.body.removeChild(preloadContainer);
         setTimeout(() => { bar.style.width = '0%'; }, 500);
     },
 
@@ -5890,13 +5946,7 @@ function observeWebcamFormat(camIndex, img) {
     if (formatMatch) {
         const format = formatMatch[1].toLowerCase();
         if (['avif', 'webp', 'jpg', 'jpeg'].includes(format)) {
-            const normalizedFormat = format === 'jpeg' ? 'jpg' : format;
-            detectedFormat = normalizedFormat;
-            try {
-                localStorage.setItem('webcam_format_pref', normalizedFormat);
-            } catch (e) {
-                // localStorage not available (private browsing, etc.)
-            }
+            detectedFormat = format === 'jpeg' ? 'jpg' : format;
         }
     }
     
@@ -5904,11 +5954,6 @@ function observeWebcamFormat(camIndex, img) {
         const size = sizeMatch[1].toLowerCase();
         if (['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(size)) {
             detectedVariant = size;
-            try {
-                localStorage.setItem('webcam_size_pref', size);
-            } catch (e) {
-                // localStorage not available (private browsing, etc.)
-            }
         }
     }
     
@@ -5921,67 +5966,52 @@ function observeWebcamFormat(camIndex, img) {
 }
 
 /**
- * Get preferred format from localStorage with server format intersection
+ * Get preferred format for live webcam polling
  * 
- * Reads browser preference from localStorage and intersects with server-enabled formats.
- * Falls back to 'jpg' if preference not available or not supported by server.
+ * Returns the best available modern format from server-enabled formats.
+ * Priority: AVIF > WebP > JPEG (matching browser <picture> element behavior)
+ * 
+ * Note: This is used for live webcam polling. The history player and initial
+ * webcam display use native <picture> elements for browser-based format selection.
  * 
  * @param {Array<string>} serverFormats Server-enabled formats (from mtime response)
  * @returns {string} Preferred format: 'avif', 'webp', or 'jpg'
  */
 function getPreferredFormat(serverFormats) {
-    let browserPref = 'jpg';
-    
-    try {
-        const stored = localStorage.getItem('webcam_format_pref');
-        if (stored && ['avif', 'webp', 'jpg'].includes(stored)) {
-            browserPref = stored;
-        }
-    } catch (e) {
-        // localStorage not available
-    }
-    
-    // Intersect browser preference with server-enabled formats
-    if (browserPref === 'avif' && serverFormats && serverFormats.includes('avif')) {
+    // Return best available format (browser <picture> uses same priority)
+    if (serverFormats && serverFormats.includes('avif')) {
         return 'avif';
     }
-    if (browserPref === 'webp' && serverFormats && serverFormats.includes('webp')) {
+    if (serverFormats && serverFormats.includes('webp')) {
         return 'webp';
     }
     return 'jpg';
 }
 
 /**
- * Get preferred variant based on viewport and stored preference
+ * Get preferred variant based on viewport size
  * 
- * Uses viewport-based detection by default, with stored preference as override.
- * Falls back to 'primary' if preference not available.
+ * Uses viewport-based detection to choose appropriate image size.
+ * This is used for live webcam polling. The history player uses native
+ * <picture> elements with srcset for browser-based size selection.
  * 
- * @returns {string} Preferred variant: 'thumb', 'small', 'medium', 'large', 'primary', or 'full'
+ * @returns {string} Preferred variant: 'small', 'medium', 'large', or 'primary'
  */
 function getPreferredVariant() {
-    // Check for stored preference first
-    try {
-        const stored = localStorage.getItem('webcam_size_pref');
-        if (stored && ['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(stored)) {
-            return stored;
-        }
-    } catch (e) {
-        // localStorage not available
-    }
-    
-    // Viewport-based detection
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const dpr = window.devicePixelRatio || 1;
     
-    if (viewportWidth < 768) {
-        // Mobile: use small or medium
-        return 'small';
-    } else if (viewportWidth < 1024) {
-        // Tablet: use medium or large
-        return 'medium';
+    // Effective width accounts for device pixel ratio (retina displays)
+    const effectiveWidth = viewportWidth * dpr;
+    
+    if (effectiveWidth < 400) {
+        return 'small';     // 320w
+    } else if (effectiveWidth < 800) {
+        return 'medium';    // 640w
+    } else if (effectiveWidth < 1400) {
+        return 'large';     // 1280w
     } else {
-        // Desktop: use primary or full
-        return 'primary';
+        return 'primary';   // 1920w
     }
 }
 
@@ -6443,13 +6473,6 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
             // Format ready - load immediately
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
-            
-            // Store format preference from successful request
-            try {
-                localStorage.setItem('webcam_format_pref', preferredFormat);
-            } catch (e) {
-                // localStorage not available
-            }
             
             console.log(`[Webcam ${camIndex}] Image loaded successfully - format: ${preferredFormat}, variant: ${requestedVariant}`);
             updateImageSilently(camIndex, blobUrl, jpegTimestamp);

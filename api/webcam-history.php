@@ -193,6 +193,15 @@ $perCamRefresh = isset($cam['refresh_seconds'])
     : $airportWebcamRefresh;
 $refreshInterval = max(60, $perCamRefresh); // Enforce minimum 60 seconds
 
+// Get variant widths for srcset (browser-native responsive image selection)
+$variantWidths = [
+    'thumb' => 160,
+    'small' => 320,
+    'medium' => 640,
+    'large' => 1280,
+    'primary' => 1920  // Default primary width, actual may vary
+];
+
 echo json_encode([
     'enabled' => true,
     'airport' => $airportId,
@@ -202,6 +211,7 @@ echo json_encode([
     'timezone' => $airport['timezone'] ?? 'UTC',
     'max_frames' => getWebcamHistoryMaxFrames($airportId),
     'enabledFormats' => getEnabledWebcamFormats(),
+    'variantWidths' => $variantWidths,
     'refresh_interval' => $refreshInterval
 ]);
 
