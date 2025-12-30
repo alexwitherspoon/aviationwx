@@ -445,11 +445,117 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
 }
 
 /**
+ * Process a single history frame with full variant generation
+ * 
+ * Generates all variants (thumb, small, medium, large, primary) × formats (jpg, webp, avif)
+ * for a single image file and saves them to history. Does NOT update current symlinks.
+ * 
+ * @param string $sourceFile Source file path
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @return bool True on success, false on failure
+ */
+function processHistoryFrame($sourceFile, $airportId, $camIndex) {
+    if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
+        return false;
+    }
+    
+    // Detect format
+    $format = detectImageFormat($sourceFile);
+    if ($format === null) {
+        aviationwx_log('debug', 'processHistoryFrame: unable to detect format', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'file' => basename($sourceFile)
+        ], 'app');
+        return false;
+    }
+    
+    // Get timestamp from EXIF or file mtime
+    $timestamp = getSourceCaptureTime($sourceFile);
+    if ($timestamp <= 0) {
+        $timestamp = @filemtime($sourceFile) ?: time();
+    }
+    
+    // Determine primary format (PNG converts to JPEG)
+    $primaryFormat = ($format === 'png') ? 'jpg' : $format;
+    
+    // Create a temporary staging file for this frame
+    $stagingFile = getWebcamCameraDir($airportId, $camIndex) . '/history_staging_' . $timestamp . '.' . $primaryFormat . '.tmp';
+    
+    // Ensure camera directory exists
+    $cameraDir = getWebcamCameraDir($airportId, $camIndex);
+    if (!ensureCacheDir($cameraDir)) {
+        return false;
+    }
+    
+    // Convert PNG or copy to staging
+    if ($format === 'png') {
+        if (!convertPngToJpeg($sourceFile, $stagingFile)) {
+            aviationwx_log('debug', 'processHistoryFrame: PNG conversion failed', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'file' => basename($sourceFile)
+            ], 'app');
+            @unlink($stagingFile);
+            return false;
+        }
+    } else {
+        if (!@copy($sourceFile, $stagingFile)) {
+            return false;
+        }
+    }
+    
+    // Get input dimensions for variant generation
+    $inputDimensions = getImageDimensions($stagingFile);
+    if ($inputDimensions === null) {
+        // Fallback to format-only generation (no variants)
+        $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
+        if (!empty($formatResults)) {
+            // Save to history using the legacy single-format approach
+            saveAllFormatsToHistory($airportId, $camIndex, ['primary' => array_keys(array_filter($formatResults))], $timestamp);
+        }
+        @unlink($stagingFile);
+        return !empty($formatResults);
+    }
+    
+    // Generate all variants × formats in parallel
+    $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, $primaryFormat, $inputDimensions);
+    
+    // Save all variants to history (this saves to history directory with proper timestamp-based names)
+    if (!empty($variantResult['results'])) {
+        saveAllVariantsToHistory($airportId, $camIndex, $variantResult['results'], $timestamp);
+    }
+    
+    // Cleanup staging file
+    @unlink($stagingFile);
+    
+    // Also cleanup any variant staging files that were created
+    $stagingPattern = $cameraDir . '/staging.*';
+    foreach (glob($stagingPattern) as $stageFile) {
+        @unlink($stageFile);
+    }
+    
+    $success = !empty($variantResult['results']);
+    
+    if ($success) {
+        aviationwx_log('debug', 'processHistoryFrame: generated variants', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'timestamp' => $timestamp,
+            'variants' => count($variantResult['results'])
+        ], 'app');
+    }
+    
+    return $success;
+}
+
+/**
  * Harvest all valid images from upload directory for history
  * 
  * For push cameras, multiple images may accumulate between processing intervals.
- * When history is enabled, save all valid images to history before processing.
- * This captures intermediate frames that would otherwise be discarded.
+ * When history is enabled, process all valid images with full variant generation.
+ * This captures intermediate frames with all size variants for high-quality timelapse.
  * 
  * @param string $uploadDir Upload directory path
  * @param string $airportId Airport ID (e.g., 'kspb')
@@ -507,8 +613,8 @@ function harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig = n
             continue;
         }
         
-        // Save to history (uses EXIF or mtime for timestamp)
-        if (saveFrameToHistory($file, $airportId, $camIndex)) {
+        // Process with full variant generation (generates all sizes × formats)
+        if (processHistoryFrame($file, $airportId, $camIndex)) {
             $harvested++;
         }
     }
