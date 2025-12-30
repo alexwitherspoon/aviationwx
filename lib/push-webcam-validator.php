@@ -40,12 +40,15 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
         $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username is required";
     } else {
         $username = $pushConfig['username'];
-        // Username should be 14 characters, alphanumeric (mixed case allowed)
-        if (strlen($username) !== 14) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must be exactly 14 characters";
+        // Username should be 14 characters or less, contain no spaces, and be alphanumeric (mixed case allowed)
+        if (strlen($username) > 14) {
+            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must be 14 characters or less";
         }
-        if (!preg_match('/^[a-zA-Z0-9]{14}$/', $username)) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must be alphanumeric (14 characters)";
+        if (preg_match('/\s/', $username)) {
+            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must not contain spaces";
+        }
+        if (!preg_match('/^[a-zA-Z0-9]+$/', $username)) {
+            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: username must be alphanumeric";
         }
     }
     
