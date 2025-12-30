@@ -473,9 +473,9 @@ function formatExifValidationResult(array $result): string {
  * - YYYYMMDDTHHmmss (ISO-like, e.g., 20251229T210421)
  * - Unix timestamps (10 digits)
  * 
- * Validation uses rolling windows based on current server time:
- * - Year: current year -5 to +1 years
- * - Unix timestamp: current time ±5 years
+ * Validation uses tight rolling windows to prevent false matches:
+ * - Year: current year only (±1 year at year boundaries for timezone edge cases)
+ * - Unix timestamp: current time ±31 days
  * - All timestamps must be within ±24 hours of file mtime
  * 
  * @param string $filePath Path to file (uses basename for parsing)
@@ -563,14 +563,14 @@ function parseFilenameTimestamp(string $filePath): array {
         }
     }
     
-    // Pattern 5: Unix timestamp (10 digits within rolling window)
+    // Pattern 5: Unix timestamp (10 digits within tight rolling window)
     // Example: webcam_1767072037.jpg
-    // Use rolling window: current time ±5 years
+    // Use tight window: current time ±31 days (covers month boundary edge cases)
     if (preg_match('/\b(\d{10})\b/', $filenameNoExt, $matches)) {
         $unixTs = intval($matches[1]);
-        $fiveYearsSeconds = 5 * 365 * 24 * 60 * 60;
-        $minUnix = time() - $fiveYearsSeconds;
-        $maxUnix = time() + (365 * 24 * 60 * 60); // 1 year in future
+        $thirtyOneDays = 31 * 24 * 60 * 60;
+        $minUnix = time() - $thirtyOneDays;
+        $maxUnix = time() + $thirtyOneDays;
         
         if ($unixTs >= $minUnix && $unixTs <= $maxUnix && isTimestampReasonable($unixTs, $fileMtime)) {
             $result['found'] = true;
@@ -586,9 +586,13 @@ function parseFilenameTimestamp(string $filePath): array {
 /**
  * Parse and validate timestamp components
  * 
- * Uses a rolling window for year validation based on current server time:
- * - Minimum: current year - 5 years (accommodates old uploads/delays)
- * - Maximum: current year + 1 year (accommodates timezone differences)
+ * Uses tight year validation with smart edge-case handling:
+ * - Primarily accepts current year only
+ * - In January: also accepts previous year (Dec→Jan boundary)
+ * - In December: also accepts next year (timezone ahead of server)
+ * 
+ * This prevents false matches on random 14-digit sequences while handling
+ * legitimate year boundary cases from timezone differences.
  * 
  * @param string $year Year (4 digits)
  * @param string $month Month (2 digits)
@@ -606,13 +610,29 @@ function parseTimestampComponents(string $year, string $month, string $day, stri
     $i = intval($minute);
     $s = intval($second);
     
-    // Rolling year window based on current time
+    // Tight year validation with edge-case handling
     $currentYear = intval(date('Y'));
-    $minYear = $currentYear - 5;  // Allow up to 5 years in the past
-    $maxYear = $currentYear + 1;  // Allow 1 year in the future (timezone edge cases)
+    $currentMonth = intval(date('n'));
     
-    // Validate ranges
-    if ($y < $minYear || $y > $maxYear) return null;
+    // Build allowed years list
+    $allowedYears = [$currentYear];
+    
+    // In January, also allow previous year (handles Dec 31 → Jan 1 boundary)
+    if ($currentMonth === 1) {
+        $allowedYears[] = $currentYear - 1;
+    }
+    
+    // In December, also allow next year (handles timezone ahead of server)
+    if ($currentMonth === 12) {
+        $allowedYears[] = $currentYear + 1;
+    }
+    
+    // Validate year is in allowed list
+    if (!in_array($y, $allowedYears, true)) {
+        return null;
+    }
+    
+    // Validate other ranges
     if ($m < 1 || $m > 12) return null;
     if ($d < 1 || $d > 31) return null;
     if ($h < 0 || $h > 23) return null;
