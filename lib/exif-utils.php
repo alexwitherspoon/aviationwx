@@ -203,8 +203,12 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null): bool {
 /**
  * Ensure image has EXIF DateTimeOriginal
  * 
- * If EXIF exists, returns true. If not, adds EXIF from file mtime.
- * Use for server-generated images (RTSP/MJPEG/static fetch).
+ * If EXIF exists, returns true. If not, adds EXIF using the best available
+ * timestamp source:
+ * 1. Timestamp parsed from filename (most accurate for IP cameras)
+ * 2. File modification time (fallback)
+ * 
+ * Use for server-generated images (RTSP/MJPEG/static fetch) and push camera uploads.
  * 
  * @param string $filePath Path to image
  * @return bool True if EXIF now exists
@@ -215,8 +219,11 @@ function ensureExifTimestamp(string $filePath): bool {
         return true;
     }
     
-    // Add EXIF from file mtime
-    return addExifTimestamp($filePath);
+    // Get best available timestamp (filename parsing → file mtime fallback)
+    $timestamp = getTimestampForExif($filePath);
+    
+    // Add EXIF with determined timestamp
+    return addExifTimestamp($filePath, $timestamp);
 }
 
 /**
@@ -450,6 +457,227 @@ function formatExifValidationResult(array $result): string {
     }
     
     return sprintf('invalid: %s', $reason);
+}
+
+/**
+ * Parse timestamp from filename
+ * 
+ * Attempts to extract capture timestamp from common filename patterns used by
+ * IP cameras (e.g., Reolink, Hikvision). Validates that detected patterns are
+ * actually valid timestamps and not coincidental numeric sequences.
+ * 
+ * Supported patterns:
+ * - YYYYMMDDHHmmss (e.g., 20251229210421 → 2025-12-29 21:04:21)
+ * - YYYY-MM-DD_HH-MM-SS (e.g., 2025-12-29_21-04-21)
+ * - YYYY_MM_DD_HH_MM_SS (e.g., 2025_12_29_21_04_21)
+ * - YYYYMMDDTHHmmss (ISO-like, e.g., 20251229T210421)
+ * 
+ * Validation ensures:
+ * - Year is reasonable (2020-2030)
+ * - Month is 1-12
+ * - Day is 1-31 (basic check)
+ * - Hour is 0-23
+ * - Minute is 0-59
+ * - Second is 0-59
+ * - Timestamp is within reasonable range of file mtime (±24 hours)
+ * 
+ * @param string $filePath Path to file (uses basename for parsing)
+ * @return array {
+ *   'found' => bool,
+ *   'timestamp' => int (Unix timestamp or 0),
+ *   'pattern' => string|null (matched pattern description),
+ *   'timezone_hint' => string|null (detected timezone if any)
+ * }
+ */
+function parseFilenameTimestamp(string $filePath): array {
+    $filename = basename($filePath);
+    $filenameNoExt = pathinfo($filename, PATHINFO_FILENAME);
+    
+    $result = [
+        'found' => false,
+        'timestamp' => 0,
+        'pattern' => null,
+        'timezone_hint' => null
+    ];
+    
+    // Get file mtime for sanity check (timestamp should be within 24 hours of mtime)
+    $fileMtime = @filemtime($filePath);
+    if ($fileMtime === false) {
+        $fileMtime = time();
+    }
+    
+    // Pattern 1: YYYYMMDDHHmmss (14 consecutive digits) - most common for IP cameras
+    // Example: KCZK-01_00_20251229210421.jpg → 20251229210421
+    if (preg_match('/(\d{14})/', $filenameNoExt, $matches)) {
+        $ts = $matches[1];
+        $parsed = parseTimestampComponents(
+            substr($ts, 0, 4),   // year
+            substr($ts, 4, 2),   // month
+            substr($ts, 6, 2),   // day
+            substr($ts, 8, 2),   // hour
+            substr($ts, 10, 2),  // minute
+            substr($ts, 12, 2)   // second
+        );
+        
+        if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+            $result['found'] = true;
+            $result['timestamp'] = $parsed;
+            $result['pattern'] = 'YYYYMMDDHHmmss';
+            return $result;
+        }
+    }
+    
+    // Pattern 2: YYYY-MM-DD_HH-MM-SS or YYYY-MM-DD-HH-MM-SS
+    // Example: cam_2025-12-29_21-04-21.jpg
+    if (preg_match('/(\d{4})-(\d{2})-(\d{2})[_-](\d{2})-(\d{2})-(\d{2})/', $filenameNoExt, $matches)) {
+        $parsed = parseTimestampComponents($matches[1], $matches[2], $matches[3], $matches[4], $matches[5], $matches[6]);
+        
+        if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+            $result['found'] = true;
+            $result['timestamp'] = $parsed;
+            $result['pattern'] = 'YYYY-MM-DD_HH-MM-SS';
+            return $result;
+        }
+    }
+    
+    // Pattern 3: YYYY_MM_DD_HH_MM_SS (underscore separated)
+    // Example: cam_2025_12_29_21_04_21.jpg
+    if (preg_match('/(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})/', $filenameNoExt, $matches)) {
+        $parsed = parseTimestampComponents($matches[1], $matches[2], $matches[3], $matches[4], $matches[5], $matches[6]);
+        
+        if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+            $result['found'] = true;
+            $result['timestamp'] = $parsed;
+            $result['pattern'] = 'YYYY_MM_DD_HH_MM_SS';
+            return $result;
+        }
+    }
+    
+    // Pattern 4: YYYYMMDDTHHmmss (ISO-like with T separator)
+    // Example: 20251229T210421.jpg
+    if (preg_match('/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/', $filenameNoExt, $matches)) {
+        $parsed = parseTimestampComponents($matches[1], $matches[2], $matches[3], $matches[4], $matches[5], $matches[6]);
+        
+        if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+            $result['found'] = true;
+            $result['timestamp'] = $parsed;
+            $result['pattern'] = 'YYYYMMDDTHHmmss';
+            return $result;
+        }
+    }
+    
+    // Pattern 5: Unix timestamp (10 digits, 1600000000-1900000000 range = ~2020-2030)
+    // Example: webcam_1767072037.jpg
+    if (preg_match('/\b(1[6-8]\d{8})\b/', $filenameNoExt, $matches)) {
+        $unixTs = intval($matches[1]);
+        if (isTimestampReasonable($unixTs, $fileMtime)) {
+            $result['found'] = true;
+            $result['timestamp'] = $unixTs;
+            $result['pattern'] = 'unix_timestamp';
+            return $result;
+        }
+    }
+    
+    return $result;
+}
+
+/**
+ * Parse and validate timestamp components
+ * 
+ * @param string $year Year (4 digits)
+ * @param string $month Month (2 digits)
+ * @param string $day Day (2 digits)
+ * @param string $hour Hour (2 digits)
+ * @param string $minute Minute (2 digits)
+ * @param string $second Second (2 digits)
+ * @return int|null Unix timestamp or null if invalid
+ */
+function parseTimestampComponents(string $year, string $month, string $day, string $hour, string $minute, string $second): ?int {
+    $y = intval($year);
+    $m = intval($month);
+    $d = intval($day);
+    $h = intval($hour);
+    $i = intval($minute);
+    $s = intval($second);
+    
+    // Validate ranges
+    if ($y < 2020 || $y > 2030) return null;  // Reasonable year range
+    if ($m < 1 || $m > 12) return null;
+    if ($d < 1 || $d > 31) return null;
+    if ($h < 0 || $h > 23) return null;
+    if ($i < 0 || $i > 59) return null;
+    if ($s < 0 || $s > 59) return null;
+    
+    // Use checkdate for accurate day validation (handles Feb 29, etc.)
+    if (!checkdate($m, $d, $y)) {
+        return null;
+    }
+    
+    // Create timestamp (assumes camera local time, which may differ from server)
+    $timestamp = mktime($h, $i, $s, $m, $d, $y);
+    
+    if ($timestamp === false) {
+        return null;
+    }
+    
+    return $timestamp;
+}
+
+/**
+ * Check if parsed timestamp is reasonable compared to file mtime
+ * 
+ * A timestamp from a filename should be close to the file's modification time.
+ * Allows ±24 hours to account for timezone differences and upload delays.
+ * 
+ * @param int $timestamp Parsed timestamp
+ * @param int $fileMtime File modification time
+ * @return bool True if timestamp is reasonable
+ */
+function isTimestampReasonable(int $timestamp, int $fileMtime): bool {
+    // Must be positive
+    if ($timestamp <= 0) {
+        return false;
+    }
+    
+    // Allow ±24 hours difference (86400 seconds) to account for:
+    // - Timezone differences between camera and server
+    // - Upload delays
+    // - Clock drift
+    $maxDifference = 86400;
+    $difference = abs($timestamp - $fileMtime);
+    
+    return $difference <= $maxDifference;
+}
+
+/**
+ * Get timestamp for EXIF from filename or file mtime
+ * 
+ * Tries to parse timestamp from filename first (more accurate for IP cameras),
+ * falls back to file modification time if no valid timestamp found in filename.
+ * 
+ * @param string $filePath Path to image file
+ * @return int Unix timestamp for EXIF
+ */
+function getTimestampForExif(string $filePath): int {
+    // Try to extract from filename first
+    $filenameTs = parseFilenameTimestamp($filePath);
+    
+    if ($filenameTs['found']) {
+        aviationwx_log('debug', 'using filename timestamp for EXIF', [
+            'file' => basename($filePath),
+            'pattern' => $filenameTs['pattern'],
+            'timestamp' => date('Y-m-d H:i:s', $filenameTs['timestamp'])
+        ], 'app');
+        return $filenameTs['timestamp'];
+    }
+    
+    // Fall back to file mtime
+    $mtime = @filemtime($filePath);
+    if ($mtime === false) {
+        $mtime = time();
+    }
+    
+    return $mtime;
 }
 
 
