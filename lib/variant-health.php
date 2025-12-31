@@ -70,7 +70,8 @@ function variant_health_get_all(): array {
     }
     
     $counters = [];
-    $info = @apcu_cache_info(true);
+    // Get APCu cache info (false = include cache_list with all entries)
+    $info = @apcu_cache_info(false);
     if (!is_array($info) || !isset($info['cache_list'])) {
         return [];
     }
@@ -99,7 +100,8 @@ function variant_health_reset_all(): void {
         return;
     }
     
-    $info = @apcu_cache_info(true);
+    // Get APCu cache info (false = include cache_list with all entries)
+    $info = @apcu_cache_info(false);
     if (!is_array($info) || !isset($info['cache_list'])) {
         return;
     }
