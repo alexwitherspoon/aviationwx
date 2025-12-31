@@ -401,8 +401,8 @@ function metrics_flush_via_http(): bool {
     $ch = curl_init();
     
     // Call Apache directly on port 8080 (skips nginx, works in both prod and local)
-    // Production: Apache on 127.0.0.1:8080, Local: port 8080 mapped to container
-    $url = 'http://127.0.0.1:8080/admin/metrics-flush.php';
+    // Endpoint in health/ directory to avoid .htaccess blocking of admin/
+    $url = 'http://127.0.0.1:8080/health/metrics-flush.php';
     
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
