@@ -26,6 +26,7 @@ require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/exif-utils.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/variant-health.php';
 
 /**
  * Detect image format from file headers
@@ -1397,6 +1398,9 @@ function generateVariantsSync(string $sourceFile, string $airportId, int $camInd
         'delete_original' => $deleteOriginal
     ], 'app');
     
+    // Track generation health metrics
+    variant_health_track_generation($airportId, $camIndex, $successCount, $totalCount);
+    
     return [
         'results' => $results,
         'actual_primary' => $actualPrimary,
@@ -1827,6 +1831,10 @@ function promoteVariants(string $airportId, int $camIndex, array $variantResults
             'timestamp' => $timestamp
         ], 'app');
     }
+    
+    // Track promotion health metrics
+    $promotionSuccess = $totalPromoted > 0;
+    variant_health_track_promotion($airportId, $camIndex, $promotionSuccess, $totalPromoted, $totalAttempted);
     
     return $promoted;
 }

@@ -10,6 +10,7 @@ require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
+require_once __DIR__ . '/../lib/metrics.php';
 
 // Weather pipeline
 require_once __DIR__ . '/../lib/weather/utils.php';
@@ -142,6 +143,9 @@ function generateMockWeatherData($airportId, $airport) {
 
     $airport = $result['airport'];
     $airportId = $result['airportId'];
+    
+    // Track weather request metric
+    metrics_track_weather_request($airportId);
     
     // Debug mode: collect pipeline information for diagnostics
     // Usage: ?airport=kspb&debug=1 (requires force=1 or cron user agent for fresh fetch)

@@ -11,6 +11,62 @@ require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/process-utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
+require_once __DIR__ . '/../lib/weather-health.php';
+
+// =============================================================================
+// OPTIMIZATION: Cached data loaders
+// =============================================================================
+
+/**
+ * Get cached backoff data (reads file once per request)
+ * 
+ * @return array Backoff data array (empty if file doesn't exist)
+ */
+function getCachedBackoffData(): array {
+    static $backoffData = null;
+    
+    if ($backoffData === null) {
+        $backoffFile = __DIR__ . '/../cache/backoff.json';
+        if (file_exists($backoffFile)) {
+            $content = @file_get_contents($backoffFile);
+            $backoffData = $content !== false ? (@json_decode($content, true) ?: []) : [];
+        } else {
+            $backoffData = [];
+        }
+    }
+    
+    return $backoffData;
+}
+
+/**
+ * Get cached status page data with APCu caching
+ * 
+ * Caches health check results for 30 seconds to reduce file I/O.
+ * 
+ * @param callable $computeFunc Function to compute fresh data
+ * @param string $cacheKey APCu cache key
+ * @param int $ttl Cache TTL in seconds (default: 30)
+ * @return mixed Cached or freshly computed data
+ */
+function getCachedStatusData(callable $computeFunc, string $cacheKey, int $ttl = 30) {
+    // Check APCu cache first
+    if (function_exists('apcu_fetch')) {
+        $cached = @apcu_fetch($cacheKey, $success);
+        if ($success) {
+            return $cached;
+        }
+    }
+    
+    // Compute fresh data
+    $data = $computeFunc();
+    
+    // Store in APCu
+    if (function_exists('apcu_store')) {
+        @apcu_store($cacheKey, $data, $ttl);
+    }
+    
+    return $data;
+}
 
 // Prevent caching (only in web context, not CLI)
 if (php_sapi_name() !== 'cli' && !headers_sent()) {
@@ -572,13 +628,30 @@ function checkSystemHealth(): array {
     $variantHealth = checkVariantGenerationHealth();
     $health['components']['variant_generation'] = $variantHealth;
     
+    // Check weather data fetching health (uses cached data from weather-health.php)
+    $weatherDataHealth = weather_health_get_status();
+    
+    // Include per-source breakdown in the metrics if available
+    $weatherSources = weather_health_get_sources();
+    if (!empty($weatherSources)) {
+        $sourceSummary = [];
+        foreach ($weatherSources as $type => $sourceData) {
+            $rate = $sourceData['metrics']['success_rate'] ?? 100;
+            $sourceSummary[] = ucfirst($type) . ': ' . $rate . '%';
+        }
+        $weatherDataHealth['source_summary'] = implode(' · ', $sourceSummary);
+    }
+    
+    $health['components']['weather_fetching'] = $weatherDataHealth;
+    
     return $health;
 }
 
 /**
  * Check webcam variant generation health
  * 
- * Analyzes recent logs and cache state to determine variant generation system health.
+ * Uses cached health data from lib/variant-health.php (written by scheduler).
+ * No log parsing needed - health is tracked at source via APCu counters.
  * 
  * @return array {
  *   'name' => string,
@@ -589,213 +662,9 @@ function checkSystemHealth(): array {
  * }
  */
 function checkVariantGenerationHealth(): array {
-    $health = [
-        'name' => 'Webcam Variant Generation',
-        'status' => 'operational',
-        'message' => 'Variant generation operational',
-        'lastChanged' => 0,
-        'metrics' => []
-    ];
-    
-    // Parse recent logs for variant generation activity
-    $logFile = AVIATIONWX_APP_LOG_FILE;
-    if (!file_exists($logFile) || !is_readable($logFile)) {
-        $health['status'] = 'degraded';
-        $health['message'] = 'Log file not available';
-        return $health;
-    }
-    
-    // Read last 1000 lines of log file with proper error handling
-    $lines = [];
-    $maxLines = 1000;
-    $maxFileSize = 50 * 1024 * 1024; // 50MB limit for safety
-    
-    // Check file size first to avoid reading huge files
-    $fileSize = @filesize($logFile);
-    if ($fileSize === false || $fileSize > $maxFileSize) {
-        // File too large or unreadable - use exec tail for efficiency
-        if (function_exists('exec')) {
-            @exec('tail -n ' . $maxLines . ' ' . escapeshellarg($logFile) . ' 2>/dev/null', $lines, $exitCode);
-            if ($exitCode !== 0 || empty($lines)) {
-                // Fallback: try reading last portion of file
-                $handle = @fopen($logFile, 'r');
-                if ($handle !== false) {
-                    // Seek to end minus reasonable buffer
-                    $seekPos = max(0, $fileSize - (500 * 1024)); // Last 500KB
-                    @fseek($handle, $seekPos);
-                    $content = @stream_get_contents($handle);
-                    @fclose($handle);
-                    if ($content !== false) {
-                        $allLines = explode("\n", $content);
-                        $lines = array_slice($allLines, -$maxLines);
-                    }
-                }
-            }
-        } else {
-            // No exec available - read last portion safely
-            $handle = @fopen($logFile, 'r');
-            if ($handle !== false) {
-                $seekPos = max(0, $fileSize - (500 * 1024)); // Last 500KB
-                @fseek($handle, $seekPos);
-                $content = @stream_get_contents($handle);
-                @fclose($handle);
-                if ($content !== false) {
-                    $allLines = explode("\n", $content);
-                    $lines = array_slice($allLines, -$maxLines);
-                }
-            }
-        }
-    } else {
-        // File is reasonable size - use exec tail if available, otherwise read file
-        if (function_exists('exec')) {
-            @exec('tail -n ' . $maxLines . ' ' . escapeshellarg($logFile) . ' 2>/dev/null', $lines);
-        } else {
-            $content = @file_get_contents($logFile);
-            if ($content !== false) {
-                $allLines = explode("\n", $content);
-                $lines = array_slice($allLines, -$maxLines);
-            }
-        }
-    }
-    
-    $now = time();
-    $oneHourAgo = $now - 3600;
-    $recentGenerations = [];
-    $recentPromotions = [];
-    $recentFailures = [];
-    $totalAttempted = 0;
-    $totalSuccessful = 0;
-    $totalPromoted = 0;
-    $totalPromotionAttempts = 0;
-    
-    // Parse log lines for variant generation events
-    foreach ($lines as $line) {
-        if (empty(trim($line))) continue;
-        
-        // Try to parse JSON log entries
-        $json = @json_decode($line, true);
-        if (!is_array($json) || !isset($json['message'])) continue;
-        
-        $message = $json['message'] ?? '';
-        $context = $json['context'] ?? [];
-        $timestamp = isset($json['ts']) ? @strtotime($json['ts']) : 0;
-        
-        if ($timestamp < $oneHourAgo || $timestamp === false) continue;
-        
-        // Track variant generation completions
-        if ($message === 'webcam variant generation completed') {
-            $successCount = $context['success_count'] ?? 0;
-            $totalCount = $context['total_count'] ?? 0;
-            $airport = $context['airport'] ?? 'unknown';
-            $cam = $context['cam'] ?? 'unknown';
-            
-            $totalAttempted += $totalCount;
-            $totalSuccessful += $successCount;
-            
-            $recentGenerations[] = [
-                'timestamp' => $timestamp,
-                'airport' => $airport,
-                'cam' => $cam,
-                'success_count' => $successCount,
-                'total_count' => $totalCount,
-                'success_rate' => $totalCount > 0 ? ($successCount / $totalCount) : 0
-            ];
-        }
-        
-        // Track promotion results
-        if ($message === 'webcam variants promoted successfully' || 
-            $message === 'webcam partial variant promotion' ||
-            $message === 'webcam variant promotion failed completely') {
-            
-            $promotedCount = $context['promoted_count'] ?? $context['total_formats'] ?? 0;
-            $attemptedCount = $context['attempted_count'] ?? 0;
-            $airport = $context['airport'] ?? 'unknown';
-            $cam = $context['cam'] ?? 'unknown';
-            
-            $totalPromotionAttempts += $attemptedCount;
-            $totalPromoted += $promotedCount;
-            
-            $recentPromotions[] = [
-                'timestamp' => $timestamp,
-                'airport' => $airport,
-                'cam' => $cam,
-                'promoted_count' => $promotedCount,
-                'attempted_count' => $attemptedCount,
-                'status' => $message
-            ];
-            
-            if ($message === 'webcam variant promotion failed completely') {
-                $recentFailures[] = [
-                    'timestamp' => $timestamp,
-                    'airport' => $airport,
-                    'cam' => $cam,
-                    'attempted_count' => $attemptedCount
-                ];
-            }
-        }
-    }
-    
-    // Calculate metrics
-    $generationSuccessRate = $totalAttempted > 0 ? ($totalSuccessful / $totalAttempted) : 1.0;
-    $promotionSuccessRate = $totalPromotionAttempts > 0 ? ($totalPromoted / $totalPromotionAttempts) : 1.0;
-    
-    // Find most recent activity
-    $lastGeneration = null;
-    $lastPromotion = null;
-    if (!empty($recentGenerations)) {
-        usort($recentGenerations, function($a, $b) { return $b['timestamp'] - $a['timestamp']; });
-        $lastGeneration = $recentGenerations[0];
-    }
-    if (!empty($recentPromotions)) {
-        usort($recentPromotions, function($a, $b) { return $b['timestamp'] - $a['timestamp']; });
-        $lastPromotion = $recentPromotions[0];
-    }
-    
-    $mostRecentActivity = max(
-        $lastGeneration['timestamp'] ?? 0,
-        $lastPromotion['timestamp'] ?? 0
-    );
-    
-    // Determine status
-    $status = 'operational';
-    $message = 'Variant generation operational';
-    
-    if ($totalAttempted === 0 && $totalPromotionAttempts === 0) {
-        // No recent activity - check if this is expected (system just started, etc.)
-        $status = 'degraded';
-        $message = 'No recent variant generation activity';
-    } elseif ($generationSuccessRate < 0.5) {
-        $status = 'down';
-        $message = sprintf('Low generation success rate: %.1f%%', $generationSuccessRate * 100);
-    } elseif ($promotionSuccessRate < 0.5) {
-        $status = 'down';
-        $message = sprintf('Low promotion success rate: %.1f%%', $promotionSuccessRate * 100);
-    } elseif ($generationSuccessRate < 0.8 || $promotionSuccessRate < 0.8) {
-        $status = 'degraded';
-        $message = sprintf('Degraded: %.1f%% generation, %.1f%% promotion', 
-            $generationSuccessRate * 100, $promotionSuccessRate * 100);
-    } elseif (!empty($recentFailures)) {
-        $status = 'degraded';
-        $message = sprintf('Operational with %d recent promotion failure(s)', count($recentFailures));
-    } else {
-        $message = sprintf('Healthy: %.1f%% generation, %.1f%% promotion', 
-            $generationSuccessRate * 100, $promotionSuccessRate * 100);
-    }
-    
-    $health['status'] = $status;
-    $health['message'] = $message;
-    $health['lastChanged'] = $mostRecentActivity;
-    $health['metrics'] = [
-        'generation_success_rate' => round($generationSuccessRate * 100, 1),
-        'promotion_success_rate' => round($promotionSuccessRate * 100, 1),
-        'total_generations_last_hour' => count($recentGenerations),
-        'total_promotions_last_hour' => count($recentPromotions),
-        'total_failures_last_hour' => count($recentFailures),
-        'last_generation' => $lastGeneration,
-        'last_promotion' => $lastPromotion
-    ];
-    
-    return $health;
+    // Uses variant_health_get_status() from lib/variant-health.php
+    // (included via webcam-format-generation.php)
+    return variant_health_get_status();
 }
 
 /**
@@ -994,17 +863,10 @@ function checkAirportHealth(string $airportId, array $airport): array {
     // Use centralized helper for source name mapping
     require_once __DIR__ . '/../lib/weather/utils.php';
     
-    // Helper function to get HTTP error code from backoff state
+    // Helper function to get HTTP error code from backoff state (uses cached data)
     $getHttpErrorInfo = function($airportId, $sourceType) {
-        $backoffFile = __DIR__ . '/../cache/backoff.json';
-        if (!file_exists($backoffFile)) {
-            return null;
-        }
-        
-        // Use @ to suppress errors for non-critical file operations
-        // We handle failures explicitly with fallback mechanisms below
-        $backoffData = @json_decode(@file_get_contents($backoffFile), true);
-        if (!is_array($backoffData)) {
+        $backoffData = getCachedBackoffData();
+        if (empty($backoffData)) {
             return null;
         }
         
@@ -1376,21 +1238,14 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $errorFile = $cacheJpg . '.error.json';
                 $hasError = !$isPush && file_exists($errorFile);
                 
-                // Check backoff state (pull cameras only)
+                // Check backoff state (pull cameras only) - uses cached data
                 $inBackoff = false;
                 if (!$isPush) {
-                    $backoffFile = __DIR__ . '/../cache/backoff.json';
-                    if (file_exists($backoffFile)) {
-                        // Use @ to suppress errors for non-critical file operations
-                        // We handle failures explicitly with fallback mechanisms below
-                        $backoffData = @json_decode(file_get_contents($backoffFile), true);
-                        if (is_array($backoffData)) {
-                            $key = $airportId . '_' . $idx;
-                            if (isset($backoffData[$key])) {
-                                $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
-                                $inBackoff = $backoffUntil > time();
-                            }
-                        }
+                    $backoffData = getCachedBackoffData();
+                    $key = $airportId . '_' . $idx;
+                    if (isset($backoffData[$key])) {
+                        $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
+                        $inBackoff = $backoffUntil > time();
                     }
                 }
                 
@@ -1717,28 +1572,42 @@ if ($config === null) {
     die('Service Unavailable: Configuration cannot be loaded');
 }
 
-// Get system health
-$systemHealth = checkSystemHealth();
+// Load usage metrics (multi-period: hour, day, 7-day)
+require_once __DIR__ . '/../lib/metrics.php';
+$usageMetrics = metrics_get_rolling(METRICS_STATUS_PAGE_DAYS);
+$multiPeriodMetrics = metrics_get_multi_period();
 
-// Get node performance metrics
-$nodePerformance = getNodePerformance();
+// Get system health (cached for 30s)
+$systemHealth = getCachedStatusData(function() {
+    return checkSystemHealth();
+}, 'status_system_health', 30);
 
-// Get public API health (if enabled)
+// Get node performance metrics (cached for 30s)
+$nodePerformance = getCachedStatusData(function() {
+    return getNodePerformance();
+}, 'status_node_performance', 30);
+
+// Get public API health (if enabled, cached for 30s)
 require_once __DIR__ . '/../lib/public-api/config.php';
 $publicApiHealth = null;
 if (isPublicApiEnabled()) {
-    $publicApiHealth = checkPublicApiHealth();
+    $publicApiHealth = getCachedStatusData(function() {
+        return checkPublicApiHealth();
+    }, 'status_public_api_health', 30);
 }
 
-// Get airport health for each configured airport
+// Get airport health for each configured airport (cached for 30s)
 // Note: checkAirportHealth() uses getCacheFile() from webcam-format-generation.php
 // which is already included at the top of this file
-$airportHealth = [];
-if (isset($config['airports']) && is_array($config['airports'])) {
-    foreach ($config['airports'] as $airportId => $airport) {
-        $airportHealth[] = checkAirportHealth($airportId, $airport);
+$airportHealth = getCachedStatusData(function() use ($config) {
+    $health = [];
+    if (isset($config['airports']) && is_array($config['airports'])) {
+        foreach ($config['airports'] as $airportId => $airport) {
+            $health[] = checkAirportHealth($airportId, $airport);
+        }
     }
-}
+    return $health;
+}, 'status_airport_health', 30);
 
 // Sort airports by status (down first, then maintenance, then degraded, then operational)
 usort($airportHealth, function($a, $b) {
@@ -1864,6 +1733,72 @@ if (php_sapi_name() === 'cli') {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+        }
+        
+        .airport-header-content {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 1.5rem;
+            flex: 1;
+        }
+        
+        .airport-views-summary {
+            font-size: 0.75rem;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex: 1;
+            justify-content: center;
+        }
+        
+        .airport-views-summary .views-label {
+            color: #999;
+        }
+        
+        .airport-views-summary .views-period {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .airport-views-summary .views-sep {
+            color: #ccc;
+        }
+        
+        .usage-metrics-block {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .usage-metrics-block .metrics-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .usage-metrics-block .metrics-line:last-child {
+            margin-bottom: 0;
+        }
+        
+        .usage-metrics-block .metric-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        
+        .usage-metrics-block .metric-label {
+            color: #888;
+        }
+        
+        .usage-metrics-block .metric-value {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .usage-metrics-block .metric-breakdown {
+            color: #666;
         }
         
         .status-card-header h2 {
@@ -2094,6 +2029,34 @@ if (php_sapi_name() === 'cli') {
             background-color: #252525;
         }
         
+        body.dark-mode .airport-views-summary {
+            color: #777;
+        }
+        
+        body.dark-mode .airport-views-summary .views-label {
+            color: #666;
+        }
+        
+        body.dark-mode .airport-views-summary .views-period {
+            color: #999;
+        }
+        
+        body.dark-mode .airport-views-summary .views-sep {
+            color: #555;
+        }
+        
+        body.dark-mode .usage-metrics-block .metric-label {
+            color: #777;
+        }
+        
+        body.dark-mode .usage-metrics-block .metric-value {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .usage-metrics-block .metric-breakdown {
+            color: #999;
+        }
+        
         body.dark-mode .component-item {
             border-bottom-color: #333;
         }
@@ -2150,6 +2113,8 @@ if (php_sapi_name() === 'cli') {
         
         body.dark-mode h2[style*="font-size: 1.5rem"] {
             color: #e0e0e0;
+        }
+        
         }
     </style>
 </head>
@@ -2242,16 +2207,20 @@ if (php_sapi_name() === 'cli') {
                             <div class="component-name"><?php echo htmlspecialchars($component['name']); ?></div>
                             <div class="component-message"><?php echo htmlspecialchars($component['message']); ?></div>
                             <?php if (isset($component['metrics']) && is_array($component['metrics']) && !empty($component['metrics'])): ?>
-                            <div class="component-metrics" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;">
-                                <?php if (isset($component['metrics']['generation_success_rate'])): ?>
-                                Generation: <?php echo htmlspecialchars($component['metrics']['generation_success_rate']); ?>% success
-                                <?php endif; ?>
-                                <?php if (isset($component['metrics']['promotion_success_rate'])): ?>
-                                · Promotion: <?php echo htmlspecialchars($component['metrics']['promotion_success_rate']); ?>% success
-                                <?php endif; ?>
-                                <?php if (isset($component['metrics']['total_generations_last_hour'])): ?>
-                                · <?php echo htmlspecialchars($component['metrics']['total_generations_last_hour']); ?> generations (1h)
-                                <?php endif; ?>
+                            <div class="component-metrics" style="margin-top: 0.25rem; font-size: 0.8rem; color: #888;">
+                                <?php 
+                                $metricParts = [];
+                                if (isset($component['metrics']['total_generations_last_hour'])) {
+                                    $metricParts[] = $component['metrics']['total_generations_last_hour'] . ' generated (1h)';
+                                }
+                                if (isset($component['metrics']['generation_success_rate']) && $component['metrics']['generation_success_rate'] < 100) {
+                                    $metricParts[] = $component['metrics']['generation_success_rate'] . '% gen success';
+                                }
+                                if (isset($component['metrics']['promotion_success_rate']) && $component['metrics']['promotion_success_rate'] < 100) {
+                                    $metricParts[] = $component['metrics']['promotion_success_rate'] . '% promo success';
+                                }
+                                echo htmlspecialchars(implode(' · ', $metricParts));
+                                ?>
                             </div>
                             <?php endif; ?>
                             <?php if (isset($component['lastChanged']) && $component['lastChanged'] > 0): ?>
@@ -2322,13 +2291,35 @@ if (php_sapi_name() === 'cli') {
         // Determine if airport should be expanded by default (not operational or maintenance = expanded)
         $isExpanded = ($airport['status'] !== 'operational' && $airport['status'] !== 'maintenance');
         ?>
+        <?php 
+        // Get multi-period metrics for this airport
+        $airportIdLower = strtolower($airport['id']);
+        $airportPeriodMetrics = $multiPeriodMetrics[$airportIdLower] ?? null;
+        $hasViewMetrics = $airportPeriodMetrics && (
+            $airportPeriodMetrics['hour']['page_views'] > 0 ||
+            $airportPeriodMetrics['day']['page_views'] > 0 ||
+            $airportPeriodMetrics['week']['page_views'] > 0
+        );
+        ?>
         <div class="status-card">
             <div class="status-card-header airport-card-header <?php echo $isExpanded ? 'expanded' : ''; ?>" 
                  onclick="toggleAirport('<?php echo htmlspecialchars($airport['id']); ?>')">
-                <h2>
-                    <span class="expand-icon">▶</span>
-                    <?php echo htmlspecialchars($airport['id']); ?>
-                </h2>
+                <div class="airport-header-content">
+                    <h2>
+                        <span class="expand-icon">▶</span>
+                        <?php echo htmlspecialchars($airport['id']); ?>
+                    </h2>
+                    <?php if ($hasViewMetrics): ?>
+                    <div class="airport-views-summary">
+                        <span class="views-label">Views:</span>
+                        <span class="views-period" title="Last hour"><?php echo number_format($airportPeriodMetrics['hour']['page_views']); ?>/hour</span>
+                        <span class="views-sep">·</span>
+                        <span class="views-period" title="Today"><?php echo number_format($airportPeriodMetrics['day']['page_views']); ?>/day</span>
+                        <span class="views-sep">·</span>
+                        <span class="views-period" title="Last 7 days"><?php echo number_format($airportPeriodMetrics['week']['page_views']); ?>/week</span>
+                    </div>
+                    <?php endif; ?>
+                </div>
                 <span class="status-badge">
                     <?php if ($airport['status'] === 'maintenance'): ?>
                         Under Maintenance <span class="status-indicator <?php echo getStatusColor($airport['status']); ?>"><?php echo getStatusIcon($airport['status']); ?></span>
@@ -2418,6 +2409,91 @@ if (php_sapi_name() === 'cli') {
                         </li>
                     <?php endif; ?>
                     <?php endforeach; ?>
+                    
+                    <?php 
+                    // Get usage metrics for this airport (use already loaded $airportPeriodMetrics from header)
+                    $webcamMetrics = $airportPeriodMetrics['webcams'] ?? [];
+                    $weeklyAirportMetrics = $usageMetrics['airports'][$airportIdLower] ?? null;
+                    
+                    // Calculate webcam totals
+                    $totalWebcam = 0;
+                    $formatTotals = ['jpg' => 0, 'webp' => 0, 'avif' => 0];
+                    $sizeTotals = ['primary' => 0, 'thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'full' => 0];
+                    foreach ($webcamMetrics as $camData) {
+                        foreach ($camData['by_format'] ?? [] as $fmt => $count) {
+                            $formatTotals[$fmt] += $count;
+                            $totalWebcam += $count;
+                        }
+                        foreach ($camData['by_size'] ?? [] as $sz => $count) {
+                            $sizeTotals[$sz] += $count;
+                        }
+                    }
+                    
+                    $hasDetailedMetrics = ($weeklyAirportMetrics !== null && $weeklyAirportMetrics['weather_requests'] > 0) || $totalWebcam > 0;
+                    ?>
+                    
+                    <?php if ($hasDetailedMetrics): ?>
+                    <li class="component-item">
+                        <div class="component-info">
+                            <div class="component-name">Requests</div>
+                            <div class="component-message usage-metrics-block">
+                                <div class="metrics-line">
+                                    <?php if ($weeklyAirportMetrics && $weeklyAirportMetrics['weather_requests'] > 0): ?>
+                                    <span class="metric-group">
+                                        <span class="metric-label">Weather (7d):</span>
+                                        <span class="metric-value"><?php echo number_format($weeklyAirportMetrics['weather_requests']); ?></span>
+                                    </span>
+                                    <?php endif; ?>
+                                    <?php if ($totalWebcam > 0): ?>
+                                    <span class="metric-group">
+                                        <span class="metric-label">Webcam (7d):</span>
+                                        <span class="metric-value"><?php echo number_format($totalWebcam); ?></span>
+                                    </span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if ($totalWebcam > 0): ?>
+                                <div class="metrics-line">
+                                    <span class="metric-group">
+                                        <span class="metric-label">Formats:</span>
+                                        <span class="metric-breakdown">
+                                            <?php
+                                            $formatParts = [];
+                                            foreach ($formatTotals as $fmt => $count) {
+                                                if ($count > 0) {
+                                                    $pct = round(($count / $totalWebcam) * 100);
+                                                    $formatParts[] = strtoupper($fmt) . " {$pct}%";
+                                                }
+                                            }
+                                            echo implode(' · ', $formatParts);
+                                            ?>
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="metrics-line">
+                                    <span class="metric-group">
+                                        <span class="metric-label">Sizes:</span>
+                                        <span class="metric-breakdown">
+                                            <?php
+                                            $sizeParts = [];
+                                            $sizeTotal = array_sum($sizeTotals);
+                                            if ($sizeTotal > 0) {
+                                                foreach ($sizeTotals as $sz => $count) {
+                                                    if ($count > 0) {
+                                                        $pct = round(($count / $sizeTotal) * 100);
+                                                        $sizeParts[] = ucfirst($sz) . " {$pct}%";
+                                                    }
+                                                }
+                                            }
+                                            echo implode(' · ', $sizeParts);
+                                            ?>
+                                        </span>
+                                    </span>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </li>
+                    <?php endif; ?>
                 </ul>
             </div>
         </div>

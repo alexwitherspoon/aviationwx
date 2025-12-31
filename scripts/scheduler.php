@@ -20,6 +20,9 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
+require_once __DIR__ . '/../lib/metrics.php';
+require_once __DIR__ . '/../lib/variant-health.php';
+require_once __DIR__ . '/../lib/weather-health.php';
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -27,6 +30,12 @@ $lockFp = null;
 $running = true;
 $loopCount = 0;
 $lastConfigReload = 0;
+$lastMetricsFlush = 0;
+$lastMetricsCleanup = 0;
+$lastDailyAggregation = '';
+$lastWeeklyAggregation = '';
+$lastVariantHealthUpdate = 0;
+$lastWeatherHealthUpdate = 0;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -345,6 +354,63 @@ while ($running) {
         if ($notamPool !== null) {
             $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
             $notamPool->cleanupFinished($dummyStats);
+        }
+        
+        // Process metrics tasks (non-blocking)
+        // 1. Flush APCu counters to hourly file (every 5 minutes)
+        if (($now - $lastMetricsFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
+            if (metrics_flush()) {
+                $lastMetricsFlush = $now;
+            }
+        }
+        
+        // 2. Aggregate yesterday's hourly data into daily (once per day, after midnight UTC)
+        $yesterdayId = gmdate('Y-m-d', $now - 86400);
+        if ($lastDailyAggregation !== $yesterdayId && (int)gmdate('H') >= 1) {
+            if (metrics_aggregate_daily($yesterdayId)) {
+                $lastDailyAggregation = $yesterdayId;
+                aviationwx_log('info', 'scheduler: metrics daily aggregation complete', [
+                    'date' => $yesterdayId
+                ], 'app');
+            }
+        }
+        
+        // 3. Aggregate last week's daily data into weekly (once per week, on Monday after midnight UTC)
+        $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
+        if ($lastWeeklyAggregation !== $lastWeekId && (int)gmdate('N') === 1 && (int)gmdate('H') >= 2) {
+            if (metrics_aggregate_weekly($lastWeekId)) {
+                $lastWeeklyAggregation = $lastWeekId;
+                aviationwx_log('info', 'scheduler: metrics weekly aggregation complete', [
+                    'week' => $lastWeekId
+                ], 'app');
+            }
+        }
+        
+        // 4. Cleanup old metrics files (once per day)
+        if (($now - $lastMetricsCleanup) >= 86400) {
+            $deletedCount = metrics_cleanup();
+            if ($deletedCount > 0) {
+                aviationwx_log('info', 'scheduler: metrics cleanup complete', [
+                    'deleted_files' => $deletedCount
+                ], 'app');
+            }
+            $lastMetricsCleanup = $now;
+        }
+        
+        // 5. Flush variant health counters to cache file (every 60 seconds)
+        // This pre-computes variant generation health so status page doesn't parse logs
+        if (($now - $lastVariantHealthUpdate) >= 60) {
+            if (variant_health_flush()) {
+                $lastVariantHealthUpdate = $now;
+            }
+        }
+        
+        // 6. Flush weather health counters to cache file (every 60 seconds)
+        // This pre-computes weather fetch health so status page doesn't check file ages
+        if (($now - $lastWeatherHealthUpdate) >= 60) {
+            if (weather_health_flush()) {
+                $lastWeatherHealthUpdate = $now;
+            }
         }
         
         // Update health status (only scheduler errors affect this)

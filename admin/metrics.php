@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/metrics.php';
 header('Content-Type: text/plain');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
@@ -87,8 +88,36 @@ if (file_exists($airportsConfig)) {
     }
 }
 
+// =============================================================================
+// USAGE METRICS (from metrics.php)
+// =============================================================================
+// Export usage metrics (page views, weather requests, webcam serves, etc.)
+
+echo "\n# HELP aviationwx_airport_views_total Total page views per airport (24h)\n";
+echo "# TYPE aviationwx_airport_views_total counter\n";
+
+echo "\n# HELP aviationwx_weather_requests_total Total weather API requests per airport (24h)\n";
+echo "# TYPE aviationwx_weather_requests_total counter\n";
+
+echo "\n# HELP aviationwx_webcam_serves_total Total webcam serves by format (24h)\n";
+echo "# TYPE aviationwx_webcam_serves_total counter\n";
+
+echo "\n# HELP aviationwx_webcam_serves_by_size_total Total webcam serves by size (24h)\n";
+echo "# TYPE aviationwx_webcam_serves_by_size_total counter\n";
+
+echo "\n# HELP aviationwx_browser_format_support_total Browser format support distribution (24h)\n";
+echo "# TYPE aviationwx_browser_format_support_total counter\n";
+
+echo "\n# HELP aviationwx_cache_hits_total Total cache hits (24h)\n";
+echo "# TYPE aviationwx_cache_hits_total counter\n";
+
+echo "\n# HELP aviationwx_cache_misses_total Total cache misses (24h)\n";
+echo "# TYPE aviationwx_cache_misses_total counter\n";
+
+// Output the actual metrics
+$prometheusLines = metrics_prometheus_export();
+foreach ($prometheusLines as $line) {
+    echo $line . "\n";
+}
+
 aviationwx_log('info', 'metrics probe', [], 'app');
-
-?>
-
-

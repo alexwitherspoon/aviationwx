@@ -226,6 +226,17 @@ if (!defined('ERROR_RATE_DEGRADED_THRESHOLD')) {
     define('ERROR_RATE_DEGRADED_THRESHOLD', 10); // System degraded if >= 10 errors/hour
 }
 
+// Metrics collection
+if (!defined('METRICS_RETENTION_DAYS')) {
+    define('METRICS_RETENTION_DAYS', 14); // Keep 14 days of metrics
+}
+if (!defined('METRICS_FLUSH_INTERVAL_SECONDS')) {
+    define('METRICS_FLUSH_INTERVAL_SECONDS', 300); // Flush to disk every 5 minutes
+}
+if (!defined('METRICS_STATUS_PAGE_DAYS')) {
+    define('METRICS_STATUS_PAGE_DAYS', 7); // Show 7-day rolling window on status page
+}
+
 // Time constants (seconds)
 if (!defined('SECONDS_PER_MINUTE')) {
     define('SECONDS_PER_MINUTE', 60);

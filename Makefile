@@ -8,7 +8,7 @@
 #
 # See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down restart logs shell test test-unit test-integration test-browser test-local test-error-detector smoke clean config config-check dev
+.PHONY: help init build build-force up down restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev
 
 help: ## Show this help message
 	@echo ''
@@ -19,7 +19,7 @@ help: ## Show this help message
 	@grep -E '^(dev|up|down|restart|logs|shell):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTesting:\033[0m'
-	@grep -E '^(test|test-unit|test-integration|test-browser|test-local|smoke):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(test|test-unit|test-integration|test-browser|test-local|metrics-test|smoke):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mConfiguration:\033[0m'
 	@grep -E '^(init|config|config-check|config-example):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -128,6 +128,11 @@ test-local: build-force up ## Rebuild containers and run PHPUnit tests locally
 test-error-detector: ## Test webcam error frame detector (requires running containers)
 	@echo "Testing webcam error frame detector..."
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml exec -T web php /var/www/html/scripts/test-error-detector.php || (echo ""; echo "⚠️  Error detector test failed. Check output above."; exit 1)
+
+metrics-test: ## Generate test metrics data for status page visualization
+	@echo "Generating test metrics..."
+	@php scripts/generate-test-metrics.php
+	@echo "✓ Test metrics generated. View at: http://localhost:8080/pages/status.php"
 
 smoke: ## Smoke test main endpoints (requires running containers)
 	@echo "Smoke testing..."

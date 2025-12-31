@@ -18,6 +18,7 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
+require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../scripts/fetch-webcam.php';
 
 // Check early if we're being included for testing vs. direct API access
@@ -858,8 +859,32 @@ function serve202Response(string $preferredFormat, int $jpegMtime, int $refreshI
  * @return void
  */
 function serve200Response(string $filePath, string $contentType, ?int $mtime = null, ?int $refreshInterval = null, bool $exitAfterServe = true): void {
-    // Access global variables for logging
-    global $airportId, $camIndex;
+    // Access global variables for logging and metrics
+    global $airportId, $camIndex, $requestedSize;
+    
+    // Track webcam metrics (only once per request)
+    static $metricsTracked = false;
+    if (!$metricsTracked && !empty($airportId)) {
+        $metricsTracked = true;
+        
+        // Determine format from content type
+        $format = 'jpg';
+        if ($contentType === 'image/webp') {
+            $format = 'webp';
+        } elseif ($contentType === 'image/avif') {
+            $format = 'avif';
+        }
+        
+        // Track webcam serve
+        $size = $requestedSize ?? 'primary';
+        metrics_track_webcam_serve($airportId, $camIndex, $format, $size);
+        
+        // Track browser format support (based on Accept header)
+        $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+        $supportsAvif = (stripos($acceptHeader, 'image/avif') !== false);
+        $supportsWebp = (stripos($acceptHeader, 'image/webp') !== false);
+        metrics_track_format_support($supportsAvif, $supportsWebp);
+    }
     
     // Check rate limiting (re-check since we can't easily pass the variable)
     $isRateLimited = !checkRateLimit('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);

@@ -29,6 +29,7 @@ require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../circuit-breaker.php';
 require_once __DIR__ . '/../logger.php';
+require_once __DIR__ . '/../weather-health.php';
 
 use AviationWX\Weather\Data\WeatherSnapshot;
 use AviationWX\Weather\WeatherAggregator;
@@ -162,6 +163,8 @@ function fetchAllSources(array $sources, string $airportId): array {
         $sourceType = $source['type'];
         $breakerResult = checkWeatherCircuitBreaker($airportId, $sourceType);
         if (is_array($breakerResult) && ($breakerResult['skip'] ?? false)) {
+            // Track circuit breaker skip for health metrics
+            weather_health_track_circuit_open($airportId, $sourceType);
             continue;
         }
         
@@ -214,9 +217,11 @@ function fetchAllSources(array $sources, string $airportId): array {
         if ($httpCode >= 200 && $httpCode < 300 && !empty($response)) {
             $responses[$sourceKey] = $response;
             recordWeatherSuccess($airportId, $sourceType);
+            weather_health_track_fetch($airportId, $sourceType, true, $httpCode);
         } else {
             $responses[$sourceKey] = null;
             recordWeatherFailure($airportId, $sourceType);
+            weather_health_track_fetch($airportId, $sourceType, false, $httpCode);
         }
         
         curl_multi_remove_handle($mh, $ch);

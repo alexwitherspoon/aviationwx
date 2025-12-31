@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/lib/config.php';
+require_once __DIR__ . '/lib/metrics.php';
 
 // Check if this is a status page request
 $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
@@ -263,6 +264,9 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         
         // Set airport-specific variables for use in template
         $airport['id'] = $airportId;
+        
+        // Track page view metric
+        metrics_track_page_view($airportId);
         
         // Include the airport template
         include 'pages/airport.php';

@@ -278,6 +278,56 @@ function getRateLimitPath(string $identifier): string {
 }
 
 // =============================================================================
+// METRICS CACHE PATHS
+// =============================================================================
+
+if (!defined('CACHE_METRICS_DIR')) {
+    define('CACHE_METRICS_DIR', CACHE_BASE_DIR . '/metrics');
+}
+
+if (!defined('CACHE_METRICS_HOURLY_DIR')) {
+    define('CACHE_METRICS_HOURLY_DIR', CACHE_METRICS_DIR . '/hourly');
+}
+
+if (!defined('CACHE_METRICS_DAILY_DIR')) {
+    define('CACHE_METRICS_DAILY_DIR', CACHE_METRICS_DIR . '/daily');
+}
+
+if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
+    define('CACHE_METRICS_WEEKLY_DIR', CACHE_METRICS_DIR . '/weekly');
+}
+
+/**
+ * Get path to hourly metrics file
+ * 
+ * @param string $hourId Hour identifier (e.g., '2025-12-31-14' for 14:00 UTC)
+ * @return string Full path to hourly metrics file
+ */
+function getMetricsHourlyPath(string $hourId): string {
+    return CACHE_METRICS_HOURLY_DIR . '/' . $hourId . '.json';
+}
+
+/**
+ * Get path to daily metrics file
+ * 
+ * @param string $dateId Date identifier (e.g., '2025-12-31')
+ * @return string Full path to daily metrics file
+ */
+function getMetricsDailyPath(string $dateId): string {
+    return CACHE_METRICS_DAILY_DIR . '/' . $dateId . '.json';
+}
+
+/**
+ * Get path to weekly metrics file
+ * 
+ * @param string $weekId Week identifier (e.g., '2025-W01')
+ * @return string Full path to weekly metrics file
+ */
+function getMetricsWeeklyPath(string $weekId): string {
+    return CACHE_METRICS_WEEKLY_DIR . '/' . $weekId . '.json';
+}
+
+// =============================================================================
 // STATE FILES (in cache root)
 // =============================================================================
 
@@ -365,6 +415,10 @@ function ensureAllCacheDirs(): array {
         CACHE_NOTAM_DIR,
         CACHE_PARTNERS_DIR,
         CACHE_RATE_LIMITS_DIR,
+        CACHE_METRICS_DIR,
+        CACHE_METRICS_HOURLY_DIR,
+        CACHE_METRICS_DAILY_DIR,
+        CACHE_METRICS_WEEKLY_DIR,
     ];
     
     $results = [];
