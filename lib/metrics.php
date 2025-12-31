@@ -22,6 +22,7 @@
 
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/logger.php';
 
 // =============================================================================
 // APCu COUNTER FUNCTIONS
@@ -383,6 +384,59 @@ function metrics_flush(): bool {
     metrics_reset_all();
     
     return true;
+}
+
+/**
+ * Flush metrics via HTTP to PHP-FPM context
+ * 
+ * APCu is process-isolated: CLI processes (like the scheduler) cannot access
+ * counters incremented by PHP-FPM workers. This function calls an internal
+ * endpoint via localhost to trigger the flush within PHP-FPM context.
+ * 
+ * Use this from CLI scripts instead of metrics_flush() directly.
+ * 
+ * @return bool True on success
+ */
+function metrics_flush_via_http(): bool {
+    $ch = curl_init();
+    
+    // Use localhost - nginx listens on port 80 inside container
+    $url = 'http://127.0.0.1/admin/metrics-flush.php';
+    
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 5,
+        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_HTTPHEADER => ['X-Scheduler-Request: 1'],
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response !== false) {
+        $data = json_decode($response, true);
+        if (isset($data['success']) && $data['success']) {
+            return true;
+        }
+    }
+    
+    // Log failure with rate limiting to avoid log spam
+    static $lastLogTime = 0;
+    $now = time();
+    if (($now - $lastLogTime) >= 300) {
+        aviationwx_log('warning', 'metrics: HTTP flush failed', [
+            'http_code' => $httpCode,
+            'error' => $error ?: 'unknown',
+            'response' => substr($response ?: '', 0, 200)
+        ], 'app');
+        $lastLogTime = $now;
+    }
+    
+    return false;
 }
 
 /**

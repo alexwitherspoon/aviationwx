@@ -358,8 +358,9 @@ while ($running) {
         
         // Process metrics tasks (non-blocking)
         // 1. Flush APCu counters to hourly file (every 5 minutes)
+        // Note: Uses HTTP endpoint because APCu is process-isolated (CLI vs PHP-FPM)
         if (($now - $lastMetricsFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
-            if (metrics_flush()) {
+            if (metrics_flush_via_http()) {
                 $lastMetricsFlush = $now;
             }
         }
@@ -397,13 +398,9 @@ while ($running) {
             $lastMetricsCleanup = $now;
         }
         
-        // 5. Flush variant health counters to cache file (every 60 seconds)
-        // This pre-computes variant generation health so status page doesn't parse logs
-        if (($now - $lastVariantHealthUpdate) >= 60) {
-            if (variant_health_flush()) {
-                $lastVariantHealthUpdate = $now;
-            }
-        }
+        // 5. Variant health flush is handled by flushMetricsViaHttp() above
+        // (APCu counters are process-isolated, must flush via PHP-FPM context)
+        $lastVariantHealthUpdate = $now; // Tracked but handled by HTTP call
         
         // 6. Flush weather health counters to cache file (every 60 seconds)
         // This pre-computes weather fetch health so status page doesn't check file ages
