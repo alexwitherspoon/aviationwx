@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 $invocationId = aviationwx_get_invocation_id();
 $triggerInfo = aviationwx_detect_trigger_type();
@@ -402,14 +403,14 @@ function validateConfigBeforeApply($configFile) {
 /**
  * Ensure base webcams directory exists with correct permissions (root:root)
  * 
- * Creates the base cache/webcam/uploads directory if it doesn't exist and sets
+ * Creates the base cache/uploads directory if it doesn't exist and sets
  * correct ownership (root:root) required for SFTP chroot functionality.
  * This matches the vsftpd local_root configuration.
  * 
  * @return string Path to webcams base directory
  */
 function ensureWebcamsBaseDirectory() {
-    $webcamsBaseDir = __DIR__ . '/../cache/webcam/uploads';
+    $webcamsBaseDir = CACHE_UPLOADS_DIR;
     
     if (!is_dir($webcamsBaseDir)) {
         @mkdir($webcamsBaseDir, 0775, true);
@@ -492,7 +493,7 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null, $usernam
  * @return void
  */
 function removeCameraDirectory($airportId, $camIndex, $username = null) {
-    $baseDir = __DIR__ . '/../cache/webcam/uploads/';
+    $baseDir = CACHE_UPLOADS_DIR . '/';
     
     // Remove all possible directory locations (current + legacy)
     $dirsToRemove = [
@@ -601,7 +602,7 @@ function getExistingPushCameras() {
     }
     
     // Secondary: scan for legacy directories (airportId_camIndex pattern)
-    $uploadBaseDir = __DIR__ . '/../cache/webcam/uploads';
+    $uploadBaseDir = CACHE_UPLOADS_DIR;
     if (is_dir($uploadBaseDir)) {
         $dirs = glob($uploadBaseDir . '/*', GLOB_ONLYDIR);
         foreach ($dirs as $dir) {
@@ -757,9 +758,8 @@ function userExists($username) {
 function createSftpUser($airportId, $camIndex, $username, $password) {
     // Airport-scoped directory: /uploads/{airport}/{username}/
     // This provides namespace isolation - cameras can only access their airport's folder
-    $baseDir = __DIR__ . "/../cache/webcam/uploads";
-    $airportDir = "{$baseDir}/{$airportId}";
-    $chrootDir = "{$airportDir}/{$username}";
+    $chrootDir = getWebcamUploadDir($airportId, $username);
+    $airportDir = dirname($chrootDir);
     
     // Ensure airport directory exists
     if (!is_dir($airportDir)) {
@@ -938,9 +938,9 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     
     // Create airport-scoped upload directory: /uploads/{airport}/{username}/
     // This provides namespace isolation - cameras can only access their airport's folder
-    $webcamsBaseDir = ensureWebcamsBaseDirectory();
-    $airportDir = $webcamsBaseDir . '/' . $airportId;
-    $chrootDir = $airportDir . '/' . $username;
+    ensureWebcamsBaseDirectory();
+    $chrootDir = getWebcamUploadDir($airportId, $username);
+    $airportDir = dirname($chrootDir);
     
     // Create airport directory (root owned for organization)
     if (!is_dir($airportDir)) {
@@ -1209,7 +1209,7 @@ function syncAllPushCameras($config) {
                         // Verify permissions for FTP/FTPS (createFtpUser sets them, but verify)
                         if (in_array(strtolower($protocol), ['ftp', 'ftps'])) {
                             // Airport-scoped directory: /uploads/{airport}/{username}/
-                            $chrootDir = __DIR__ . "/../cache/webcam/uploads/{$airportId}/{$username}";
+                            $chrootDir = getWebcamUploadDir($airportId, $username);
                             if (is_dir($chrootDir)) {
                                 $ftpUserInfo = @posix_getpwnam('ftp');
                                 if ($ftpUserInfo !== false) {
