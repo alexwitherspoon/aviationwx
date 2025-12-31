@@ -6068,6 +6068,16 @@ function updateImageSilently(camIndex, blobUrl, timestamp) {
     const img = document.getElementById(`webcam-${camIndex}`);
     if (img) {
         const oldSrc = img.src;
+        
+        // Clear <source> srcsets so browser uses blob URL instead of cached <picture> sources
+        const picture = img.closest('picture');
+        if (picture) {
+            const sources = picture.querySelectorAll('source');
+            sources.forEach(source => {
+                source.srcset = '';
+            });
+        }
+        
         img.src = blobUrl;
         
         if (timestamp) {
