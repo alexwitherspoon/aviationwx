@@ -6,12 +6,13 @@
  * APCu is process-isolated: CLI scheduler cannot read PHP-FPM's APCu cache.
  * This endpoint runs in PHP-FPM, giving access to the actual metrics counters.
  * 
- * Security: Only accepts requests from localhost.
+ * Security: Only accepts requests from localhost (127.0.0.1 or ::1).
  */
 
 // Security: Only allow localhost requests
+// Note: REMOTE_ADDR is the actual connection IP, not affected by X-Forwarded-For
 $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
-if (!in_array($remoteAddr, ['127.0.0.1', '::1', 'localhost'])) {
+if (!in_array($remoteAddr, ['127.0.0.1', '::1'])) {
     http_response_code(403);
     header('Content-Type: application/json');
     echo json_encode(['error' => 'Forbidden', 'detail' => 'Localhost only']);
@@ -24,19 +25,25 @@ require_once __DIR__ . '/../lib/variant-health.php';
 header('Content-Type: application/json');
 
 $results = [];
+$success = true;
 
-// Flush metrics
-$metricsResult = metrics_flush();
-$results['metrics_flush'] = $metricsResult;
+try {
+    // Flush metrics APCu counters to JSON files
+    $results['metrics_flush'] = metrics_flush();
+    
+    // Flush variant health APCu counters to cache file
+    $results['variant_health_flush'] = variant_health_flush();
+    
+    // Overall success requires both to succeed
+    $success = $results['metrics_flush'] && $results['variant_health_flush'];
+    
+} catch (Throwable $e) {
+    $success = false;
+    $results['error'] = $e->getMessage();
+}
 
-// Flush variant health
-$variantResult = variant_health_flush();
-$results['variant_health_flush'] = $variantResult;
-
-// Return result
 echo json_encode([
-    'success' => $metricsResult,
+    'success' => $success,
     'results' => $results,
     'timestamp' => time()
 ]);
-

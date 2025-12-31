@@ -21,8 +21,8 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/metrics.php';
-require_once __DIR__ . '/../lib/variant-health.php';
 require_once __DIR__ . '/../lib/weather-health.php';
+// Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -34,7 +34,6 @@ $lastMetricsFlush = 0;
 $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
 $lastWeeklyAggregation = '';
-$lastVariantHealthUpdate = 0;
 $lastWeatherHealthUpdate = 0;
 $config = null;
 $healthStatus = 'healthy';
@@ -398,11 +397,8 @@ while ($running) {
             $lastMetricsCleanup = $now;
         }
         
-        // 5. Variant health flush is handled by flushMetricsViaHttp() above
-        // (APCu counters are process-isolated, must flush via PHP-FPM context)
-        $lastVariantHealthUpdate = $now; // Tracked but handled by HTTP call
-        
-        // 6. Flush weather health counters to cache file (every 60 seconds)
+        // 5. Flush weather health counters to cache file (every 60 seconds)
+        // Note: Variant health flush is handled by metrics_flush_via_http() above
         // This pre-computes weather fetch health so status page doesn't check file ages
         if (($now - $lastWeatherHealthUpdate) >= 60) {
             if (weather_health_flush()) {
