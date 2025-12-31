@@ -115,6 +115,11 @@ RUN mkdir -p /var/www/html/cache/uploads \
 # Create webcam_users group
 RUN groupadd -f webcam_users
 
+# Add ftp user to www-data group for push webcam uploads
+# This allows vsftpd (running as ftp) to write to www-data owned directories
+# and allows www-data (PHP processor) to read/write files created by ftp
+RUN usermod -aG www-data ftp
+
 # Create fail2ban configuration directories
 RUN mkdir -p /etc/fail2ban/jail.d \
     && mkdir -p /var/log/fail2ban \

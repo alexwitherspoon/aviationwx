@@ -451,30 +451,33 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null, $usernam
     $airportDir = $webcamsBaseDir . '/' . $airportId;
     $userDir = $airportDir . '/' . $username;
     
+    // Get www-data user info for ownership
+    $wwwDataInfo = @posix_getpwnam('www-data');
+    $wwwDataUid = $wwwDataInfo ? $wwwDataInfo['uid'] : 33;
+    $wwwDataGid = $wwwDataInfo ? $wwwDataInfo['gid'] : 33;
+    
     // Create airport directory
     if (!is_dir($airportDir)) {
-        @mkdir($airportDir, 0755, true);
+        @mkdir($airportDir, 0775, true);
     }
     
     // Create user directory
     if (!is_dir($userDir)) {
-        @mkdir($userDir, 0755, true);
+        @mkdir($userDir, 0775, true);
     }
     
     if (in_array($protocol, ['ftp', 'ftps'])) {
-        // FTP/FTPS: owned by ftp user (vsftpd guest_username)
-        $ftpUserInfo = @posix_getpwnam('ftp');
-        if ($ftpUserInfo !== false) {
-            setDirectoryPermissions(
-                $userDir,
-                $ftpUserInfo['uid'],
-                'ftp',
-                0755,
-                "FTP upload directory for {$airportId}/{$username}"
-            );
-        } else {
-            @chmod($userDir, 0777);
-        }
+        // FTP/FTPS: owned by www-data:www-data with setgid
+        // - www-data can read/write for processing and EXIF updates
+        // - ftp is in www-data group (set in Dockerfile), so ftp can write uploads
+        // - Setgid ensures uploaded files inherit www-data group
+        @chown($airportDir, $wwwDataUid);
+        @chgrp($airportDir, $wwwDataGid);
+        @chmod($airportDir, 02775);
+        
+        @chown($userDir, $wwwDataUid);
+        @chgrp($userDir, $wwwDataGid);
+        @chmod($userDir, 02775);
     }
     // SFTP: Root ownership and permissions set by create-sftp-user.sh
     
@@ -942,29 +945,40 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     $chrootDir = getWebcamUploadDir($airportId, $username);
     $airportDir = dirname($chrootDir);
     
-    // Create airport directory (root owned for organization)
+    // Get www-data user info for ownership
+    $wwwDataInfo = @posix_getpwnam('www-data');
+    $wwwDataUid = $wwwDataInfo ? $wwwDataInfo['uid'] : 33;
+    $wwwDataGid = $wwwDataInfo ? $wwwDataInfo['gid'] : 33;
+    
+    // Create airport directory (www-data owned for processor access)
     if (!is_dir($airportDir)) {
-        @mkdir($airportDir, 0755, true);
+        @mkdir($airportDir, 0775, true);
     }
+    // Set ownership to www-data:www-data with setgid bit
+    // Setgid (2775) ensures new files/dirs inherit www-data group
+    @chown($airportDir, $wwwDataUid);
+    @chgrp($airportDir, $wwwDataGid);
+    @chmod($airportDir, 02775);
     
     // Create user directory inside airport folder
     if (!is_dir($chrootDir)) {
-        @mkdir($chrootDir, 0755, true);
+        @mkdir($chrootDir, 0775, true);
     }
     
-    // Make user directory writable by ftp user (vsftpd guest_username)
-    $ftpUserInfo = @posix_getpwnam('ftp');
-    if ($ftpUserInfo !== false) {
-        setDirectoryPermissions(
-            $chrootDir,
-            $ftpUserInfo['uid'],
-            'ftp',
-            0755,
-            "FTP upload directory for {$airportId}/{$username}"
-        );
-    } else {
-        @chmod($chrootDir, 0777);
-    }
+    // Set ownership to www-data:www-data with setgid bit
+    // - www-data (owner) can read/write for processing and EXIF updates
+    // - ftp is in www-data group, so ftp can write uploads
+    // - Setgid ensures uploaded files inherit www-data group
+    @chown($chrootDir, $wwwDataUid);
+    @chgrp($chrootDir, $wwwDataGid);
+    @chmod($chrootDir, 02775);
+    
+    aviationwx_log('debug', 'sync-push-config: FTP directory permissions set', [
+        'directory' => $chrootDir,
+        'owner' => 'www-data',
+        'group' => 'www-data',
+        'mode' => '2775 (setgid)'
+    ], 'app');
     
     // Create per-user vsftpd config with airport-scoped local_root
     $userConfigDir = '/etc/vsftpd/users';
@@ -1211,22 +1225,21 @@ function syncAllPushCameras($config) {
                             // Airport-scoped directory: /uploads/{airport}/{username}/
                             $chrootDir = getWebcamUploadDir($airportId, $username);
                             if (is_dir($chrootDir)) {
-                                $ftpUserInfo = @posix_getpwnam('ftp');
-                                if ($ftpUserInfo !== false) {
+                                // Verify www-data ownership with setgid (2775)
+                                // ftp is in www-data group, so ftp can write
+                                // www-data can process files and add EXIF
+                                $wwwDataInfo = @posix_getpwnam('www-data');
+                                if ($wwwDataInfo !== false) {
                                     $verification = verifyDirectoryPermissions(
                                         $chrootDir,
-                                        $ftpUserInfo['uid'],
-                                        'ftp',
-                                        0755
+                                        $wwwDataInfo['uid'],
+                                        'www-data',
+                                        02775
                                     );
                                     if (!$verification['success']) {
-                                        setDirectoryPermissions(
-                                            $chrootDir,
-                                            $ftpUserInfo['uid'],
-                                            'ftp',
-                                            0755,
-                                            "FTP upload directory for {$airportId}/{$username}"
-                                        );
+                                        @chown($chrootDir, $wwwDataInfo['uid']);
+                                        @chgrp($chrootDir, $wwwDataInfo['gid']);
+                                        @chmod($chrootDir, 02775);
                                     }
                                 }
                             }
