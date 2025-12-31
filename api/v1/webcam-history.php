@@ -14,6 +14,8 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-paths.php';
+require_once __DIR__ . '/../../lib/webcam-history.php';
 
 /**
  * Handle GET /v1/airports/{id}/webcams/{cam}/history request
@@ -66,14 +68,13 @@ function handleGetWebcamHistory(array $params, array $context): void
         return;
     }
     
-    // Check if history is enabled
-    $historyEnabled = isset($airport['webcam_history_enabled']) 
-        && $airport['webcam_history_enabled'] === true;
+    // Check if history is enabled and available
+    $historyStatus = getHistoryStatus($airportId, $camIndex);
     
-    if (!$historyEnabled) {
+    if (!$historyStatus['enabled']) {
         sendPublicApiError(
             PUBLIC_API_ERROR_INVALID_REQUEST,
-            'Webcam history is not enabled for this airport',
+            'Webcam history is not configured for this airport',
             404
         );
         return;
@@ -165,23 +166,24 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
         $size = 'primary';
     }
     
-    $historyDir = getWebcamHistoryDir($airportId, $camIndex);
+    // History images are stored in the camera cache directory (unified storage)
+    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
     
     // Try variant-based file first, fall back to primary, then old naming
-    $frameFile = $historyDir . '/' . $timestamp . '_' . $size . '.' . $format;
+    $frameFile = $cacheDir . '/' . $timestamp . '_' . $size . '.' . $format;
     if (!file_exists($frameFile)) {
         if ($size !== 'primary') {
-            $frameFile = $historyDir . '/' . $timestamp . '_primary.' . $format;
+            $frameFile = $cacheDir . '/' . $timestamp . '_primary.' . $format;
         }
         if (!file_exists($frameFile) && $format !== 'jpg') {
-            $frameFile = $historyDir . '/' . $timestamp . '_' . $size . '.jpg';
+            $frameFile = $cacheDir . '/' . $timestamp . '_' . $size . '.jpg';
             $format = 'jpg';
         }
         if (!file_exists($frameFile)) {
             // Fallback to old naming
-            $frameFile = $historyDir . '/' . $timestamp . '.' . $format;
+            $frameFile = $cacheDir . '/' . $timestamp . '.' . $format;
             if (!file_exists($frameFile) && $format !== 'jpg') {
-                $frameFile = $historyDir . '/' . $timestamp . '.jpg';
+                $frameFile = $cacheDir . '/' . $timestamp . '.jpg';
                 $format = 'jpg';
             }
         }

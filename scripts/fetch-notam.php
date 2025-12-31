@@ -119,3 +119,4 @@ aviationwx_log('info', 'notam fetch: script called without --worker flag', [
 exit(0);
 
 
+

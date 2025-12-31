@@ -3,6 +3,7 @@
  * Generate Test Webcam History Data
  * 
  * Creates sample historical frames for local development and testing.
+ * Files are created directly in the camera cache directory (unified storage).
  * 
  * Usage:
  *   php dev/generate-test-history.php [airport_id] [cam_index] [num_frames]
@@ -22,27 +23,29 @@ $airportId = $argv[1] ?? 'kspb';
 $camIndex = (int)($argv[2] ?? 0);
 $numFrames = (int)($argv[3] ?? 12);
 
+$maxFrames = getWebcamHistoryMaxFrames($airportId);
+
 echo "=== Webcam History Test Data Generator ===\n\n";
 echo "Airport:    {$airportId}\n";
 echo "Camera:     {$camIndex}\n";
 echo "Frames:     {$numFrames}\n";
-echo "History:    " . (isWebcamHistoryEnabledForAirport($airportId) ? "ENABLED" : "DISABLED") . "\n\n";
+echo "Max Frames: {$maxFrames}\n";
+echo "History:    " . ($maxFrames >= 2 ? "ENABLED" : "DISABLED (max_frames < 2)") . "\n\n";
 
-// Get history directory
-$historyDir = getWebcamHistoryDir($airportId, $camIndex);
-echo "History dir: {$historyDir}\n\n";
+// Get camera cache directory (unified storage)
+$cacheDir = getWebcamCameraDir($airportId, $camIndex);
+echo "Cache dir: {$cacheDir}\n\n";
 
-// Create history directory if needed
-if (!is_dir($historyDir)) {
-    if (!@mkdir($historyDir, 0755, true)) {
-        echo "ERROR: Failed to create history directory\n";
+// Create cache directory if needed
+if (!is_dir($cacheDir)) {
+    if (!@mkdir($cacheDir, 0755, true)) {
+        echo "ERROR: Failed to create cache directory\n";
         exit(1);
     }
-    echo "Created history directory\n";
+    echo "Created cache directory\n";
 }
 
 // Check for source webcam image
-$cacheDir = CACHE_WEBCAMS_DIR;
 $sourceFile = getCacheSymlinkPath($airportId, $camIndex, 'jpg');
 
 // Create placeholder if no source exists
@@ -50,8 +53,7 @@ if (!file_exists($sourceFile)) {
     echo "No existing webcam image found. Creating placeholder...\n";
     
     // Ensure cache dir exists
-    $camDir = getWebcamCameraDir($airportId, $camIndex);
-    ensureCacheDir($camDir);
+    ensureCacheDir($cacheDir);
     
     // Create a simple test image
     $img = imagecreatetruecolor(1600, 900);
@@ -95,7 +97,8 @@ $skippedCount = 0;
 for ($i = 0; $i < $numFrames; $i++) {
     // Calculate timestamp (oldest to newest)
     $timestamp = $now - (($numFrames - 1 - $i) * $intervalSeconds);
-    $destFile = $historyDir . '/' . $timestamp . '.jpg';
+    // Use variant naming for unified storage
+    $destFile = $cacheDir . '/' . $timestamp . '_primary.jpg';
     
     if (file_exists($destFile)) {
         echo "  [{$i}] SKIP: " . date('H:i:s', $timestamp) . " (already exists)\n";

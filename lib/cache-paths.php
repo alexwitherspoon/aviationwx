@@ -13,9 +13,8 @@
  * │       └── {airport}.json       # 24-hour weather history
  * ├── webcams/
  * │   └── {airport}/{camIndex}/
- * │       ├── {timestamp}_{variant}.{format}  # Timestamped images
- * │       ├── current.{format}     # Symlink to latest
- * │       ├── history/             # Historical frames
+ * │       ├── {timestamp}_{variant}.{format}  # Timestamped images (current & historical)
+ * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── uploads/
  * │   └── {airport}/{username}/    # Push webcam FTP uploads
@@ -29,6 +28,9 @@
  * ├── temp_extremes.json           # Daily temperature extremes
  * ├── outage_{airport}.json        # Outage detection state
  * └── memory_history.json          # Memory usage tracking
+ * 
+ * Note: Webcam history is stored directly in the camera directory (unified storage).
+ * Retention is controlled by webcam_history_max_frames config setting.
  */
 
 // =============================================================================
@@ -116,9 +118,13 @@ function getWebcamCameraDir(string $airportId, int $camIndex): string {
 /**
  * Get path to camera history directory
  * 
+ * @deprecated History is now stored directly in the camera cache directory.
+ *             Use getWebcamCameraDir() instead. This function is kept for
+ *             backward compatibility with tests and migration scripts.
+ * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @return string Full path to camera's history directory
+ * @return string Full path to legacy camera history directory
  */
 function getWebcamHistoryDir(string $airportId, int $camIndex): string {
     return getWebcamCameraDir($airportId, $camIndex) . '/history';

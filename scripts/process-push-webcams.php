@@ -511,21 +511,12 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
     if ($inputDimensions === null) {
         // Fallback to format-only generation (no variants)
         $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
-        if (!empty($formatResults)) {
-            // Save to history using the legacy single-format approach
-            saveAllFormatsToHistory($airportId, $camIndex, ['primary' => array_keys(array_filter($formatResults))], $timestamp);
-        }
         @unlink($stagingFile);
         return !empty($formatResults);
     }
     
     // Generate all variants × formats in parallel
     $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, $primaryFormat, $inputDimensions);
-    
-    // Save all variants to history (this saves to history directory with proper timestamp-based names)
-    if (!empty($variantResult['results'])) {
-        saveAllVariantsToHistory($airportId, $camIndex, $variantResult['results'], $timestamp);
-    }
     
     // Cleanup staging file
     @unlink($stagingFile);
@@ -758,7 +749,6 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
             cleanupStagingFiles($airportId, $camIndex);
             return false;
         }
-        saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
     } else {
         // Generate all variants and formats in parallel (synchronous wait)
         // All variants × formats are written to staging files (.tmp)
@@ -785,9 +775,6 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
             return false;
         }
         
-        // Save all promoted variants to history (if enabled for this airport)
-        saveAllVariantsToHistory($airportId, $camIndex, $promotedVariants, $timestamp);
-        
         // Convert for logging compatibility
         $promotedFormats = [];
         foreach ($promotedVariants as $variant => $formats) {
@@ -796,8 +783,8 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         $promotedFormats = array_unique($promotedFormats);
     }
     
-    // Cleanup old timestamp files (keep only recent ones to prevent disk space issues)
-    cleanupOldTimestampFiles($airportId, $camIndex, 5);
+    // Cleanup old timestamp files (uses webcam_history_max_frames config for retention)
+    cleanupOldTimestampFiles($airportId, $camIndex);
     
     // Log final result
     $allRequestedFormats = [$primaryFormat];

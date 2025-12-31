@@ -4396,7 +4396,9 @@ const WebcamPlayer = {
             const response = await fetch(`/api/webcam-history.php?id=${encodeURIComponent(airportId)}&cam=${camIndex}`);
             const data = await response.json();
 
-            if (data.enabled && data.frames && data.frames.length > 0) {
+            // Check if history is enabled and available
+            if (data.enabled && data.available && data.frames && data.frames.length > 0) {
+                // Full history player mode
                 this.frames = data.frames;
                 this.timezone = data.timezone || 'UTC';
                 this.currentIndex = data.current_index || 0;
@@ -4423,8 +4425,14 @@ const WebcamPlayer = {
                 if (options.autoplay && this.frames.length > 1) {
                     this.play();
                 }
+            } else if (data.enabled && !data.available) {
+                // History is configured but not enough frames yet
+                this.frames = [];
+                document.querySelector('.webcam-player-controls').style.display = 'none';
+                document.getElementById('webcam-player-timestamp').textContent = 
+                    data.message || 'History not available for this camera, come back later.';
             } else {
-                // No history available - show single frame mode
+                // History is not configured for this airport
                 this.frames = [];
                 document.querySelector('.webcam-player-controls').style.display = 'none';
                 document.getElementById('webcam-player-timestamp').textContent = 'History not available';

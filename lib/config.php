@@ -845,24 +845,14 @@ function getImageVariants(): array {
 /**
  * Check if webcam history is enabled for an airport
  * 
- * Checks airport-specific setting first, falls back to global default.
+ * History is considered enabled when webcam_history_max_frames >= 2.
+ * With max_frames = 1, only the latest image is kept (history disabled).
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @return bool True if webcam history enabled for this airport
  */
 function isWebcamHistoryEnabledForAirport(string $airportId): bool {
-    $config = loadConfig();
-    if ($config === null) {
-        return false;
-    }
-    
-    // Check airport-specific setting first
-    if (isset($config['airports'][$airportId]['webcam_history_enabled'])) {
-        return (bool)$config['airports'][$airportId]['webcam_history_enabled'];
-    }
-    
-    // Fall back to global default
-    return (bool)getGlobalConfig('webcam_history_enabled', false);
+    return getWebcamHistoryMaxFrames($airportId) >= 2;
 }
 
 /**
@@ -2464,12 +2454,7 @@ function validateAirportsJsonStructure(array $config): array {
             }
             
             // Validate webcam history settings
-            if (isset($cfg['webcam_history_enabled'])) {
-                if (!is_bool($cfg['webcam_history_enabled'])) {
-                    $errors[] = "config.webcam_history_enabled must be a boolean (true or false)";
-                }
-            }
-            
+            // Note: webcam_history_enabled is deprecated - max_frames >= 2 enables history
             if (isset($cfg['webcam_history_max_frames'])) {
                 if (!is_int($cfg['webcam_history_max_frames']) || $cfg['webcam_history_max_frames'] < 1) {
                     $errors[] = "config.webcam_history_max_frames must be a positive integer";
@@ -2850,12 +2835,7 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Validate webcam history settings (per-airport overrides)
-        if (isset($airport['webcam_history_enabled'])) {
-            if (!is_bool($airport['webcam_history_enabled'])) {
-                $errors[] = "Airport '{$airportCode}' has invalid webcam_history_enabled: must be a boolean (true or false)";
-            }
-        }
-        
+        // Note: webcam_history_enabled is deprecated - max_frames >= 2 enables history
         if (isset($airport['webcam_history_max_frames'])) {
             if (!is_int($airport['webcam_history_max_frames']) || $airport['webcam_history_max_frames'] < 1) {
                 $errors[] = "Airport '{$airportCode}' has invalid webcam_history_max_frames: must be a positive integer";

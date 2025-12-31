@@ -88,6 +88,39 @@ function detectImageFormat($filePath) {
 }
 
 /**
+ * Validate AVIF file by checking headers
+ * 
+ * Validates that a file is a proper AVIF by checking the ftyp box
+ * and major brand (avif or avis).
+ * 
+ * @param string $filePath Path to AVIF file
+ * @return bool True if valid AVIF, false otherwise
+ */
+function isValidAvifFile(string $filePath): bool {
+    $fp = @fopen($filePath, 'rb');
+    if (!$fp) {
+        return false;
+    }
+    
+    $header = @fread($fp, 12);
+    if (!$header || strlen($header) < 12) {
+        @fclose($fp);
+        return false;
+    }
+    
+    // AVIF: ftyp box with avif/avis
+    // Structure: [4 bytes size][4 bytes 'ftyp'][4 bytes major brand][...]
+    if (substr($header, 4, 4) === 'ftyp') {
+        $majorBrand = substr($header, 8, 4);
+        @fclose($fp);
+        return ($majorBrand === 'avif' || $majorBrand === 'avis');
+    }
+    
+    @fclose($fp);
+    return false;
+}
+
+/**
  * Get image dimensions from file
  * 
  * Uses ffprobe to detect image width and height.
@@ -492,16 +525,28 @@ function cleanupStagingFiles(string $airportId, int $camIndex): int {
 /**
  * Cleanup old timestamp-based cache files
  * 
- * Keeps only the most recent N timestamp files to prevent disk space issues.
+ * Keeps only the most recent N timestamp files based on webcam_history_max_frames config.
+ * This unified retention controls both the live view and history player.
  * Old timestamp files are removed, but symlinks are preserved (they'll point to latest).
  * Only removes files that are not targets of active symlinks.
  * 
- * @param string $airportId Airport ID (e.g., 'kspb') - used for logging only
- * @param int $camIndex Camera index (0-based) - used for logging only
- * @param int $keepCount Number of recent timestamp files to keep (default: 5)
+ * Retention behavior:
+ * - max_frames = 1: Only latest image kept, history player disabled
+ * - max_frames >= 2: History player enabled with N frames available
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param int|null $keepCount Override for max frames (null = use config)
  * @return int Number of files cleaned up
  */
-function cleanupOldTimestampFiles(string $airportId, int $camIndex, int $keepCount = 5): int {
+function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCount = null): int {
+    // Use config-based retention if not explicitly overridden
+    if ($keepCount === null) {
+        $keepCount = getWebcamHistoryMaxFrames($airportId);
+    }
+    
+    // Ensure at least 1 frame is kept (the current image)
+    $keepCount = max(1, $keepCount);
     $cacheDir = getWebcamCacheDir($airportId, $camIndex);
     
     // Get all timestamp-based files (format: {timestamp}_{variant}.{format})

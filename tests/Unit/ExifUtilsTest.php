@@ -444,3 +444,4 @@ class ExifUtilsTest extends TestCase
     }
 }
 
+

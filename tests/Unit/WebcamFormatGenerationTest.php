@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-require_once __DIR__ . '/../../api/webcam.php';
+require_once __DIR__ . '/../../scripts/fetch-webcam.php';
 
 class WebcamFormatGenerationTest extends TestCase
 {
@@ -759,7 +759,7 @@ class WebcamFormatGenerationTest extends TestCase
     public function testGenerateFormatsSync_AVIF_GeneratesValidFile(): void
     {
         // This test requires ffmpeg and may be slow, so we'll skip if not available
-        if (!isCommandAvailable('ffmpeg')) {
+        if (!isFfmpegAvailable()) {
             $this->markTestSkipped('ffmpeg not available');
         }
         

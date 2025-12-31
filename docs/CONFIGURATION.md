@@ -26,8 +26,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `worker_timeout_seconds` | `90` | Worker process timeout |
 | `webcam_generate_webp` | `false` | Generate WebP globally |
 | `webcam_generate_avif` | `false` | Generate AVIF globally |
-| `webcam_history_enabled` | `false` | Enable time-lapse globally |
-| `webcam_history_max_frames` | `12` | Max history frames per camera |
+| `webcam_history_max_frames` | `12` | Max history frames per camera (1 = disabled, 2+ = enabled) |
 | `default_preferences` | — | Default unit toggle settings (see below) |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
@@ -71,8 +70,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |
 | **Feature Overrides** |||
-| `webcam_history_enabled` | global default | Override time-lapse for this airport |
-| `webcam_history_max_frames` | global default | Override max frames for this airport |
+| `webcam_history_max_frames` | global default | Max history frames (1 = disabled, 2+ = enabled) |
 | `default_preferences` | global default | Override unit toggle defaults for this airport |
 | **Data Sources** |||
 | `weather_source` | — | Primary weather source config |
@@ -163,7 +161,6 @@ Unit toggle defaults resolve in this order (first match wins):
     
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
-    "webcam_history_enabled": false,
     "webcam_history_max_frames": 12,
     
     "notam_cache_ttl_seconds": 3600,
@@ -219,7 +216,6 @@ The `config` section is optional—sensible defaults apply if omitted.
       
       "webcam_refresh_seconds": 30,
       "weather_refresh_seconds": 60,
-      "webcam_history_enabled": true,
       "webcam_history_max_frames": 24,
       
       "weather_source": {
@@ -477,14 +473,31 @@ Cameras upload directly to `/` (chroot root). Files are processed automatically.
 
 ## Webcam History (Time-lapse)
 
-Stores recent frames for time-lapse playback.
+Stores recent frames for time-lapse playback. All webcam images (current and historical) are stored in a unified directory structure at `cache/webcams/{airport}/{cam}/`.
 
-### Enable Globally
+### Storage Architecture
+
+- **Unified Storage**: All webcam images stored directly in the camera cache directory
+- **No Separate History Folder**: Timestamped files serve as both current and historical images
+- **Symlinks**: `current.jpg`, `current.webp` point to the latest timestamped image
+- **Retention**: Controlled by `webcam_history_max_frames` config
+
+### Configuration
+
+The `webcam_history_max_frames` setting controls both:
+1. How many historical frames are retained
+2. Whether the history player is enabled (requires `max_frames >= 2`)
+
+| `max_frames` | Behavior |
+|--------------|----------|
+| `1` | Only latest image kept, history player disabled |
+| `2+` | History player enabled with N frames available |
+
+### Set Globally
 
 ```json
 {
   "config": {
-    "webcam_history_enabled": true,
     "webcam_history_max_frames": 12
   }
 }
@@ -492,16 +505,20 @@ Stores recent frames for time-lapse playback.
 
 ### Override Per-Airport
 
+Use per-airport overrides to compensate for different camera refresh rates:
+
 ```json
 {
   "airports": {
     "kspb": {
-      "webcam_history_enabled": true,
       "webcam_history_max_frames": 24
     }
   }
 }
 ```
+
+**Example**: An airport with 30-second refresh uploading to 24 frames = 12 minutes of history.
+An airport with 60-second refresh uploading to 24 frames = 24 minutes of history.
 
 ### Player URLs
 
@@ -725,9 +742,9 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `config/airports.json` | All configuration |
 | `cache/weather/{airport}.json` | Cached weather data |
 | `cache/weather/history/{airport}.json` | Weather history (24h) |
-| `cache/webcams/{airport}/{cam}/` | Webcam images per camera |
+| `cache/webcams/{airport}/{cam}/` | Webcam images (current and historical) |
 | `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
-| `cache/webcams/{airport}/{cam}/history/` | Time-lapse frames |
+| `cache/webcams/{airport}/{cam}/{ts}_{variant}.{ext}` | Timestamped webcam images |
 | `cache/uploads/{airport}/{username}/` | FTP/SFTP push uploads |
 | `cache/peak_gusts.json` | Daily peak gust tracking |
 | `cache/temp_extremes.json` | Daily temperature extremes |

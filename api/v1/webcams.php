@@ -78,11 +78,8 @@ function handleListWebcams(array $params, array $context): void
  */
 function formatWebcamMetadata(string $airportId, int $index, array $webcam, array $airport): array
 {
-    // Check if history is enabled for this webcam
-    $historyEnabled = false;
-    if (isset($airport['webcam_history_enabled']) && $airport['webcam_history_enabled'] === true) {
-        $historyEnabled = true;
-    }
+    // Check if history is enabled for this webcam (max_frames >= 2 enables history)
+    $historyEnabled = isWebcamHistoryEnabledForAirport($airportId);
     
     // Get refresh interval
     $refreshSeconds = $webcam['refresh_seconds'] 

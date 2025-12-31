@@ -5,6 +5,15 @@
  * Returns manifest of available historical frames for a camera,
  * or serves individual frames when timestamp is specified.
  * 
+ * Storage: History frames are stored directly in the camera cache directory
+ * (unified storage with current images). Retention is controlled by
+ * webcam_history_max_frames config.
+ * 
+ * History Behavior:
+ * - max_frames < 2: History disabled, returns enabled=false
+ * - max_frames >= 2 but frames < 2: History enabled but not yet available
+ * - max_frames >= 2 and frames >= 2: History fully available
+ * 
  * Endpoints:
  *   GET /api/webcam-history.php?id={airport}&cam={index}
  *     Returns JSON manifest of available frames with format availability
@@ -17,6 +26,7 @@
  * Response (manifest):
  * {
  *   "enabled": true,
+ *   "available": true,
  *   "airport": "kspb",
  *   "cam": 0,
  *   "frames": [
@@ -34,6 +44,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 
 // Supported image formats with MIME types
 $supportedFormats = [
@@ -83,7 +94,8 @@ if (!isset($airport['webcams']) || !isset($airport['webcams'][$camIndex])) {
 
 // If timestamp provided, serve the actual image
 if ($timestamp !== null) {
-    $historyDir = getWebcamHistoryDir($airportId, $camIndex);
+    // History images are stored in the camera cache directory (unified storage)
+    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
     
     // Validate requested format
     if (!isset($supportedFormats[$requestedFormat])) {
@@ -91,28 +103,28 @@ if ($timestamp !== null) {
     }
     
     // Try requested variant and format first, fall back to primary, then JPG
-    $imageFile = $historyDir . '/' . $timestamp . '_' . $requestedSize . '.' . $requestedFormat;
+    $imageFile = $cacheDir . '/' . $timestamp . '_' . $requestedSize . '.' . $requestedFormat;
     $servedFormat = $requestedFormat;
     $servedSize = $requestedSize;
     
     if (!file_exists($imageFile)) {
         // Fall back to primary variant
         if ($requestedSize !== 'primary') {
-            $imageFile = $historyDir . '/' . $timestamp . '_primary.' . $requestedFormat;
+            $imageFile = $cacheDir . '/' . $timestamp . '_primary.' . $requestedFormat;
             $servedSize = 'primary';
         }
         
         // Fall back to JPG if format not available
         if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
-            $imageFile = $historyDir . '/' . $timestamp . '_' . $servedSize . '.jpg';
+            $imageFile = $cacheDir . '/' . $timestamp . '_' . $servedSize . '.jpg';
             $servedFormat = 'jpg';
         }
         
         // Final fallback: old naming (no variant)
         if (!file_exists($imageFile)) {
-            $imageFile = $historyDir . '/' . $timestamp . '.' . $requestedFormat;
+            $imageFile = $cacheDir . '/' . $timestamp . '.' . $requestedFormat;
             if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
-                $imageFile = $historyDir . '/' . $timestamp . '.jpg';
+                $imageFile = $cacheDir . '/' . $timestamp . '.jpg';
                 $servedFormat = 'jpg';
             }
         }
@@ -127,8 +139,8 @@ if ($timestamp !== null) {
     
     // Validate file is within expected directory (security check)
     $realPath = realpath($imageFile);
-    $realHistoryDir = realpath($historyDir);
-    if ($realPath === false || $realHistoryDir === false || strpos($realPath, $realHistoryDir) !== 0) {
+    $realCacheDir = realpath($cacheDir);
+    if ($realPath === false || $realCacheDir === false || strpos($realPath, $realCacheDir) !== 0) {
         header('Content-Type: application/json');
         http_response_code(403);
         echo json_encode(['error' => 'Access denied']);
@@ -154,16 +166,19 @@ if ($timestamp !== null) {
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, max-age=0');
 
-// Check if history is enabled for this airport
-$historyEnabled = isWebcamHistoryEnabledForAirport($airportId);
+// Get history status (enabled, available, frame count)
+$historyStatus = getHistoryStatus($airportId, $camIndex);
 
-if (!$historyEnabled) {
+// History disabled by config (max_frames < 2)
+if (!$historyStatus['enabled']) {
     echo json_encode([
         'enabled' => false,
+        'available' => false,
         'airport' => $airportId,
         'cam' => $camIndex,
         'frames' => [],
-        'message' => 'Webcam history not enabled for this airport'
+        'max_frames' => $historyStatus['max_frames'],
+        'message' => 'Webcam history not configured for this airport'
     ]);
     exit;
 }
@@ -202,16 +217,26 @@ $variantWidths = [
     'primary' => 1920  // Default primary width, actual may vary
 ];
 
-echo json_encode([
+// Build response with status information
+$response = [
     'enabled' => true,
+    'available' => $historyStatus['available'],
     'airport' => $airportId,
     'cam' => $camIndex,
     'frames' => $frameList,
+    'frame_count' => count($frameList),
     'current_index' => count($frameList) > 0 ? count($frameList) - 1 : 0,
     'timezone' => $airport['timezone'] ?? 'UTC',
-    'max_frames' => getWebcamHistoryMaxFrames($airportId),
+    'max_frames' => $historyStatus['max_frames'],
     'enabledFormats' => getEnabledWebcamFormats(),
     'variantWidths' => $variantWidths,
     'refresh_interval' => $refreshInterval
-]);
+];
+
+// Add message if history enabled but not yet available (insufficient frames)
+if (!$historyStatus['available']) {
+    $response['message'] = 'History not available for this camera, come back later.';
+}
+
+echo json_encode($response);
 

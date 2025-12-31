@@ -2536,13 +2536,14 @@ class ConfigValidationTest extends TestCase
 
     /**
      * Test webcam history config validation - Valid settings
+     * 
+     * Note: webcam_history_enabled is deprecated. History is enabled when max_frames >= 2.
      */
     public function testGlobalConfig_WebcamHistory_ValidSettings()
     {
         $config = [
             'config' => [
-                'webcam_history_enabled' => true,
-                'webcam_history_max_frames' => 24
+                'webcam_history_max_frames' => 24  // >= 2 enables history
             ],
             'airports' => [
                 'kspb' => [
@@ -2565,7 +2566,6 @@ class ConfigValidationTest extends TestCase
     {
         $config = [
             'config' => [
-                'webcam_history_enabled' => 'true',  // String, not boolean
                 'webcam_history_max_frames' => '12'  // String, not integer
             ],
             'airports' => [
@@ -2579,8 +2579,7 @@ class ConfigValidationTest extends TestCase
         
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Invalid type webcam history settings should fail validation');
-        $this->assertCount(2, $result['errors']);
-        $this->assertStringContainsString('webcam_history_enabled must be a boolean', implode(' ', $result['errors']));
+        $this->assertCount(1, $result['errors']);
         $this->assertStringContainsString('webcam_history_max_frames must be a positive integer', implode(' ', $result['errors']));
     }
 
@@ -2609,20 +2608,21 @@ class ConfigValidationTest extends TestCase
 
     /**
      * Test per-airport webcam history settings - Valid overrides
+     * 
+     * Note: webcam_history_enabled is deprecated. Use max_frames >= 2 to enable.
      */
     public function testAirport_WebcamHistory_ValidOverrides()
     {
         $config = [
             'config' => [
-                'webcam_history_enabled' => false  // Global disabled
+                'webcam_history_max_frames' => 12  // Global default
             ],
             'airports' => [
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
-                    'webcam_history_enabled' => true,  // Per-airport override
-                    'webcam_history_max_frames' => 48
+                    'webcam_history_max_frames' => 48  // Per-airport override
                 ]
             ]
         ];
@@ -2643,7 +2643,6 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
-                    'webcam_history_enabled' => 1,     // Integer, not boolean
                     'webcam_history_max_frames' => -5  // Negative
                 ]
             ]
@@ -2651,8 +2650,7 @@ class ConfigValidationTest extends TestCase
         
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Invalid per-airport webcam history settings should fail validation');
-        $this->assertCount(2, $result['errors']);
-        $this->assertStringContainsString('webcam_history_enabled', implode(' ', $result['errors']));
+        $this->assertCount(1, $result['errors']);
         $this->assertStringContainsString('webcam_history_max_frames', implode(' ', $result['errors']));
     }
 

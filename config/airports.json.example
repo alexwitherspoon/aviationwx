@@ -35,7 +35,6 @@
     "worker_timeout_seconds": 90,
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
-    "webcam_history_enabled": false,
     "webcam_history_max_frames": 12,
     "image_primary_size": "1920x1080",
     "image_max_resolution": "3840x2160",
@@ -102,7 +101,6 @@
       "tower_status": "non_towered",
       "webcam_refresh_seconds": 60,
       "weather_refresh_seconds": 60,
-      "webcam_history_enabled": true,
       "webcam_history_max_frames": 24,
       "default_preferences": {
         "baro_unit": "hPa"

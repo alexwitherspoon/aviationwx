@@ -11,50 +11,46 @@
  * to weather.php's stale-while-revalidate implementation.
  */
 
-// Start output buffering IMMEDIATELY to catch any output from included files
-// Handle case where buffering may already be active or output already sent
-if (!ob_get_level()) {
-    ob_start();
-} else {
-    // If buffering already active, clean it to remove any unwanted output
-    ob_clean();
-}
-
+// Required libraries - always load these for function definitions
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/rate-limit.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/constants.php';
-
-// Include circuit breaker functions
 require_once __DIR__ . '/../lib/circuit-breaker.php';
-// Include webcam format generation functions
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
-// Include webcam fetch functions for background refresh
 require_once __DIR__ . '/../scripts/fetch-webcam.php';
 
-// Clear any output that may have been captured from included files
-// Only clean if we have an active buffer and headers haven't been sent
-if (ob_get_level() > 0 && !headers_sent()) {
-    ob_clean();
-}
+// Check early if we're being included for testing vs. direct API access
+// Tests include this file to get the helper functions but shouldn't run API logic
+$_webcamApiDirectAccess = (
+    php_sapi_name() !== 'cli' ||
+    (isset($_SERVER['SCRIPT_FILENAME']) && realpath($_SERVER['SCRIPT_FILENAME']) === realpath(__FILE__))
+);
 
-// Determine if we're serving JSON (mtime=1) or image early - check BEFORE any other processing
-$isJsonRequest = isset($_GET['mtime']) && $_GET['mtime'] === '1';
-
-// Set Content-Type IMMEDIATELY based on request type to prevent Nginx/Cloudflare override
-// Only set headers if they haven't been sent yet (defensive check)
-if (!headers_sent()) {
-    if ($isJsonRequest) {
-        header('Content-Type: application/json', true);
+// Only do output buffering and headers when running as API endpoint
+if ($_webcamApiDirectAccess) {
+    // Start output buffering IMMEDIATELY to catch any output from included files
+    if (!ob_get_level()) {
+        ob_start();
     } else {
-        // Set image/jpeg immediately - will be adjusted for WEBP later if needed
-        header('Content-Type: image/jpeg', true);
+        ob_clean();
     }
-} else {
-    // Log warning but don't fail - might be in test mode or output already started
-    // Only log in non-CLI mode to avoid cluttering test output
-    if (php_sapi_name() !== 'cli') {
-        error_log('Warning: Headers already sent, cannot set Content-Type in webcam.php');
+
+    // Clear any output that may have been captured from included files
+    if (ob_get_level() > 0 && !headers_sent()) {
+        ob_clean();
+    }
+
+    // Determine if we're serving JSON (mtime=1) or image early
+    $isJsonRequest = isset($_GET['mtime']) && $_GET['mtime'] === '1';
+
+    // Set Content-Type IMMEDIATELY based on request type
+    if (!headers_sent()) {
+        if ($isJsonRequest) {
+            header('Content-Type: application/json', true);
+        } else {
+            header('Content-Type: image/jpeg', true);
+        }
     }
 }
 
@@ -209,6 +205,13 @@ function serveFile($filePath, $contentType) {
     @fclose($fp);
     @flush();
     return true;
+}
+
+// =============================================================================
+// API EXECUTION - Only runs when accessed directly, not when included for tests
+// =============================================================================
+if (!$_webcamApiDirectAccess) {
+    return; // Stop execution here when included for testing
 }
 
 // Get and validate parameters
@@ -419,40 +422,8 @@ if ($rl !== null) {
     header('X-RateLimit-Reset: ' . (int)$rl['reset']);
 }
 
-/**
- * Validate AVIF file by checking headers
- * 
- * @param string $filePath Path to AVIF file
- * @return bool True if valid AVIF, false otherwise
- */
-function isValidAvifFile($filePath) {
-    $fp = @fopen($filePath, 'rb');
-    if (!$fp) {
-        return false;
-    }
-    
-    $header = @fread($fp, 12);
-    if (!$header || strlen($header) < 12) {
-        @fclose($fp);
-        return false;
-    }
-    
-    // AVIF: ftyp box with avif/avis
-    // AVIF structure: [4 bytes size][4 bytes 'ftyp'][4 bytes major brand][...]
-    // Major brand at bytes 8-11 should be 'avif' or 'avis'
-    if (substr($header, 4, 4) === 'ftyp') {
-        // Check major brand at bytes 8-11 (already read in header)
-        $majorBrand = substr($header, 8, 4);
-        @fclose($fp);
-        if ($majorBrand === 'avif' || $majorBrand === 'avis') {
-            return true;
-        }
-    } else {
-        @fclose($fp);
-    }
-    
-    return false;
-}
+// Note: isValidAvifFile() is now defined in lib/webcam-format-generation.php
+// It's included via the require_once chain above
 
 // Parse format parameter (if specified)
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : null;
@@ -1412,12 +1383,6 @@ if ($isExplicitFormatRequest && $isCurrentCycle) {
             // Promote all successful formats to timestamp-based files with symlinks
             $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
             
-            // Save to history if enabled
-            if (!empty($promotedFormats)) {
-                require_once __DIR__ . '/../lib/webcam-history.php';
-                saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
-            }
-            
             // Re-check format status after generation
             $formatStatus = getFormatStatus($airportId, $camIndex, $requestedSize);
             
@@ -1740,12 +1705,6 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
         
         // Promote all successful formats to timestamp-based files with symlinks
         $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
-        
-        // Save to history if enabled
-        if (!empty($promotedFormats)) {
-            require_once __DIR__ . '/../lib/webcam-history.php';
-            saveAllFormatsToHistory($airportId, $camIndex, $promotedFormats, $timestamp);
-        }
         
         return true;
     } else {

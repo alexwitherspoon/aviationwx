@@ -337,9 +337,7 @@ function generateConfigSnippet($formData) {
     // ============================================================================
     // Feature Overrides
     // ============================================================================
-    if (isset($formData['webcam_history_enabled'])) {
-        $airport['webcam_history_enabled'] = ($formData['webcam_history_enabled'] === '1' || $formData['webcam_history_enabled'] === true);
-    }
+    // Note: webcam_history_enabled is deprecated - max_frames >= 2 enables history
     if (!empty($formData['webcam_history_max_frames'] ?? '')) {
         $frames = intval($formData['webcam_history_max_frames']);
         if ($frames > 0) {
@@ -1158,19 +1156,11 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label>
-                                <input type="checkbox" name="webcam_history_enabled" value="1"
-                                       <?= isset($_POST['webcam_history_enabled']) && $_POST['webcam_history_enabled'] ? 'checked' : '' ?>>
-                                Enable Webcam History
-                            </label>
-                            <div class="help-text">Enable time-lapse for this airport</div>
-                        </div>
-                        <div class="form-group">
                             <label for="webcam_history_max_frames">Max History Frames</label>
                             <input type="number" id="webcam_history_max_frames" name="webcam_history_max_frames"
                                    value="<?= htmlspecialchars($_POST['webcam_history_max_frames'] ?? '') ?>"
-                                   min="1" step="1">
-                            <div class="help-text">Maximum frames to store for time-lapse</div>
+                                   min="1" step="1" placeholder="12">
+                            <div class="help-text">Maximum frames for time-lapse (1 = disabled, 2+ = enabled)</div>
                         </div>
                     </div>
                     

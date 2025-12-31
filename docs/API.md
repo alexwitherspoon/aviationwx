@@ -134,14 +134,17 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 ```json
 {
   "enabled": true,
+  "available": true,
   "airport": "kspb",
   "cam": 0,
   "frames": [
-    { "timestamp": 1703444400, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444400" },
-    { "timestamp": 1703444460, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444460" }
+    { "timestamp": 1703444400, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444400", "formats": ["jpg", "webp"] },
+    { "timestamp": 1703444460, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444460", "formats": ["jpg", "webp"] }
   ],
-  "current_index": 11,
-  "timezone": "America/Los_Angeles"
+  "frame_count": 2,
+  "current_index": 1,
+  "timezone": "America/Los_Angeles",
+  "max_frames": 12
 }
 ```
 
@@ -149,15 +152,29 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 - **Content-Type**: `image/jpeg`
 - **Cache-Control**: `public, max-age=31536000` (immutable historical frame)
 
-**Response (history disabled):**
+**Response (history not configured):**
 ```json
 {
   "enabled": false,
+  "available": false,
   "airport": "kspb",
   "cam": 0,
   "frames": [],
-  "current_index": 0,
-  "timezone": "UTC"
+  "max_frames": 1,
+  "message": "Webcam history not configured for this airport"
+}
+```
+
+**Response (history enabled but not yet available):**
+```json
+{
+  "enabled": true,
+  "available": false,
+  "airport": "kspb",
+  "cam": 0,
+  "frames": [],
+  "max_frames": 12,
+  "message": "History not available for this camera, come back later."
 }
 ```
 
@@ -166,9 +183,10 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 - `404 Not Found`: Airport not found or frame not found
 
 **Notes:**
-- Webcam history must be enabled in configuration (`webcam_history_enabled: true`)
-- Historical frames are retained based on `webcam_history_max_frames` setting
-- See [Configuration Guide](CONFIGURATION.md#webcam-history-time-lapse-player) for setup details
+- History is enabled when `webcam_history_max_frames >= 2`
+- History is available when at least 2 frames have been captured
+- Historical frames are stored directly in the camera cache directory (unified storage)
+- See [Configuration Guide](CONFIGURATION.md#webcam-history-time-lapse) for setup details
 
 ---
 
