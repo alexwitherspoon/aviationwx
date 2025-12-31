@@ -4201,7 +4201,9 @@ const WebcamPlayer = {
     controlsVisible: true,
     hideTimeout: null,
     hideUIMode: false,  // Kiosk/signage mode
-    enabledFormats: ['jpg'],  // Server-enabled formats for <picture> element
+    enabledFormats: ['jpg'],  // Server-enabled formats
+    preferredFormat: 'jpg',   // Browser's preferred format (detected once)
+    preferredVariant: 'primary',  // Preferred size variant for viewport
     variantWidths: {},  // Variant widths for srcset (from API)
     // Rolling window refresh
     refreshInterval: 60,  // Refresh interval in seconds (from API)
@@ -4345,55 +4347,13 @@ const WebcamPlayer = {
         this.updateURL();
     },
 
-    // Build srcset string for a frame with all available sizes
-    // Browser will choose best size based on viewport and device pixel ratio
-    buildSrcset(frame, format) {
-        const parts = [];
-        const variants = frame.variants || ['primary'];
-        
-        for (const variant of variants) {
-            const width = this.variantWidths[variant];
-            if (width) {
-                parts.push(`${frame.url}&fmt=${format}&size=${variant} ${width}w`);
-            }
-        }
-        
-        // If no variants matched, add a default
-        if (parts.length === 0) {
-            parts.push(`${frame.url}&fmt=${format}&size=primary 1920w`);
-        }
-        
-        return parts.join(', ');
-    },
-
-    // Create a <picture> element for a frame with native browser format/size selection
-    createPictureElement(frame) {
-        const picture = document.createElement('picture');
-        
-        // Sizes attribute - player is typically fullscreen or ~80vw
-        const sizes = '(max-width: 768px) 100vw, 80vw';
-        
-        // Add sources for modern formats (AVIF > WebP) if available for this frame
-        for (const format of ['avif', 'webp']) {
-            if (this.enabledFormats.includes(format) && frame.formats.includes(format)) {
-                const source = document.createElement('source');
-                source.type = `image/${format}`;
-                source.srcset = this.buildSrcset(frame, format);
-                source.sizes = sizes;
-                picture.appendChild(source);
-            }
-        }
-        
-        // JPEG fallback with srcset (always available)
-        const img = document.createElement('img');
-        img.srcset = this.buildSrcset(frame, 'jpg');
-        img.sizes = sizes;
-        img.src = frame.url + '&fmt=jpg&size=medium'; // explicit fallback
-        img.alt = 'Webcam history frame';
-        img.loading = 'eager'; // we want to preload these
-        picture.appendChild(img);
-        
-        return { picture, img };
+    // Build URL for a frame using the browser's preferred format and variant
+    buildImageUrl(frame) {
+        // Use preferred format if available for this frame, otherwise fall back to jpg
+        const format = frame.formats.includes(this.preferredFormat) 
+            ? this.preferredFormat 
+            : 'jpg';
+        return `${frame.url}&fmt=${format}&size=${this.preferredVariant}`;
     },
 
     async open(airportId, camIndex, camName, currentImageSrc, options = {}) {
@@ -4442,8 +4402,10 @@ const WebcamPlayer = {
                 this.currentIndex = data.current_index || 0;
                 this.refreshInterval = data.refresh_interval || 60;
                 
-                // Store enabled formats and variant widths for <picture> element building
+                // Store enabled formats and detect browser's preferred format once
                 this.enabledFormats = data.enabledFormats || ['jpg'];
+                this.preferredFormat = getPreferredFormat(this.enabledFormats);
+                this.preferredVariant = getPreferredVariant();
                 this.variantWidths = data.variantWidths || {
                     thumb: 160, small: 320, medium: 640, large: 1280, primary: 1920
                 };
@@ -4622,31 +4584,25 @@ const WebcamPlayer = {
 
         timeline.value = index;
 
-        // Use preloaded image URL if available (browser already chose best format/size)
+        // Use preloaded image URL if available
         const cacheKey = frame.timestamp;
         if (this.preloadedImages[cacheKey]) {
             img.src = this.preloadedImages[cacheKey];
             img.classList.remove('loading');
         } else {
-            // Fallback: create picture element on-demand and use its selection
+            // Fallback: load directly using preferred format
             img.classList.add('loading');
-            const { picture, img: pictureImg } = this.createPictureElement(frame);
+            const imageUrl = this.buildImageUrl(frame);
+            const preloadImg = new Image();
+            preloadImg.src = imageUrl;
             
-            // Append temporarily to DOM to trigger browser loading
-            picture.style.position = 'absolute';
-            picture.style.visibility = 'hidden';
-            document.body.appendChild(picture);
-            
-            pictureImg.onload = () => {
-                // Use currentSrc which is the URL the browser actually chose
-                img.src = pictureImg.currentSrc || pictureImg.src;
+            preloadImg.onload = () => {
+                img.src = imageUrl;
                 img.classList.remove('loading');
-                this.preloadedImages[cacheKey] = img.src;
-                document.body.removeChild(picture);
+                this.preloadedImages[cacheKey] = imageUrl;
             };
-            pictureImg.onerror = () => {
+            preloadImg.onerror = () => {
                 img.classList.remove('loading');
-                document.body.removeChild(picture);
             };
         }
 
@@ -4656,11 +4612,6 @@ const WebcamPlayer = {
     async preloadFrames() {
         const bar = document.getElementById('webcam-player-loading-bar');
         let loaded = 0;
-
-        // Create a hidden container for preloading picture elements
-        const preloadContainer = document.createElement('div');
-        preloadContainer.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;visibility:hidden';
-        document.body.appendChild(preloadContainer);
 
         for (const frame of this.frames) {
             if (!this.active) break;
@@ -4674,15 +4625,14 @@ const WebcamPlayer = {
                 continue;
             }
 
-            // Create picture element with native browser format/size selection
-            const { picture, img } = this.createPictureElement(frame);
-            preloadContainer.appendChild(picture);
+            // Preload single format directly (no <picture> element needed)
+            const imageUrl = this.buildImageUrl(frame);
+            const img = new Image();
+            img.src = imageUrl;
             
             await new Promise((resolve) => {
                 img.onload = () => {
-                    // Store the URL the browser actually chose (currentSrc)
-                    // This respects browser format support and viewport size
-                    this.preloadedImages[cacheKey] = img.currentSrc || img.src;
+                    this.preloadedImages[cacheKey] = imageUrl;
                     loaded++;
                     bar.style.width = `${(loaded / this.frames.length) * 100}%`;
                     resolve();
@@ -4695,8 +4645,6 @@ const WebcamPlayer = {
             });
         }
 
-        // Cleanup preload container
-        document.body.removeChild(preloadContainer);
         setTimeout(() => { bar.style.width = '0%'; }, 500);
     },
 
