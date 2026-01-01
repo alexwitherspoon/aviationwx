@@ -226,6 +226,8 @@ class ProcessPool {
         foreach ($this->workers as $key => $worker) {
             $status = @proc_get_status($worker['proc']);
             if (!$status) {
+                // Still call proc_close() to reap the child process and prevent zombies
+                @proc_close($worker['proc']);
                 $this->closePipes($worker['pipes']);
                 $jobKey = $this->getJobKey($worker['args']);
                 unset($this->activeJobs[$jobKey]);

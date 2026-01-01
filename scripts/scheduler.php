@@ -44,6 +44,23 @@ pcntl_signal(SIGTERM, function() use (&$running) { $running = false; });
 pcntl_signal(SIGINT, function() use (&$running) { $running = false; });
 
 /**
+ * Reap zombie child processes
+ * 
+ * Calls waitpid() with WNOHANG to collect exit status of any child processes
+ * that have finished but haven't been waited on. This prevents zombie accumulation.
+ * 
+ * @return int Number of zombies reaped in this call
+ */
+function reapZombies(): int {
+    $reaped = 0;
+    // Keep reaping until no more finished children
+    while (($pid = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+        $reaped++;
+    }
+    return $reaped;
+}
+
+/**
  * Acquire lock file with exclusive lock
  * 
  * Prevents duplicate scheduler instances from running.
@@ -354,6 +371,10 @@ while ($running) {
             $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
             $notamPool->cleanupFinished($dummyStats);
         }
+        
+        // Reap any zombie child processes that proc_close() may have missed
+        // This is a safety net for edge cases where child processes become orphaned
+        reapZombies();
         
         // Process metrics tasks (non-blocking)
         // 1. Flush APCu counters to hourly file (every 5 minutes)
