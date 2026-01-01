@@ -1112,6 +1112,11 @@ ensureCacheDir(CACHE_BASE_DIR);
 
 // Worker mode: process single camera and exit
 if ($isWorkerMode) {
+    // Initialize self-timeout to prevent zombie workers
+    // Worker will terminate itself before ProcessPool's hard kill
+    require_once __DIR__ . '/../lib/worker-timeout.php';
+    initWorkerTimeout(null, "webcam_{$workerAirportId}_{$workerCamIndex}");
+    
     if (!$workerAirportId || !validateAirportId($workerAirportId)) {
         aviationwx_log('error', 'worker mode: invalid airport ID', [
             'airport' => $workerAirportId

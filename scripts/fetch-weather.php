@@ -119,6 +119,11 @@ function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType
 }
 
 if ($isWorkerMode) {
+    // Initialize self-timeout to prevent zombie workers
+    // Worker will terminate itself before ProcessPool's hard kill
+    require_once __DIR__ . '/../lib/worker-timeout.php';
+    initWorkerTimeout(null, "weather_{$workerAirportId}");
+    
     $config = loadConfig(false);
     if ($config === null || !isset($config['airports'][$workerAirportId])) {
         aviationwx_log('error', 'worker mode: airport not found', [

@@ -103,6 +103,11 @@ function processAirportNotam(string $airportId, string $invocationId): bool {
 
 // Worker mode: process single airport
 if ($isWorkerMode) {
+    // Initialize self-timeout to prevent zombie workers
+    // Worker will terminate itself before ProcessPool's hard kill
+    require_once __DIR__ . '/../lib/worker-timeout.php';
+    initWorkerTimeout(null, "notam_{$workerAirportId}");
+    
     $invocationId = aviationwx_get_invocation_id();
     $success = processAirportNotam($workerAirportId, $invocationId);
     exit($success ? 0 : 1);
@@ -117,6 +122,7 @@ aviationwx_log('info', 'notam fetch: script called without --worker flag', [
 ], 'app');
 
 exit(0);
+
 
 
 

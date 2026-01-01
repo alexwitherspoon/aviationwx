@@ -22,6 +22,7 @@ require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/weather-health.php';
+require_once __DIR__ . '/../lib/worker-timeout.php';
 // Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
 
 // Lock file location
@@ -35,6 +36,7 @@ $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
 $lastWeeklyAggregation = '';
 $lastWeatherHealthUpdate = 0;
+$lastStuckWorkerCleanup = 0;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -425,6 +427,22 @@ while ($running) {
             if (weather_health_flush()) {
                 $lastWeatherHealthUpdate = $now;
             }
+        }
+        
+        // 6. Clean up stuck worker processes (every 60 seconds)
+        // This is a safety net for workers that become stuck despite self-timeout mechanisms
+        if (($now - $lastStuckWorkerCleanup) >= 60) {
+            $stuckPids = cleanupStaleWorkerHeartbeats();
+            if (!empty($stuckPids)) {
+                $killed = killStuckWorkers($stuckPids);
+                if ($killed > 0) {
+                    aviationwx_log('warning', 'scheduler: cleaned up stuck workers', [
+                        'killed_count' => $killed,
+                        'pids' => $stuckPids
+                    ], 'app');
+                }
+            }
+            $lastStuckWorkerCleanup = $now;
         }
         
         // Update health status (only scheduler errors affect this)

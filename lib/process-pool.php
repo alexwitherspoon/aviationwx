@@ -140,10 +140,34 @@ class ProcessPool {
     }
     
     /**
+     * Check if system timeout command is available
+     * 
+     * @return bool True if timeout command exists
+     */
+    private static function isTimeoutAvailable(): bool {
+        static $available = null;
+        if ($available === null) {
+            // Check if timeout command exists (GNU coreutils)
+            $output = [];
+            $returnCode = 0;
+            @exec('command -v timeout 2>/dev/null', $output, $returnCode);
+            $available = ($returnCode === 0 && !empty($output));
+        }
+        return $available;
+    }
+    
+    /**
      * Spawn worker process
      * 
      * Creates a new worker process using proc_open(). The worker runs the script
      * in --worker mode with the provided arguments.
+     * 
+     * Uses the system `timeout` command as an outer wrapper to guarantee process
+     * termination even if the worker becomes stuck on blocking I/O. The timeout
+     * is set to worker_timeout + 10s to allow the worker's internal self-timeout
+     * mechanisms to fire first (cleaner exit).
+     * 
+     * Falls back to running without timeout wrapper if command is not available.
      * 
      * @param array $args Job arguments to pass to worker script
      * @return array|null Worker data array with keys: 'proc' (resource), 'pipes' (array),
@@ -155,12 +179,25 @@ class ProcessPool {
         // Workers run at nice 5 (lower priority than user requests at 0, higher than scheduler at 10)
         $workerNice = 5;
         
-        $cmdParts = [
-            'nice', '-n', (string)$workerNice,
-            '/usr/local/bin/php',
-            escapeshellarg($scriptPath),
-            '--worker'
-        ];
+        $cmdParts = [];
+        
+        // Use system `timeout` command as outer wrapper for guaranteed kill (if available)
+        // timeout --kill-after sends SIGKILL after additional grace period if SIGTERM doesn't work
+        // Set timeout slightly longer than ProcessPool's tracking to let internal mechanisms fire first
+        if (self::isTimeoutAvailable()) {
+            $systemTimeout = $this->timeout + 10;
+            $cmdParts[] = 'timeout';
+            $cmdParts[] = '--kill-after=5';
+            $cmdParts[] = (string)$systemTimeout . 's';
+        }
+        
+        $cmdParts[] = 'nice';
+        $cmdParts[] = '-n';
+        $cmdParts[] = (string)$workerNice;
+        $cmdParts[] = '/usr/local/bin/php';
+        $cmdParts[] = escapeshellarg($scriptPath);
+        $cmdParts[] = '--worker';
+        
         foreach ($args as $arg) {
             $cmdParts[] = escapeshellarg((string)$arg);
         }
