@@ -4092,14 +4092,14 @@ function updateWindVisual(weather) {
             <span style="font-weight: bold;">${isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '--')}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
-            <span style="color: #555;">Peak Gust:</span>
+            <span style="color: #555;">Gusting:</span>
             <span style="font-weight: bold;">${gustSpeed !== null && gustSpeed !== undefined ? (gustSpeed > 0 ? formatWindSpeed(gustSpeed) + ' ' + windUnitLabel : '--') : '--'}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Gust Factor:</span>
             <span style="font-weight: bold;">${gustFactor === null || gustFactor === undefined ? '--' : (gustFactor > 0 ? formatWindSpeed(gustFactor) + ' ' + windUnitLabel : '0')}</span>
         </div>
-        <div style="padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
+        <div style="padding: 0.5rem 0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                 <span style="color: #555;">Today's Peak Gust:</span>
                 <span style="font-weight: bold;">${todaysPeakGust > 0 ? formatWindSpeed(todaysPeakGust) + ' ' + windUnitLabel : '--'}</span>

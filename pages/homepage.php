@@ -121,6 +121,18 @@ $ogImage = file_exists($aboutPhotoWebp)
         /* Smooth scrolling for anchor links */
         html {
             scroll-behavior: smooth;
+            overflow-x: hidden;
+        }
+        
+        body {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+        
+        /* Constrain container to viewport on mobile */
+        .container {
+            max-width: 100%;
+            overflow-x: hidden;
         }
         
         /* Ensure proper anchor positioning */
@@ -134,6 +146,8 @@ $ogImage = file_exists($aboutPhotoWebp)
             padding: 4rem 2rem;
             text-align: center;
             margin: -1rem -1rem 3rem -1rem;
+            box-sizing: border-box;
+            max-width: calc(100% + 2rem);
         }
         .hero h1 {
             font-size: 3rem;
@@ -163,6 +177,13 @@ $ogImage = file_exists($aboutPhotoWebp)
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 2rem;
             margin: 2rem 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        @media (max-width: 480px) {
+            .features {
+                grid-template-columns: 1fr;
+            }
         }
         .features-webcam {
             display: grid;
@@ -183,6 +204,8 @@ $ogImage = file_exists($aboutPhotoWebp)
             min-width: 0;
             overflow-wrap: break-word;
             word-wrap: break-word;
+            box-sizing: border-box;
+            width: 100%;
         }
         .feature-card h3 {
             margin-top: 0;
@@ -193,6 +216,9 @@ $ogImage = file_exists($aboutPhotoWebp)
             grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
             margin-top: 2rem;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         @media (max-width: 992px) {
             .airports-list {
@@ -213,6 +239,9 @@ $ogImage = file_exists($aboutPhotoWebp)
             border: 2px solid transparent;
             display: flex;
             flex-direction: column;
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
         }
         .airport-card:hover {
             transform: translateY(-3px);
@@ -384,6 +413,28 @@ $ogImage = file_exists($aboutPhotoWebp)
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1.5rem;
             margin: 2rem 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        @media (max-width: 480px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+        .equipment-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 3rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        @media (max-width: 480px) {
+            .equipment-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
         }
         .stat-card {
             text-align: center;
@@ -1524,7 +1575,7 @@ Best regards,
             <h2>Supported Equipment and Systems</h2>
             <p style="text-align: center; color: #555; margin-bottom: 2rem;">We work with existing equipment, help you pick equipment or can provide new equipment. We can integrate with a broad range of equipment, and if it isn't supported today we can probably add support quickly. All formats are automatically processed and optimized.</p>
             
-            <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 3rem;">
+            <div class="equipment-grid">
                 <div>
                     <h3 style="color: #0066cc; margin-bottom: 1rem;">🌡️ Weather Sources</h3>
                     <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
