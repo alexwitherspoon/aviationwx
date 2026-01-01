@@ -137,6 +137,7 @@ RUN echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "max_execution_time = 60" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "apc.enabled = 1" >> /usr/local/etc/php/conf.d/custom.ini \
+    && echo "apc.enable_cli = 1" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "apc.shm_size = 64M" >> /usr/local/etc/php/conf.d/custom.ini \
     && echo "expose_php = Off" >> /usr/local/etc/php/conf.d/security.ini \
     && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/security.ini \
