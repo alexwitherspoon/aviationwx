@@ -2317,11 +2317,10 @@ if (php_sapi_name() === 'cli') {
         // Get multi-period metrics for this airport
         $airportIdLower = strtolower($airport['id']);
         $airportPeriodMetrics = $multiPeriodMetrics[$airportIdLower] ?? null;
-        $hasViewMetrics = $airportPeriodMetrics && (
-            $airportPeriodMetrics['hour']['page_views'] > 0 ||
-            $airportPeriodMetrics['day']['page_views'] > 0 ||
-            $airportPeriodMetrics['week']['page_views'] > 0
-        );
+        // Get view counts (default to 0 if no metrics)
+        $hourViews = $airportPeriodMetrics['hour']['page_views'] ?? 0;
+        $dayViews = $airportPeriodMetrics['day']['page_views'] ?? 0;
+        $weekViews = $airportPeriodMetrics['week']['page_views'] ?? 0;
         ?>
         <div class="status-card">
             <div class="status-card-header airport-card-header <?php echo $isExpanded ? 'expanded' : ''; ?>" 
@@ -2331,16 +2330,14 @@ if (php_sapi_name() === 'cli') {
                         <span class="expand-icon">▶</span>
                         <?php echo htmlspecialchars($airport['id']); ?>
                     </h2>
-                    <?php if ($hasViewMetrics): ?>
                     <div class="airport-views-summary">
                         <span class="views-label">Views:</span>
-                        <span class="views-period" title="Last hour"><?php echo number_format($airportPeriodMetrics['hour']['page_views']); ?>/hour</span>
+                        <span class="views-period" title="Last hour"><?php echo number_format($hourViews); ?>/hour</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="Today"><?php echo number_format($airportPeriodMetrics['day']['page_views']); ?>/day</span>
+                        <span class="views-period" title="Today"><?php echo number_format($dayViews); ?>/day</span>
                         <span class="views-sep">·</span>
-                        <span class="views-period" title="Last 7 days"><?php echo number_format($airportPeriodMetrics['week']['page_views']); ?>/week</span>
+                        <span class="views-period" title="Last 7 days"><?php echo number_format($weekViews); ?>/week</span>
                     </div>
-                    <?php endif; ?>
                 </div>
                 <span class="status-badge">
                     <?php if ($airport['status'] === 'maintenance'): ?>
@@ -2451,27 +2448,23 @@ if (php_sapi_name() === 'cli') {
                         }
                     }
                     
-                    $hasDetailedMetrics = ($weeklyAirportMetrics !== null && $weeklyAirportMetrics['weather_requests'] > 0) || $totalWebcam > 0;
+                    // Get weather requests (default to 0)
+                    $weatherRequests = $weeklyAirportMetrics['weather_requests'] ?? 0;
                     ?>
                     
-                    <?php if ($hasDetailedMetrics): ?>
                     <li class="component-item">
                         <div class="component-info">
-                            <div class="component-name">Requests</div>
+                            <div class="component-name">Requests (7d)</div>
                             <div class="component-message usage-metrics-block">
                                 <div class="metrics-line">
-                                    <?php if ($weeklyAirportMetrics && $weeklyAirportMetrics['weather_requests'] > 0): ?>
                                     <span class="metric-group">
-                                        <span class="metric-label">Weather (7d):</span>
-                                        <span class="metric-value"><?php echo number_format($weeklyAirportMetrics['weather_requests']); ?></span>
+                                        <span class="metric-label">Weather:</span>
+                                        <span class="metric-value"><?php echo number_format($weatherRequests); ?></span>
                                     </span>
-                                    <?php endif; ?>
-                                    <?php if ($totalWebcam > 0): ?>
                                     <span class="metric-group">
-                                        <span class="metric-label">Webcam (7d):</span>
+                                        <span class="metric-label">Webcam:</span>
                                         <span class="metric-value"><?php echo number_format($totalWebcam); ?></span>
                                     </span>
-                                    <?php endif; ?>
                                 </div>
                                 <?php if ($totalWebcam > 0): ?>
                                 <div class="metrics-line">
@@ -2515,7 +2508,6 @@ if (php_sapi_name() === 'cli') {
                             </div>
                         </div>
                     </li>
-                    <?php endif; ?>
                 </ul>
             </div>
         </div>
