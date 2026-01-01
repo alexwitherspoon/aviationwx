@@ -20,22 +20,14 @@ The `airports.json` file contains:
 ## What to Do Before Making Public
 
 ### ✅ What's Safe to Commit (Public Repo)
-- `pages/airport.php`
-- `index.php`
-- `weather.php`
-- `webcam.php`
-- `fetch-webcam-safe.php`
-- `styles.css`
-- `homepage.php`
-- `404.php`
-- `airports.json.example` (template with placeholders)
-- `CONFIGURATION.md`
-- `README.md`
-- `SECURITY.md`
+- All PHP source code (`pages/`, `api/`, `lib/`, `scripts/`)
+- Configuration templates (`config/airports.json.example`, `config/env.example`)
+- Static assets (`public/css/`, `public/js/`, `public/images/`)
+- Documentation files (`docs/`, `README.md`, `CODE_STYLE.md`)
+- Docker configuration (`docker/`)
+- Test files (`tests/`)
+- Build/CI files (`Makefile`, `.github/`, `phpunit.xml`)
 - `.gitignore`
-- `LOCAL_SETUP.md`
-- `LOCAL_COMMANDS.md`
-- All documentation files
 
 ### ❌ NEVER Commit (Private or Local Only)
 - `airports.json` (contains real API keys and passwords)

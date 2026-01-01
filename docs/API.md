@@ -243,9 +243,9 @@ Returns JSON with image timestamp and format availability status.
 
 ---
 
-### Diagnostics
+### Admin Endpoints
 
-#### `GET /diagnostics.php`
+#### `GET /admin/diagnostics.php`
 
 Returns system diagnostics information (useful for debugging).
 
@@ -271,9 +271,7 @@ Returns system diagnostics information (useful for debugging).
 
 ---
 
-### Clear Cache
-
-#### `GET /clear-cache.php`
+#### `GET /admin/cache-clear.php`
 
 Clears configuration cache (useful after updating `airports.json`).
 
@@ -289,9 +287,25 @@ Clears configuration cache (useful after updating `airports.json`).
 
 ---
 
-### Health Check
+#### `GET /admin/metrics.php`
 
-#### `GET /health.php`
+Returns application metrics (for monitoring systems like Prometheus).
+
+**Response:** Prometheus-formatted metrics
+
+**Example:**
+```
+# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{endpoint="weather"} 1234
+http_requests_total{endpoint="webcam"} 5678
+```
+
+---
+
+### Health Endpoints
+
+#### `GET /health/health.php`
 
 Simple health check endpoint for monitoring.
 
@@ -306,24 +320,6 @@ Simple health check endpoint for monitoring.
 **HTTP Status Codes:**
 - `200`: Healthy
 - `500`: Unhealthy
-
----
-
-### Metrics
-
-#### `GET /metrics.php`
-
-Returns application metrics (for monitoring systems like Prometheus).
-
-**Response:** Prometheus-formatted metrics
-
-**Example:**
-```
-# HELP http_requests_total Total number of HTTP requests
-# TYPE http_requests_total counter
-http_requests_total{endpoint="weather"} 1234
-http_requests_total{endpoint="webcam"} 5678
-```
 
 ---
 

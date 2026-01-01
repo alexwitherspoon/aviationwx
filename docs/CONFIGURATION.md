@@ -725,11 +725,14 @@ The validator uses strict checking—unknown fields are rejected.
 ### Test Configuration
 
 ```bash
-# Validate config
-php -r "require 'lib/config.php'; var_dump(validateAirportsJsonStructure(loadAirportsConfig()));"
+# Start Docker development environment
+make dev
 
-# Test locally
-php -S localhost:8080
+# Validate config (inside container)
+docker compose -f docker/docker-compose.yml exec web \
+  php -r "require 'lib/config.php'; var_dump(validateAirportsJsonStructure(loadAirportsConfig()));"
+
+# Test API endpoint
 curl http://localhost:8080/api/weather.php?airport=kspb
 ```
 

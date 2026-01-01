@@ -2,12 +2,11 @@
 
 ## 🚀 Quick Start
 
-```bash
-# Start the PHP server
-php -S localhost:8080
+**IMPORTANT: Always use Docker for local development, NOT direct PHP processes.**
 
-# In another terminal, fetch webcam images
-php fetch-webcam-safe.php
+```bash
+# Start the Docker development environment
+make dev
 
 # Visit the page in your browser
 open http://localhost:8080/?airport=kspb
@@ -15,34 +14,34 @@ open http://localhost:8080/?airport=kspb
 
 ## 📋 Available Commands
 
-### 1. Start Server
+### 1. Start Docker Environment
 ```bash
-php -S localhost:8080
+make dev          # Build and start Docker containers, then tail logs
+make up           # Start containers (builds if needed)
+make down         # Stop containers
+make restart      # Restart containers
 ```
-Starts local development server on port 8080.
 
-### 2. Fetch Webcam Images
+### 2. Access Container Shell
 ```bash
-php fetch-webcam-safe.php
+# Open a shell inside the container
+make shell
+
+# Inside container, you can run PHP scripts:
+cd /var/www/html
+php scripts/fetch-webcam.php --worker kspb 0
 ```
-Downloads current images from webcam streams and caches them.
-- Safe memory usage (stops after first JPEG frame)
-- Timeout protection (10 second max)
-- Shows progress and results
-- Caches to the cache directory (location depends on deployment - see [Local Setup](LOCAL_SETUP.md) or [Deployment Guide](DEPLOYMENT.md))
 
 ### 3. Check Weather API
 ```bash
-curl -s 'http://localhost:8080/weather.php?airport=kspb' | python3 -m json.tool
+curl -s 'http://localhost:8080/api/weather.php?airport=kspb' | python3 -m json.tool
 ```
-Tests the weather API and shows formatted JSON response.
 
 ### 4. View Cached Images
 ```bash
-# List cached webcam images (cache location depends on deployment)
-ls -lh cache/webcams/*/
+# List cached webcam images
+docker compose -f docker/docker-compose.yml exec web ls -lh /var/www/html/cache/webcams/*/
 ```
-Lists cached webcam images with sizes and timestamps.
 
 ### 5. Test Full Page
 Open in browser: http://localhost:8080/?airport=kspb
@@ -60,16 +59,16 @@ Shows:
 ```
 Interactive menu for testing different aspects.
 
-## 🔄 Update Webcam Images
+## 🔄 Webcam Updates
 
-The webcam images are cached for performance. To refresh them:
+The scheduler daemon runs automatically inside the Docker container and handles webcam updates.
 
 ```bash
-# Fetch fresh images from streams
-php fetch-webcam-safe.php
+# Check scheduler status
+docker compose -f docker/docker-compose.yml exec web cat /tmp/scheduler.lock | jq
 
-# The "last updated" times will show when the fetch was executed
-# Times display as: "X minutes ago" or "X hours ago"
+# Manually trigger webcam update for specific airport/camera
+docker compose -f docker/docker-compose.yml exec -T web php scripts/fetch-webcam.php --worker kspb 0
 ```
 
 ## 📁 Directory Structure
@@ -77,22 +76,19 @@ php fetch-webcam-safe.php
 ```
 aviationwx.org/
 ├── index.php                    # Main router
-├── pages/airport.php             # Airport page template
-├── weather.php                  # Weather API fetcher
-├── webcam.php                   # Webcam image server
-├── fetch-webcam-safe.php        # Safe webcam fetcher (run this!)
-├── airports.json                # Airport configuration
-├── styles.css                   # Styling
-# Cache directory structure (location depends on deployment)
-# cache/webcams/{airport}/{cam}/  # Cached webcam images per camera
-│       ├── kspb_0.jpg          # Webcam 1
-│       └── kspb_1.jpg          # Webcam 2
+├── pages/airport.php            # Airport page template
+├── api/weather.php              # Weather API fetcher
+├── api/webcam.php               # Webcam image server
+├── config/airports.json         # Airport configuration
+├── public/css/styles.css        # Styling
+├── cache/                       # Cache directory
+│   └── webcams/{airport}/{cam}/ # Cached webcam images
 └── ...
 ```
 
 ## ⏰ How "Last Updated" Works
 
-1. When you run `php fetch-webcam-safe.php`, it captures images and saves them
+1. The scheduler daemon captures webcam images at configured intervals
 2. Each image file has a modification timestamp (when it was downloaded)
 3. The page reads this timestamp and displays it as "X minutes ago"
 4. The timestamp updates every minute automatically
@@ -101,26 +97,32 @@ aviationwx.org/
 
 **Webcam images not showing?**
 ```bash
-# Fetch the images first
-php fetch-webcam-safe.php
+# Check if scheduler is running
+docker compose -f docker/docker-compose.yml exec web ps aux | grep scheduler
 
-# Then reload the page
+# Check scheduler lock file
+docker compose -f docker/docker-compose.yml exec web cat /tmp/scheduler.lock
+
+# Manually trigger webcam fetch
+docker compose -f docker/docker-compose.yml exec -T web php scripts/fetch-webcam.php --worker kspb 0
 ```
 
 **Weather data not loading?**
 ```bash
 # Check the API response
-curl 'http://localhost:8080/weather.php?airport=kspb'
+curl 'http://localhost:8080/api/weather.php?airport=kspb'
 ```
 
-**Server not responding?**
+**Container not running?**
 ```bash
-# Check if server is running
-lsof -i :8080
+# Check container status
+docker compose -f docker/docker-compose.yml ps
 
-# Restart if needed
-pkill -f "php -S"
-php -S localhost:8080
+# View logs
+make logs
+
+# Restart containers
+make restart
 ```
 
 ## 🎯 For Production (Docker Droplet)
@@ -134,3 +136,7 @@ The Docker container includes:
 
 The scheduler supports sub-minute refresh intervals (minimum 5 seconds) and automatically reloads configuration changes without restart. All refresh intervals are configurable via `airports.json`.
 
+## ❌ DO NOT USE
+
+- `php -S localhost:8080` - Never run PHP's built-in server directly
+- Direct PHP execution outside Docker for web testing
