@@ -1981,6 +1981,28 @@ if (php_sapi_name() === 'cli') {
                 flex-direction: column;
                 gap: 0.75rem;
             }
+            
+            /* Airport header stacks vertically on mobile */
+            .status-card-header.airport-card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+            
+            .airport-header-content {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+                width: 100%;
+            }
+            
+            .airport-views-summary {
+                justify-content: flex-start;
+            }
+            
+            .status-card-header.airport-card-header .status-badge {
+                align-self: flex-start;
+            }
         }
         
         /* ============================================
