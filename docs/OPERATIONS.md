@@ -162,6 +162,28 @@ Visit the status page (`/status.php` or `status.aviationwx.org` in production) f
 - Status indicators (Green/Yellow/Red)
 - Timestamps showing when each component status last changed
 
+#### Per-Airport Metrics
+
+Each airport card displays usage metrics:
+
+| Metric | Description |
+|--------|-------------|
+| **Views** | Page views per hour/day/week |
+| **Weather Requests** | API requests to `/api/weather.php` (7-day total) |
+| **Webcam Requests** | API requests to `/api/webcam.php` (7-day total) |
+| **Webcam Serves** | Images delivered from server (shown in parentheses) |
+
+The difference between webcam requests and serves indicates caching effectiveness. Browser and CDN caching reduces server load, so a high requests:serves ratio means caching is working well.
+
+#### Metrics System
+
+Metrics are tracked in APCu (in-memory) and flushed to JSON files every 5 minutes by the scheduler:
+- **Hourly files**: `cache/metrics/hourly/YYYY-MM-DD-HH.json`
+- **Daily files**: `cache/metrics/daily/YYYY-MM-DD.json`
+- **Weekly aggregation**: Computed from daily files for 7-day rolling totals
+
+Manual flush: `curl http://localhost:8080/health/metrics-flush.php`
+
 ### Health Checks
 
 ```bash
