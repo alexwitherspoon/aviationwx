@@ -1599,7 +1599,7 @@ body.night-mode .value {
 }
 
 body.night-mode .address-link {
-    color: var(--night-link) !important;
+    color: var(--night-text-bright) !important;
 }
 
 /* Frequencies section */
@@ -2027,7 +2027,7 @@ body.dark-mode .value {
 }
 
 body.dark-mode .address-link {
-    color: var(--dark-link) !important;
+    color: var(--dark-text-bright) !important;
 }
 
 /* Frequencies section */
