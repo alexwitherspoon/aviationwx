@@ -1792,6 +1792,12 @@ if (php_sapi_name() === 'cli') {
             color: #888;
         }
         
+        .usage-metrics-block .metric-detail {
+            color: #999;
+            font-size: 0.85em;
+            margin-left: 0.25rem;
+        }
+        
         .usage-metrics-block .metric-value {
             font-weight: 600;
             color: #333;
@@ -2069,6 +2075,10 @@ if (php_sapi_name() === 'cli') {
         
         body.dark-mode .usage-metrics-block .metric-label {
             color: #777;
+        }
+        
+        body.dark-mode .usage-metrics-block .metric-detail {
+            color: #666;
         }
         
         body.dark-mode .usage-metrics-block .metric-value {
@@ -2434,27 +2444,28 @@ if (php_sapi_name() === 'cli') {
                     $webcamMetrics = $airportPeriodMetrics['webcams'] ?? [];
                     $weeklyAirportMetrics = $usageMetrics['airports'][$airportIdLower] ?? null;
                     
-                    // Calculate webcam totals
-                    $totalWebcam = 0;
+                    // Calculate webcam totals (serves = successful image deliveries)
+                    $totalWebcamServes = 0;
                     $formatTotals = ['jpg' => 0, 'webp' => 0, 'avif' => 0];
                     $sizeTotals = ['primary' => 0, 'thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'full' => 0];
                     foreach ($webcamMetrics as $camData) {
                         foreach ($camData['by_format'] ?? [] as $fmt => $count) {
                             $formatTotals[$fmt] += $count;
-                            $totalWebcam += $count;
+                            $totalWebcamServes += $count;
                         }
                         foreach ($camData['by_size'] ?? [] as $sz => $count) {
                             $sizeTotals[$sz] += $count;
                         }
                     }
                     
-                    // Get weather requests (default to 0)
+                    // Get request counts (default to 0)
                     $weatherRequests = $weeklyAirportMetrics['weather_requests'] ?? 0;
+                    $webcamRequests = $weeklyAirportMetrics['webcam_requests'] ?? 0;
                     ?>
                     
                     <li class="component-item">
                         <div class="component-info">
-                            <div class="component-name">Requests (7d)</div>
+                            <div class="component-name">API Requests (7d)</div>
                             <div class="component-message usage-metrics-block">
                                 <div class="metrics-line">
                                     <span class="metric-group">
@@ -2463,10 +2474,20 @@ if (php_sapi_name() === 'cli') {
                                     </span>
                                     <span class="metric-group">
                                         <span class="metric-label">Webcam:</span>
-                                        <span class="metric-value"><?php echo number_format($totalWebcam); ?></span>
+                                        <?php if ($webcamRequests > 0): ?>
+                                        <span class="metric-value"><?php echo number_format($webcamRequests); ?></span>
+                                        <?php if ($totalWebcamServes > 0): ?>
+                                        <span class="metric-detail" title="Serves = images delivered from server (not browser cache)">(<?php echo number_format($totalWebcamServes); ?> serves)</span>
+                                        <?php endif; ?>
+                                        <?php elseif ($totalWebcamServes > 0): ?>
+                                        <span class="metric-value"><?php echo number_format($totalWebcamServes); ?></span>
+                                        <span class="metric-detail">(serves only, pre-tracking)</span>
+                                        <?php else: ?>
+                                        <span class="metric-value">0</span>
+                                        <?php endif; ?>
                                     </span>
                                 </div>
-                                <?php if ($totalWebcam > 0): ?>
+                                <?php if ($totalWebcamServes > 0): ?>
                                 <div class="metrics-line">
                                     <span class="metric-group">
                                         <span class="metric-label">Formats:</span>
@@ -2475,7 +2496,7 @@ if (php_sapi_name() === 'cli') {
                                             $formatParts = [];
                                             foreach ($formatTotals as $fmt => $count) {
                                                 if ($count > 0) {
-                                                    $pct = round(($count / $totalWebcam) * 100);
+                                                    $pct = round(($count / $totalWebcamServes) * 100);
                                                     $formatParts[] = strtoupper($fmt) . " {$pct}%";
                                                 }
                                             }

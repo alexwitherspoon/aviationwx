@@ -283,6 +283,10 @@ if ($camIndex > $maxCamIndex || !isset($config['airports'][$airportId]['webcams'
 }
 
 $cam = $config['airports'][$airportId]['webcams'][$camIndex];
+
+// Track webcam API request (all requests, before cache/serve decisions)
+metrics_track_webcam_request($airportId, $camIndex);
+
 $cacheDir = CACHE_WEBCAMS_DIR;
 $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', 'primary');
 $cacheWebp = getCacheFile($airportId, $camIndex, 'webp', 'primary');

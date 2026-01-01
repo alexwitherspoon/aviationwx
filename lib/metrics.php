@@ -156,6 +156,24 @@ function metrics_track_weather_request(string $airportId): void {
 }
 
 /**
+ * Track a webcam API request (all requests, regardless of cache outcome)
+ * 
+ * Called early in the webcam API flow to count all incoming requests,
+ * unlike metrics_track_webcam_serve() which only counts successful image serves.
+ * This provides visibility into total demand vs actual server load.
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
+ * @return void
+ */
+function metrics_track_webcam_request(string $airportId, int $camIndex): void {
+    $airportId = strtolower($airportId);
+    metrics_increment("airport_{$airportId}_webcam_requests");
+    metrics_increment("webcam_{$airportId}_{$camIndex}_requests");
+    metrics_increment('global_webcam_requests');
+}
+
+/**
  * Track a webcam serve
  * 
  * @param string $airportId Airport identifier
@@ -299,6 +317,7 @@ function metrics_flush(): bool {
             'global' => [
                 'page_views' => 0,
                 'weather_requests' => 0,
+                'webcam_requests' => 0,
                 'webcam_serves' => 0,
                 'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
                 'size_served' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0],
@@ -308,26 +327,55 @@ function metrics_flush(): bool {
         ];
     }
     
+    // Ensure webcam_requests field exists for older data structures
+    if (!isset($hourData['global']['webcam_requests'])) {
+        $hourData['global']['webcam_requests'] = 0;
+    }
+    
     // Merge counters into hourly data
     foreach ($counters as $key => $value) {
         // Parse key to determine where to store
         if (preg_match('/^airport_([a-z0-9]+)_views$/', $key, $m)) {
             $airportId = $m[1];
             if (!isset($hourData['airports'][$airportId])) {
-                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0];
+                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
             }
             $hourData['airports'][$airportId]['page_views'] += $value;
         } elseif (preg_match('/^airport_([a-z0-9]+)_weather$/', $key, $m)) {
             $airportId = $m[1];
             if (!isset($hourData['airports'][$airportId])) {
-                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0];
+                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
             }
             $hourData['airports'][$airportId]['weather_requests'] += $value;
+        } elseif (preg_match('/^airport_([a-z0-9]+)_webcam_requests$/', $key, $m)) {
+            $airportId = $m[1];
+            if (!isset($hourData['airports'][$airportId])) {
+                $hourData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
+            }
+            if (!isset($hourData['airports'][$airportId]['webcam_requests'])) {
+                $hourData['airports'][$airportId]['webcam_requests'] = 0;
+            }
+            $hourData['airports'][$airportId]['webcam_requests'] += $value;
+        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_requests$/', $key, $m)) {
+            // Per-camera request tracking (stored under webcams)
+            $webcamKey = $m[1] . '_' . $m[2];
+            if (!isset($hourData['webcams'][$webcamKey])) {
+                $hourData['webcams'][$webcamKey] = [
+                    'requests' => 0,
+                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_size' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0]
+                ];
+            }
+            if (!isset($hourData['webcams'][$webcamKey]['requests'])) {
+                $hourData['webcams'][$webcamKey]['requests'] = 0;
+            }
+            $hourData['webcams'][$webcamKey]['requests'] += $value;
         } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp|avif)$/', $key, $m)) {
             $webcamKey = $m[1] . '_' . $m[2];
             $format = $m[3];
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
+                    'requests' => 0,
                     'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
                     'by_size' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0]
                 ];
@@ -338,6 +386,7 @@ function metrics_flush(): bool {
             $size = $m[3];
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
+                    'requests' => 0,
                     'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
                     'by_size' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0]
                 ];
@@ -351,6 +400,8 @@ function metrics_flush(): bool {
             $hourData['global']['page_views'] += $value;
         } elseif ($key === 'global_weather_requests') {
             $hourData['global']['weather_requests'] += $value;
+        } elseif ($key === 'global_webcam_requests') {
+            $hourData['global']['webcam_requests'] += $value;
         } elseif ($key === 'global_webcam_serves') {
             $hourData['global']['webcam_serves'] += $value;
         } elseif ($key === 'browser_avif_support') {
