@@ -1119,6 +1119,14 @@ function processPushWebcams() {
             'processed' => $processed
         ], 'app');
         
+        // Flush variant health counters to cache file
+        // CLI APCu is process-isolated from PHP-FPM, so we must flush here
+        // before the process exits (scheduler's HTTP flush reads PHP-FPM APCu)
+        if ($processed > 0) {
+            require_once __DIR__ . '/../lib/variant-health.php';
+            variant_health_flush();
+        }
+        
     } finally {
         @flock($fp, LOCK_UN);
         @fclose($fp);

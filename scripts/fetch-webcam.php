@@ -1141,6 +1141,13 @@ if ($isWorkerMode) {
     $triggerType = $triggerInfo['trigger'];
     
     $success = processWebcam($workerAirportId, $workerCamIndex, $cam, $airport, $cacheDir, $invocationId, $triggerType, false);
+    
+    // Flush variant health counters to cache file before exiting
+    // Worker runs as separate CLI process with isolated APCu
+    // Must flush here before process exit, otherwise counters are lost
+    require_once __DIR__ . '/../lib/variant-health.php';
+    variant_health_flush();
+    
     exit($success ? 0 : 1);
 }
 
