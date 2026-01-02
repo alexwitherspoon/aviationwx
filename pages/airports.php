@@ -329,7 +329,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         .flight-condition.unknown { background: #e9ecef; color: #6c757d; }
         
         footer {
-            margin-top: 3rem;
+            margin-top: 0;
             padding: 2rem;
             border-top: 1px solid #ddd;
             text-align: center;
@@ -343,6 +343,114 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Add Your Airport Section */
+        .add-airport-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 3rem 2rem;
+            margin-top: 3rem;
+        }
+        
+        .add-airport-content {
+            max-width: 900px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .add-airport-content h2 {
+            color: #333;
+            font-size: 1.75rem;
+            margin: 0 0 1rem 0;
+        }
+        
+        .add-airport-content > p {
+            color: #555;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        .add-airport-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        @media (max-width: 640px) {
+            .add-airport-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .add-airport-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: left;
+        }
+        
+        .add-airport-card.highlight {
+            border: 2px solid #28a745;
+        }
+        
+        .add-airport-card h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1.2rem;
+            color: #333;
+        }
+        
+        .add-airport-card p {
+            color: #555;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+        
+        .add-airport-card .btn {
+            display: inline-block;
+            padding: 0.6rem 1.25rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .add-airport-card .btn-primary {
+            background: #28a745;
+            color: white;
+        }
+        
+        .add-airport-card .btn-primary:hover {
+            background: #218838;
+        }
+        
+        .add-airport-card .btn-secondary {
+            background: white;
+            color: #0066cc;
+            border: 2px solid #0066cc;
+        }
+        
+        .add-airport-card .btn-secondary:hover {
+            background: #0066cc;
+            color: white;
+        }
+        
+        .add-airport-footer {
+            margin-top: 1rem;
+        }
+        
+        .add-airport-footer a {
+            color: #0066cc;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        
+        .add-airport-footer a:hover {
             text-decoration: underline;
         }
         
@@ -426,6 +534,48 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         body.dark-mode footer a { color: #4a9eff; }
+        
+        /* Dark mode add-airport section */
+        body.dark-mode .add-airport-section {
+            background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
+        }
+        
+        body.dark-mode .add-airport-content h2 { color: #e0e0e0; }
+        body.dark-mode .add-airport-content > p { color: #a0a0a0; }
+        
+        body.dark-mode .add-airport-card {
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .add-airport-card.highlight {
+            border-color: #4ade80;
+        }
+        
+        body.dark-mode .add-airport-card h3 { color: #e0e0e0; }
+        body.dark-mode .add-airport-card p { color: #a0a0a0; }
+        
+        body.dark-mode .add-airport-card .btn-primary {
+            background: #4ade80;
+            color: #1a1a1a;
+        }
+        
+        body.dark-mode .add-airport-card .btn-primary:hover {
+            background: #22c55e;
+        }
+        
+        body.dark-mode .add-airport-card .btn-secondary {
+            background: #1e1e1e;
+            color: #4a9eff;
+            border-color: #4a9eff;
+        }
+        
+        body.dark-mode .add-airport-card .btn-secondary:hover {
+            background: #4a9eff;
+            color: white;
+        }
+        
+        body.dark-mode .add-airport-footer a { color: #4a9eff; }
         
         /* Dark mode map tiles handled by filter */
         body.dark-mode .map-container {
@@ -553,6 +703,32 @@ $breadcrumbs = generateBreadcrumbSchema([
                     </a>
                 </div>
                 <?php endforeach; ?>
+            </div>
+        </section>
+        
+        <!-- Add Your Airport Section -->
+        <section class="add-airport-section">
+            <div class="add-airport-content">
+                <h2>Don't See Your Airport?</h2>
+                <p>We're always looking to add more airports to the network. AviationWX.org is <strong>completely free</strong> for airports and pilots—no fees, no subscriptions, no ads.</p>
+                
+                <div class="add-airport-grid">
+                    <div class="add-airport-card">
+                        <h3>✈️ For Pilots</h3>
+                        <p>Know an airport that should be here? Help us connect with the right people—airport managers, advocacy organizations, or local flying clubs.</p>
+                        <a href="https://guides.aviationwx.org/12-submit-an-airport-to-aviationwx" class="btn btn-secondary">Learn How to Help</a>
+                    </div>
+                    
+                    <div class="add-airport-card highlight">
+                        <h3>🏢 For Airport Owners</h3>
+                        <p>We integrate with your existing webcams and weather stations, or guide your community through new installations. You own the equipment, we host the dashboard.</p>
+                        <a href="mailto:contact@aviationwx.org?subject=Add%20my%20airport%20to%20AviationWX" class="btn btn-primary">Get Started</a>
+                    </div>
+                </div>
+                
+                <p class="add-airport-footer">
+                    <a href="https://guides.aviationwx.org">📚 Read the full setup guides</a>
+                </p>
             </div>
         </section>
         
