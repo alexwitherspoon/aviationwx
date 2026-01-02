@@ -474,8 +474,8 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         .popup-link {
             display: inline-block;
-            background: #28a745;
-            color: white;
+            background: #0066cc;
+            color: #ffffff !important;
             padding: 0.4rem 0.8rem;
             border-radius: 4px;
             text-decoration: none;
@@ -484,7 +484,8 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         .popup-link:hover {
-            background: #218838;
+            background: #0052a3;
+            color: #ffffff !important;
         }
         
         /* Dark mode */
@@ -576,6 +577,17 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         body.dark-mode .add-airport-footer a { color: #4a9eff; }
+        
+        /* Dark mode popup styling - inverse contrast */
+        body.dark-mode .popup-link {
+            background: #ffffff;
+            color: #0066cc !important;
+        }
+        
+        body.dark-mode .popup-link:hover {
+            background: #e0e0e0;
+            color: #0052a3 !important;
+        }
         
         /* Dark mode map tiles handled by filter */
         body.dark-mode .map-container {
