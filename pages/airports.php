@@ -474,17 +474,17 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         .popup-link {
             display: inline-block;
-            background: #0066cc;
+            background: #28a745;
             color: white;
             padding: 0.4rem 0.8rem;
             border-radius: 4px;
             text-decoration: none;
             font-size: 0.85rem;
-            font-weight: 500;
+            font-weight: 600;
         }
         
         .popup-link:hover {
-            background: #0052a3;
+            background: #218838;
         }
         
         /* Dark mode */
