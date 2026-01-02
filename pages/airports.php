@@ -781,7 +781,16 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         // Configure Leaflet default icon path to prevent 404s
         // (We use custom divIcon, but this prevents Leaflet from trying default paths)
-        L.Icon.Default.imagePath = '/public/images/leaflet/';
+        // Note: In Leaflet 1.9.4, we override the _getIconUrl method
+        if (L.Icon.Default && L.Icon.Default.prototype) {
+            var originalGetIconUrl = L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.prototype._getIconUrl = function(name) {
+                var url = originalGetIconUrl ? originalGetIconUrl.call(this, name) : name;
+                // Extract filename and prepend our path
+                var filename = url.split('/').pop();
+                return '/public/images/leaflet/' + filename;
+            };
+        }
         
         // Initialize map
         var map = L.map('map', {

@@ -34,16 +34,30 @@ if (!fs.existsSync(NODE_MODULES_LEAFLET)) {
     }
 });
 
-// Copy leaflet.js
+// Copy leaflet.js and fix source map path
 const leafletJs = path.join(NODE_MODULES_LEAFLET, 'leaflet.js');
 const leafletJsDest = path.join(PUBLIC_JS, 'leaflet.js');
 if (fs.existsSync(leafletJs)) {
-    fs.copyFileSync(leafletJs, leafletJsDest);
+    let jsContent = fs.readFileSync(leafletJs, 'utf8');
+    // Fix source map path to use absolute path
+    jsContent = jsContent.replace(/\/\/# sourceMappingURL=leaflet\.js\.map/g, '//# sourceMappingURL=/public/js/leaflet.js.map');
+    fs.writeFileSync(leafletJsDest, jsContent, 'utf8');
     const stats = fs.statSync(leafletJsDest);
-    console.log(`✓ Copied leaflet.js (${(stats.size / 1024).toFixed(1)} KB)`);
+    console.log(`✓ Copied leaflet.js with fixed source map path (${(stats.size / 1024).toFixed(1)} KB)`);
 } else {
     console.error(`❌ Error: ${leafletJs} not found`);
     process.exit(1);
+}
+
+// Copy leaflet.js.map (source map)
+const leafletJsMap = path.join(NODE_MODULES_LEAFLET, 'leaflet.js.map');
+const leafletJsMapDest = path.join(PUBLIC_JS, 'leaflet.js.map');
+if (fs.existsSync(leafletJsMap)) {
+    fs.copyFileSync(leafletJsMap, leafletJsMapDest);
+    const stats = fs.statSync(leafletJsMapDest);
+    console.log(`✓ Copied leaflet.js.map (${(stats.size / 1024).toFixed(1)} KB)`);
+} else {
+    console.warn(`⚠️  Warning: ${leafletJsMap} not found (source map will not be available)`);
 }
 
 // Copy leaflet.css and fix image paths
