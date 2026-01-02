@@ -4407,7 +4407,7 @@ const WebcamPlayer = {
                 // Store enabled formats and detect browser's preferred format once
                 this.enabledFormats = data.enabledFormats || ['jpg'];
                 this.preferredFormat = getPreferredFormat(this.enabledFormats);
-                this.preferredVariant = getPreferredVariant();
+                this.preferredVariant = getPreferredVariant('player');
                 this.variantWidths = data.variantWidths || {
                     thumb: 160, small: 320, medium: 640, large: 1280, primary: 1920
                 };
@@ -5942,29 +5942,58 @@ function getPreferredFormat(serverFormats) {
 }
 
 /**
- * Get preferred variant based on viewport size
+ * Get preferred variant based on actual element display size
  * 
- * Uses viewport-based detection to choose appropriate image size.
- * This is used for live webcam polling. The history player uses native
- * <picture> elements with srcset for browser-based size selection.
+ * Uses the actual rendered width of the webcam element to choose the appropriate
+ * image size variant. This ensures we don't over-fetch large images for small
+ * display containers.
  * 
- * @returns {string} Preferred variant: 'small', 'medium', 'large', or 'primary'
+ * @param {string} context - Optional context: 'player' for history player, 
+ *                           or defaults to grid view
+ * @returns {string} Preferred variant: 'thumb', 'small', 'medium', 'large', or 'primary'
  */
-function getPreferredVariant() {
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+function getPreferredVariant(context) {
     const dpr = window.devicePixelRatio || 1;
+    let displayWidth = 0;
+    
+    // Try to get actual element width based on context
+    if (context === 'player') {
+        // Webcam history player - use the player container
+        const playerContainer = document.querySelector('.webcam-player-image-container');
+        if (playerContainer && playerContainer.clientWidth > 0) {
+            displayWidth = playerContainer.clientWidth;
+        }
+    } else {
+        // Grid view - use the first webcam container as reference
+        // All webcam cards are the same size in the grid
+        const webcamContainer = document.querySelector('.webcam-container');
+        if (webcamContainer && webcamContainer.clientWidth > 0) {
+            displayWidth = webcamContainer.clientWidth;
+        }
+    }
+    
+    // Fallback to viewport width if element not found or not rendered yet
+    if (displayWidth === 0) {
+        displayWidth = window.innerWidth || document.documentElement.clientWidth;
+    }
     
     // Effective width accounts for device pixel ratio (retina displays)
-    const effectiveWidth = viewportWidth * dpr;
+    // This ensures sharp images on high-DPI screens
+    const effectiveWidth = displayWidth * dpr;
     
-    if (effectiveWidth < 400) {
-        return 'small';     // 320w
-    } else if (effectiveWidth < 800) {
-        return 'medium';    // 640w
-    } else if (effectiveWidth < 1400) {
-        return 'large';     // 1280w
+    // Choose variant based on effective display width
+    // Thresholds are set to provide ~1.5x headroom for quality
+    // e.g., 320w variant is suitable for displays up to ~213px (320/1.5)
+    if (effectiveWidth < 240) {
+        return 'thumb';     // 160w - for very small displays/thumbnails
+    } else if (effectiveWidth < 480) {
+        return 'small';     // 320w - for small mobile displays
+    } else if (effectiveWidth < 960) {
+        return 'medium';    // 640w - for tablets/small laptops
+    } else if (effectiveWidth < 1920) {
+        return 'large';     // 1280w - for most desktop displays
     } else {
-        return 'primary';   // 1920w
+        return 'primary';   // 1920w - for large/4K displays
     }
 }
 
