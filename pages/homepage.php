@@ -69,7 +69,8 @@ if (file_exists($configFile)) {
 
 // SEO variables
 $pageTitle = 'AviationWX.org - Live Airport Webcams & Real-time Aviation Weather';
-$pageDescription = 'Free live airport webcams and real-time runway conditions for pilots. View live weather, webcams, and aviation metrics at airports across the network. ' . $totalAirports . ' participating airports with ' . $totalWebcams . ' live webcams.';
+// Optimized meta description - action-oriented, under 160 chars
+$pageDescription = 'Make safer go/no-go decisions with free live airport webcams and real-time weather. ' . $totalAirports . ' airports, ' . $totalWebcams . '+ webcams. No login, no ads—built for pilots.';
 $pageKeywords = 'live airport webcams, runway conditions, aviation weather, airport webcams, live weather, pilot weather, airport conditions, aviation webcams, real-time weather, airport cameras';
 $canonicalUrl = getCanonicalUrl();
 $baseUrl = getBaseUrl();

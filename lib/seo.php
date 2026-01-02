@@ -101,33 +101,71 @@ function generateWebSiteSchema() {
 }
 
 /**
- * Generate LocalBusiness structured data (JSON-LD) for airport pages
+ * Generate Airport structured data (JSON-LD) for airport pages
  * 
- * Creates Schema.org LocalBusiness structured data for airport pages.
- * Includes airport name, description, address, geo coordinates, webcam images,
- * and service offerings.
+ * Creates Schema.org Airport structured data for airport pages.
+ * Uses the specific Airport type (better than generic LocalBusiness) with
+ * aviation-specific properties like icaoCode, iataCode, and sameAs links
+ * to authoritative aviation databases.
  * 
  * @param array $airport Airport configuration array
  * @param string $airportId Airport ID (e.g., 'kspb')
- * @return array Schema.org LocalBusiness JSON-LD structure
+ * @return array Schema.org Airport JSON-LD structure
  */
 function generateAirportSchema($airport, $airportId) {
-    $baseUrl = getBaseUrl();
     $airportUrl = 'https://' . $airportId . '.aviationwx.org';
     
     // Get primary identifier for display (handles null ICAO)
     $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
     
+    // Build alternate names from all available identifiers
+    $alternateNames = [$airport['name']];
+    if (!empty($airport['icao'])) {
+        $alternateNames[] = $airport['icao'];
+    }
+    if (!empty($airport['iata'])) {
+        $alternateNames[] = $airport['iata'];
+    }
+    if (!empty($airport['faa']) && $airport['faa'] !== ($airport['icao'] ?? '')) {
+        $alternateNames[] = $airport['faa'];
+    }
+    $alternateNames = array_unique($alternateNames);
+    
     $schema = [
         '@context' => 'https://schema.org',
-        '@type' => 'LocalBusiness',
-        'name' => $airport['name'] . ' (' . $primaryIdentifier . ')',
+        '@type' => 'Airport',
+        'name' => $airport['name'],
+        'alternateName' => $alternateNames,
+        'identifier' => $primaryIdentifier,
         'description' => 'Live webcams and real-time weather conditions for ' . $airport['name'] . ' (' . $primaryIdentifier . ')',
-        'url' => $airportUrl,
-        'address' => [
-            '@type' => 'PostalAddress',
-            'addressLocality' => $airport['address']
-        ]
+        'url' => $airportUrl
+    ];
+    
+    // Add ICAO code if available
+    if (!empty($airport['icao'])) {
+        $schema['icaoCode'] = $airport['icao'];
+    }
+    
+    // Add IATA code if available
+    if (!empty($airport['iata'])) {
+        $schema['iataCode'] = $airport['iata'];
+    }
+    
+    // Build sameAs links to authoritative aviation databases
+    $sameAs = [];
+    // AirNav and SkyVector work with any identifier (ICAO, FAA LID, etc.)
+    $sameAs[] = 'https://www.airnav.com/airport/' . $primaryIdentifier;
+    $sameAs[] = 'https://skyvector.com/airport/' . $primaryIdentifier;
+    // AOPA works best with ICAO codes
+    if (!empty($airport['icao'])) {
+        $sameAs[] = 'https://www.aopa.org/destinations/airports/' . $airport['icao'];
+    }
+    $schema['sameAs'] = $sameAs;
+    
+    // Add address
+    $schema['address'] = [
+        '@type' => 'PostalAddress',
+        'addressLocality' => $airport['address']
     ];
     
     // Add geo coordinates if available
@@ -172,6 +210,163 @@ function generateAirportSchema($airport, $airportId) {
     ];
     
     return $schema;
+}
+
+/**
+ * Generate BreadcrumbList structured data (JSON-LD)
+ * 
+ * Creates Schema.org BreadcrumbList for navigation breadcrumbs.
+ * Helps search engines understand site hierarchy and can display
+ * breadcrumb trails in search results instead of raw URLs.
+ * 
+ * @param array $items Array of breadcrumb items, each with 'name' and optional 'url'
+ *                     The last item should NOT have a 'url' (it's the current page)
+ * @return array Schema.org BreadcrumbList JSON-LD structure
+ */
+function generateBreadcrumbSchema($items) {
+    $elements = [];
+    foreach ($items as $i => $item) {
+        $element = [
+            '@type' => 'ListItem',
+            'position' => $i + 1,
+            'name' => $item['name']
+        ];
+        // Only add 'item' URL if provided (last breadcrumb shouldn't have URL)
+        if (isset($item['url']) && !empty($item['url'])) {
+            $element['item'] = $item['url'];
+        }
+        $elements[] = $element;
+    }
+    return [
+        '@context' => 'https://schema.org',
+        '@type' => 'BreadcrumbList',
+        'itemListElement' => $elements
+    ];
+}
+
+/**
+ * Generate breadcrumbs for airport pages
+ * 
+ * Creates a simple two-level breadcrumb: Home > Airport Name
+ * 
+ * @param array $airport Airport configuration array
+ * @param string $primaryIdentifier Primary airport identifier (ICAO/IATA/FAA)
+ * @return array Schema.org BreadcrumbList JSON-LD structure
+ */
+function generateAirportBreadcrumbs($airport, $primaryIdentifier) {
+    return generateBreadcrumbSchema([
+        ['name' => 'AviationWX', 'url' => 'https://aviationwx.org'],
+        ['name' => $primaryIdentifier . ' - ' . $airport['name']]
+    ]);
+}
+
+/**
+ * Generate breadcrumbs for guide pages
+ * 
+ * Creates breadcrumbs for guides: Home > Guides > [Guide Name] (if not index)
+ * 
+ * @param string|null $guideTitle Title of the current guide (null for index page)
+ * @return array Schema.org BreadcrumbList JSON-LD structure
+ */
+function generateGuideBreadcrumbs($guideTitle = null) {
+    $items = [
+        ['name' => 'Home', 'url' => 'https://aviationwx.org'],
+    ];
+    
+    if ($guideTitle !== null) {
+        // Individual guide page
+        $items[] = ['name' => 'Guides', 'url' => 'https://guides.aviationwx.org'];
+        $items[] = ['name' => $guideTitle];
+    } else {
+        // Guides index page
+        $items[] = ['name' => 'Guides'];
+    }
+    
+    return generateBreadcrumbSchema($items);
+}
+
+/**
+ * Extract a meta description from markdown content
+ * 
+ * Automatically extracts the first paragraph after the H1 heading
+ * to use as a meta description. Falls back to a default if extraction fails.
+ * Truncates to ~155 characters for optimal SEO.
+ * 
+ * @param string $markdownContent Raw markdown content
+ * @param string $fallback Fallback description if extraction fails
+ * @return string Meta description (max ~160 chars)
+ */
+function extractMetaDescriptionFromMarkdown($markdownContent, $fallback = 'AviationWX guide for airport weather installations.') {
+    // Normalize line endings
+    $content = str_replace(["\r\n", "\r"], "\n", $markdownContent);
+    
+    // Split into lines and find first real paragraph after H1
+    $lines = explode("\n", $content);
+    $foundH1 = false;
+    $paragraphLines = [];
+    $inParagraph = false;
+    
+    foreach ($lines as $line) {
+        $trimmedLine = trim($line);
+        
+        // Skip until we find the H1
+        if (!$foundH1) {
+            if (preg_match('/^#\s+/', $trimmedLine)) {
+                $foundH1 = true;
+            }
+            continue;
+        }
+        
+        // Skip empty lines before first paragraph
+        if (empty($trimmedLine)) {
+            if ($inParagraph) {
+                // End of paragraph
+                break;
+            }
+            continue;
+        }
+        
+        // Skip H2+ headings, lists, code blocks, etc.
+        if (preg_match('/^(#{2,}|\*|-|\d+\.|\||```|>)/', $trimmedLine)) {
+            if ($inParagraph) {
+                break; // Stop if we hit another element after starting a paragraph
+            }
+            continue;
+        }
+        
+        // This is paragraph content
+        $inParagraph = true;
+        $paragraphLines[] = $trimmedLine;
+    }
+    
+    if (!empty($paragraphLines)) {
+        $firstParagraph = implode(' ', $paragraphLines);
+        
+        // Remove any markdown formatting (links, bold, etc.)
+        $firstParagraph = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $firstParagraph); // Links
+        $firstParagraph = preg_replace('/\*\*([^*]+)\*\*/', '$1', $firstParagraph); // Bold
+        $firstParagraph = preg_replace('/\*([^*]+)\*/', '$1', $firstParagraph); // Italic
+        $firstParagraph = preg_replace('/`([^`]+)`/', '$1', $firstParagraph); // Code
+        $firstParagraph = strip_tags($firstParagraph);
+        $firstParagraph = trim($firstParagraph);
+        
+        // Truncate to ~155 chars at word boundary
+        if (strlen($firstParagraph) > 155) {
+            $firstParagraph = substr($firstParagraph, 0, 152);
+            // Cut at last space to avoid mid-word truncation
+            $lastSpace = strrpos($firstParagraph, ' ');
+            if ($lastSpace !== false && $lastSpace > 100) {
+                $firstParagraph = substr($firstParagraph, 0, $lastSpace);
+            }
+            $firstParagraph .= '...';
+        }
+        
+        if (!empty($firstParagraph)) {
+            return $firstParagraph;
+        }
+    }
+    
+    return $fallback;
 }
 
 /**

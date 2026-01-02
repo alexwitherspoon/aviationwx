@@ -99,10 +99,22 @@ $fileMtime = filemtime($markdownFile);
 $fileAge = time() - $fileMtime;
 
 // Extract title from first H1
+$guideDisplayTitle = null;
 $titleMatch = [];
 if (preg_match('/^#\s+(.+)$/m', $markdownContent, $titleMatch)) {
-    $pageTitle = htmlspecialchars(trim($titleMatch[1])) . ' - Guides - AviationWX.org';
-    $pageDescription = 'Guide: ' . htmlspecialchars(trim($titleMatch[1]));
+    $guideDisplayTitle = trim($titleMatch[1]);
+    $pageTitle = htmlspecialchars($guideDisplayTitle) . ' - Guides - AviationWX.org';
+    // Use automated extraction for meta description
+    $pageDescription = extractMetaDescriptionFromMarkdown(
+        $markdownContent,
+        'AviationWX guide: ' . htmlspecialchars($guideDisplayTitle) . '. Step-by-step documentation for airport weather installations.'
+    );
+} else {
+    // Fallback for index page or if no H1 found
+    $pageDescription = extractMetaDescriptionFromMarkdown(
+        $markdownContent,
+        'Documentation and guides for AviationWX.org airport weather installations.'
+    );
 }
 
 // Parse markdown
@@ -165,6 +177,10 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     
     // Open Graph and Twitter Card tags
     echo generateSocialMetaTags($pageTitle, $pageDescription, $canonicalUrl, $ogImage);
+    echo "\n    ";
+    
+    // Breadcrumb structured data
+    echo generateStructuredDataScript(generateGuideBreadcrumbs($guideDisplayTitle));
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">

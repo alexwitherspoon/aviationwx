@@ -140,11 +140,14 @@ function getImageCaptureTimeForPage($filePath) {
 
 // SEO variables - emphasize live webcams and runway conditions
 $webcamCount = isset($airport['webcams']) ? count($airport['webcams']) : 0;
-$webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') . ' and ' : '';
+$webcamText = $webcamCount > 0 ? $webcamCount . ' live webcam' . ($webcamCount > 1 ? 's' : '') : '';
 // Get primary identifier (ICAO > IATA > FAA > Airport ID) for display
 $primaryIdentifier = getPrimaryIdentifier($airportId, $airport);
 $pageTitle = htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . ') - Live Webcams & Runway Conditions';
-$pageDescription = 'Live webcams and real-time runway conditions for ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . '). ' . $webcamText . 'current weather, wind, visibility, and aviation metrics. Free for pilots.';
+// Optimized meta description - action-oriented, under 160 chars
+$pageDescription = 'Check current conditions at ' . htmlspecialchars($airport['name']) . ' (' . htmlspecialchars($primaryIdentifier) . ')' . 
+    ($webcamText ? ' - ' . $webcamText . ', real-time wind & weather.' : ' - real-time wind, visibility & weather.') . 
+    ' Updated every minute. Free.';
 $pageKeywords = htmlspecialchars($primaryIdentifier) . ', ' . htmlspecialchars($airport['name']) . ', live airport webcam, runway conditions, ' . htmlspecialchars($primaryIdentifier) . ' weather, airport webcam, pilot weather, aviation weather';
 // Get base domain from global config (config.php already loaded at top of file)
 $baseDomain = getBaseDomain();
@@ -397,8 +400,12 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     echo generateSocialMetaTags($pageTitle, $pageDescription, $airportUrl, $ogImage);
     echo "\n    ";
     
-    // Structured data (LocalBusiness schema for airport)
+    // Structured data (Airport schema)
     echo generateStructuredDataScript(generateAirportSchema($airport, $airportId));
+    echo "\n    ";
+    
+    // Breadcrumb structured data
+    echo generateStructuredDataScript(generateAirportBreadcrumbs($airport, $primaryIdentifier));
     ?>
     
     <?php
