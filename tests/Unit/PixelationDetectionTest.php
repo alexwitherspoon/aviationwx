@@ -417,3 +417,4 @@ class PixelationDetectionTest extends TestCase
 }
 
 
+

@@ -220,3 +220,4 @@ function fetchNotamsForAirport(string $airportId, array $airport): array {
 
 
 
+

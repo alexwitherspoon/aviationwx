@@ -8,7 +8,7 @@
 #
 # See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev
+.PHONY: help init build build-force up down restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet
 
 help: ## Show this help message
 	@echo ''
@@ -25,7 +25,7 @@ help: ## Show this help message
 	@grep -E '^(init|config|config-check|config-example):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mBuild & Cleanup:\033[0m'
-	@grep -E '^(build|build-force|clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(build|build-force|clean|update-leaflet):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo 'See docs/LOCAL_SETUP.md for complete setup guide'
 	@echo ''
@@ -184,4 +184,11 @@ test-guides: ## Test guides pages (requires running containers)
 	@echo "Testing guides pages..."
 	@echo "- Guides index" && curl -sf http://127.0.0.1:8080 -H "Host: guides.localhost" >/dev/null && echo " ✓" || echo " ✗"
 	@echo "- Guides 404" && curl -sf http://127.0.0.1:8080/nonexistent -H "Host: guides.localhost" | grep -q "404" && echo " ✓" || echo " ✗"
+
+# Leaflet library management
+update-leaflet: ## Update Leaflet library (install npm package and copy to public/)
+	@echo "Updating Leaflet library..."
+	@npm install
+	@npm run build:leaflet
+	@echo "✓ Leaflet updated successfully"
 

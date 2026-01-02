@@ -150,7 +150,7 @@ $breadcrumbs = generateBreadcrumbSchema([
     ?>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="public/css/leaflet.css">
     
     <link rel="stylesheet" href="public/css/styles.css">
     <style>
@@ -377,6 +377,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             grid-template-columns: repeat(2, 1fr);
             gap: 1.5rem;
             margin-bottom: 2rem;
+            align-items: stretch; /* Ensure cards have equal height */
         }
         
         @media (max-width: 640px) {
@@ -391,6 +392,8 @@ $breadcrumbs = generateBreadcrumbSchema([
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             text-align: left;
+            display: flex;
+            flex-direction: column; /* Stack content vertically */
         }
         
         .add-airport-card.highlight {
@@ -408,6 +411,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             font-size: 0.95rem;
             line-height: 1.5;
             margin-bottom: 1rem;
+            flex-grow: 1; /* Allow paragraph to grow and push button down */
         }
         
         .add-airport-card .btn {
@@ -418,6 +422,8 @@ $breadcrumbs = generateBreadcrumbSchema([
             font-weight: 600;
             font-size: 0.9rem;
             transition: all 0.2s;
+            margin-top: auto; /* Push button to bottom of card */
+            align-self: flex-start; /* Keep button left-aligned */
         }
         
         .add-airport-card .btn-primary {
@@ -759,7 +765,7 @@ $breadcrumbs = generateBreadcrumbSchema([
     </main>
     
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="public/js/leaflet.js"></script>
     
     <script>
     (function() {

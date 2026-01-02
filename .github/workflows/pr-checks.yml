@@ -12,9 +12,9 @@ concurrency:
 
 # Default permissions for all jobs in this workflow
 permissions:
-  contents: read
+  contents: write  # Needed to commit built Leaflet files back to PR
   actions: read
-  pull-requests: read
+  pull-requests: write  # Needed to comment on PRs
 
 jobs:
   quality-gates:
@@ -259,4 +259,79 @@ jobs:
             echo "❌ Guides validation failed"
             exit 1
           fi
+
+  build-leaflet:
+    name: Build Leaflet (if package.json changed)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check if package.json changed
+        id: check-changes
+        run: |
+          # Check if package.json was modified in this PR
+          if git diff --name-only origin/main...HEAD | grep -q "^package.json$"; then
+            echo "package-changed=true" >> $GITHUB_OUTPUT
+            echo "✓ package.json changed in this PR"
+          else
+            echo "package-changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  package.json not changed - skipping Leaflet build"
+          fi
+      
+      - name: Check if Leaflet is in dependencies
+        id: check-leaflet
+        if: steps.check-changes.outputs.package-changed == 'true'
+        run: |
+          if grep -q '"leaflet"' package.json; then
+            echo "leaflet-present=true" >> $GITHUB_OUTPUT
+            echo "✓ Leaflet found in package.json"
+          else
+            echo "leaflet-present=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  Leaflet not in dependencies - skipping build"
+          fi
+      
+      - name: Setup Node.js
+        if: steps.check-changes.outputs.package-changed == 'true' && steps.check-leaflet.outputs.leaflet-present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install npm dependencies
+        if: steps.check-changes.outputs.package-changed == 'true' && steps.check-leaflet.outputs.leaflet-present == 'true'
+        run: npm install
+      
+      - name: Build Leaflet files
+        if: steps.check-changes.outputs.package-changed == 'true' && steps.check-leaflet.outputs.leaflet-present == 'true'
+        run: npm run build:leaflet
+      
+      - name: Check for changes to built files
+        if: steps.check-changes.outputs.package-changed == 'true' && steps.check-leaflet.outputs.leaflet-present == 'true'
+        id: check-built-files
+        run: |
+          # Check if any built files have uncommitted changes
+          git add public/js/leaflet.js public/css/leaflet.css public/images/leaflet/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "files-changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No changes to built Leaflet files"
+          else
+            echo "files-changed=true" >> $GITHUB_OUTPUT
+            echo "✓ Built files have changes"
+            git diff --staged --stat
+          fi
+      
+      - name: Commit built Leaflet files
+        if: steps.check-changes.outputs.package-changed == 'true' && steps.check-leaflet.outputs.leaflet-present == 'true' && steps.check-built-files.outputs.files-changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add public/js/leaflet.js public/css/leaflet.css public/images/leaflet/
+          git commit -m "chore: rebuild Leaflet files from updated package.json [skip ci]" || exit 0
+          git push || echo "⚠️  Could not push changes (may require manual merge or already up to date)"
+          echo "✓ Committed built Leaflet files to PR"
 

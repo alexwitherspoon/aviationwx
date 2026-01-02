@@ -4,7 +4,11 @@
   "description": "Aviation Weather Application",
   "scripts": {
     "lint:js": "node scripts/lint-javascript.js",
-    "lint:js:fix": "node scripts/lint-javascript.js --fix"
+    "lint:js:fix": "node scripts/lint-javascript.js --fix",
+    "build:leaflet": "node scripts/build-leaflet.js"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
   },
   "devDependencies": {
     "eslint": "^9.39.2",
