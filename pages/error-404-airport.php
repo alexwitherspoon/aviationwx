@@ -1123,6 +1123,7 @@ Best regards,
     <footer class="footer" style="text-align: center; padding: 2rem 1rem; margin-top: 2rem; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
         <p>
             &copy; <?= date('Y') ?> <a href="https://aviationwx.org" style="color: #0066cc;">AviationWX.org</a> • 
+            <a href="https://aviationwx.org/airports" style="color: #0066cc;">Airports</a> • 
             <a href="https://guides.aviationwx.org" style="color: #0066cc;">Guides</a> • 
             <a href="https://aviationwx.org#about-the-project" style="color: #0066cc;">Built for pilots, by pilots</a> • 
             <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc;">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
