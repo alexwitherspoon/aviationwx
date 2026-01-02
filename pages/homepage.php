@@ -70,7 +70,7 @@ if (file_exists($configFile)) {
 // SEO variables
 $pageTitle = 'AviationWX.org - Live Airport Webcams & Real-time Aviation Weather';
 // Optimized meta description - action-oriented, under 160 chars
-$pageDescription = 'Make safer go/no-go decisions with free live airport webcams and real-time weather. ' . $totalAirports . ' airports, ' . $totalWebcams . '+ webcams. No login, no ads—built for pilots.';
+$pageDescription = 'Make safer go/no-go decisions with free live airport webcams and real-time weather. ' . $totalAirports . ' airports, ' . $totalWebcams . '+ webcams. No login, no ads - built for pilots.';
 $pageKeywords = 'live airport webcams, runway conditions, aviation weather, airport webcams, live weather, pilot weather, airport conditions, aviation webcams, real-time weather, airport cameras';
 $canonicalUrl = getCanonicalUrl();
 $baseUrl = getBaseUrl();
@@ -1666,7 +1666,7 @@ Best regards,
             <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #28a745;">
                 <h3 style="color: #28a745; margin-top: 0;">Donating</h3>
                 <p>
-                    If you'd like to support this project financially, that's wonderful and greatly appreciated! However, <strong>donations are completely optional</strong> – AviationWX will always remain free to use for everyone in the aviation community.
+                    If you'd like to support this project financially, that's wonderful and greatly appreciated! However, <strong>donations are completely optional</strong> - AviationWX will always remain free to use for everyone in the aviation community.
                 </p>
                 <p style="margin-top: 1rem;">
                     You can sponsor this project through <a href="https://github.com/sponsors/alexwitherspoon" target="_blank" rel="noopener">GitHub Sponsors</a>. Every contribution helps cover hosting costs, maintenance, and continued development of new features.

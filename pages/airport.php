@@ -1007,7 +1007,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                  src="<?= $baseUrl ?>&fmt=jpg&size=primary"
                                  data-initial-timestamp="<?= $mtimeJpg ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?> - Tap to see historical time-lapse"
-                                 title="<?= htmlspecialchars($cam['name']) ?> – Tap to see historical time-lapse"
+                                 title="<?= htmlspecialchars($cam['name']) ?> - Tap to see historical time-lapse"
                                  aria-label="<?= htmlspecialchars($cam['name']) ?> webcam image - Tap to see historical time-lapse"
                                  role="button"
                                  tabindex="0"

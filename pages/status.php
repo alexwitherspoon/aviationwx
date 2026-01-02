@@ -423,7 +423,7 @@ function getNodePerformance(): array {
  */
 function formatBytes(?int $bytes, int $precision = 1): string {
     if ($bytes === null || $bytes < 0) {
-        return '—';
+        return '-';
     }
     
     $units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -2181,7 +2181,7 @@ if (php_sapi_name() === 'cli') {
                                 echo htmlspecialchars($load['5min']) . ' <span class="metric-sub">(5m)</span> ';
                                 echo htmlspecialchars($load['15min']) . ' <span class="metric-sub">(15m)</span>';
                             } else {
-                                echo '—';
+                                echo '-';
                             }
                             ?>
                         </span>

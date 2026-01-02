@@ -337,7 +337,7 @@ $attribution = getPublicApiAttributionText();
     <div class="container">
         <header>
             <h1>AviationWX Public API</h1>
-            <p class="tagline">Real-time weather, webcam images, and 24-hour history for all airports — programmatically.</p>
+            <p class="tagline">Real-time weather, webcam images, and 24-hour history for all airports - programmatically.</p>
             
             <div class="stats">
                 <div class="stat">

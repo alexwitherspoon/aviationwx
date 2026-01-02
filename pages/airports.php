@@ -722,12 +722,12 @@ $breadcrumbs = generateBreadcrumbSchema([
         <section class="add-airport-section">
             <div class="add-airport-content">
                 <h2>Don't See Your Airport?</h2>
-                <p>We're always looking to add more airports to the network. AviationWX.org is <strong>completely free</strong> for airports and pilots—no fees, no subscriptions, no ads.</p>
+                <p>We're always looking to add more airports to the network. AviationWX.org is <strong>completely free</strong> for airports and pilots - no fees, no subscriptions, no ads.</p>
                 
                 <div class="add-airport-grid">
                     <div class="add-airport-card">
                         <h3>✈️ For Pilots</h3>
-                        <p>Know an airport that should be here? Help us connect with the right people—airport managers, advocacy organizations, or local flying clubs.</p>
+                        <p>Know an airport that should be here? Help us connect with the right people - airport managers, advocacy organizations, or local flying clubs.</p>
                         <a href="https://guides.aviationwx.org/12-submit-an-airport-to-aviationwx" class="btn btn-secondary">Learn How to Help</a>
                     </div>
                     
