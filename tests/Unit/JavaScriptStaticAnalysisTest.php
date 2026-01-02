@@ -213,6 +213,11 @@ class JavaScriptStaticAnalysisTest extends TestCase
     
     /**
      * Test that JavaScript code blocks are properly closed
+     * 
+     * Note: Files that use PHP output buffering to dynamically generate script tags
+     * (e.g., for JS minification) cannot be reliably checked by stripping PHP code.
+     * These files are handled separately by checking the raw file for ob_start/ob_get_clean
+     * patterns around script blocks.
      */
     public function testJavaScriptCodeBlocksAreClosed()
     {
@@ -224,30 +229,58 @@ class JavaScriptStaticAnalysisTest extends TestCase
             }
             
             $content = file_get_contents($file);
+            $filename = basename($file);
+            
+            // Check if file uses output buffering for script handling
+            // These files dynamically generate </script> tags via PHP, so simple
+            // tag counting after PHP removal won't work
+            $usesOutputBuffering = (
+                strpos($content, 'ob_start()') !== false && 
+                strpos($content, 'ob_get_clean()') !== false &&
+                preg_match('/ob_start\(\).*?<script.*?ob_get_clean\(\)/is', $content)
+            );
+            
+            if ($usesOutputBuffering) {
+                // For files using output buffering: verify the pattern is complete
+                // The PHP code must output </script> for each buffered <script>
+                $bufferedScriptStarts = preg_match_all('/ob_start\(\);\s*\?>\s*<script/is', $content);
+                $bufferEndsWithScriptClose = preg_match_all('/echo.*<\/script>/i', $content);
+                
+                // Also count any literal </script> that might be added
+                $literalScriptCloses = preg_match_all('/\.\s*[\'"]<\/script>[\'"]/i', $content);
+                
+                // Each buffered script start should have a corresponding PHP echo of </script>
+                if ($bufferedScriptStarts > 0 && ($bufferEndsWithScriptClose + $literalScriptCloses) < $bufferedScriptStarts) {
+                    $errors[] = sprintf(
+                        "%s: Output-buffered script blocks may be missing closing tags (found %d buffered starts, %d PHP-generated closes)",
+                        $filename,
+                        $bufferedScriptStarts,
+                        $bufferEndsWithScriptClose + $literalScriptCloses
+                    );
+                }
+                
+                // Skip the simple tag counting for this file
+                continue;
+            }
             
             // Remove PHP code blocks first (they may contain script tags in strings)
             $contentWithoutPhp = preg_replace('/<\?php.*?\?>/is', '', $content);
             $contentWithoutPhp = preg_replace('/<\?=.*?\?>/is', '', $contentWithoutPhp);
             $contentWithoutPhp = preg_replace('/<\?.*?\?>/is', '', $contentWithoutPhp);
             
-            // Remove script tags that are inside strings (simplified approach)
-            // This is a basic check - we'll count actual HTML script tags
-            // Pattern: match strings and remove script tags inside them
+            // Start with PHP-stripped content
             $contentForCounting = $contentWithoutPhp;
             
-            // Remove single-line comments
+            // Remove single-line comments (they can't contain real HTML tags)
             $contentForCounting = preg_replace('/\/\/.*$/m', '', $contentForCounting);
             
-            // Remove multi-line comments
+            // Remove multi-line comments (they can't contain real HTML tags)
             $contentForCounting = preg_replace('/\/\*[\s\S]*?\*\//', '', $contentForCounting);
             
-            // Remove script tags inside single quotes (basic check)
-            $contentForCounting = preg_replace("/'[^']*<script[^']*'[^']*/i", '', $contentForCounting);
-            $contentForCounting = preg_replace("/'[^']*<\/script>[^']*'/i", '', $contentForCounting);
-            
-            // Remove script tags inside double quotes (basic check)
-            $contentForCounting = preg_replace('/"[^"]*<script[^"]*"[^"]*/i', '', $contentForCounting);
-            $contentForCounting = preg_replace('/"[^"]*<\/script>[^"]*"/i', '', $contentForCounting);
+            // Note: We intentionally do NOT try to filter script tags inside JS strings.
+            // Previous regex patterns were too greedy and consumed legitimate HTML tags.
+            // Script tags in JS strings are rare, and if present, would still have
+            // matching open/close pairs within the same string.
             
             // Count opening and closing script tags (actual HTML tags)
             preg_match_all('/<script[^>]*>/i', $contentForCounting, $openingTags);
@@ -259,7 +292,7 @@ class JavaScriptStaticAnalysisTest extends TestCase
             if ($openingCount !== $closingCount) {
                 $errors[] = sprintf(
                     "%s: Mismatched script tags - %d opening, %d closing",
-                    basename($file),
+                    $filename,
                     $openingCount,
                     $closingCount
                 );
