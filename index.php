@@ -111,6 +111,13 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
     exit;
 }
 
+// Check for airports directory page (for local dev/testing and main domain)
+if (isset($_GET['airports']) || $requestPath === 'airports') {
+    // Route to airports directory page
+    include 'pages/airports.php';
+    exit;
+}
+
 // Check for terms query parameter or path (for local dev/testing)
 if (isset($_GET['terms']) || $requestPath === 'terms') {
     // Route to terms of service page

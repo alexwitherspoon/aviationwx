@@ -94,6 +94,14 @@ if ($isMainDomain) {
     echo "    <priority>0.3</priority>\n";
     echo "  </url>\n";
     
+    // Airports directory page
+    echo "  <url>\n";
+    echo "    <loc>https://aviationwx.org/airports</loc>\n";
+    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
+    echo "    <changefreq>daily</changefreq>\n";
+    echo "    <priority>0.8</priority>\n";
+    echo "  </url>\n";
+    
     // Guides - dynamically add index and all guide pages
     $guidesDir = __DIR__ . '/../guides';
     
