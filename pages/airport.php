@@ -1066,97 +1066,60 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
 
         <!-- Build weather sources for attribution -->
         <?php
-        // Collect unique weather data sources by name (dynamically based on active sources)
+        // Credit any source that is actively providing data, regardless of hierarchy
         $weatherSources = [];
+        $addedSourceNames = []; // Track by name to avoid duplicates
         
-        // Load weather cache to check source status
+        // Load weather cache to check which sources have fresh data
         $weatherCacheFile = getWeatherCachePath($airportId);
         $weatherData = null;
         if (file_exists($weatherCacheFile)) {
             $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
         }
         
-        // Check if primary is healthy (not stale, not failed)
-        $primaryHealthy = false;
-        if (isset($airport['weather_source']) && !empty($airport['weather_source']) && isset($airport['weather_source']['type'])) {
-            require_once __DIR__ . '/../lib/constants.php';
-            require_once __DIR__ . '/../lib/circuit-breaker.php';
-            
-            // Use warning threshold to determine if source is healthy
-            $staleThreshold = getStaleWarningSeconds($airport);
-            
-            // Check if primary is fresh and not in circuit breaker
-            $primaryCircuit = checkWeatherCircuitBreaker($airportId, 'primary');
-            $primaryAge = PHP_INT_MAX;
+        require_once __DIR__ . '/../lib/constants.php';
+        
+        // Use a generous threshold for attribution - we want to credit sources providing data
+        $staleThreshold = getStaleWarningSeconds($airport);
+        
+        // Helper to add source if not already added
+        $addSource = function($sourceType) use (&$weatherSources, &$addedSourceNames) {
+            $sourceInfo = getWeatherSourceInfo($sourceType);
+            if ($sourceInfo !== null && !in_array($sourceInfo['name'], $addedSourceNames)) {
+                $weatherSources[] = $sourceInfo;
+                $addedSourceNames[] = $sourceInfo['name'];
+            }
+        };
+        
+        // Check primary PWS source (non-METAR)
+        $primaryType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
+        if ($primaryType !== null && $primaryType !== 'metar') {
             if (is_array($weatherData) && isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
                 $primaryAge = time() - $weatherData['last_updated_primary'];
-            }
-            
-            $primaryHealthy = !$primaryCircuit['skip'] && $primaryAge < $staleThreshold;
-            
-            // Add primary source if healthy
-            if ($primaryHealthy) {
-                $sourceInfo = getWeatherSourceInfo($airport['weather_source']['type']);
-                if ($sourceInfo !== null) {
-                    $weatherSources[] = $sourceInfo;
+                if ($primaryAge < $staleThreshold) {
+                    $addSource($primaryType);
                 }
             }
         }
         
-        // Check if backup is active (providing data - backup has fresh data and primary is stale)
-        $backupActive = false;
-        if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup']) && isset($airport['weather_source_backup']['type'])) {
-            if (is_array($weatherData)) {
-                // Use backup_status from cache if available (more accurate than calculating)
-                if (isset($weatherData['backup_status'])) {
-                    $backupActive = ($weatherData['backup_status'] === 'active');
-                } else {
-                    // Fallback: calculate based on timestamps (for backward compatibility)
-                    // Use warning threshold to determine freshness
-                    $staleThreshold = getStaleWarningSeconds($airport);
-                    
-                    $backupAge = isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0
-                        ? time() - $weatherData['last_updated_backup']
-                        : PHP_INT_MAX;
-                    $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
-                        ? time() - $weatherData['last_updated_primary']
-                        : PHP_INT_MAX;
-                    
-                    // Backup is active if it has fresh data and primary is stale
-                    $backupActive = ($backupAge < $staleThreshold) && ($primaryAge >= $staleThreshold);
-                }
-            }
-            
-            // Add backup source if active
-            if ($backupActive) {
-                $backupSourceInfo = getWeatherSourceInfo($airport['weather_source_backup']['type']);
-                if ($backupSourceInfo !== null) {
-                    $weatherSources[] = $backupSourceInfo;
+        // Check backup source
+        $backupType = isset($airport['weather_source_backup']['type']) ? $airport['weather_source_backup']['type'] : null;
+        if ($backupType !== null) {
+            if (is_array($weatherData) && isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
+                $backupAge = time() - $weatherData['last_updated_backup'];
+                if ($backupAge < $staleThreshold) {
+                    $addSource($backupType);
                 }
             }
         }
         
-        // Add METAR source if using Tempest, Ambient, or WeatherLink (since we supplement with METAR)
-        // Only add if not already using METAR as primary source AND metar_station is configured
-        $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
-        $metarInfo = getWeatherSourceInfo('metar');
-        $metarDisplayName = $metarInfo !== null ? $metarInfo['name'] : 'Aviation Weather';
-        $hasAviationWeather = false;
-        foreach ($weatherSources as $source) {
-            if ($source['name'] === $metarDisplayName) {
-                $hasAviationWeather = true;
-                break;
-            }
-        }
-        
-        if (!$hasAviationWeather && 
-            in_array($sourceType, ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'synopticdata'])) {
-            // Show METAR source if metar_station is configured
-            if (isMetarEnabled($airport)) {
-                $metarInfo = getWeatherSourceInfo('metar');
-                if ($metarInfo !== null) {
-                    $weatherSources[] = $metarInfo;
-                }
+        // Check METAR source - credit if we have fresh METAR data
+        if (is_array($weatherData) && isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
+            // METAR has its own staleness threshold (typically longer, ~2 hours for hourly updates)
+            $metarStaleThreshold = 7200; // 2 hours - METAR updates hourly with specials
+            $metarAge = time() - $weatherData['last_updated_metar'];
+            if ($metarAge < $metarStaleThreshold) {
+                $addSource('metar');
             }
         }
         ?>
