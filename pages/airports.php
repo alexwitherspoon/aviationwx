@@ -150,9 +150,9 @@ $breadcrumbs = generateBreadcrumbSchema([
     ?>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="public/css/leaflet.css">
+    <link rel="stylesheet" href="/public/css/leaflet.css">
     
-    <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/styles.css">
     <style>
         html {
             scroll-behavior: smooth;
@@ -765,7 +765,7 @@ $breadcrumbs = generateBreadcrumbSchema([
     </main>
     
     <!-- Leaflet JS -->
-    <script src="public/js/leaflet.js"></script>
+    <script src="/public/js/leaflet.js"></script>
     
     <script>
     (function() {
@@ -778,6 +778,10 @@ $breadcrumbs = generateBreadcrumbSchema([
             document.getElementById('map').innerHTML = '<p style="padding: 2rem; text-align: center; color: #666;">No airports with coordinates available.</p>';
             return;
         }
+        
+        // Configure Leaflet default icon path to prevent 404s
+        // (We use custom divIcon, but this prevents Leaflet from trying default paths)
+        L.Icon.Default.imagePath = '/public/images/leaflet/';
         
         // Initialize map
         var map = L.map('map', {
