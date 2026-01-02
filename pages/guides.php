@@ -179,12 +179,18 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             scroll-margin-top: 2rem;
         }
         
+        /* Container needs min-width to match content so everything scrolls together */
+        .container {
+            min-width: 750px; /* Match content min-width so header/footer scale with content */
+        }
+        
         .hero {
             background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
             color: white;
             padding: 4rem 2rem;
             text-align: center;
             margin: -1rem -1rem 3rem -1rem;
+            box-sizing: border-box;
         }
         .hero h1 {
             font-size: 3rem;
