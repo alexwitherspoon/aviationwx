@@ -73,6 +73,34 @@ function generateOrganizationSchema() {
 }
 
 /**
+ * Generate WebSite structured data (JSON-LD) with SearchAction for homepage
+ * 
+ * Creates Schema.org WebSite structured data that enables Google's
+ * Sitelinks Search Box feature. Users can search for airports directly
+ * from Google search results using the subdomain URL pattern.
+ * 
+ * @return array Schema.org WebSite JSON-LD structure
+ */
+function generateWebSiteSchema() {
+    return [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => 'AviationWX.org',
+        'alternateName' => ['AviationWX', 'Aviation Weather'],
+        'url' => 'https://aviationwx.org',
+        'description' => 'Free real-time aviation weather with live airport webcams and runway conditions for pilots',
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => [
+                '@type' => 'EntryPoint',
+                'urlTemplate' => 'https://{search_term_string}.aviationwx.org'
+            ],
+            'query-input' => 'required name=search_term_string'
+        ]
+    ];
+}
+
+/**
  * Generate LocalBusiness structured data (JSON-LD) for airport pages
  * 
  * Creates Schema.org LocalBusiness structured data for airport pages.

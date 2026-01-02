@@ -94,13 +94,40 @@ if ($isMainDomain) {
     echo "    <priority>0.3</priority>\n";
     echo "  </url>\n";
     
-    // Guides subdomain
-    echo "  <url>\n";
-    echo "    <loc>https://guides.aviationwx.org</loc>\n";
-    echo "    <lastmod>{$pageLastmod}</lastmod>\n";
-    echo "    <changefreq>weekly</changefreq>\n";
-    echo "    <priority>0.6</priority>\n";
-    echo "  </url>\n";
+    // Guides - dynamically add index and all guide pages
+    $guidesDir = __DIR__ . '/../guides';
+    
+    // Guides index page (README.md)
+    $readmePath = $guidesDir . '/README.md';
+    if (file_exists($readmePath)) {
+        $guidesIndexLastmod = date('Y-m-d', filemtime($readmePath));
+        echo "  <url>\n";
+        echo "    <loc>https://guides.aviationwx.org</loc>\n";
+        echo "    <lastmod>{$guidesIndexLastmod}</lastmod>\n";
+        echo "    <changefreq>weekly</changefreq>\n";
+        echo "    <priority>0.7</priority>\n";
+        echo "  </url>\n";
+    }
+    
+    // Individual guide pages
+    if (is_dir($guidesDir)) {
+        $files = scandir($guidesDir);
+        foreach ($files as $file) {
+            // Match numbered guide files like "01-permission-packet.md"
+            if (preg_match('/^(\d+)-(.+)\.md$/i', $file)) {
+                $guideSlug = preg_replace('/\.md$/i', '', $file);
+                $filePath = $guidesDir . '/' . $file;
+                $guideLastmod = date('Y-m-d', filemtime($filePath));
+                
+                echo "  <url>\n";
+                echo "    <loc>https://guides.aviationwx.org/" . htmlspecialchars($guideSlug) . "</loc>\n";
+                echo "    <lastmod>{$guideLastmod}</lastmod>\n";
+                echo "    <changefreq>monthly</changefreq>\n";
+                echo "    <priority>0.6</priority>\n";
+                echo "  </url>\n";
+            }
+        }
+    }
     
     // Terms of Service
     echo "  <url>\n";

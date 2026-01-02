@@ -114,6 +114,10 @@ $ogImage = file_exists($aboutPhotoWebp)
     
     // Structured data (Organization schema)
     echo generateStructuredDataScript(generateOrganizationSchema());
+    echo "\n    ";
+    
+    // Structured data (WebSite schema with SearchAction for sitelinks search box)
+    echo generateStructuredDataScript(generateWebSiteSchema());
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">
