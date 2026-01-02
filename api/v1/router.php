@@ -17,7 +17,8 @@ require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/logger.php';
 
 // Get the request path (strip /api/v1 prefix if present)
-$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+// Use X-Original-URI header if set by nginx proxy, fallback to REQUEST_URI
+$requestUri = $_SERVER['HTTP_X_ORIGINAL_URI'] ?? $_SERVER['REQUEST_URI'] ?? '/';
 $requestPath = parse_url($requestUri, PHP_URL_PATH);
 
 // Normalize path - remove /api/v1 prefix and trailing slashes

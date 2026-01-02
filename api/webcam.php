@@ -56,6 +56,37 @@ if ($_webcamApiDirectAccess) {
 }
 
 /**
+ * Serve JSON error response for mtime=1 requests, or placeholder image otherwise
+ * 
+ * This ensures mtime=1 requests always receive JSON responses, even for errors.
+ * Non-mtime requests receive the standard placeholder image.
+ * 
+ * @param string $errorCode Error code for the response
+ * @param string $message Human-readable error message
+ * @return void
+ */
+function serveJsonErrorOrPlaceholder(string $errorCode, string $message = '') {
+    if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
+        // Clear any existing output buffer
+        if (ob_get_level() > 0 && !headers_sent()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        echo json_encode([
+            'success' => false,
+            'error' => $errorCode,
+            'message' => $message ?: $errorCode,
+            'timestamp' => 0,
+            'size' => 0,
+            'formatReady' => new stdClass()
+        ]);
+        exit;
+    }
+    servePlaceholder();
+}
+
+/**
  * Serve placeholder image
  * 
  * Serves an optimized placeholder image when webcam is unavailable or invalid.
@@ -237,14 +268,14 @@ if (!in_array($requestedSize, $validSizes)) {
 
 if (empty($rawIdentifier)) {
     aviationwx_log('error', 'webcam missing airport identifier', [], 'user');
-    servePlaceholder();
+    serveJsonErrorOrPlaceholder('missing_airport', 'Airport identifier is required');
 }
 
 // Find airport by any identifier type (ICAO, IATA, FAA, or airport ID)
 $result = findAirportByIdentifier($rawIdentifier);
 if ($result === null || !isset($result['airport']) || !isset($result['airportId'])) {
     aviationwx_log('error', 'webcam airport not found', ['identifier' => $rawIdentifier], 'user');
-    servePlaceholder();
+    serveJsonErrorOrPlaceholder('airport_not_found', 'Airport not found: ' . $rawIdentifier);
 }
 
 $airport = $result['airport'];
@@ -253,19 +284,23 @@ $airportId = $result['airportId'];
 // Check if airport is enabled (opt-in model: must have enabled: true)
 if (!isAirportEnabled($airport)) {
     aviationwx_log('error', 'webcam airport not enabled', ['identifier' => $rawIdentifier, 'airport_id' => $airportId], 'user');
-    servePlaceholder();
+    serveJsonErrorOrPlaceholder('airport_not_enabled', 'Airport is not enabled: ' . $rawIdentifier);
 }
 
 // Load config for webcam access
 $config = loadConfig();
 if ($config === null) {
     aviationwx_log('error', 'webcam config load failed', [], 'app');
-    servePlaceholder();
+    serveJsonErrorOrPlaceholder('config_error', 'Failed to load configuration');
 }
 
-// Validate cam index is non-negative and within bounds
+// Validate cam index is non-negative
 if ($camIndex < 0) {
-    $camIndex = 0;
+    aviationwx_log('error', 'webcam invalid camera index', [
+        'identifier' => $rawIdentifier, 
+        'cam' => $_GET['cam'] ?? $_GET['index'] ?? 'not set'
+    ], 'user');
+    serveJsonErrorOrPlaceholder('invalid_camera_index', 'Camera index must be a non-negative integer');
 }
 // Upper bound will be validated after config is loaded
 
@@ -279,7 +314,7 @@ if ($camIndex > $maxCamIndex || !isset($config['airports'][$airportId]['webcams'
         'cam' => $camIndex,
         'max' => $maxCamIndex
     ], 'user');
-    servePlaceholder();
+    serveJsonErrorOrPlaceholder('camera_not_found', 'Camera index ' . $camIndex . ' not found for airport ' . $airportId);
 }
 
 $cam = $config['airports'][$airportId]['webcams'][$camIndex];

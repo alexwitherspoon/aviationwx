@@ -33,6 +33,10 @@ Options -Indexes
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^webcam\.php$ api/webcam.php [L]
 
+    # Route Public API v1 endpoints to api/v1/router.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^api/v1/(.*)$ api/v1/router.php [QSA,L]
+
     # Route admin endpoints to admin/ directory
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^diagnostics\.php$ admin/diagnostics.php [L]

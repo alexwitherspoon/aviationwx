@@ -19,7 +19,10 @@ if ($config === null || !isset($config['airports'])) {
 }
 
 // Get base URL (protocol + domain)
-$protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+// Check both HTTPS and X-Forwarded-Proto for proxy setups (Cloudflare, nginx)
+$protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || 
+            (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') 
+            ? 'https' : 'http';
 $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
 $baseUrl = $protocol . '://' . $host;
 
