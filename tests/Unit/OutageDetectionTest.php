@@ -80,9 +80,9 @@ class OutageDetectionTest extends TestCase
             'weather_source' => ['type' => 'tempest']
         ];
         
-        // Create stale weather cache (2 hours old)
+        // Create stale weather cache (4 hours old - exceeds failclosed threshold of 3 hours)
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
-        $staleTimestamp = time() - (2 * 3600);
+        $staleTimestamp = time() - (4 * 3600);
         $weatherData = [
             'obs_time_primary' => $staleTimestamp,
             'last_updated_primary' => $staleTimestamp,
@@ -111,7 +111,7 @@ class OutageDetectionTest extends TestCase
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
         $outageStateFile = getOutageCachePath($this->testAirportId);
-        $staleTimestamp = time() - (2 * 3600);
+        $staleTimestamp = time() - (4 * 3600); // 4 hours old - exceeds failclosed threshold
         $weatherData = [
             'obs_time_primary' => $staleTimestamp,
             'last_updated_primary' => $staleTimestamp
@@ -154,8 +154,8 @@ class OutageDetectionTest extends TestCase
         ];
         file_put_contents($outageStateFile, json_encode($outageState));
         
-        // Create stale weather cache (2 hours old - newer than original)
-        $staleTimestamp = time() - (2 * 3600);
+        // Create stale weather cache (4 hours old - exceeds failclosed threshold)
+        $staleTimestamp = time() - (4 * 3600);
         $weatherData = [
             'obs_time_primary' => $staleTimestamp,
             'last_updated_primary' => $staleTimestamp
@@ -272,7 +272,7 @@ class OutageDetectionTest extends TestCase
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
         }
-        $webcamTimestamp = time() - (2 * 3600); // 2 hours ago
+        $webcamTimestamp = time() - (4 * 3600); // 4 hours ago - exceeds failclosed threshold
         touch($webcamFile, $webcamTimestamp);
         
         $result = checkDataOutageStatus($this->testAirportId, $airport);
@@ -349,7 +349,7 @@ class OutageDetectionTest extends TestCase
         if (!is_dir($webcamDir)) {
             mkdir($webcamDir, 0755, true);
         }
-        $staleTimestamp = time() - (2 * 3600);
+        $staleTimestamp = time() - (4 * 3600); // 4 hours old - exceeds failclosed threshold
         touch($webcamFile, $staleTimestamp);
         
         $result = checkDataOutageStatus($this->testAirportId, $airport);

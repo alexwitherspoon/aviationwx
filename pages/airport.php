@@ -93,6 +93,74 @@ if ($stuckClientCleanup) {
     }
 }
 
+// =============================================================================
+// TEMPORARY DEBUG CODE - REMOVE AFTER 2025-03-15 (or when kspb cache issue resolved)
+// =============================================================================
+// Meta refresh cleanup for stuck kspb clients with old cached HTML/JS
+// This forces a cache-busting reload even when service worker has cached HTML
+// Only triggers for kspb when version cookie is older than 14 days
+// TODO: Remove this entire block after cleanup period (target: ~2 months from implementation)
+// =============================================================================
+$injectMetaRefresh = false;
+$metaRefreshReason = '';
+
+// Only process for kspb airport
+if (strtolower($airportId) === 'kspb') {
+    // Check if we've already attempted refresh (prevent loops)
+    $refreshAttempted = isset($_COOKIE['aviationwx_refresh_attempted']);
+    $hasRefreshParam = isset($_GET['refresh']) && $_GET['refresh'] === '1';
+    
+    // Don't refresh if we already attempted or if refresh param is present
+    if (!$refreshAttempted && !$hasRefreshParam) {
+        $clientVersionCookie = $_COOKIE['aviationwx_v'] ?? null;
+        
+        if ($clientVersionCookie === null) {
+            // No version cookie - check if they have other aviationwx cookies
+            // (indicates returning user, not first visit)
+            $hasOtherCookies = false;
+            foreach ($_COOKIE as $name => $value) {
+                if (strpos($name, 'aviationwx_') === 0 && $name !== 'aviationwx_v' && $name !== 'aviationwx_refresh_attempted') {
+                    $hasOtherCookies = true;
+                    break;
+                }
+            }
+            
+            if ($hasOtherCookies) {
+                $injectMetaRefresh = true;
+                $metaRefreshReason = 'kspb: Missing version cookie but has preference cookies';
+            }
+        } else {
+            // Parse cookie: "hash.timestamp"
+            $parts = explode('.', $clientVersionCookie);
+            if (count($parts) === 2) {
+                $clientTimestamp = (int)$parts[1];
+                $cookieAgeDays = (time() - $clientTimestamp) / 86400;
+                
+                // Only refresh if cookie is older than 14 days
+                if ($cookieAgeDays > 14) {
+                    $injectMetaRefresh = true;
+                    $metaRefreshReason = 'kspb: Version cookie is ' . round($cookieAgeDays) . ' days old';
+                }
+            }
+        }
+        
+        // If we're going to inject refresh, set a cookie to prevent loops
+        if ($injectMetaRefresh) {
+            setcookie('aviationwx_refresh_attempted', '1', [
+                'expires' => time() + 86400, // 1 day
+                'path' => '/',
+                'domain' => $cookieDomain,
+                'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+                'httponly' => false,
+                'samesite' => 'Lax'
+            ]);
+        }
+    }
+}
+// =============================================================================
+// END TEMPORARY DEBUG CODE
+// =============================================================================
+
 // Set cache control headers for HTML
 header('Cache-Control: no-cache, must-revalidate');
 header('Pragma: no-cache');
@@ -171,6 +239,24 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <?php
+    // =============================================================================
+    // TEMPORARY DEBUG CODE - REMOVE AFTER 2025-03-15 (or when kspb cache issue resolved)
+    // =============================================================================
+    // Inject meta refresh tag for stuck kspb clients (forces cache-busting reload)
+    // This executes even when HTML is cached by service worker
+    // TODO: Remove this block along with detection logic above
+    // =============================================================================
+    if ($injectMetaRefresh) {
+        $refreshUrl = '?v=' . time() . '&refresh=1';
+        echo '<meta http-equiv="refresh" content="0;url=' . htmlspecialchars($refreshUrl, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+        // Log for monitoring (optional - can remove if not needed)
+        error_log('[MetaRefresh] Triggered for kspb: ' . $metaRefreshReason);
+    }
+    // =============================================================================
+    // END TEMPORARY DEBUG CODE
+    // =============================================================================
+    ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>

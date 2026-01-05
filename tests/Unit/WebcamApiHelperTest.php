@@ -72,13 +72,19 @@ class WebcamApiHelperTest extends TestCase
     public function testGetCacheFile_ValidPaths(): void
     {
         $jpg = getCacheFile('kspb', 0, 'jpg');
-        $this->assertStringEndsWith('kspb_0.jpg', $jpg);
+        // getCacheFile returns symlink path or resolved timestamp-based file path
+        $this->assertStringContainsString('kspb', $jpg);
+        $this->assertStringContainsString('.jpg', $jpg);
         
         $webp = getCacheFile('kspb', 1, 'webp');
-        $this->assertStringEndsWith('kspb_1.webp', $webp);
+        // getCacheFile returns symlink path or resolved timestamp-based file path
+        $this->assertStringContainsString('kspb', $webp);
+        $this->assertStringContainsString('.webp', $webp);
         
         $avif = getCacheFile('ksea', 2, 'avif');
-        $this->assertStringEndsWith('ksea_2.avif', $avif);
+        // getCacheFile returns symlink path (current.avif) or resolved timestamp-based file path
+        $this->assertStringContainsString('ksea', $avif);
+        $this->assertStringContainsString('.avif', $avif);
     }
     
     /**

@@ -566,7 +566,8 @@ function parseFilenameTimestamp(string $filePath): array {
     // Pattern 5: Unix timestamp (10 digits within tight rolling window)
     // Example: webcam_1767072037.jpg
     // Use tight window: current time ±31 days (covers month boundary edge cases)
-    if (preg_match('/\b(\d{10})\b/', $filenameNoExt, $matches)) {
+    // Use lookbehind/lookahead instead of word boundary to handle underscores
+    if (preg_match('/(?<![0-9])(\d{10})(?![0-9])/', $filenameNoExt, $matches)) {
         $unixTs = intval($matches[1]);
         $thirtyOneDays = 31 * 24 * 60 * 60;
         $minUnix = time() - $thirtyOneDays;

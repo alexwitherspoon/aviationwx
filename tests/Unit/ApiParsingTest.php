@@ -743,9 +743,10 @@ class ApiParsingTest extends TestCase
         
         $this->assertIsArray($result);
         $this->assertNotNull($result['temperature']);
-        // Missing fields should have null values
+        // Missing fields should have null values (wind_speed) or default to 0 (precip_accum)
+        // Note: precip_accum defaults to 0 (no precipitation) per unified standard, not null
         $this->assertNull($result['wind_speed']);
-        $this->assertNull($result['precip_accum']);
+        $this->assertEquals(0, $result['precip_accum'], 'Missing precip_accum should default to 0 (no precipitation)');
     }
     
     /**

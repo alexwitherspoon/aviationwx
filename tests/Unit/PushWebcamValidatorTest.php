@@ -50,8 +50,8 @@ class PushWebcamValidatorTest extends TestCase
             'name' => 'Test Camera',
             'type' => 'push',
             'push_config' => [
-                'username' => 'short',
-                'password' => 'mK8pL3nQ6rT9vW2',
+                'username' => 'thisusernameistoolong', // Too long (> 14 chars)
+                'password' => 'mK8pL3nQ6rT9v', // Exactly 14 chars (valid)
                 'protocol' => 'sftp'
             ]
         ];
@@ -59,7 +59,7 @@ class PushWebcamValidatorTest extends TestCase
         $result = validatePushWebcamConfig($cam, 'kspb', 0);
         
         $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('username must be exactly 14 characters', $result['errors'][0]);
+        $this->assertStringContainsString('username must be 14 characters or less', $result['errors'][0]);
     }
     
     public function testInvalidPasswordLength()

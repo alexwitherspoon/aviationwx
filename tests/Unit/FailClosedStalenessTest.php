@@ -83,25 +83,27 @@ class FailClosedStalenessTest extends TestCase
         $now = time();
         
         // Create data where one field has obs_time, another doesn't
+        // For fail-closed behavior, fields without obs_time fall back to source-level check
+        // So we need source to be stale for the field without obs_time to be nulled
+        $failclosedSeconds = getStaleFailclosedSeconds();
         $data = [
             'temperature' => 15.0,
             'wind_speed' => 10,
             '_field_obs_time_map' => [
                 'temperature' => $now - 300,  // Has obs_time (fresh)
-                // wind_speed missing from map (should be considered stale)
+                // wind_speed missing from map - will fall back to source-level check
             ],
-            'last_updated_primary' => $now - 300,
+            'last_updated_primary' => $now - ($failclosedSeconds + 100), // Source is stale
         ];
         
-        $failclosedSeconds = getStaleFailclosedSeconds();
         $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
         
         nullStaleFieldsBySource($data, $failclosedSeconds, $failclosedSecondsMetar);
         
-        // Temperature should remain (has obs_time and is fresh)
+        // Temperature should remain (has obs_time and is fresh, even though source is stale)
         $this->assertEquals(15.0, $data['temperature']);
         
-        // Wind speed should be nulled (no obs_time entry = fail-closed)
+        // Wind speed should be nulled (no obs_time entry, falls back to stale source-level check)
         $this->assertNull($data['wind_speed']);
     }
     

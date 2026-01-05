@@ -467,7 +467,9 @@ class MultiIdentifierTest extends TestCase
                 'custom-airport' => [
                     'name' => 'Custom Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                     // No identifiers - airport ID 'custom-airport' is used as identifier
                 ]
             ]
@@ -490,7 +492,9 @@ class MultiIdentifierTest extends TestCase
                     'iata' => null,
                     'faa' => null,
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -510,7 +514,9 @@ class MultiIdentifierTest extends TestCase
                     'name' => 'Airport One',
                     'iata' => 'TST',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -531,7 +537,9 @@ class MultiIdentifierTest extends TestCase
                     'name' => 'Airport One',
                     'faa' => '03S',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];

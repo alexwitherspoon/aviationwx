@@ -137,8 +137,8 @@ class SeoUtilsTest extends TestCase
         
         $this->assertIsArray($schema);
         $this->assertEquals('https://schema.org', $schema['@context']);
-        $this->assertEquals('LocalBusiness', $schema['@type']);
-        $this->assertEquals('Test Airport (TEST)', $schema['name']);
+        $this->assertEquals('Airport', $schema['@type']); // Changed from LocalBusiness to Airport
+        $this->assertEquals('Test Airport', $schema['name']); // Name doesn't include identifier
         $this->assertStringContainsString('Live webcams', $schema['description']);
         $this->assertArrayHasKey('url', $schema);
         $this->assertArrayHasKey('address', $schema);

@@ -47,7 +47,8 @@ class WebcamFormatGenerationTest extends TestCase
     {
         $path = $this->testImageDir . '/' . $filename;
         // Minimal valid JPEG: SOI marker + EOI marker
-        file_put_contents($path, "\xFF\xD8\xFF\xD9");
+        // Need at least 12 bytes for detectImageFormat to work
+        file_put_contents($path, "\xFF\xD8\xFF\xD9" . str_repeat("\x00", 8));
         return $path;
     }
     
@@ -306,7 +307,8 @@ class WebcamFormatGenerationTest extends TestCase
     {
         $path = getStagingFilePath('kspb', 0, 'jpg', 'primary');
         $this->assertStringContainsString('cache/webcams', $path);
-        $this->assertStringContainsString('kspb/0/staging_primary.jpg.tmp', $path);
+        // Function returns staging_primary_{variant}.format.tmp, so 'primary' variant becomes staging_primary_primary.jpg.tmp
+        $this->assertStringContainsString('kspb/0/staging_primary_primary.jpg.tmp', $path);
     }
 
     /**
@@ -318,9 +320,10 @@ class WebcamFormatGenerationTest extends TestCase
         $webpPath = getStagingFilePath('kspb', 0, 'webp', 'primary');
         $avifPath = getStagingFilePath('kspb', 0, 'avif', 'primary');
         
-        $this->assertStringEndsWith('staging_primary.jpg.tmp', $jpgPath);
-        $this->assertStringEndsWith('staging_primary.webp.tmp', $webpPath);
-        $this->assertStringEndsWith('staging_primary.avif.tmp', $avifPath);
+        // Function returns staging_primary_{variant}.format.tmp, so 'primary' variant becomes staging_primary_primary.format.tmp
+        $this->assertStringEndsWith('staging_primary_primary.jpg.tmp', $jpgPath);
+        $this->assertStringEndsWith('staging_primary_primary.webp.tmp', $webpPath);
+        $this->assertStringEndsWith('staging_primary_primary.avif.tmp', $avifPath);
     }
 
     /**
@@ -332,9 +335,10 @@ class WebcamFormatGenerationTest extends TestCase
         $path1 = getStagingFilePath('kspb', 1, 'jpg', 'primary');
         $path2 = getStagingFilePath('kspb', 2, 'jpg', 'primary');
         
-        $this->assertStringContainsString('kspb/0/staging_primary.jpg.tmp', $path0);
-        $this->assertStringContainsString('kspb/1/staging_primary.jpg.tmp', $path1);
-        $this->assertStringContainsString('kspb/2/staging_primary.jpg.tmp', $path2);
+        // Function returns staging_primary_{variant}.format.tmp, so 'primary' variant becomes staging_primary_primary.jpg.tmp
+        $this->assertStringContainsString('kspb/0/staging_primary_primary.jpg.tmp', $path0);
+        $this->assertStringContainsString('kspb/1/staging_primary_primary.jpg.tmp', $path1);
+        $this->assertStringContainsString('kspb/2/staging_primary_primary.jpg.tmp', $path2);
     }
 
     /**

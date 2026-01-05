@@ -80,6 +80,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => 'Test Partner',
@@ -104,6 +106,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => 'Test Partner',
@@ -126,6 +130,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => []
                 ]
             ]
@@ -143,6 +149,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'url' => 'https://example.com/partner'
@@ -165,6 +173,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => '',
@@ -188,6 +198,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => 'Test Partner'
@@ -210,6 +222,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => 'Test Partner',
@@ -233,6 +247,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => 'Test Partner',
@@ -257,6 +273,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => 'not-an-array'
                 ]
             ]
@@ -275,6 +293,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'partners' => [
                         [
                             'name' => 'Test Partner',
@@ -302,6 +322,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => '100LL, Jet-A',
                         'repairs_available' => true
@@ -322,6 +344,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => '100LL'
                     ]
@@ -341,6 +365,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'repairs_available' => false
                     ]
@@ -360,6 +386,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => '100LL',
                         'repairs_available' => true,
@@ -382,6 +410,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => '100LL, Jet-A',
                         'fuel_available' => true
@@ -403,6 +433,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => '100LL',
                         '100ll' => true
@@ -424,6 +456,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => 'Jet-A',
                         'jet_a' => true
@@ -445,6 +479,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => []
                 ]
             ]
@@ -465,6 +501,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'fuel' => true  // Should be string
                     ]
@@ -485,6 +523,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => [
                         'repairs_available' => 'yes'  // Should be boolean
                     ]
@@ -505,6 +545,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'services' => 'not-an-object'
                 ]
             ]
@@ -526,6 +568,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -550,6 +594,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -574,6 +620,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -677,6 +725,7 @@ class ConfigValidationTest extends TestCase
                     'lat' => 45.0,
                     'lon' => -122.0,
                     'tower_status' => 'non_towered'
+                    // Missing access_type - this is what we're testing
                 ]
             ]
         ];
@@ -899,6 +948,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -921,6 +972,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -945,6 +998,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'RTSP Camera',
@@ -970,6 +1025,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1003,6 +1060,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera'
@@ -1025,6 +1084,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -1048,6 +1109,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Test Camera',
@@ -1072,6 +1135,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'RTSP Camera',
@@ -1096,6 +1161,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'RTSP Camera',
@@ -1120,6 +1187,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'RTSP Camera',
@@ -1146,6 +1215,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1169,6 +1240,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1200,6 +1273,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => 'not-an-array'
                 ]
             ]
@@ -1221,6 +1296,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'tempest',
                         'station_id' => '149918',
@@ -1242,6 +1319,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'ambient',
                         'api_key' => 'test-api-key',
@@ -1263,6 +1342,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'ambient',
                         'api_key' => 'test-api-key',
@@ -1285,6 +1366,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'weatherlink',
                         'api_key' => 'test-api-key',
@@ -1307,6 +1390,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'pwsweather',
                         'station_id' => 'KORSCAPP1',
@@ -1329,6 +1414,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'metar'
                     ]
@@ -1348,6 +1435,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'synopticdata',
                         'station_id' => 'AT297',
@@ -1372,6 +1461,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'invalid-type'
                     ]
@@ -1392,6 +1483,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'station_id' => '149918'
                     ]
@@ -1412,6 +1505,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'tempest',
                         'api_key' => 'test-api-key'
@@ -1433,6 +1528,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'tempest',
                         'station_id' => '149918'
@@ -1454,6 +1551,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'ambient',
                         'application_key' => 'test-app-key'
@@ -1475,6 +1574,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'ambient',
                         'api_key' => 'test-api-key'
@@ -1496,6 +1597,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'weatherlink',
                         'api_secret' => 'test-secret',
@@ -1518,6 +1621,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'weatherlink',
                         'api_key' => 'test-api-key',
@@ -1540,6 +1645,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'weatherlink',
                         'api_key' => 'test-api-key',
@@ -1562,6 +1669,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'pwsweather',
                         'client_id' => 'test-client-id',
@@ -1584,6 +1693,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'pwsweather',
                         'station_id' => 'KORSCAPP1',
@@ -1606,6 +1717,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'pwsweather',
                         'station_id' => 'KORSCAPP1',
@@ -1628,6 +1741,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'synopticdata',
                         'api_token' => 'test-api-token'
@@ -1649,6 +1764,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => [
                         'type' => 'synopticdata',
                         'station_id' => 'AT297'
@@ -1670,6 +1787,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'weather_source' => 'not-an-object'
                 ]
             ]
@@ -1691,6 +1810,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1720,6 +1841,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1753,6 +1876,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1782,6 +1907,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1811,6 +1938,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1840,6 +1969,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1871,6 +2002,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1901,6 +2034,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1931,6 +2066,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcams' => [
                         [
                             'name' => 'Push Camera',
@@ -1959,6 +2096,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'runways' => [
                         [
                             'name' => '15/33',
@@ -1982,6 +2121,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'runways' => [
                         [
                             'name' => '15/33',
@@ -2006,6 +2147,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'runways' => [
                         [
                             'heading_1' => 152,
@@ -2029,6 +2172,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'runways' => 'not-an-array'
                 ]
             ]
@@ -2047,6 +2192,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'runways' => [
                         [
                             'name' => '15/33',
@@ -2071,6 +2218,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'runways' => [
                         [
                             'name' => '15/33',
@@ -2098,6 +2247,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'frequencies' => [
                         'ctaf' => '122.8',
                         'asos' => '135.875'
@@ -2118,6 +2269,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'frequencies' => [
                         'ctaf' => '100.0'
                     ]
@@ -2138,6 +2291,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'frequencies' => 'not-an-object'
                 ]
             ]
@@ -2156,6 +2311,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'frequencies' => [
                         'ctaf' => '137.0'
                     ]
@@ -2176,6 +2333,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'frequencies' => [
                         'ctaf' => '117.0'
                     ]
@@ -2199,6 +2358,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'links' => [
                         [
                             'label' => 'Airport Website',
@@ -2221,6 +2382,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'links' => [
                         [
                             'label' => 'Airport Website',
@@ -2244,6 +2407,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'links' => 'not-an-array'
                 ]
             ]
@@ -2262,6 +2427,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'links' => [
                         [
                             'url' => 'https://example.com/airport'
@@ -2284,6 +2451,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'links' => [
                         [
                             'label' => 'Airport Website'
@@ -2320,7 +2489,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2343,7 +2514,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2363,7 +2536,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2383,7 +2558,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2403,7 +2580,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2427,7 +2606,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2451,7 +2632,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2476,7 +2659,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2500,7 +2685,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2524,7 +2711,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2549,7 +2738,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2572,7 +2763,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2596,7 +2789,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2622,6 +2817,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcam_history_max_frames' => 48  // Per-airport override
                 ]
             ]
@@ -2643,6 +2840,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'webcam_history_max_frames' => -5  // Negative
                 ]
             ]
@@ -2664,7 +2863,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2689,6 +2890,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'KSEA'
                 ]
             ]
@@ -2706,6 +2909,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'London Heathrow',
                     'lat' => 51.47,
                     'lon' => -0.46,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'EGLL'
                 ]
             ]
@@ -2723,6 +2928,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Seaside Municipal Airport',
                     'lat' => 46.0,
                     'lon' => -123.9,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'K56S'
                 ]
             ]
@@ -2740,6 +2947,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Small Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'K03S'
                 ]
             ]
@@ -2760,6 +2969,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => '56S'
                 ]
             ]
@@ -2779,6 +2990,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'SEA'
                 ]
             ]
@@ -2797,6 +3010,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'KS'
                 ]
             ]
@@ -2815,6 +3030,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'KSEAA'
                 ]
             ]
@@ -2833,6 +3050,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'A1B2'
                 ]
             ]
@@ -2851,6 +3070,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => '1234'
                 ]
             ]
@@ -2869,6 +3090,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'metar_station' => 'ksea'
                 ]
             ]
@@ -2885,7 +3108,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2913,7 +3138,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2939,7 +3166,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2965,7 +3194,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -2993,7 +3224,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -3016,7 +3249,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
@@ -3043,6 +3278,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'London Heathrow',
                     'lat' => 51.47,
                     'lon' => -0.46,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'default_preferences' => [
                         'temp_unit' => 'C',
                         'baro_unit' => 'hPa'
@@ -3067,6 +3304,8 @@ class ConfigValidationTest extends TestCase
                     'name' => 'Test Airport',
                     'lat' => 45.0,
                     'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
                     'default_preferences' => [
                         'wind_speed_unit' => 'invalid'
                     ]
@@ -3780,7 +4019,9 @@ class ConfigValidationTest extends TestCase
                 'kspb' => [
                     'name' => 'Test Airport',
                     'lat' => 45.0,
-                    'lon' => -122.0
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
                 ]
             ]
         ];
