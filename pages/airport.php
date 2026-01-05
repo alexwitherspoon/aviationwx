@@ -243,15 +243,145 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
     // =============================================================================
     // TEMPORARY DEBUG CODE - REMOVE AFTER 2025-03-15 (or when kspb cache issue resolved)
     // =============================================================================
-    // Inject meta refresh tag for stuck kspb clients (forces cache-busting reload)
+    // Inject cache-clearing script + meta refresh for stuck kspb clients
     // This executes even when HTML is cached by service worker
+    // Script clears all caches, service workers, and storage before reloading
     // TODO: Remove this block along with detection logic above
     // =============================================================================
     if ($injectMetaRefresh) {
-        $refreshUrl = '?v=' . time() . '&refresh=1';
-        echo '<meta http-equiv="refresh" content="0;url=' . htmlspecialchars($refreshUrl, ENT_QUOTES, 'UTF-8') . '">' . "\n";
-        // Log for monitoring (optional - can remove if not needed)
-        error_log('[MetaRefresh] Triggered for kspb: ' . $metaRefreshReason);
+        // Inject JavaScript that clears all caches and service workers
+        // This runs immediately, even from cached HTML, and waits for cleanup to complete
+        echo '<script>' . "\n";
+        echo '(async function() {' . "\n";
+        echo '    "use strict";' . "\n";
+        echo '    console.warn("[CacheCleanup] Clearing all caches for kspb stuck client");' . "\n";
+        echo '    ' . "\n";
+        echo '    // Prevent multiple cleanup attempts' . "\n";
+        echo '    if (sessionStorage.getItem("aviationwx-cleanup-in-progress")) {' . "\n";
+        echo '        console.log("[CacheCleanup] Already in progress, skipping");' . "\n";
+        echo '        return;' . "\n";
+        echo '    }' . "\n";
+        echo '    sessionStorage.setItem("aviationwx-cleanup-in-progress", Date.now().toString());' . "\n";
+        echo '    ' . "\n";
+        echo '    try {' . "\n";
+        echo '        // 1. Clear all Cache API caches' . "\n";
+        echo '        if ("caches" in window) {' . "\n";
+        echo '            const cacheNames = await caches.keys();' . "\n";
+        echo '            await Promise.all(cacheNames.map(name => {' . "\n";
+        echo '                console.log("[CacheCleanup] Deleting cache:", name);' . "\n";
+        echo '                return caches.delete(name);' . "\n";
+        echo '            }));' . "\n";
+        echo '            console.log("[CacheCleanup] Cleared", cacheNames.length, "caches");' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        // 2. Unregister all service workers' . "\n";
+        echo '        if ("serviceWorker" in navigator) {' . "\n";
+        echo '            const registrations = await navigator.serviceWorker.getRegistrations();' . "\n";
+        echo '            await Promise.all(registrations.map(reg => {' . "\n";
+        echo '                console.log("[CacheCleanup] Unregistering service worker:", reg.scope);' . "\n";
+        echo '                return reg.unregister();' . "\n";
+        echo '            }));' . "\n";
+        echo '            console.log("[CacheCleanup] Unregistered", registrations.length, "service workers");' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        // 3. Clear localStorage' . "\n";
+        echo '        try { ' . "\n";
+        echo '            localStorage.clear();' . "\n";
+        echo '            console.log("[CacheCleanup] Cleared localStorage");' . "\n";
+        echo '        } catch(e) {' . "\n";
+        echo '            console.warn("[CacheCleanup] Could not clear localStorage:", e);' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        // 4. Clear sessionStorage (except cleanup flag)' . "\n";
+        echo '        try {' . "\n";
+        echo '            const flag = sessionStorage.getItem("aviationwx-cleanup-in-progress");' . "\n";
+        echo '            sessionStorage.clear();' . "\n";
+        echo '            if (flag) sessionStorage.setItem("aviationwx-cleanup-in-progress", flag);' . "\n";
+        echo '            console.log("[CacheCleanup] Cleared sessionStorage");' . "\n";
+        echo '        } catch(e) {' . "\n";
+        echo '            console.warn("[CacheCleanup] Could not clear sessionStorage:", e);' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        // 5. Clear all cookies (by setting expired dates)' . "\n";
+        echo '        try {' . "\n";
+        echo '            // Get all cookies for current domain' . "\n";
+        echo '            const cookies = document.cookie.split(";");' . "\n";
+        echo '            const domain = window.location.hostname;' . "\n";
+        echo '            const baseDomain = domain.startsWith("www.") ? domain.substring(4) : domain;' . "\n";
+        echo '            const cookieDomain = "." + baseDomain;' . "\n";
+        echo '            ' . "\n";
+        echo '            // Clear all aviationwx_ cookies' . "\n";
+        echo '            cookies.forEach(cookie => {' . "\n";
+        echo '                const cookieName = cookie.split("=")[0].trim();' . "\n";
+        echo '                if (cookieName.startsWith("aviationwx_")) {' . "\n";
+        echo '                    // Delete cookie by setting expired date' . "\n";
+        echo '                    // Try multiple paths/domains to ensure deletion' . "\n";
+        echo '                    document.cookie = cookieName + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + cookieDomain;' . "\n";
+        echo '                    document.cookie = cookieName + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + baseDomain;' . "\n";
+        echo '                    document.cookie = cookieName + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";' . "\n";
+        echo '                    console.log("[CacheCleanup] Deleted cookie:", cookieName);' . "\n";
+        echo '                }' . "\n";
+        echo '            });' . "\n";
+        echo '            console.log("[CacheCleanup] Cleared cookies");' . "\n";
+        echo '        } catch(e) {' . "\n";
+        echo '            console.warn("[CacheCleanup] Could not clear cookies:", e);' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        // 6. Clear IndexedDB (if used)' . "\n";
+        echo '        try {' . "\n";
+        echo '            if ("indexedDB" in window) {' . "\n";
+        echo '                const databases = await indexedDB.databases();' . "\n";
+        echo '                await Promise.all(databases.map(db => {' . "\n";
+        echo '                    return new Promise((resolve, reject) => {' . "\n";
+        echo '                        const deleteReq = indexedDB.deleteDatabase(db.name);' . "\n";
+        echo '                        deleteReq.onsuccess = () => {' . "\n";
+        echo '                            console.log("[CacheCleanup] Deleted IndexedDB:", db.name);' . "\n";
+        echo '                            resolve();' . "\n";
+        echo '                        };' . "\n";
+        echo '                        deleteReq.onerror = () => reject(deleteReq.error);' . "\n";
+        echo '                        deleteReq.onblocked = () => resolve(); // Database in use, skip' . "\n";
+        echo '                    });' . "\n";
+        echo '                }));' . "\n";
+        echo '                console.log("[CacheCleanup] Cleared IndexedDB");' . "\n";
+        echo '            }' . "\n";
+        echo '        } catch(e) {' . "\n";
+        echo '            console.warn("[CacheCleanup] Could not clear IndexedDB:", e);' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        console.log("[CacheCleanup] Complete, setting new version cookie...");' . "\n";
+        echo '        ' . "\n";
+        echo '        // 7. Set new version cookie immediately (prevents re-triggering cleanup)' . "\n";
+        echo '        // This ensures the new version cookie is set before reload' . "\n";
+        echo '        try {' . "\n";
+        echo '            const buildHash = "' . $buildHashShort . '";' . "\n";
+        echo '            const buildTimestamp = ' . $buildTimestamp . ';' . "\n";
+        echo '            const versionCookieValue = buildHash + "." + buildTimestamp;' . "\n";
+        echo '            const domain = window.location.hostname;' . "\n";
+        echo '            const baseDomain = domain.startsWith("www.") ? domain.substring(4) : domain;' . "\n";
+        echo '            const cookieDomain = "." + baseDomain;' . "\n";
+        echo '            const expires = new Date(Date.now() + 31536000000).toUTCString(); // 1 year' . "\n";
+        echo '            const isSecure = window.location.protocol === "https:";' . "\n";
+        echo '            document.cookie = "aviationwx_v=" + versionCookieValue + "; expires=" + expires + "; path=/; domain=" + cookieDomain + (isSecure ? "; secure" : "") + "; SameSite=Lax";' . "\n";
+        echo '            console.log("[CacheCleanup] Set new version cookie:", versionCookieValue);' . "\n";
+        echo '        } catch(e) {' . "\n";
+        echo '            console.warn("[CacheCleanup] Could not set version cookie:", e);' . "\n";
+        echo '        }' . "\n";
+        echo '        ' . "\n";
+        echo '        // 8. Force hard reload with cache-busting parameter' . "\n";
+        echo '        // Small delay to ensure cleanup operations complete' . "\n";
+        echo '        await new Promise(resolve => setTimeout(resolve, 100));' . "\n";
+        echo '        const refreshUrl = "?v=" + Date.now() + "&refresh=1";' . "\n";
+        echo '        window.location.href = refreshUrl;' . "\n";
+        echo '    } catch(err) {' . "\n";
+        echo '        console.error("[CacheCleanup] Error:", err);' . "\n";
+        echo '        // Even on error, try to reload' . "\n";
+        echo '        window.location.reload(true);' . "\n";
+        echo '    }' . "\n";
+        echo '})();' . "\n";
+        echo '</script>' . "\n";
+        
+        // Log for monitoring
+        error_log('[CacheCleanup] Triggered for kspb: ' . $metaRefreshReason);
     }
     // =============================================================================
     // END TEMPORARY DEBUG CODE
