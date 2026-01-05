@@ -542,10 +542,11 @@ function metrics_aggregate_daily(string $dateId): bool {
         // Merge airports
         foreach ($hourData['airports'] ?? [] as $airportId => $airportData) {
             if (!isset($dailyData['airports'][$airportId])) {
-                $dailyData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0];
+                $dailyData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
             }
             $dailyData['airports'][$airportId]['page_views'] += $airportData['page_views'] ?? 0;
             $dailyData['airports'][$airportId]['weather_requests'] += $airportData['weather_requests'] ?? 0;
+            $dailyData['airports'][$airportId]['webcam_requests'] += $airportData['webcam_requests'] ?? 0;
         }
         
         // Merge webcams
@@ -655,10 +656,11 @@ function metrics_aggregate_weekly(string $weekId): bool {
         // Merge airports
         foreach ($dailyData['airports'] ?? [] as $airportId => $airportData) {
             if (!isset($weeklyData['airports'][$airportId])) {
-                $weeklyData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0];
+                $weeklyData['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
             }
             $weeklyData['airports'][$airportId]['page_views'] += $airportData['page_views'] ?? 0;
             $weeklyData['airports'][$airportId]['weather_requests'] += $airportData['weather_requests'] ?? 0;
+            $weeklyData['airports'][$airportId]['webcam_requests'] += $airportData['webcam_requests'] ?? 0;
         }
         
         // Merge webcams
@@ -762,10 +764,11 @@ function metrics_get_rolling(int $days = 7): array {
         // Merge airports
         foreach ($dailyData['airports'] ?? [] as $airportId => $airportData) {
             if (!isset($result['airports'][$airportId])) {
-                $result['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0];
+                $result['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
             }
             $result['airports'][$airportId]['page_views'] += $airportData['page_views'] ?? 0;
             $result['airports'][$airportId]['weather_requests'] += $airportData['weather_requests'] ?? 0;
+            $result['airports'][$airportId]['webcam_requests'] += $airportData['webcam_requests'] ?? 0;
         }
         
         // Merge webcams
@@ -826,10 +829,11 @@ function metrics_get_rolling(int $days = 7): array {
         // Merge using same logic as daily
         foreach ($hourData['airports'] ?? [] as $airportId => $airportData) {
             if (!isset($result['airports'][$airportId])) {
-                $result['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0];
+                $result['airports'][$airportId] = ['page_views' => 0, 'weather_requests' => 0, 'webcam_requests' => 0];
             }
             $result['airports'][$airportId]['page_views'] += $airportData['page_views'] ?? 0;
             $result['airports'][$airportId]['weather_requests'] += $airportData['weather_requests'] ?? 0;
+            $result['airports'][$airportId]['webcam_requests'] += $airportData['webcam_requests'] ?? 0;
         }
         
         foreach ($hourData['webcams'] ?? [] as $webcamKey => $webcamData) {
