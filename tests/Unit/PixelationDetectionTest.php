@@ -415,6 +415,3 @@ class PixelationDetectionTest extends TestCase
         $this->assertNull($location);
     }
 }
-
-
-

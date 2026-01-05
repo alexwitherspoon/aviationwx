@@ -69,4 +69,3 @@
     notifempty
     create 0644 www-data www-data
 }
-

@@ -270,6 +270,3 @@ class WebcamHistoryApiTest extends TestCase
         $this->assertArrayHasKey('error', $data, 'Error response should have error field');
     }
 }
-
-
-

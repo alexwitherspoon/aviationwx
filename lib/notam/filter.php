@@ -203,7 +203,3 @@ function filterRelevantNotams(array $notams, array $airport): array {
     
     return $relevant;
 }
-
-
-
-

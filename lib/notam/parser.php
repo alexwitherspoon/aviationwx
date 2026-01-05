@@ -116,7 +116,3 @@ function parseNotamXmlArray(array $xmlStrings): array {
     }
     return $parsed;
 }
-
-
-
-

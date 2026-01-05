@@ -443,6 +443,3 @@ class ExifUtilsTest extends TestCase
         $this->assertNull($result, "Year {$futureYear} should be rejected");
     }
 }
-
-
-
