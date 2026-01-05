@@ -121,21 +121,21 @@ if (preg_match('/^#\s+(.+)$/m', $markdownContent, $titleMatch)) {
 $parsedown = new Parsedown();
 $htmlContent = $parsedown->text($markdownContent);
 
-// Set cache headers for Cloudflare
+// Set cache headers for CDN
 // Guides are documentation that doesn't change frequently, but we want reasonable cache times
 // Cache for 1 hour, allow stale-while-revalidate for 4 hours
 // This balances freshness with performance
 $cacheMaxAge = 3600; // 1 hour
 $staleWhileRevalidate = 14400; // 4 hours
-$cloudflareMaxAge = 3600; // 1 hour for Cloudflare
+$cdnMaxAge = 3600; // 1 hour for CDN
 
 // If file was recently modified (within last hour), use shorter cache
 if ($fileAge < 3600) {
     $cacheMaxAge = 300; // 5 minutes for recently updated files
-    $cloudflareMaxAge = 300;
+    $cdnMaxAge = 300;
 }
 
-header('Cache-Control: public, max-age=' . $cacheMaxAge . ', s-maxage=' . $cloudflareMaxAge . ', stale-while-revalidate=' . $staleWhileRevalidate);
+header('Cache-Control: public, max-age=' . $cacheMaxAge . ', s-maxage=' . $cdnMaxAge . ', stale-while-revalidate=' . $staleWhileRevalidate);
 header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cacheMaxAge) . ' GMT');
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $fileMtime) . ' GMT');
 header('ETag: "' . md5($markdownFile . $fileMtime) . '"');

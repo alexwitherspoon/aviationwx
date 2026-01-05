@@ -102,13 +102,13 @@ function processPublicApiRequest(): array
 /**
  * Get the client IP address
  * 
- * Respects X-Forwarded-For header for proxied requests (Cloudflare)
+ * Respects X-Forwarded-For header for proxied requests (CDN)
  * 
  * @return string Client IP address
  */
 function getPublicApiClientIp(): string
 {
-    // Check for Cloudflare CF-Connecting-IP first
+    // Check for CDN CF-Connecting-IP first (CDN-specific header)
     if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
         return $_SERVER['HTTP_CF_CONNECTING_IP'];
     }

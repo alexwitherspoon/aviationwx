@@ -13,6 +13,7 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/cache-headers.php';
 
 /**
  * Handle GET /v1/airports/{id}/webcams/{cam}/image request
@@ -117,13 +118,27 @@ function handleGetWebcamImage(array $params, array $context): void
         default => 'image/jpeg',
     };
     
+    // Get webcam refresh interval (from camera config, airport config, or default)
+    require_once __DIR__ . '/../../lib/config.php';
+    $webcamRefresh = getDefaultWebcamRefresh();
+    if (isset($airport['webcam_refresh_seconds'])) {
+        $webcamRefresh = intval($airport['webcam_refresh_seconds']);
+    }
+    $cam = $webcams[$camIndex];
+    if (isset($cam['refresh_seconds'])) {
+        $webcamRefresh = intval($cam['refresh_seconds']);
+    }
+    
     // Send headers
     header('Content-Type: ' . $contentType);
     header('Content-Length: ' . $fileSize);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     
-    // Cache headers for live data (60 seconds)
-    header('Cache-Control: public, max-age=60, s-maxage=60, stale-while-revalidate=30');
+    // Cache headers: browser cache matches refresh interval, CDN uses half (min 5s)
+    $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);
+    foreach ($headers as $name => $value) {
+        header($name . ': ' . $value);
+    }
     
     // CORS headers
     header('Access-Control-Allow-Origin: *');

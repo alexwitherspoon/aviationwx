@@ -19,7 +19,7 @@ if ($config === null || !isset($config['airports'])) {
 }
 
 // Get base URL (protocol + domain)
-// Check both HTTPS and X-Forwarded-Proto for proxy setups (Cloudflare, nginx)
+// Check both HTTPS and X-Forwarded-Proto for proxy setups (CDN, nginx)
 $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || 
             (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') 
             ? 'https' : 'http';

@@ -19,6 +19,7 @@ require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/circuit-breaker.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/metrics.php';
+require_once __DIR__ . '/../lib/cache-headers.php';
 require_once __DIR__ . '/../scripts/fetch-webcam.php';
 
 // Check early if we're being included for testing vs. direct API access
@@ -395,9 +396,24 @@ if (!is_dir($cacheDir)) {
 // Exempt timestamp requests from rate limiting (they're lightweight and frequent)
 if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
     // Content-Type already set earlier for JSON requests
-    header('Cache-Control: no-cache, no-store, must-revalidate'); // Don't cache timestamp responses
-    header('Pragma: no-cache');
-    header('Expires: 0');
+    
+    // Get webcam refresh interval (from camera config, airport config, or default)
+    // Use ACTUAL refresh interval (not clamped to 60s) for cache calculation
+    // The 60s minimum is for cron scheduling, but cache headers should match actual refresh rate
+    $webcamRefresh = getDefaultWebcamRefresh();
+    if (isset($airport['webcam_refresh_seconds'])) {
+        $webcamRefresh = intval($airport['webcam_refresh_seconds']);
+    }
+    if (isset($cam['refresh_seconds'])) {
+        $webcamRefresh = intval($cam['refresh_seconds']);
+    }
+    
+    // Browser cache disabled (max-age=0) since timestamp checks need fresh data
+    // CDN cache uses half refresh interval (min 5s) to support fast refreshes
+    $headers = generateCacheHeaders($webcamRefresh, null);
+    foreach ($headers as $name => $value) {
+        header($name . ': ' . $value);
+    }
     // Rate limit headers (for observability; mtime endpoint is not limited)
     $rl = getRateLimitRemaining('webcam_api', RATE_LIMIT_WEBCAM_MAX, RATE_LIMIT_WEBCAM_WINDOW);
     if ($rl !== null) {

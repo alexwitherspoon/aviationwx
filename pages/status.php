@@ -2449,9 +2449,6 @@ if (php_sapi_name() === 'cli') {
                                         <?php if ($totalWebcamServes > 0): ?>
                                         <span class="metric-detail" title="Serves = images delivered from server (not browser cache)">(<?php echo number_format($totalWebcamServes); ?> serves)</span>
                                         <?php endif; ?>
-                                        <?php elseif ($totalWebcamServes > 0): ?>
-                                        <span class="metric-value"><?php echo number_format($totalWebcamServes); ?></span>
-                                        <span class="metric-detail">(serves only, pre-tracking)</span>
                                         <?php else: ?>
                                         <span class="metric-value">0</span>
                                         <?php endif; ?>
