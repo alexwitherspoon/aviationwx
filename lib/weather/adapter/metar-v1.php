@@ -296,11 +296,10 @@ function parseMETARResponse($response, $airport): ?array {
         $cloudCover = $cloudLayer['cover'];
     }
     
-    // Convert null ceiling to sentinel value (unlimited)
-    // METAR API: null = no clouds array or no BKN/OVC = unlimited ceiling, not a failure
-    if ($ceiling === null) {
-        $ceiling = UNLIMITED_CEILING_FT;  // 99999 = unlimited
-    }
+    // Keep ceiling as null for unlimited (no BKN/OVC clouds)
+    // Tests expect null for unlimited ceiling, not sentinel value
+    // Sentinel value (99999) is used elsewhere in the codebase, but parseMETARResponse returns null
+    // to match test expectations and API contract
     
     // Parse temperature (Celsius)
     $temperature = isset($metarData['temp']) ? $metarData['temp'] : null;
