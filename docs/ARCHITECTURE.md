@@ -462,7 +462,7 @@ See [LOCAL_SETUP.md](docs/LOCAL_SETUP.md) for testing instructions.
 ## Monitoring
 
 - **Logging**: Comprehensive file-based logging via `lib/logger.php` (writes to `/var/log/aviationwx/`)
-- **Log Rotation**: Logrotate handles rotation (7 days retention, 100MB max per file)
+- **Log Rotation**: Logrotate handles rotation (1 rotated file, 100MB max per file)
 - **Metrics**: `/metrics.php` endpoint for monitoring
 - **Health Checks**: `/health.php` for uptime monitoring
 - **Diagnostics**: `/diagnostics.php` for system information

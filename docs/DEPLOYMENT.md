@@ -506,7 +506,7 @@ docker compose -f docker/docker-compose.prod.yml up -d --build
 
 ### Monitor Logs
 
-Logs are written to `/var/log/aviationwx/` inside the container. Logrotate handles rotation (7 days retention, 100MB max per file).
+Logs are written to `/var/log/aviationwx/` inside the container. Logrotate handles rotation (1 rotated file, 100MB max per file).
 
 ```bash
 # Application logs (PHP - JSONL format)

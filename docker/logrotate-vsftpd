@@ -1,6 +1,6 @@
 /var/log/vsftpd.log {
     daily
-    rotate 7
+    rotate 1
     compress
     delaycompress
     missingok

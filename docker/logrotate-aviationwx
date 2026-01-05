@@ -1,10 +1,10 @@
 # Logrotate configuration for AviationWX application logs
 # Rotates cron job logs and Apache logs
-# Keeps 7 days of logs, compresses old logs, max 100MB per file
+# Keeps 1 rotated file (100MB max per file), compresses old logs
 
 /var/log/aviationwx/*.log {
     daily
-    rotate 7
+    rotate 1
     compress
     delaycompress
     missingok
@@ -22,7 +22,7 @@
 /var/log/aviationwx/apache-access.log
 /var/log/aviationwx/apache-error.log {
     daily
-    rotate 7
+    rotate 1
     compress
     delaycompress
     missingok
@@ -38,7 +38,7 @@
 # Service watchdog log
 /var/log/aviationwx/service-watchdog.log {
     daily
-    rotate 7
+    rotate 1
     compress
     delaycompress
     missingok
@@ -51,7 +51,18 @@
 /var/log/aviationwx/user.log
 /var/log/aviationwx/php-error.log {
     daily
-    rotate 7
+    rotate 1
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 www-data www-data
+}
+
+# Debug log
+/var/log/aviationwx/debug.log {
+    daily
+    rotate 1
     compress
     delaycompress
     missingok

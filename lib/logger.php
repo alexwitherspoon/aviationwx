@@ -1,6 +1,6 @@
 <?php
 // Lightweight JSONL logger that writes to log files
-// Log rotation is handled by logrotate (7 days, 100MB max per file)
+// Log rotation is handled by logrotate (1 rotated file, 100MB max per file)
 // Supports dual logging: user activity log and application/system log
 
 // File-based logging paths
@@ -20,7 +20,7 @@ if (!defined('AVIATIONWX_LOG_MAX_BYTES')) {
     define('AVIATIONWX_LOG_MAX_BYTES', 100 * 1024 * 1024); // 100MB per file
 }
 if (!defined('AVIATIONWX_LOG_MAX_FILES')) {
-    define('AVIATIONWX_LOG_MAX_FILES', 10); // 10 files × 100MB = 1GB total per log type
+    define('AVIATIONWX_LOG_MAX_FILES', 1); // 1 rotated file (matches logrotate config)
 }
 
 if (!function_exists('aviationwx_get_log_file_path')) {
@@ -63,8 +63,8 @@ if (!function_exists('aviationwx_rotate_log_if_needed')) {
 /**
  * Rotate log file if it exceeds maximum size
  * 
- * Implements log rotation: logfile -> logfile.1 -> logfile.2 -> ... -> logfile.N
- * Deletes files beyond MAX_FILES limit.
+ * Implements log rotation: logfile -> logfile.1 (keeps 1 rotated file).
+ * Deletes any existing rotated file before rotating to match logrotate config.
  * Note: This is a fallback mechanism. Primary rotation should be via logrotate.
  * 
  * @param string $logFile Full path to log file to check/rotate
@@ -74,22 +74,20 @@ function aviationwx_rotate_log_if_needed(string $logFile): void {
     clearstatcache(true, $logFile);
     $size = @filesize($logFile);
     if ($size !== false && $size > AVIATIONWX_LOG_MAX_BYTES) {
-        // Rotate: logfile -> logfile.1 -> logfile.2 -> ... -> logfile.N, delete > MAX_FILES
-        for ($i = AVIATIONWX_LOG_MAX_FILES - 1; $i >= 1; $i--) {
-            $src = $logFile . '.' . $i;
-            $dst = $logFile . '.' . ($i + 1);
-            if (file_exists($src)) {
-                @rename($src, $dst);
-            }
+        // Delete existing rotated file if it exists (MAX_FILES = 1, so only keep .1)
+        $rotatedFile = $logFile . '.1';
+        if (file_exists($rotatedFile)) {
+            @unlink($rotatedFile);
         }
-        // Delete files beyond MAX_FILES
+        // Delete any stray files beyond MAX_FILES (cleanup for safety)
         for ($i = AVIATIONWX_LOG_MAX_FILES + 1; $i <= AVIATIONWX_LOG_MAX_FILES + 10; $i++) {
             $oldFile = $logFile . '.' . $i;
             if (file_exists($oldFile)) {
                 @unlink($oldFile);
             }
         }
-        @rename($logFile, $logFile . '.1');
+        // Rotate: logfile -> logfile.1
+        @rename($logFile, $rotatedFile);
         @touch($logFile);
     }
 }

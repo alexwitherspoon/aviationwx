@@ -12,7 +12,7 @@ Guide for logging, monitoring, and troubleshooting AviationWX.org in production.
 
 ## Logging Overview
 
-All logs are written to files in `/var/log/aviationwx/`. Log rotation is handled by logrotate (7 days retention, 100MB max per file).
+All logs are written to files in `/var/log/aviationwx/`. Log rotation is handled by logrotate (1 rotated file, 100MB max per file).
 
 ### Log Files
 
@@ -318,7 +318,7 @@ docker compose -f docker/docker-compose.prod.yml exec web cat /var/log/aviationw
 ## Log Rotation
 
 Logrotate handles log rotation with the following settings:
-- **Retention**: 7 days
+- **Retention**: 1 rotated file (current + 1 compressed archive)
 - **Max size**: 100MB per log file
 - **Compression**: Older logs are compressed with gzip
 - **Location**: `/var/log/aviationwx/`

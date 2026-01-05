@@ -2,7 +2,7 @@
 # Old auth.log entry kept for backward compatibility, but sshd uses its own log
 /var/log/aviationwx/sshd.log {
     daily
-    rotate 7
+    rotate 1
     compress
     delaycompress
     missingok
@@ -18,7 +18,7 @@
 # Keep auth.log rotation for any other services that might use it
 /var/log/auth.log {
     daily
-    rotate 7
+    rotate 1
     compress
     delaycompress
     missingok
