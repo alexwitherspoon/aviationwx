@@ -18,7 +18,7 @@ require_once __DIR__ . '/../lib/weather-health.php';
 // =============================================================================
 
 /**
- * Get cached backoff data (reads file once per request)
+ * Get cached backoff data
  * 
  * @return array Backoff data array (empty if file doesn't exist)
  */
@@ -49,7 +49,6 @@ function getCachedBackoffData(): array {
  * @return mixed Cached or freshly computed data
  */
 function getCachedStatusData(callable $computeFunc, string $cacheKey, int $ttl = 30) {
-    // Check APCu cache first
     if (function_exists('apcu_fetch')) {
         $cached = @apcu_fetch($cacheKey, $success);
         if ($success) {
@@ -57,10 +56,8 @@ function getCachedStatusData(callable $computeFunc, string $cacheKey, int $ttl =
         }
     }
     
-    // Compute fresh data
     $data = $computeFunc();
     
-    // Store in APCu
     if (function_exists('apcu_store')) {
         @apcu_store($cacheKey, $data, $ttl);
     }
@@ -182,7 +179,6 @@ function calculateMemoryAverages(int $currentMemory): array {
         }
     }
     
-    // Add current snapshot (only if enough time has passed since last snapshot, or if empty)
     // Sample every 5 seconds to avoid excessive writes
     $shouldAddSnapshot = true;
     if (!empty($snapshots)) {
@@ -209,8 +205,7 @@ function calculateMemoryAverages(int $currentMemory): array {
         }
     ));
     
-    // Save updated snapshots (only if we added a new one)
-    // Use file locking to prevent race conditions in concurrent environments
+    // Use file locking to prevent concurrent writes from corrupting snapshot data
     // Use @ to suppress errors for non-critical metrics (memory averages are informational)
     if ($shouldAddSnapshot) {
         $data = [
@@ -220,7 +215,6 @@ function calculateMemoryAverages(int $currentMemory): array {
         @file_put_contents($cacheFile, json_encode($data), LOCK_EX);
     }
     
-    // Calculate averages for 1min, 5min, 15min periods
     $averages = [
         '1min' => null,
         '5min' => null,
@@ -309,16 +303,40 @@ function getNodePerformance(): array {
         }
     }
     
-    // Memory Usage - Try cgroups v2 first (Docker), then v1, then /proc/meminfo
+    // Memory Usage - Prefer RSS (Resident Set Size) to match htop, fallback to total cgroup memory
+    // RSS represents actual physical memory used, excluding page cache
+    // This is more comparable to what htop shows for process memory
     $memoryUsed = null;
     
-    // cgroups v2 (modern Docker)
-    $cgroupV2Current = '/sys/fs/cgroup/memory.current';
-    if (file_exists($cgroupV2Current) && is_readable($cgroupV2Current)) {
-        $memoryUsed = (int) trim(@file_get_contents($cgroupV2Current));
+    // Try to get RSS from cgroups v2 (modern Docker)
+    // RSS is reported as "anon" in cgroups v2 memory.stat
+    $cgroupV2Stat = '/sys/fs/cgroup/memory.stat';
+    if (file_exists($cgroupV2Stat) && is_readable($cgroupV2Stat)) {
+        $statContent = @file_get_contents($cgroupV2Stat);
+        if ($statContent !== false && preg_match('/anon\s+(\d+)/', $statContent, $m)) {
+            $memoryUsed = (int) $m[1];
+        }
     }
     
-    // cgroups v1 fallback
+    // Fallback: Try RSS from cgroups v1
+    if ($memoryUsed === null) {
+        $cgroupV1Stat = '/sys/fs/cgroup/memory/memory.stat';
+        if (file_exists($cgroupV1Stat) && is_readable($cgroupV1Stat)) {
+            $statContent = @file_get_contents($cgroupV1Stat);
+            if ($statContent !== false && preg_match('/rss\s+(\d+)/', $statContent, $m)) {
+                $memoryUsed = (int) $m[1];
+            }
+        }
+    }
+    
+    // Fallback: Use total cgroup memory (includes cache, less ideal but better than nothing)
+    if ($memoryUsed === null) {
+        $cgroupV2Current = '/sys/fs/cgroup/memory.current';
+        if (file_exists($cgroupV2Current) && is_readable($cgroupV2Current)) {
+            $memoryUsed = (int) trim(@file_get_contents($cgroupV2Current));
+        }
+    }
+    
     if ($memoryUsed === null) {
         $cgroupV1Usage = '/sys/fs/cgroup/memory/memory.usage_in_bytes';
         if (file_exists($cgroupV1Usage) && is_readable($cgroupV1Usage)) {
@@ -326,7 +344,8 @@ function getNodePerformance(): array {
         }
     }
     
-    // /proc/meminfo fallback (host view, less ideal but works)
+    // Last resort: /proc/meminfo (host view, not container-specific, but works)
+    // Note: This shows system-wide memory, not container memory, so won't match htop process view
     if ($memoryUsed === null && file_exists('/proc/meminfo')) {
         $meminfo = @file_get_contents('/proc/meminfo');
         if ($meminfo) {
@@ -346,14 +365,12 @@ function getNodePerformance(): array {
     
     $performance['memory_used_bytes'] = $memoryUsed;
     
-    // Calculate memory averages from historical snapshots
     if ($memoryUsed !== null) {
         $memoryAverages = calculateMemoryAverages($memoryUsed);
         $performance['memory_average'] = $memoryAverages;
     }
     
-    // Storage Usage - Calculate actual size of all data directories
-    // Includes cache, uploads, and logs for complete picture
+    // Calculate storage usage (cache, uploads, logs)
     $performance['storage_used_bytes'] = 0;
     $performance['storage_breakdown'] = [
         'cache' => 0,
@@ -361,7 +378,6 @@ function getNodePerformance(): array {
         'logs' => 0
     ];
     
-    // Helper function to calculate directory size
     $calculateDirSize = function($path) {
         if (!is_dir($path)) {
             return 0;
@@ -386,15 +402,12 @@ function getNodePerformance(): array {
         return $size;
     };
     
-    // 1. Cache directory (weather data, webcam images, history frames)
     $cachePath = __DIR__ . '/../cache';
     $performance['storage_breakdown']['cache'] = $calculateDirSize($cachePath);
     
-    // 2. Uploads directory (push webcam uploads waiting to be processed)
     $uploadsPath = __DIR__ . '/../uploads';
     $performance['storage_breakdown']['uploads'] = $calculateDirSize($uploadsPath);
     
-    // 3. Logs directory (when file-based logging is enabled)
     // Check both the defined log directory and common locations
     $logPaths = [
         defined('AVIATIONWX_LOG_DIR') ? AVIATIONWX_LOG_DIR : '/var/log/aviationwx',
@@ -408,7 +421,6 @@ function getNodePerformance(): array {
         }
     }
     
-    // Calculate total
     $performance['storage_used_bytes'] = array_sum($performance['storage_breakdown']);
     
     return $performance;
@@ -453,7 +465,6 @@ function checkSystemHealth(): array {
         'components' => []
     ];
     
-    // Check configuration
     $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../config/airports.json';
     $configReadable = file_exists($configPath) && is_readable($configPath);
     $configValid = false;
@@ -470,7 +481,6 @@ function checkSystemHealth(): array {
         'lastChanged' => $configMtime
     ];
     
-    // Check cache directories
     $cacheDir = CACHE_BASE_DIR;
     $webcamCacheDir = CACHE_WEBCAMS_DIR;
     $cacheExists = is_dir($cacheDir);
@@ -480,7 +490,6 @@ function checkSystemHealth(): array {
     
     $cacheStatus = ($cacheExists && $cacheWritable && $webcamCacheExists && $webcamCacheWritable) ? 'operational' : 'down';
     
-    // Find most recent cache file modification time
     $latestCacheMtime = 0;
     if ($cacheExists) {
         $latestCacheMtime = filemtime($cacheDir);
@@ -489,7 +498,6 @@ function checkSystemHealth(): array {
             if ($webcamMtime > $latestCacheMtime) {
                 $latestCacheMtime = $webcamMtime;
             }
-            // Check individual webcam files
             $files = glob($webcamCacheDir . '/*.{jpg,webp}', GLOB_BRACE);
             if ($files) {
                 foreach ($files as $file) {
@@ -500,7 +508,6 @@ function checkSystemHealth(): array {
                 }
             }
         }
-        // Check weather cache files (new location: cache/weather/*.json)
         $weatherFiles = glob(CACHE_WEATHER_DIR . '/*.json');
         if ($weatherFiles) {
             foreach ($weatherFiles as $file) {
@@ -521,17 +528,15 @@ function checkSystemHealth(): array {
         'lastChanged' => $latestCacheMtime > 0 ? $latestCacheMtime : 0
     ];
     
-    // Check APCu
     $apcuAvailable = function_exists('apcu_fetch');
-    // APCu status doesn't really change, so we'll use current time or 0
+    // APCu status doesn't change, so use 0 for lastChanged
     $health['components']['apcu'] = [
         'name' => 'APCu Cache',
         'status' => $apcuAvailable ? 'operational' : 'degraded',
         'message' => $apcuAvailable ? 'APCu available' : 'APCu not available (performance may be reduced)',
-        'lastChanged' => 0 // Static state, no meaningful timestamp
+        'lastChanged' => 0
     ];
     
-    // Check logging system (file-based logging)
     $logFile = AVIATIONWX_APP_LOG_FILE;
     $logDir = dirname($logFile);
     $logMtime = file_exists($logFile) ? filemtime($logFile) : 0;
@@ -540,7 +545,6 @@ function checkSystemHealth(): array {
         $hasRecentLogs = (time() - $logMtime) < STATUS_RECENT_LOG_THRESHOLD_SECONDS;
     }
     
-    // Check if log directory is writable
     $logDirWritable = is_dir($logDir) && is_writable($logDir);
     
     // Determine logging status:
@@ -570,7 +574,7 @@ function checkSystemHealth(): array {
         'lastChanged' => $logMtime > 0 ? $logMtime : (is_dir($logDir) ? filemtime($logDir) : 0)
     ];
     
-    // Check internal error rate (system errors only, not external data source failures)
+    // Check internal error rate (excludes external data source failures)
     $errorRate = aviationwx_error_rate_last_hour();
     $errorRateStatus = $errorRate === 0 ? 'operational' : ($errorRate < ERROR_RATE_DEGRADED_THRESHOLD ? 'degraded' : 'down');
     
@@ -590,11 +594,9 @@ function checkSystemHealth(): array {
         'lastChanged' => $lastErrorTime > 0 ? $lastErrorTime : ($errorRate === 0 ? time() : 0)
     ];
     
-    // Check FTP/SFTP services
     $ftpSftpHealth = checkFtpSftpServices();
     $health['components']['ftp_sftp'] = $ftpSftpHealth;
     
-    // Check scheduler status
     $schedulerStatus = getSchedulerStatus();
     $schedulerHealthStatus = 'operational';
     $schedulerMessage = 'Scheduler running and healthy';
@@ -624,14 +626,12 @@ function checkSystemHealth(): array {
         ]
     ];
     
-    // Check webcam variant generation health
     $variantHealth = checkVariantGenerationHealth();
     $health['components']['variant_generation'] = $variantHealth;
     
-    // Check weather data fetching health (uses cached data from weather-health.php)
+    // Uses cached data from weather-health.php
     $weatherDataHealth = weather_health_get_status();
     
-    // Include per-source breakdown in the metrics if available
     $weatherSources = weather_health_get_sources();
     if (!empty($weatherSources)) {
         $sourceSummary = [];
@@ -662,8 +662,6 @@ function checkSystemHealth(): array {
  * }
  */
 function checkVariantGenerationHealth(): array {
-    // Uses variant_health_get_status() from lib/variant-health.php
-    // (included via webcam-format-generation.php)
     return variant_health_get_status();
 }
 
@@ -779,9 +777,7 @@ function checkFtpSftpServices(): array {
         ]
     ];
     
-    // Check vsftpd process
     // Use @ to suppress errors for non-critical process checks
-    // We handle failures explicitly with fallback mechanisms below
     $vsftpdRunning = false;
     if (function_exists('exec')) {
         @exec('pgrep -x vsftpd 2>/dev/null', $output, $code);
@@ -789,9 +785,6 @@ function checkFtpSftpServices(): array {
     }
     $services['vsftpd']['running'] = $vsftpdRunning;
     
-    // Check sshd process
-    // Use @ to suppress errors for non-critical process checks
-    // We handle failures explicitly with fallback mechanisms below
     $sshdRunning = false;
     if (function_exists('exec')) {
         @exec('pgrep -x sshd 2>/dev/null', $output, $code);
@@ -799,7 +792,6 @@ function checkFtpSftpServices(): array {
     }
     $services['sshd']['running'] = $sshdRunning;
     
-    // Determine overall status
     $allRunning = $vsftpdRunning && $sshdRunning;
     $noneRunning = !$vsftpdRunning && !$sshdRunning;
     
@@ -821,7 +813,7 @@ function checkFtpSftpServices(): array {
         'name' => 'FTP/SFTP Services',
         'status' => $status,
         'message' => $message,
-        'lastChanged' => 0, // Static state, no meaningful timestamp
+        'lastChanged' => 0,
         'services' => $services
     ];
 }
@@ -844,15 +836,14 @@ function checkAirportHealth(string $airportId, array $airport): array {
         'components' => []
     ];
     
-    // Check weather sources - per-source status
-    // Use shared helper to get timestamps
     $sourceTimestamps = getSourceTimestamps($airportId, $airport);
     
     $weatherRefresh = isset($airport['weather_refresh_seconds']) 
         ? intval($airport['weather_refresh_seconds']) 
         : getDefaultWeatherRefresh();
     
-    // 3-tier staleness thresholds
+    // 3-tier staleness model: warning (operational), error (degraded), failclosed (down)
+    // Prevents showing stale data to pilots while allowing graceful degradation
     $warningSeconds = getStaleWarningSeconds($airport);
     $errorSeconds = getStaleErrorSeconds($airport);
     $failclosedSeconds = getStaleFailclosedSeconds($airport);
@@ -860,10 +851,9 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     $weatherSources = [];
     
-    // Use centralized helper for source name mapping
     require_once __DIR__ . '/../lib/weather/utils.php';
     
-    // Helper function to get HTTP error code from backoff state (uses cached data)
+    // Helper function to get HTTP error code from backoff state
     $getHttpErrorInfo = function($airportId, $sourceType) {
         $backoffData = getCachedBackoffData();
         if (empty($backoffData)) {
@@ -880,10 +870,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
         $errorTime = isset($state['last_error_time']) ? (int)$state['last_error_time'] : 0;
         $nextAllowed = isset($state['next_allowed_time']) ? (int)$state['next_allowed_time'] : 0;
         
-        // Only return HTTP code if:
-        // 1. Code exists and is 4xx/5xx
-        // 2. Source is in backoff (circuit open), OR
-        // 3. Error occurred within last hour
+        // Return HTTP code only for recent errors or active backoff to avoid stale error display
         if ($httpCode !== null && $httpCode >= 400 && $httpCode < 600) {
             $now = time();
             $inBackoff = $nextAllowed > $now;
@@ -913,9 +900,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
         if ($primaryLastChanged > 0) {
             $primaryAge = $sourceTimestamps['primary']['age'];
             
-            // Use 3-tier staleness model
+            // Apply 3-tier staleness model: operational (fresh/warning) -> degraded (error) -> down (failclosed)
             if ($sourceType === 'metar') {
-                // Use METAR-specific thresholds
                 $metarWarning = getMetarStaleWarningSeconds();
                 $metarError = getMetarStaleErrorSeconds();
                 $metarFailclosed = getMetarStaleFailclosedSeconds();
@@ -934,7 +920,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $primaryMessage = 'Expired (failclosed)';
                 }
             } else {
-                // Use general 3-tier staleness thresholds for non-METAR sources
                 if ($primaryAge < $warningSeconds) {
                     $primaryStatus = 'operational';
                     $primaryMessage = 'Operational';
@@ -954,7 +939,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $primaryMessage = 'No timestamp available';
         }
         
-        // Check for HTTP error code to append to message
         $httpErrorInfo = $getHttpErrorInfo($airportId, 'primary');
         if ($httpErrorInfo !== null && ($primaryStatus === 'down' || $primaryStatus === 'degraded' || $httpErrorInfo['in_backoff'])) {
             $primaryMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
@@ -968,15 +952,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
         ];
     }
     
-    // Check METAR source (if configured separately or as supplement)
     $isMetarEnabled = isMetarEnabled($airport);
     $isMetarPrimary = ($sourceType === 'metar');
     
-    // METAR is shown separately if:
-    // 1. It's the primary source (already added above), OR
-    // 2. It's configured as supplement (metar_station set and primary is not metar)
+    // METAR shown separately if primary or configured as supplement
     if ($isMetarPrimary) {
-        // Already added above, skip
+        // Already added above
     } elseif ($isMetarEnabled && $sourceTimestamps['metar']['available']) {
         $metarStatus = 'down';
         $metarMessage = 'No data available';
@@ -985,7 +966,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
         if ($metarLastChanged > 0) {
             $metarAge = $sourceTimestamps['metar']['age'];
             
-            // METAR status using 3-tier staleness model
             $metarWarning = getMetarStaleWarningSeconds();
             $metarError = getMetarStaleErrorSeconds();
             $metarFailclosed = getMetarStaleFailclosedSeconds();
@@ -1008,7 +988,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $metarMessage = 'No timestamp available';
         }
         
-        // Check for HTTP error code to append to message
         $httpErrorInfo = $getHttpErrorInfo($airportId, 'metar');
         if ($httpErrorInfo !== null && ($metarStatus === 'down' || $metarStatus === 'degraded' || $httpErrorInfo['in_backoff'])) {
             $metarMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
@@ -1022,7 +1001,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
         ];
     }
     
-    // Check backup weather source (if configured)
     $backupSourceType = isset($airport['weather_source_backup']['type']) ? $airport['weather_source_backup']['type'] : null;
     if ($backupSourceType && $sourceTimestamps['backup']['available']) {
         $backupSourceName = getWeatherSourceDisplayName($backupSourceType) . ' (Backup)';
@@ -1030,14 +1008,13 @@ function checkAirportHealth(string $airportId, array $airport): array {
         $backupMessage = 'Standby';
         $backupLastChanged = $sourceTimestamps['backup']['timestamp'];
         
-        // Check if backup is active (providing data for any fields)
-        // Use backup_status from cache if available (more accurate than calculating)
+        // Determine if backup is actively providing data (vs standby)
+        // Backup is active when it has fresh data and primary source is stale
         $backupActive = false;
         $weatherCacheFile = getWeatherCachePath($airportId);
         if (file_exists($weatherCacheFile)) {
             $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
             if (is_array($weatherData)) {
-                // Use backup_status from cache if available (set during merge)
                 if (isset($weatherData['backup_status'])) {
                     $backupActive = ($weatherData['backup_status'] === 'active');
                 } else {
@@ -1048,7 +1025,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $primaryAge = isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0
                         ? time() - $weatherData['last_updated_primary']
                         : PHP_INT_MAX;
-                    // Backup is active if it has fresh data and primary is stale
                     $backupActive = ($backupAge < $warningSeconds) && ($primaryAge >= $warningSeconds);
                 }
             }
@@ -1057,7 +1033,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
         if ($backupLastChanged > 0) {
             $backupAge = $sourceTimestamps['backup']['age'];
             
-            // Check circuit breaker for backup
             require_once __DIR__ . '/../lib/circuit-breaker.php';
             $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
             
@@ -1065,7 +1040,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $backupStatus = 'failed';
                 $backupMessage = 'Circuit breaker open';
             } elseif ($backupActive) {
-                // Backup is active (providing data) - use 3-tier staleness
                 if ($backupAge < $warningSeconds) {
                     $backupStatus = 'operational';
                     $backupMessage = 'Active';
@@ -1080,7 +1054,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $backupMessage = 'Active (failclosed)';
                 }
             } else {
-                // Backup is in standby (configured but not active) - use 3-tier staleness
                 if ($backupAge < $warningSeconds) {
                     $backupStatus = 'operational';
                     $backupMessage = 'Standby (ready)';
@@ -1229,16 +1202,15 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $cacheAge = time() - @filemtime($cacheFile);
                 $camLastChanged = @filemtime($cacheFile) ?: 0;
                 
-                // 3-tier staleness thresholds (from config with airport override)
+                // Apply 3-tier staleness model (same as weather) for safety-critical data freshness
                 $warningThreshold = getStaleWarningSeconds($airport);
                 $errorThreshold = getStaleErrorSeconds($airport);
                 $failclosedThreshold = getStaleFailclosedSeconds($airport);
                 
-                // Check for error files (pull cameras only)
                 $errorFile = $cacheJpg . '.error.json';
                 $hasError = !$isPush && file_exists($errorFile);
                 
-                // Check backoff state (pull cameras only) - uses cached data
+                // Check backoff state (pull cameras only)
                 $inBackoff = false;
                 if (!$isPush) {
                     $backoffData = getCachedBackoffData();
@@ -1249,6 +1221,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     }
                 }
                 
+                // Prioritize error/backoff status over staleness (circuit breaker takes precedence)
                 if ($hasError || $inBackoff) {
                     $camStatus = 'degraded';
                     $camMessage = $hasError ? 'Has errors' : 'In backoff';
@@ -1318,7 +1291,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
             }
         }
         
-        // Determine aggregate status
+        // Determine aggregate status: any down = down, any degraded = degraded, else operational
         $hasDown = false;
         $hasDegraded = false;
         foreach ($webcamComponents as $comp) {
@@ -1362,12 +1335,11 @@ function checkAirportHealth(string $airportId, array $airport): array {
         ];
     }
     
-    // Determine overall airport status
-    // Check all components including individual sources for weather and webcams
+    // Determine overall airport status: any component down = down, any degraded = degraded
+    // Check all components including nested sources/cameras for complete status picture
     $hasDown = false;
     $hasDegraded = false;
     foreach ($health['components'] as $comp) {
-        // Check weather sources
         if (isset($comp['sources']) && is_array($comp['sources'])) {
             foreach ($comp['sources'] as $source) {
                 if ($source['status'] === 'down') {
@@ -1378,7 +1350,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 }
             }
         }
-        // Check webcam cameras
         elseif (isset($comp['cameras']) && is_array($comp['cameras'])) {
             foreach ($comp['cameras'] as $camera) {
                 if ($camera['status'] === 'down') {
@@ -1389,7 +1360,6 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 }
             }
         }
-        // Check other components that have direct status
         elseif (isset($comp['status'])) {
             if ($comp['status'] === 'down') {
                 $hasDown = true;
@@ -1402,7 +1372,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     $health['status'] = $hasDown ? 'down' : ($hasDegraded ? 'degraded' : 'operational');
     
-    // Check if airport is in maintenance mode
+    // Maintenance mode overrides all other statuses
     if (isAirportInMaintenance($airport)) {
         $health['status'] = 'maintenance';
     }
@@ -2186,13 +2156,13 @@ if (php_sapi_name() === 'cli') {
                             ?>
                         </span>
                     </div>
-                    <div class="metric-inline">
+                    <div class="metric-inline" title="Memory: Rolling averages (RSS).">
                         <span class="metric-label-inline">Memory</span>
                         <span class="metric-value-inline">
                             <?php 
                             $memoryAvg = $nodePerformance['memory_average'] ?? null;
                             if ($memoryAvg && ($memoryAvg['1min'] !== null || $memoryAvg['5min'] !== null || $memoryAvg['15min'] !== null)) {
-                                // Show averages if available
+                                // Show averages
                                 $parts = [];
                                 if ($memoryAvg['1min'] !== null) {
                                     $parts[] = formatBytes((int)$memoryAvg['1min']) . ' <span class="metric-sub">(1m)</span>';
