@@ -853,7 +853,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     
     require_once __DIR__ . '/../lib/weather/utils.php';
     
-    // Helper function to get HTTP error code from backoff state
+    // Helper function to get HTTP error code and failure reason from backoff state
     $getHttpErrorInfo = function($airportId, $sourceType) {
         $backoffData = getCachedBackoffData();
         if (empty($backoffData)) {
@@ -869,6 +869,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
         $httpCode = isset($state['last_http_code']) ? (int)$state['last_http_code'] : null;
         $errorTime = isset($state['last_error_time']) ? (int)$state['last_error_time'] : 0;
         $nextAllowed = isset($state['next_allowed_time']) ? (int)$state['next_allowed_time'] : 0;
+        $failureReason = isset($state['last_failure_reason']) ? $state['last_failure_reason'] : null;
         
         // Return HTTP code only for recent errors or active backoff to avoid stale error display
         if ($httpCode !== null && $httpCode >= 400 && $httpCode < 600) {
@@ -881,9 +882,22 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 return [
                     'http_code' => $httpCode,
                     'error_time' => $errorTime,
-                    'in_backoff' => $inBackoff
+                    'in_backoff' => $inBackoff,
+                    'failure_reason' => $failureReason
                 ];
             }
+        }
+        
+        // Also return failure reason if in backoff, even without HTTP code
+        $now = time();
+        $inBackoff = $nextAllowed > $now;
+        if ($inBackoff && $failureReason !== null) {
+            return [
+                'http_code' => null,
+                'error_time' => $errorTime,
+                'in_backoff' => true,
+                'failure_reason' => $failureReason
+            ];
         }
         
         return null;
@@ -941,7 +955,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
         
         $httpErrorInfo = $getHttpErrorInfo($airportId, 'primary');
         if ($httpErrorInfo !== null && ($primaryStatus === 'down' || $primaryStatus === 'degraded' || $httpErrorInfo['in_backoff'])) {
-            $primaryMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+            if ($httpErrorInfo['http_code'] !== null) {
+                $primaryMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+            }
+            if (isset($httpErrorInfo['failure_reason']) && $httpErrorInfo['failure_reason'] !== null) {
+                $primaryMessage .= ' (' . $httpErrorInfo['failure_reason'] . ')';
+            }
         }
         
         $weatherSources[] = [
@@ -990,7 +1009,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
         
         $httpErrorInfo = $getHttpErrorInfo($airportId, 'metar');
         if ($httpErrorInfo !== null && ($metarStatus === 'down' || $metarStatus === 'degraded' || $httpErrorInfo['in_backoff'])) {
-            $metarMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+            if ($httpErrorInfo['http_code'] !== null) {
+                $metarMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+            }
+            if (isset($httpErrorInfo['failure_reason']) && $httpErrorInfo['failure_reason'] !== null) {
+                $metarMessage .= ' (' . $httpErrorInfo['failure_reason'] . ')';
+            }
         }
         
         $weatherSources[] = [
@@ -1038,7 +1062,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
             
             if ($backupCircuit['skip']) {
                 $backupStatus = 'failed';
-                $backupMessage = 'Circuit breaker open';
+                $failureReason = $backupCircuit['last_failure_reason'] ?? null;
+                $backupMessage = $failureReason ? 'Circuit breaker open: ' . $failureReason : 'Circuit breaker open';
             } elseif ($backupActive) {
                 if ($backupAge < $warningSeconds) {
                     $backupStatus = 'operational';
@@ -1074,7 +1099,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $backupCircuit = checkWeatherCircuitBreaker($airportId, 'backup');
             if ($backupCircuit['skip']) {
                 $backupStatus = 'failed';
-                $backupMessage = 'Circuit breaker open';
+                $failureReason = $backupCircuit['last_failure_reason'] ?? null;
+                $backupMessage = $failureReason ? 'Circuit breaker open: ' . $failureReason : 'Circuit breaker open';
             } else {
                 $backupStatus = $backupActive ? 'operational' : 'standby';
                 $backupMessage = $backupActive ? 'Active (no timestamp)' : 'Standby (no timestamp)';
@@ -1084,7 +1110,12 @@ function checkAirportHealth(string $airportId, array $airport): array {
         // Check for HTTP error code to append to message
         $httpErrorInfo = $getHttpErrorInfo($airportId, 'backup');
         if ($httpErrorInfo !== null && ($backupStatus === 'down' || $backupStatus === 'degraded' || $backupStatus === 'failed' || $httpErrorInfo['in_backoff'])) {
-            $backupMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+            if ($httpErrorInfo['http_code'] !== null) {
+                $backupMessage .= ' - HTTP ' . $httpErrorInfo['http_code'];
+            }
+            if (isset($httpErrorInfo['failure_reason']) && $httpErrorInfo['failure_reason'] !== null) {
+                $backupMessage .= ' (' . $httpErrorInfo['failure_reason'] . ')';
+            }
         }
         
         $weatherSources[] = [
@@ -1230,19 +1261,27 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 
                 // Check backoff state (pull cameras only)
                 $inBackoff = false;
+                $failureReason = null;
                 if (!$isPush) {
                     $backoffData = getCachedBackoffData();
                     $key = $airportId . '_' . $idx;
                     if (isset($backoffData[$key])) {
                         $backoffUntil = $backoffData[$key]['next_allowed_time'] ?? 0;
                         $inBackoff = $backoffUntil > time();
+                        if ($inBackoff) {
+                            $failureReason = $backoffData[$key]['last_failure_reason'] ?? null;
+                        }
                     }
                 }
                 
                 // Prioritize error/backoff status over staleness (circuit breaker takes precedence)
                 if ($hasError || $inBackoff) {
                     $camStatus = 'degraded';
-                    $camMessage = $hasError ? 'Has errors' : 'In backoff';
+                    if ($inBackoff && $failureReason) {
+                        $camMessage = 'In backoff: ' . $failureReason;
+                    } else {
+                        $camMessage = $hasError ? 'Has errors' : 'In backoff';
+                    }
                 } elseif ($cacheAge < $warningThreshold) {
                     $camStatus = 'operational';
                     $camMessage = 'Fresh';
