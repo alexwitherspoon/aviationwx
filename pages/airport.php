@@ -5688,9 +5688,10 @@ function initializeWebcamTimestamps() {
 // Initialize when DOM is ready
 function initializeWebcamTimestampsAndStartUpdates() {
     initializeWebcamTimestamps();
-    // Update relative timestamps every 10 seconds for better responsiveness
+    // Update relative timestamps - 1 second on desktop for smooth counting, 10 seconds on mobile to save battery
     updateWebcamTimestamps();
-    setInterval(updateWebcamTimestamps, 10000); // Update every 10 seconds
+    const webcamTimestampRefreshMs = TIMER_IS_MOBILE ? 10000 : 1000;
+    registerTimer('webcam-timestamp-refresh', webcamTimestampRefreshMs, updateWebcamTimestamps);
     
     // Check outage banner after webcam timestamp updates
     if (typeof checkAndUpdateOutageBanner === 'function') {
@@ -5839,7 +5840,9 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
 <?php endif; ?>
 
 updateWeatherTimestamp();
-setInterval(updateWeatherTimestamp, 10000); // Update relative time every 10 seconds
+// Update weather timestamp - 1 second on desktop for smooth counting, 10 seconds on mobile to save battery
+const weatherTimestampRefreshMs = TIMER_IS_MOBILE ? 10000 : 1000;
+registerTimer('weather-timestamp-refresh', weatherTimestampRefreshMs, updateWeatherTimestamp);
 
 // Initialize and update outage banner
 function initializeOutageBanner() {
