@@ -991,39 +991,25 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             $timestamp = time();
         }
         
-        // Get input dimensions for variant generation
-        $inputDimensions = getImageDimensions($stagingFile);
-        if ($inputDimensions === null) {
-            aviationwx_log('warning', 'webcam fetch: unable to detect image dimensions, falling back to format-only generation', [
+        $variantResult = generateVariantsFromOriginal($stagingFile, $airportId, $camIndex, $timestamp);
+        
+        if ($variantResult['original'] === null || empty($variantResult['variants'])) {
+            aviationwx_log('error', 'webcam fetch: variant generation failed', [
                 'airport' => $airportId,
-                'cam' => $camIndex
+                'cam' => $camIndex,
+                'has_original' => $variantResult['original'] !== null,
+                'variant_count' => count($variantResult['variants'])
             ], 'app');
-            // Fallback to old format-only generation
-            $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, 'jpg');
-            $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
-        } else {
-            // Generate all variants and formats in parallel (synchronous wait)
-            // All variants × formats are written to staging files (.tmp)
-            $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, 'jpg', $inputDimensions);
-            
-            // Promote all successful staging files to final cache location (with timestamp for filename)
-            $promotedVariants = promoteVariants(
-                $airportId,
-                $camIndex,
-                $variantResult['results'],
-                'jpg',
-                $timestamp,
-                $variantResult['delete_original'],
-                $variantResult['delete_original'] ? $stagingFile : null
-            );
-            
-            // Convert promoted variants format for logging compatibility
-            $promotedFormats = [];
-            foreach ($promotedVariants as $variant => $formats) {
-                $promotedFormats = array_merge($promotedFormats, $formats);
-            }
-            $promotedFormats = array_unique($promotedFormats);
+            cleanupStagingFiles($airportId, $camIndex);
+            releaseCameraLock($lockFp);
+            return false;
         }
+        
+        $promotedFormats = [];
+        foreach ($variantResult['variants'] as $height => $formats) {
+            $promotedFormats = array_merge($promotedFormats, array_keys($formats));
+        }
+        $promotedFormats = array_unique($promotedFormats);
         
         // Cleanup old timestamp files (uses webcam_history_max_frames config for retention)
         cleanupOldTimestampFiles($airportId, $camIndex);

@@ -358,7 +358,7 @@ while ($running) {
                     }
                     
                     // Check cache age (stateless - use filemtime)
-                    $cacheFile = getCacheFile($airportId, $index, 'jpg', 'primary');
+                    $cacheFile = getCacheFile($airportId, $index, 'jpg', 'original');
                     $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
                     
                     // Check if update needed
