@@ -354,8 +354,13 @@ jobs:
             ['kx12', true],
             ['invalid!!', false],
             ['', false],
-            ['toolong123', false],
+            [str_repeat('a', 51), false], // Too long (51 chars)
             ['ab', false], // Too short
+            ['private-strip-1', true], // Valid with hyphens
+            ['helipad-downtown', true], // Valid longer ID
+            ['-airport', false], // Leading hyphen
+            ['airport-', false], // Trailing hyphen
+            ['air--port', false], // Consecutive hyphens
           ];
           
           foreach (\$tests as [\$id, \$expected]) {
