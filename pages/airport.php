@@ -34,6 +34,13 @@ if (file_exists($versionFile)) {
 }
 
 // Build version cookie value: short_hash.timestamp
+// If hash is 'unknown', generate a deterministic hash for testing/development
+if ($buildHash === 'unknown') {
+    // Generate a deterministic hex hash based on project root and timestamp
+    // This ensures consistent hash in test/dev environments and matches expected format
+    $projectRoot = dirname(__DIR__);
+    $buildHash = substr(md5($projectRoot . $buildTimestamp), 0, 7);
+}
 $buildHashShort = substr($buildHash, 0, 7);
 $versionCookieValue = $buildHashShort . '.' . $buildTimestamp;
 
@@ -689,7 +696,7 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                 return;
                             }
                             
-                            newWorker.addEventListener('statechange', () => {
+                            newWorker.addEventListener('statechange', function() {
                                 if (newWorker.state === 'installed') {
                                     if (navigator.serviceWorker.controller) {
                                         // There's a new SW waiting - activate it immediately
@@ -1193,12 +1200,22 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         <!-- Webcams -->
         <section class="webcam-section">
             <div class="webcam-grid">
-                <?php foreach ($airport['webcams'] as $index => $cam): ?>
-                <div class="webcam-item">
-                    <div class="webcam-container">
-                        <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: 16/9; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
-                        <?php
-                        $mtimeJpg = 0;
+                <?php 
+                require_once __DIR__ . '/../lib/webcam-metadata.php';
+                foreach ($airport['webcams'] as $index => $cam): 
+                    // Get webcam metadata
+                    $meta = getWebcamMetadata($airportId, $index);
+                    $aspectRatio = $meta ? $meta['aspect_ratio'] : 1.777; // Default 16:9
+                    $width = $meta ? $meta['width'] : 1920;
+                    $height = $meta ? $meta['height'] : 1080;
+                    $aspectRatioStr = round($aspectRatio, 3);
+                    
+                    // Get latest timestamp (used for both data-initial-timestamp and CAM_TS)
+                    // Store in variable for reuse in JavaScript initialization
+                    $mtimeJpg = 0;
+                    if ($meta && isset($meta['timestamp'])) {
+                        $mtimeJpg = $meta['timestamp'];
+                    } else {
                         foreach (['jpg', 'webp'] as $ext) {
                             $filePath = getCacheSymlinkPath($airportId, $index, $ext);
                             if (file_exists($filePath)) {
@@ -1206,21 +1223,82 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                 break;
                             }
                         }
+                    }
+                    // Store for JavaScript CAM_TS initialization (ensures consistency)
+                    $webcamTimestamps[$index] = $mtimeJpg;
+                    
+                    // Get available variants for browser selection
+                    $availableVariants = [];
+                    if ($mtimeJpg > 0) {
+                        $availableVariants = getAvailableVariants($airportId, $index, $mtimeJpg);
+                    }
+                    
+                    // Build srcset for each format with all available sizes
+                    // Browser will select best size based on viewport and pixel density
+                    $enabledFormats = getEnabledWebcamFormats();
+                    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
+                    $host = htmlspecialchars($_SERVER['HTTP_HOST']);
+                    $baseUrl = $protocol . '://' . $host . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $index . '&ts=' . $mtimeJpg;
+                    
+                    // Helper to build srcset with width descriptors
+                    // Browser selects best size based on viewport and pixel density
+                    $buildSrcset = function($format, $variants, $aspectRatio, $originalWidth, $originalHeight) use ($baseUrl) {
+                        $srcsetParts = [];
+                        $variantList = [];
                         
-                        $enabledFormats = getEnabledWebcamFormats();
-                        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
-                        $host = htmlspecialchars($_SERVER['HTTP_HOST']);
-                        $baseUrl = $protocol . '://' . $host . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $index . '&ts=' . $mtimeJpg;
-                        ?>
+                        // Collect available variants for this format
+                        foreach ($variants as $variant => $formats) {
+                            if (in_array($format, $formats)) {
+                                if ($variant === 'original') {
+                                    $variantList[] = 'original';
+                                } elseif (is_numeric($variant)) {
+                                    $variantList[] = (int)$variant;
+                                }
+                            }
+                        }
+                        
+                        // Sort numeric variants descending, original last
+                        $numericVariants = array_filter($variantList, 'is_numeric');
+                        rsort($numericVariants);
+                        if (in_array('original', $variantList)) {
+                            $numericVariants[] = 'original';
+                        }
+                        
+                        foreach ($numericVariants as $variant) {
+                            $url = $baseUrl . '&fmt=' . $format . '&size=' . $variant;
+                            if ($variant === 'original') {
+                                // Use actual original width
+                                $srcsetParts[] = $url . ' ' . $originalWidth . 'w';
+                            } else {
+                                // For height-based variants, calculate width
+                                $variantWidth = (int)round($aspectRatio * (int)$variant);
+                                // Cap at 3840px for ultra-wide cameras
+                                if ($variantWidth > 3840) {
+                                    $variantWidth = 3840;
+                                }
+                                $srcsetParts[] = $url . ' ' . $variantWidth . 'w';
+                            }
+                        }
+                        return implode(', ', $srcsetParts);
+                    };
+                ?>
+                <div class="webcam-item" 
+                     data-aspect-ratio="<?= $aspectRatioStr ?>"
+                     data-width="<?= $width ?>"
+                     data-height="<?= $height ?>">
+                    <div class="webcam-container">
+                        <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: <?= $width ?>/<?= $height ?>; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
                         <picture>
-                            <?php if (in_array('avif', $enabledFormats)): ?>
-                            <source srcset="<?= $baseUrl ?>&fmt=avif&size=primary" type="image/avif">
+                            <?php if (in_array('avif', $enabledFormats) && !empty($availableVariants)): ?>
+                            <source srcset="<?= $buildSrcset('avif', $availableVariants, $aspectRatio, $width, $height) ?>" type="image/avif" sizes="100vw">
                             <?php endif; ?>
-                            <?php if (in_array('webp', $enabledFormats)): ?>
-                            <source srcset="<?= $baseUrl ?>&fmt=webp&size=primary" type="image/webp">
+                            <?php if (in_array('webp', $enabledFormats) && !empty($availableVariants)): ?>
+                            <source srcset="<?= $buildSrcset('webp', $availableVariants, $aspectRatio, $width, $height) ?>" type="image/webp" sizes="100vw">
                             <?php endif; ?>
                             <img id="webcam-<?= $index ?>" 
-                                 src="<?= $baseUrl ?>&fmt=jpg&size=primary"
+                                 srcset="<?= !empty($availableVariants) ? $buildSrcset('jpg', $availableVariants, $aspectRatio, $width, $height) : ($baseUrl . '&fmt=jpg&size=original') ?>"
+                                 src="<?= $baseUrl ?>&fmt=jpg&size=original"
+                                 sizes="100vw"
                                  data-initial-timestamp="<?= $mtimeJpg ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?> - Tap to see historical time-lapse"
                                  title="<?= htmlspecialchars($cam['name']) ?> - Tap to see historical time-lapse"
@@ -1228,13 +1306,13 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
                                  role="button"
                                  tabindex="0"
                                  class="webcam-image"
-                                 width="1600"
-                                 height="900"
-                                 style="aspect-ratio: 16/9; width: 100%; height: auto; position: relative; z-index: 2;"
+                                 width="<?= $width ?>"
+                                 height="<?= $height ?>"
+                                 style="aspect-ratio: <?= $width ?>/<?= $height ?>; width: 100%; height: auto; position: relative; z-index: 2;"
                                  fetchpriority="high"
                                  decoding="async"
                                  onerror="handleWebcamError(<?= $index ?>, this)"
-                                 onload="observeWebcamFormat(<?= $index ?>, this); const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
+                                 onload="if(typeof observeWebcamFormat === 'function') { observeWebcamFormat(<?= $index ?>, this); } const skel=document.getElementById('webcam-skeleton-<?= $index ?>'); if(skel) skel.style.display='none'"
                                  onclick="openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.currentSrc || this.src)"
                                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWebcamPlayer('<?= htmlspecialchars($airportId) ?>', <?= $index ?>, '<?= htmlspecialchars(addslashes($cam['name'])) ?>', this.currentSrc || this.src)}">
                         </picture>
@@ -3053,7 +3131,7 @@ function initThemeToggle() {
         }
     });
     
-    // Sync with initial state (might have been set by inline script in <head>)
+    // Sync with initial state (might have been set by inline script in head)
     // This must happen BEFORE updateToggle() so it reads the correct theme
     if (document.documentElement.classList.contains('night-mode')) {
         document.body.classList.add('night-mode');
@@ -3991,8 +4069,7 @@ function displayWeather(weather) {
     
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
-        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
-        <div class="weather-group">
+        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `<div class="weather-group">
             ${(() => {
                 // Check if METAR data is actually available (has METAR timestamp)
                 const hasMetarData = (sanitizedWeather.obs_time_metar && sanitizedWeather.obs_time_metar > 0) || (sanitizedWeather.last_updated_metar && sanitizedWeather.last_updated_metar > 0);
@@ -4067,8 +4144,7 @@ function displayEmptyWeather() {
     // Display all weather fields as empty ("--") to match the structure of displayWeather()
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
-        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
-        <div class="weather-group">
+        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `<div class="weather-group">
             <div class="weather-item"><span class="label">Condition</span><span class="weather-value">--</span></div>
             <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">--</span></div>
             <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">--</span></div>
@@ -4447,8 +4523,8 @@ const WebcamPlayer = {
     hideUIMode: false,  // Kiosk/signage mode
     enabledFormats: ['jpg'],  // Server-enabled formats
     preferredFormat: 'jpg',   // Browser's preferred format (detected once)
-    preferredVariant: 'primary',  // Preferred size variant for viewport
-    variantWidths: {},  // Variant widths for srcset (from API)
+    preferredVariant: 1080,  // Preferred size variant for viewport (height in pixels)
+        variantHeights: [],  // Variant heights for selection (from API)
     // Rolling window refresh
     refreshInterval: 60,  // Refresh interval in seconds (from API)
     refreshTimer: null,  // Interval timer for refreshing frames
@@ -4594,10 +4670,51 @@ const WebcamPlayer = {
     // Build URL for a frame using the browser's preferred format and variant
     buildImageUrl(frame) {
         // Use preferred format if available for this frame, otherwise fall back to jpg
-        const format = frame.formats.includes(this.preferredFormat) 
+        const format = (frame.formats && Array.isArray(frame.formats) && frame.formats.includes(this.preferredFormat))
             ? this.preferredFormat 
             : 'jpg';
-        return `${frame.url}&fmt=${format}&size=${this.preferredVariant}`;
+        
+        // Get available heights from variant manifest
+        const availableHeights = frame.variants ? Object.keys(frame.variants)
+            .filter(v => v !== 'original' && !isNaN(parseInt(v)))
+            .map(v => parseInt(v))
+            .sort((a, b) => b - a) : [];
+        
+        // Choose variant height - use preferred if available, otherwise find best match
+        let size = this.preferredVariant;
+        if (typeof size === 'number') {
+            // Convert to string for object key lookup (variants object has string keys)
+            const sizeKey = String(size);
+            // Check if preferred height is available for this frame
+            if (!frame.variants || !frame.variants[sizeKey] || !frame.variants[sizeKey].includes(format)) {
+                // Find best available height
+                const availableForFormat = availableHeights.filter(h => {
+                    const hKey = String(h);
+                    return frame.variants[hKey] && frame.variants[hKey].includes(format);
+                });
+                if (availableForFormat.length > 0) {
+                    // Use largest available height <= preferred
+                    size = availableForFormat.find(h => h <= size) || availableForFormat[availableForFormat.length - 1];
+                } else if (frame.variants && frame.variants.original && frame.variants.original.includes(format)) {
+                    size = 'original';
+                } else {
+                    // Fallback to any available variant
+                    size = availableHeights.length > 0 ? availableHeights[availableHeights.length - 1] : 'original';
+                }
+            }
+        } else if (size === 'original') {
+            // Check if original is available
+            if (!frame.variants || !frame.variants.original || !frame.variants.original.includes(format)) {
+                // Fallback to largest available height
+                const availableForFormat = availableHeights.filter(h => {
+                    const hKey = String(h);
+                    return frame.variants[hKey] && frame.variants[hKey].includes(format);
+                });
+                size = availableForFormat.length > 0 ? availableForFormat[0] : 'original';
+            }
+        }
+        
+        return `${frame.url}&fmt=${format}&size=${size}`;
     },
 
     async open(airportId, camIndex, camName, currentImageSrc, options = {}) {
@@ -4651,10 +4768,13 @@ const WebcamPlayer = {
                 // Store enabled formats and detect browser's preferred format once
                 this.enabledFormats = data.enabledFormats || ['jpg'];
                 this.preferredFormat = getPreferredFormat(this.enabledFormats);
-                this.preferredVariant = getPreferredVariant('player');
-                this.variantWidths = data.variantWidths || {
-                    thumb: 160, small: 320, medium: 640, large: 1280, primary: 1920
-                };
+                this.variantHeights = data.variantHeights || [1080, 720, 360];
+                // Get preferred variant height based on display size
+                this.preferredVariant = getPreferredVariant('player', this.variantHeights);
+                
+                // Log browser format and variant selection
+                const variantStr = this.preferredVariant === 'original' ? 'original' : String(this.preferredVariant);
+                console.log(`[Webcam Player ${camIndex}] Browser selected format: ${this.preferredFormat}, variant: ${variantStr}`);
                 
                 this.initTimeline();
                 // Display the current frame immediately so navigation works right away
@@ -4841,10 +4961,26 @@ const WebcamPlayer = {
         if (this.preloadedImages[cacheKey]) {
             img.src = this.preloadedImages[cacheKey];
             img.classList.remove('loading');
+            // Extract format and variant from cached URL for logging
+            const urlMatch = this.preloadedImages[cacheKey].match(/[&?]fmt=([^&]+)/);
+            const sizeMatch = this.preloadedImages[cacheKey].match(/[&?]size=([^&]+)/);
+            const format = urlMatch ? urlMatch[1] : 'unknown';
+            const variant = sizeMatch ? sizeMatch[1] : 'unknown';
+            const timeStr = new Date(frame.timestamp * 1000).toLocaleTimeString();
+            console.log(`[Webcam Player ${this.camIndex}] Displaying cached image at ${timeStr} (format: ${format}, variant: ${variant})`);
         } else {
             // Fallback: load directly using preferred format
             img.classList.add('loading');
             const imageUrl = this.buildImageUrl(frame);
+            
+            // Extract format and variant from URL for logging
+            const urlMatch = imageUrl.match(/[&?]fmt=([^&]+)/);
+            const sizeMatch = imageUrl.match(/[&?]size=([^&]+)/);
+            const format = urlMatch ? urlMatch[1] : 'unknown';
+            const variant = sizeMatch ? sizeMatch[1] : 'unknown';
+            const timeStr = new Date(frame.timestamp * 1000).toLocaleTimeString();
+            console.log(`[Webcam Player ${this.camIndex}] Requesting image at ${timeStr} - format: ${format}, variant: ${variant}`);
+            
             const preloadImg = new Image();
             preloadImg.src = imageUrl;
             
@@ -4852,9 +4988,11 @@ const WebcamPlayer = {
                 img.src = imageUrl;
                 img.classList.remove('loading');
                 this.preloadedImages[cacheKey] = imageUrl;
+                console.log(`[Webcam Player ${this.camIndex}] Image loaded successfully at ${timeStr} - format: ${format}, variant: ${variant}`);
             };
             preloadImg.onerror = () => {
                 img.classList.remove('loading');
+                console.error(`[Webcam Player ${this.camIndex}] Image load failed at ${timeStr} - format: ${format}, variant: ${variant}`);
             };
         }
 
@@ -4879,6 +5017,16 @@ const WebcamPlayer = {
 
             // Preload single format directly (no <picture> element needed)
             const imageUrl = this.buildImageUrl(frame);
+            
+            // Extract format and variant from URL for logging (only log first few to avoid spam)
+            if (loaded < 3 || loaded % 10 === 0) {
+                const urlMatch = imageUrl.match(/[&?]fmt=([^&]+)/);
+                const sizeMatch = imageUrl.match(/[&?]size=([^&]+)/);
+                const format = urlMatch ? urlMatch[1] : 'unknown';
+                const variant = sizeMatch ? sizeMatch[1] : 'unknown';
+                console.log(`[Webcam Player ${this.camIndex}] Preloading frame ${loaded + 1}/${this.frames.length} - format: ${format}, variant: ${variant}`);
+            }
+            
             const img = new Image();
             img.src = imageUrl;
             
@@ -4921,6 +5069,9 @@ const WebcamPlayer = {
             } else {
                 this.currentIndex++;
             }
+            const frame = this.frames[this.currentIndex];
+            const timeStr = new Date(frame.timestamp * 1000).toLocaleTimeString();
+            console.log(`[Webcam Player ${this.camIndex}] Updating - new frame at ${timeStr}`);
             this.goToFrame(this.currentIndex);
         }, 500);  // 500ms = 2 FPS for deliberate time-lapse viewing
         
@@ -5479,13 +5630,19 @@ let webcamVisibilityDebounceTimer = null; // Debounce visibility/focus events
 
 // Initialize CAM_TS with server-side timestamps from initial image load
 // Uses EXIF capture time when available, otherwise falls back to filemtime
+// Uses webcamTimestamps array if available (ensures consistency with data-initial-timestamp)
 <?php foreach ($airport['webcams'] as $index => $cam): 
-    $initialMtime = 0;
-    foreach (['jpg', 'webp'] as $ext) {
-        $filePath = getCacheSymlinkPath($airportId, $index, $ext);
-        if (file_exists($filePath)) {
-            $initialMtime = getImageCaptureTimeForPage($filePath);
-            break;
+    // Use timestamp from webcamTimestamps array if available (ensures consistency with data-initial-timestamp)
+    $initialMtime = isset($webcamTimestamps[$index]) ? $webcamTimestamps[$index] : 0;
+    
+    // Fallback: read from file if not in array
+    if ($initialMtime === 0) {
+        foreach (['jpg', 'webp'] as $ext) {
+            $filePath = getCacheSymlinkPath($airportId, $index, $ext);
+            if (file_exists($filePath)) {
+                $initialMtime = getImageCaptureTimeForPage($filePath);
+                break;
+            }
         }
     }
 ?>
@@ -5636,7 +5793,9 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
             const timestampDelay = <?= $index === 0 ? '500' : '100' ?>;
             if (imgEl<?= $index ?>.complete && imgEl<?= $index ?>.naturalHeight !== 0) {
                 // Image already loaded, observe format immediately and check timestamp after delay
-                observeWebcamFormat(<?= $index ?>, imgEl<?= $index ?>);
+                if (typeof observeWebcamFormat === 'function') {
+                    observeWebcamFormat(<?= $index ?>, imgEl<?= $index ?>);
+                }
                 setTimeout(() => updateWebcamTimestampOnLoad(<?= $index ?>), timestampDelay);
             } else {
                 // Image not loaded yet, wait for load event, then delay timestamp check
@@ -6152,7 +6311,10 @@ function observeWebcamFormat(camIndex, img) {
     
     if (sizeMatch) {
         const size = sizeMatch[1].toLowerCase();
-        if (['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(size)) {
+        // Support both old variant names and new height-based variants
+        if (size === 'original' || !isNaN(parseInt(size))) {
+            detectedVariant = size === 'original' ? 'original' : parseInt(size);
+        } else if (['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(size)) {
             detectedVariant = size;
         }
     }
@@ -6189,59 +6351,76 @@ function getPreferredFormat(serverFormats) {
 }
 
 /**
- * Get preferred variant based on actual element display size
+ * Get preferred variant height based on actual element display size
  * 
- * Uses the actual rendered width of the webcam element to choose the appropriate
- * image size variant. This ensures we don't over-fetch large images for small
- * display containers.
+ * Uses the actual rendered height of the webcam element to choose the appropriate
+ * image size variant. Returns a height in pixels that should be used.
  * 
  * @param {string} context - Optional context: 'player' for history player, 
  *                           or defaults to grid view
- * @returns {string} Preferred variant: 'thumb', 'small', 'medium', 'large', or 'primary'
+ * @param {Array<number>} availableHeights - Optional array of available heights to choose from
+ * @returns {number|string} Preferred height in pixels, or 'original' if display is very large
  */
-function getPreferredVariant(context) {
+function getPreferredVariant(context, availableHeights = null) {
     const dpr = window.devicePixelRatio || 1;
-    let displayWidth = 0;
+    let displayHeight = 0;
     
-    // Try to get actual element width based on context
+    // Try to get actual element height based on context
     if (context === 'player') {
         // Webcam history player - use the player container
         const playerContainer = document.querySelector('.webcam-player-image-container');
-        if (playerContainer && playerContainer.clientWidth > 0) {
-            displayWidth = playerContainer.clientWidth;
+        if (playerContainer && playerContainer.clientHeight > 0) {
+            displayHeight = playerContainer.clientHeight;
         }
     } else {
         // Grid view - use the first webcam container as reference
         // All webcam cards are the same size in the grid
         const webcamContainer = document.querySelector('.webcam-container');
-        if (webcamContainer && webcamContainer.clientWidth > 0) {
-            displayWidth = webcamContainer.clientWidth;
+        if (webcamContainer && webcamContainer.clientHeight > 0) {
+            displayHeight = webcamContainer.clientHeight;
         }
     }
     
-    // Fallback to viewport width if element not found or not rendered yet
-    if (displayWidth === 0) {
-        displayWidth = window.innerWidth || document.documentElement.clientWidth;
+    // Fallback to viewport height if element not found or not rendered yet
+    if (displayHeight === 0) {
+        // Estimate height from viewport (assume 16:9 aspect ratio for estimation)
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        displayHeight = Math.round(viewportWidth * 9 / 16);
     }
     
-    // Effective width accounts for device pixel ratio (retina displays)
+    // Effective height accounts for device pixel ratio (retina displays)
     // This ensures sharp images on high-DPI screens
-    const effectiveWidth = displayWidth * dpr;
+    const effectiveHeight = displayHeight * dpr;
     
-    // Choose variant based on effective display width
-    // Thresholds are set to provide ~1.5x headroom for quality
-    // e.g., 320w variant is suitable for displays up to ~213px (320/1.5)
-    if (effectiveWidth < 240) {
-        return 'thumb';     // 160w - for very small displays/thumbnails
-    } else if (effectiveWidth < 480) {
-        return 'small';     // 320w - for small mobile displays
-    } else if (effectiveWidth < 960) {
-        return 'medium';    // 640w - for tablets/small laptops
-    } else if (effectiveWidth < 1920) {
-        return 'large';     // 1280w - for most desktop displays
-    } else {
-        return 'primary';   // 1920w - for large/4K displays
+    // If available heights provided, choose closest match
+    if (availableHeights && Array.isArray(availableHeights) && availableHeights.length > 0) {
+        // Sort heights descending
+        const sortedHeights = [...availableHeights].sort((a, b) => b - a);
+        
+        // Find smallest height that's >= effective height (with 1.5x headroom)
+        const targetHeight = effectiveHeight * 1.5;
+        for (const height of sortedHeights) {
+            if (height >= targetHeight) {
+                return height;
+            }
+        }
+        
+        // No height is large enough - return largest available or original
+        return sortedHeights[0] >= effectiveHeight ? sortedHeights[0] : 'original';
     }
+    
+    // Default heights if not provided
+    const defaultHeights = [1080, 720, 360];
+    const targetHeight = effectiveHeight * 1.5;
+    
+    for (const height of defaultHeights) {
+        if (height >= targetHeight) {
+            return height;
+        }
+    }
+    
+    // Very large display - use original
+    return 'original';
 }
 
 /**
@@ -6698,7 +6877,7 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
 async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpegTimestamp) {
     // Extract variant from URL for logging
     const variantMatch = url.match(/[&?]size=([^&]+)/);
-    const requestedVariant = variantMatch ? variantMatch[1] : 'primary';
+    const requestedVariant = variantMatch ? variantMatch[1] : 'original';
     
     console.log(`[Webcam ${camIndex}] Requesting image - format: ${preferredFormat}, variant: ${requestedVariant}`);
     
@@ -6830,10 +7009,17 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                 : ['jpg'];
             
             const preferredFormat = getPreferredFormat(serverFormats);
-            const preferredVariant = getPreferredVariant();
+            // Get available variant heights from API response or extract from variants
+            const variantHeights = json.variantHeights && Array.isArray(json.variantHeights) 
+                ? json.variantHeights 
+                : (json.variants ? Object.keys(json.variants)
+                    .filter(v => v !== 'original' && !isNaN(parseInt(v)))
+                    .map(v => parseInt(v))
+                    .sort((a, b) => b - a) : [1080, 720, 360]);
+            const preferredVariant = getPreferredVariant(null, variantHeights);
             
             // Build image URL with timestamp and variant parameters (immutable cache busting)
-            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}&size={variant}
+            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}&size={height|original}
             // This ensures automatic cache busting when timestamp changes
             const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&ts=${newTs}&fmt=${preferredFormat}&size=${preferredVariant}`;
             

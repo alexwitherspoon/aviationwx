@@ -171,6 +171,8 @@ function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): 
 /**
  * Get path to timestamped webcam image
  * 
+ * @deprecated Use getWebcamVariantPath() or getWebcamOriginalTimestampedPath() instead
+ * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp
@@ -180,6 +182,45 @@ function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): 
  */
 function getWebcamTimestampedPath(string $airportId, int $camIndex, int $timestamp, string $variant, string $format): string {
     return getWebcamCameraDir($airportId, $camIndex) . '/' . $timestamp . '_' . $variant . '.' . $format;
+}
+
+/**
+ * Get path to timestamped original webcam image
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timestamp Unix timestamp
+ * @param string $format Image format (jpg, webp, avif)
+ * @return string Full path to timestamped original image
+ */
+function getWebcamOriginalTimestampedPath(string $airportId, int $camIndex, int $timestamp, string $format): string {
+    return getWebcamCameraDir($airportId, $camIndex) . '/' . $timestamp . '_original.' . $format;
+}
+
+/**
+ * Get path to timestamped variant webcam image (by height)
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param int $timestamp Unix timestamp
+ * @param int $height Variant height in pixels
+ * @param string $format Image format (jpg, webp, avif)
+ * @return string Full path to timestamped variant image
+ */
+function getWebcamVariantPath(string $airportId, int $camIndex, int $timestamp, int $height, string $format): string {
+    return getWebcamCameraDir($airportId, $camIndex) . '/' . $timestamp . '_' . $height . '.' . $format;
+}
+
+/**
+ * Get path to original webcam symlink
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param string $format Image format (jpg, webp, avif)
+ * @return string Full path to original symlink
+ */
+function getWebcamOriginalSymlinkPath(string $airportId, int $camIndex, string $format = 'jpg'): string {
+    return getWebcamCameraDir($airportId, $camIndex) . '/original.' . $format;
 }
 
 /**

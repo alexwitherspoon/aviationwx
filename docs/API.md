@@ -113,15 +113,34 @@ The API uses `s-maxage` to limit Cloudflare cache TTL separately from browser ca
 
 ### Webcam Images
 
-#### `GET /webcam.php?id={airport_id}&cam={camera_index}[&fmt={format}][&v={hash}][&mtime=1]`
+#### `GET /webcam.php?id={airport_id}&cam={camera_index}[&fmt={format}][&size={height}][&v={hash}][&mtime=1]`
 
 Returns a cached webcam image for the specified airport and camera.
+
+**Parameters:**
+- `id` (required): Airport ID (e.g., `kspb`)
+- `cam` (required): Camera index (0-based, e.g., `0`, `1`)
+- `fmt` (optional): Explicit format request (`jpg`, `webp`, or `avif`)
+  - If specified: May return HTTP 202 if format is generating
+  - If omitted: Always returns HTTP 200 immediately (server respects `Accept` header)
+- `size` (optional): Variant height in pixels (e.g., `1080`, `720`, `360`) or `original` for full resolution
+  - Default: `original` (serves full-resolution original image)
+  - Variants preserve aspect ratio and are capped at 3840px width for ultra-wide cameras
+- `v` (optional): Cache-busting hash (8-character hex string)
+- `mtime` (optional): Set to `1` to get JSON timestamp response instead of image
+
+**Variant System:**
+- Original images are preserved at full resolution
+- Height-based variants are generated automatically (configured via `webcam_variant_heights` in `airports.json`)
+- Variants are identified by height (e.g., `1080`, `720`, `360`) to support diverse aspect ratios
+- Width is calculated from height to preserve aspect ratio, capped at 3840px for ultra-wide cameras
+- Only variants ≤ original height are generated
 
 ---
 
 ### Webcam History
 
-#### `GET /api/webcam-history.php?id={airport_id}&cam={camera_index}[&ts={timestamp}]`
+#### `GET /api/webcam-history.php?id={airport_id}&cam={camera_index}[&ts={timestamp}][&size={height}][&fmt={format}]`
 
 Returns webcam history data. When `ts` is omitted, returns a JSON manifest of available frames. When `ts` is provided, returns the actual historical image.
 
@@ -129,6 +148,8 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 - `id` (required): Airport ID (e.g., `kspb`)
 - `cam` (required): Camera index (0-based)
 - `ts` (optional): Unix timestamp of specific frame to retrieve
+- `size` (optional): Variant height in pixels (e.g., `1080`, `720`, `360`) or `original` for full resolution
+- `fmt` (optional): Format request (`jpg`, `webp`, or `avif`)
 
 **Response (without `ts` - JSON manifest):**
 ```json
@@ -137,9 +158,30 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
   "available": true,
   "airport": "kspb",
   "cam": 0,
+  "variantHeights": [1080, 720, 360],
   "frames": [
-    { "timestamp": 1703444400, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444400", "formats": ["jpg", "webp"] },
-    { "timestamp": 1703444460, "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444460", "formats": ["jpg", "webp"] }
+    {
+      "timestamp": 1703444400,
+      "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444400",
+      "formats": ["jpg", "webp"],
+      "variants": {
+        "original": ["jpg", "webp"],
+        "1080": ["jpg", "webp"],
+        "720": ["jpg", "webp"],
+        "360": ["jpg"]
+      }
+    },
+    {
+      "timestamp": 1703444460,
+      "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1703444460",
+      "formats": ["jpg", "webp"],
+      "variants": {
+        "original": ["jpg", "webp"],
+        "1080": ["jpg", "webp"],
+        "720": ["jpg", "webp"],
+        "360": ["jpg"]
+      }
+    }
   ],
   "frame_count": 2,
   "current_index": 1,
@@ -223,7 +265,7 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 
 **Timestamp Endpoint (`mtime=1`):**
 
-Returns JSON with image timestamp and format availability status.
+Returns JSON with image timestamp, format availability, and variant information.
 
 **Response Format:**
 ```json
@@ -235,11 +277,17 @@ Returns JSON with image timestamp and format availability status.
     "jpg": true,
     "webp": true,
     "avif": false
+  },
+  "variants": {
+    "original": ["jpg", "webp"],
+    "1080": ["jpg", "webp"],
+    "720": ["jpg", "webp"],
+    "360": ["jpg"]
   }
 }
 ```
 
-**Note:** Only includes formats that are enabled in configuration. Format availability is checked via optimized file I/O (single `stat()` call per format).
+**Note:** Only includes formats that are enabled in configuration. Format availability is checked via optimized file I/O (single `stat()` call per format). The `variants` object shows available variant heights and their supported formats.
 
 ---
 

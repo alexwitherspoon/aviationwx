@@ -15,7 +15,7 @@ class WebcamBackgroundRefreshTest extends TestCase
         parent::setUp();
         $this->baseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $this->cacheFile = getCacheFile($this->airport, $this->camIndex, 'jpg', 'primary');
+        $this->cacheFile = getCacheFile($this->airport, $this->camIndex, 'jpg', 'original');
         $cacheDir = dirname(dirname($this->cacheFile));
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);

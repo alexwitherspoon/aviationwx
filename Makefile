@@ -8,7 +8,7 @@
 #
 # See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet
+.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet
 
 help: ## Show this help message
 	@echo ''
@@ -16,7 +16,7 @@ help: ## Show this help message
 	@echo '============================'
 	@echo ''
 	@echo '\033[1;33mDevelopment:\033[0m'
-	@grep -E '^(dev|up|down|restart|logs|shell):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(dev|up|down|down-prod|restart|logs|shell):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTesting:\033[0m'
 	@grep -E '^(test|test-unit|test-integration|test-browser|test-local|metrics-test|smoke):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -81,8 +81,11 @@ build-force: ## Force rebuild Docker containers (no cache)
 up: build ## Start containers (local development)
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml up -d
 
-down: ## Stop containers
+down: ## Stop local development containers
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml down
+
+down-prod: ## Stop production containers
+	@docker compose -f docker/docker-compose.prod.yml down
 
 restart: ## Restart containers (quick restart, doesn't pick up env var changes)
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.override.yml restart

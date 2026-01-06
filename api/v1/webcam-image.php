@@ -72,27 +72,41 @@ function handleGetWebcamImage(array $params, array $context): void
         $format = 'jpg';
     }
     
-    // Get requested size (variant)
-    $size = $_GET['size'] ?? 'primary';
-    $validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
-    if (!in_array($size, $validSizes)) {
-        $size = 'primary';
+    // Get requested size (variant) - supports height-based variants or 'original'
+    $size = $_GET['size'] ?? 'original';
+    
+    // Validate size: numeric height or 'original'
+    if ($size !== 'original' && (!is_numeric($size) || (int)$size < 1 || (int)$size > 5000)) {
+        $size = 'original';
     }
     
-    // Build cache file path using getCacheFile helper
-    require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-    $cacheFile = getCacheFile($airportId, $camIndex, $format, $size);
+    // Get latest timestamp and build path using new variant system
+    require_once __DIR__ . '/../../lib/webcam-metadata.php';
+    $timestamp = getLatestImageTimestamp($airportId, $camIndex);
     
-    // Fall back to primary if variant doesn't exist
-    if (!file_exists($cacheFile) && $size !== 'primary') {
-        $cacheFile = getCacheFile($airportId, $camIndex, $format, 'primary');
+    if ($timestamp === 0) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+            'Webcam image temporarily unavailable',
+            503
+        );
+        return;
+    }
+    
+    // Get image path for requested size
+    $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $format);
+    
+    // Fall back to original if variant doesn't exist
+    if ($cacheFile === null && $size !== 'original') {
+        $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, 'original', $format);
+        $size = 'original';
     }
     
     // Fall back to JPG if requested format doesn't exist
-    if (!file_exists($cacheFile) && $format !== 'jpg') {
-        $cacheFile = getCacheFile($airportId, $camIndex, 'jpg', $size);
-        if (!file_exists($cacheFile) && $size !== 'primary') {
-            $cacheFile = getCacheFile($airportId, $camIndex, 'jpg', 'primary');
+    if ($cacheFile === null && $format !== 'jpg') {
+        $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, 'jpg');
+        if ($cacheFile === null && $size !== 'original') {
+            $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, 'original', 'jpg');
         }
         $format = 'jpg';
     }

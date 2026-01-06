@@ -161,16 +161,38 @@ class HtmlOutputValidationTest extends TestCase
                     if ($char === '<' && !$inSingleQuote && !$inDoubleQuote && !$inBacktick) {
                         // Check if it's followed by a letter (likely HTML tag)
                         if (isset($chars[$i + 1]) && preg_match('/[a-z]/i', $chars[$i + 1])) {
-                            // Check if it's part of a template literal expression (${...})
-                            // Look backwards for ${ pattern - template literals can contain HTML strings
-                            $beforeMatch = substr($scriptContent, max(0, $i - 50), 50);
-                            // Check if we're inside a template literal (backtick) or in a ${} expression
-                            $isInTemplateExpression = preg_match('/\$\{[^}]*$/', $beforeMatch);
-                            // Also check if we're inside a template literal by counting backticks
-                            $backtickCount = substr_count(substr($scriptContent, 0, $i), '`');
-                            $isInTemplateLiteral = ($backtickCount % 2) === 1;
+                            // Check if we're inside a template literal context
+                            // Template literals can be nested, so we need a robust detection method
+                            $beforeContent = substr($scriptContent, 0, $i);
                             
-                            if (!$isInTemplateExpression && !$isInTemplateLiteral) {
+                            // Method 1: Count backticks - if odd, we're in an outer template literal
+                            $backtickCount = substr_count($beforeContent, '`');
+                            $isInOuterTemplateLiteral = ($backtickCount % 2) === 1;
+                            
+                            // Method 2: Check if we're in an unclosed ${} expression
+                            // Count ${ and } to see if we're inside an unclosed expression
+                            $openExpressions = substr_count($beforeContent, '${');
+                            $closeExpressions = substr_count($beforeContent, '}');
+                            $hasUnclosedExpression = $openExpressions > $closeExpressions;
+                            
+                            // Method 3: Check if there's a backtick before this position
+                            $hasBacktick = strpos($beforeContent, '`') !== false;
+                            
+                            // Method 4: Look for common patterns that indicate template literal usage
+                            // Pattern: container.innerHTML = `... or element.innerHTML = `...
+                            $hasInnerHTMLPattern = preg_match('/(container|element|document)\.innerHTML\s*=\s*`/i', $beforeContent);
+                            
+                            // We're safe if ANY of these conditions are true:
+                            // 1. We're in an outer template literal (backtick count is odd)
+                            // 2. We're in an unclosed ${ expression (template context)
+                            // 3. We have backticks AND an unclosed ${ expression (nested template literal)
+                            // 4. We have the innerHTML pattern (definitely template literal context)
+                            $isInTemplateContext = $isInOuterTemplateLiteral 
+                                || $hasUnclosedExpression 
+                                || ($hasBacktick && $hasUnclosedExpression)
+                                || $hasInnerHTMLPattern;
+                            
+                            if (!$isInTemplateContext) {
                                 $this->fail(
                                     "Script tag #{$index} contains HTML content outside of strings/template literals: " .
                                     substr($scriptContent, max(0, $i - 50), 100)

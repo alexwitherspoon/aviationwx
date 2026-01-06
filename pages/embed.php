@@ -11,6 +11,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/webcam-metadata.php';
 
 // Get embed parameters
 $embedAirportId = $_GET['embed_airport'] ?? $_GET['airport'] ?? '';
@@ -197,10 +198,93 @@ if ($airport && isset($airport['runways']) && is_array($airport['runways'])) {
     $runways = $airport['runways'];
 }
 
-// Build webcam URL if needed
+// Get webcam metadata for dynamic aspect ratios and variant support
+$webcamMetadata = [];
+if ($hasWebcams && $airportId) {
+    for ($i = 0; $i < $webcamCount; $i++) {
+        $meta = getWebcamMetadata($airportId, $i);
+        if ($meta) {
+            $webcamMetadata[$i] = $meta;
+        } else {
+            // Default to 16:9 if no metadata
+            $webcamMetadata[$i] = [
+                'width' => 1920,
+                'height' => 1080,
+                'aspect_ratio' => 1.777,
+                'timestamp' => 0
+            ];
+        }
+    }
+}
+
+// Helper function to build webcam URL with variant support
+function buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex, $format = 'jpg', $size = null) {
+    $url = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIndex . '&fmt=' . $format;
+    if ($size !== null) {
+        $url .= '&size=' . $size;
+    }
+    return $url;
+}
+
+// Helper function to build srcset for embed webcam
+function buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIndex, $meta, $format = 'jpg') {
+    if (!$meta || !isset($meta['timestamp']) || $meta['timestamp'] <= 0) {
+        // Fallback to simple URL if no metadata
+        return buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex, $format, 'original');
+    }
+    
+    $availableVariants = getAvailableVariants($airportId, $camIndex, $meta['timestamp']);
+    if (empty($availableVariants)) {
+        return buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex, $format, 'original');
+    }
+    
+    $srcsetParts = [];
+    $aspectRatio = $meta['aspect_ratio'] ?? 1.777;
+    $originalWidth = $meta['width'] ?? 1920;
+    
+    // Collect available variants for this format
+    $variantList = [];
+    foreach ($availableVariants as $variant => $formats) {
+        if (in_array($format, $formats)) {
+            if ($variant === 'original') {
+                $variantList[] = 'original';
+            } elseif (is_numeric($variant)) {
+                $variantList[] = (int)$variant;
+            }
+        }
+    }
+    
+    // Sort numeric variants descending, original last
+    $numericVariants = array_filter($variantList, 'is_numeric');
+    rsort($numericVariants);
+    if (in_array('original', $variantList)) {
+        $numericVariants[] = 'original';
+    }
+    
+    foreach ($numericVariants as $variant) {
+        $url = buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex, $format, $variant);
+        if ($variant === 'original') {
+            $srcsetParts[] = $url . ' ' . $originalWidth . 'w';
+        } else {
+            $variantWidth = (int)round($aspectRatio * (int)$variant);
+            if ($variantWidth > 3840) {
+                $variantWidth = 3840;
+            }
+            $srcsetParts[] = $url . ' ' . $variantWidth . 'w';
+        }
+    }
+    
+    return implode(', ', $srcsetParts);
+}
+
+// Build webcam URL if needed (for single webcam style)
 $webcamUrl = null;
+$webcamSrcset = null;
 if ($hasWebcams && $webcamIndex < $webcamCount) {
-    $webcamUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $webcamIndex . '&fmt=jpg&t=' . time();
+    $meta = $webcamMetadata[$webcamIndex] ?? null;
+    $enabledFormats = getEnabledWebcamFormats();
+    $webcamUrl = buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex, 'jpg', 'original');
+    $webcamSrcset = buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'jpg');
 }
 
 // Detect if airport has METAR data
@@ -336,6 +420,11 @@ header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 header('X-Frame-Options: ALLOWALL');
+
+// Set 404 if airport not found (check before output)
+if (empty($embedAirportId) || !$airport) {
+    http_response_code(404);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -526,6 +615,14 @@ header('X-Frame-Options: ALLOWALL');
             position: relative;
             background: #000;
             overflow: hidden;
+            <?php if ($webcamUrl && isset($webcamMetadata[$webcamIndex])): 
+                $meta = $webcamMetadata[$webcamIndex];
+                $aspectRatio = $meta['aspect_ratio'] ?? 1.777;
+            ?>
+            aspect-ratio: <?= $aspectRatio ?>;
+            <?php else: ?>
+            aspect-ratio: 16/9;
+            <?php endif; ?>
         }
         
         .style-webcam .webcam-image {
@@ -675,6 +772,22 @@ header('X-Frame-Options: ALLOWALL');
             overflow: hidden;
         }
         
+        <?php if ($hasWebcams && $airportId): 
+            // Set dynamic aspect ratios for dual webcam cells
+            for ($slot = 0; $slot < 2; $slot++):
+                $camIdx = $cams[$slot] ?? $slot;
+                if ($camIdx < $webcamCount && isset($webcamMetadata[$camIdx])):
+                    $meta = $webcamMetadata[$camIdx];
+                    $aspectRatio = $meta['aspect_ratio'] ?? 1.777;
+        ?>
+        .style-dual .dual-webcam-cell:nth-child(<?= $slot + 1 ?>) {
+            aspect-ratio: <?= $aspectRatio ?>;
+        }
+        <?php 
+                endif;
+            endfor;
+        endif; ?>
+        
         .style-dual .dual-webcam-cell img {
             width: 100%;
             height: 100%;
@@ -800,19 +913,7 @@ header('X-Frame-Options: ALLOWALL');
             grid-template-rows: repeat(2, 1fr);
         }
         
-        /* Adjust aspect ratios based on webcam count */
-        .style-multi .webcam-grid.cams-1 .webcam-cell {
-            aspect-ratio: 16/9;
-        }
-        
-        .style-multi .webcam-grid.cams-2 .webcam-cell {
-            aspect-ratio: 16/9;
-        }
-        
-        .style-multi .webcam-grid.cams-3 .webcam-cell {
-            aspect-ratio: 4/3;
-        }
-        
+        /* Dynamic aspect ratios will be set inline per cell based on metadata */
         .style-multi .webcam-grid.cams-4 .webcam-cell {
             aspect-ratio: auto;
         }
@@ -1125,6 +1226,7 @@ header('X-Frame-Options: ALLOWALL');
 </head>
 <body>
 <?php if (!$airport): ?>
+    <?php http_response_code(404); ?>
     <div class="no-data">
         <div class="icon">✈️</div>
         <p>Airport not found</p>
@@ -1135,7 +1237,7 @@ header('X-Frame-Options: ALLOWALL');
         </p>
     </div>
 <?php else: ?>
-    <a href="<?= htmlspecialchars($dashboardUrl) ?>" target="<?= htmlspecialchars($target) ?>" rel="noopener" class="embed-container">
+    <a href="<?= htmlspecialchars($dashboardUrl) ?>" target="<?= htmlspecialchars($target) ?>" rel="noopener" class="embed-container theme-<?= htmlspecialchars($theme) ?>">
     
     <?php if ($style === 'card'): ?>
         <!-- CARD STYLE -->
@@ -1277,8 +1379,28 @@ header('X-Frame-Options: ALLOWALL');
         <!-- WEBCAM STYLE -->
         <div class="style-webcam">
             <div class="webcam-container">
-                <?php if ($webcamUrl): ?>
-                    <img src="<?= htmlspecialchars($webcamUrl) ?>" alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam" class="webcam-image">
+                <?php if ($webcamUrl): 
+                    $meta = $webcamMetadata[$webcamIndex] ?? null;
+                    $enabledFormats = getEnabledWebcamFormats();
+                    $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $webcamIndex;
+                    $timestamp = $meta['timestamp'] ?? 0;
+                    if ($timestamp > 0) {
+                        $baseUrl .= '&ts=' . $timestamp;
+                    }
+                ?>
+                    <picture>
+                        <?php if (in_array('avif', $enabledFormats) && $meta): ?>
+                        <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'avif')) ?>" type="image/avif" sizes="400px">
+                        <?php endif; ?>
+                        <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                        <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'webp')) ?>" type="image/webp" sizes="400px">
+                        <?php endif; ?>
+                        <img src="<?= htmlspecialchars($webcamUrl) ?>" 
+                             <?php if ($webcamSrcset): ?>srcset="<?= htmlspecialchars($webcamSrcset) ?>" sizes="400px"<?php endif; ?>
+                             alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam" 
+                             class="webcam-image"
+                             <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                    </picture>
                     <div class="live-badge">LIVE</div>
                 <?php else: ?>
                     <div class="no-webcam-placeholder">No webcam available</div>
@@ -1430,11 +1552,30 @@ header('X-Frame-Options: ALLOWALL');
                         $camIdx = $cams[$slot] ?? $slot;
                         // Ensure camera index is valid
                         if ($camIdx >= $webcamCount) $camIdx = $slot < $webcamCount ? $slot : 0;
-                        $camUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIdx . '&fmt=jpg&t=' . time();
+                        $meta = $webcamMetadata[$camIdx] ?? null;
+                        $camUrl = buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx, 'jpg', 'original');
+                        $camSrcset = buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'jpg');
                         $camName = $airport['webcams'][$camIdx]['name'] ?? 'Camera ' . ($camIdx + 1);
+                        $enabledFormats = getEnabledWebcamFormats();
+                        $timestamp = $meta['timestamp'] ?? 0;
+                        $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIdx;
+                        if ($timestamp > 0) {
+                            $baseUrl .= '&ts=' . $timestamp;
+                        }
                 ?>
                 <div class="dual-webcam-cell">
-                    <img src="<?= htmlspecialchars($camUrl) ?>" alt="<?= htmlspecialchars($camName) ?>">
+                    <picture>
+                        <?php if (in_array('avif', $enabledFormats) && $meta): ?>
+                        <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'avif')) ?>" type="image/avif" sizes="300px">
+                        <?php endif; ?>
+                        <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                        <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'webp')) ?>" type="image/webp" sizes="300px">
+                        <?php endif; ?>
+                        <img src="<?= htmlspecialchars($camUrl) ?>" 
+                             <?php if ($camSrcset): ?>srcset="<?= htmlspecialchars($camSrcset) ?>" sizes="300px"<?php endif; ?>
+                             alt="<?= htmlspecialchars($camName) ?>"
+                             <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                    </picture>
                     <span class="cam-label"><?= htmlspecialchars($camName) ?></span>
                 </div>
                 <?php 
@@ -1583,11 +1724,31 @@ header('X-Frame-Options: ALLOWALL');
                         $camIdx = $cams[$slot] ?? $slot;
                         // Ensure camera index is valid
                         if ($camIdx >= $webcamCount) $camIdx = $slot < $webcamCount ? $slot : 0;
-                        $camUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIdx . '&fmt=jpg&t=' . time();
+                        $meta = $webcamMetadata[$camIdx] ?? null;
+                        $camUrl = buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx, 'jpg', 'original');
+                        $camSrcset = buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'jpg');
                         $camName = $airport['webcams'][$camIdx]['name'] ?? 'Camera ' . ($camIdx + 1);
+                        $enabledFormats = getEnabledWebcamFormats();
+                        $aspectRatio = $meta ? $meta['aspect_ratio'] : 1.777;
+                        $timestamp = $meta['timestamp'] ?? 0;
+                        $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIdx;
+                        if ($timestamp > 0) {
+                            $baseUrl .= '&ts=' . $timestamp;
+                        }
                     ?>
-                    <div class="webcam-cell">
-                        <img src="<?= htmlspecialchars($camUrl) ?>" alt="<?= htmlspecialchars($camName) ?>">
+                    <div class="webcam-cell" style="aspect-ratio: <?= $aspectRatio ?>;">
+                        <picture>
+                            <?php if (in_array('avif', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'avif')) ?>" type="image/avif" sizes="300px">
+                            <?php endif; ?>
+                            <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'webp')) ?>" type="image/webp" sizes="300px">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($camUrl) ?>" 
+                                 <?php if ($camSrcset): ?>srcset="<?= htmlspecialchars($camSrcset) ?>" sizes="300px"<?php endif; ?>
+                                 alt="<?= htmlspecialchars($camName) ?>"
+                                 <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                        </picture>
                         <span class="cam-label"><?= htmlspecialchars($camName) ?></span>
                     </div>
                     <?php endfor; ?>
@@ -1726,8 +1887,27 @@ header('X-Frame-Options: ALLOWALL');
             </div>
             <div class="full-body">
                 <div class="webcam-section">
-                    <?php if ($webcamUrl): ?>
-                        <img src="<?= htmlspecialchars($webcamUrl) ?>" alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam">
+                    <?php if ($webcamUrl): 
+                        $meta = $webcamMetadata[$webcamIndex] ?? null;
+                        $enabledFormats = getEnabledWebcamFormats();
+                        $timestamp = $meta['timestamp'] ?? 0;
+                        $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $webcamIndex;
+                        if ($timestamp > 0) {
+                            $baseUrl .= '&ts=' . $timestamp;
+                        }
+                    ?>
+                        <picture>
+                            <?php if (in_array('avif', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'avif')) ?>" type="image/avif" sizes="800px">
+                            <?php endif; ?>
+                            <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'webp')) ?>" type="image/webp" sizes="800px">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($webcamUrl) ?>" 
+                                 <?php if ($webcamSrcset): ?>srcset="<?= htmlspecialchars($webcamSrcset) ?>" sizes="800px"<?php endif; ?>
+                                 alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam"
+                                 <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                        </picture>
                         <div class="live-badge">🔴 LIVE</div>
                     <?php else: ?>
                         <div class="no-webcam-placeholder" style="height: 100%;">No webcam available</div>

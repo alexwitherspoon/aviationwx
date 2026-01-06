@@ -115,7 +115,13 @@ if (!defined('WIND_GROUP_MERGE_TOLERANCE_SECONDS')) {
 
 // Rate limiting defaults
 if (!defined('RATE_LIMIT_WEATHER_MAX')) {
-    define('RATE_LIMIT_WEATHER_MAX', 60);
+    // Increased from 60 to 120 to accommodate legitimate use cases:
+    // - Multiple browser tabs (each makes requests)
+    // - Page refreshes
+    // - Stale data retry logic (5s + 30s delays)
+    // - Normal refresh intervals (every 60s)
+    // Server caches weather data, so this protects against abuse while allowing normal usage
+    define('RATE_LIMIT_WEATHER_MAX', 120);
 }
 if (!defined('RATE_LIMIT_WEATHER_WINDOW')) {
     define('RATE_LIMIT_WEATHER_WINDOW', 60);

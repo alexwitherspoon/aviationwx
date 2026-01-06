@@ -45,6 +45,7 @@
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/webcam-metadata.php';
 
 // Supported image formats with MIME types
 $supportedFormats = [
@@ -58,12 +59,7 @@ $airportId = isset($_GET['id']) ? strtolower(trim($_GET['id'])) : '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 $timestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
 $requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
-$requestedSize = isset($_GET['size']) ? strtolower(trim($_GET['size'])) : 'primary';
-// Validate size parameter
-$validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
-if (!in_array($requestedSize, $validSizes)) {
-    $requestedSize = 'primary'; // Default to primary
-}
+$requestedSize = isset($_GET['size']) ? trim($_GET['size']) : 'original';
 
 // Validate airport ID
 if (empty($airportId)) {
@@ -102,42 +98,48 @@ if ($timestamp !== null) {
         $requestedFormat = 'jpg';
     }
     
-    // Try requested variant and format first, fall back to primary, then JPG
-    $imageFile = $cacheDir . '/' . $timestamp . '_' . $requestedSize . '.' . $requestedFormat;
-    $servedFormat = $requestedFormat;
-    $servedSize = $requestedSize;
+    $size = $requestedSize;
+    if ($size !== 'original' && is_numeric($size)) {
+        $size = (int)$size;
+        if ($size < 1 || $size > 5000) {
+            $size = 'original';
+        }
+    } elseif ($size !== 'original') {
+        $size = 'original';
+    }
     
-    if (!file_exists($imageFile)) {
-        // Fall back to primary variant
-        if ($requestedSize !== 'primary') {
-            $imageFile = $cacheDir . '/' . $timestamp . '_primary.' . $requestedFormat;
-            $servedSize = 'primary';
-        }
-        
-        // Fall back to JPG if format not available
-        if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
-            $imageFile = $cacheDir . '/' . $timestamp . '_' . $servedSize . '.jpg';
-            $servedFormat = 'jpg';
-        }
-        
-        // Final fallback: old naming (no variant)
-        if (!file_exists($imageFile)) {
-            $imageFile = $cacheDir . '/' . $timestamp . '.' . $requestedFormat;
-            if (!file_exists($imageFile) && $requestedFormat !== 'jpg') {
-                $imageFile = $cacheDir . '/' . $timestamp . '.jpg';
-                $servedFormat = 'jpg';
+    require_once __DIR__ . '/../lib/webcam-metadata.php';
+    $imageFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $requestedFormat);
+    $servedFormat = $requestedFormat;
+    $servedSize = $size;
+    
+    if ($imageFile === null) {
+        $enabledFormats = getEnabledWebcamFormats();
+        foreach ($enabledFormats as $format) {
+            if ($format === $requestedFormat) {
+                continue;
+            }
+            $imageFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $format);
+            if ($imageFile !== null) {
+                $servedFormat = $format;
+                break;
             }
         }
     }
     
-    if (!file_exists($imageFile)) {
+    if ($imageFile === null || !file_exists($imageFile)) {
         header('Content-Type: application/json');
         http_response_code(404);
-        echo json_encode(['error' => 'Frame not found']);
+        echo json_encode([
+            'error' => 'Frame not found',
+            'timestamp' => $timestamp,
+            'requested_size' => $size,
+            'requested_format' => $requestedFormat
+        ]);
         exit;
     }
     
-    // Validate file is within expected directory (security check)
+    // Security check: ensure file is within cache directory
     $realPath = realpath($imageFile);
     $realCacheDir = realpath($cacheDir);
     if ($realPath === false || $realCacheDir === false || strpos($realPath, $realCacheDir) !== 0) {
@@ -147,13 +149,11 @@ if ($timestamp !== null) {
         exit;
     }
     
-    // Serve image with aggressive cache headers (timestamp+format makes URL immutable)
     header('Content-Type: ' . $supportedFormats[$servedFormat]);
     header('Cache-Control: public, max-age=31536000, immutable');
     header('Content-Length: ' . filesize($imageFile));
     header('X-Content-Type-Options: nosniff');
     
-    // Tell client which format was actually served (useful for debugging/fallback detection)
     if ($servedFormat !== $requestedFormat) {
         header('X-Served-Format: ' . $servedFormat);
     }
@@ -193,7 +193,7 @@ foreach ($frames as $frame) {
         'timestamp' => $frame['timestamp'],
         'url' => $baseUrl . '&ts=' . $frame['timestamp'],
         'formats' => $frame['formats'] ?? ['jpg'],
-        'variants' => $frame['variants'] ?? ['primary'] // Available variants for this frame
+        'variants' => $frame['variants'] ?? [] // Variant manifest: {variant: [formats]}
     ];
 }
 
@@ -208,14 +208,9 @@ $perCamRefresh = isset($cam['refresh_seconds'])
     : $airportWebcamRefresh;
 $refreshInterval = max(60, $perCamRefresh); // Enforce minimum 60 seconds
 
-// Get variant widths for srcset (browser-native responsive image selection)
-$variantWidths = [
-    'thumb' => 160,
-    'small' => 320,
-    'medium' => 640,
-    'large' => 1280,
-    'primary' => 1920  // Default primary width, actual may vary
-];
+// Get variant heights from config (for reference)
+require_once __DIR__ . '/../lib/webcam-metadata.php';
+$variantHeights = getVariantHeights($airportId, $camIndex);
 
 // Build response with status information
 $response = [
@@ -229,7 +224,7 @@ $response = [
     'timezone' => $airport['timezone'] ?? 'UTC',
     'max_frames' => $historyStatus['max_frames'],
     'enabledFormats' => getEnabledWebcamFormats(),
-    'variantWidths' => $variantWidths,
+    'variantHeights' => $variantHeights,
     'refresh_interval' => $refreshInterval
 ];
 

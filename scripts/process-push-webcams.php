@@ -506,38 +506,29 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
         }
     }
     
-    // Get input dimensions for variant generation
-    $inputDimensions = getImageDimensions($stagingFile);
-    if ($inputDimensions === null) {
-        // Fallback to format-only generation (no variants)
-        $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
-        @unlink($stagingFile);
-        return !empty($formatResults);
-    }
+    // Generate variants from original
+    $variantResult = generateVariantsFromOriginal($stagingFile, $airportId, $camIndex, $timestamp);
     
-    // Generate all variants × formats in parallel
-    $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, $primaryFormat, $inputDimensions);
-    
-    // Cleanup staging file
+    // Cleanup staging file (original is now preserved)
     @unlink($stagingFile);
     
-    // Also cleanup any variant staging files that were created
-    // Matches both 'staging_*' (from generateVariantsSync) and 'history_staging_*' patterns
+    // Cleanup any remaining staging files
     foreach (glob($cameraDir . '/staging*.tmp') as $stageFile) {
         @unlink($stageFile);
     }
-    foreach (glob($cameraDir . '/history_staging_*.tmp') as $stageFile) {
-        @unlink($stageFile);
-    }
     
-    $success = !empty($variantResult['results']);
+    $success = $variantResult['original'] !== null && !empty($variantResult['variants']);
     
     if ($success) {
+        $variantCount = 0;
+        foreach ($variantResult['variants'] as $formats) {
+            $variantCount += count($formats);
+        }
         aviationwx_log('debug', 'processHistoryFrame: generated variants', [
             'airport' => $airportId,
             'cam' => $camIndex,
             'timestamp' => $timestamp,
-            'variants' => count($variantResult['results'])
+            'variants' => $variantCount
         ], 'app');
     }
     
@@ -750,35 +741,23 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
             return false;
         }
     } else {
-        // Generate all variants and formats in parallel (synchronous wait)
-        // All variants × formats are written to staging files (.tmp)
-        $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, $primaryFormat, $inputDimensions);
+        $variantResult = generateVariantsFromOriginal($stagingFile, $airportId, $camIndex, $timestamp);
         
-        // Promote all successful staging files to final cache location (with timestamp for filename)
-        $promotedVariants = promoteVariants(
-            $airportId,
-            $camIndex,
-            $variantResult['results'],
-            $primaryFormat,
-            $timestamp,
-            $variantResult['delete_original'],
-            $variantResult['delete_original'] ? $stagingFile : null
-        );
-        
-        if (empty($promotedVariants)) {
-            aviationwx_log('error', 'moveToCache: no variants promoted', [
+        if ($variantResult['original'] === null || empty($variantResult['variants'])) {
+            aviationwx_log('error', 'moveToCache: variant generation failed', [
                 'airport' => $airportId,
                 'cam' => $camIndex,
-                'primary_format' => $primaryFormat
+                'primary_format' => $primaryFormat,
+                'has_original' => $variantResult['original'] !== null,
+                'variant_count' => count($variantResult['variants'])
             ], 'app');
             cleanupStagingFiles($airportId, $camIndex);
             return false;
         }
         
-        // Convert for logging compatibility
         $promotedFormats = [];
-        foreach ($promotedVariants as $variant => $formats) {
-            $promotedFormats = array_merge($promotedFormats, $formats);
+        foreach ($variantResult['variants'] as $height => $formats) {
+            $promotedFormats = array_merge($promotedFormats, array_keys($formats));
         }
         $promotedFormats = array_unique($promotedFormats);
     }

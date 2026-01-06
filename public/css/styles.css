@@ -626,12 +626,34 @@ h3 {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
+    grid-auto-rows: min-content;
 }
 
 .webcam-item {
     background: #000;
     border-radius: 4px;
     overflow: hidden;
+    grid-column: span 1;
+}
+
+/* Wide panoramic cameras (2:1 to 2.5:1) - span 2 columns */
+.webcam-item[data-aspect-ratio^="2"] {
+    grid-column: span 2;
+}
+
+/* Ultra-wide (3:1+) - full width */
+.webcam-item[data-aspect-ratio^="3"] {
+    grid-column: 1 / -1;
+}
+
+/* Mobile: always single column */
+@media (max-width: 768px) {
+    .webcam-grid {
+        grid-template-columns: 1fr;
+    }
+    .webcam-item {
+        grid-column: span 1 !important;
+    }
 }
 
 .webcam-container {

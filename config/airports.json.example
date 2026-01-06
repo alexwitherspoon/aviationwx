@@ -36,6 +36,8 @@
     "webcam_generate_webp": false,
     "webcam_generate_avif": false,
     "webcam_history_max_frames": 12,
+    "webcam_variant_heights": [1080, 720, 360],
+    "_comment_legacy": "The following image_* options are deprecated. Use webcam_variant_heights instead.",
     "image_primary_size": "1920x1080",
     "image_max_resolution": "3840x2160",
     "image_aspect_ratio": "16:9",

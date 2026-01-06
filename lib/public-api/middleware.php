@@ -193,8 +193,8 @@ function validatePublicApiAirportId(string $airportId): ?string
 {
     $trimmed = trim($airportId);
     
-    // Airport IDs should be 3-4 alphanumeric characters
-    if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 10) {
+    // Airport IDs should be 3-10 alphanumeric characters (allow longer for custom IDs)
+    if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 20) {
         return null;
     }
     
