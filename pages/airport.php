@@ -2149,6 +2149,107 @@ window.forceRefreshAllTimers = function() {
     }
 };
 
+// =============================================================================
+// Wake/Reconnect Recovery System
+// Handles: tab visibility change, network reconnection, window focus
+// Triggers immediate refresh when data is stale after sleep/disconnect
+// =============================================================================
+
+/**
+ * Check if data is stale and needs refresh
+ * Uses 1.5x the refresh interval as threshold
+ * @returns {Object} { isStale: boolean, weatherAge: number, webcamAge: number }
+ */
+function checkDataStaleness() {
+    const now = Date.now();
+    
+    // Weather staleness check
+    let weatherAge = 0;
+    if (typeof weatherLastUpdated !== 'undefined' && weatherLastUpdated !== null) {
+        weatherAge = now - weatherLastUpdated.getTime();
+    } else {
+        // No weather data yet - consider stale to trigger initial load
+        weatherAge = Infinity;
+    }
+    
+    // Webcam staleness check - find oldest webcam
+    let webcamAge = 0;
+    if (typeof CAM_LAST_FETCH !== 'undefined' && CAM_LAST_FETCH) {
+        const fetchTimes = Object.values(CAM_LAST_FETCH);
+        if (fetchTimes.length > 0) {
+            const oldestFetch = Math.min(...fetchTimes);
+            webcamAge = now - oldestFetch;
+        } else {
+            webcamAge = Infinity; // No webcam data yet
+        }
+    }
+    
+    // Threshold: 1.5x the refresh interval (90 seconds for 60s interval)
+    const threshold = 90000;
+    const isStale = weatherAge > threshold || webcamAge > threshold;
+    
+    return { isStale, weatherAge, webcamAge, threshold };
+}
+
+/**
+ * Handle wake from sleep, network reconnection, or focus return
+ * Only refreshes if data is actually stale to avoid unnecessary requests
+ * @param {string} reason - Why this was triggered (visibility, network, focus)
+ */
+function handleWakeOrReconnect(reason) {
+    const staleness = checkDataStaleness();
+    
+    if (staleness.isStale) {
+        const weatherSec = Math.round(staleness.weatherAge / 1000);
+        const webcamSec = Math.round(staleness.webcamAge / 1000);
+        console.log(`[Recovery] Data stale after ${reason} - weather: ${weatherSec}s, webcam: ${webcamSec}s (threshold: ${staleness.threshold / 1000}s) - forcing refresh`);
+        
+        // Small delay to let network stabilize after wake/reconnect
+        setTimeout(() => {
+            if (typeof window.forceRefreshAllTimers === 'function') {
+                window.forceRefreshAllTimers();
+            }
+        }, 500);
+    } else {
+        console.log(`[Recovery] Data still fresh after ${reason} - no refresh needed`);
+    }
+}
+
+// Debounce wake/reconnect events to avoid multiple rapid refreshes
+let wakeDebounceTimer = null;
+function debouncedWakeHandler(reason) {
+    if (wakeDebounceTimer) {
+        clearTimeout(wakeDebounceTimer);
+    }
+    wakeDebounceTimer = setTimeout(() => {
+        handleWakeOrReconnect(reason);
+        wakeDebounceTimer = null;
+    }, 200);
+}
+
+// Setup wake/reconnect event listeners
+(function setupWakeRecovery() {
+    // Visibility change - tab becomes visible
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            debouncedWakeHandler('visibility');
+        }
+    });
+    
+    // Network reconnection - comes back online after being offline
+    window.addEventListener('online', () => {
+        console.log('[Recovery] Network back online');
+        debouncedWakeHandler('network');
+    });
+    
+    // Window focus - user clicks back into browser window
+    window.addEventListener('focus', () => {
+        debouncedWakeHandler('focus');
+    });
+    
+    console.log('[Recovery] Wake/reconnect handlers initialized');
+})();
+
 /**
  * Detect if browser is Safari (desktop or mobile)
  * Safari doesn't handle geo: URIs, so we need to use Apple Maps URLs instead
