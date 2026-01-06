@@ -3736,7 +3736,7 @@ async function fetchWeather(forceRefresh = false) {
             // Validate weather data structure
             if (!data.weather || typeof data.weather !== 'object') {
                 console.error('[Weather] Invalid weather data structure:', data);
-                displayError('Invalid weather data received from server');
+                displayEmptyWeather();
                 return;
             }
             
@@ -3806,12 +3806,12 @@ async function fetchWeather(forceRefresh = false) {
             }
         } else {
             console.error('[Weather] API returned error:', data.error);
-            displayError(data.error || 'Failed to fetch weather data');
+            displayEmptyWeather();
         }
     } catch (error) {
         console.error('[Weather] Fetch error:', error);
         console.error('[Weather] Error stack:', error.stack);
-        displayError('Unable to load weather data: ' + error.message + '. Check browser console for details.');
+        displayEmptyWeather();
     } finally {
         isFetchingWeather = false;
     }
@@ -4056,15 +4056,72 @@ function displayWeather(weather) {
     `;
 }
 
-function displayError(msg) {
-    // Sanitize error message to prevent XSS
+/**
+ * Display empty weather fields when data is unavailable or invalid
+ * Shows all fields as "--" instead of error messages for better UX
+ */
+function displayEmptyWeather() {
     const container = document.getElementById('weather-data');
     if (!container) return;
-    const sanitized = String(msg).replace(/[<>&"']/g, (char) => {
-        const map = {'<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;'};
-        return map[char] || char;
-    });
-    container.innerHTML = `<div class="weather-item loading">${sanitized}</div>`;
+    
+    // Display all weather fields as empty ("--") to match the structure of displayWeather()
+    container.innerHTML = `
+        <!-- Aviation Conditions (METAR-required data) -->
+        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `
+        <div class="weather-group">
+            <div class="weather-item"><span class="label">Condition</span><span class="weather-value">--</span></div>
+            <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">--</span></div>
+            <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">--</span></div>
+        </div>
+        ` : ''}
+        
+        <!-- Temperature -->
+        <div class="weather-group">
+            <div class="weather-item"><span class="label">Today's High</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Current Temperature</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Today's Low</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+        </div>
+        
+        <!-- Moisture & Precipitation -->
+        <div class="weather-group">
+            <div class="weather-item"><span class="label">Dewpoint Spread</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Dewpoint</span><span class="weather-value">--</span><span class="weather-unit">${getTempUnit() === 'C' ? '°C' : '°F'}</span></div>
+            <div class="weather-item"><span class="label">Humidity</span><span class="weather-value">--</span><span class="weather-unit"></span></div>
+        </div>
+        
+        <!-- Precipitation & Daylight -->
+        <div class="weather-group">
+            <div class="weather-item"><span class="label">Rainfall Today</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'cm' : 'in'}</span></div>
+            <div class="weather-item sunrise-sunset">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.2rem;">🌅</span>
+                    <span class="label">Sunrise</span>
+                </span>
+                <span class="weather-value">-- <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+            </div>
+            <div class="weather-item sunrise-sunset">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.2rem;">🌇</span>
+                    <span class="label">Sunset</span>
+                </span>
+                <span class="weather-value">-- <span style="font-size: 0.75rem; color: #555;">${getTimezoneAbbreviation()}</span></span>
+            </div>
+        </div>
+        
+        <!-- Pressure & Altitude -->
+        <div class="weather-group">
+            <div class="weather-item"><span class="label">Pressure</span><span class="weather-value">--</span><span class="weather-unit">${getPressureUnit()}</span></div>
+            <div class="weather-item"><span class="label">Pressure Altitude</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+            <div class="weather-item"><span class="label">Density Altitude</span><span class="weather-value">--</span><span class="weather-unit">${getDistanceUnit() === 'm' ? 'm' : 'ft'}</span></div>
+        </div>
+    `;
+}
+
+function displayError(msg) {
+    // Legacy function - now redirects to displayEmptyWeather for better UX
+    // Error messages are logged to console but not shown to users
+    console.error('[Weather] Error (showing empty fields):', msg);
+    displayEmptyWeather();
 }
 
 
@@ -5951,6 +6008,9 @@ if (hasWeatherSource || hasMetarStation) {
         }
         
         console.log('[Weather] Initial data displayed from cache');
+    } else {
+        // No initial weather data available - show empty fields
+        displayEmptyWeather();
     }
     
     // Fetch immediately on page load (no delay - prioritize showing data quickly)

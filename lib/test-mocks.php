@@ -30,8 +30,8 @@ function getMockHttpResponse(string $url): ?string {
         return getMockTempestResponse();
     }
     
-    if (strpos($url, 'api.ambientweather.net') !== false) {
-        // Ambient Weather API
+    if (strpos($url, 'api.ambientweather.net') !== false || strpos($url, 'rt.ambientweather.net') !== false) {
+        // Ambient Weather API (both api.ambientweather.net and rt.ambientweather.net endpoints)
         require_once __DIR__ . '/../tests/mock-weather-responses.php';
         return getMockAmbientResponse();
     }

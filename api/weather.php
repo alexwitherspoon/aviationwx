@@ -121,10 +121,11 @@ function generateMockWeatherData($airportId, $airport) {
     exit;
     }
 
-    // Basic format validation: identifiers should be 3-4 alphanumeric characters
-    // (ICAO: 4 chars, IATA: 3 chars, FAA: 3-4 chars, airport ID: 3-4 chars)
+    // Basic format validation: identifiers should be 3-50 alphanumeric characters (with hyphens allowed)
+    // (ICAO: 4 chars, IATA: 3 chars, FAA: 3-4 chars, airport ID: 3-50 chars with hyphens)
+    // Use the same validation as validateAirportId() for consistency
     $trimmed = trim($rawIdentifier);
-    if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 4 || !preg_match('/^[a-z0-9]{3,4}$/i', $trimmed)) {
+    if (empty($trimmed) || !validateAirportId($trimmed)) {
     http_response_code(400);
     ob_clean();
     aviationwx_log('error', 'invalid airport identifier format', ['identifier' => $rawIdentifier], 'user');
