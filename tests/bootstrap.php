@@ -61,7 +61,7 @@ function isRunningInCI(): bool {
  * Removes all cache files that tests create or modify:
  * - Circuit breaker state (backoff.json)
  * - Weather cache files (weather_*.json)
- * - Webcam images (webcams/*.jpg, *.webp, *.avif)
+ * - Webcam images (webcams/*.jpg, *.webp)
  * - Daily tracking files (peak_gusts.json, temp_extremes.json)
  * - Outage detection files (outage_*.json)
  * - Rate limiting files (rate_limit_*.json)
@@ -138,7 +138,7 @@ function cleanTestCache(): void {
     // Clean webcams directory (all image formats and staging files)
     $webcamsDir = CACHE_WEBCAMS_DIR;
     if (is_dir($webcamsDir)) {
-        $imagePatterns = ['*.jpg', '*.webp', '*.avif', '*.tmp'];
+        $imagePatterns = ['*.jpg', '*.webp', '*.tmp'];
         foreach ($imagePatterns as $pattern) {
             $files = glob($webcamsDir . '/' . $pattern);
             foreach ($files as $file) {

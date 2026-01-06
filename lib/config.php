@@ -748,28 +748,15 @@ function isWebpGenerationEnabled(): bool {
 }
 
 /**
- * Check if AVIF generation is enabled globally
- * 
- * @return bool True if AVIF generation enabled, false otherwise
- */
-function isAvifGenerationEnabled(): bool {
-    return (bool)getGlobalConfig('webcam_generate_avif', false);
-}
-
-/**
  * Get list of enabled formats for webcam generation
  * 
- * @return array Array of enabled format strings: ['jpg', 'webp', 'avif']
+ * @return array Array of enabled format strings: ['jpg', 'webp']
  */
 function getEnabledWebcamFormats(): array {
     $formats = ['jpg']; // Always enabled
     
     if (isWebpGenerationEnabled()) {
         $formats[] = 'webp';
-    }
-    
-    if (isAvifGenerationEnabled()) {
-        $formats[] = 'avif';
     }
     
     return $formats;
@@ -785,18 +772,6 @@ function getEnabledWebcamFormats(): array {
  */
 function getWebcamWebpQuality(): int {
     return (int)getGlobalConfig('webcam_webp_quality', WEBCAM_WEBP_QUALITY);
-}
-
-/**
- * Get AVIF CRF (quality) setting
- * 
- * Returns configured AVIF CRF value (0-63 scale, lower = better).
- * Can be overridden in airports.json config.webcam_avif_crf
- * 
- * @return int AVIF CRF value (default: 23)
- */
-function getWebcamAvifCrf(): int {
-    return (int)getGlobalConfig('webcam_avif_crf', WEBCAM_AVIF_CRF);
 }
 
 /**
@@ -2467,12 +2442,6 @@ function validateAirportsJsonStructure(array $config): array {
             if (isset($cfg['webcam_generate_webp'])) {
                 if (!is_bool($cfg['webcam_generate_webp'])) {
                     $errors[] = "config.webcam_generate_webp must be a boolean (true or false)";
-                }
-            }
-            
-            if (isset($cfg['webcam_generate_avif'])) {
-                if (!is_bool($cfg['webcam_generate_avif'])) {
-                    $errors[] = "config.webcam_generate_avif must be a boolean (true or false)";
                 }
             }
             

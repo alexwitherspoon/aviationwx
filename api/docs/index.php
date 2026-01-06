@@ -451,7 +451,7 @@ $attribution = getPublicApiAttributionText();
                 <span class="endpoint-path">/v1/airports/{id}/webcams/{cam}/image</span>
             </div>
             <div class="endpoint-body">
-                <p class="endpoint-desc">Get the current webcam image. Supports <code>fmt</code> parameter (jpg, webp, avif).</p>
+                <p class="endpoint-desc">Get the current webcam image. Supports <code>fmt</code> parameter (jpg, webp).</p>
             </div>
         </div>
         

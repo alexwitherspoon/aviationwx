@@ -49,7 +49,7 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
     }
     
     // Get all image files (excludes symlinks, staging files, etc.)
-    $allFiles = glob($cacheDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
+    $allFiles = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
     if ($allFiles === false || empty($allFiles)) {
         return [];
     }
@@ -65,7 +65,7 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         
         $basename = basename($file);
         // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
-        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
+        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|webp)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             $variant = $matches[2];
             $format = $matches[3];
@@ -343,7 +343,7 @@ function parseGPSTimestamp(array $gps): int {
 /**
  * Get total size of webcam cache for an airport camera
  * 
- * Includes all format files (jpg, webp, avif) in the camera cache directory.
+ * Includes all format files (jpg, webp) in the camera cache directory.
  * Useful for monitoring disk usage.
  * 
  * @param string $airportId Airport ID
@@ -357,7 +357,7 @@ function getHistoryDiskUsage(string $airportId, int $camIndex): int {
         return 0;
     }
     
-    $files = glob($cacheDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
+    $files = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
     if ($files === false) {
         return 0;
     }
@@ -493,7 +493,7 @@ function isWebpComplete(string $file): bool {
  * Cost: ~0.1ms per file (reads only a few bytes from end)
  * 
  * @param string $file Path to image file
- * @param string|null $format Image format (jpg, png, webp, avif) or null to auto-detect
+ * @param string|null $format Image format (jpg, png, webp) or null to auto-detect
  * @return bool True if file appears complete
  */
 function isImageComplete(string $file, ?string $format = null): bool {
@@ -524,12 +524,6 @@ function isImageComplete(string $file, ?string $format = null): bool {
             
         case 'webp':
             return isWebpComplete($file);
-            
-        case 'avif':
-            // AVIF uses ISOBMFF container (complex)
-            // For now, trust header validation only
-            // A truncated AVIF will likely fail on decode anyway
-            return filesize($file) > 100;
             
         default:
             // Unknown format - trust that it passed header validation

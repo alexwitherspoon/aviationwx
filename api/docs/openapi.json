@@ -216,7 +216,7 @@
             "description": "Image format",
             "schema": {
               "type": "string",
-              "enum": ["jpg", "webp", "avif"],
+              "enum": ["jpg", "webp"],
               "default": "jpg"
             }
           },
@@ -236,8 +236,7 @@
             "description": "Image data",
             "content": {
               "image/jpeg": {},
-              "image/webp": {},
-              "image/avif": {}
+              "image/webp": {}
             }
           },
           "404": {
@@ -276,7 +275,7 @@
             "description": "Image format (only used with ts parameter)",
             "schema": {
               "type": "string",
-              "enum": ["jpg", "webp", "avif"],
+              "enum": ["jpg", "webp"],
               "default": "jpg"
             }
           },

@@ -179,7 +179,7 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
     
     // Get requested format and size
     $format = $_GET['fmt'] ?? 'jpg';
-    if (!in_array($format, ['jpg', 'webp', 'avif'])) {
+    if (!in_array($format, ['jpg', 'webp'])) {
         $format = 'jpg';
     }
     
@@ -225,7 +225,6 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
     // Set content type based on format
     $contentType = match ($format) {
         'webp' => 'image/webp',
-        'avif' => 'image/avif',
         default => 'image/jpeg',
     };
     

@@ -7,7 +7,7 @@
  * Returns the current webcam image.
  * 
  * Query parameters:
- * - fmt: Image format ('jpg', 'webp', 'avif') - default is jpg
+ * - fmt: Image format ('jpg', 'webp') - default is jpg
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -68,7 +68,7 @@ function handleGetWebcamImage(array $params, array $context): void
     
     // Get requested format
     $format = $_GET['fmt'] ?? 'jpg';
-    if (!in_array($format, ['jpg', 'webp', 'avif'])) {
+    if (!in_array($format, ['jpg', 'webp'])) {
         $format = 'jpg';
     }
     
@@ -128,7 +128,6 @@ function handleGetWebcamImage(array $params, array $context): void
     // Set content type
     $contentType = match ($format) {
         'webp' => 'image/webp',
-        'avif' => 'image/avif',
         default => 'image/jpeg',
     };
     

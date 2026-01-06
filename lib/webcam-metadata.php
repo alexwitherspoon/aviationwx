@@ -259,7 +259,7 @@ function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
         return null;
     }
     
-    $pattern = $cacheDir . '/*_original.{jpg,jpeg,webp,avif}';
+    $pattern = $cacheDir . '/*_original.{jpg,jpeg,webp}';
     $files = glob($pattern, GLOB_BRACE);
     
     if (empty($files)) {
@@ -280,7 +280,7 @@ function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index
  * @param string|int $size Size: "original" or numeric height
- * @param string $format Format: 'jpg', 'webp', or 'avif'
+ * @param string $format Format: 'jpg' or 'webp'
  * @return string Staging file path
  */
 function getStagingPathForVariant(string $airportId, int $camIndex, $size, string $format): string {
@@ -302,7 +302,7 @@ function getStagingPathForVariant(string $airportId, int $camIndex, $size, strin
  * @param int $camIndex Camera index
  * @param int $timestamp Image timestamp
  * @param string|int $size Size: "original" or numeric height
- * @param string $format Format: 'jpg', 'webp', or 'avif'
+ * @param string $format Format: 'jpg' or 'webp'
  * @return string|null File path or null if not found
  */
 function getImagePathForSize(string $airportId, int $camIndex, int $timestamp, $size, string $format): ?string {
@@ -407,7 +407,7 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
         
         $basename = basename($file);
         // Match: {timestamp}_{height}.{format}
-        if (preg_match('/^' . $timestamp . '_(\d+)\.(jpg|jpeg|webp|avif)$/', $basename, $matches)) {
+        if (preg_match('/^' . $timestamp . '_(\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
             $height = (int)$matches[1];
             $format = $matches[2] === 'jpeg' ? 'jpg' : $matches[2];
             
@@ -442,7 +442,7 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
     }
     
     // Find all timestamped files (original or variants)
-    $pattern = $cacheDir . '/*_*.{jpg,jpeg,webp,avif}';
+    $pattern = $cacheDir . '/*_*.{jpg,jpeg,webp}';
     $files = glob($pattern, GLOB_BRACE);
     
     if (empty($files)) {
@@ -450,8 +450,7 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
         $files = array_merge(
             glob($cacheDir . '/*_*.jpg'),
             glob($cacheDir . '/*_*.jpeg'),
-            glob($cacheDir . '/*_*.webp'),
-            glob($cacheDir . '/*_*.avif')
+            glob($cacheDir . '/*_*.webp')
         );
     }
     
@@ -468,7 +467,7 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
         
         $basename = basename($file);
         // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
-        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp|avif)$/', $basename, $matches)) {
+        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             if ($timestamp > $latestTimestamp) {
                 $latestTimestamp = $timestamp;

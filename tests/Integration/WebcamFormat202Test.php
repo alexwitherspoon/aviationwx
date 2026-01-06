@@ -3,8 +3,8 @@
  * Integration tests for webcam format HTTP 202 behavior
  * 
  * Tests the new HTTP 202 Accepted response for format generation:
- * - HTTP 202 when fmt=webp/avif and format is generating
- * - HTTP 200 when fmt=webp/avif and format is ready
+ * - HTTP 202 when fmt=webp and format is generating
+ * - HTTP 200 when fmt=webp and format is ready
  * - HTTP 200 when no fmt= parameter (always, even if generating)
  * - HTTP 400 when format disabled but explicitly requested
  * - HTTP 200 with fallback when format disabled and no explicit request
@@ -24,7 +24,6 @@ class WebcamFormat202Test extends TestCase
     private $cacheDir;
     private $cacheJpg;
     private $cacheWebp;
-    private $cacheAvif;
     private $placeholderPath;
     
     protected function setUp(): void
@@ -35,7 +34,6 @@ class WebcamFormat202Test extends TestCase
         $this->cacheDir = CACHE_WEBCAMS_DIR;
         $this->cacheJpg = getCacheSymlinkPath($this->airport, $this->camIndex, 'jpg');
         $this->cacheWebp = getCacheSymlinkPath($this->airport, $this->camIndex, 'webp');
-        $this->cacheAvif = getCacheSymlinkPath($this->airport, $this->camIndex, 'avif');
         $this->placeholderPath = __DIR__ . '/../../public/images/placeholder.jpg';
         
         // Ensure cache directory exists
@@ -48,10 +46,8 @@ class WebcamFormat202Test extends TestCase
         // Clean up test files
         @unlink($this->cacheJpg);
         @unlink($this->cacheWebp);
-        @unlink($this->cacheAvif);
         @unlink($this->cacheJpg . '.tmp');
         @unlink($this->cacheWebp . '.tmp');
-        @unlink($this->cacheAvif . '.tmp');
         parent::tearDown();
     }
     

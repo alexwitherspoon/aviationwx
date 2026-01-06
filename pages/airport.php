@@ -1307,9 +1307,6 @@ if ($themeCookie === 'dark') {
                     <div class="webcam-container">
                         <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: <?= $width ?>/<?= $height ?>; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
                         <picture>
-                            <?php if (in_array('avif', $enabledFormats) && !empty($availableVariants)): ?>
-                            <source srcset="<?= $buildSrcset('avif', $availableVariants, $aspectRatio, $width, $height) ?>" type="image/avif" sizes="100vw">
-                            <?php endif; ?>
                             <?php if (in_array('webp', $enabledFormats) && !empty($availableVariants)): ?>
                             <source srcset="<?= $buildSrcset('webp', $availableVariants, $aspectRatio, $width, $height) ?>" type="image/webp" sizes="100vw">
                             <?php endif; ?>
@@ -6322,7 +6319,7 @@ function observeWebcamFormat(camIndex, img) {
     
     if (formatMatch) {
         const format = formatMatch[1].toLowerCase();
-        if (['avif', 'webp', 'jpg', 'jpeg'].includes(format)) {
+        if (['webp', 'jpg', 'jpeg'].includes(format)) {
             detectedFormat = format === 'jpeg' ? 'jpg' : format;
         }
     }
@@ -6350,19 +6347,16 @@ function observeWebcamFormat(camIndex, img) {
  * Get preferred format for live webcam polling
  * 
  * Returns the best available modern format from server-enabled formats.
- * Priority: AVIF > WebP > JPEG (matching browser <picture> element behavior)
+ * Priority: WebP > JPEG
  * 
  * Note: This is used for live webcam polling. The history player and initial
  * webcam display use native <picture> elements for browser-based format selection.
  * 
  * @param {Array<string>} serverFormats Server-enabled formats (from mtime response)
- * @returns {string} Preferred format: 'avif', 'webp', or 'jpg'
+ * @returns {string} Preferred format: 'webp' or 'jpg'
  */
 function getPreferredFormat(serverFormats) {
-    // Return best available format (browser <picture> uses same priority)
-    if (serverFormats && serverFormats.includes('avif')) {
-        return 'avif';
-    }
+    // Return best available format
     if (serverFormats && serverFormats.includes('webp')) {
         return 'webp';
     }
@@ -6470,7 +6464,7 @@ function hasExistingImage(camIndex) {
  * 
  * @param {string} airportId Airport ID
  * @param {number} camIndex Camera index
- * @param {string} format Format: 'jpg', 'webp', or 'avif'
+ * @param {string} format Format: 'jpg' or 'webp'
  * @param {number} timestamp Image timestamp
  * @param {number} size Image size
  * @returns {string} 8-character hex hash
@@ -6536,11 +6530,49 @@ function updateImageSilently(camIndex, blobUrl, timestamp) {
 }
 
 /**
- * Load image from URL
+ * Verify blob EXIF and display image if valid
+ * 
+ * For aviation safety: Only displays image if EXIF timestamp is verified.
+ * If verification fails, keeps current image and logs warning.
+ * 
+ * @param {Blob} blob - Image blob to verify and display
+ * @param {number} camIndex - Camera index
+ * @param {number} expectedTimestamp - Expected Unix timestamp (seconds)
+ * @param {string} context - Context string for logging (e.g., "format retry", "initial load")
+ * @returns {Promise<boolean>} True if image was verified and displayed, false otherwise
+ */
+async function verifyAndDisplayImage(blob, camIndex, expectedTimestamp, context = '') {
+    // Skip verification if no expected timestamp (shouldn't happen with our backend)
+    if (!expectedTimestamp || expectedTimestamp <= 0) {
+        console.warn(`[Webcam ${camIndex}] No expected timestamp for verification - rejecting image`);
+        return false;
+    }
+    
+    // Verify EXIF timestamp
+    const verification = await verifyWebcamImageTimestamp(blob, expectedTimestamp, camIndex);
+    
+    if (!verification.verified) {
+        // Verification failed - keep current image
+        console.warn(`[Webcam ${camIndex}] Image verification FAILED (${verification.reason})${context ? ' during ' + context : ''} - keeping current image`);
+        if (verification.exifTimestamp) {
+            console.warn(`[Webcam ${camIndex}] Expected: ${new Date(expectedTimestamp * 1000).toISOString()}, EXIF: ${new Date(verification.exifTimestamp * 1000).toISOString()}`);
+        }
+        return false;
+    }
+    
+    // Verification passed - safe to display
+    const blobUrl = URL.createObjectURL(blob);
+    console.log(`[Webcam ${camIndex}] Image VERIFIED${context ? ' (' + context + ')' : ''} - EXIF: ${new Date(verification.exifTimestamp * 1000).toISOString()}`);
+    updateImageSilently(camIndex, blobUrl, expectedTimestamp);
+    return true;
+}
+
+/**
+ * Load image from URL with EXIF verification
  * 
  * @param {string} url Image URL
  * @param {number} camIndex Camera index
- * @param {number} timestamp Image timestamp
+ * @param {number} timestamp Expected image timestamp
  */
 async function loadImageFromUrl(url, camIndex, timestamp) {
     try {
@@ -6551,8 +6583,7 @@ async function loadImageFromUrl(url, camIndex, timestamp) {
         
         if (response.status === 200) {
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            updateImageSilently(camIndex, blobUrl, timestamp);
+            await verifyAndDisplayImage(blob, camIndex, timestamp, 'direct load');
         }
     } catch (error) {
         // Silent error - user already has image or placeholder
@@ -6565,8 +6596,9 @@ async function loadImageFromUrl(url, camIndex, timestamp) {
  * @param {number} camIndex Camera index
  * @param {boolean} hasExisting Whether image is already rendered
  * @param {object} data 202 response data
+ * @param {number} expectedTimestamp Expected EXIF timestamp for verification
  */
-async function handleJpegGenerating(camIndex, hasExisting, data) {
+async function handleJpegGenerating(camIndex, hasExisting, data, expectedTimestamp) {
     const { fallback_url } = data;
     
     if (!hasExisting) {
@@ -6603,8 +6635,17 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
                 if (response.status === 200) {
                     isComplete = true;
                     const blob = await response.blob();
-                    const blobUrl = URL.createObjectURL(blob);
-                    updateImageSilently(camIndex, blobUrl);
+                    // Verify EXIF before displaying
+                    const verified = await verifyAndDisplayImage(blob, camIndex, expectedTimestamp, 'JPEG generating');
+                    if (!verified) {
+                        // Verification failed but we got a 200 - show placeholder
+                        const img = document.getElementById(`webcam-${camIndex}`);
+                        if (img) {
+                            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                            const host = window.location.host;
+                            img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                        }
+                    }
                     return;
                 }
                 
@@ -6667,8 +6708,9 @@ async function handleJpegGenerating(camIndex, hasExisting, data) {
                 if (response.status === 200) {
                     isComplete = true;
                     const blob = await response.blob();
-                    const blobUrl = URL.createObjectURL(blob);
-                    updateImageSilently(camIndex, blobUrl);
+                    // Verify EXIF before displaying
+                    await verifyAndDisplayImage(blob, camIndex, expectedTimestamp, 'JPEG generating refresh');
+                    // If verification fails, keep existing image (silent failure)
                     return;
                 }
                 
@@ -6788,11 +6830,13 @@ function startFormatRetry(camIndex, data) {
                     });
                     
                     if (imageResponse.status === 200) {
-                        // Success - upgrade image silently
+                        // Success - verify EXIF before upgrading image
                         const blob = await imageResponse.blob();
-                        const blobUrl = URL.createObjectURL(blob);
-                        console.log(`[Webcam ${camIndex}] Upgraded to preferred format - format: ${format}, variant: ${variant}`);
-                        updateImageSilently(camIndex, blobUrl, mtimeData.timestamp);
+                        const verified = await verifyAndDisplayImage(blob, camIndex, mtimeData.timestamp, 'format upgrade');
+                        if (verified) {
+                            console.log(`[Webcam ${camIndex}] Upgraded to preferred format - format: ${format}, variant: ${variant}`);
+                        }
+                        // Whether verified or not, we're done with this retry cycle
                         window.formatRetries.delete(camIndex);
                         return;
                     }
@@ -6867,11 +6911,11 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
     // Special case: JPEG is generating (our fallback)
     if (format === 'jpg') {
         console.warn(`[Webcam ${camIndex}] JPEG generating (fallback) - variant: ${variant}, estimated: ${estimated_ready_seconds || 'unknown'}s`);
-        await handleJpegGenerating(camIndex, hasExisting, data);
+        await handleJpegGenerating(camIndex, hasExisting, data, jpegTimestamp);
         return;
     }
     
-    // Preferred format (WebP/AVIF) is generating
+    // Preferred format (WebP) is generating
     console.log(`[Webcam ${camIndex}] ${format.toUpperCase()} generating - variant: ${variant}, estimated: ${estimated_ready_seconds || 'unknown'}s, using fallback`);
     if (!hasExisting) {
         // Initial load: use fallback immediately, no waiting
@@ -6907,11 +6951,28 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
         });
         
         if (response.status === 200) {
-            // Format ready - load immediately
+            // Format ready - verify EXIF timestamp before displaying
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
             
-            console.log(`[Webcam ${camIndex}] Image loaded successfully - format: ${preferredFormat}, variant: ${requestedVariant}`);
+            // Safety verification: Confirm image EXIF timestamp matches expected timestamp
+            // This ensures we're displaying the correct image, not a stale cached version
+            // Our backend enforces EXIF on all images, so missing EXIF = reject
+            const verification = await verifyWebcamImageTimestamp(blob, jpegTimestamp, camIndex);
+            
+            if (!verification.verified) {
+                // Verification failed - keep current image, will retry on next poll
+                console.warn(`[Webcam ${camIndex}] Image verification FAILED (${verification.reason}) - keeping current image`);
+                if (verification.exifTimestamp) {
+                    console.warn(`[Webcam ${camIndex}] Expected timestamp: ${new Date(jpegTimestamp * 1000).toISOString()}, EXIF timestamp: ${new Date(verification.exifTimestamp * 1000).toISOString()}`);
+                }
+                // Don't update display - keep showing last verified image
+                CAM_LAST_FETCH[camIndex] = Date.now(); // Still mark that we attempted
+                return;
+            }
+            
+            // Verification passed - safe to display
+            const blobUrl = URL.createObjectURL(blob);
+            console.log(`[Webcam ${camIndex}] Image VERIFIED and loaded - format: ${preferredFormat}, variant: ${requestedVariant}, EXIF: ${new Date(verification.exifTimestamp * 1000).toISOString()}`);
             updateImageSilently(camIndex, blobUrl, jpegTimestamp);
             CAM_LAST_FETCH[camIndex] = Date.now();
             return;
@@ -6931,6 +6992,37 @@ async function loadWebcamImage(camIndex, url, preferredFormat, hasExisting, jpeg
         // Network error - use fallback
         console.error(`[Webcam ${camIndex}] Request failed - format: ${preferredFormat}, variant: ${requestedVariant}, error: ${error.message}`);
         handleRequestError(error, camIndex, hasExisting);
+    }
+}
+
+/**
+ * Verify webcam image EXIF timestamp matches expected timestamp
+ * 
+ * For aviation safety: Ensures the displayed image is actually from the
+ * timestamp we expect, preventing display of stale cached images.
+ * 
+ * @param {Blob} blob - Image blob to verify
+ * @param {number} expectedTimestamp - Expected Unix timestamp (seconds)
+ * @param {number} camIndex - Camera index for logging
+ * @returns {Promise<{verified: boolean, reason: string, exifTimestamp: number|null}>}
+ */
+async function verifyWebcamImageTimestamp(blob, expectedTimestamp, camIndex) {
+    // Tolerance for clock drift between server and EXIF timestamp
+    // Our pipeline should have near-zero drift, but allow 5 seconds for safety
+    const TOLERANCE_SECONDS = 5;
+    
+    // Check if ExifTimestamp library is loaded
+    if (typeof ExifTimestamp === 'undefined' || typeof ExifTimestamp.verify !== 'function') {
+        console.error(`[Webcam ${camIndex}] ExifTimestamp library not loaded - cannot verify image`);
+        return { verified: false, reason: 'library_not_loaded', exifTimestamp: null };
+    }
+    
+    try {
+        const result = await ExifTimestamp.verify(blob, expectedTimestamp, TOLERANCE_SECONDS);
+        return result;
+    } catch (e) {
+        console.error(`[Webcam ${camIndex}] EXIF verification error:`, e.message);
+        return { verified: false, reason: 'verification_error', exifTimestamp: null, error: e.message };
     }
 }
 
@@ -7522,6 +7614,9 @@ window.addEventListener('beforeunload', () => {
         </div>
     </div>
 </div>
+
+<!-- EXIF timestamp extractor for webcam image verification (loaded before timer) -->
+<script src="/public/js/exif-timestamp.js?v=<?= $buildHashShort ?>"></script>
 
 <!-- Timer lifecycle manager (deferred, non-blocking) -->
 <script src="/public/js/timer-lifecycle.js?v=<?= $buildHashShort ?>" defer></script>

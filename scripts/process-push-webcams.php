@@ -242,7 +242,7 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
         return null;
     }
     
-    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp,avif}', GLOB_BRACE);
+    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE);
     if (empty($files)) {
         return null; // No files - exit immediately
     }
@@ -404,7 +404,7 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
     
     // Check MIME type
     $mime = @mime_content_type($file);
-    $validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/avif'];
+    $validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!in_array($mime, $validMimes)) {
         return false;
     }
@@ -447,7 +447,7 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
 /**
  * Process a single history frame with full variant generation
  * 
- * Generates all variants (thumb, small, medium, large, primary) × formats (jpg, webp, avif)
+ * Generates all variants (thumb, small, medium, large, primary) × formats (jpg, webp)
  * for a single image file and saves them to history. Does NOT update current symlinks.
  * 
  * @param string $sourceFile Source file path
@@ -559,7 +559,7 @@ function harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig = n
         return 0;
     }
     
-    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp,avif}', GLOB_BRACE);
+    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE);
     if (empty($files)) {
         return 0;
     }
@@ -689,7 +689,7 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         // Remove source PNG after successful conversion
         @unlink($sourceFile);
     } else {
-        // Keep original format (JPEG, WebP, or AVIF)
+        // Keep original format (JPEG or WebP)
         $primaryFormat = $format;
         $stagingFile = getStagingFilePath($airportId, $camIndex, $primaryFormat);
         
@@ -769,7 +769,6 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     $allRequestedFormats = [$primaryFormat];
     if ($primaryFormat !== 'jpg') $allRequestedFormats[] = 'jpg';
     if (isWebpGenerationEnabled() && $primaryFormat !== 'webp') $allRequestedFormats[] = 'webp';
-    if (isAvifGenerationEnabled() && $primaryFormat !== 'avif') $allRequestedFormats[] = 'avif';
     $failedFormats = array_diff($allRequestedFormats, $promotedFormats);
     
     if (!empty($failedFormats)) {
@@ -908,7 +907,7 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     }
     
     // Quick check: if no image files exist, exit immediately (no waiting)
-    $hasFiles = !empty(glob($uploadDir . '*.{jpg,jpeg,png,webp,avif}', GLOB_BRACE));
+    $hasFiles = !empty(glob($uploadDir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE));
     if (!$hasFiles) {
         return false; // No files - exit immediately
     }

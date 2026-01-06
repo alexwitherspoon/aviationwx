@@ -92,7 +92,7 @@ function serveJsonErrorOrPlaceholder(string $errorCode, string $message = '') {
  * Serve placeholder image
  * 
  * Serves an optimized placeholder image when webcam is unavailable or invalid.
- * Selects format based on browser Accept header (AVIF > WebP > JPEG).
+ * Selects format based on browser Accept header (WebP > JPEG).
  * Falls back to JPEG if optimized formats unavailable, or 1x1 transparent PNG if all fail.
  * Sets appropriate cache headers for placeholder images.
  * 
@@ -111,9 +111,7 @@ function servePlaceholder() {
         // Determine preferred format based on Accept header (same logic as webcam images)
         $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
         $preferredFormat = 'jpg'; // Default fallback
-        if (stripos($acceptHeader, 'image/avif') !== false) {
-            $preferredFormat = 'avif';
-        } elseif (stripos($acceptHeader, 'image/webp') !== false) {
+        if (stripos($acceptHeader, 'image/webp') !== false) {
             $preferredFormat = 'webp';
         }
         
@@ -121,15 +119,7 @@ function servePlaceholder() {
         $placeholderPath = null;
         $contentType = 'image/jpeg';
         
-        if ($preferredFormat === 'avif') {
-            $avifPath = $imagesDir . '/placeholder.avif';
-            if (file_exists($avifPath) && filesize($avifPath) > 0) {
-                $placeholderPath = $avifPath;
-                $contentType = 'image/avif';
-            }
-        }
-        
-        if ($placeholderPath === null && $preferredFormat === 'webp') {
+        if ($preferredFormat === 'webp') {
             $webpPath = $imagesDir . '/placeholder.webp';
             if (file_exists($webpPath) && filesize($webpPath) > 0) {
                 $placeholderPath = $webpPath;
@@ -335,7 +325,6 @@ metrics_track_webcam_request($airportId, $camIndex);
 $cacheDir = CACHE_WEBCAMS_DIR;
 $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', 'original');
 $cacheWebp = getCacheFile($airportId, $camIndex, 'webp', 'original');
-$cacheAvif = getCacheFile($airportId, $camIndex, 'avif', 'original');
 
 // Create cache directory if it doesn't exist
 // Check parent directory first, then create with proper error handling
@@ -533,37 +522,29 @@ if ($rl !== null) {
     header('X-RateLimit-Reset: ' . (int)$rl['reset']);
 }
 
-// isValidAvifFile() defined in lib/webcam-format-generation.php
-// It's included via the require_once chain above
 
 // Parse format parameter (if specified)
 $fmt = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : null;
-if ($fmt !== null && !in_array($fmt, ['jpg', 'jpeg', 'webp', 'avif'])) {
+if ($fmt !== null && !in_array($fmt, ['jpg', 'jpeg', 'webp'])) {
     $fmt = null; // Invalid fmt, treat as unspecified
 }
 
 // Check Accept header for format support if fmt not specified
 $acceptsWebp = false;
-$acceptsAvif = false;
 if ($fmt === null) {
     $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
     $acceptsWebp = (stripos($acceptHeader, 'image/webp') !== false);
-    $acceptsAvif = (stripos($acceptHeader, 'image/avif') !== false);
 }
 
 // Determine preferred format based on priority:
 // 1. Explicit fmt parameter (if file exists)
-// 2. Accept header (AVIF > WebP > JPEG)
+// 2. Accept header (WebP > JPEG)
 // 3. Fallback to JPG
 $preferredFormat = null;
-if ($fmt === 'avif') {
-    $preferredFormat = 'avif';
-} elseif ($fmt === 'webp') {
+if ($fmt === 'webp') {
     $preferredFormat = 'webp';
 } elseif ($fmt === 'jpg' || $fmt === 'jpeg') {
     $preferredFormat = 'jpg';
-} elseif ($acceptsAvif) {
-    $preferredFormat = 'avif';
 } elseif ($acceptsWebp) {
     $preferredFormat = 'webp';
 } else {
@@ -621,7 +602,7 @@ function getImageCaptureTime($filePath) {
  * 
  * @param string $airportId Airport ID
  * @param int $camIndex Camera index
- * @param string $format Format: 'jpg', 'webp', or 'avif'
+ * @param string $format Format: 'jpg' or 'webp'
  * @param int $timestamp Image timestamp
  * @return string Webcam URL
  */
@@ -654,15 +635,13 @@ function getRefreshIntervalForCamera(string $airportId, array $config, array $ca
 /**
  * Get MIME type for format
  * 
- * @param string $format Format: 'jpg', 'webp', or 'avif'
+ * @param string $format Format: 'jpg' or 'webp'
  * @return string MIME type
  */
 function getMimeTypeForFormat(string $format): string {
     switch ($format) {
         case 'webp':
             return 'image/webp';
-        case 'avif':
-            return 'image/avif';
         case 'jpg':
         case 'jpeg':
         default:
@@ -715,13 +694,6 @@ function areAllFormatsFromSameCycle(array $formatStatus, int $jpegMtime, int $re
         }
     }
     
-    if ($formatStatus['avif']['exists'] && $formatStatus['avif']['mtime'] > 0) {
-        $avifAge = time() - $formatStatus['avif']['mtime'];
-        if (abs($jpegAge - $avifAge) > $tolerance) {
-            return false; // Different cycles
-        }
-    }
-    
     return true; // All from same stale cycle
 }
 
@@ -729,21 +701,19 @@ function areAllFormatsFromSameCycle(array $formatStatus, int $jpegMtime, int $re
  * Get format status with optimized file I/O
  * 
  * Uses single stat() call per file instead of multiple file_exists/filesize/filemtime calls.
- * Reduces file system operations from 11+ to 3.
+ * Reduces file system operations from 11+ to 2.
  * 
  * @param string $airportId Airport ID
  * @param int $camIndex Camera index
- * @return array Status array with keys: jpg, webp, avif (each with exists, size, mtime, valid)
+ * @return array Status array with keys: jpg, webp (each with exists, size, mtime, valid)
  */
 function getFormatStatus(string $airportId, int $camIndex, string|int $variant = 'original'): array {
     $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', $variant);
     $cacheWebp = getCacheFile($airportId, $camIndex, 'webp', $variant);
-    $cacheAvif = getCacheFile($airportId, $camIndex, 'avif', $variant);
     
     // Single stat() call per file (returns size, mtime, etc.)
     $jpgStat = @stat($cacheJpg);
     $webpStat = @stat($cacheWebp);
-    $avifStat = @stat($cacheAvif);
     
     // Helper to validate JPEG
     $isValidJpeg = function($filePath) {
@@ -781,13 +751,6 @@ function getFormatStatus(string $airportId, int $camIndex, string|int $variant =
             'size' => $webpStat ? $webpStat['size'] : 0,
             'mtime' => $webpStat ? $webpStat['mtime'] : 0,
             'valid' => $webpValidResult
-        ],
-        'avif' => [
-            'file' => $cacheAvif,
-            'exists' => $avifStat !== false,
-            'size' => $avifStat ? $avifStat['size'] : 0,
-            'mtime' => $avifStat ? $avifStat['mtime'] : 0,
-            'valid' => $avifStat && $avifStat['size'] > 0 && isValidAvifFile($cacheAvif)
         ]
     ];
 }
@@ -802,7 +765,7 @@ function getFormatStatus(string $airportId, int $camIndex, string|int $variant =
  * 
  * Also logs generation result when format becomes available or fails.
  * 
- * @param string $format Format to check: 'webp' or 'avif'
+ * @param string $format Format to check: 'webp'
  * @param array $formatStatus Status array from getFormatStatus()
  * @param int $jpegMtime JPEG capture timestamp
  * @param int $refreshInterval Refresh interval in seconds
@@ -868,7 +831,7 @@ function isFormatGenerating(string $format, array $formatStatus, int $jpegMtime,
 /**
  * Find most efficient format available
  * 
- * Priority: AVIF > WebP > JPEG (most efficient first)
+ * Priority: WebP > JPEG (most efficient first)
  * Only considers formats that are enabled in config.
  * 
  * @param array $formatStatus Status array from getFormatStatus()
@@ -880,20 +843,12 @@ function findMostEfficientFormat(array $formatStatus, string $airportId, int $ca
     $enabledFormats = getEnabledWebcamFormats();
     $candidates = [];
     
-    // Priority order: AVIF (1) > WebP (2) > JPEG (3)
-    if (in_array('avif', $enabledFormats) && $formatStatus['avif']['valid']) {
-        $candidates[] = [
-            'file' => getCacheFile($airportId, $camIndex, 'avif', $variant),
-            'type' => 'image/avif',
-            'priority' => 1
-        ];
-    }
-    
+    // Priority order: WebP (1) > JPEG (2)
     if (in_array('webp', $enabledFormats) && $formatStatus['webp']['valid']) {
         $candidates[] = [
             'file' => getCacheFile($airportId, $camIndex, 'webp', $variant),
             'type' => 'image/webp',
-            'priority' => 2
+            'priority' => 1
         ];
     }
     
@@ -901,7 +856,7 @@ function findMostEfficientFormat(array $formatStatus, string $airportId, int $ca
         $candidates[] = [
             'file' => getCacheFile($airportId, $camIndex, 'jpg', $variant),
             'type' => 'image/jpeg',
-            'priority' => 3
+            'priority' => 2
         ];
     }
     
@@ -923,7 +878,7 @@ function findMostEfficientFormat(array $formatStatus, string $airportId, int $ca
  * Returns 202 Accepted with JSON body indicating format is generating.
  * Client can wait briefly or use fallback immediately.
  * 
- * @param string $preferredFormat Format that's generating: 'webp' or 'avif'
+ * @param string $preferredFormat Format that's generating: 'webp'
  * @param int $jpegMtime JPEG capture timestamp
  * @param int $refreshInterval Refresh interval in seconds
  * @param string $airportId Airport ID
@@ -983,8 +938,6 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
         $format = 'jpg';
         if ($contentType === 'image/webp') {
             $format = 'webp';
-        } elseif ($contentType === 'image/avif') {
-            $format = 'avif';
         }
         
         // Track webcam serve
@@ -993,9 +946,8 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
         
         // Track browser format support (based on Accept header)
         $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
-        $supportsAvif = (stripos($acceptHeader, 'image/avif') !== false);
         $supportsWebp = (stripos($acceptHeader, 'image/webp') !== false);
-        metrics_track_format_support($supportsAvif, $supportsWebp);
+        metrics_track_format_support(false, $supportsWebp);
     }
     
     // Check rate limiting (re-check since we can't easily pass the variable)
@@ -1090,21 +1042,21 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
 }
 
 /**
- * Find the latest valid image file (JPG, WEBP, or AVIF)
+ * Find the latest valid image file (JPG or WEBP)
  * 
- * Scans JPG, WEBP, and AVIF cache files, validates they are actual image files,
+ * Scans JPG and WEBP cache files, validates they are actual image files,
  * and returns the preferred or most recent valid image. Validates file headers
  * to ensure files are not corrupted. Uses EXIF capture time when available,
  * otherwise falls back to file modification time.
  * 
  * @param string $cacheJpg Path to JPG cache file
  * @param string $cacheWebp Path to WEBP cache file
- * @param string $cacheAvif Path to AVIF cache file
- * @param string|null $preferredFormat Preferred format: 'avif', 'webp', 'jpg', or null for auto-select
+ * @param string|null $unused Unused parameter (kept for backward compatibility)
+ * @param string|null $preferredFormat Preferred format: 'webp', 'jpg', or null for auto-select
  * @return array|null Array with keys: 'file' (string path), 'mtime' (int timestamp),
  *   'size' (int bytes), 'type' (string MIME type), or null if no valid image found
  */
-function findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredFormat = null) {
+function findLatestValidImage($cacheJpg, $cacheWebp, $unused = null, $preferredFormat = null) {
     $candidates = [];
     
     // Check JPG file
@@ -1137,7 +1089,6 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredForma
             $header = @fread($fp, 12);
             @fclose($fp);
             // Validate WEBP header (RIFF...WEBP)
-            // WEBP doesn't preserve EXIF, use filemtime
             if (substr($header, 0, 4) === 'RIFF' && strpos($header, 'WEBP') !== false) {
                 $mtime = @filemtime($cacheWebp);
                 $size = @filesize($cacheWebp);
@@ -1154,35 +1105,12 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredForma
         }
     }
     
-    // Check AVIF file
-    if (file_exists($cacheAvif) && @filesize($cacheAvif) > 0) {
-        if (isValidAvifFile($cacheAvif)) {
-            $mtime = @filemtime($cacheAvif);
-            $size = @filesize($cacheAvif);
-            // Validate mtime and size
-            if ($mtime !== false && $size !== false && $size > 0) {
-                $candidates[] = [
-                    'file' => $cacheAvif,
-                    'mtime' => (int)$mtime,
-                    'size' => (int)$size,
-                    'type' => 'image/avif'
-                ];
-            }
-        }
-    }
-    
     if (empty($candidates)) {
         return null;
     }
     
     // If preferred format is specified, return it if available
-    if ($preferredFormat === 'avif') {
-        foreach ($candidates as $candidate) {
-            if ($candidate['type'] === 'image/avif') {
-                return $candidate;
-            }
-        }
-    } elseif ($preferredFormat === 'webp') {
+    if ($preferredFormat === 'webp') {
         foreach ($candidates as $candidate) {
             if ($candidate['type'] === 'image/webp') {
                 return $candidate;
@@ -1197,16 +1125,13 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredForma
     }
     
     // No preferred format or preferred format not available: prefer JPG for EXIF capture time
-    // If JPG not available, prefer AVIF > WebP > most recent
+    // If JPG not available, use WebP > most recent
     $jpgCandidate = null;
-    $avifCandidate = null;
     $webpCandidate = null;
     foreach ($candidates as $candidate) {
         if ($candidate['type'] === 'image/jpeg') {
             $jpgCandidate = $candidate;
             break;
-        } elseif ($candidate['type'] === 'image/avif' && $avifCandidate === null) {
-            $avifCandidate = $candidate;
         } elseif ($candidate['type'] === 'image/webp' && $webpCandidate === null) {
             $webpCandidate = $candidate;
         }
@@ -1214,10 +1139,6 @@ function findLatestValidImage($cacheJpg, $cacheWebp, $cacheAvif, $preferredForma
     
     if ($jpgCandidate !== null) {
         return $jpgCandidate;
-    }
-    
-    if ($avifCandidate !== null) {
-        return $avifCandidate;
     }
     
     if ($webpCandidate !== null) {
@@ -1266,7 +1187,7 @@ if ($latestTimestamp === 0) {
 if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
     // Determine requested format
     $requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
-    if (!in_array($requestedFormat, ['jpg', 'webp', 'avif'])) {
+    if (!in_array($requestedFormat, ['jpg', 'webp'])) {
         $requestedFormat = 'jpg';
     }
     
@@ -1357,16 +1278,16 @@ if ($mtime === false) {
 }
 $isCurrentCycle = isFromCurrentRefreshCycle($mtime, $refreshInterval);
 
-// Determine if this is an explicit format request (fmt=webp or fmt=avif)
+// Determine if this is an explicit format request (fmt=webp)
 $isExplicitFormatRequest = isset($_GET['fmt']) && 
-                          in_array(strtolower(trim($_GET['fmt'])), ['webp', 'avif']);
+                          in_array(strtolower(trim($_GET['fmt'])), ['webp']);
 
 // Re-determine preferred format (may have changed based on enabled formats)
 $requestedFormatOriginal = null;
 if (isset($_GET['fmt'])) {
     // Explicit format request
     $fmt = strtolower(trim($_GET['fmt']));
-    if (in_array($fmt, ['avif', 'webp', 'jpg', 'jpeg'])) {
+    if (in_array($fmt, ['webp', 'jpg', 'jpeg'])) {
         $preferredFormat = ($fmt === 'jpeg') ? 'jpg' : $fmt;
         $requestedFormatOriginal = $preferredFormat; // Store original for disabled check
     } else {
@@ -1375,9 +1296,7 @@ if (isset($_GET['fmt'])) {
 } else {
     // No explicit format - use Accept header for preference, but serve immediately
     $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
-    if (stripos($acceptHeader, 'image/avif') !== false) {
-        $preferredFormat = 'avif';
-    } elseif (stripos($acceptHeader, 'image/webp') !== false) {
+    if (stripos($acceptHeader, 'image/webp') !== false) {
         $preferredFormat = 'webp';
     } else {
         $preferredFormat = 'jpg';
@@ -1408,8 +1327,8 @@ if ($isExplicitFormatRequest && $requestedFormatOriginal !== null && !in_array($
 // Adjust preferred format if disabled
 if (!in_array($preferredFormat, $enabledFormats)) {
     // Find next best enabled format
-    if ($preferredFormat === 'avif' && in_array('webp', $enabledFormats)) {
-        $preferredFormat = 'webp';
+    if ($preferredFormat === 'webp' && in_array('jpg', $enabledFormats)) {
+        $preferredFormat = 'jpg';
     } else {
         $preferredFormat = 'jpg'; // Always enabled
     }
@@ -1424,8 +1343,6 @@ if ($isRateLimited) {
         $filePath = $mostEfficient['file'];
         if (substr($filePath, -5) === '.webp') {
             $mtime = $formatStatus['webp']['mtime'];
-        } elseif (substr($filePath, -5) === '.avif') {
-            $mtime = $formatStatus['avif']['mtime'];
         } else {
             $mtime = $formatStatus['jpg']['mtime'];
         }
@@ -1455,7 +1372,7 @@ if ($mostEfficient) {
         'airport' => $airportId,
         'cam' => $camIndex,
         'preferred_format' => $preferredFormat,
-        'served_format' => substr($mostEfficient['file'], -4) === 'webp' ? 'webp' : (substr($mostEfficient['file'], -5) === 'avif' ? 'avif' : 'jpg'),
+        'served_format' => substr($mostEfficient['file'], -4) === 'webp' ? 'webp' : 'jpg',
         'fmt_param' => $fmt ?? 'auto',
         'reason' => $isExplicitFormatRequest ? 'explicit_request_not_ready' : 'auto_fallback'
     ], 'user');
@@ -1463,8 +1380,6 @@ if ($mostEfficient) {
     $filePath = $mostEfficient['file'];
     if (substr($filePath, -5) === '.webp') {
         $mtime = $formatStatus['webp']['mtime'];
-    } elseif (substr($filePath, -5) === '.avif') {
-        $mtime = $formatStatus['avif']['mtime'];
     } else {
         $mtime = $formatStatus['jpg']['mtime'];
     }
@@ -1774,7 +1689,7 @@ if ($ifNoneMatch === $etagVal || strtotime($ifModSince ?: '1970-01-01') >= (int)
     exit;
 }
 
-// Update Content-Type if serving WEBP or AVIF (already set to image/jpeg earlier)
+// Update Content-Type if serving WEBP (already set to image/jpeg earlier)
 if ($ctype !== 'image/jpeg') {
     header('Content-Type: ' . $ctype, true);
 }

@@ -120,7 +120,7 @@ Returns a cached webcam image for the specified airport and camera.
 **Parameters:**
 - `id` (required): Airport ID (e.g., `kspb`)
 - `cam` (required): Camera index (0-based, e.g., `0`, `1`)
-- `fmt` (optional): Explicit format request (`jpg`, `webp`, or `avif`)
+- `fmt` (optional): Explicit format request (`jpg` or `webp`)
   - If specified: May return HTTP 202 if format is generating
   - If omitted: Always returns HTTP 200 immediately (server respects `Accept` header)
 - `size` (optional): Variant height in pixels (e.g., `1080`, `720`, `360`) or `original` for full resolution
@@ -149,7 +149,7 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 - `cam` (required): Camera index (0-based)
 - `ts` (optional): Unix timestamp of specific frame to retrieve
 - `size` (optional): Variant height in pixels (e.g., `1080`, `720`, `360`) or `original` for full resolution
-- `fmt` (optional): Format request (`jpg`, `webp`, or `avif`)
+- `fmt` (optional): Format request (`jpg` or `webp`)
 
 **Response (without `ts` - JSON manifest):**
 ```json
@@ -235,19 +235,19 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 **Parameters:**
 - `id` (required): Airport ID (e.g., `kspb`)
 - `cam` (required): Camera index (0-based, e.g., `0`, `1`)
-- `fmt` (optional): Explicit format request (`jpg`, `webp`, or `avif`)
+- `fmt` (optional): Explicit format request (`jpg` or `webp`)
   - If specified: May return HTTP 202 if format is generating
   - If omitted: Always returns HTTP 200 immediately (server respects `Accept` header)
 - `v` (optional): Cache-busting hash (8-character hex string)
 - `mtime` (optional): Set to `1` to get JSON timestamp response instead of image
 
 **Response:**
-- Content-Type: `image/jpeg`, `image/webp`, `image/avif`, or `application/json` (for `mtime=1`)
+- Content-Type: `image/jpeg`, `image/webp`, or `application/json` (for `mtime=1`)
 - Binary image data (for image requests) or JSON (for `mtime=1`)
 
 **HTTP Status Codes:**
 - `200`: Success (image returned)
-- `202`: Format generating (only for explicit `fmt=webp` or `fmt=avif` requests)
+- `202`: Format generating (only for explicit `fmt=webp` requests)
   - Response body: JSON with `status: "generating"`, `format`, `estimated_ready_seconds`, `fallback_url`, `preferred_url`, `jpeg_timestamp`, `refresh_interval`
   - Headers: `Retry-After: 5`, `X-Format-Generating: {format}`, `X-Fallback-URL: {url}`, `X-Preferred-Format-URL: {url}`
 - `400`: Format disabled but explicitly requested, or invalid format parameter
@@ -275,8 +275,7 @@ Returns JSON with image timestamp, format availability, and variant information.
   "size": 123456,
   "formatReady": {
     "jpg": true,
-    "webp": true,
-    "avif": false
+    "webp": true
   },
   "variants": {
     "original": ["jpg", "webp"],

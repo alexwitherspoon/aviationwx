@@ -146,7 +146,7 @@ function getWebcamStatePath(string $airportId, int $camIndex): string {
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @return string Full path to current symlink
  */
 function getWebcamCurrentPath(string $airportId, int $camIndex, string $format = 'jpg'): string {
@@ -161,7 +161,7 @@ function getWebcamCurrentPath(string $airportId, int $camIndex, string $format =
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @return string Full path to current symlink
  */
 function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): string {
@@ -177,7 +177,7 @@ function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): 
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp
  * @param string $variant Image variant (primary, full, large, medium, small, thumb)
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @return string Full path to timestamped image
  */
 function getWebcamTimestampedPath(string $airportId, int $camIndex, int $timestamp, string $variant, string $format): string {
@@ -190,7 +190,7 @@ function getWebcamTimestampedPath(string $airportId, int $camIndex, int $timesta
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @return string Full path to timestamped original image
  */
 function getWebcamOriginalTimestampedPath(string $airportId, int $camIndex, int $timestamp, string $format): string {
@@ -204,7 +204,7 @@ function getWebcamOriginalTimestampedPath(string $airportId, int $camIndex, int 
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp
  * @param int $height Variant height in pixels
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @return string Full path to timestamped variant image
  */
 function getWebcamVariantPath(string $airportId, int $camIndex, int $timestamp, int $height, string $format): string {
@@ -216,7 +216,7 @@ function getWebcamVariantPath(string $airportId, int $camIndex, int $timestamp, 
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @return string Full path to original symlink
  */
 function getWebcamOriginalSymlinkPath(string $airportId, int $camIndex, string $format = 'jpg'): string {

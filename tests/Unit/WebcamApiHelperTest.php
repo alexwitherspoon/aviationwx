@@ -80,11 +80,6 @@ class WebcamApiHelperTest extends TestCase
         // getCacheFile returns symlink path or resolved timestamp-based file path
         $this->assertStringContainsString('kspb', $webp);
         $this->assertStringContainsString('.webp', $webp);
-        
-        $avif = getCacheFile('ksea', 2, 'avif');
-        // getCacheFile returns symlink path (current.avif) or resolved timestamp-based file path
-        $this->assertStringContainsString('ksea', $avif);
-        $this->assertStringContainsString('.avif', $avif);
     }
     
     /**
@@ -133,7 +128,6 @@ class WebcamApiHelperTest extends TestCase
         $this->assertEquals('image/jpeg', getMimeTypeForFormat('jpg'));
         $this->assertEquals('image/jpeg', getMimeTypeForFormat('jpeg'));
         $this->assertEquals('image/webp', getMimeTypeForFormat('webp'));
-        $this->assertEquals('image/avif', getMimeTypeForFormat('avif'));
         $this->assertEquals('image/jpeg', getMimeTypeForFormat('unknown')); // Default
     }
     
@@ -184,8 +178,7 @@ class WebcamApiHelperTest extends TestCase
         
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => $oldMtime, 'valid' => true],
-            'webp' => ['exists' => true, 'mtime' => $oldMtime - 5, 'valid' => true], // Within tolerance
-            'avif' => ['exists' => true, 'mtime' => $oldMtime + 5, 'valid' => true] // Within tolerance
+            'webp' => ['exists' => true, 'mtime' => $oldMtime - 5, 'valid' => true] // Within tolerance
         ];
         
         $result = areAllFormatsFromSameCycle($formatStatus, $oldMtime, $refreshInterval);
@@ -202,8 +195,7 @@ class WebcamApiHelperTest extends TestCase
         
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true],
-            'webp' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true],
-            'avif' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true]
+            'webp' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true]
         ];
         
         $result = areAllFormatsFromSameCycle($formatStatus, $recentMtime, $refreshInterval);
@@ -220,8 +212,7 @@ class WebcamApiHelperTest extends TestCase
         
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => $oldMtime, 'valid' => true],
-            'webp' => ['exists' => true, 'mtime' => time() - 30, 'valid' => true], // Recent (different cycle)
-            'avif' => ['exists' => true, 'mtime' => $oldMtime, 'valid' => true]
+            'webp' => ['exists' => true, 'mtime' => time() - 30, 'valid' => true] // Recent (different cycle)
         ];
         
         $result = areAllFormatsFromSameCycle($formatStatus, $oldMtime, $refreshInterval);
@@ -237,7 +228,6 @@ class WebcamApiHelperTest extends TestCase
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
         $jpgFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'jpg', 'original');
         $webpFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'webp', 'original');
-        $avifFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'avif', 'original');
         
         // Ensure directories exist (need the direct parent dir of the files)
         $cacheDir = dirname($jpgFile);
@@ -248,27 +238,21 @@ class WebcamApiHelperTest extends TestCase
         // Create valid test files
         file_put_contents($jpgFile, "\xFF\xD8\xFF\xD9");
         file_put_contents($webpFile, 'RIFF' . pack('V', 0) . 'WEBP');
-        // AVIF requires more complex structure, so we'll just check that it's detected
-        file_put_contents($avifFile, str_repeat("\x00", 100)); // Invalid but exists
         
         $result = getFormatStatus($this->testAirportId, $this->testCamIndex);
         
         $this->assertIsArray($result);
         $this->assertArrayHasKey('jpg', $result);
         $this->assertArrayHasKey('webp', $result);
-        $this->assertArrayHasKey('avif', $result);
         
         $this->assertTrue($result['jpg']['exists']);
         $this->assertTrue($result['jpg']['valid']);
         $this->assertTrue($result['webp']['exists']);
         $this->assertTrue($result['webp']['valid']);
-        $this->assertTrue($result['avif']['exists']);
-        $this->assertFalse($result['avif']['valid']); // Invalid AVIF
         
         // Clean up
         @unlink($jpgFile);
         @unlink($webpFile);
-        @unlink($avifFile);
     }
     
     /**
@@ -282,10 +266,8 @@ class WebcamApiHelperTest extends TestCase
         $this->assertIsArray($result);
         $this->assertFalse($result['jpg']['exists']);
         $this->assertFalse($result['webp']['exists']);
-        $this->assertFalse($result['avif']['exists']);
         $this->assertFalse($result['jpg']['valid']);
         $this->assertFalse($result['webp']['valid']);
-        $this->assertFalse($result['avif']['valid']);
     }
     
     /**
@@ -298,8 +280,7 @@ class WebcamApiHelperTest extends TestCase
         
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true, 'size' => 1000],
-            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0],
-            'avif' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
+            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
         ];
         
         $result = isFormatGenerating('webp', $formatStatus, $recentMtime, $refreshInterval, 'kspb', 0);
@@ -316,8 +297,7 @@ class WebcamApiHelperTest extends TestCase
         
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true, 'size' => 1000],
-            'webp' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true, 'size' => 500],
-            'avif' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
+            'webp' => ['exists' => true, 'mtime' => $recentMtime, 'valid' => true, 'size' => 500]
         ];
         
         $result = isFormatGenerating('webp', $formatStatus, $recentMtime, $refreshInterval, 'kspb', 0);
@@ -334,8 +314,7 @@ class WebcamApiHelperTest extends TestCase
         
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => $oldMtime, 'valid' => true, 'size' => 1000],
-            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0],
-            'avif' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
+            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
         ];
         
         $result = isFormatGenerating('webp', $formatStatus, $oldMtime, $refreshInterval, 'kspb', 0);
@@ -359,8 +338,7 @@ class WebcamApiHelperTest extends TestCase
     {
         $formatStatus = [
             'jpg' => ['exists' => true, 'mtime' => time(), 'valid' => true, 'size' => 1000],
-            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0],
-            'avif' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
+            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
         ];
         
         $result = findMostEfficientFormat($formatStatus, 'kspb', 0);
@@ -377,8 +355,7 @@ class WebcamApiHelperTest extends TestCase
     {
         $formatStatus = [
             'jpg' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0],
-            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0],
-            'avif' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
+            'webp' => ['exists' => false, 'mtime' => 0, 'valid' => false, 'size' => 0]
         ];
         
         $result = findMostEfficientFormat($formatStatus, 'kspb', 0);

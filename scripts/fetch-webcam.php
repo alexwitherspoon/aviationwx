@@ -1118,7 +1118,6 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         // Log final result
         $allRequestedFormats = ['jpg'];
         if (isWebpGenerationEnabled()) $allRequestedFormats[] = 'webp';
-        if (isAvifGenerationEnabled()) $allRequestedFormats[] = 'avif';
         $failedFormats = array_diff($allRequestedFormats, $promotedFormats);
         
         if (empty($failedFormats)) {

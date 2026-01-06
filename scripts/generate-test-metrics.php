@@ -38,9 +38,9 @@ $hourData = [
         'page_views' => 0,
         'weather_requests' => 0,
         'webcam_serves' => 0,
-        'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+        'format_served' => ['jpg' => 0, 'webp' => 0],
         'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
-        'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
+        'browser_support' => ['webp' => 0, 'jpg_only' => 0],
         'cache' => ['hits' => 0, 'misses' => 0]
     ],
     'last_flush' => $now
@@ -66,11 +66,10 @@ foreach ($airports as $airportId) {
     // Generate webcam data if the airport has webcams
     $webcams = $airportConfig['webcams'] ?? [];
     foreach ($webcams as $camIndex => $cam) {
-        // Simulate realistic format distribution (WebP most popular, AVIF growing)
+        // Simulate realistic format distribution (WebP most popular)
         $jpg = rand(10, 40);
         $webp = rand(40, 120);
-        $avif = rand(5, 25);
-        $webcamTotal = $jpg + $webp + $avif;
+        $webcamTotal = $jpg + $webp;
         
         // Simulate realistic size distribution (720p most common, then original)
         $size720 = rand(40, 100);   // Primary variant (720p)
@@ -80,8 +79,7 @@ foreach ($airports as $airportId) {
         $hourData['webcams'][$airportId . '_' . $camIndex] = [
             'by_format' => [
                 'jpg' => $jpg,
-                'webp' => $webp,
-                'avif' => $avif
+                'webp' => $webp
             ],
             'by_size' => [
                 '720' => $size720,
@@ -93,7 +91,6 @@ foreach ($airports as $airportId) {
         $hourData['global']['webcam_serves'] += $webcamTotal;
         $hourData['global']['format_served']['jpg'] += $jpg;
         $hourData['global']['format_served']['webp'] += $webp;
-        $hourData['global']['format_served']['avif'] += $avif;
         
         // Initialize size keys if needed
         if (!isset($hourData['global']['size_served']['720'])) {
@@ -129,6 +126,5 @@ echo "  - Page views: " . $hourData['global']['page_views'] . "\n";
 echo "  - Weather requests: " . $hourData['global']['weather_requests'] . "\n";
 echo "  - Webcam serves: " . $hourData['global']['webcam_serves'] . "\n";
 echo "  - Formats: JPG " . $hourData['global']['format_served']['jpg'];
-echo ", WebP " . $hourData['global']['format_served']['webp'];
-echo ", AVIF " . $hourData['global']['format_served']['avif'] . "\n";
+echo ", WebP " . $hourData['global']['format_served']['webp'] . "\n";
 

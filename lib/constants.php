@@ -648,7 +648,7 @@ if (!defined('UNLIMITED_CEILING_FT')) {
 // =============================================================================
 // IMAGE FORMAT QUALITY SETTINGS
 // =============================================================================
-// Quality settings for webcam format generation (WebP, AVIF, JPEG)
+// Quality settings for webcam format generation (WebP, JPEG)
 // These can be overridden in airports.json config section
 
 // WebP quality (0-100 scale, higher = better quality, larger file)
@@ -665,24 +665,6 @@ if (!defined('WEBCAM_WEBP_QUALITY')) {
 // Default 6 is fine for background processing
 if (!defined('WEBCAM_WEBP_COMPRESSION_LEVEL')) {
     define('WEBCAM_WEBP_COMPRESSION_LEVEL', 6);
-}
-
-// AVIF CRF (Constant Rate Factor, 0-63 scale, lower = better quality)
-// Recommended range: 0-18 for high quality (aviation safety critical)
-// - 0: Lossless
-// - 1-5: Near-lossless, excellent quality (recommended for aviation safety)
-// - 18-22: Very high quality (visually lossless)
-// - 23-28: High quality, good compression
-// - 30-40: Medium quality, noticeable artifacts
-// - 50+: Low quality
-if (!defined('WEBCAM_AVIF_CRF')) {
-    define('WEBCAM_AVIF_CRF', 2);
-}
-
-// AVIF encoding speed (0-8, higher = faster but lower quality)
-// 4 is a good balance for background processing
-if (!defined('WEBCAM_AVIF_CPU_USED')) {
-    define('WEBCAM_AVIF_CPU_USED', 4);
 }
 
 // JPEG quality (1-31 scale for ffmpeg, lower = better quality)

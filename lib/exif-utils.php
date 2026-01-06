@@ -230,7 +230,7 @@ function ensureExifTimestamp(string $filePath): bool {
  * Add AviationWX.org attribution metadata to webcam image
  * 
  * Adds IPTC and XMP metadata for attribution, copyright, and location.
- * Uses XMP for cross-format compatibility (JPEG, WebP, AVIF).
+ * Uses XMP for cross-format compatibility (JPEG, WebP).
  * Uses IPTC for additional richness on JPEG files.
  * 
  * @param string $filePath Path to image
@@ -257,7 +257,7 @@ function addAviationWxMetadata(string $filePath, string $airportId, int $camInde
     $displayName = $airportName ? "$airportName ($airportUpper)" : $airportUpper;
     
     // Build metadata arguments
-    // XMP fields work across JPEG, WebP, and AVIF
+    // XMP fields work across JPEG and WebP
     $metaArgs = [
         '-XMP:Credit=AviationWX.org',
         '-XMP:Rights=Webcam imagery provided by AviationWX.org',
@@ -303,7 +303,7 @@ function addAviationWxMetadata(string $filePath, string $airportId, int $camInde
 /**
  * Copy EXIF metadata from source to destination image
  * 
- * Used when generating WebP/AVIF from source JPEG.
+ * Used when generating WebP from source JPEG.
  * Copies all EXIF/IPTC/XMP metadata to maintain clean dataset.
  * 
  * @param string $sourceFile Source image with EXIF

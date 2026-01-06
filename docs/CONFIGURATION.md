@@ -25,7 +25,6 @@ All configuration lives in a single `airports.json` file with two sections:
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
 | `webcam_generate_webp` | `false` | Generate WebP globally |
-| `webcam_generate_avif` | `false` | Generate AVIF globally |
 | `webcam_history_max_frames` | `12` | Max history frames per camera (1 = disabled, 2+ = enabled) |
 | `default_preferences` | — | Default unit toggle settings (see below) |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
@@ -160,7 +159,6 @@ Unit toggle defaults resolve in this order (first match wins):
     "worker_timeout_seconds": 90,
     
     "webcam_generate_webp": false,
-    "webcam_generate_avif": false,
     "webcam_history_max_frames": 12,
     
     "notam_cache_ttl_seconds": 3600,

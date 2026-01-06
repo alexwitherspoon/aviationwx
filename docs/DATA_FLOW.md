@@ -718,11 +718,11 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - **Upload Sources**:
   - **Direct camera uploads**: Cameras upload via SFTP/FTP/FTPS with local time EXIF
   - **Bridge uploads**: AviationWX-Bridge uploads with UTC EXIF and marker in UserComment
-- **Supported Upload Formats**: JPEG, PNG, WebP, AVIF
+- **Supported Upload Formats**: JPEG, PNG, WebP
 - **Processing**:
   - PNG always converted to JPEG (we don't serve PNG)
-  - Original format preserved for JPEG, WebP, AVIF (no redundant conversion)
-  - Missing formats generated in background (JPEG, WebP, AVIF)
+  - Original format preserved for JPEG, WebP (no redundant conversion)
+  - Missing formats generated in background (JPEG, WebP)
   - Mtime synced to match source image's capture time
 - **Timestamp Handling**:
   - Bridge uploads: EXIF `DateTimeOriginal` interpreted as UTC
@@ -774,11 +774,11 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
      - Push camera images must have camera-provided EXIF
 
 6. **Format Generation** (if successful)
-   - Generates WebP and AVIF formats for modern browsers
+   - Generates WebP format for modern browsers
    - Uses ffmpeg with quality settings
    - Runs asynchronously (non-blocking) using `exec() &`
    - Automatically syncs mtime to match source image's capture time
-   - All formats cached: `.jpg`, `.webp`, and `.avif`
+   - All formats cached: `.jpg` and `.webp`
 
 7. **Lock Release**
    - Releases file lock
@@ -815,7 +815,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Example: `cache/webcams/kspb/0/current.jpg` → `1703980800_720.jpg`
 - Example: `cache/webcams/kspb/0/original.jpg` → `1703980800_original.jpg`
 - Variants: `original`, `1080`, `720`, `360` (height-based)
-- Formats: JPEG (`.jpg`), WebP (`.webp`), AVIF (`.avif`)
+- Formats: JPEG (`.jpg`), WebP (`.webp`)
 
 **Atomic Writes**:
 - Writes to temporary file first: `{cache_file}.tmp.{pid}.{timestamp}.{random}`
@@ -826,16 +826,16 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 **EXIF Metadata Preservation**:
 - Original images have EXIF metadata (DateTimeOriginal, Description, Rights, etc.)
 - When generating variants and formats, EXIF is copied using `exiftool -TagsFromFile`
-- Ensures all cached files (variants, WebP, AVIF) have correct capture timestamps
+- Ensures all cached files (variants, WebP) have correct capture timestamps
 - Critical for accurate "Last Updated" display on frontend
 - Function: `copyExifMetadata($source, $dest)` in `lib/exif-utils.php`
 
 ### Format Generation
 
 **Multi-Format Support**:
-- System generates JPEG, WebP, and AVIF formats from source images (if enabled in config)
-- Format generation is globally configurable via `webcam_generate_webp` and `webcam_generate_avif` flags
-- Default: Formats disabled (only JPEG generated) to control resource usage
+- System generates JPEG and WebP formats from source images (if enabled in config)
+- Format generation is globally configurable via `webcam_generate_webp` flag
+- Default: WebP disabled (only JPEG generated) to control resource usage
 - All generation runs synchronously in parallel with `nice -n 10` priority (low priority to avoid interfering with normal operations)
 - Mtime automatically synced to match source image's capture time (EXIF or filemtime)
 - EXIF metadata is copied from source to all generated formats using `copyExifMetadata()`
@@ -851,17 +851,6 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - EXIF metadata copied from source JPEG using `exiftool -TagsFromFile`
 - Only runs if `webcam_generate_webp` is enabled in config
 
-**JPEG to AVIF**:
-- Uses ffmpeg: `nice -n 10 ffmpeg -i input.jpg -frames:v 1 -c:v libaom-av1 -crf 2 -b:v 0 -cpu-used 4 output.avif`
-- Quality: CRF 2 (0-63 scale, lower = better quality, near-lossless) - configurable via `config.webcam_avif_crf`
-- Codec: libaom-av1 (AV1 codec for AVIF format)
-- Speed: cpu-used 4 (balanced speed vs quality, 0-8 scale)
-- Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
-- Mtime sync: `touch -t {timestamp} output.avif` (chained after generation)
-- EXIF metadata copied from source JPEG using `exiftool -TagsFromFile`
-- Only runs if `webcam_generate_avif` is enabled in config
-- Note: AVIF generation can take 15+ seconds; may timeout on slow systems
-
 **Variant Generation**:
 - Original images are downscaled to configured heights (default: 1080, 720, 360)
 - Width calculated to preserve aspect ratio, capped at 3840px for ultra-wide cameras
@@ -871,10 +860,9 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - `original.jpg` symlink points to full-resolution original
 
 **Purpose**: 
-- AVIF provides best compression (smallest file size, best quality)
 - WebP provides good compression (smaller than JPEG)
 - JPEG served as fallback for older browsers
-- Format priority: AVIF → WebP → JPEG (based on browser support and availability)
+- Format priority: WebP → JPEG (based on browser support and availability)
 - Variants reduce bandwidth for mobile/small displays
 
 ### Webcam Metadata Caching
@@ -909,7 +897,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 2. **Timestamp Request**: `?mtime=1` returns JSON with file modification time
 
 **Serving Logic**:
-1. Check if explicit format parameter (`?fmt=webp|avif`) → if generating, return HTTP 202
+1. Check if explicit format parameter (`?fmt=webp`) → if generating, return HTTP 202
 2. Check explicit format parameter → if ready, serve immediately (HTTP 200)
 3. Check if format disabled but explicitly requested → return HTTP 400
 4. Check Accept header for format preference (if no explicit `fmt=`) → serve best available (HTTP 200)
@@ -918,7 +906,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 7. If no formats available → serve placeholder (HTTP 200)
 
 **HTTP 202 Response (Format Generating)**:
-- Only returned for explicit `fmt=webp` or `fmt=avif` requests
+- Only returned for explicit `fmt=webp` requests
 - Indicates format is actively generating in current refresh cycle
 - Includes `Retry-After` header (5 seconds)
 - Client can wait briefly or use fallback immediately
@@ -926,7 +914,6 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 
 **Format Priority**:
 - Explicit `fmt` parameter (highest priority, may return 202 if generating)
-- AVIF (if browser supports via Accept header and enabled)
 - WebP (if browser supports via Accept header and enabled)
 - JPEG (fallback, always available, always enabled)
 

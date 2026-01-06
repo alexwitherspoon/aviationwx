@@ -20,7 +20,7 @@
  * 
  *   GET /api/webcam-history.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}
  *     Returns the image for that timestamp in requested format
- *     fmt: 'jpg' (default), 'webp', or 'avif'
+ *     fmt: 'jpg' (default) or 'webp'
  *     Falls back to JPG if requested format not available
  * 
  * Response (manifest):
@@ -33,7 +33,7 @@
  *     { 
  *       "timestamp": 1735084200, 
  *       "url": "/api/webcam-history.php?id=kspb&cam=0&ts=1735084200",
- *       "formats": ["jpg", "webp", "avif"]
+ *       "formats": ["jpg", "webp"]
  *     },
  *     ...
  *   ],
@@ -50,8 +50,7 @@ require_once __DIR__ . '/../lib/webcam-metadata.php';
 // Supported image formats with MIME types
 $supportedFormats = [
     'jpg' => 'image/jpeg',
-    'webp' => 'image/webp',
-    'avif' => 'image/avif'
+    'webp' => 'image/webp'
 ];
 
 // Get parameters

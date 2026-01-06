@@ -8,7 +8,7 @@
  * Metrics tracked:
  * - Airport page views
  * - Weather API requests per airport
- * - Webcam serves by format (jpg, webp, avif)
+ * - Webcam serves by format (jpg, webp)
  * - Webcam serves by size (thumb, small, medium, large, primary, full)
  * - Cache hit/miss rates
  * - Browser format support
@@ -178,7 +178,7 @@ function metrics_track_webcam_request(string $airportId, int $camIndex): void {
  * 
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index
- * @param string $format Image format (jpg, webp, avif)
+ * @param string $format Image format (jpg, webp)
  * @param string|int $size Image size variant (height like 720, 360, 1080 or 'original')
  * @return void
  */
@@ -206,14 +206,11 @@ function metrics_track_webcam_serve(string $airportId, int $camIndex, string $fo
 /**
  * Track browser format support (based on Accept header)
  * 
- * @param bool $supportsAvif Browser supports AVIF
  * @param bool $supportsWebp Browser supports WebP
  * @return void
  */
-function metrics_track_format_support(bool $supportsAvif, bool $supportsWebp): void {
-    if ($supportsAvif) {
-        metrics_increment('browser_avif_support');
-    } elseif ($supportsWebp) {
+function metrics_track_format_support(bool $supportsWebp): void {
+    if ($supportsWebp) {
         metrics_increment('browser_webp_support');
     } else {
         metrics_increment('browser_jpg_only');
@@ -319,9 +316,9 @@ function metrics_flush(): bool {
                 'weather_requests' => 0,
                 'webcam_requests' => 0,
                 'webcam_serves' => 0,
-                'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                'format_served' => ['jpg' => 0, 'webp' => 0],
                 'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
-                'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
+                'browser_support' => ['webp' => 0, 'jpg_only' => 0],
                 'cache' => ['hits' => 0, 'misses' => 0]
             ]
         ];
@@ -362,7 +359,7 @@ function metrics_flush(): bool {
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
                     'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }
@@ -370,13 +367,13 @@ function metrics_flush(): bool {
                 $hourData['webcams'][$webcamKey]['requests'] = 0;
             }
             $hourData['webcams'][$webcamKey]['requests'] += $value;
-        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp|avif)$/', $key, $m)) {
+        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_(jpg|webp)$/', $key, $m)) {
             $webcamKey = $m[1] . '_' . $m[2];
             $format = $m[3];
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
                     'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => []
                 ];
             }
@@ -388,7 +385,7 @@ function metrics_flush(): bool {
             if (!isset($hourData['webcams'][$webcamKey])) {
                 $hourData['webcams'][$webcamKey] = [
                     'requests' => 0,
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => []
                 ];
             }
@@ -396,7 +393,7 @@ function metrics_flush(): bool {
                 $hourData['webcams'][$webcamKey]['by_size'][$size] = 0;
             }
             $hourData['webcams'][$webcamKey]['by_size'][$size] += $value;
-        } elseif (preg_match('/^format_(jpg|webp|avif)_served$/', $key, $m)) {
+        } elseif (preg_match('/^format_(jpg|webp)_served$/', $key, $m)) {
             $hourData['global']['format_served'][$m[1]] += $value;
         } elseif (preg_match('/^size_(\w+)_served$/', $key, $m)) {
             // Match both height-based and named sizes
@@ -413,8 +410,6 @@ function metrics_flush(): bool {
             $hourData['global']['webcam_requests'] += $value;
         } elseif ($key === 'global_webcam_serves') {
             $hourData['global']['webcam_serves'] += $value;
-        } elseif ($key === 'browser_avif_support') {
-            $hourData['global']['browser_support']['avif'] += $value;
         } elseif ($key === 'browser_webp_support') {
             $hourData['global']['browser_support']['webp'] += $value;
         } elseif ($key === 'browser_jpg_only') {
@@ -521,9 +516,9 @@ function metrics_aggregate_daily(string $dateId): bool {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
-            'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+            'format_served' => ['jpg' => 0, 'webp' => 0],
             'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
-            'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
+            'browser_support' => ['webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0]
         ],
         'generated_at' => time()
@@ -562,7 +557,7 @@ function metrics_aggregate_daily(string $dateId): bool {
         foreach ($hourData['webcams'] ?? [] as $webcamKey => $webcamData) {
             if (!isset($dailyData['webcams'][$webcamKey])) {
                 $dailyData['webcams'][$webcamKey] = [
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }
@@ -640,9 +635,9 @@ function metrics_aggregate_weekly(string $weekId): bool {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
-            'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+            'format_served' => ['jpg' => 0, 'webp' => 0],
             'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
-            'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
+            'browser_support' => ['webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0]
         ],
         'generated_at' => time()
@@ -682,7 +677,7 @@ function metrics_aggregate_weekly(string $weekId): bool {
         foreach ($dailyData['webcams'] ?? [] as $webcamKey => $webcamData) {
             if (!isset($weeklyData['webcams'][$webcamKey])) {
                 $weeklyData['webcams'][$webcamKey] = [
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }
@@ -755,9 +750,9 @@ function metrics_get_rolling(int $days = 7): array {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
-            'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+            'format_served' => ['jpg' => 0, 'webp' => 0],
             'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
-            'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
+            'browser_support' => ['webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0]
         ],
         'generated_at' => $now
@@ -796,7 +791,7 @@ function metrics_get_rolling(int $days = 7): array {
         foreach ($dailyData['webcams'] ?? [] as $webcamKey => $webcamData) {
             if (!isset($result['webcams'][$webcamKey])) {
                 $result['webcams'][$webcamKey] = [
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }
@@ -866,7 +861,7 @@ function metrics_get_rolling(int $days = 7): array {
         foreach ($hourData['webcams'] ?? [] as $webcamKey => $webcamData) {
             if (!isset($result['webcams'][$webcamKey])) {
                 $result['webcams'][$webcamKey] = [
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }
@@ -1067,7 +1062,7 @@ function metrics_get_today(): array {
         foreach ($hourData['webcams'] ?? [] as $webcamKey => $webcamData) {
             if (!isset($result['webcams'][$webcamKey])) {
                 $result['webcams'][$webcamKey] = [
-                    'by_format' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
+                    'by_format' => ['jpg' => 0, 'webp' => 0],
                     'by_size' => [] // Dynamic: height-based variants like '720', '360', 'original'
                 ];
             }

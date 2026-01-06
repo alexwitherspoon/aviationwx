@@ -20,8 +20,7 @@ if ($config === null) {
 $enabledFormats = getEnabledWebcamFormats();
 echo "=== Variant Coverage Diagnostic ===\n\n";
 echo "Enabled formats: " . implode(', ', $enabledFormats) . "\n";
-echo "WebP enabled: " . (isWebpGenerationEnabled() ? 'yes' : 'no') . "\n";
-echo "AVIF enabled: " . (isAvifGenerationEnabled() ? 'yes' : 'no') . "\n\n";
+echo "WebP enabled: " . (isWebpGenerationEnabled() ? 'yes' : 'no') . "\n\n";
 
 $issues = [];
 $totalCameras = 0;
@@ -126,14 +125,13 @@ foreach ($config['airports'] as $airportId => $airport) {
             $cacheDir = getWebcamCameraDir($airportId, $idx);
             echo "Cache directory: {$cacheDir}\n";
             if (is_dir($cacheDir)) {
-                $pattern = $cacheDir . '/' . $latestTimestamp . '_*.{jpg,jpeg,webp,avif}';
+                $pattern = $cacheDir . '/' . $latestTimestamp . '_*.{jpg,jpeg,webp}';
                 $files = glob($pattern, GLOB_BRACE);
                 if (empty($files)) {
                     $files = array_merge(
                         glob($cacheDir . '/' . $latestTimestamp . '_*.jpg'),
                         glob($cacheDir . '/' . $latestTimestamp . '_*.jpeg'),
-                        glob($cacheDir . '/' . $latestTimestamp . '_*.webp'),
-                        glob($cacheDir . '/' . $latestTimestamp . '_*.avif')
+                        glob($cacheDir . '/' . $latestTimestamp . '_*.webp')
                     );
                 }
                 echo "Files found for timestamp {$latestTimestamp}: " . count($files) . "\n";

@@ -1389,9 +1389,6 @@ if (empty($embedAirportId) || !$airport) {
                     }
                 ?>
                     <picture>
-                        <?php if (in_array('avif', $enabledFormats) && $meta): ?>
-                        <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'avif')) ?>" type="image/avif" sizes="400px">
-                        <?php endif; ?>
                         <?php if (in_array('webp', $enabledFormats) && $meta): ?>
                         <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'webp')) ?>" type="image/webp" sizes="400px">
                         <?php endif; ?>
@@ -1565,9 +1562,6 @@ if (empty($embedAirportId) || !$airport) {
                 ?>
                 <div class="dual-webcam-cell">
                     <picture>
-                        <?php if (in_array('avif', $enabledFormats) && $meta): ?>
-                        <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'avif')) ?>" type="image/avif" sizes="300px">
-                        <?php endif; ?>
                         <?php if (in_array('webp', $enabledFormats) && $meta): ?>
                         <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'webp')) ?>" type="image/webp" sizes="300px">
                         <?php endif; ?>
@@ -1738,9 +1732,6 @@ if (empty($embedAirportId) || !$airport) {
                     ?>
                     <div class="webcam-cell" style="aspect-ratio: <?= $aspectRatio ?>;">
                         <picture>
-                            <?php if (in_array('avif', $enabledFormats) && $meta): ?>
-                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'avif')) ?>" type="image/avif" sizes="300px">
-                            <?php endif; ?>
                             <?php if (in_array('webp', $enabledFormats) && $meta): ?>
                             <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'webp')) ?>" type="image/webp" sizes="300px">
                             <?php endif; ?>
@@ -1897,9 +1888,6 @@ if (empty($embedAirportId) || !$airport) {
                         }
                     ?>
                         <picture>
-                            <?php if (in_array('avif', $enabledFormats) && $meta): ?>
-                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'avif')) ?>" type="image/avif" sizes="800px">
-                            <?php endif; ?>
                             <?php if (in_array('webp', $enabledFormats) && $meta): ?>
                             <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'webp')) ?>" type="image/webp" sizes="800px">
                             <?php endif; ?>

@@ -234,12 +234,6 @@ cleanupFilesByPattern(
     'Webcam WebP images (backup)',
     $stats, $dryRun, $verbose
 );
-cleanupFilesByPattern(
-    CACHE_WEBCAMS_DIR . '/*/*/*.avif',
-    CLEANUP_WEBCAM_IMAGE_AGE,
-    'Webcam AVIF images (backup)',
-    $stats, $dryRun, $verbose
-);
 
 // Clean stale entries in peak_gusts.json and temp_extremes.json
 cleanupDailyTrackingEntries(
@@ -591,11 +585,10 @@ function cleanupWebcamHistoryFrames(
     $bytesFreed = 0;
     
     foreach ($historyDirs as $dir) {
-        // Clean up all image formats (jpg, webp, avif) and variants
+        // Clean up all image formats (jpg, webp) and variants
         $files = array_merge(
             glob($dir . '/*.jpg') ?: [],
-            glob($dir . '/*.webp') ?: [],
-            glob($dir . '/*.avif') ?: []
+            glob($dir . '/*.webp') ?: []
         );
         
         if (empty($files)) {

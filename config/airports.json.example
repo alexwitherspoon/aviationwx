@@ -34,7 +34,6 @@
     "webcam_worker_pool_size": 5,
     "worker_timeout_seconds": 90,
     "webcam_generate_webp": false,
-    "webcam_generate_avif": false,
     "webcam_history_max_frames": 12,
     "webcam_variant_heights": [1080, 720, 360],
     "_comment_legacy": "The following image_* options are deprecated. Use webcam_variant_heights instead.",

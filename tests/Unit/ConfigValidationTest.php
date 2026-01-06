@@ -2632,8 +2632,7 @@ class ConfigValidationTest extends TestCase
     {
         $config = [
             'config' => [
-                'webcam_generate_webp' => true,
-                'webcam_generate_avif' => false
+                'webcam_generate_webp' => true
             ],
             'airports' => [
                 'kspb' => [
@@ -2658,8 +2657,7 @@ class ConfigValidationTest extends TestCase
     {
         $config = [
             'config' => [
-                'webcam_generate_webp' => 'true',  // String, not boolean
-                'webcam_generate_avif' => 1        // Integer, not boolean
+                'webcam_generate_webp' => 'true'  // String, not boolean
             ],
             'airports' => [
                 'kspb' => [
@@ -2674,9 +2672,8 @@ class ConfigValidationTest extends TestCase
         
         $result = validateAirportsJsonStructure($config);
         $this->assertFalse($result['valid'], 'Invalid type flags should fail validation');
-        $this->assertCount(2, $result['errors']);
+        $this->assertCount(1, $result['errors']);
         $this->assertStringContainsString('webcam_generate_webp must be a boolean', implode(' ', $result['errors']));
-        $this->assertStringContainsString('webcam_generate_avif must be a boolean', implode(' ', $result['errors']));
     }
 
     /**
@@ -2705,14 +2702,13 @@ class ConfigValidationTest extends TestCase
     }
 
     /**
-     * Test format generation flags validation - Both true
+     * Test format generation flags validation - WebP true
      */
-    public function testGlobalConfig_FormatFlags_BothTrue()
+    public function testGlobalConfig_FormatFlags_WebpTrue()
     {
         $config = [
             'config' => [
-                'webcam_generate_webp' => true,
-                'webcam_generate_avif' => true
+                'webcam_generate_webp' => true
             ],
             'airports' => [
                 'kspb' => [
@@ -2726,19 +2722,18 @@ class ConfigValidationTest extends TestCase
         ];
         
         $result = validateAirportsJsonStructure($config);
-        $this->assertTrue($result['valid'], 'Both flags true should pass validation');
+        $this->assertTrue($result['valid'], 'WebP flag true should pass validation');
         $this->assertEmpty($result['errors']);
     }
 
     /**
-     * Test format generation flags validation - Both false
+     * Test format generation flags validation - WebP false
      */
-    public function testGlobalConfig_FormatFlags_BothFalse()
+    public function testGlobalConfig_FormatFlags_WebpFalse()
     {
         $config = [
             'config' => [
-                'webcam_generate_webp' => false,
-                'webcam_generate_avif' => false
+                'webcam_generate_webp' => false
             ],
             'airports' => [
                 'kspb' => [
@@ -2752,7 +2747,7 @@ class ConfigValidationTest extends TestCase
         ];
         
         $result = validateAirportsJsonStructure($config);
-        $this->assertTrue($result['valid'], 'Both flags false should pass validation');
+        $this->assertTrue($result['valid'], 'WebP flag false should pass validation');
         $this->assertEmpty($result['errors']);
     }
 

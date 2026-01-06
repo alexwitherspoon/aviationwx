@@ -3,8 +3,7 @@
  * Unit Tests for Webcam Format Generation
  * 
  * Tests format detection and validation functionality:
- * - detectImageFormat() - JPEG, PNG, WebP, AVIF detection
- * - isValidAvifFile() - AVIF header validation
+ * - detectImageFormat() - JPEG, PNG, WebP detection
  */
 
 namespace AviationWX\Tests;
@@ -75,22 +74,6 @@ class WebcamFormatGenerationTest extends TestCase
         return $path;
     }
     
-    /**
-     * Create a minimal AVIF file
-     */
-    private function createTestAvif($filename): string
-    {
-        $path = $this->testImageDir . '/' . $filename;
-        // AVIF: ftyp box with avif major brand
-        // [4 bytes size][4 bytes 'ftyp'][4 bytes major brand 'avif'][...]
-        $size = pack("N", 20); // 20 bytes total
-        $ftyp = "ftyp";
-        $majorBrand = "avif";
-        $content = $size . $ftyp . $majorBrand . str_repeat("\x00", 8);
-        file_put_contents($path, $content);
-        return $path;
-    }
-    
     public function testDetectImageFormat_JpegFile_ReturnsJpg(): void
     {
         $file = $this->createTestJpeg('test.jpg');
@@ -110,13 +93,6 @@ class WebcamFormatGenerationTest extends TestCase
         $file = $this->createTestWebp('test.webp');
         $format = detectImageFormat($file);
         $this->assertEquals('webp', $format);
-    }
-    
-    public function testDetectImageFormat_AvifFile_ReturnsAvif(): void
-    {
-        $file = $this->createTestAvif('test.avif');
-        $format = detectImageFormat($file);
-        $this->assertEquals('avif', $format);
     }
     
     public function testDetectImageFormat_InvalidFile_ReturnsNull(): void
@@ -150,69 +126,6 @@ class WebcamFormatGenerationTest extends TestCase
         $this->assertNull($format);
     }
     
-    public function testIsValidAvifFile_ValidAvif_ReturnsTrue(): void
-    {
-        $file = $this->createTestAvif('test.avif');
-        $result = isValidAvifFile($file);
-        $this->assertTrue($result);
-    }
-    
-    public function testIsValidAvifFile_AvifWithAvisBrand_ReturnsTrue(): void
-    {
-        $path = $this->testImageDir . '/test.avif';
-        // AVIF with 'avis' major brand (AVIF image sequence)
-        $size = pack("N", 20);
-        $ftyp = "ftyp";
-        $majorBrand = "avis";
-        $content = $size . $ftyp . $majorBrand . str_repeat("\x00", 8);
-        file_put_contents($path, $content);
-        
-        $result = isValidAvifFile($path);
-        $this->assertTrue($result);
-    }
-    
-    public function testIsValidAvifFile_InvalidFile_ReturnsFalse(): void
-    {
-        $file = $this->createTestJpeg('test.jpg');
-        $result = isValidAvifFile($file);
-        $this->assertFalse($result);
-    }
-    
-    public function testIsValidAvifFile_NonExistentFile_ReturnsFalse(): void
-    {
-        $file = $this->testImageDir . '/nonexistent.avif';
-        $result = isValidAvifFile($file);
-        $this->assertFalse($result);
-    }
-    
-    public function testIsValidAvifFile_EmptyFile_ReturnsFalse(): void
-    {
-        $file = $this->testImageDir . '/empty.avif';
-        file_put_contents($file, "");
-        $result = isValidAvifFile($file);
-        $this->assertFalse($result);
-    }
-    
-    public function testIsValidAvifFile_ShortFile_ReturnsFalse(): void
-    {
-        $file = $this->testImageDir . '/short.avif';
-        file_put_contents($file, "\x00\x00\x00\x00ftyp"); // Too short
-        $result = isValidAvifFile($file);
-        $this->assertFalse($result);
-    }
-    
-    public function testIsValidAvifFile_NonFtypBox_ReturnsFalse(): void
-    {
-        $file = $this->testImageDir . '/notavif.avif';
-        // Valid box structure but not ftyp
-        $size = pack("N", 20);
-        $boxType = "moov"; // Not ftyp
-        $content = $size . $boxType . str_repeat("\x00", 12);
-        file_put_contents($file, $content);
-        
-        $result = isValidAvifFile($file);
-        $this->assertFalse($result);
-    }
 
     /**
      * Test isWebpGenerationEnabled() - Default (disabled)
@@ -227,21 +140,6 @@ class WebcamFormatGenerationTest extends TestCase
         // Test with no config (should default to false)
         $result = isWebpGenerationEnabled();
         $this->assertFalse($result, 'WebP generation should default to disabled');
-    }
-
-    /**
-     * Test isAvifGenerationEnabled() - Default (disabled)
-     */
-    public function testIsAvifGenerationEnabled_Default_ReturnsFalse(): void
-    {
-        // Clear any cached config
-        if (function_exists('clearConfigCache')) {
-            clearConfigCache();
-        }
-        
-        // Test with no config (should default to false)
-        $result = isAvifGenerationEnabled();
-        $this->assertFalse($result, 'AVIF generation should default to disabled');
     }
 
     /**
@@ -317,11 +215,9 @@ class WebcamFormatGenerationTest extends TestCase
     {
         $jpgPath = getStagingFilePath('kspb', 0, 'jpg', 'original');
         $webpPath = getStagingFilePath('kspb', 0, 'webp', 'original');
-        $avifPath = getStagingFilePath('kspb', 0, 'avif', 'original');
         
         $this->assertStringEndsWith('staging_original.jpg.tmp', $jpgPath);
         $this->assertStringEndsWith('staging_original.webp.tmp', $webpPath);
-        $this->assertStringEndsWith('staging_original.avif.tmp', $avifPath);
     }
 
     /**
@@ -370,11 +266,9 @@ class WebcamFormatGenerationTest extends TestCase
         $timestamp = 1703700000;
         $jpgPath = getFinalFilePath('kspb', 0, 'jpg', $timestamp);
         $webpPath = getFinalFilePath('kspb', 0, 'webp', $timestamp);
-        $avifPath = getFinalFilePath('kspb', 0, 'avif', $timestamp);
         
         $this->assertStringEndsWith('1703700000_original.jpg', $jpgPath);
         $this->assertStringEndsWith('1703700000_original.webp', $webpPath);
-        $this->assertStringEndsWith('1703700000_original.avif', $avifPath);
     }
     
     /**
@@ -431,8 +325,7 @@ class WebcamFormatGenerationTest extends TestCase
         // Create test .tmp files using the new path structure
         $tmpFiles = [
             getStagingFilePath($testAirport, 0, 'jpg', 'primary'),
-            getStagingFilePath($testAirport, 0, 'webp', 'primary'),
-            getStagingFilePath($testAirport, 0, 'avif', 'primary')
+            getStagingFilePath($testAirport, 0, 'webp', 'primary')
         ];
         
         // Create the test files (getStagingFilePath ensures directory exists)
@@ -451,7 +344,7 @@ class WebcamFormatGenerationTest extends TestCase
         $result = cleanupStagingFiles($testAirport, 0);
         
         // Verify all files were removed
-        $this->assertEquals(3, $result);
+        $this->assertEquals(2, $result);
         foreach ($tmpFiles as $file) {
             $this->assertFileDoesNotExist($file);
         }
@@ -473,21 +366,6 @@ class WebcamFormatGenerationTest extends TestCase
         $this->assertStringContainsString('nice -n 10', $cmd);
     }
 
-    /**
-     * Test buildFormatCommand() generates valid AVIF command with -f avif flag
-     */
-    public function testBuildFormatCommand_Avif_ContainsCorrectParameters(): void
-    {
-        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.avif.tmp', 'avif', time());
-        
-        $this->assertStringContainsString('ffmpeg', $cmd);
-        $this->assertStringContainsString('libaom-av1', $cmd);
-        $this->assertStringContainsString('/source/file.jpg', $cmd);
-        $this->assertStringContainsString('/dest/file.avif.tmp', $cmd);
-        $this->assertStringContainsString('-f avif', $cmd, 'AVIF command must include -f avif flag for .tmp extension');
-        $this->assertStringContainsString('-crf ' . getWebcamAvifCrf(), $cmd, 'AVIF command must use configured CRF');
-        $this->assertStringContainsString('nice -n 10', $cmd);
-    }
 
     /**
      * Test buildFormatCommand() generates valid JPG command
@@ -571,18 +449,17 @@ class WebcamFormatGenerationTest extends TestCase
         
         ensureCacheDir(CACHE_WEBCAMS_DIR);
         
-        // Create staging files for jpg and webp (avif will be marked as failed)
+        // Create staging files for jpg and webp
         @file_put_contents(getStagingFilePath($testAirport, 0, 'jpg', 'original'), 'test jpg');
         @file_put_contents(getStagingFilePath($testAirport, 0, 'webp', 'original'), 'test webp');
         
-        // Promote with mixed results (webp success, avif failed)
-        $formatResults = ['webp' => true, 'avif' => false];
+        // Promote formats
+        $formatResults = ['webp' => true];
         $result = promoteFormats($testAirport, 0, $formatResults, 'jpg', $timestamp);
         
-        // Should include jpg and webp, not avif
+        // Should include jpg and webp
         $this->assertContains('jpg', $result);
         $this->assertContains('webp', $result);
-        $this->assertNotContains('avif', $result);
         
         // Verify timestamp files exist
         $this->assertFileExists(getFinalFilePath($testAirport, 0, 'jpg', $timestamp));
@@ -707,7 +584,7 @@ class WebcamFormatGenerationTest extends TestCase
         
         // Verify formats were generated (check what's enabled)
         $enabledFormats = getEnabledWebcamFormats();
-        $expectedFormats = array_filter(['jpg', 'webp', 'avif'], function($fmt) use ($enabledFormats) {
+        $expectedFormats = array_filter(['jpg', 'webp'], function($fmt) use ($enabledFormats) {
             return in_array($fmt, $enabledFormats);
         });
         
@@ -764,7 +641,7 @@ class WebcamFormatGenerationTest extends TestCase
         // Cleanup
         @unlink($sourceFile);
         // Clean up staging files
-        foreach (['jpg', 'webp', 'avif'] as $format) {
+        foreach (['jpg', 'webp'] as $format) {
             $stagingFile = getStagingFilePath($testAirport, 0, $format, 'primary');
             @unlink($stagingFile);
             $timestampFile = getFinalFilePath($testAirport, 0, $format, $captureTime);
@@ -776,38 +653,6 @@ class WebcamFormatGenerationTest extends TestCase
         }
     }
 
-    /**
-     * Test generateFormatsSync() actually generates AVIF format (if ffmpeg available)
-     * 
-     * This is an integration test that requires ffmpeg with libaom-av1 to be installed.
-     * It verifies that the AVIF format generation pipeline works end-to-end.
-     */
-    public function testGenerateFormatsSync_AVIF_GeneratesValidFile(): void
-    {
-        // This test requires ffmpeg and may be slow, so we'll skip if not available
-        if (!isFfmpegAvailable()) {
-            $this->markTestSkipped('ffmpeg not available');
-        }
-        
-        $sourceFile = $this->createTestJpeg('source.jpg');
-        $airportId = 'test';
-        $camIndex = 0;
-        
-        // Enable AVIF generation for this test
-        // Note: This test may fail if AVIF is disabled in config
-        // We'll check if it's enabled first
-        if (!isAvifGenerationEnabled()) {
-            $this->markTestSkipped('AVIF generation not enabled in config');
-        }
-        
-        $results = generateFormatsSync($sourceFile, $airportId, $camIndex, 'jpg');
-        
-        // Clean up staging files
-        cleanupStagingFiles($airportId, $camIndex);
-        
-        // Should have generated AVIF (and possibly WebP if enabled)
-        $this->assertIsArray($results);
-    }
     
     /**
      * Test parseResolutionString() - Valid format

@@ -2,7 +2,7 @@
 /**
  * Webcam Format Generation Library
  * 
- * Generates image variants and formats (WebP, AVIF, JPEG) from source images.
+ * Generates image variants and formats (WebP, JPEG) from source images.
  * 
  * Workflow:
  * 1. Write source to .tmp staging file
@@ -26,7 +26,7 @@ require_once __DIR__ . '/variant-health.php';
  * Reads file headers to determine image format.
  * 
  * @param string $filePath Path to image file
- * @return string|null Format: 'jpg', 'png', 'webp', 'avif', or null if unknown
+ * @return string|null Format: 'jpg', 'png', 'webp', or null if unknown
  */
 function detectImageFormat($filePath) {
     $handle = @fopen($filePath, 'rb');
@@ -63,54 +63,8 @@ function detectImageFormat($filePath) {
         return null;
     }
     
-    // AVIF: ftyp box with avif/avis
-    // AVIF structure: [4 bytes size][4 bytes 'ftyp'][4 bytes major brand][...]
-    // Major brand at bytes 8-11 should be 'avif' or 'avis'
-    if (substr($header, 4, 4) === 'ftyp') {
-        // Check major brand at bytes 8-11 (already read in header)
-        $majorBrand = substr($header, 8, 4);
-        @fclose($handle);
-        if ($majorBrand === 'avif' || $majorBrand === 'avis') {
-            return 'avif';
-        }
-        return null;
-    }
-    
     @fclose($handle);
     return null;
-}
-
-/**
- * Validate AVIF file by checking headers
- * 
- * Validates that a file is a proper AVIF by checking the ftyp box
- * and major brand (avif or avis).
- * 
- * @param string $filePath Path to AVIF file
- * @return bool True if valid AVIF, false otherwise
- */
-function isValidAvifFile(string $filePath): bool {
-    $fp = @fopen($filePath, 'rb');
-    if (!$fp) {
-        return false;
-    }
-    
-    $header = @fread($fp, 12);
-    if (!$header || strlen($header) < 12) {
-        @fclose($fp);
-        return false;
-    }
-    
-    // AVIF: ftyp box with avif/avis
-    // Structure: [4 bytes size][4 bytes 'ftyp'][4 bytes major brand][...]
-    if (substr($header, 4, 4) === 'ftyp') {
-        $majorBrand = substr($header, 8, 4);
-        @fclose($fp);
-        return ($majorBrand === 'avif' || $majorBrand === 'avis');
-    }
-    
-    @fclose($fp);
-    return false;
 }
 
 /**
@@ -308,7 +262,7 @@ function getFormatGenerationTimeout(): int {
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param string $format Format extension (jpg, webp, avif)
+ * @param string $format Format extension (jpg, webp)
  * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Staging file path with .tmp suffix
  */
@@ -347,7 +301,7 @@ function getWebcamCacheDir(string $airportId, int $camIndex): string {
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp for the image
- * @param string $format Format extension (jpg, webp, avif)
+ * @param string $format Format extension (jpg, webp)
  * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Timestamp-based cache file path
  */
@@ -367,7 +321,7 @@ function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timest
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param string $format Format: 'jpg', 'webp', or 'avif'
+ * @param string $format Format: 'jpg' or 'webp'
  * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Cache file path
  */
@@ -474,7 +428,7 @@ function getCacheFile(string $airportId, int $camIndex, string $format, string|i
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param string $format Format extension (jpg, webp, avif)
+ * @param string $format Format extension (jpg, webp)
  * @param int $timestamp Unix timestamp for the image
  * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Final timestamp-based cache file path
@@ -549,7 +503,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
     
     // Get all timestamp-based files (format: {timestamp}_{variant}.{format})
     // Exclude symlinks and staging files
-    $allFiles = glob($cacheDir . '/*.{jpg,webp,avif}', GLOB_BRACE);
+    $allFiles = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
     if ($allFiles === false || empty($allFiles)) {
         return 0;
     }
@@ -564,7 +518,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         
         $basename = basename($file);
         // Match timestamp-based filename: "1703700000_primary.jpg" or "1703700000.jpg"
-        if (preg_match('/^(\d+)(?:_[^_]+)?\.(jpg|webp|avif)$/', $basename, $matches)) {
+        if (preg_match('/^(\d+)(?:_[^_]+)?\.(jpg|webp)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             if (!isset($timestampFiles[$timestamp])) {
                 $timestampFiles[$timestamp] = [];
@@ -718,7 +672,7 @@ function buildResizeCommand(string $sourceFile, string $destFile, int $targetWid
  * @param string $sourceFile Source image file path
  * @param string $destFile Destination file path (with correct extension)
  * @param string $variant Variant name (thumb, small, medium, large, primary, full)
- * @param string $format Target format (webp, avif, jpg)
+ * @param string $format Target format (webp, jpg)
  * @param array $variantDimensions Target dimensions for variant
  * @param bool $letterbox Whether to letterbox (for primary/full only)
  * @param int $captureTime Source capture time for mtime sync
@@ -760,17 +714,6 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
             );
             break;
             
-        case 'avif':
-            $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
-                escapeshellarg($sourceFile),
-                $scaleFilter,
-                getWebcamAvifCrf(),
-                WEBCAM_AVIF_CPU_USED,
-                escapeshellarg($destFile)
-            );
-            break;
-            
         default:
             // Fallback for unknown formats - treat as JPEG
             $cmd = sprintf(
@@ -808,7 +751,7 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
  * 
  * @param string $sourceFile Source image file path
  * @param string $destFile Destination file path
- * @param string $format Target format (webp, avif, jpg)
+ * @param string $format Target format (webp, jpg)
  * @param int $captureTime Source capture time for mtime sync
  * @return string Shell command string
  */
@@ -821,17 +764,6 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
                 escapeshellarg($sourceFile),
                 getWebcamWebpQuality(),
                 WEBCAM_WEBP_COMPRESSION_LEVEL,
-                escapeshellarg($destFile)
-            );
-            break;
-            
-        case 'avif':
-            // Explicitly specify format with -f avif (required when using .tmp extension)
-            $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
-                escapeshellarg($sourceFile),
-                getWebcamAvifCrf(),
-                WEBCAM_AVIF_CPU_USED,
                 escapeshellarg($destFile)
             );
             break;
@@ -876,7 +808,7 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
  * @param string $sourceFile Source image file path (staging .tmp file)
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param string $sourceFormat Format of source file (jpg, webp, avif)
+ * @param string $sourceFormat Format of source file (jpg, webp)
  * @return array Results: ['format' => bool success, ...]
  */
 function generateFormatsSync(string $sourceFile, string $airportId, int $camIndex, string $sourceFormat): array {
@@ -900,11 +832,6 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
         $formatsToGenerate[] = 'webp';
     }
     
-    // AVIF if enabled and source isn't AVIF
-    if (isAvifGenerationEnabled() && $sourceFormat !== 'avif') {
-        $formatsToGenerate[] = 'avif';
-    }
-    
     // If no formats to generate, return early
     if (empty($formatsToGenerate)) {
         return $results;
@@ -918,7 +845,6 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
         'source_size' => file_exists($sourceFile) ? filesize($sourceFile) : 0,
         'formats_to_generate' => $formatsToGenerate,
         'webp_enabled' => isWebpGenerationEnabled(),
-        'avif_enabled' => isAvifGenerationEnabled(),
         'timeout_seconds' => $timeout,
         'capture_time' => $captureTime
     ], 'app');
@@ -1077,7 +1003,7 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
  * @param string $sourceFile Source image file path (staging .tmp file)
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param string $sourceFormat Format of source file (jpg, webp, avif, png)
+ * @param string $sourceFormat Format of source file (jpg, webp, png)
  * @param array|null $inputDimensions Optional input dimensions (detected if null)
  * @return array Results: ['variant_format' => bool success, ...] and metadata
  */
@@ -1171,11 +1097,6 @@ function generateVariantsSync(string $sourceFile, string $airportId, int $camInd
     // WebP if enabled and source isn't WebP
     if (isWebpGenerationEnabled() && $sourceFormat !== 'webp') {
         $formatsToGenerate[] = 'webp';
-    }
-    
-    // AVIF if enabled and source isn't AVIF
-    if (isAvifGenerationEnabled() && $sourceFormat !== 'avif') {
-        $formatsToGenerate[] = 'avif';
     }
     
     // Always include source format (we'll copy it for variants)
@@ -1437,7 +1358,7 @@ function updateCacheSymlink(string $symlinkPath, string $targetPath): bool {
         $basename = basename($symlinkPath);
         $logContext = [];
         
-        if (preg_match('/^([^_]+)_(\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
+        if (preg_match('/^([^_]+)_(\d+)\.(jpg|webp)$/', $basename, $matches)) {
             $logContext = [
                 'airport' => $matches[1],
                 'cam' => (int)$matches[2],
@@ -1964,99 +1885,6 @@ function generateWebp($sourceFile, $airportId, $camIndex) {
 }
 
 /**
- * Generate AVIF version of image (non-blocking with mtime sync)
- * 
- * Converts source image to AVIF format using ffmpeg. Runs in background
- * and automatically syncs mtime to match source file's capture time.
- * 
- * @param string $sourceFile Source image file path (any format)
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @return bool True if AVIF generation started, false on failure
- */
-function generateAvif($sourceFile, $airportId, $camIndex) {
-    // Check if format generation is enabled
-    if (!isAvifGenerationEnabled()) {
-        return false; // Format disabled, don't generate
-    }
-    
-    if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
-        return false;
-    }
-    
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
-        return false;
-    }
-    
-    $cacheAvif = getCacheSymlinkPath($airportId, $camIndex, 'avif');
-    
-    // Log job start
-    aviationwx_log('info', 'webcam format generation job started', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'format' => 'avif',
-        'source_file' => basename($sourceFile),
-        'source_size' => filesize($sourceFile),
-        'timestamp' => time()
-    ], 'app');
-    
-    // Get source capture time before starting generation
-    $captureTime = getSourceCaptureTime($sourceFile);
-    
-    // Build ffmpeg command for AVIF encoding with nice 10 (low priority to avoid interfering with normal operations)
-    // -c:v libaom-av1: Use AV1 codec (AVIF uses AV1)
-    // -crf: Quality setting (0=lossless, 23=high quality, 30+=medium quality)
-    // -b:v 0: Use CRF mode (quality-based, not bitrate)
-    // -cpu-used: Speed vs quality balance (0-8, 4 is balanced)
-    $cmdAvif = sprintf(
-        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
-        escapeshellarg($sourceFile),
-        getWebcamAvifCrf(),
-        WEBCAM_AVIF_CPU_USED,
-        escapeshellarg($cacheAvif)
-    );
-    
-    // Chain mtime sync after generation (only if capture time available)
-    if ($captureTime > 0) {
-        $dateStr = date('YmdHi.s', $captureTime); // Format: YYYYMMDDhhmm.ss (touch -t requires dot before seconds)
-        $cmdSync = sprintf("touch -t %s %s", $dateStr, escapeshellarg($cacheAvif));
-        $cmd = $cmdAvif . ' && ' . $cmdSync;
-    } else {
-        $cmd = $cmdAvif;
-    }
-    
-    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
-    if (isExiftoolAvailable()) {
-        $cmdExif = sprintf(
-            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s || true",
-            escapeshellarg($sourceFile),
-            escapeshellarg($cacheAvif)
-        );
-        $cmd = $cmd . ' && ' . $cmdExif;
-    }
-    
-    // Run in background (non-blocking)
-    // Result will be logged when format status is checked (in getFormatStatus or isFormatGenerating)
-    if (function_exists('exec')) {
-        $cmd = $cmd . ' > /dev/null 2>&1 &';
-        @exec($cmd);
-        return true;
-    }
-    
-    // Log failure if exec not available
-    aviationwx_log('error', 'webcam format generation job failed - exec not available', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'format' => 'avif',
-        'error' => 'exec_function_not_available',
-        'troubleshooting' => 'PHP exec() function is disabled or not available'
-    ], 'app');
-    
-    return false;
-}
-
-/**
  * Generate JPEG from source image (non-blocking with mtime sync)
  * 
  * Converts source image to JPEG format using ffmpeg. Runs in background
@@ -2369,7 +2197,7 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
  * 
  * @param string $sourceFile Source image file
  * @param string $destFile Destination file
- * @param string $format Target format (jpg, webp, avif)
+ * @param string $format Target format (jpg, webp)
  * @param int $targetWidth Target width
  * @param int $targetHeight Target height
  * @param string $scaleFilter FFmpeg scale filter
@@ -2396,17 +2224,6 @@ function buildVariantCommandByFormat(string $sourceFile, string $destFile, strin
                 $scaleFilter,
                 getWebcamWebpQuality(),
                 WEBCAM_WEBP_COMPRESSION_LEVEL,
-                escapeshellarg($destFile)
-            );
-            break;
-            
-        case 'avif':
-            $cmd = sprintf(
-                "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -vf \"%s\" -frames:v 1 -f avif -c:v libaom-av1 -crf %d -b:v 0 -cpu-used %d %s",
-                escapeshellarg($sourceFile),
-                $scaleFilter,
-                getWebcamAvifCrf(),
-                WEBCAM_AVIF_CPU_USED,
                 escapeshellarg($destFile)
             );
             break;
