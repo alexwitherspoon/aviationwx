@@ -18,7 +18,7 @@ require_once __DIR__ . '/../../lib/weather/outage-detection.php';
 class OutageDetectionTest extends TestCase
 {
     private $cacheDir;
-    private $testAirportId = 'test_outage';
+    private $testAirportId = 'test-outage';
     
     protected function setUp(): void
     {
