@@ -32,6 +32,7 @@ $running = true;
 $loopCount = 0;
 $lastConfigReload = 0;
 $lastConfigMtime = null; // Track config file mtime to detect changes
+$lastConfigSha = null; // Track config file SHA hash to detect ANY content changes
 $lastMetricsFlush = 0;
 $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
@@ -193,38 +194,49 @@ while ($running) {
         // Check if config needs reload (configurable interval)
         $configReloadInterval = getSchedulerConfigReloadInterval();
         if (($now - $lastConfigReload) >= $configReloadInterval) {
-            // Check if config file has actually changed by comparing mtime
+            // Check if config file has actually changed by comparing SHA hash
+            // SHA hash detects ANY content change (webcam names, settings, etc.), not just structural changes
             $configFilePath = getConfigFilePath();
             $configChanged = false;
             $currentMtime = null;
+            $currentSha = null;
             
             if ($configFilePath && file_exists($configFilePath)) {
-                $currentMtime = filemtime($configFilePath);
-                // Check if mtime changed since last reload
-                if ($lastConfigMtime !== null && $currentMtime !== $lastConfigMtime) {
-                    $configChanged = true;
+                // Read file content to compute SHA hash (primary change detection)
+                $fileContent = @file_get_contents($configFilePath);
+                if ($fileContent !== false) {
+                    $currentSha = hash('sha256', $fileContent);
+                    // Check if SHA hash changed since last reload (most reliable change detection)
+                    if ($lastConfigSha !== null && $currentSha !== $lastConfigSha) {
+                        $configChanged = true;
+                    }
                 }
+                // Keep mtime for logging/debugging only
+                $currentMtime = filemtime($configFilePath);
             }
             
             $newConfig = loadConfig(false);
             if ($newConfig !== null) {
-                // Check if config actually changed (compare airport count and structure)
-                $airportsChanged = ($config === null) || 
-                    (count($newConfig['airports'] ?? []) !== count($config['airports'] ?? []));
-                
-                // If config changed (mtime or content), clear APCu cache so web requests pick up changes immediately
-                if ($airportsChanged || $configChanged) {
+                // Only clear cache if config actually changed (SHA hash differs)
+                // SHA hash is reliable, so we don't need to always clear
+                if ($configChanged) {
                     clearConfigCache();
-                    aviationwx_log('info', 'scheduler: config changed, cleared APCu cache', [
-                        'old_airports' => $config ? count($config['airports'] ?? []) : 0,
-                        'new_airports' => count($newConfig['airports'] ?? []),
-                        'mtime_changed' => $configChanged
+                    
+                    // Also clear webcam metadata cache since it includes cam names from config
+                    require_once __DIR__ . '/../lib/webcam-metadata.php';
+                    clearWebcamMetadataCache();
+                    
+                    aviationwx_log('info', 'scheduler: config changed (SHA hash), cleared APCu cache', [
+                        'old_sha' => $lastConfigSha ? substr($lastConfigSha, 0, 8) : 'none',
+                        'new_sha' => substr($currentSha, 0, 8),
+                        'mtime' => $currentMtime
                     ], 'app');
                 }
                 
                 $config = $newConfig;
                 $lastConfigReload = $now;
-                $lastConfigMtime = $currentMtime;
+                $lastConfigMtime = $currentMtime; // Keep for logging/debugging
+                $lastConfigSha = $currentSha;
                 
                 // Reinitialize ProcessPools with new config
                 $weatherPoolSize = getWeatherWorkerPoolSize();
@@ -266,10 +278,15 @@ while ($running) {
                 throw new Exception('Failed to load config');
             }
             $lastConfigReload = $now;
-            // Initialize mtime tracking
+            // Initialize SHA hash tracking (primary change detection)
             $configFilePath = getConfigFilePath();
             if ($configFilePath && file_exists($configFilePath)) {
-                $lastConfigMtime = filemtime($configFilePath);
+                $lastConfigMtime = filemtime($configFilePath); // Keep for logging/debugging
+                // Initialize SHA hash for change detection
+                $fileContent = @file_get_contents($configFilePath);
+                if ($fileContent !== false) {
+                    $lastConfigSha = hash('sha256', $fileContent);
+                }
             }
             
             // Initialize ProcessPools on first load

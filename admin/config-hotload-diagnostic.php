@@ -25,28 +25,34 @@ if (!$configFilePath || !file_exists($configFilePath)) {
     $fileMtimeStr = date('Y-m-d H:i:s', $fileMtime);
     $info[] = "File last modified: {$fileMtimeStr} (timestamp: {$fileMtime})";
     
-    // Check APCu cache status
+    // Check APCu cache status (using SHA hash for change detection)
     if (function_exists('apcu_fetch')) {
-        $cacheTimeKey = 'aviationwx_config_mtime';
+        $cacheShaKey = 'aviationwx_config_sha';
         $cacheKey = 'aviationwx_config';
         
-        $cachedMtime = apcu_fetch($cacheTimeKey);
+        // Compute current file SHA hash
+        $fileContent = @file_get_contents($configFilePath);
+        $currentSha = $fileContent !== false ? hash('sha256', $fileContent) : null;
+        
+        $cachedSha = apcu_fetch($cacheShaKey);
         $cachedConfig = apcu_fetch($cacheKey);
         
-        if ($cachedMtime !== false) {
-            $cachedMtimeStr = date('Y-m-d H:i:s', $cachedMtime);
-            $info[] = "APCu cached mtime: {$cachedMtimeStr} (timestamp: {$cachedMtime})";
+        if ($currentSha !== null) {
+            $info[] = "Current file SHA: " . substr($currentSha, 0, 16) . "...";
+        }
+        
+        if ($cachedSha !== false) {
+            $info[] = "APCu cached SHA: " . substr($cachedSha, 0, 16) . "...";
             
-            if ($cachedMtime === $fileMtime) {
-                $info[] = "✅ APCu cache mtime matches file mtime (cache should be valid)";
-            } else {
-                $diff = abs($fileMtime - $cachedMtime);
-                $issues[] = "⚠️ APCu cache mtime does NOT match file mtime (diff: {$diff}s)";
-                $issues[] = "   This means the cache should have been invalidated, but may not have been cleared";
+            if ($currentSha !== null && $cachedSha === $currentSha) {
+                $info[] = "✅ APCu cache SHA matches file SHA (cache is valid)";
+            } else if ($currentSha !== null) {
+                $issues[] = "⚠️ APCu cache SHA does NOT match file SHA (config changed)";
+                $issues[] = "   Cache should be invalidated on next request";
                 $recommendations[] = "Clear APCu cache manually: <a href='/admin/cache-clear.php'>Clear Config Cache</a>";
             }
         } else {
-            $info[] = "ℹ️ APCu cache mtime not found (cache empty or expired)";
+            $info[] = "ℹ️ APCu cache SHA not found (cache empty or expired)";
         }
         
         if ($cachedConfig !== false) {

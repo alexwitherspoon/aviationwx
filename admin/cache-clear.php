@@ -5,11 +5,15 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/webcam-metadata.php';
 
 header('Content-Type: application/json');
 
-// Clear the cache
+// Clear the config cache
 clearConfigCache();
+
+// Also clear webcam metadata cache (includes cam names from config)
+clearWebcamMetadataCache();
 
 // Reload config to verify it works
 $config = loadConfig(true);

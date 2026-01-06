@@ -1224,17 +1224,26 @@ function loadConfig(bool $useCache = true): ?array {
         return null;
     }
     
-    // Get file modification time for cache invalidation
-    $fileMtime = filemtime($configFile);
+    // Read file content to compute SHA hash (needed for change detection)
+    $jsonContent = @file_get_contents($configFile);
+    if ($jsonContent === false) {
+        aviationwx_log('error', 'config read failed', ['path' => $configFile], 'app', true);
+        return null;
+    }
+    
+    // Compute SHA-256 hash of file content for reliable change detection
+    // This detects ANY content change, not just structural changes
+    $fileSha = hash('sha256', $jsonContent);
     $cacheKey = 'aviationwx_config';
-    $cacheTimeKey = 'aviationwx_config_mtime';
+    $cacheShaKey = 'aviationwx_config_sha';
     
     // Try APCu cache first (if available)
     if ($useCache && function_exists('apcu_fetch')) {
-        // Check if cached file mtime matches current file mtime
-        $cachedMtime = apcu_fetch($cacheTimeKey);
-        if ($cachedMtime !== false && $cachedMtime === $fileMtime) {
-            // File hasn't changed, return cached config
+        // Check if cached SHA hash matches current file SHA
+        // SHA is more reliable than mtime (catches all content changes)
+        $cachedSha = apcu_fetch($cacheShaKey);
+        if ($cachedSha !== false && $cachedSha === $fileSha) {
+            // File content hasn't changed, return cached config
             $cached = apcu_fetch($cacheKey);
             if ($cached !== false) {
                 // Also update static cache
@@ -1244,36 +1253,29 @@ function loadConfig(bool $useCache = true): ?array {
         } else {
             // File changed or cache expired, clear old cache
             apcu_delete($cacheKey);
-            apcu_delete($cacheTimeKey);
+            apcu_delete($cacheShaKey);
         }
     }
     
     // Use static cache for request lifetime (but check file hasn't changed)
-    // We also store file mtime and path in static variables to detect changes
-    static $cachedConfigMtime = null;
+    // We also store file SHA hash and path in static variables to detect changes
+    static $cachedConfigSha = null;
     static $cachedConfigPath = null;
     
-    // Check if cache is valid: same file path AND same mtime
+    // Check if cache is valid: same file path AND same SHA hash
     if ($cachedConfig !== null && 
         $cachedConfigPath === $configFile && 
-        $cachedConfigMtime === $fileMtime) {
+        $cachedConfigSha === $fileSha) {
         // File hasn't changed in this request, return cached config
         return $cachedConfig;
     }
     
     // File changed, path changed, or no cache - clear static cache
     $cachedConfig = null;
-    $cachedConfigMtime = null;
+    $cachedConfigSha = null;
     $cachedConfigPath = null;
     
-    // Read and validate JSON
-    // Use @ to suppress errors for non-critical file operations
-    // We handle failures explicitly with null check and logging below
-    $jsonContent = @file_get_contents($configFile);
-    if ($jsonContent === false) {
-        aviationwx_log('error', 'config read failed', ['path' => $configFile], 'app', true);
-        return null;
-    }
+    // Validate JSON (content already read above)
     
     $config = json_decode($jsonContent, true);
     if (json_last_error() !== JSON_ERROR_NONE || !is_array($config)) {
@@ -1362,17 +1364,17 @@ function loadConfig(bool $useCache = true): ?array {
         return null;
     }
 
-    aviationwx_log('info', 'config loaded', ['path' => $configFile, 'mtime' => $fileMtime], 'app');
+    aviationwx_log('info', 'config loaded', ['path' => $configFile, 'sha' => substr($fileSha, 0, 8)], 'app');
     
-    // Cache in static variable (with mtime and path)
+    // Cache in static variable (with SHA hash and path)
     $cachedConfig = $config;
-    $cachedConfigMtime = $fileMtime;
+    $cachedConfigSha = $fileSha;
     $cachedConfigPath = $configFile;
     
     // Cache in APCu if available (1 hour TTL, but invalidated on file change)
     if ($useCache && function_exists('apcu_store')) {
         apcu_store($cacheKey, $config, CONFIG_CACHE_TTL);
-        apcu_store($cacheTimeKey, $fileMtime, CONFIG_CACHE_TTL);
+        apcu_store($cacheShaKey, $fileSha, CONFIG_CACHE_TTL);
     }
     
     return $config;
@@ -1381,7 +1383,7 @@ function loadConfig(bool $useCache = true): ?array {
 /**
  * Clear configuration cache
  * 
- * Removes both the config data and the modification time check from APCu.
+ * Removes the config data and SHA hash from APCu.
  * This forces the next loadConfig() call to reload from disk.
  * 
  * @return void
@@ -1389,7 +1391,7 @@ function loadConfig(bool $useCache = true): ?array {
 function clearConfigCache(): void {
     if (function_exists('apcu_delete')) {
         apcu_delete('aviationwx_config');
-        apcu_delete('aviationwx_config_mtime');
+        apcu_delete('aviationwx_config_sha');
     }
 }
 

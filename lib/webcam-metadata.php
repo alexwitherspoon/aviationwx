@@ -51,6 +51,33 @@ function getWebcamMetadata(string $airportId, int $camIndex): ?array {
 }
 
 /**
+ * Clear all webcam metadata cache entries from APCu
+ * 
+ * Used when config changes to ensure webcam names and other config-dependent
+ * metadata are refreshed from the updated config.
+ * 
+ * @return void
+ */
+function clearWebcamMetadataCache(): void {
+    if (!function_exists('apcu_delete')) {
+        return;
+    }
+    
+    // Get all APCu cache entries and delete webcam metadata keys
+    $info = @apcu_cache_info(false);
+    if (!is_array($info) || !isset($info['cache_list'])) {
+        return;
+    }
+    
+    foreach ($info['cache_list'] as $entry) {
+        $key = $entry['info'] ?? $entry['key'] ?? null;
+        if ($key !== null && strpos($key, 'webcam_meta_') === 0) {
+            @apcu_delete($key);
+        }
+    }
+}
+
+/**
  * Update webcam metadata in APCu
  * 
  * @param string $airportId Airport identifier

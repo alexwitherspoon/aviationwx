@@ -414,13 +414,16 @@ if (file_exists($configFilePath)) {
     $success[] = "📄 Config file modified: {$fileMtimeStr}";
     
     if (function_exists('apcu_fetch')) {
-        $cacheTimeKey = 'aviationwx_config_mtime';
-        $cachedMtime = apcu_fetch($cacheTimeKey);
-        if ($cachedMtime !== false) {
-            if ($cachedMtime === $fileMtime) {
-                $success[] = "✅ Config cache is valid (file hasn't changed)";
+        $cacheShaKey = 'aviationwx_config_sha';
+        $fileContent = @file_get_contents($configFilePath);
+        $currentSha = $fileContent !== false ? hash('sha256', $fileContent) : null;
+        $cachedSha = apcu_fetch($cacheShaKey);
+        
+        if ($cachedSha !== false && $currentSha !== null) {
+            if ($cachedSha === $currentSha) {
+                $success[] = "✅ Config cache is valid (SHA hash matches)";
             } else {
-                $success[] = "🔄 Config cache will auto-invalidate (file changed since last cache)";
+                $success[] = "🔄 Config cache will auto-invalidate (SHA hash changed)";
             }
         } else {
             $success[] = "ℹ️ Config cache empty (will be created on next load)";
