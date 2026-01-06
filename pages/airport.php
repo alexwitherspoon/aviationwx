@@ -6493,13 +6493,21 @@ function updateImageSilently(camIndex, blobUrl, timestamp) {
     if (img) {
         const oldSrc = img.src;
         
-        // Clear <source> srcsets so browser uses blob URL instead of cached <picture> sources
+        // Clear ALL srcset attributes so browser uses our blob URL
+        // The browser prefers srcset over src, so we must clear:
+        // 1. <source srcset> elements in the parent <picture>
+        // 2. The <img srcset> attribute itself
         const picture = img.closest('picture');
         if (picture) {
             const sources = picture.querySelectorAll('source');
             sources.forEach(source => {
                 source.srcset = '';
             });
+        }
+        
+        // Clear img srcset - this is critical! Browser prefers srcset over src
+        if (img.srcset) {
+            img.srcset = '';
         }
         
         img.src = blobUrl;
