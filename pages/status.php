@@ -1158,9 +1158,9 @@ function checkAirportHealth(string $airportId, array $airport): array {
             // Check variant availability (height-based variants)
             require_once __DIR__ . '/../lib/webcam-metadata.php';
             $variantHeights = getVariantHeights($airportId, $idx);
-            $formats = ['jpg', 'webp'];
+            $formats = getEnabledWebcamFormats(); // Dynamic based on config (jpg always, webp/avif if enabled)
             $variantAvailability = [];
-            $totalVariants = count($variantHeights) * count($formats) + count($formats); // +1 for original
+            $totalVariants = count($variantHeights) * count($formats) + count($formats); // original + height variants
             $availableVariants = 0;
             
             // Get latest timestamp to check variants

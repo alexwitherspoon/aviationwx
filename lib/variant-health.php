@@ -297,8 +297,14 @@ function variant_health_compute_status(array $data): array {
         'metrics' => []
     ];
     
+    $now = time();
+    $lastGeneration = $data['last_generation'] ?? 0;
+    $lastPromotion = $data['last_promotion'] ?? 0;
+    $hasRecentActivity = ($lastGeneration > 0 && ($now - $lastGeneration) < 3600) 
+                      || ($lastPromotion > 0 && ($now - $lastPromotion) < 3600);
+    
     // Sum up last hour of data
-    $oneHourAgo = gmdate('Y-m-d-H', time() - 3600);
+    $oneHourAgo = gmdate('Y-m-d-H', $now - 3600);
     $totals = [
         'generation_events' => 0,
         'generation_attempts' => 0,
@@ -316,6 +322,23 @@ function variant_health_compute_status(array $data): array {
         }
     }
     
+    // Also check current APCu counters (not yet flushed to buckets)
+    if (function_exists('apcu_fetch')) {
+        $currentGenEvents = variant_health_get('generation_events');
+        $currentPromEvents = variant_health_get('promotion_events');
+        $currentGenAttempts = variant_health_get('generation_attempts');
+        $currentGenSuccesses = variant_health_get('generation_successes');
+        $currentPromSuccesses = variant_health_get('promotion_successes');
+        
+        if ($currentGenEvents > 0 || $currentPromEvents > 0) {
+            $totals['generation_events'] += $currentGenEvents;
+            $totals['promotion_events'] += $currentPromEvents;
+            $totals['generation_attempts'] += $currentGenAttempts;
+            $totals['generation_successes'] += $currentGenSuccesses;
+            $totals['promotion_successes'] += $currentPromSuccesses;
+        }
+    }
+    
     // Calculate rates
     $genRate = $totals['generation_attempts'] > 0 
         ? $totals['generation_successes'] / $totals['generation_attempts'] 
@@ -325,9 +348,16 @@ function variant_health_compute_status(array $data): array {
         : 1.0;
     
     // Determine status
+    // If no events in buckets but we have recent activity (from timestamp or APCu), show operational
     if ($totals['generation_events'] === 0 && $totals['promotion_events'] === 0) {
-        $health['status'] = 'degraded';
-        $health['message'] = 'No recent variant generation activity';
+        if ($hasRecentActivity) {
+            // Recent activity detected via timestamp, but not yet in buckets (flush pending)
+            $health['status'] = 'operational';
+            $health['message'] = 'Variants generating (data pending flush)';
+        } else {
+            $health['status'] = 'degraded';
+            $health['message'] = 'No recent variant generation activity';
+        }
     } elseif ($genRate < 0.5) {
         $health['status'] = 'down';
         $health['message'] = sprintf('Low generation success rate: %.1f%%', $genRate * 100);
@@ -356,6 +386,7 @@ function variant_health_compute_status(array $data): array {
  * Get variant health status (for status page)
  * 
  * Reads from cache file - fast, no log parsing needed.
+ * Also checks APCu counters directly as fallback if cache is stale.
  * 
  * @return array Health status
  */
@@ -368,20 +399,106 @@ function variant_health_get_status(): array {
         'metrics' => []
     ];
     
-    if (!file_exists(VARIANT_HEALTH_CACHE_FILE)) {
-        return $default;
+    // Try to read from cache file first
+    $cachedHealth = null;
+    $data = [];
+    if (file_exists(VARIANT_HEALTH_CACHE_FILE)) {
+        $content = @file_get_contents(VARIANT_HEALTH_CACHE_FILE);
+        if ($content !== false) {
+            $data = @json_decode($content, true) ?: [];
+            if (is_array($data) && isset($data['health'])) {
+                $cachedHealth = $data['health'];
+            }
+        }
     }
     
-    $content = @file_get_contents(VARIANT_HEALTH_CACHE_FILE);
-    if ($content === false) {
-        return $default;
+    // If we have cached health, use it (but enhance with current APCu data if available)
+    if ($cachedHealth !== null) {
+        $health = $cachedHealth;
+        
+        // Check if cache is stale (older than 2 minutes) and we have current APCu activity
+        $cacheAge = isset($data['last_flush']) ? (time() - $data['last_flush']) : 999999;
+        if ($cacheAge > 120 && function_exists('apcu_fetch')) {
+            $currentGenEvents = variant_health_get('generation_events');
+            $currentPromEvents = variant_health_get('promotion_events');
+            $lastGen = @apcu_fetch('variant_health_last_generation') ?: 0;
+            $lastProm = @apcu_fetch('variant_health_last_promotion') ?: 0;
+            
+            // If we have recent APCu activity, update the health status
+            $now = time();
+            $hasRecentAPCuActivity = ($lastGen > 0 && ($now - $lastGen) < 3600) 
+                                  || ($lastProm > 0 && ($now - $lastProm) < 3600);
+            
+            if ($hasRecentAPCuActivity && ($currentGenEvents > 0 || $currentPromEvents > 0)) {
+                // Update metrics with current APCu counters
+                $health['metrics']['total_generations_last_hour'] = 
+                    ($health['metrics']['total_generations_last_hour'] ?? 0) + $currentGenEvents;
+                $health['metrics']['total_promotions_last_hour'] = 
+                    ($health['metrics']['total_promotions_last_hour'] ?? 0) + $currentPromEvents;
+                
+                // If status was "no activity" but we have APCu activity, upgrade to operational
+                if ($health['status'] === 'degraded' && 
+                    strpos($health['message'], 'No recent') !== false) {
+                    $health['status'] = 'operational';
+                    $health['message'] = sprintf(
+                        '%d generated, %d promoted (1h)',
+                        $health['metrics']['total_generations_last_hour'],
+                        $health['metrics']['total_promotions_last_hour']
+                    );
+                }
+                
+                // Update lastChanged if APCu timestamp is newer
+                $health['lastChanged'] = max(
+                    $health['lastChanged'] ?? 0,
+                    max($lastGen, $lastProm)
+                );
+            }
+        }
+        
+        return $health;
     }
     
-    $data = @json_decode($content, true);
-    if (!is_array($data) || !isset($data['health'])) {
-        return $default;
+    // Fallback: check APCu directly if cache file doesn't exist
+    if (function_exists('apcu_fetch')) {
+        $lastGen = @apcu_fetch('variant_health_last_generation') ?: 0;
+        $lastProm = @apcu_fetch('variant_health_last_promotion') ?: 0;
+        $currentGenEvents = variant_health_get('generation_events');
+        $currentPromEvents = variant_health_get('promotion_events');
+        $currentGenAttempts = variant_health_get('generation_attempts');
+        $currentGenSuccesses = variant_health_get('generation_successes');
+        $currentPromSuccesses = variant_health_get('promotion_successes');
+        
+        $now = time();
+        $hasRecentActivity = ($lastGen > 0 && ($now - $lastGen) < 3600) 
+                          || ($lastProm > 0 && ($now - $lastProm) < 3600);
+        
+        if ($hasRecentActivity || $currentGenEvents > 0 || $currentPromEvents > 0) {
+            $genRate = $currentGenAttempts > 0 
+                ? ($currentGenSuccesses / $currentGenAttempts) 
+                : 1.0;
+            $promoRate = $currentPromEvents > 0 
+                ? ($currentPromSuccesses / $currentPromEvents) 
+                : 1.0;
+            
+            return [
+                'name' => 'Webcam Variant Generation',
+                'status' => 'operational',
+                'message' => sprintf(
+                    '%d generated, %d promoted (1h)',
+                    $currentGenEvents,
+                    $currentPromEvents
+                ),
+                'lastChanged' => max($lastGen, $lastProm),
+                'metrics' => [
+                    'generation_success_rate' => round($genRate * 100, 1),
+                    'promotion_success_rate' => round($promoRate * 100, 1),
+                    'total_generations_last_hour' => $currentGenEvents,
+                    'total_promotions_last_hour' => $currentPromEvents
+                ]
+            ];
+        }
     }
     
-    return $data['health'];
+    return $default;
 }
 
