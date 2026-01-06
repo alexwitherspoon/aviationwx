@@ -67,14 +67,72 @@ class WeatherBackoffTest extends TestCase
      */
     public function testRecordWeatherFailure_CreatesBackoff()
     {
-        recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient');
+        // Record failures up to threshold (circuit opens after threshold failures)
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient');
+        }
         
         $result = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
         
-        $this->assertTrue($result['skip'], 'Should skip after recording failure');
+        $this->assertTrue($result['skip'], 'Should skip after recording threshold failures');
         $this->assertEquals('circuit_open', $result['reason']);
         $this->assertGreaterThan(0, $result['backoff_remaining']);
-        $this->assertEquals(1, $result['failures']);
+        $this->assertEquals(CIRCUIT_BREAKER_FAILURE_THRESHOLD, $result['failures']);
+    }
+    
+    /**
+     * Test recordWeatherFailure with HTTP code - Should generate failure reason from HTTP code
+     */
+    public function testRecordWeatherFailure_WithHttpCode()
+    {
+        // Record failures up to threshold
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient', 503);
+        }
+        
+        $result = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
+        
+        $this->assertTrue($result['skip'], 'Should skip after recording threshold failures');
+        $this->assertEquals('HTTP 503', $result['last_failure_reason'], 'Should generate failure reason from HTTP code');
+    }
+    
+    /**
+     * Test recordWeatherFailure with explicit failure reason - Should store and return failure reason
+     */
+    public function testRecordWeatherFailure_WithExplicitReason()
+    {
+        $failureReason = 'API rate limit exceeded';
+        // Record failures up to threshold
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient', null, $failureReason);
+        }
+        
+        $result = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
+        
+        $this->assertTrue($result['skip'], 'Should skip after recording threshold failures');
+        $this->assertEquals($failureReason, $result['last_failure_reason'], 'Should return stored failure reason');
+    }
+    
+    /**
+     * Test recordWeatherSuccess - Should clear failure reason
+     */
+    public function testRecordWeatherSuccess_ClearsFailureReason()
+    {
+        // Record failures up to threshold with reason
+        require_once __DIR__ . '/../../lib/circuit-breaker.php';
+        $key = $this->testAirportId . '_weather_' . $this->testSourceType;
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordCircuitBreakerFailureBase($key, CACHE_BACKOFF_FILE, 'transient', null, 'Connection timeout');
+        }
+        
+        $resultBefore = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
+        $this->assertEquals('Connection timeout', $resultBefore['last_failure_reason'], 'Should have failure reason before success');
+        
+        // Record success
+        recordWeatherSuccess($this->testAirportId, $this->testSourceType);
+        
+        $resultAfter = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
+        $this->assertNull($resultAfter['last_failure_reason'], 'Failure reason should be cleared after success');
     }
     
     /**
@@ -107,7 +165,10 @@ class WeatherBackoffTest extends TestCase
      */
     public function testRecordWeatherFailure_PermanentError()
     {
-        recordWeatherFailure($this->testAirportId, $this->testSourceType, 'permanent');
+        // Record failures up to threshold
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure($this->testAirportId, $this->testSourceType, 'permanent');
+        }
         $result = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
         
         // Permanent errors should have longer backoff (2x multiplier)
@@ -120,10 +181,12 @@ class WeatherBackoffTest extends TestCase
      */
     public function testRecordWeatherSuccess_ResetsBackoff()
     {
-        // Record a failure first
-        recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient');
+        // Record failures up to threshold
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure($this->testAirportId, $this->testSourceType, 'transient');
+        }
         $resultBefore = checkWeatherCircuitBreaker($this->testAirportId, $this->testSourceType);
-        $this->assertTrue($resultBefore['skip'], 'Should skip after failure');
+        $this->assertTrue($resultBefore['skip'], 'Should skip after threshold failures');
         
         // Record success
         recordWeatherSuccess($this->testAirportId, $this->testSourceType);
@@ -139,8 +202,10 @@ class WeatherBackoffTest extends TestCase
      */
     public function testSeparateBackoffForSources()
     {
-        // Record failure for primary source
-        recordWeatherFailure($this->testAirportId, 'primary', 'transient');
+        // Record failures up to threshold for primary source
+        for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
+            recordWeatherFailure($this->testAirportId, 'primary', 'transient');
+        }
         
         // Primary should be in backoff
         $primaryResult = checkWeatherCircuitBreaker($this->testAirportId, 'primary');
