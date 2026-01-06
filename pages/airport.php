@@ -242,9 +242,23 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
         ? $baseUrl . '/public/images/about-photo.webp'
         : $baseUrl . '/public/images/about-photo.jpg';
 }
+
+// Server-side theme detection - prevents flash by setting initial class
+// Read saved theme preference from cookie
+$themeCookie = $_COOKIE['aviationwx_theme'] ?? null;
+$htmlThemeClass = '';
+
+// Only set class if user has explicitly chosen dark mode
+// Note: 'day' means light mode (no class), 'auto' means follow OS preference (no class)
+// Night mode is time-based and handled by JavaScript
+if ($themeCookie === 'dark') {
+    $htmlThemeClass = 'dark-mode';
+}
+// Note: We don't set night-mode server-side because it's time-based and requires JS
+// for mobile detection and sunset/sunrise calculations
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"<?= $htmlThemeClass ? ' class="' . htmlspecialchars($htmlThemeClass) . '"' : '' ?>>
 <head>
     <?php
     // =============================================================================
@@ -498,12 +512,16 @@ if (isset($airport['webcams']) && count($airport['webcams']) > 0) {
             
             // Apply theme class
             function applyTheme(theme) {
+                // Remove all theme classes first (in case server set one)
+                document.documentElement.classList.remove('night-mode', 'dark-mode');
+                
+                // Apply the selected theme
                 if (theme === 'night') {
                     document.documentElement.classList.add('night-mode');
                 } else if (theme === 'dark') {
                     document.documentElement.classList.add('dark-mode');
                 }
-                // 'day' = no class (default)
+                // 'day' = no class (default light mode)
             }
             
             // Apply theme based on browser preference (for auto mode)

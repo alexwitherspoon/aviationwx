@@ -13,6 +13,159 @@ body {
     background: #f5f5f5;
 }
 
+/* OS dark mode preference - prevents flash of light content */
+/* This applies immediately on page load before JS runs */
+@media (prefers-color-scheme: dark) {
+    body {
+        --dark-bg-body: #121212;
+        --dark-bg-section: #1e1e1e;
+        --dark-bg-header: #181818;
+        --dark-bg-item: #252525;
+        --dark-bg-button: #2d2d2d;
+        --dark-bg-button-hover: #383838;
+        --dark-text-primary: #e0e0e0;
+        --dark-text-bright: #ffffff;
+        --dark-text-muted: #a0a0a0;
+        --dark-text-dim: #707070;
+        --dark-border: #333333;
+        --dark-border-light: #2a2a2a;
+        --dark-accent: #4a9eff;
+        --dark-link: #6eb5ff;
+        
+        background: var(--dark-bg-body);
+        color: var(--dark-text-primary);
+    }
+    
+    .header {
+        background: var(--dark-bg-header);
+        color: var(--dark-text-bright);
+    }
+    
+    .header h1 {
+        color: var(--dark-text-bright);
+    }
+    
+    .header h2 {
+        color: var(--dark-text-primary);
+    }
+    
+    .location {
+        color: var(--dark-text-muted);
+    }
+    
+    /* Section containers (weather, webcams, etc.) */
+    section {
+        background: var(--dark-bg-section) !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    /* Explicit rules for specific section classes to ensure they get dark background */
+    section.weather-section,
+    section.webcam-section {
+        background: var(--dark-bg-section) !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    section h2 {
+        color: var(--dark-text-bright);
+    }
+    
+    section h3 {
+        color: var(--dark-text-primary);
+    }
+    
+    /* Weather items */
+    .weather-item {
+        background: var(--dark-bg-item);
+    }
+    
+    .weather-item .label {
+        color: var(--dark-text-muted);
+    }
+    
+    .weather-value {
+        color: var(--dark-text-bright);
+    }
+    
+    /* Other text elements */
+    .label {
+        color: var(--dark-text-muted);
+    }
+    
+    .value {
+        color: var(--dark-text-bright);
+    }
+    
+    h2 {
+        color: var(--dark-text-bright);
+    }
+    
+    h3 {
+        color: var(--dark-text-primary);
+    }
+    
+    /* Address links */
+    .address-link {
+        color: var(--dark-text-bright);
+    }
+    
+    /* Section dividers */
+    .frequencies {
+        border-top-color: var(--dark-border);
+    }
+    
+    .links {
+        border-top-color: var(--dark-border);
+    }
+    
+    /* Partnerships section */
+    .partnerships-section {
+        background: var(--dark-bg-section);
+        border-top-color: var(--dark-border);
+    }
+    
+    .partnerships-heading {
+        color: var(--dark-text-bright);
+    }
+    
+    .partnerships-subheading {
+        color: var(--dark-text-muted);
+    }
+    
+    .partner-link {
+        background: var(--dark-bg-item);
+        border-color: var(--dark-border);
+        color: var(--dark-text-primary);
+    }
+    
+    /* Embed section */
+    .embed-section {
+        background: var(--dark-bg-section);
+    }
+    
+    /* Toggle buttons - prevent white flash */
+    #night-mode-toggle,
+    #time-format-toggle,
+    #temp-unit-toggle,
+    #distance-unit-toggle,
+    #wind-speed-unit-toggle,
+    #baro-unit-toggle {
+        background: var(--dark-bg-button) !important;
+        border-color: var(--dark-border) !important;
+        color: var(--dark-text-primary) !important;
+    }
+    
+    #night-mode-toggle:hover,
+    #time-format-toggle:hover,
+    #temp-unit-toggle:hover,
+    #distance-unit-toggle:hover,
+    #wind-speed-unit-toggle:hover,
+    #baro-unit-toggle:hover {
+        background: var(--dark-bg-button-hover) !important;
+        border-color: #555 !important;
+    }
+}
+
 /* Maintenance Banner */
 .maintenance-banner {
     background-color: #dc3545;
