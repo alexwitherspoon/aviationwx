@@ -235,9 +235,9 @@ class WebcamApiHelperTest extends TestCase
     {
         // Create test files in cache directory using getCacheFile
         require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-        $jpgFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'jpg', 'primary');
-        $webpFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'webp', 'primary');
-        $avifFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'avif', 'primary');
+        $jpgFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'jpg', 'original');
+        $webpFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'webp', 'original');
+        $avifFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'avif', 'original');
         
         // Ensure directories exist
         $cacheDir = dirname(dirname($jpgFile));

@@ -116,7 +116,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_CardStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light');
+        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -152,7 +152,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_WebcamStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=webcam&theme=light&webcam=0');
+        $response = $this->makeRequest('?embed&airport=kspb&style=webcam&theme=light&webcam=0&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -179,7 +179,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_DualStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=dual&theme=light&cams=0,1');
+        $response = $this->makeRequest('?embed&airport=kspb&style=dual&theme=light&cams=0,1&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -206,7 +206,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_MultiStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=multi&theme=light&cams=0,1,2,3');
+        $response = $this->makeRequest('?embed&airport=kspb&style=multi&theme=light&cams=0,1,2,3&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -233,7 +233,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_FullStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=full&theme=light&webcam=0');
+        $response = $this->makeRequest('?embed&airport=kspb&style=full&theme=light&webcam=0&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -260,7 +260,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_DarkTheme()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=dark');
+        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=dark&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -287,7 +287,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_WithUnitParameters()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&temp=C&dist=m&wind=kmh&baro=hPa');
+        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&temp=C&dist=m&wind=kmh&baro=hPa&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -306,7 +306,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_InvalidAirport()
     {
-        $response = $this->makeRequest('?embed&airport=invalid_airport_xyz&style=card&theme=light');
+        $response = $this->makeRequest('?embed&airport=invalid_airport_xyz&style=card&theme=light&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -352,7 +352,7 @@ class EmbedEndpointTest extends TestCase
      */
     public function testEmbedRenderer_HasProperAttribution()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light');
+        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");

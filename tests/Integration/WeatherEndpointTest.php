@@ -125,7 +125,8 @@ class WeatherEndpointTest extends TestCase
      */
     public function testWeatherEndpoint_InvalidAirportId()
     {
-        $response = $this->makeRequest("api/weather.php?airport=invalid123");
+        // Use an identifier that fails format validation (contains invalid characters)
+        $response = $this->makeRequest("api/weather.php?airport=invalid@123");
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -136,7 +137,7 @@ class WeatherEndpointTest extends TestCase
         $this->assertContains(
             $response['http_code'],
             [400, 429],
-            "Should return 400 for invalid airport ID or 429 if rate limited (got: {$response['http_code']})"
+            "Should return 400 for invalid airport ID format or 429 if rate limited (got: {$response['http_code']})"
         );
         
         // If rate limited, skip validation checks

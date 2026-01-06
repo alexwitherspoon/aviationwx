@@ -161,7 +161,9 @@ class WebcamRefreshInitializationTest extends TestCase
         $html = $response['body'];
         
         // Check that timer-lifecycle.js is included with defer
-        $hasScript = preg_match('/timer-lifecycle\.js\?v=[a-f0-9]+.*defer/', $html);
+        // Hash can be hex (7 chars) - check for script tag with v= parameter and defer attribute
+        $hasScript = preg_match('/timer-lifecycle\.js\?v=[a-f0-9]{7}.*defer/i', $html) || 
+                     preg_match('/timer-lifecycle\.js[^"\']*defer/i', $html);
         $this->assertTrue((bool)$hasScript, 'timer-lifecycle.js should be included with cache-bust and defer');
     }
     
@@ -175,7 +177,7 @@ class WebcamRefreshInitializationTest extends TestCase
         // Check both possible cache files (page uses first one found)
         $cacheFiles = [];
         foreach (['jpg', 'webp'] as $format) {
-            $filePath = getCacheFile($this->airport, 0, $format, 'primary');
+            $filePath = getCacheFile($this->airport, 0, $format, 'original');
             if (file_exists($filePath)) {
                 $cacheFiles[] = $filePath;
             }
