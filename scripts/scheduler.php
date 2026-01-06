@@ -31,6 +31,7 @@ $lockFp = null;
 $running = true;
 $loopCount = 0;
 $lastConfigReload = 0;
+$lastConfigMtime = null; // Track config file mtime to detect changes
 $lastMetricsFlush = 0;
 $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
@@ -113,9 +114,10 @@ function acquireLock($lockFile) {
  * @param string|null $lastError Last error message (if any)
  * @param array|null $config Config array
  * @param int $lastConfigReload Last config reload timestamp
+ * @param int|null $lastConfigMtime Last config file mtime
  * @return void
  */
-function updateLockFile($fp, $pid, $startTime, $loopCount, $healthStatus, $lastError, $config, $lastConfigReload) {
+function updateLockFile($fp, $pid, $startTime, $loopCount, $healthStatus, $lastError, $config, $lastConfigReload, $lastConfigMtime) {
     $lockData = [
         'pid' => $pid,
         'started' => $startTime,
@@ -124,7 +126,8 @@ function updateLockFile($fp, $pid, $startTime, $loopCount, $healthStatus, $lastE
         'health' => $healthStatus,
         'last_error' => $lastError,
         'config_airports_count' => isset($config['airports']) ? count($config['airports']) : 0,
-        'config_last_reload' => $lastConfigReload
+        'config_last_reload' => $lastConfigReload,
+        'config_last_mtime' => $lastConfigMtime
     ];
     
     @ftruncate($fp, 0);
@@ -190,10 +193,38 @@ while ($running) {
         // Check if config needs reload (configurable interval)
         $configReloadInterval = getSchedulerConfigReloadInterval();
         if (($now - $lastConfigReload) >= $configReloadInterval) {
+            // Check if config file has actually changed by comparing mtime
+            $configFilePath = getConfigFilePath();
+            $configChanged = false;
+            $currentMtime = null;
+            
+            if ($configFilePath && file_exists($configFilePath)) {
+                $currentMtime = filemtime($configFilePath);
+                // Check if mtime changed since last reload
+                if ($lastConfigMtime !== null && $currentMtime !== $lastConfigMtime) {
+                    $configChanged = true;
+                }
+            }
+            
             $newConfig = loadConfig(false);
             if ($newConfig !== null) {
+                // Check if config actually changed (compare airport count and structure)
+                $airportsChanged = ($config === null) || 
+                    (count($newConfig['airports'] ?? []) !== count($config['airports'] ?? []));
+                
+                // If config changed (mtime or content), clear APCu cache so web requests pick up changes immediately
+                if ($airportsChanged || $configChanged) {
+                    clearConfigCache();
+                    aviationwx_log('info', 'scheduler: config changed, cleared APCu cache', [
+                        'old_airports' => $config ? count($config['airports'] ?? []) : 0,
+                        'new_airports' => count($newConfig['airports'] ?? []),
+                        'mtime_changed' => $configChanged
+                    ], 'app');
+                }
+                
                 $config = $newConfig;
                 $lastConfigReload = $now;
+                $lastConfigMtime = $currentMtime;
                 
                 // Reinitialize ProcessPools with new config
                 $weatherPoolSize = getWeatherWorkerPoolSize();
@@ -235,6 +266,11 @@ while ($running) {
                 throw new Exception('Failed to load config');
             }
             $lastConfigReload = $now;
+            // Initialize mtime tracking
+            $configFilePath = getConfigFilePath();
+            if ($configFilePath && file_exists($configFilePath)) {
+                $lastConfigMtime = filemtime($configFilePath);
+            }
             
             // Initialize ProcessPools on first load
             $weatherPoolSize = getWeatherWorkerPoolSize();
@@ -471,7 +507,7 @@ while ($running) {
     
     // Update lock file (non-blocking write)
     if ($lockFp) {
-        updateLockFile($lockFp, $pid, $startTime, $loopCount, $healthStatus, $lastError, $config, $lastConfigReload);
+        updateLockFile($lockFp, $pid, $startTime, $loopCount, $healthStatus, $lastError, $config, $lastConfigReload, $lastConfigMtime);
     }
     
     // Dispatch signals
