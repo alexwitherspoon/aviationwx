@@ -2472,13 +2472,16 @@ if (php_sapi_name() === 'cli') {
                     // Calculate webcam totals (serves = successful image deliveries)
                     $totalWebcamServes = 0;
                     $formatTotals = ['jpg' => 0, 'webp' => 0, 'avif' => 0];
-                    $sizeTotals = ['primary' => 0, 'thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'full' => 0];
+                    $sizeTotals = []; // Dynamic: height-based variants like '720', '360', 'original'
                     foreach ($webcamMetrics as $camData) {
                         foreach ($camData['by_format'] ?? [] as $fmt => $count) {
                             $formatTotals[$fmt] += $count;
                             $totalWebcamServes += $count;
                         }
                         foreach ($camData['by_size'] ?? [] as $sz => $count) {
+                            if (!isset($sizeTotals[$sz])) {
+                                $sizeTotals[$sz] = 0;
+                            }
                             $sizeTotals[$sz] += $count;
                         }
                     }
