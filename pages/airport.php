@@ -2217,7 +2217,18 @@ function handleWakeOrReconnect(reason) {
 
 // Debounce wake/reconnect events to avoid multiple rapid refreshes
 let wakeDebounceTimer = null;
+const pageLoadTime = Date.now();
+const RECOVERY_GRACE_PERIOD = 10000; // Don't trigger recovery in first 10 seconds after page load
+
 function debouncedWakeHandler(reason) {
+    // Skip recovery during grace period after page load
+    // This avoids duplicate fetches on initial load when focus/visibility events fire
+    const timeSinceLoad = Date.now() - pageLoadTime;
+    if (timeSinceLoad < RECOVERY_GRACE_PERIOD) {
+        console.log(`[Recovery] Skipping ${reason} event - within ${RECOVERY_GRACE_PERIOD/1000}s grace period (${Math.round(timeSinceLoad/1000)}s since load)`);
+        return;
+    }
+    
     if (wakeDebounceTimer) {
         clearTimeout(wakeDebounceTimer);
     }
