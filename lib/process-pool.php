@@ -63,7 +63,7 @@ class ProcessPool {
      * @return bool True if job is running, false otherwise
      */
     private function isJobRunning($jobKey) {
-        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
         $this->cleanupFinished($dummyStats);
         return isset($this->activeJobs[$jobKey]);
     }
@@ -105,17 +105,18 @@ class ProcessPool {
     /**
      * Wait for all workers to complete
      * 
-     * Blocks until all workers in the pool have finished (completed, timed out, or failed).
+     * Blocks until all workers in the pool have finished (completed, timed out, failed, or skipped).
      * Periodically checks worker status and cleans up finished workers.
      * 
      * @return array {
      *   'completed' => int,   // Number of successfully completed jobs
-     *   'timed_out' => int,    // Number of jobs that exceeded timeout
-     *   'failed' => int        // Number of jobs that failed (non-zero exit code)
+     *   'timed_out' => int,   // Number of jobs that exceeded timeout
+     *   'failed' => int,      // Number of jobs that failed (exit code 1)
+     *   'skipped' => int      // Number of jobs that were skipped (exit code 2 - circuit breaker, etc.)
      * }
      */
     public function waitForAll() {
-        $stats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+        $stats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
         
         while (!empty($this->workers)) {
             $this->cleanupFinished($stats);
@@ -134,7 +135,7 @@ class ProcessPool {
      * @return int Number of active workers (0 to maxWorkers)
      */
     public function getActiveCount() {
-        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+        $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
         $this->cleanupFinished($dummyStats);
         return count($this->workers);
     }
@@ -245,7 +246,7 @@ class ProcessPool {
      * Clean up finished or timed-out workers
      * 
      * Checks all workers and removes those that have finished or exceeded timeout.
-     * Updates statistics array with counts of completed, timed-out, and failed jobs.
+     * Updates statistics array with counts of completed, timed-out, failed, and skipped jobs.
      * Terminates timed-out workers with SIGTERM, then SIGKILL if needed.
      * 
      * Public method to support continuous operation patterns (e.g., scheduler daemon).
@@ -254,7 +255,8 @@ class ProcessPool {
      * @param array &$stats Statistics array to update (passed by reference)
      *   - 'completed' => int (incremented for successful jobs)
      *   - 'timed_out' => int (incremented for timed-out jobs)
-     *   - 'failed' => int (incremented for failed jobs)
+     *   - 'failed' => int (incremented for failed jobs, exit code 1)
+     *   - 'skipped' => int (incremented for skipped jobs, exit code 2)
      * @return void
      */
     public function cleanupFinished(array &$stats) {
@@ -329,6 +331,9 @@ class ProcessPool {
                 
                 if ($exitCode === 0) {
                     $stats['completed']++;
+                } elseif ($exitCode === 2) {
+                    // Exit code 2 = skip (circuit breaker, fresh cache, etc.) - not a failure
+                    $stats['skipped']++;
                 } else {
                     $stats['failed']++;
                     // Include worker output in log for debugging
@@ -383,7 +388,7 @@ class ProcessPool {
         $waited = 0;
         
         while (count($this->workers) >= $this->maxWorkers && $waited < $maxWait) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
             $this->cleanupFinished($dummyStats);
             
             if (count($this->workers) < $this->maxWorkers) {
