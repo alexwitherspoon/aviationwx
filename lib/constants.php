@@ -195,9 +195,23 @@ if (!defined('PARTNER_LOGO_CACHE_TTL')) {
 }
 
 // Circuit breaker / backoff
-if (!defined('BACKOFF_BASE_SECONDS')) {
-    define('BACKOFF_BASE_SECONDS', 60);
+// Circuit breaker failure threshold - require this many consecutive failures before opening
+if (!defined('CIRCUIT_BREAKER_FAILURE_THRESHOLD')) {
+    define('CIRCUIT_BREAKER_FAILURE_THRESHOLD', 2); // Open after 2 consecutive failures
 }
+
+// Base backoff times for different error types
+if (!defined('BACKOFF_BASE_SECONDS')) {
+    define('BACKOFF_BASE_SECONDS', 60); // Legacy - kept for backward compatibility
+}
+if (!defined('BACKOFF_BASE_TRANSIENT')) {
+    define('BACKOFF_BASE_TRANSIENT', 10); // 10 seconds for transient errors
+}
+if (!defined('BACKOFF_BASE_RATE_LIMIT')) {
+    define('BACKOFF_BASE_RATE_LIMIT', 2); // 2 seconds for rate limit (429) errors
+}
+
+// Maximum backoff durations
 if (!defined('BACKOFF_MAX_TRANSIENT')) {
     define('BACKOFF_MAX_TRANSIENT', 600); // 10 minutes
 }
