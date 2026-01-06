@@ -103,13 +103,20 @@ function detectDuplicateJsonKeys(string $jsonContent): array {
 }
 
 /**
- * Validate and sanitize airport ID
+ * Validate airport ID format
  * 
- * Airport IDs must be 3-4 lowercase alphanumeric characters (ICAO format).
- * Validates format before trimming to prevent "k spb" from becoming "kspb".
+ * Supports both standard ICAO/FAA codes (3-4 characters) and custom identifiers
+ * (3-50 characters with hyphens) for airports without standard codes.
+ * 
+ * Rules:
+ * - Length: 3-50 characters (matches subdomain regex)
+ * - Characters: Lowercase alphanumeric + hyphens (filesystem-safe)
+ * - Format: Must start and end with alphanumeric (no leading/trailing hyphens)
+ * - No consecutive hyphens (prevents "--")
+ * - No whitespace or special characters
  * 
  * @param string|null $id Airport ID to validate
- * @return bool True if valid ICAO format, false otherwise
+ * @return bool True if valid, false otherwise
  */
 function validateAirportId(?string $id): bool {
     if ($id === null || empty($id)) {
@@ -120,7 +127,19 @@ function validateAirportId(?string $id): bool {
     if (preg_match('/\s/', $id)) {
         return false;
     }
-    return preg_match('/^[a-z0-9]{3,4}$/', strtolower(trim($id))) === 1;
+    $normalized = strtolower(trim($id));
+    
+    // Length check: 3-50 characters (matches subdomain regex)
+    $length = strlen($normalized);
+    if ($length < 3 || $length > 50) {
+        return false;
+    }
+    
+    // Must start and end with alphanumeric (no leading/trailing hyphens)
+    // Allow lowercase alphanumeric + hyphens (filesystem-safe)
+    // No consecutive hyphens (prevents "--")
+    return preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', $normalized) === 1
+        && strpos($normalized, '--') === false;
 }
 
 /**
@@ -1295,7 +1314,7 @@ function loadConfig(bool $useCache = true): ?array {
         
         foreach ($config['airports'] as $aid => $ap) {
             if (!validateAirportId($aid)) {
-                $errors[] = "Airport key '{$aid}' is invalid (3-4 lowercase alphanumerics)";
+                $errors[] = "Airport key '{$aid}' is invalid (must be 3-50 lowercase alphanumeric characters, hyphens allowed)";
             }
             
             if (!isset($ap['webcams']) || !is_array($ap['webcams'])) {
@@ -1380,7 +1399,7 @@ function clearConfigCache(): void {
  * Checks both query parameter and subdomain, validating format before returning.
  * Supports both ?airport=kspb and kspb.aviationwx.org patterns.
  * 
- * @return string Validated airport ID (3-4 lowercase alphanumeric) or empty string
+ * @return string Validated airport ID (3-50 lowercase alphanumeric, hyphens allowed) or empty string
  */
 function getAirportIdFromRequest(): string {
     $identifier = '';

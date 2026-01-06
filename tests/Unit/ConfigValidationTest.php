@@ -50,16 +50,49 @@ class ConfigValidationTest extends TestCase
 
     public function testValidateAirportId_TooLong()
     {
-        $this->assertFalse(validateAirportId('toolong'));     // 7 chars
-        $this->assertFalse(validateAirportId('toolong123'));   // 10 chars
+        // 51 characters - exceeds maximum
+        $tooLong = str_repeat('a', 51);
+        $this->assertFalse(validateAirportId($tooLong));
+    }
+
+    public function testValidateAirportId_ValidWithHyphens()
+    {
+        // Valid longer IDs with hyphens
+        $this->assertTrue(validateAirportId('private-strip-1'));
+        $this->assertTrue(validateAirportId('helipad-downtown'));
+        $this->assertTrue(validateAirportId('test-airport'));
+        $this->assertTrue(validateAirportId('a-b-c'));
+        $this->assertTrue(validateAirportId('custom-id-123'));
+    }
+
+    public function testValidateAirportId_ValidLongerIds()
+    {
+        // Valid IDs longer than 4 characters (up to 50)
+        $this->assertTrue(validateAirportId('airport123'));
+        $this->assertTrue(validateAirportId('test12345'));
+        // Exactly 50 characters
+        $fiftyChars = str_repeat('a', 50);
+        $this->assertTrue(validateAirportId($fiftyChars));
+    }
+
+    public function testValidateAirportId_InvalidHyphenPlacement()
+    {
+        // Leading hyphen
+        $this->assertFalse(validateAirportId('-airport'));
+        // Trailing hyphen
+        $this->assertFalse(validateAirportId('airport-'));
+        // Consecutive hyphens
+        $this->assertFalse(validateAirportId('air--port'));
+        $this->assertFalse(validateAirportId('test---airport'));
     }
 
     public function testValidateAirportId_SpecialCharacters()
     {
-        $this->assertFalse(validateAirportId('ks-pb'));   // Hyphen
         $this->assertFalse(validateAirportId('ks_pb'));   // Underscore
         $this->assertFalse(validateAirportId('ks.pb'));   // Period
         $this->assertFalse(validateAirportId('kspb!'));   // Exclamation
+        $this->assertFalse(validateAirportId('ks@pb'));   // At sign
+        $this->assertFalse(validateAirportId('ks#pb'));   // Hash
     }
 
     public function testValidateAirportId_Whitespace()

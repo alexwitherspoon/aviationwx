@@ -99,7 +99,7 @@ function validateAirportConfig($formData) {
     if (empty($airportId)) {
         $errors[] = 'Airport ID (ICAO code) is required';
     } elseif (!validateAirportId($airportId)) {
-        $errors[] = 'Airport ID must be 3-4 lowercase alphanumeric characters';
+        $errors[] = 'Airport ID must be 3-50 lowercase alphanumeric characters (hyphens allowed)';
     }
     
     // Airport name
@@ -989,8 +989,8 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         <label for="airport_id">ICAO Code <span class="required">*</span></label>
                         <input type="text" id="airport_id" name="airport_id" 
                                value="<?= htmlspecialchars($_POST['airport_id'] ?? '') ?>"
-                               pattern="[a-z0-9]{3,4}" maxlength="4" required>
-                        <div class="help-text">3-4 lowercase alphanumeric characters (e.g., kspb)</div>
+                               pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" maxlength="50" required>
+                        <div class="help-text">3-50 lowercase alphanumeric characters, hyphens allowed (e.g., kspb or private-strip-1)</div>
                         <?php if (isset($_POST['airport_id'])): ?>
                         <?php 
                         $checkId = strtolower(trim($_POST['airport_id']));
