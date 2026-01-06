@@ -846,19 +846,21 @@ function getImageAspectRatio(): string {
 }
 
 /**
- * Get list of image variants to generate
+ * Get list of image variant heights to generate
  * 
- * Returns the configured list of variant names to generate.
- * Defaults to ["thumb", "small", "medium", "large"].
+ * Returns the configured list of variant heights to generate.
+ * Defaults to [1080, 720, 360] (standard video resolutions).
+ * Heights are in pixels; width is calculated from aspect ratio.
  * 
- * @return array Array of variant name strings
+ * @return array Array of integer heights
  */
 function getImageVariants(): array {
     $variants = getGlobalConfig('image_variants', null);
     if ($variants === null || !is_array($variants)) {
-        return ['thumb', 'small', 'medium', 'large'];
+        return [1080, 720, 360];
     }
-    return $variants;
+    // Ensure all values are integers
+    return array_map('intval', $variants);
 }
 
 /**

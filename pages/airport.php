@@ -6329,12 +6329,13 @@ function observeWebcamFormat(camIndex, img) {
     
     if (sizeMatch) {
         const size = sizeMatch[1].toLowerCase();
-        // Support both old variant names and new height-based variants
-        if (size === 'original' || !isNaN(parseInt(size))) {
-            detectedVariant = size === 'original' ? 'original' : parseInt(size);
-        } else if (['thumb', 'small', 'medium', 'large', 'primary', 'full'].includes(size)) {
-            detectedVariant = size;
+        // Support 'original' and height-based variants (e.g., 720, 360)
+        if (size === 'original') {
+            detectedVariant = 'original';
+        } else if (!isNaN(parseInt(size))) {
+            detectedVariant = parseInt(size);
         }
+        // Note: Old named variants (thumb, small, etc.) are no longer supported
     }
     
     // Log detected format and variant for debugging
@@ -6726,7 +6727,7 @@ function startFormatRetry(camIndex, data) {
     
     const { preferred_url, format, jpeg_timestamp, estimated_ready_seconds } = data;
     const variantMatch = preferred_url ? preferred_url.match(/[&?]size=([^&]+)/) : null;
-    const variant = variantMatch ? variantMatch[1] : 'primary';
+    const variant = variantMatch ? variantMatch[1] : 'original';
     
     console.log(`[Webcam ${camIndex}] Starting format retry - format: ${format}, variant: ${variant}, estimated: ${estimated_ready_seconds || 'unknown'}s`);
     
@@ -6776,7 +6777,7 @@ function startFormatRetry(camIndex, data) {
             if (mtimeData.formatReady && mtimeData.formatReady[format]) {
                 // Format ready! Request the image
                 const variantMatch = preferred_url.match(/[&?]size=([^&]+)/);
-                const variant = variantMatch ? variantMatch[1] : 'primary';
+                const variant = variantMatch ? variantMatch[1] : 'original';
                 console.log(`[Webcam ${camIndex}] Format ready after retry - format: ${format}, variant: ${variant}`);
                 
                 try {
@@ -6808,7 +6809,7 @@ function startFormatRetry(camIndex, data) {
             // Format not ready yet - schedule next check
             retryCount++;
             const variantMatch = preferred_url.match(/[&?]size=([^&]+)/);
-            const variant = variantMatch ? variantMatch[1] : 'primary';
+            const variant = variantMatch ? variantMatch[1] : 'original';
             console.log(`[Webcam ${camIndex}] Format not ready (retry ${retryCount}) - format: ${format}, variant: ${variant}`);
             scheduleNextRetry();
             
@@ -6861,7 +6862,7 @@ async function handle202Response(camIndex, data, hasExisting, jpegTimestamp) {
     
     // Extract variant from URLs for logging
     const variantMatch = preferred_url ? preferred_url.match(/[&?]size=([^&]+)/) : null;
-    const variant = variantMatch ? variantMatch[1] : 'primary';
+    const variant = variantMatch ? variantMatch[1] : 'original';
     
     // Special case: JPEG is generating (our fallback)
     if (format === 'jpg') {

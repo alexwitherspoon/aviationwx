@@ -305,10 +305,9 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetStagingFilePath_ReturnsCorrectPathFormat(): void
     {
-        $path = getStagingFilePath('kspb', 0, 'jpg', 'primary');
+        $path = getStagingFilePath('kspb', 0, 'jpg', 'original');
         $this->assertStringContainsString('cache/webcams', $path);
-        // Function returns staging_primary_{variant}.format.tmp, so 'primary' variant becomes staging_primary_primary.jpg.tmp
-        $this->assertStringContainsString('kspb/0/staging_primary_primary.jpg.tmp', $path);
+        $this->assertStringContainsString('kspb/0/staging_original.jpg.tmp', $path);
     }
 
     /**
@@ -316,14 +315,13 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetStagingFilePath_WorksForDifferentFormats(): void
     {
-        $jpgPath = getStagingFilePath('kspb', 0, 'jpg', 'primary');
-        $webpPath = getStagingFilePath('kspb', 0, 'webp', 'primary');
-        $avifPath = getStagingFilePath('kspb', 0, 'avif', 'primary');
+        $jpgPath = getStagingFilePath('kspb', 0, 'jpg', 'original');
+        $webpPath = getStagingFilePath('kspb', 0, 'webp', 'original');
+        $avifPath = getStagingFilePath('kspb', 0, 'avif', 'original');
         
-        // Function returns staging_primary_{variant}.format.tmp, so 'primary' variant becomes staging_primary_primary.format.tmp
-        $this->assertStringEndsWith('staging_primary_primary.jpg.tmp', $jpgPath);
-        $this->assertStringEndsWith('staging_primary_primary.webp.tmp', $webpPath);
-        $this->assertStringEndsWith('staging_primary_primary.avif.tmp', $avifPath);
+        $this->assertStringEndsWith('staging_original.jpg.tmp', $jpgPath);
+        $this->assertStringEndsWith('staging_original.webp.tmp', $webpPath);
+        $this->assertStringEndsWith('staging_original.avif.tmp', $avifPath);
     }
 
     /**
@@ -331,14 +329,25 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetStagingFilePath_WorksForDifferentCamIndices(): void
     {
-        $path0 = getStagingFilePath('kspb', 0, 'jpg', 'primary');
-        $path1 = getStagingFilePath('kspb', 1, 'jpg', 'primary');
-        $path2 = getStagingFilePath('kspb', 2, 'jpg', 'primary');
+        $path0 = getStagingFilePath('kspb', 0, 'jpg', 'original');
+        $path1 = getStagingFilePath('kspb', 1, 'jpg', 'original');
+        $path2 = getStagingFilePath('kspb', 2, 'jpg', 'original');
         
-        // Function returns staging_primary_{variant}.format.tmp, so 'primary' variant becomes staging_primary_primary.jpg.tmp
-        $this->assertStringContainsString('kspb/0/staging_primary_primary.jpg.tmp', $path0);
-        $this->assertStringContainsString('kspb/1/staging_primary_primary.jpg.tmp', $path1);
-        $this->assertStringContainsString('kspb/2/staging_primary_primary.jpg.tmp', $path2);
+        $this->assertStringContainsString('kspb/0/staging_original.jpg.tmp', $path0);
+        $this->assertStringContainsString('kspb/1/staging_original.jpg.tmp', $path1);
+        $this->assertStringContainsString('kspb/2/staging_original.jpg.tmp', $path2);
+    }
+    
+    /**
+     * Test getStagingFilePath() works for height-based variants
+     */
+    public function testGetStagingFilePath_WorksForHeightVariants(): void
+    {
+        $path720 = getStagingFilePath('kspb', 0, 'jpg', 720);
+        $path360 = getStagingFilePath('kspb', 0, 'webp', 360);
+        
+        $this->assertStringEndsWith('staging_720.jpg.tmp', $path720);
+        $this->assertStringEndsWith('staging_360.webp.tmp', $path360);
     }
 
     /**
@@ -349,7 +358,7 @@ class WebcamFormatGenerationTest extends TestCase
         $timestamp = 1703700000;
         $path = getFinalFilePath('kspb', 0, 'jpg', $timestamp);
         $this->assertStringContainsString('cache/webcams', $path);
-        $this->assertStringContainsString('kspb/0/1703700000_primary.jpg', $path);
+        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
         $this->assertFalse(str_ends_with($path, '.tmp'), 'Final path should not end with .tmp');
     }
 
@@ -363,9 +372,22 @@ class WebcamFormatGenerationTest extends TestCase
         $webpPath = getFinalFilePath('kspb', 0, 'webp', $timestamp);
         $avifPath = getFinalFilePath('kspb', 0, 'avif', $timestamp);
         
-        $this->assertStringEndsWith('1703700000_primary.jpg', $jpgPath);
-        $this->assertStringEndsWith('1703700000_primary.webp', $webpPath);
-        $this->assertStringEndsWith('1703700000_primary.avif', $avifPath);
+        $this->assertStringEndsWith('1703700000_original.jpg', $jpgPath);
+        $this->assertStringEndsWith('1703700000_original.webp', $webpPath);
+        $this->assertStringEndsWith('1703700000_original.avif', $avifPath);
+    }
+    
+    /**
+     * Test getFinalFilePath() works for height-based variants
+     */
+    public function testGetFinalFilePath_WorksForHeightVariants(): void
+    {
+        $timestamp = 1703700000;
+        $path720 = getFinalFilePath('kspb', 0, 'jpg', $timestamp, 720);
+        $path360 = getFinalFilePath('kspb', 0, 'webp', $timestamp, 360);
+        
+        $this->assertStringEndsWith('1703700000_720.jpg', $path720);
+        $this->assertStringEndsWith('1703700000_360.webp', $path360);
     }
 
     /**
@@ -513,7 +535,7 @@ class WebcamFormatGenerationTest extends TestCase
     {
         // Create a staging file for this test
         $testAirport = 'test_promote_' . time();
-        $stagingFile = getStagingFilePath($testAirport, 0, 'jpg', 'primary');
+        $stagingFile = getStagingFilePath($testAirport, 0, 'jpg', 'original');
         $cacheDir = dirname($stagingFile);
         $timestamp = time();
         
@@ -550,8 +572,8 @@ class WebcamFormatGenerationTest extends TestCase
         ensureCacheDir(CACHE_WEBCAMS_DIR);
         
         // Create staging files for jpg and webp (avif will be marked as failed)
-        @file_put_contents(getStagingFilePath($testAirport, 0, 'jpg', 'primary'), 'test jpg');
-        @file_put_contents(getStagingFilePath($testAirport, 0, 'webp', 'primary'), 'test webp');
+        @file_put_contents(getStagingFilePath($testAirport, 0, 'jpg', 'original'), 'test jpg');
+        @file_put_contents(getStagingFilePath($testAirport, 0, 'webp', 'original'), 'test webp');
         
         // Promote with mixed results (webp success, avif failed)
         $formatResults = ['webp' => true, 'avif' => false];
@@ -819,40 +841,39 @@ class WebcamFormatGenerationTest extends TestCase
     }
     
     /**
-     * Test getVariantDimensions() - Fixed variants
+     * Test getVariantDimensions() - Height-based variants
      */
-    public function testGetVariantDimensions_FixedVariants_ReturnsCorrectDimensions(): void
+    public function testGetVariantDimensions_HeightVariants_ReturnsCorrectDimensions(): void
     {
-        $thumb = getVariantDimensions('thumb');
-        $this->assertIsArray($thumb);
-        $this->assertEquals(160, $thumb['width']);
-        $this->assertEquals(90, $thumb['height']);
+        // Default aspect ratio is 16:9
+        $h720 = getVariantDimensions(720);
+        $this->assertIsArray($h720);
+        $this->assertEquals(1280, $h720['width']);
+        $this->assertEquals(720, $h720['height']);
         
-        $small = getVariantDimensions('small');
-        $this->assertEquals(320, $small['width']);
-        $this->assertEquals(180, $small['height']);
+        $h360 = getVariantDimensions(360);
+        $this->assertEquals(640, $h360['width']);
+        $this->assertEquals(360, $h360['height']);
         
-        $medium = getVariantDimensions('medium');
-        $this->assertEquals(640, $medium['width']);
-        $this->assertEquals(360, $medium['height']);
+        $h1080 = getVariantDimensions(1080);
+        $this->assertEquals(1920, $h1080['width']);
+        $this->assertEquals(1080, $h1080['height']);
         
-        $large = getVariantDimensions('large');
-        $this->assertEquals(1280, $large['width']);
-        $this->assertEquals(720, $large['height']);
+        // Also test with string height
+        $h720Str = getVariantDimensions('720');
+        $this->assertEquals(1280, $h720Str['width']);
+        $this->assertEquals(720, $h720Str['height']);
     }
     
     /**
-     * Test getVariantDimensions() - Dynamic variants
+     * Test getVariantDimensions() - Original variant
      */
-    public function testGetVariantDimensions_DynamicVariants_ReturnsProvidedDimensions(): void
+    public function testGetVariantDimensions_OriginalVariant_ReturnsProvidedDimensions(): void
     {
-        $primaryDims = ['width' => 1920, 'height' => 1080];
+        $originalDims = ['width' => 1920, 'height' => 1080];
         
-        $primary = getVariantDimensions('primary', $primaryDims);
-        $this->assertEquals($primaryDims, $primary);
-        
-        $full = getVariantDimensions('full', $primaryDims);
-        $this->assertEquals($primaryDims, $full);
+        $original = getVariantDimensions('original', $originalDims);
+        $this->assertEquals($originalDims, $original);
     }
     
     /**
@@ -860,7 +881,16 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetVariantDimensions_InvalidVariant_ReturnsNull(): void
     {
+        // Non-numeric, non-'original' string
         $result = getVariantDimensions('invalid');
+        $this->assertNull($result);
+        
+        // Zero height
+        $result = getVariantDimensions(0);
+        $this->assertNull($result);
+        
+        // Negative height
+        $result = getVariantDimensions(-100);
         $this->assertNull($result);
     }
     

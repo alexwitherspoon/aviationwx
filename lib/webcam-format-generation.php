@@ -309,13 +309,12 @@ function getFormatGenerationTimeout(): int {
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param string $format Format extension (jpg, webp, avif)
- * @param string $variant Variant name (thumb, small, medium, large, primary, full)
+ * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Staging file path with .tmp suffix
  */
-function getStagingFilePath(string $airportId, int $camIndex, string $format, string $variant = 'primary'): string {
+function getStagingFilePath(string $airportId, int $camIndex, string $format, string|int $variant = 'original'): string {
     $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    // Match naming convention used in generateVariantsSync: staging_primary_variant.format.tmp
-    return $cacheDir . '/staging_primary_' . $variant . '.' . $format . '.tmp';
+    return $cacheDir . '/staging_' . $variant . '.' . $format . '.tmp';
 }
 
 /**
@@ -349,10 +348,10 @@ function getWebcamCacheDir(string $airportId, int $camIndex): string {
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp for the image
  * @param string $format Format extension (jpg, webp, avif)
- * @param string $variant Variant name (thumb, small, medium, large, primary, full)
+ * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Timestamp-based cache file path
  */
-function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timestamp, string $format, string $variant = 'primary'): string {
+function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timestamp, string $format, string|int $variant = 'original'): string {
     $cacheDir = getWebcamCacheDir($airportId, $camIndex);
     return $cacheDir . '/' . $timestamp . '_' . $variant . '.' . $format;
 }
@@ -362,27 +361,25 @@ function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timest
 /**
  * Get cache file path for a webcam image
  * 
- * Resolves symlinks and handles both primary and variant files.
- * For primary variant, resolves symlink to actual timestamp-based file.
- * For non-primary variants, extracts timestamp from primary JPG and constructs variant path.
+ * Resolves symlinks and handles both original and height-based variant files.
+ * For 'original' variant, uses original.{format} symlink.
+ * For height variants (e.g., 720, 360), uses current.{format} symlink or constructs path.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param string $format Format: 'jpg', 'webp', or 'avif'
- * @param string $variant Variant name (thumb, small, medium, large, primary, full)
+ * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Cache file path
  */
-function getCacheFile(string $airportId, int $camIndex, string $format, string $variant = 'primary'): string {
+function getCacheFile(string $airportId, int $camIndex, string $format, string|int $variant = 'original'): string {
     $cacheDir = getWebcamCacheDir($airportId, $camIndex);
     
-    // Map 'primary' to 'original' for backward compatibility
-    if ($variant === 'primary') {
-        $variant = 'original';
-    }
+    // Normalize variant to string
+    $variant = (string)$variant;
     
-    // For original variant, use symlink
+    // For 'original' variant, use original.{format} symlink
     if ($variant === 'original') {
-        $symlinkPath = $cacheDir . '/current.' . $format;
+        $symlinkPath = $cacheDir . '/original.' . $format;
         
         // Resolve symlink to actual timestamp-based file
         // If symlink exists, readlink() returns the target
@@ -397,30 +394,17 @@ function getCacheFile(string $airportId, int $camIndex, string $format, string $
             }
         }
         
-        // Symlink doesn't exist - check if we can find timestamp-based file from JPG symlink
+        // Symlink doesn't exist - check if we can find timestamp-based file from original.jpg symlink
         // This handles cases where format generation created the file but symlink wasn't created yet
-        $jpgSymlinkPath = $cacheDir . '/current.jpg';
-        if (is_link($jpgSymlinkPath)) {
-            $jpgTarget = readlink($jpgSymlinkPath);
+        $origJpgSymlinkPath = $cacheDir . '/original.jpg';
+        if (is_link($origJpgSymlinkPath)) {
+            $jpgTarget = readlink($origJpgSymlinkPath);
             if ($jpgTarget !== false) {
-                // Extract timestamp from JPG filename (supports both old and new naming)
-                // Old: "1766944401_primary.jpg" or "1766944401.jpg"
-                // New: "1766944401_original.jpg"
+                // Extract timestamp from JPG filename
                 $jpgBasename = basename($jpgTarget);
-                if (preg_match('/^(\d+)(?:_(?:primary|original))?\.jpg$/', $jpgBasename, $matches)) {
+                if (preg_match('/^(\d+)_original\.jpg$/', $jpgBasename, $matches)) {
                     $timestamp = $matches[1];
-                    // Try new naming first (original)
                     $timestampFile = $cacheDir . '/' . $timestamp . '_original.' . $format;
-                    if (file_exists($timestampFile)) {
-                        return $timestampFile;
-                    }
-                    // Fallback to old naming (primary)
-                    $timestampFile = $cacheDir . '/' . $timestamp . '_primary.' . $format;
-                    if (file_exists($timestampFile)) {
-                        return $timestampFile;
-                    }
-                    // Fallback to old naming (no variant)
-                    $timestampFile = $cacheDir . '/' . $timestamp . '.' . $format;
                     if (file_exists($timestampFile)) {
                         return $timestampFile;
                     }
@@ -492,10 +476,10 @@ function getCacheFile(string $airportId, int $camIndex, string $format, string $
  * @param int $camIndex Camera index (0-based)
  * @param string $format Format extension (jpg, webp, avif)
  * @param int $timestamp Unix timestamp for the image
- * @param string $variant Variant name (thumb, small, medium, large, primary, full)
+ * @param string|int $variant Variant: 'original' or height in pixels (e.g., 720, 360)
  * @return string Final timestamp-based cache file path
  */
-function getFinalFilePath(string $airportId, int $camIndex, string $format, int $timestamp, string $variant = 'primary'): string {
+function getFinalFilePath(string $airportId, int $camIndex, string $format, int $timestamp, string|int $variant = 'original'): string {
     return getTimestampCacheFilePath($airportId, $camIndex, $timestamp, $format, $variant);
 }
 
@@ -649,31 +633,40 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
 }
 
 /**
- * Get variant dimensions
+ * Get variant dimensions from height
  * 
- * Returns the dimensions for a given variant name.
+ * Returns the dimensions for a given variant height or 'original'.
+ * Width is calculated from the configured aspect ratio (default 16:9).
  * 
- * @param string $variant Variant name (thumb, small, medium, large, primary, full)
- * @param array|null $actualPrimary Actual primary dimensions (for primary/full variants)
+ * @param string|int $variant Variant height (e.g., 720, 360) or 'original'
+ * @param array|null $actualDimensions Actual source dimensions (for 'original' variant)
  * @return array|null Array with 'width' and 'height' keys, or null if invalid variant
  */
-function getVariantDimensions(string $variant, ?array $actualPrimary = null): ?array {
-    $fixedVariants = [
-        'thumb' => ['width' => 160, 'height' => 90],
-        'small' => ['width' => 320, 'height' => 180],
-        'medium' => ['width' => 640, 'height' => 360],
-        'large' => ['width' => 1280, 'height' => 720],
-    ];
-    
-    if (isset($fixedVariants[$variant])) {
-        return $fixedVariants[$variant];
+function getVariantDimensions(string|int $variant, ?array $actualDimensions = null): ?array {
+    // Handle 'original' variant - use actual source dimensions
+    if ($variant === 'original') {
+        return $actualDimensions;
     }
     
-    if ($variant === 'primary' || $variant === 'full') {
-        return $actualPrimary;
+    // Handle numeric height
+    $height = is_numeric($variant) ? (int)$variant : null;
+    if ($height === null || $height <= 0) {
+        return null;
     }
     
-    return null;
+    // Calculate width from aspect ratio (default 16:9)
+    $aspectRatio = getImageAspectRatio();
+    $parts = explode(':', $aspectRatio);
+    $ratioWidth = (int)($parts[0] ?? 16);
+    $ratioHeight = (int)($parts[1] ?? 9);
+    
+    if ($ratioHeight <= 0) {
+        $ratioHeight = 9;
+    }
+    
+    $width = (int)round($height * $ratioWidth / $ratioHeight);
+    
+    return ['width' => $width, 'height' => $height];
 }
 
 /**
@@ -932,7 +925,7 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
     
     // Start all format generation processes in parallel
     foreach ($formatsToGenerate as $format) {
-        $destFile = getStagingFilePath($airportId, $camIndex, $format, 'primary');
+        $destFile = getStagingFilePath($airportId, $camIndex, $format, 'original');
         $cmd = buildFormatCommand($sourceFile, $destFile, $format, $captureTime);
         
         // Redirect stderr to stdout for capture
@@ -1144,20 +1137,26 @@ function generateVariantsSync(string $sourceFile, string $airportId, int $camInd
         $actualPrimary = $primaryConfig;
     }
     
-    // Determine which variants to generate
+    // Determine which variants to generate (using height-based naming)
     $variantsToProcess = [];
     
-    // Always generate primary and full (if different)
-    $variantsToProcess[] = 'primary';
+    // Always generate 'original' (full resolution)
+    $variantsToProcess[] = 'original';
+    
+    // Add primary height variant if different from original
+    $primaryHeight = $actualPrimary['height'];
     if ($actualPrimary['width'] !== $actualFull['width'] || $actualPrimary['height'] !== $actualFull['height']) {
-        $variantsToProcess[] = 'full';
+        $variantsToProcess[] = $primaryHeight;
     }
     
-    // Add configured variants if they're smaller than actual_primary
-    foreach ($variantsToGenerate as $variant) {
-        $variantDims = getVariantDimensions($variant);
+    // Add configured height variants if they're smaller than actual_primary
+    foreach ($variantsToGenerate as $height) {
+        $variantDims = getVariantDimensions($height);
         if ($variantDims !== null && shouldGenerateVariant($variantDims, $actualPrimary)) {
-            $variantsToProcess[] = $variant;
+            // Avoid duplicates
+            if (!in_array($height, $variantsToProcess)) {
+                $variantsToProcess[] = $height;
+            }
         }
     }
     
@@ -1213,13 +1212,14 @@ function generateVariantsSync(string $sourceFile, string $airportId, int $camInd
     
     // Start all variant × format generation processes in parallel
     foreach ($variantsToProcess as $variant) {
-        $variantDims = getVariantDimensions($variant, $actualPrimary);
+        // For 'original', use actualFull dimensions; for heights, calculate from aspect ratio
+        $variantDims = ($variant === 'original') ? $actualFull : getVariantDimensions($variant, $actualFull);
         if ($variantDims === null) {
             continue;
         }
         
-        // Letterboxing only for primary and full
-        $letterbox = ($variant === 'primary' || $variant === 'full');
+        // Letterboxing only for 'original' variant (preserves source aspect ratio with bars)
+        $letterbox = ($variant === 'original');
         
         foreach ($formatsToGenerate as $format) {
             // Create staging file path with variant and format
@@ -1511,7 +1511,7 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
     
     // Get timestamp from source file if not provided
     if ($timestamp <= 0) {
-        $sourceStagingFile = getStagingFilePath($airportId, $camIndex, $sourceFormat, 'primary');
+        $sourceStagingFile = getStagingFilePath($airportId, $camIndex, $sourceFormat, 'original');
         if (file_exists($sourceStagingFile)) {
             $timestamp = getSourceCaptureTime($sourceStagingFile);
         }
@@ -1557,7 +1557,7 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
             continue;
         }
         
-        $stagingFile = getStagingFilePath($airportId, $camIndex, $format, 'primary');
+        $stagingFile = getStagingFilePath($airportId, $camIndex, $format, 'original');
         $timestampFile = getFinalFilePath($airportId, $camIndex, $format, $timestamp);
         $symlink = getCacheSymlinkPath($airportId, $camIndex, $format);
         
@@ -1748,8 +1748,27 @@ function promoteVariants(string $airportId, int $camIndex, array $variantResults
                         copyExifMetadata($originalSourceFile, $finalFile);
                     }
                     
-                    // Update symlink for primary variant only
-                    if ($variant === 'primary') {
+                    // Update symlinks based on variant type
+                    // 'original' variant gets original.{format} symlink
+                    // Primary height variant gets current.{format} symlink
+                    $config = getImageResolutionConfig();
+                    $primaryHeight = $config['primary']['height'] ?? 720;
+                    
+                    if ($variant === 'original') {
+                        // Create original.{format} symlink
+                        $cacheDir = getWebcamCacheDir($airportId, $camIndex);
+                        $symlink = $cacheDir . '/original.' . $format;
+                        if (!updateCacheSymlink($symlink, $finalFile)) {
+                            aviationwx_log('error', 'webcam original symlink failed', [
+                                'airport' => $airportId,
+                                'cam' => $camIndex,
+                                'variant' => $variant,
+                                'format' => $format,
+                                'error' => error_get_last()['message'] ?? 'unknown'
+                            ], 'app');
+                        }
+                    } elseif ((string)$variant === (string)$primaryHeight) {
+                        // Create current.{format} symlink for primary height variant
                         $symlink = getCacheSymlinkPath($airportId, $camIndex, $format);
                         if (!updateCacheSymlink($symlink, $finalFile)) {
                             aviationwx_log('error', 'webcam variant symlink failed', [

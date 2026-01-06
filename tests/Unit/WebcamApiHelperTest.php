@@ -239,8 +239,8 @@ class WebcamApiHelperTest extends TestCase
         $webpFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'webp', 'original');
         $avifFile = getCacheFile($this->testAirportId, $this->testCamIndex, 'avif', 'original');
         
-        // Ensure directories exist
-        $cacheDir = dirname(dirname($jpgFile));
+        // Ensure directories exist (need the direct parent dir of the files)
+        $cacheDir = dirname($jpgFile);
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0755, true);
         }

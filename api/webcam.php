@@ -735,7 +735,7 @@ function areAllFormatsFromSameCycle(array $formatStatus, int $jpegMtime, int $re
  * @param int $camIndex Camera index
  * @return array Status array with keys: jpg, webp, avif (each with exists, size, mtime, valid)
  */
-function getFormatStatus(string $airportId, int $camIndex, string $variant = 'primary'): array {
+function getFormatStatus(string $airportId, int $camIndex, string|int $variant = 'original'): array {
     $cacheJpg = getCacheFile($airportId, $camIndex, 'jpg', $variant);
     $cacheWebp = getCacheFile($airportId, $camIndex, 'webp', $variant);
     $cacheAvif = getCacheFile($airportId, $camIndex, 'avif', $variant);
