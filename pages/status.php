@@ -1191,7 +1191,9 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $variantHeights = getVariantHeights($airportId, $idx);
             $formats = getEnabledWebcamFormats(); // Dynamic based on config (jpg always, webp/avif if enabled)
             $variantAvailability = [];
-            $totalVariants = count($variantHeights) * count($formats) + count($formats); // original + height variants
+            // Original is only stored in source format (not all formats), so count it once
+            // Height variants are generated in all enabled formats
+            $totalVariants = count($variantHeights) * count($formats) + 1; // 1 original + height variants in all formats
             $availableVariants = 0;
             
             // Get latest timestamp to check variants
@@ -1199,13 +1201,11 @@ function checkAirportHealth(string $airportId, array $airport): array {
             if ($latestTimestamp > 0) {
                 $availableVariantsData = getAvailableVariants($airportId, $idx, $latestTimestamp);
                 
-                // Check original
-                foreach ($formats as $format) {
-                    $available = isset($availableVariantsData['original']) && in_array($format, $availableVariantsData['original']);
-                    $variantAvailability['original_' . $format] = $available;
-                    if ($available) {
-                        $availableVariants++;
-                    }
+                // Check original (only one original file exists, in source format)
+                $originalAvailable = isset($availableVariantsData['original']) && !empty($availableVariantsData['original']);
+                $variantAvailability['original'] = $originalAvailable;
+                if ($originalAvailable) {
+                    $availableVariants++;
                 }
                 
                 // Check height-based variants
@@ -1225,9 +1225,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                         $variantAvailability[$height . '_' . $format] = false;
                     }
                 }
-                foreach ($formats as $format) {
-                    $variantAvailability['original_' . $format] = false;
-                }
+                $variantAvailability['original'] = false;
             }
             
             $variantCoverage = $totalVariants > 0 ? ($availableVariants / $totalVariants) : 0;
