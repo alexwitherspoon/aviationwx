@@ -1143,8 +1143,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     $cacheJpg = $cacheDir . '/current.jpg';
                     $cacheWebp = $cacheDir . '/current.webp';
                 } else {
-                    $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
-                    $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
+                    $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'original');
+                    $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'original');
                 }
             } else {
                 $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
@@ -1155,29 +1155,47 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $cacheExists = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
                         || (@file_exists($cacheWebp) && @is_readable($cacheWebp));
             
-            // Check variant availability
-            $variants = ['thumb', 'small', 'medium', 'large', 'primary'];
+            // Check variant availability (height-based variants)
+            require_once __DIR__ . '/../lib/webcam-metadata.php';
+            $variantHeights = getVariantHeights($airportId, $idx);
             $formats = ['jpg', 'webp'];
             $variantAvailability = [];
-            $totalVariants = count($variants) * count($formats);
+            $totalVariants = count($variantHeights) * count($formats) + count($formats); // +1 for original
             $availableVariants = 0;
             
-            foreach ($variants as $variant) {
+            // Get latest timestamp to check variants
+            $latestTimestamp = getLatestImageTimestamp($airportId, $idx);
+            if ($latestTimestamp > 0) {
+                $availableVariantsData = getAvailableVariants($airportId, $idx, $latestTimestamp);
+                
+                // Check original
                 foreach ($formats as $format) {
-                    // Get most recent file for this variant/format
-                    $cacheDir = getWebcamCacheDir($airportId, $idx);
-                    // Check directory exists before glob (getWebcamCacheDir creates it, but verify)
-                    if (is_dir($cacheDir) && is_readable($cacheDir)) {
-                        $pattern = $cacheDir . '/*_' . $variant . '.' . $format;
-                        $files = @glob($pattern);
-                        $available = !empty($files);
+                    $available = isset($availableVariantsData['original']) && in_array($format, $availableVariantsData['original']);
+                    $variantAvailability['original_' . $format] = $available;
+                    if ($available) {
+                        $availableVariants++;
+                    }
+                }
+                
+                // Check height-based variants
+                foreach ($variantHeights as $height) {
+                    foreach ($formats as $format) {
+                        $available = isset($availableVariantsData[$height]) && in_array($format, $availableVariantsData[$height]);
+                        $variantAvailability[$height . '_' . $format] = $available;
                         if ($available) {
                             $availableVariants++;
                         }
-                        $variantAvailability[$variant . '_' . $format] = $available;
-                    } else {
-                        $variantAvailability[$variant . '_' . $format] = false;
                     }
+                }
+            } else {
+                // No image available - mark all as unavailable
+                foreach ($variantHeights as $height) {
+                    foreach ($formats as $format) {
+                        $variantAvailability[$height . '_' . $format] = false;
+                    }
+                }
+                foreach ($formats as $format) {
+                    $variantAvailability['original_' . $format] = false;
                 }
             }
             

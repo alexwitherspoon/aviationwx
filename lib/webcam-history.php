@@ -64,10 +64,10 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         }
         
         $basename = basename($file);
-        // Match timestamp-based filename: "1703700000_primary.jpg" or "1703700000.jpg"
-        if (preg_match('/^(\d+)(?:_([^\.]+))?\.(jpg|webp|avif)$/', $basename, $matches)) {
+        // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
+        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|webp|avif)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
-            $variant = $matches[2] ?? 'primary'; // Default to primary for old naming
+            $variant = $matches[2];
             $format = $matches[3];
             
             if (!isset($timestampGroups[$timestamp])) {
@@ -90,24 +90,24 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         }
     }
     
-    // Build frames array
     $frames = [];
     foreach ($timestampGroups as $timestamp => $data) {
         $formats = $data['formats'];
         $variants = $data['variants'];
         
-        // Primary filename is always JPG if available, otherwise first format
-        $primaryFormat = in_array('jpg', $formats) ? 'jpg' : $formats[0];
+        $variantManifest = [];
+        foreach ($variants as $variant => $variantFormats) {
+            $variantManifest[$variant] = $variantFormats;
+        }
         
         $frames[] = [
             'timestamp' => $timestamp,
-            'filename' => $timestamp . '_primary.' . $primaryFormat,
             'formats' => $formats,
-            'variants' => array_keys($variants) // List of available variants
+            'variants' => $variantManifest
         ];
     }
     
-    // Sort by timestamp ascending (oldest first for playback)
+    // Sort by timestamp ascending
     usort($frames, fn($a, $b) => $a['timestamp'] - $b['timestamp']);
     
     // Get refresh interval for this airport (used to calculate time window)
