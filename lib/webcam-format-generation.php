@@ -2321,6 +2321,17 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
     
     updateWebcamSymlinks($airportId, $camIndex, $timestamp, $promoted, $originalPath, $sourceFormat);
     
+    // Track variant health metrics
+    $totalAttempted = count($results);
+    $successCount = count(array_filter($results, function($v) { return $v !== false; }));
+    $promotedCount = 0;
+    foreach ($promoted as $heightFormats) {
+        $promotedCount += count($heightFormats);
+    }
+    
+    variant_health_track_generation($airportId, $camIndex, $successCount, $totalAttempted);
+    variant_health_track_promotion($airportId, $camIndex, $promotedCount > 0, $promotedCount, $successCount);
+    
     return [
         'original' => $originalPath,
         'variants' => $promoted,
