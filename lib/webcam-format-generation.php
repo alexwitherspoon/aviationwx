@@ -1564,6 +1564,11 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
         if (file_exists($stagingFile)) {
             // Rename staging file to timestamp-based file
             if (@rename($stagingFile, $timestampFile)) {
+                // Copy EXIF metadata from source format to generated format (ensures timestamps are preserved)
+                if (file_exists($sourceTimestampFile)) {
+                    copyExifMetadata($sourceTimestampFile, $timestampFile);
+                }
+                
                 // Create/update symlink
                 if (updateCacheSymlink($symlink, $timestampFile)) {
                     $promoted[] = $format;
@@ -1737,6 +1742,11 @@ function promoteVariants(string $airportId, int $camIndex, array $variantResults
                 // Rename staging file to timestamp-based file
                 if (@rename($stagingFile, $finalFile)) {
                     $promotedFormats[] = $format;
+                    
+                    // Copy EXIF metadata from original source to variant (ensures timestamps are preserved)
+                    if ($originalSourceFile !== null && file_exists($originalSourceFile)) {
+                        copyExifMetadata($originalSourceFile, $finalFile);
+                    }
                     
                     // Update symlink for primary variant only
                     if ($variant === 'primary') {
@@ -2298,6 +2308,10 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
             if ($captureTime > 0) {
                 $dateStr = date('YmdHi.s', $captureTime);
                 @exec("touch -t {$dateStr} " . escapeshellarg($finalPath) . " 2>/dev/null");
+            }
+            // Copy EXIF metadata from original to variant (ensures timestamps are preserved)
+            if (file_exists($originalPath)) {
+                copyExifMetadata($originalPath, $finalPath);
             }
             $promoted[$height][$format] = $finalPath;
         } else {

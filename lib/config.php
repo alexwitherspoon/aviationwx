@@ -3353,40 +3353,44 @@ function validateAirportsIcaoCodes(?array $config = null): array {
     }
     
     // Get OurAirports data (will download if needed)
+    // If unavailable, we can still do format validation but skip cross-reference checks
     $ourairportsData = getOurAirportsData();
-    if ($ourairportsData === null) {
-        // If we can't get the data, we can't validate - but don't fail
-        // This allows deployments to proceed even if OurAirports is temporarily unavailable
-        return ['valid' => true, 'errors' => [], 'warnings' => ['Could not download OurAirports data - skipping validation']];
+    $hasOurAirportsData = ($ourairportsData !== null);
+    
+    if (!$hasOurAirportsData) {
+        $warnings[] = 'Could not download OurAirports data - skipping cross-reference validation';
     }
     
-    // Build lookup arrays for fast access
+    // Build lookup arrays for fast access (only if data available)
     $icaoLookup = [];
-    if (isset($ourairportsData['icao']) && is_array($ourairportsData['icao'])) {
-        foreach ($ourairportsData['icao'] as $code) {
-            $normalized = strtoupper(trim($code));
-            if (!empty($normalized)) {
-                $icaoLookup[$normalized] = true;
-            }
-        }
-    }
-    
     $iataLookup = [];
-    if (isset($ourairportsData['iata']) && is_array($ourairportsData['iata'])) {
-        foreach ($ourairportsData['iata'] as $code) {
-            $normalized = strtoupper(trim($code));
-            if (!empty($normalized)) {
-                $iataLookup[$normalized] = true;
+    $faaLookup = [];
+    
+    if ($hasOurAirportsData) {
+        if (isset($ourairportsData['icao']) && is_array($ourairportsData['icao'])) {
+            foreach ($ourairportsData['icao'] as $code) {
+                $normalized = strtoupper(trim($code));
+                if (!empty($normalized)) {
+                    $icaoLookup[$normalized] = true;
+                }
             }
         }
-    }
-    
-    $faaLookup = [];
-    if (isset($ourairportsData['faa']) && is_array($ourairportsData['faa'])) {
-        foreach ($ourairportsData['faa'] as $code) {
-            $normalized = strtoupper(trim($code));
-            if (!empty($normalized)) {
-                $faaLookup[$normalized] = true;
+        
+        if (isset($ourairportsData['iata']) && is_array($ourairportsData['iata'])) {
+            foreach ($ourairportsData['iata'] as $code) {
+                $normalized = strtoupper(trim($code));
+                if (!empty($normalized)) {
+                    $iataLookup[$normalized] = true;
+                }
+            }
+        }
+        
+        if (isset($ourairportsData['faa']) && is_array($ourairportsData['faa'])) {
+            foreach ($ourairportsData['faa'] as $code) {
+                $normalized = strtoupper(trim($code));
+                if (!empty($normalized)) {
+                    $faaLookup[$normalized] = true;
+                }
             }
         }
     }
@@ -3397,10 +3401,10 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         if (isset($airport['icao']) && !empty($airport['icao'])) {
             $icao = strtoupper(trim((string)$airport['icao']));
             
-            // Check format
+            // Check format (always validate format)
             if (!isValidIcaoFormat($icao)) {
                 $errors[] = "Airport '{$airportId}' has invalid ICAO format: '{$icao}'";
-            } elseif (!isset($icaoLookup[$icao])) {
+            } elseif ($hasOurAirportsData && !isset($icaoLookup[$icao])) {
                 // Missing from OurAirports - warning only (data may be incomplete for very new/rare airports)
                 $warnings[] = "Airport '{$airportId}' has ICAO code '{$icao}' which is not found in OurAirports data";
             }
@@ -3410,10 +3414,10 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         if (isset($airport['iata']) && !empty($airport['iata']) && $airport['iata'] !== null) {
             $iata = strtoupper(trim((string)$airport['iata']));
             
-            // Check format
+            // Check format (always validate format)
             if (!isValidIataFormat($iata)) {
                 $errors[] = "Airport '{$airportId}' has invalid IATA format: '{$iata}'";
-            } elseif (!isset($iataLookup[$iata])) {
+            } elseif ($hasOurAirportsData && !isset($iataLookup[$iata])) {
                 // Missing from OurAirports - warning only
                 $warnings[] = "Airport '{$airportId}' has IATA code '{$iata}' which is not found in OurAirports data";
             }
@@ -3423,10 +3427,10 @@ function validateAirportsIcaoCodes(?array $config = null): array {
         if (isset($airport['faa']) && !empty($airport['faa']) && $airport['faa'] !== null) {
             $faa = strtoupper(trim((string)$airport['faa']));
             
-            // Check format
+            // Check format (always validate format)
             if (!isValidFaaFormat($faa)) {
                 $errors[] = "Airport '{$airportId}' has invalid FAA identifier format: '{$faa}'";
-            } elseif (!isset($faaLookup[$faa])) {
+            } elseif ($hasOurAirportsData && !isset($faaLookup[$faa])) {
                 // Missing from OurAirports - warning only
                 $warnings[] = "Airport '{$airportId}' has FAA identifier '{$faa}' which is not found in OurAirports data";
             }

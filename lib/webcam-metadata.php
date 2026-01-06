@@ -29,7 +29,13 @@ function getWebcamMetadata(string $airportId, int $camIndex): ?array {
     if (function_exists('apcu_fetch')) {
         $meta = @apcu_fetch($key);
         if ($meta !== false && is_array($meta)) {
-            return $meta;
+            // Validate that cached timestamp matches latest file timestamp
+            // This handles CLI/FPM APCu isolation (CLI scheduler writes don't affect FPM cache)
+            $latestTimestamp = getLatestImageTimestamp($airportId, $camIndex);
+            if ($latestTimestamp > 0 && isset($meta['timestamp']) && $meta['timestamp'] === $latestTimestamp) {
+                return $meta;
+            }
+            // Cache is stale - fall through to rebuild
         }
     }
     
