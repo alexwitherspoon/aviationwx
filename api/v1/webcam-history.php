@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/webcam-history.php';
+require_once __DIR__ . '/../../lib/webcam-metadata.php';
 
 /**
  * Handle GET /v1/airports/{id}/webcams/{cam}/history request
@@ -105,12 +106,30 @@ function handleGetFrameList(string $airportId, int $camIndex, array $airport): v
     
     $frameList = [];
     foreach ($frames as $frame) {
+        // Get available variants for this frame (height-based)
+        $availableVariants = getAvailableVariants($airportId, $camIndex, $frame['timestamp']);
+        $variantList = [];
+        if (!empty($availableVariants)) {
+            foreach ($availableVariants as $variant => $formats) {
+                if ($variant === 'original') {
+                    $variantList[] = 'original';
+                } elseif (is_numeric($variant)) {
+                    $variantList[] = (int)$variant;
+                }
+            }
+        }
+        
+        // If no variants found, default to original
+        if (empty($variantList)) {
+            $variantList = ['original'];
+        }
+        
         $frameList[] = [
             'timestamp' => $frame['timestamp'],
             'timestamp_iso' => gmdate('c', $frame['timestamp']),
             'url' => '/v1/airports/' . $airportId . '/webcams/' . $camIndex . '/history?ts=' . $frame['timestamp'],
             'formats' => $frame['formats'] ?? ['jpg'],
-            'variants' => $frame['variants'] ?? ['primary']
+            'variants' => $variantList
         ];
     }
     
@@ -124,6 +143,9 @@ function handleGetFrameList(string $airportId, int $camIndex, array $airport): v
     // Get max frames setting
     $maxFrames = $airport['webcam_history_max_frames'] ?? 12;
     
+    // Get variant heights for metadata
+    $variantHeights = getVariantHeights($airport, $airport['webcams'][$camIndex] ?? []);
+    
     // Build metadata
     $meta = [
         'airport_id' => $airportId,
@@ -131,6 +153,7 @@ function handleGetFrameList(string $airportId, int $camIndex, array $airport): v
         'frame_count' => count($frames),
         'max_frames' => $maxFrames,
         'timezone' => $airport['timezone'] ?? 'UTC',
+        'variantHeights' => $variantHeights,
     ];
     
     // Send cache headers for live data (frames list changes as new frames arrive)
@@ -160,36 +183,33 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
         $format = 'jpg';
     }
     
-    $size = $_GET['size'] ?? 'primary';
-    $validSizes = ['thumb', 'small', 'medium', 'large', 'primary', 'full'];
-    if (!in_array($size, $validSizes)) {
-        $size = 'primary';
+    // Get requested size (variant) - supports height-based variants or 'original'
+    $size = $_GET['size'] ?? 'original';
+    
+    // Validate size: numeric height or 'original'
+    if ($size !== 'original' && (!is_numeric($size) || (int)$size < 1 || (int)$size > 5000)) {
+        $size = 'original';
     }
     
-    // History images are stored in the camera cache directory (unified storage)
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+    // Get image path for requested size using new variant system
+    $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $format);
     
-    // Try variant-based file first, fall back to primary, then old naming
-    $frameFile = $cacheDir . '/' . $timestamp . '_' . $size . '.' . $format;
-    if (!file_exists($frameFile)) {
-        if ($size !== 'primary') {
-            $frameFile = $cacheDir . '/' . $timestamp . '_primary.' . $format;
-        }
-        if (!file_exists($frameFile) && $format !== 'jpg') {
-            $frameFile = $cacheDir . '/' . $timestamp . '_' . $size . '.jpg';
-            $format = 'jpg';
-        }
-        if (!file_exists($frameFile)) {
-            // Fallback to old naming
-            $frameFile = $cacheDir . '/' . $timestamp . '.' . $format;
-            if (!file_exists($frameFile) && $format !== 'jpg') {
-                $frameFile = $cacheDir . '/' . $timestamp . '.jpg';
-                $format = 'jpg';
-            }
-        }
+    // Fall back to original if variant doesn't exist
+    if ($cacheFile === null && $size !== 'original') {
+        $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, 'original', $format);
+        $size = 'original';
     }
     
-    if (!file_exists($frameFile)) {
+    // Fall back to JPG if requested format doesn't exist
+    if ($cacheFile === null && $format !== 'jpg') {
+        $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, 'jpg');
+        if ($cacheFile === null && $size !== 'original') {
+            $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, 'original', 'jpg');
+        }
+        $format = 'jpg';
+    }
+    
+    if ($cacheFile === null || !file_exists($cacheFile)) {
         sendPublicApiError(
             PUBLIC_API_ERROR_INVALID_REQUEST,
             'Historical frame not found for timestamp: ' . $timestamp,
@@ -199,11 +219,18 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
     }
     
     // Get file info
-    $fileSize = filesize($frameFile);
-    $mtime = filemtime($frameFile);
+    $fileSize = filesize($cacheFile);
+    $mtime = filemtime($cacheFile);
+    
+    // Set content type based on format
+    $contentType = match ($format) {
+        'webp' => 'image/webp',
+        'avif' => 'image/avif',
+        default => 'image/jpeg',
+    };
     
     // Send headers
-    header('Content-Type: image/jpeg');
+    header('Content-Type: ' . $contentType);
     header('Content-Length: ' . $fileSize);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     
@@ -214,6 +241,6 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
     header('Access-Control-Allow-Origin: *');
     
     // Output image
-    readfile($frameFile);
+    readfile($cacheFile);
 }
 
