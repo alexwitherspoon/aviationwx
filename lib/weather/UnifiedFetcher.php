@@ -220,7 +220,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             weather_health_track_fetch($airportId, $sourceType, true, $httpCode);
         } else {
             $responses[$sourceKey] = null;
-            recordWeatherFailure($airportId, $sourceType);
+            recordWeatherFailure($airportId, $sourceType, 'transient', $httpCode);
             weather_health_track_fetch($airportId, $sourceType, false, $httpCode);
         }
         

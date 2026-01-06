@@ -122,6 +122,13 @@ function fetchStaticImage($url, $cacheFile) {
     
     if ($error) {
         // Log curl error
+        $errorFile = $cacheFile . '.error.json';
+        @file_put_contents($errorFile, json_encode([
+            'code' => 'curl_error',
+            'reason' => 'CURL error: ' . $error,
+            'http_code' => $httpCode,
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT));
         return false;
     }
     
@@ -138,6 +145,13 @@ function fetchStaticImage($url, $cacheFile) {
                         'confidence' => $errorCheck['confidence'],
                         'reasons' => $errorCheck['reasons']
                     ], 'app');
+                    $errorFile = $cacheFile . '.error.json';
+                    @file_put_contents($errorFile, json_encode([
+                        'code' => 'error_frame',
+                        'reason' => 'Error frame detected: ' . implode(', ', $errorCheck['reasons'] ?? []),
+                        'confidence' => $errorCheck['confidence'],
+                        'timestamp' => time()
+                    ], JSON_PRETTY_PRINT));
                     @unlink($tmpFile);
                     return false;
                 }
@@ -157,6 +171,12 @@ function fetchStaticImage($url, $cacheFile) {
                         'reason' => $exifCheck['reason'],
                         'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
                     ], 'app');
+                    $errorFile = $cacheFile . '.error.json';
+                    @file_put_contents($errorFile, json_encode([
+                        'code' => 'exif_invalid',
+                        'reason' => 'EXIF timestamp invalid: ' . ($exifCheck['reason'] ?? 'unknown'),
+                        'timestamp' => time()
+                    ], JSON_PRETTY_PRINT));
                     @unlink($tmpFile);
                     return false;
                 }
@@ -168,6 +188,12 @@ function fetchStaticImage($url, $cacheFile) {
                     @unlink($tmpFile);
                 }
             }
+            $errorFile = $cacheFile . '.error.json';
+            @file_put_contents($errorFile, json_encode([
+                'code' => 'write_failed',
+                'reason' => 'Failed to write staging file',
+                'timestamp' => time()
+            ], JSON_PRETTY_PRINT));
             return false;
         } elseif (strpos($data, "\x89PNG") === 0) {
             // PNG - convert to JPEG using GD library
@@ -219,6 +245,26 @@ function fetchStaticImage($url, $cacheFile) {
             }
         }
     }
+    
+    // If we get here, the response was not HTTP 200, empty, or not an image
+    $errorFile = $cacheFile . '.error.json';
+    $reason = 'Unknown error';
+    if ($httpCode !== 200) {
+        $reason = "HTTP {$httpCode}";
+    } elseif (empty($data)) {
+        $reason = 'Empty response';
+    } elseif (strlen($data) <= 100) {
+        $reason = 'Response too small (' . strlen($data) . ' bytes)';
+    } else {
+        $reason = 'Not a recognized image format';
+    }
+    @file_put_contents($errorFile, json_encode([
+        'code' => 'fetch_failed',
+        'reason' => $reason,
+        'http_code' => $httpCode,
+        'data_length' => strlen($data ?? ''),
+        'timestamp' => time()
+    ], JSON_PRETTY_PRINT));
     return false;
 }
 
@@ -591,6 +637,22 @@ function fetchMJPEGStream($url, $cacheFile) {
     
     // Validate we got HTTP 200 and have data
     if ($httpCode !== 200 || empty($data) || strlen($data) < 1000) {
+        $errorFile = $cacheFile . '.error.json';
+        $reason = 'HTTP ' . $httpCode;
+        if ($httpCode !== 200) {
+            $reason = "HTTP {$httpCode}";
+        } elseif (empty($data)) {
+            $reason = 'Empty response';
+        } elseif (strlen($data) < 1000) {
+            $reason = 'Response too small (' . strlen($data) . ' bytes)';
+        }
+        @file_put_contents($errorFile, json_encode([
+            'code' => 'fetch_failed',
+            'reason' => $reason,
+            'http_code' => $httpCode,
+            'data_length' => strlen($data),
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT));
         return false;
     }
     
@@ -600,6 +662,12 @@ function fetchMJPEGStream($url, $cacheFile) {
     $jpegEnd = strpos($data, "\xff\xd9");   // JPEG end marker (0xFF 0xD9)
     
     if ($jpegStart === false || $jpegEnd === false || $jpegEnd <= $jpegStart) {
+        $errorFile = $cacheFile . '.error.json';
+        @file_put_contents($errorFile, json_encode([
+            'code' => 'invalid_jpeg',
+            'reason' => 'No valid JPEG frame found in stream',
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT));
         return false; // No valid JPEG found
     }
     
@@ -609,6 +677,14 @@ function fetchMJPEGStream($url, $cacheFile) {
     // Validate JPEG is reasonable size (at least 1KB, max CACHE_FILE_MAX_SIZE)
     $jpegSize = strlen($jpegData);
     if ($jpegSize < 1024 || $jpegSize > CACHE_FILE_MAX_SIZE) {
+        $errorFile = $cacheFile . '.error.json';
+        $reason = $jpegSize < 1024 ? 'JPEG too small (' . $jpegSize . ' bytes)' : 'JPEG too large (' . $jpegSize . ' bytes)';
+        @file_put_contents($errorFile, json_encode([
+            'code' => 'invalid_size',
+            'reason' => $reason,
+            'size' => $jpegSize,
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT));
         return false;
     }
     
@@ -618,6 +694,12 @@ function fetchMJPEGStream($url, $cacheFile) {
     } else {
         $testImg = @imagecreatefromstring($jpegData);
         if ($testImg === false) {
+            $errorFile = $cacheFile . '.error.json';
+            @file_put_contents($errorFile, json_encode([
+                'code' => 'invalid_jpeg_data',
+                'reason' => 'JPEG data failed to parse',
+                'timestamp' => time()
+            ], JSON_PRETTY_PRINT));
             return false; // Invalid JPEG data
         }
         imagedestroy($testImg);
@@ -635,6 +717,13 @@ function fetchMJPEGStream($url, $cacheFile) {
             'confidence' => $errorCheck['confidence'],
             'reasons' => $errorCheck['reasons']
         ], 'app');
+        $errorFile = $cacheFile . '.error.json';
+        @file_put_contents($errorFile, json_encode([
+            'code' => 'error_frame',
+            'reason' => 'Error frame detected: ' . implode(', ', $errorCheck['reasons'] ?? []),
+            'confidence' => $errorCheck['confidence'],
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT));
         @unlink($tmpFile);
         return false;
     }
@@ -653,6 +742,12 @@ function fetchMJPEGStream($url, $cacheFile) {
         aviationwx_log('warning', 'webcam EXIF timestamp invalid for MJPEG, rejecting', [
             'reason' => $exifCheck['reason']
         ], 'app');
+        $errorFile = $cacheFile . '.error.json';
+        @file_put_contents($errorFile, json_encode([
+            'code' => 'exif_invalid',
+            'reason' => 'EXIF timestamp invalid: ' . ($exifCheck['reason'] ?? 'unknown'),
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT));
         @unlink($tmpFile);
         return false;
     }
@@ -686,10 +781,12 @@ function checkCircuitBreaker($airportId, $camIndex) {
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
+ * @param string|null $failureReason Human-readable reason for the failure
  * @return void
  */
-function recordFailure($airportId, $camIndex, $severity = 'transient') {
-    recordWebcamFailure($airportId, $camIndex, $severity);
+function recordFailure($airportId, $camIndex, $severity = 'transient', $httpCode = null, $failureReason = null) {
+    recordWebcamFailure($airportId, $camIndex, $severity, $httpCode, $failureReason);
 }
 
 /**
@@ -802,7 +899,7 @@ function getUniqueTmpFile($cacheFile) {
  * @param string $invocationId Invocation ID for logging
  * @param string $triggerType Trigger type for logging
  * @param bool $isWeb Whether in web context (for output formatting)
- * @return bool True on success, false on failure/skip
+ * @return bool|string True on success, false on failure, 'skip' on circuit breaker/fresh cache
  */
 function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invocationId, $triggerType, $isWeb = false) {
     $lockFp = acquireCameraLock($airportId, $camIndex, 5);
@@ -915,23 +1012,27 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             'refresh_threshold' => $perCamRefresh
         ], 'app');
         releaseCameraLock($lockFp);
-        return false;
+        // Return 'skip' to distinguish from actual failure
+        return 'skip';
     }
     
     $circuit = checkCircuitBreaker($airportId, $camIndex);
     if ($circuit['skip']) {
         $remaining = $circuit['backoff_remaining'];
         $failures = $circuit['failures'] ?? 0;
+        $failureReason = $circuit['last_failure_reason'] ?? 'unknown';
         aviationwx_log('info', 'webcam skipped - circuit breaker open', [
             'invocation_id' => $invocationId,
             'trigger' => $triggerType,
             'airport' => $airportId,
             'cam' => $camIndex,
             'failures' => $failures,
-            'backoff_remaining' => $remaining
+            'backoff_remaining' => $remaining,
+            'last_failure_reason' => $failureReason
         ], 'app');
         releaseCameraLock($lockFp);
-        return false;
+        // Return 'skip' to distinguish from actual failure
+        return 'skip';
     }
     
     aviationwx_log('info', 'webcam fetch attempt', [
@@ -1051,7 +1152,9 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         
         $lastErr = @json_decode(@file_get_contents($stagingFile . '.error.json'), true);
         $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
-        recordFailure($airportId, $camIndex, $sev);
+        $failureReason = $lastErr['reason'] ?? ($lastErr['code'] ?? 'unknown');
+        $httpCode = isset($lastErr['http_code']) ? (int)$lastErr['http_code'] : null;
+        recordFailure($airportId, $camIndex, $sev, $httpCode, $failureReason);
         
         aviationwx_log('error', 'webcam fetch failure', [
             'invocation_id' => $invocationId,
@@ -1131,7 +1234,7 @@ if ($isWorkerMode) {
     $triggerInfo = aviationwx_detect_trigger_type();
     $triggerType = $triggerInfo['trigger'];
     
-    $success = processWebcam($workerAirportId, $workerCamIndex, $cam, $airport, $cacheDir, $invocationId, $triggerType, false);
+    $result = processWebcam($workerAirportId, $workerCamIndex, $cam, $airport, $cacheDir, $invocationId, $triggerType, false);
     
     // Flush variant health counters to cache file before exiting
     // Worker runs as separate CLI process with isolated APCu
@@ -1139,7 +1242,17 @@ if ($isWorkerMode) {
     require_once __DIR__ . '/../lib/variant-health.php';
     variant_health_flush();
     
-    exit($success ? 0 : 1);
+    // Exit codes:
+    //   0 = success
+    //   1 = failure (actual error)
+    //   2 = skipped (circuit breaker, fresh cache, etc. - not a failure)
+    if ($result === true) {
+        exit(0);
+    } elseif ($result === 'skip') {
+        exit(2); // Skip is not a failure
+    } else {
+        exit(1); // Actual failure
+    }
 }
 
 // Normal mode: use process pool
@@ -1231,19 +1344,26 @@ $stats = $pool->waitForAll();
 if ($isWeb) {
     echo "<div style='margin-top: 20px; padding: 15px; background: #fff; border-left: 4px solid #28a745;'>";
     echo "<strong>✓ Done!</strong> Webcam images cached.<br>";
-    echo "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
-    if ($skipped > 0) {
-        echo ", Skipped (already running): {$skipped}";
+    $statsParts = ["Completed: {$stats['completed']}", "Failed: {$stats['failed']}", "Timed out: {$stats['timed_out']}"];
+    if (isset($stats['skipped']) && $stats['skipped'] > 0) {
+        $statsParts[] = "Skipped (circuit breaker/cache): {$stats['skipped']}";
     }
+    if ($skipped > 0) {
+        $statsParts[] = "Skipped (already running): {$skipped}";
+    }
+    echo implode(', ', $statsParts);
     echo "</div>";
 } else {
     // Write progress to stderr for CLI/cron visibility
     @fwrite(STDERR, "\n\nDone! Webcam images cached.\n");
-    $statsLine = "Completed: {$stats['completed']}, Failed: {$stats['failed']}, Timed out: {$stats['timed_out']}";
-    if ($skipped > 0) {
-        $statsLine .= ", Skipped (already running): {$skipped}";
+    $statsParts = ["Completed: {$stats['completed']}", "Failed: {$stats['failed']}", "Timed out: {$stats['timed_out']}"];
+    if (isset($stats['skipped']) && $stats['skipped'] > 0) {
+        $statsParts[] = "Skipped (circuit breaker/cache): {$stats['skipped']}";
     }
-    @fwrite(STDERR, $statsLine . "\n");
+    if ($skipped > 0) {
+        $statsParts[] = "Skipped (already running): {$skipped}";
+    }
+    @fwrite(STDERR, implode(', ', $statsParts) . "\n");
 }
 
 // Log script completion

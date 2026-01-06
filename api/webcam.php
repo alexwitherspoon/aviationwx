@@ -1741,7 +1741,9 @@ function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $ca
         // Failure: record and update backoff
         $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
         $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
-        recordFailure($airportId, $camIndex, $sev);
+        $failureReason = $lastErr['reason'] ?? ($lastErr['code'] ?? 'unknown');
+        $httpCode = isset($lastErr['http_code']) ? (int)$lastErr['http_code'] : null;
+        recordFailure($airportId, $camIndex, $sev, $httpCode, $failureReason);
         
         aviationwx_log('error', 'webcam background refresh failure', [
             'airport' => $airportId,
