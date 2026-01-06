@@ -128,6 +128,24 @@ if [ -d "${CACHE_DIR}" ]; then
     fi
     
     echo "✓ Cache directory initialized"
+    
+    # Clear circuit breaker state on container startup
+    # This ensures fresh circuit breaker state after code deployments
+    # that may change circuit breaker logic
+    echo "Clearing circuit breaker state..."
+    if [ -f /var/www/html/scripts/deploy-clear-circuit-breakers.php ]; then
+        if php /var/www/html/scripts/deploy-clear-circuit-breakers.php 2>&1; then
+            echo "✓ Circuit breakers cleared successfully"
+        else
+            echo "⚠️  Warning: Circuit breaker clearing script returned non-zero exit code"
+            echo "   Continuing startup anyway..."
+        fi
+    else
+        # Fallback: manually clear the main backoff.json file
+        if [ -f "${CACHE_DIR}/backoff.json" ]; then
+            rm -f "${CACHE_DIR}/backoff.json" && echo "✓ Cleared circuit breaker state (fallback)"
+        fi
+    fi
 else
     echo "⚠️  Warning: Cache directory does not exist and could not be created"
 fi
