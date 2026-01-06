@@ -219,6 +219,16 @@
               "enum": ["jpg", "webp", "avif"],
               "default": "jpg"
             }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Image size variant (height in pixels or 'original')",
+            "schema": {
+              "type": "string",
+              "default": "original",
+              "example": "720"
+            }
           }
         ],
         "responses": {
@@ -258,6 +268,26 @@
             "description": "Timestamp of specific frame to retrieve (returns image)",
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "fmt",
+            "in": "query",
+            "description": "Image format (only used with ts parameter)",
+            "schema": {
+              "type": "string",
+              "enum": ["jpg", "webp", "avif"],
+              "default": "jpg"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Image size variant (only used with ts parameter)",
+            "schema": {
+              "type": "string",
+              "default": "original",
+              "example": "720"
             }
           }
         ],
@@ -807,6 +837,88 @@
           }
         }
       },
+      "WeatherHistoryObservation": {
+        "type": "object",
+        "description": "Weather observation in history response (subset of full Weather fields)",
+        "properties": {
+          "obs_time": {
+            "type": "integer",
+            "description": "Unix timestamp of observation",
+            "nullable": true
+          },
+          "obs_time_iso": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of observation",
+            "nullable": true
+          },
+          "temperature": {
+            "type": "number",
+            "nullable": true
+          },
+          "temperature_f": {
+            "type": "number",
+            "nullable": true
+          },
+          "dewpoint": {
+            "type": "number",
+            "nullable": true
+          },
+          "humidity": {
+            "type": "number",
+            "nullable": true
+          },
+          "wind_speed": {
+            "type": "integer",
+            "nullable": true
+          },
+          "wind_direction": {
+            "type": "integer",
+            "nullable": true
+          },
+          "gust_speed": {
+            "type": "integer",
+            "nullable": true
+          },
+          "pressure": {
+            "type": "number",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "number",
+            "nullable": true
+          },
+          "ceiling": {
+            "type": "integer",
+            "nullable": true
+          },
+          "cloud_cover": {
+            "type": "string",
+            "nullable": true
+          },
+          "flight_category": {
+            "type": "string",
+            "enum": ["VFR", "MVFR", "IFR", "LIFR"],
+            "nullable": true
+          },
+          "field_sources": {
+            "type": "object",
+            "description": "Source attribution for each field",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "sources": {
+            "type": "array",
+            "description": "All unique sources used in this observation",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
       "WeatherHistoryResponse": {
         "type": "object",
         "properties": {
@@ -826,14 +938,16 @@
                     "type": "string"
                   },
                   "start_time": {
-                    "type": "integer",
+                    "type": "string",
+                    "format": "date-time",
                     "nullable": true,
-                    "description": "Unix timestamp of first observation"
+                    "description": "ISO 8601 timestamp of first observation"
                   },
                   "end_time": {
-                    "type": "integer",
+                    "type": "string",
+                    "format": "date-time",
                     "nullable": true,
-                    "description": "Unix timestamp of last observation"
+                    "description": "ISO 8601 timestamp of last observation"
                   },
                   "observation_count": {
                     "type": "integer"
@@ -853,7 +967,7 @@
           "observations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Weather"
+              "$ref": "#/components/schemas/WeatherHistoryObservation"
             }
           }
         }
@@ -900,7 +1014,8 @@
                 },
                 "history_url": {
                   "type": "string",
-                  "description": "URL to webcam history endpoint"
+                  "nullable": true,
+                  "description": "URL to webcam history endpoint (null if history disabled)"
                 },
                 "history_enabled": {
                   "type": "boolean"
@@ -920,7 +1035,36 @@
             "type": "boolean"
           },
           "meta": {
-            "$ref": "#/components/schemas/Meta"
+            "allOf": [
+              { "$ref": "#/components/schemas/Meta" },
+              {
+                "type": "object",
+                "properties": {
+                  "airport_id": {
+                    "type": "string"
+                  },
+                  "cam_index": {
+                    "type": "integer"
+                  },
+                  "frame_count": {
+                    "type": "integer"
+                  },
+                  "max_frames": {
+                    "type": "integer"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "variantHeights": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "Available variant heights (e.g., [1080, 720, 360])"
+                  }
+                }
+              }
+            ]
           },
           "frames": {
             "type": "array",
@@ -936,6 +1080,23 @@
                 },
                 "url": {
                   "type": "string"
+                },
+                "formats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Available formats (e.g., ['jpg', 'webp'])"
+                },
+                "variants": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      { "type": "integer" },
+                      { "type": "string", "enum": ["original"] }
+                    ]
+                  },
+                  "description": "Available variant heights and/or 'original'"
                 }
               }
             }
