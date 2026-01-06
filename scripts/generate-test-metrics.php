@@ -39,7 +39,7 @@ $hourData = [
         'weather_requests' => 0,
         'webcam_serves' => 0,
         'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
-        'size_served' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0],
+        'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
         'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
         'cache' => ['hits' => 0, 'misses' => 0]
     ],
@@ -72,13 +72,10 @@ foreach ($airports as $airportId) {
         $avif = rand(5, 25);
         $webcamTotal = $jpg + $webp + $avif;
         
-        // Simulate realistic size distribution (primary most common)
-        $thumb = rand(5, 20);
-        $small = rand(10, 30);
-        $medium = rand(15, 35);
-        $large = rand(5, 15);
-        $primary = rand(40, 100);
-        $full = rand(2, 10);
+        // Simulate realistic size distribution (720p most common, then original)
+        $size720 = rand(40, 100);   // Primary variant (720p)
+        $size360 = rand(15, 35);    // Smaller variant for mobile
+        $original = rand(10, 30);   // Full resolution
         
         $hourData['webcams'][$airportId . '_' . $camIndex] = [
             'by_format' => [
@@ -87,12 +84,9 @@ foreach ($airports as $airportId) {
                 'avif' => $avif
             ],
             'by_size' => [
-                'thumb' => $thumb,
-                'small' => $small,
-                'medium' => $medium,
-                'large' => $large,
-                'primary' => $primary,
-                'full' => $full
+                '720' => $size720,
+                '360' => $size360,
+                'original' => $original
             ]
         ];
         
@@ -100,12 +94,20 @@ foreach ($airports as $airportId) {
         $hourData['global']['format_served']['jpg'] += $jpg;
         $hourData['global']['format_served']['webp'] += $webp;
         $hourData['global']['format_served']['avif'] += $avif;
-        $hourData['global']['size_served']['thumb'] += $thumb;
-        $hourData['global']['size_served']['small'] += $small;
-        $hourData['global']['size_served']['medium'] += $medium;
-        $hourData['global']['size_served']['large'] += $large;
-        $hourData['global']['size_served']['primary'] += $primary;
-        $hourData['global']['size_served']['full'] += $full;
+        
+        // Initialize size keys if needed
+        if (!isset($hourData['global']['size_served']['720'])) {
+            $hourData['global']['size_served']['720'] = 0;
+        }
+        if (!isset($hourData['global']['size_served']['360'])) {
+            $hourData['global']['size_served']['360'] = 0;
+        }
+        if (!isset($hourData['global']['size_served']['original'])) {
+            $hourData['global']['size_served']['original'] = 0;
+        }
+        $hourData['global']['size_served']['720'] += $size720;
+        $hourData['global']['size_served']['360'] += $size360;
+        $hourData['global']['size_served']['original'] += $original;
     }
     
     echo "  - $airportId: $views views, $weather weather, " . count($webcams) . " webcam(s)\n";

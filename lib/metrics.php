@@ -320,7 +320,7 @@ function metrics_flush(): bool {
                 'webcam_requests' => 0,
                 'webcam_serves' => 0,
                 'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
-                'size_served' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0],
+                'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
                 'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
                 'cache' => ['hits' => 0, 'misses' => 0]
             ]
@@ -522,7 +522,7 @@ function metrics_aggregate_daily(string $dateId): bool {
             'weather_requests' => 0,
             'webcam_serves' => 0,
             'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
-            'size_served' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0],
+            'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
             'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0]
         ],
@@ -587,6 +587,9 @@ function metrics_aggregate_daily(string $dateId): bool {
             $dailyData['global']['format_served'][$fmt] += $count;
         }
         foreach ($global['size_served'] ?? [] as $sz => $count) {
+            if (!isset($dailyData['global']['size_served'][$sz])) {
+                $dailyData['global']['size_served'][$sz] = 0;
+            }
             $dailyData['global']['size_served'][$sz] += $count;
         }
         foreach ($global['browser_support'] ?? [] as $type => $count) {
@@ -638,7 +641,7 @@ function metrics_aggregate_weekly(string $weekId): bool {
             'weather_requests' => 0,
             'webcam_serves' => 0,
             'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
-            'size_served' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0],
+            'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
             'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0]
         ],
@@ -704,6 +707,9 @@ function metrics_aggregate_weekly(string $weekId): bool {
             $weeklyData['global']['format_served'][$fmt] += $count;
         }
         foreach ($global['size_served'] ?? [] as $sz => $count) {
+            if (!isset($weeklyData['global']['size_served'][$sz])) {
+                $weeklyData['global']['size_served'][$sz] = 0;
+            }
             $weeklyData['global']['size_served'][$sz] += $count;
         }
         foreach ($global['browser_support'] ?? [] as $type => $count) {
@@ -750,7 +756,7 @@ function metrics_get_rolling(int $days = 7): array {
             'weather_requests' => 0,
             'webcam_serves' => 0,
             'format_served' => ['jpg' => 0, 'webp' => 0, 'avif' => 0],
-            'size_served' => ['thumb' => 0, 'small' => 0, 'medium' => 0, 'large' => 0, 'primary' => 0, 'full' => 0],
+            'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
             'browser_support' => ['avif' => 0, 'webp' => 0, 'jpg_only' => 0],
             'cache' => ['hits' => 0, 'misses' => 0]
         ],
@@ -815,6 +821,9 @@ function metrics_get_rolling(int $days = 7): array {
             $result['global']['format_served'][$fmt] += $count;
         }
         foreach ($global['size_served'] ?? [] as $sz => $count) {
+            if (!isset($result['global']['size_served'][$sz])) {
+                $result['global']['size_served'][$sz] = 0;
+            }
             $result['global']['size_served'][$sz] += $count;
         }
         foreach ($global['browser_support'] ?? [] as $type => $count) {
@@ -881,6 +890,9 @@ function metrics_get_rolling(int $days = 7): array {
             $result['global']['format_served'][$fmt] += $count;
         }
         foreach ($global['size_served'] ?? [] as $sz => $count) {
+            if (!isset($result['global']['size_served'][$sz])) {
+                $result['global']['size_served'][$sz] = 0;
+            }
             $result['global']['size_served'][$sz] += $count;
         }
         foreach ($global['browser_support'] ?? [] as $type => $count) {
