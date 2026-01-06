@@ -8,6 +8,8 @@
         failOnRisky="false"
         failOnWarning="false"
         beStrictAboutOutputDuringTests="false"
+        displayDetailsOnTestsThatTriggerDeprecations="true"
+        displayDetailsOnPhpunitDeprecations="true"
          requireCoverageMetadata="false"
          beStrictAboutCoverageMetadata="false">
     
