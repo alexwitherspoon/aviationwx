@@ -810,8 +810,11 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 
 **File Naming**: 
 - Current: `current.{ext}` - symlink to latest timestamped image
+- Original: `original.{ext}` - symlink to latest timestamped original
 - Timestamped: `{timestamp}_{variant}.{ext}` - actual image files
-- Example: `cache/webcams/kspb/0/current.jpg`, `cache/webcams/kspb/0/1703980800_primary.jpg`
+- Example: `cache/webcams/kspb/0/current.jpg` → `1703980800_720.jpg`
+- Example: `cache/webcams/kspb/0/original.jpg` → `1703980800_original.jpg`
+- Variants: `original`, `1080`, `720`, `360` (height-based)
 - Formats: JPEG (`.jpg`), WebP (`.webp`), AVIF (`.avif`)
 
 **Atomic Writes**:
@@ -819,6 +822,13 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Validates write success
 - Atomic rename to final filename
 - Prevents corruption from concurrent writes
+
+**EXIF Metadata Preservation**:
+- Original images have EXIF metadata (DateTimeOriginal, Description, Rights, etc.)
+- When generating variants and formats, EXIF is copied using `exiftool -TagsFromFile`
+- Ensures all cached files (variants, WebP, AVIF) have correct capture timestamps
+- Critical for accurate "Last Updated" display on frontend
+- Function: `copyExifMetadata($source, $dest)` in `lib/exif-utils.php`
 
 ### Format Generation
 
@@ -828,6 +838,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Default: Formats disabled (only JPEG generated) to control resource usage
 - All generation runs synchronously in parallel with `nice -n 10` priority (low priority to avoid interfering with normal operations)
 - Mtime automatically synced to match source image's capture time (EXIF or filemtime)
+- EXIF metadata is copied from source to all generated formats using `copyExifMetadata()`
 - Formats generated in background, may not be immediately available
 - Generation jobs are logged (start and result) for monitoring and troubleshooting
 
@@ -837,6 +848,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Compression: Level 6 (0-6 scale)
 - Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
 - Mtime sync: `touch -t {timestamp} output.webp` (chained after generation)
+- EXIF metadata copied from source JPEG using `exiftool -TagsFromFile`
 - Only runs if `webcam_generate_webp` is enabled in config
 
 **JPEG to AVIF**:
@@ -846,14 +858,47 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - Speed: cpu-used 4 (balanced speed vs quality, 0-8 scale)
 - Priority: `nice -n 10` (low priority to avoid interfering with normal operations)
 - Mtime sync: `touch -t {timestamp} output.avif` (chained after generation)
+- EXIF metadata copied from source JPEG using `exiftool -TagsFromFile`
 - Only runs if `webcam_generate_avif` is enabled in config
 - Note: AVIF generation can take 15+ seconds; may timeout on slow systems
+
+**Variant Generation**:
+- Original images are downscaled to configured heights (default: 1080, 720, 360)
+- Width calculated to preserve aspect ratio, capped at 3840px for ultra-wide cameras
+- EXIF metadata is copied from original to all variants using `copyExifMetadata()`
+- Variants stored as `{timestamp}_{height}.{format}` (e.g., `1703700000_720.jpg`)
+- `current.jpg` symlink points to primary variant (720p by default)
+- `original.jpg` symlink points to full-resolution original
 
 **Purpose**: 
 - AVIF provides best compression (smallest file size, best quality)
 - WebP provides good compression (smaller than JPEG)
 - JPEG served as fallback for older browsers
 - Format priority: AVIF → WebP → JPEG (based on browser support and availability)
+- Variants reduce bandwidth for mobile/small displays
+
+### Webcam Metadata Caching
+
+**Purpose**: Store and serve webcam metadata (timestamp, name, formats) efficiently.
+
+**APCu Cache** (`lib/webcam-metadata.php`):
+- Webcam metadata cached in APCu with 24-hour TTL
+- Key format: `webcam_meta_{airportId}_{camIndex}`
+- Stores: timestamp, name, available formats, variant information
+
+**CLI/FPM Isolation Handling**:
+- PHP CLI (scheduler) and PHP-FPM (web) have separate APCu memory pools
+- When scheduler updates images, FPM's APCu cache may have stale metadata
+- Solution: `getWebcamMetadata()` validates cached timestamp against latest file
+- If cached timestamp doesn't match `getLatestImageTimestamp()`, cache is rebuilt
+- Ensures frontend always displays accurate "Last Updated" times
+
+**Metadata Retrieval Flow**:
+1. Check APCu for cached metadata
+2. Validate cached timestamp matches latest image file timestamp
+3. If stale or missing, rebuild metadata from file
+4. Store rebuilt metadata in APCu
+5. Return metadata to caller
 
 ### Cache Serving
 
