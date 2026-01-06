@@ -2480,6 +2480,21 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
             
+            // Validate webcam_variant_heights (global default)
+            if (isset($cfg['webcam_variant_heights'])) {
+                if (!is_array($cfg['webcam_variant_heights'])) {
+                    $errors[] = "config.webcam_variant_heights must be an array";
+                } else {
+                    foreach ($cfg['webcam_variant_heights'] as $height) {
+                        $height = (int)$height;
+                        if ($height < 1 || $height > 5000) {
+                            $errors[] = "config.webcam_variant_heights must contain integers between 1 and 5000";
+                            break;
+                        }
+                    }
+                }
+            }
+            
             // Validate default_preferences
             if (isset($cfg['default_preferences'])) {
                 $prefErrors = validateDefaultPreferences($cfg['default_preferences'], 'config');
@@ -2861,6 +2876,21 @@ function validateAirportsJsonStructure(array $config): array {
             }
         }
         
+        // Validate webcam_variant_heights (per-airport override)
+        if (isset($airport['webcam_variant_heights'])) {
+            if (!is_array($airport['webcam_variant_heights'])) {
+                $errors[] = "Airport '{$airportCode}' webcam_variant_heights must be an array";
+            } else {
+                foreach ($airport['webcam_variant_heights'] as $height) {
+                    $height = (int)$height;
+                    if ($height < 1 || $height > 5000) {
+                        $errors[] = "Airport '{$airportCode}' webcam_variant_heights must contain integers between 1 and 5000";
+                        break;
+                    }
+                }
+            }
+        }
+        
         // Validate default_preferences (per-airport overrides)
         if (isset($airport['default_preferences'])) {
             $prefErrors = validateDefaultPreferences($airport['default_preferences'], "Airport '{$airportCode}'");
@@ -3108,7 +3138,7 @@ function validateAirportsJsonStructure(array $config): array {
                         
                         if ($webcamType === 'push') {
                             // Define allowed fields for push cameras
-                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds'];
+                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds', 'variant_heights'];
                             
                             // Check for unknown fields in push webcam
                             foreach ($webcam as $key => $value) {
@@ -3149,7 +3179,7 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                         } elseif ($webcamType === 'rtsp') {
                             // Define allowed fields for RTSP cameras
-                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout'];
+                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout', 'variant_heights'];
                             
                             // Check for unknown fields in RTSP webcam
                             foreach ($webcam as $key => $value) {
@@ -3166,7 +3196,7 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                         } else {
                             // Define allowed fields for pull cameras (http/mjpeg/static_jpeg/static_png)
-                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds'];
+                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds', 'variant_heights'];
                             
                             // Check for unknown fields in pull webcam
                             foreach ($webcam as $key => $value) {
@@ -3188,6 +3218,21 @@ function validateAirportsJsonStructure(array $config): array {
                             $rs = $webcam['refresh_seconds'];
                             if (!is_int($rs) || $rs < 1) {
                                 $errors[] = "Airport '{$airportCode}' webcam[{$idx}] refresh_seconds must be positive integer";
+                            }
+                        }
+                        
+                        // Validate variant_heights
+                        if (isset($webcam['variant_heights'])) {
+                            if (!is_array($webcam['variant_heights'])) {
+                                $errors[] = "Airport '{$airportCode}' webcam[{$idx}] variant_heights must be an array";
+                            } else {
+                                foreach ($webcam['variant_heights'] as $height) {
+                                    $height = (int)$height;
+                                    if ($height < 1 || $height > 5000) {
+                                        $errors[] = "Airport '{$airportCode}' webcam[{$idx}] variant_heights must contain integers between 1 and 5000";
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
