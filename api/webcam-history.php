@@ -54,30 +54,35 @@ $supportedFormats = [
 ];
 
 // Get parameters
-$airportId = isset($_GET['id']) ? strtolower(trim($_GET['id'])) : '';
+$rawIdentifier = isset($_GET['id']) ? trim($_GET['id']) : '';
 $camIndex = isset($_GET['cam']) ? intval($_GET['cam']) : 0;
 $timestamp = isset($_GET['ts']) ? intval($_GET['ts']) : null;
 $requestedFormat = isset($_GET['fmt']) ? strtolower(trim($_GET['fmt'])) : 'jpg';
 $requestedSize = isset($_GET['size']) ? trim($_GET['size']) : 'original';
 
-// Validate airport ID
-if (empty($airportId)) {
+// Validate airport ID parameter exists
+if (empty($rawIdentifier)) {
     header('Content-Type: application/json');
     http_response_code(400);
     echo json_encode(['error' => 'Missing airport id parameter']);
     exit;
 }
 
-// Load config and validate airport exists
-$config = loadConfig();
-if ($config === null || !isset($config['airports'][$airportId])) {
+// Find airport by any identifier type (ICAO, IATA, FAA, or airport ID)
+// This handles case-insensitive lookups properly
+$result = findAirportByIdentifier($rawIdentifier);
+if ($result === null || !isset($result['airport']) || !isset($result['airportId'])) {
     header('Content-Type: application/json');
     http_response_code(404);
     echo json_encode(['error' => 'Airport not found']);
     exit;
 }
 
-$airport = $config['airports'][$airportId];
+$airport = $result['airport'];
+$airportId = $result['airportId'];
+
+// Load config for later use (history settings, etc.)
+$config = loadConfig();
 
 // Validate camera index exists
 if (!isset($airport['webcams']) || !isset($airport['webcams'][$camIndex])) {
