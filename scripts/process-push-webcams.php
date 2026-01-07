@@ -154,6 +154,110 @@ function checkInodeUsage($path) {
 }
 
 /**
+ * Recursively find all image files in a directory and its subdirectories
+ * 
+ * Handles FTP/camera uploads that create date-based subfolder structures
+ * like /2026/01/06/image.jpg. Includes depth limit to prevent runaway recursion.
+ * 
+ * @param string $dir Base directory to search
+ * @param int $maxDepth Maximum recursion depth (default 10, handles year/month/day structures)
+ * @param int $currentDepth Current recursion depth (internal use)
+ * @return array List of image file paths found
+ */
+function recursiveGlobImages($dir, $maxDepth = 10, $currentDepth = 0) {
+    $files = [];
+    
+    if (!is_dir($dir) || $currentDepth > $maxDepth) {
+        return $files;
+    }
+    
+    // Normalize directory path to ensure trailing slash
+    $dir = rtrim($dir, '/') . '/';
+    
+    // Find images in current directory
+    $images = glob($dir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE);
+    if ($images !== false) {
+        $files = array_merge($files, $images);
+    }
+    
+    // Recurse into subdirectories
+    $subdirs = glob($dir . '*', GLOB_ONLYDIR);
+    if ($subdirs !== false) {
+        foreach ($subdirs as $subdir) {
+            $files = array_merge($files, recursiveGlobImages($subdir, $maxDepth, $currentDepth + 1));
+        }
+    }
+    
+    return $files;
+}
+
+/**
+ * Recursively clean up empty directories
+ * 
+ * Removes empty subdirectories from bottom-up. Used after cleaning files
+ * to prevent orphaned empty folder structures from date-based uploads.
+ * 
+ * @param string $dir Directory to clean
+ * @param string $stopAt Stop cleaning at this directory (don't delete it or parents)
+ * @return int Number of directories removed
+ */
+function cleanupEmptyDirectories($dir, $stopAt) {
+    $removed = 0;
+    
+    if (!is_dir($dir)) {
+        return $removed;
+    }
+    
+    // Normalize paths for comparison using realpath
+    // realpath() returns false if path doesn't exist, so handle gracefully
+    $realDir = realpath($dir);
+    $realStopAt = realpath($stopAt);
+    
+    if ($realDir === false || $realStopAt === false) {
+        // Can't resolve paths - skip to avoid accidental deletion
+        return $removed;
+    }
+    
+    $realDir = rtrim($realDir, '/');
+    $realStopAt = rtrim($realStopAt, '/');
+    
+    // Don't delete the stop directory itself
+    if ($realDir === $realStopAt) {
+        return $removed;
+    }
+    
+    // Don't delete parent directories of stopAt
+    // If stopAt starts with dir/, then dir is a parent of stopAt
+    if (strpos($realStopAt, $realDir . '/') === 0) {
+        return $removed;
+    }
+    
+    // First, recurse into subdirectories (depth-first to clean children before parents)
+    $subdirs = glob($realDir . '/*', GLOB_ONLYDIR);
+    if ($subdirs !== false) {
+        foreach ($subdirs as $subdir) {
+            $removed += cleanupEmptyDirectories($subdir, $stopAt);
+        }
+    }
+    
+    // Check if directory is now empty (no files, no subdirs)
+    $contents = @scandir($realDir);
+    if ($contents !== false) {
+        // Filter out . and ..
+        $contents = array_diff($contents, ['.', '..']);
+        if (empty($contents)) {
+            // Directory is empty - remove it
+            if (@rmdir($realDir)) {
+                $removed++;
+                aviationwx_log('debug', 'removed empty directory', ['dir' => $realDir], 'app');
+            }
+        }
+    }
+    
+    return $removed;
+}
+
+/**
  * Get last processed time for a camera
  * 
  * Retrieves the timestamp of the last successfully processed image for a camera.
@@ -229,6 +333,7 @@ function updateLastProcessedTime($airportId, $camIndex) {
 /**
  * Find newest valid image in upload directory
  * Optimized to exit quickly if no new files are found
+ * Supports recursive search for date-based subfolder structures (year/month/day)
  * 
  * @param string $uploadDir Upload directory path
  * @param int $maxWaitSeconds Maximum wait time for file to be fully written
@@ -242,7 +347,8 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
         return null;
     }
     
-    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE);
+    // Use recursive search to find images in subfolders (handles date-based folder structures)
+    $files = recursiveGlobImages($uploadDir);
     if (empty($files)) {
         return null; // No files - exit immediately
     }
@@ -541,6 +647,7 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
  * For push cameras, multiple images may accumulate between processing intervals.
  * When history is enabled, process all valid images with full variant generation.
  * This captures intermediate frames with all size variants for high-quality timelapse.
+ * Supports recursive search for date-based subfolder structures (year/month/day).
  * 
  * @param string $uploadDir Upload directory path
  * @param string $airportId Airport ID (e.g., 'kspb')
@@ -559,7 +666,8 @@ function harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig = n
         return 0;
     }
     
-    $files = glob($uploadDir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE);
+    // Use recursive search to find images in subfolders (handles date-based folder structures)
+    $files = recursiveGlobImages($uploadDir);
     if (empty($files)) {
         return 0;
     }
@@ -788,9 +896,10 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
 /**
  * Clean up upload directory
  * 
- * Removes old files from upload directory. Only deletes files with modification time
- * older than or equal to the specified cutoff time. This prevents race conditions where
- * new files might be deleted while still being uploaded.
+ * Removes old files from upload directory and its subdirectories. Only deletes files 
+ * with modification time older than or equal to the specified cutoff time. This prevents 
+ * race conditions where new files might be deleted while still being uploaded.
+ * Also cleans up empty subdirectories left after file deletion (handles date-based folders).
  * 
  * @param string $uploadDir Upload directory path
  * @param string|null $keepFile File to keep by name (optional, legacy parameter)
@@ -814,11 +923,27 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null, $maxMtime = null) 
         return;
     }
     
-    $files = glob($uploadDir . '*');
-    if ($files === false) {
-        aviationwx_log('warning', 'cleanupUploadDirectory: glob failed', [
-            'dir' => $uploadDir
-        ], 'app');
+    // Use recursive search to find all files including in date-based subfolders
+    $files = recursiveGlobImages($uploadDir);
+    // Also get any other files (not just images) in the top-level directory
+    $topLevelFiles = glob($uploadDir . '*');
+    if ($topLevelFiles !== false) {
+        foreach ($topLevelFiles as $file) {
+            if (is_file($file) && !in_array($file, $files)) {
+                $files[] = $file;
+            }
+        }
+    }
+    
+    if (empty($files)) {
+        // No files, but check for empty directories to clean up
+        $dirsRemoved = cleanupEmptyDirectories($uploadDir, $uploadDir);
+        if ($dirsRemoved > 0) {
+            aviationwx_log('debug', 'cleanupUploadDirectory: removed empty directories', [
+                'dir' => $uploadDir,
+                'dirs_removed' => $dirsRemoved
+            ], 'app');
+        }
         return;
     }
     
@@ -868,11 +993,15 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null, $maxMtime = null) 
         }
     }
     
-    if ($deletedCount > 0 || $skippedCount > 0) {
+    // Clean up empty directories left after file deletion
+    $dirsRemoved = cleanupEmptyDirectories($uploadDir, $uploadDir);
+    
+    if ($deletedCount > 0 || $skippedCount > 0 || $dirsRemoved > 0) {
         aviationwx_log('debug', 'cleanupUploadDirectory: cleanup completed', [
             'dir' => $uploadDir,
-            'deleted' => $deletedCount,
-            'skipped_newer' => $skippedCount,
+            'files_deleted' => $deletedCount,
+            'files_skipped_newer' => $skippedCount,
+            'dirs_removed' => $dirsRemoved,
             'max_mtime' => $maxMtime
         ], 'app');
     }
@@ -906,8 +1035,9 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         return false; // No directory - exit immediately
     }
     
-    // Quick check: if no image files exist, exit immediately (no waiting)
-    $hasFiles = !empty(glob($uploadDir . '*.{jpg,jpeg,png,webp}', GLOB_BRACE));
+    // Quick check: if no image files exist (including in subfolders), exit immediately
+    // Use recursive search to handle date-based folder structures from FTP uploads
+    $hasFiles = !empty(recursiveGlobImages($uploadDir));
     if (!$hasFiles) {
         return false; // No files - exit immediately
     }

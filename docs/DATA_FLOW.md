@@ -719,6 +719,10 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
   - **Direct camera uploads**: Cameras upload via SFTP/FTP/FTPS with local time EXIF
   - **Bridge uploads**: AviationWX-Bridge uploads with UTC EXIF and marker in UserComment
 - **Supported Upload Formats**: JPEG, PNG, WebP
+- **Subfolder Support**: Cameras that create date-based folder structures (e.g., `2026/01/06/image.jpg`) are fully supported:
+  - Recursive search up to 10 levels deep
+  - Files found and processed regardless of folder structure
+  - Empty folders automatically cleaned up after processing
 - **Processing**:
   - PNG always converted to JPEG (we don't serve PNG)
   - Original format preserved for JPEG, WebP (no redundant conversion)

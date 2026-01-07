@@ -467,6 +467,8 @@ For cameras that upload images to the server:
 
 Cameras upload directly to `/` (chroot root). Files are processed automatically.
 
+**Subfolder support:** Cameras that create date-based folder structures (e.g., `2026/01/06/image.jpg`) are fully supported. The system recursively searches up to 10 levels deep and automatically cleans up empty folders after processing.
+
 ### Webcam Variants
 
 The system automatically generates multiple image sizes (variants) from the original image to optimize bandwidth and display performance. Variants are identified by height in pixels to support diverse aspect ratios.
