@@ -323,16 +323,52 @@ Affects daily statistics reset (midnight), sunrise/sunset display. Use PHP timez
 
 `mac_address` is optional—uses first device if omitted.
 
-### Davis WeatherLink
+### Davis WeatherLink v2 (Newer Devices)
+
+For WeatherLink Live, WeatherLink Console, and EnviroMonitor systems.
 
 ```json
 "weather_source": {
-  "type": "weatherlink",
+  "type": "weatherlink_v2",
   "api_key": "your-api-key",
   "api_secret": "your-api-secret",
-  "station_id": "your-station-id"
+  "station_id": "123456"
 }
 ```
+
+**Getting v2 Credentials:**
+
+| Field | Where to Find It |
+|-------|------------------|
+| `api_key` | WeatherLink Account page → "Generate v2 Key" |
+| `api_secret` | Generated with API Key (shown only once!) |
+| `station_id` | **We'll look this up for you** - just provide your API Key and Secret |
+
+The Station ID is a numeric value not displayed in the WeatherLink web interface.
+When you submit your API Key and Secret, we'll use the API to discover your Station ID.
+
+See the [Weather Station Guide](../guides/09-weather-station-configuration.md) for detailed step-by-step instructions.
+
+### Davis WeatherLink v1 (Legacy Devices)
+
+For older devices: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial loggers.
+
+```json
+"weather_source": {
+  "type": "weatherlink_v1",
+  "device_id": "001D0A12345678",
+  "api_token": "your-api-token"
+}
+```
+
+**Getting v1 Credentials:**
+
+| Field | Where to Find It |
+|-------|------------------|
+| `device_id` | Printed on a label on your physical device (12-16 characters) |
+| `api_token` | WeatherLink Account page → API Token section |
+
+See the [Weather Station Guide](../guides/09-weather-station-configuration.md) for photos and detailed instructions.
 
 ### PWSWeather (AerisWeather)
 

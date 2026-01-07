@@ -309,41 +309,129 @@ With specific device (if you have multiple):
 
 ## Davis WeatherLink - What We Need
 
-Professional-grade option for long-term, high-reliability installs.
+Professional-grade option for long-term, high-reliability installs. Davis offers two API versions depending on your hardware.
 
-### Required Information
+### Which API Version Do I Need?
 
-| Field | Description | Where to Find It |
-|-------|-------------|------------------|
-| `station_id` | Your WeatherLink station ID | WeatherLink developer portal |
-| `api_key` | v2 API key | WeatherLink developer portal |
-| `api_secret` | v2 API secret | WeatherLink developer portal |
+| Device Type | API Version | Type Value |
+|-------------|-------------|------------|
+| **WeatherLink Live** | v2 API | `weatherlink_v2` |
+| **WeatherLink Console** | v2 API | `weatherlink_v2` |
+| **EnviroMonitor** | v2 API | `weatherlink_v2` |
+| **Vantage Connect** | v1 API | `weatherlink_v1` |
+| **WeatherLinkIP** | v1 API | `weatherlink_v1` |
+| **WeatherLink USB/Serial** | v1 API | `weatherlink_v1` |
 
-### How to Get Your API Credentials
+> **Note:** If you're unsure which version you need, try v2 first. Most modern Davis setups use the v2 API.
 
-1. **Log into WeatherLink**: [weatherlink.com](https://www.weatherlink.com)
-2. **Go to the developer portal**: [weatherlink.com/api-explorer](https://www.weatherlink.com/api-explorer)
-3. **Generate API v2 credentials**:
-   - Click "Generate v2 API Key"
-   - Copy both the `API Key` and `API Secret`
-4. **Find your Station ID**:
-   - In the API Explorer, find your station in the station list
-   - Note the station ID number
+---
 
-### Configuration Example
+### WeatherLink v2 API (Newer Devices)
+
+For WeatherLink Live, WeatherLink Console, and EnviroMonitor systems.
+
+#### What You'll Need to Provide
+
+| Information | Description | How to Get It |
+|-------------|-------------|---------------|
+| **API Key** | Your v2 API key | WeatherLink account page |
+| **API Secret** | Your v2 API secret | WeatherLink account page |
+| **Station ID** | Numeric station identifier | We'll look this up for you! |
+
+#### Step-by-Step: Getting Your v2 API Credentials
+
+**Step 1: Log into WeatherLink**
+
+1. Go to [weatherlink.com](https://www.weatherlink.com) and log in
+2. Click your **username** in the top-right corner
+3. Select **"Account"** from the dropdown menu
+
+**Step 2: Generate Your API Key and Secret**
+
+1. On your Account page, look for the **"API v2 Key"** section
+2. If you don't have a key yet, click **"Generate v2 Key"**
+3. Copy both values:
+   - **API Key** - a long string of letters and numbers
+   - **API Secret** - another long string (keep this private!)
+
+> ⚠️ **Important:** The API Secret is only shown once when generated. Save it somewhere safe!
+
+**Step 3: Finding Your Station ID**
+
+The Station ID is a numeric value that identifies your specific station. Unlike the API credentials, the Station ID is not displayed in the WeatherLink web interface.
+
+**Don't worry! We can look it up for you.** Just provide your API Key and API Secret when you submit your station, and we'll automatically discover your Station ID.
+
+Alternatively, if you have multiple stations and need to identify a specific one:
+1. Use the [WeatherLink API v2 Playground](https://api.weatherlink.com/v2/stations) (requires your API credentials)
+2. Or ask our team and we'll help you find the correct Station ID
+
+#### Example Configuration (v2)
+
+Once you have all the information, your configuration will look like this:
 
 ```json
 "weather_source": {
-  "type": "weatherlink",
+  "type": "weatherlink_v2",
   "station_id": "123456",
-  "api_key": "your-api-key-here",
-  "api_secret": "your-api-secret-here"
+  "api_key": "abc123def456...",
+  "api_secret": "xyz789..."
 }
 ```
 
+---
+
+### WeatherLink v1 API (Legacy Devices)
+
+For older devices: Vantage Connect, WeatherLinkIP, and WeatherLink USB/Serial data loggers.
+
+#### What You'll Need to Provide
+
+| Information | Description | How to Get It |
+|-------------|-------------|---------------|
+| **Device ID (DID)** | 12-16 character code | Printed on your device |
+| **API Token** | Authentication token | WeatherLink account page |
+
+#### Step-by-Step: Getting Your v1 Credentials
+
+**Step 1: Find Your Device ID (DID)**
+
+The Device ID is printed on a physical label on your hardware:
+
+| Device | Where to Look |
+|--------|---------------|
+| **WeatherLinkIP** | Label on the side of the data logger module |
+| **Vantage Connect** | Label inside the plastic cover, or on the manual's front cover |
+| **USB/Serial Logger** | Label on the data logger hardware |
+
+The DID looks like: `001D0A12345678` (12-16 alphanumeric characters)
+
+> 💡 **Tip:** Take a photo of the label with your phone so you have it handy!
+
+**Step 2: Get Your API Token**
+
+1. Go to [weatherlink.com](https://www.weatherlink.com) and log in
+2. Click your **username** in the top-right corner
+3. Select **"Account"** from the dropdown menu
+4. Look for the **"API Token"** section
+5. Copy your API Token
+
+#### Example Configuration (v1)
+
+```json
+"weather_source": {
+  "type": "weatherlink_v1",
+  "device_id": "001D0A12345678",
+  "api_token": "ABCDEF123456..."
+}
+```
+
+---
+
 ### API Documentation
 
-- [WeatherLink v2 API](https://weatherlink.github.io/v2-api/)
+- [WeatherLink v2 API Documentation](https://weatherlink.github.io/v2-api/)
+- [WeatherLink v1 API Documentation (PDF)](https://www.weatherlink.com/static/docs/APIdocumentation.pdf)
 
 ---
 

@@ -180,12 +180,22 @@ function validateAirportConfig($formData) {
                 $errors[] = 'Ambient Weather MAC Address must be a valid format (e.g., AA:BB:CC:DD:EE:FF)';
             }
         }
-    } elseif ($weatherType === 'weatherlink') {
+    } elseif ($weatherType === 'weatherlink_v2') {
         if (empty(trim($formData['weatherlink_api_key'] ?? ''))) {
-            $errors[] = 'WeatherLink API Key is required';
+            $errors[] = 'WeatherLink v2 API Key is required';
         }
         if (empty(trim($formData['weatherlink_api_secret'] ?? ''))) {
-            $errors[] = 'WeatherLink API Secret is required';
+            $errors[] = 'WeatherLink v2 API Secret is required';
+        }
+        if (empty(trim($formData['weatherlink_station_id'] ?? ''))) {
+            $errors[] = 'WeatherLink v2 Station ID is required';
+        }
+    } elseif ($weatherType === 'weatherlink_v1') {
+        if (empty(trim($formData['weatherlink_v1_device_id'] ?? ''))) {
+            $errors[] = 'WeatherLink v1 Device ID is required';
+        }
+        if (empty(trim($formData['weatherlink_v1_api_token'] ?? ''))) {
+            $errors[] = 'WeatherLink v1 API Token is required';
         }
     } elseif ($weatherType === 'synopticdata') {
         if (empty(trim($formData['synopticdata_api_token'] ?? ''))) {
@@ -415,13 +425,15 @@ function generateConfigSnippet($formData) {
             if (!empty($macAddress)) {
                 $airport['weather_source']['mac_address'] = $macAddress;
             }
-        } elseif ($weatherType === 'weatherlink') {
-            $airport['weather_source']['type'] = 'weatherlink';
+        } elseif ($weatherType === 'weatherlink_v2') {
+            $airport['weather_source']['type'] = 'weatherlink_v2';
             $airport['weather_source']['api_key'] = trim($formData['weatherlink_api_key'] ?? '');
             $airport['weather_source']['api_secret'] = trim($formData['weatherlink_api_secret'] ?? '');
-            if (!empty($formData['weatherlink_station_id'] ?? '')) {
-                $airport['weather_source']['station_id'] = trim($formData['weatherlink_station_id']);
-            }
+            $airport['weather_source']['station_id'] = trim($formData['weatherlink_station_id'] ?? '');
+        } elseif ($weatherType === 'weatherlink_v1') {
+            $airport['weather_source']['type'] = 'weatherlink_v1';
+            $airport['weather_source']['device_id'] = trim($formData['weatherlink_v1_device_id'] ?? '');
+            $airport['weather_source']['api_token'] = trim($formData['weatherlink_v1_api_token'] ?? '');
         } elseif ($weatherType === 'synopticdata') {
             $airport['weather_source']['type'] = 'synopticdata';
             $airport['weather_source']['api_token'] = trim($formData['synopticdata_api_token'] ?? '');
@@ -467,13 +479,15 @@ function generateConfigSnippet($formData) {
             if (!empty($macAddress)) {
                 $airport['weather_source_backup']['mac_address'] = $macAddress;
             }
-        } elseif ($backupType === 'weatherlink') {
-            $airport['weather_source_backup']['type'] = 'weatherlink';
+        } elseif ($backupType === 'weatherlink_v2') {
+            $airport['weather_source_backup']['type'] = 'weatherlink_v2';
             $airport['weather_source_backup']['api_key'] = trim($formData['backup_weatherlink_api_key'] ?? '');
             $airport['weather_source_backup']['api_secret'] = trim($formData['backup_weatherlink_api_secret'] ?? '');
-            if (!empty($formData['backup_weatherlink_station_id'] ?? '')) {
-                $airport['weather_source_backup']['station_id'] = trim($formData['backup_weatherlink_station_id']);
-            }
+            $airport['weather_source_backup']['station_id'] = trim($formData['backup_weatherlink_station_id'] ?? '');
+        } elseif ($backupType === 'weatherlink_v1') {
+            $airport['weather_source_backup']['type'] = 'weatherlink_v1';
+            $airport['weather_source_backup']['device_id'] = trim($formData['backup_weatherlink_v1_device_id'] ?? '');
+            $airport['weather_source_backup']['api_token'] = trim($formData['backup_weatherlink_v1_api_token'] ?? '');
         } elseif ($backupType === 'synopticdata') {
             $airport['weather_source_backup']['type'] = 'synopticdata';
             $airport['weather_source_backup']['api_token'] = trim($formData['backup_synopticdata_api_token'] ?? '');
@@ -1225,7 +1239,8 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                             <option value="metar" <?= ($_POST['weather_type'] ?? '') === 'metar' ? 'selected' : '' ?>>METAR (Aviation Weather)</option>
                             <option value="tempest" <?= ($_POST['weather_type'] ?? '') === 'tempest' ? 'selected' : '' ?>>Tempest Weather Station</option>
                             <option value="ambient" <?= ($_POST['weather_type'] ?? '') === 'ambient' ? 'selected' : '' ?>>Ambient Weather</option>
-                            <option value="weatherlink" <?= ($_POST['weather_type'] ?? '') === 'weatherlink' ? 'selected' : '' ?>>Davis WeatherLink</option>
+                            <option value="weatherlink_v2" <?= ($_POST['weather_type'] ?? '') === 'weatherlink_v2' ? 'selected' : '' ?>>Davis WeatherLink v2 (Newer Devices)</option>
+                            <option value="weatherlink_v1" <?= ($_POST['weather_type'] ?? '') === 'weatherlink_v1' ? 'selected' : '' ?>>Davis WeatherLink v1 (Legacy Devices)</option>
                             <option value="synopticdata" <?= ($_POST['weather_type'] ?? '') === 'synopticdata' ? 'selected' : '' ?>>SynopticData</option>
                             <option value="pwsweather" <?= ($_POST['weather_type'] ?? '') === 'pwsweather' ? 'selected' : '' ?>>PWSWeather (AerisWeather)</option>
                         </select>
@@ -1281,12 +1296,13 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         </div>
                     </div>
                     
-                    <!-- WeatherLink Config -->
-                    <div id="weather_weatherlink" class="weather-config" style="display: none;">
+                    <!-- WeatherLink v2 Config (Newer Devices) -->
+                    <div id="weather_weatherlink_v2" class="weather-config" style="display: none;">
                         <div class="form-group">
                             <label for="weatherlink_api_key">API Key <span class="required">*</span></label>
                             <input type="text" id="weatherlink_api_key" name="weatherlink_api_key"
                                    value="<?= htmlspecialchars($_POST['weatherlink_api_key'] ?? '') ?>" required>
+                            <small class="form-text text-muted">Generate at <a href="https://www.weatherlink.com/account" target="_blank">weatherlink.com/account</a></small>
                         </div>
                         <div class="form-group">
                             <label for="weatherlink_api_secret">API Secret <span class="required">*</span></label>
@@ -1294,10 +1310,26 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                                    value="<?= htmlspecialchars($_POST['weatherlink_api_secret'] ?? '') ?>" required>
                         </div>
                         <div class="form-group">
-                            <label for="weatherlink_station_id">Station ID</label>
+                            <label for="weatherlink_station_id">Station ID <span class="required">*</span></label>
                             <input type="text" id="weatherlink_station_id" name="weatherlink_station_id"
-                                   value="<?= htmlspecialchars($_POST['weatherlink_station_id'] ?? '') ?>">
-                            <div class="help-text">Optional - required for some API versions</div>
+                                   value="<?= htmlspecialchars($_POST['weatherlink_station_id'] ?? '') ?>" required>
+                            <small class="form-text text-muted">Call the /stations endpoint with your API credentials to discover your Station ID</small>
+                        </div>
+                    </div>
+                    
+                    <!-- WeatherLink v1 Config (Legacy Devices) -->
+                    <div id="weather_weatherlink_v1" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="weatherlink_v1_device_id">Device ID (DID) <span class="required">*</span></label>
+                            <input type="text" id="weatherlink_v1_device_id" name="weatherlink_v1_device_id"
+                                   value="<?= htmlspecialchars($_POST['weatherlink_v1_device_id'] ?? '') ?>" required>
+                            <small class="form-text text-muted">Found on a label on your physical device</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="weatherlink_v1_api_token">API Token <span class="required">*</span></label>
+                            <input type="text" id="weatherlink_v1_api_token" name="weatherlink_v1_api_token"
+                                   value="<?= htmlspecialchars($_POST['weatherlink_v1_api_token'] ?? '') ?>" required>
+                            <small class="form-text text-muted">Generate from your WeatherLink account settings</small>
                         </div>
                     </div>
                     
@@ -1341,7 +1373,8 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                             <option value="">None</option>
                             <option value="tempest" <?= ($_POST['weather_backup_type'] ?? '') === 'tempest' ? 'selected' : '' ?>>Tempest Weather Station</option>
                             <option value="ambient" <?= ($_POST['weather_backup_type'] ?? '') === 'ambient' ? 'selected' : '' ?>>Ambient Weather</option>
-                            <option value="weatherlink" <?= ($_POST['weather_backup_type'] ?? '') === 'weatherlink' ? 'selected' : '' ?>>Davis WeatherLink</option>
+                            <option value="weatherlink_v2" <?= ($_POST['weather_backup_type'] ?? '') === 'weatherlink_v2' ? 'selected' : '' ?>>Davis WeatherLink v2 (Newer Devices)</option>
+                            <option value="weatherlink_v1" <?= ($_POST['weather_backup_type'] ?? '') === 'weatherlink_v1' ? 'selected' : '' ?>>Davis WeatherLink v1 (Legacy Devices)</option>
                             <option value="synopticdata" <?= ($_POST['weather_backup_type'] ?? '') === 'synopticdata' ? 'selected' : '' ?>>SynopticData</option>
                             <option value="pwsweather" <?= ($_POST['weather_backup_type'] ?? '') === 'pwsweather' ? 'selected' : '' ?>>PWSWeather (AerisWeather)</option>
                         </select>
@@ -1381,7 +1414,7 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         </div>
                     </div>
                     
-                    <div id="weather_backup_weatherlink" class="weather-config" style="display: none;">
+                    <div id="weather_backup_weatherlink_v2" class="weather-config" style="display: none;">
                         <div class="form-group">
                             <label for="backup_weatherlink_api_key">API Key</label>
                             <input type="text" id="backup_weatherlink_api_key" name="backup_weatherlink_api_key"
@@ -1396,6 +1429,19 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                             <label for="backup_weatherlink_station_id">Station ID</label>
                             <input type="text" id="backup_weatherlink_station_id" name="backup_weatherlink_station_id"
                                    value="<?= htmlspecialchars($_POST['backup_weatherlink_station_id'] ?? '') ?>">
+                        </div>
+                    </div>
+                    
+                    <div id="weather_backup_weatherlink_v1" class="weather-config" style="display: none;">
+                        <div class="form-group">
+                            <label for="backup_weatherlink_v1_device_id">Device ID (DID)</label>
+                            <input type="text" id="backup_weatherlink_v1_device_id" name="backup_weatherlink_v1_device_id"
+                                   value="<?= htmlspecialchars($_POST['backup_weatherlink_v1_device_id'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="backup_weatherlink_v1_api_token">API Token</label>
+                            <input type="text" id="backup_weatherlink_v1_api_token" name="backup_weatherlink_v1_api_token"
+                                   value="<?= htmlspecialchars($_POST['backup_weatherlink_v1_api_token'] ?? '') ?>">
                         </div>
                     </div>
                     
@@ -1616,7 +1662,7 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
         // Show/hide weather config based on type
         document.getElementById('weather_type').addEventListener('change', function() {
             // Hide all primary weather configs
-            document.querySelectorAll('#weather_metar, #weather_tempest, #weather_ambient, #weather_weatherlink, #weather_synopticdata, #weather_pwsweather').forEach(el => {
+            document.querySelectorAll('#weather_metar, #weather_tempest, #weather_ambient, #weather_weatherlink_v2, #weather_weatherlink_v1, #weather_synopticdata, #weather_pwsweather').forEach(el => {
                 if (el) el.style.display = 'none';
             });
             const type = this.value;
@@ -1629,7 +1675,7 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
         // Show/hide backup weather config based on type
         document.getElementById('weather_backup_type').addEventListener('change', function() {
             // Hide all backup weather configs
-            document.querySelectorAll('#weather_backup_tempest, #weather_backup_ambient, #weather_backup_weatherlink, #weather_backup_synopticdata, #weather_backup_pwsweather').forEach(el => {
+            document.querySelectorAll('#weather_backup_tempest, #weather_backup_ambient, #weather_backup_weatherlink_v2, #weather_backup_weatherlink_v1, #weather_backup_synopticdata, #weather_backup_pwsweather').forEach(el => {
                 if (el) el.style.display = 'none';
             });
             const type = this.value;

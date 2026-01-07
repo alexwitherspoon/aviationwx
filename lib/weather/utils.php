@@ -201,7 +201,8 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Ambient Weather',
                 'url' => 'https://ambientweather.net'
             ];
-        case 'weatherlink':
+        case 'weatherlink_v2':
+        case 'weatherlink_v1':
             return [
                 'name' => 'Davis WeatherLink',
                 'url' => 'https://weatherlink.com'

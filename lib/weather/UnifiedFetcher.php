@@ -21,7 +21,8 @@ require_once __DIR__ . '/WeatherAggregator.php';
 require_once __DIR__ . '/adapter/tempest-v1.php';
 require_once __DIR__ . '/adapter/ambient-v1.php';
 require_once __DIR__ . '/adapter/synopticdata-v1.php';
-require_once __DIR__ . '/adapter/weatherlink-v1.php';
+require_once __DIR__ . '/adapter/weatherlink-v2-api.php';
+require_once __DIR__ . '/adapter/weatherlink-v1-api.php';
 require_once __DIR__ . '/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
 require_once __DIR__ . '/calculator.php';
@@ -246,23 +247,12 @@ function buildSourceUrl(array $source): ?string {
         'tempest' => TempestAdapter::buildUrl($source),
         'ambient' => AmbientAdapter::buildUrl($source),
         'synopticdata' => SynopticDataAdapter::buildUrl($source),
-        'weatherlink' => buildWeatherLinkUrl($source),
+        'weatherlink_v2' => WeatherLinkV2Adapter::buildUrl($source),
+        'weatherlink_v1' => WeatherLinkV1Adapter::buildUrl($source),
         'pwsweather' => buildPWSWeatherUrl($source),
         'metar' => MetarAdapter::buildUrl($source['station_id'] ?? ''),
         default => null,
     };
-}
-
-/**
- * Build WeatherLink URL
- */
-function buildWeatherLinkUrl(array $source): ?string {
-    if (!isset($source['api_key']) || !isset($source['api_secret']) || !isset($source['station_id'])) {
-        return null;
-    }
-    $timestamp = time();
-    $signature = hash_hmac('sha256', $source['api_key'] . $timestamp, $source['api_secret']);
-    return "https://api.weatherlink.com/v2/current/{$source['station_id']}?api-key={$source['api_key']}&t={$timestamp}&api-signature={$signature}";
 }
 
 /**
@@ -290,7 +280,8 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'tempest' => TempestAdapter::parseToSnapshot($response, $source),
         'ambient' => AmbientAdapter::parseToSnapshot($response, $source),
         'synopticdata' => SynopticDataAdapter::parseToSnapshot($response, $source),
-        'weatherlink' => WeatherLinkAdapter::parseToSnapshot($response, $source),
+        'weatherlink_v2' => WeatherLinkV2Adapter::parseToSnapshot($response, $source),
+        'weatherlink_v1' => WeatherLinkV1Adapter::parseToSnapshot($response, $source),
         'pwsweather' => PWSWeatherAdapter::parseToSnapshot($response, $source),
         'metar' => MetarAdapter::parseToSnapshot($response, $airport),
         default => null,
@@ -310,7 +301,8 @@ function getSourceMaxAge(array $source): int {
         'tempest' => TempestAdapter::getMaxAcceptableAge(),
         'ambient' => AmbientAdapter::getMaxAcceptableAge(),
         'synopticdata' => SynopticDataAdapter::getMaxAcceptableAge(),
-        'weatherlink' => WeatherLinkAdapter::getMaxAcceptableAge(),
+        'weatherlink_v2' => WeatherLinkV2Adapter::getMaxAcceptableAge(),
+        'weatherlink_v1' => WeatherLinkV1Adapter::getMaxAcceptableAge(),
         'pwsweather' => PWSWeatherAdapter::getMaxAcceptableAge(),
         'metar' => MetarAdapter::getMaxAcceptableAge(),
         default => 600, // 10 minutes default

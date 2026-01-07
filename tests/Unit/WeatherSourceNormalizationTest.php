@@ -121,7 +121,7 @@ class WeatherSourceNormalizationTest extends TestCase
      */
     public function testNormalizeWeatherSource_AllSourceTypes_Preserved()
     {
-        $sourceTypes = ['tempest', 'ambient', 'weatherlink', 'pwsweather', 'metar'];
+        $sourceTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'metar'];
         
         foreach ($sourceTypes as $type) {
             $airport = createTestAirport([

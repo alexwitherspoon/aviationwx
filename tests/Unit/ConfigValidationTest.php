@@ -1402,7 +1402,7 @@ class ConfigValidationTest extends TestCase
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
                     'weather_source' => [
-                        'type' => 'weatherlink',
+                        'type' => 'weatherlink_v2',
                         'api_key' => 'test-api-key',
                         'api_secret' => 'test-api-secret',
                         'station_id' => '123456'
@@ -1633,7 +1633,7 @@ class ConfigValidationTest extends TestCase
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
                     'weather_source' => [
-                        'type' => 'weatherlink',
+                        'type' => 'weatherlink_v2',
                         'api_secret' => 'test-secret',
                         'station_id' => '123456'
                     ]
@@ -1657,7 +1657,7 @@ class ConfigValidationTest extends TestCase
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
                     'weather_source' => [
-                        'type' => 'weatherlink',
+                        'type' => 'weatherlink_v2',
                         'api_key' => 'test-api-key',
                         'station_id' => '123456'
                     ]
@@ -1681,7 +1681,7 @@ class ConfigValidationTest extends TestCase
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
                     'weather_source' => [
-                        'type' => 'weatherlink',
+                        'type' => 'weatherlink_v2',
                         'api_key' => 'test-api-key',
                         'api_secret' => 'test-secret'
                     ]

@@ -162,7 +162,7 @@
       "access_type": "public",
       "tower_status": "towered",
       "weather_source": {
-        "type": "weatherlink",
+        "type": "weatherlink_v2",
         "api_key": "test_weatherlink_api_key",
         "api_secret": "test_weatherlink_api_secret",
         "station_id": "123456"
