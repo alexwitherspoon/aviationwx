@@ -105,6 +105,18 @@ AviationWX provides dedicated upload credentials for each camera. After you subm
 
 > **Note:** FTPS and FTP use the same port (2121). FTPS adds TLS encryption. Most modern cameras support FTPS - look for "FTP over TLS", "Explicit TLS", or "FTPS" in your camera's settings.
 
+**FTP server mode / transfer mode:**
+
+If your camera asks about FTP server mode or transfer mode, use these settings:
+
+| Setting | Recommended Value | Notes |
+|---------|-------------------|-------|
+| **FTP Mode** | **Auto** or **Passive** | Recommended for most connections |
+| **Transfer Mode** | **Passive** (PASV) | More reliable through firewalls/NAT |
+| **Port Mode** | Avoid if possible | Active/PORT mode often fails through routers |
+
+> **Why passive mode?** Passive mode (PASV) is more reliable when your camera is behind a router or firewall. In passive mode, the camera initiates both the command and data connections, which works better with NAT and most network configurations. Active/PORT mode requires the server to connect back to your camera, which is often blocked by routers and firewalls.
+
 ### Recommended default settings for any camera
 
 | Setting | Recommendation | Notes |
@@ -280,6 +292,9 @@ Reolink cameras are well-tested with AviationWX and offer reliable scheduled FTP
 | **Directory** | `/` or leave blank |
 | **Anonymous** | Disabled / Off |
 | **Encryption** | FTPS / TLS / SSL (if available) |
+| **Server Mode** | **Auto** or **Passive** (if available) |
+
+> **FTP Mode Note:** If your Reolink camera shows options for "FTP Mode", "Server Mode", or "Transfer Mode", select **Auto** or **Passive** mode. Avoid "PORT" or "Active" mode as it often doesn't work reliably through routers. Most modern Reolink firmware defaults to Auto, which intelligently selects the best mode.
 
 **Configure file upload type:**
 
@@ -432,6 +447,8 @@ Use this checklist when evaluating any camera for AviationWX.
 - Check username and password are entered correctly (case-sensitive)
 - Ensure your network allows outbound connections on the required port
 - Try disabling any firewall temporarily to test
+- **If using FTP/FTPS:** Change FTP mode to **Passive** or **Auto** (not PORT/Active mode)
+- Some cameras have "Extended Passive Mode" - try enabling this if passive mode alone doesn't work
 
 ### "It worked for a week then stopped"
 - Confirm power stability (consider UPS if needed)
