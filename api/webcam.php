@@ -927,7 +927,7 @@ function serve202Response(string $preferredFormat, int $jpegMtime, int $refreshI
  */
 function serve200Response(string $filePath, string $contentType, ?int $mtime = null, ?int $refreshInterval = null, bool $exitAfterServe = true): void {
     // Access global variables for logging and metrics
-    global $airportId, $camIndex, $requestedSize;
+    global $airportId, $camIndex, $requestedSize, $latestTimestamp;
     
     // Track webcam metrics (only once per request)
     static $metricsTracked = false;
@@ -960,6 +960,16 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
             $mtime = time();
         }
     }
+    
+    // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
+    $timestamp = $mtime;
+    if (isset($latestTimestamp) && $latestTimestamp > 0) {
+        $timestamp = $latestTimestamp;
+    }
+    $variant = is_string($requestedSize) ? $requestedSize : (is_numeric($requestedSize) ? (int)$requestedSize : 'original');
+    $ext = ($contentType === 'image/webp') ? 'webp' : 'jpg';
+    $filename = $timestamp . '_' . $variant . '.' . $ext;
+    header('Content-Disposition: inline; filename="' . $filename . '"');
     
     // Set basic cache headers
     if ($refreshInterval !== null && $mtime > 0) {
@@ -1209,7 +1219,12 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
             $mimeType = getMimeTypeForFormat($requestedFormat);
             $mtime = @filemtime($timestampFile);
             
+            // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
+            $variant = ($requestedSize === 'original') ? 'original' : (int)$requestedSize;
+            $filename = $requestedTimestamp . '_' . $variant . '.' . $requestedFormat;
+            
             header('Content-Type: ' . $mimeType);
+            header('Content-Disposition: inline; filename="' . $filename . '"');
             header('Cache-Control: public, max-age=31536000, immutable');
             header('Content-Length: ' . filesize($timestampFile));
             header('X-Content-Type-Options: nosniff');

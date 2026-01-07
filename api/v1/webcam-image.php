@@ -131,6 +131,10 @@ function handleGetWebcamImage(array $params, array $context): void
         default => 'image/jpeg',
     };
     
+    // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
+    $variant = ($size === 'original') ? 'original' : (int)$size;
+    $filename = $timestamp . '_' . $variant . '.' . $format;
+    
     // Get webcam refresh interval (from camera config, airport config, or default)
     require_once __DIR__ . '/../../lib/config.php';
     $webcamRefresh = getDefaultWebcamRefresh();
@@ -144,6 +148,7 @@ function handleGetWebcamImage(array $params, array $context): void
     
     // Send headers
     header('Content-Type: ' . $contentType);
+    header('Content-Disposition: inline; filename="' . $filename . '"');
     header('Content-Length: ' . $fileSize);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     

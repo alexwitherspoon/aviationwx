@@ -228,8 +228,13 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
         default => 'image/jpeg',
     };
     
+    // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
+    $variant = ($size === 'original') ? 'original' : (int)$size;
+    $filename = $timestamp . '_' . $variant . '.' . $format;
+    
     // Send headers
     header('Content-Type: ' . $contentType);
+    header('Content-Disposition: inline; filename="' . $filename . '"');
     header('Content-Length: ' . $fileSize);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     

@@ -153,7 +153,12 @@ if ($timestamp !== null) {
         exit;
     }
     
+    // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
+    $variant = ($servedSize === 'original') ? 'original' : (int)$servedSize;
+    $filename = $timestamp . '_' . $variant . '.' . $servedFormat;
+    
     header('Content-Type: ' . $supportedFormats[$servedFormat]);
+    header('Content-Disposition: inline; filename="' . $filename . '"');
     header('Cache-Control: public, max-age=31536000, immutable');
     header('Content-Length: ' . filesize($imageFile));
     header('X-Content-Type-Options: nosniff');
