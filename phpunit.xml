@@ -49,12 +49,14 @@
         </exclude>
     </source>
     
+    <!-- Coverage disabled - install pcov or xdebug to enable
     <coverage>
         <report>
             <html outputDirectory="coverage"/>
             <text outputFile="php://stdout"/>
         </report>
     </coverage>
+    -->
     
     <php>
         <ini name="error_reporting" value="-1"/>

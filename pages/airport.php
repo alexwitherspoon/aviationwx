@@ -2157,8 +2157,10 @@ window.forceRefreshAllTimers = function() {
 
 /**
  * Check if data is stale and needs refresh
- * Uses 1.5x the refresh interval as threshold
- * @returns {Object} { isStale: boolean, weatherAge: number, webcamAge: number }
+ * Uses the warning threshold from the 3-tier staleness model
+ * Data older than warning threshold triggers refresh on wake/reconnect
+ * 
+ * @returns {Object} { isStale: boolean, weatherAge: number, webcamAge: number, threshold: number }
  */
 function checkDataStaleness() {
     const now = Date.now();
@@ -2184,11 +2186,13 @@ function checkDataStaleness() {
         }
     }
     
-    // Threshold: 1.5x the refresh interval (90 seconds for 60s interval)
-    const threshold = 90000;
-    const isStale = weatherAge > threshold || webcamAge > threshold;
+    // Use warning threshold from 3-tier staleness model (configurable via airports.json)
+    // Data older than warning threshold triggers refresh on wake/reconnect
+    // Convert seconds to milliseconds for comparison with Date.now() values
+    const thresholdMs = STALE_WARNING_SECONDS * 1000;
+    const isStale = weatherAge > thresholdMs || webcamAge > thresholdMs;
     
-    return { isStale, weatherAge, webcamAge, threshold };
+    return { isStale, weatherAge, webcamAge, threshold: thresholdMs };
 }
 
 /**
@@ -2221,12 +2225,24 @@ const pageLoadTime = Date.now();
 const RECOVERY_GRACE_PERIOD = 10000; // Don't trigger recovery in first 10 seconds after page load
 
 function debouncedWakeHandler(reason) {
-    // Skip recovery during grace period after page load
-    // This avoids duplicate fetches on initial load when focus/visibility events fire
     const timeSinceLoad = Date.now() - pageLoadTime;
+    
+    // During grace period, only skip if we already have weather data
+    // If no data loaded yet (blank fields), allow recovery to trigger refresh
     if (timeSinceLoad < RECOVERY_GRACE_PERIOD) {
-        console.log(`[Recovery] Skipping ${reason} event - within ${RECOVERY_GRACE_PERIOD/1000}s grace period (${Math.round(timeSinceLoad/1000)}s since load)`);
-        return;
+        // Check if we have weather data - use typeof check to handle undefined
+        const hasWeatherData = typeof currentWeatherData !== 'undefined' && 
+                               currentWeatherData !== null &&
+                               typeof weatherLastUpdated !== 'undefined' && 
+                               weatherLastUpdated !== null;
+        
+        if (hasWeatherData) {
+            console.log(`[Recovery] Skipping ${reason} event - within ${RECOVERY_GRACE_PERIOD/1000}s grace period and data already loaded`);
+            return;
+        } else {
+            // No data yet - allow recovery to proceed (will check staleness and refresh)
+            console.log(`[Recovery] Processing ${reason} event during grace period - no weather data loaded yet`);
+        }
     }
     
     if (wakeDebounceTimer) {
@@ -4011,15 +4027,61 @@ async function fetchWeather(forceRefresh = false) {
             }
         } else {
             console.error('[Weather] API returned error:', data.error);
-            displayEmptyWeather();
+            // Check if existing data is still within display threshold before clearing
+            if (!shouldPreserveExistingWeatherData('API error')) {
+                displayEmptyWeather();
+            }
         }
     } catch (error) {
         console.error('[Weather] Fetch error:', error);
         console.error('[Weather] Error stack:', error.stack);
-        displayEmptyWeather();
+        // Check if existing data is still within display threshold before clearing
+        if (!shouldPreserveExistingWeatherData('fetch error')) {
+            displayEmptyWeather();
+        }
     } finally {
         isFetchingWeather = false;
     }
+}
+
+/**
+ * Check if existing weather data should be preserved on fetch failure
+ * 
+ * Uses the 3-tier staleness model: data within the failclosed threshold
+ * can still be displayed with appropriate warnings. This prevents blank
+ * fields when a fetch fails but we have recent-enough data to show.
+ * 
+ * @param {string} reason - Reason for the check (for logging)
+ * @returns {boolean} True if existing data should be preserved
+ */
+function shouldPreserveExistingWeatherData(reason) {
+    // Check if we have existing data and a timestamp
+    if (!currentWeatherData || !weatherLastUpdated) {
+        console.log(`[Weather] No existing data to preserve after ${reason}`);
+        return false;
+    }
+    
+    // Calculate age of existing data
+    const ageMs = Date.now() - weatherLastUpdated.getTime();
+    const ageSeconds = Math.floor(ageMs / 1000);
+    
+    // Determine failclosed threshold based on source type
+    // METAR-only sources use METAR threshold, others use general threshold
+    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && 
+                        AIRPORT_DATA.weather_source.type === 'metar';
+    const failclosedThreshold = isMetarOnly ? METAR_STALE_FAILCLOSED_SECONDS : STALE_FAILCLOSED_SECONDS;
+    
+    if (ageSeconds < failclosedThreshold) {
+        // Data is still within displayable window - preserve it
+        console.log(`[Weather] Preserving existing data after ${reason} - age ${ageSeconds}s < failclosed threshold ${failclosedThreshold}s`);
+        // Update timestamp display to reflect current staleness (will show warning colors)
+        updateWeatherTimestamp();
+        return true;
+    }
+    
+    // Data exceeds failclosed threshold - should not be displayed
+    console.log(`[Weather] Existing data exceeds failclosed threshold after ${reason} - age ${ageSeconds}s >= ${failclosedThreshold}s - clearing display`);
+    return false;
 }
 
 /**
