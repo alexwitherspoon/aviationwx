@@ -7,9 +7,13 @@ Configure cameras so they reliably provide **clear still images** to AviationWX 
 - and easy recovery after power/internet hiccups.
 
 This guide focuses on camera integration methods that work well for AviationWX:
-1) **Scheduled JPEG uploads (FTP/FTPs/SFTP)** - recommended when the camera supports it
-2) **RTSP** - a solid fallback when uploads aren't supported
+1) **Scheduled JPEG uploads (FTPS/FTP/SFTP)** ✅ **preferred**
+2) **RTSP** - works well when uploads aren't available
 3) **Snapshot URL** - useful for some devices, varies widely by vendor
+4) **AviationWX Bridge** - for cameras without native upload capability
+
+> **Our preference: Push-style uploads (FTPS/SFTP/FTP)**
+> Scheduled JPEG uploads typically produce **better image quality** than RTSP extraction. When the camera uploads a dedicated snapshot, it uses still-image encoding rather than video compression—resulting in clearer images with less pixelation. If your camera supports scheduled FTP uploads, we recommend using that method.
 
 For camera siting and privacy expectations, see:
 - **Guide 02 - Location & Siting** (framing guidance)
@@ -19,21 +23,32 @@ For camera siting and privacy expectations, see:
 
 ## Choose your integration path
 
-### Option A - Scheduled JPEG uploads (FTP/FTPs/SFTP) ✅ recommended
-The camera pushes a JPEG image on a schedule (e.g., every 1-15 minutes).
+### Option A - Scheduled JPEG uploads (FTPS/FTP/SFTP) ✅ recommended
+The camera pushes a JPEG image on a schedule (e.g., every 1 minute).
 
 **Why this is great**
 - simple "set it and forget it"
 - predictable bandwidth
 - easy to reason about freshness (you know when an upload should arrive)
-- often **higher still-image quality** than sampling an RTSP stream: the camera can upload a full-resolution JPEG and take the time it needs, instead of forcing a video-style capture-typically meaning **less pixelation and more detail** with **less overall bandwidth**
+- often **higher still-image quality** than sampling an RTSP stream: the camera can upload a full-resolution JPEG and take the time it needs, instead of forcing a video-style capture—typically meaning **less pixelation and more detail** with **less overall bandwidth**
 
 ### Option B - RTSP (extract still images)
-The camera provides an RTSP stream, and a system extracts still images.
+The camera provides an RTSP stream, and AviationWX extracts still images.
 
-**Why this is useful**
-- works with many cameras that don't have built-in upload scheduling
-- can support higher-quality still images depending on the camera and extraction method
+**Why this works**
+- compatible with most IP cameras and NVR systems
+- no port forwarding to AviationWX required (we connect to you)
+- good option when scheduled uploads aren't available
+
+**Trade-offs vs. push uploads:**
+- RTSP is optimized for video, so extracted frames may have more compression artifacts
+- image quality can vary with network conditions
+- push uploads give the camera time to encode a high-quality still image
+
+**When RTSP is the right choice:**
+- camera doesn't support scheduled FTP/FTPS/SFTP uploads
+- you're using an NVR or camera system that only exposes RTSP
+- simpler network setup is preferred over maximum image quality
 
 ### Option C - Snapshot URL
 A URL returns a current still image.
@@ -52,7 +67,7 @@ A small local device captures images from your cameras and uploads them to Aviat
 - unified solution for **mixed camera types** at a single airport
 
 **When to consider the Bridge**
-- your camera system doesn't offer FTP/FTPs/SFTP uploads
+- your camera system doesn't offer FTP/FTPS/SFTP uploads
 - you want extra reliability for remote or solar-powered installations
 - you have multiple camera types that need unified handling
 
@@ -60,69 +75,322 @@ See **Guide 10 - AviationWX Bridge** for details.
 
 ---
 
-## "Known-good defaults" (start here)
-These defaults are intentionally conservative and reliable.
+## Known-good defaults
 
-- **Update interval:** start at **5 minutes** (then adjust to 1-15 minutes)
-- **Image quality:** "High" JPEG, but avoid huge files if the connection is LTE
-- **Frame rate:** irrelevant if you're uploading stills (don't chase video settings)
-- **Time sync:** ensure the camera time/date is reasonable
-- **Night mode:** prefer a usable image over a perfect one; avoid settings that create heavy blur
-- **Stability:** prioritize mounts and power stability; a shaky camera is a useless camera
+### FTPS / FTP / SFTP Connection Settings
+
+AviationWX provides dedicated upload credentials for each camera. After you submit your airport (see **Guide 12**), you'll receive:
+- A **username** unique to your camera
+- A **password** for that account
+
+**Connection details for all cameras:**
+
+| Setting | Value |
+|---------|-------|
+| **Server** | `upload.aviationwx.org` |
+| **FTPS Port** | `2121` (recommended) |
+| **FTP Port** | `2121` |
+| **SFTP Port** | `2222` |
+| **Directory** | `/` (root — no subfolder needed) |
+| **Filename** | Use timestamp in filename (e.g., `20250106_143022.jpg`) |
+| **Overwrite** | No — each upload should be a new file |
+| **File format** | JPEG preferred (`.jpg` or `.jpeg`) |
+| **Max file size** | 100 MB per image |
+
+**Protocol recommendation:**
+- **FTPS** (FTP over TLS) — recommended for most cameras; encrypted and widely supported
+- **SFTP** — good alternative if your camera supports it; different protocol, also encrypted
+- **FTP** — works but unencrypted; use only if FTPS/SFTP aren't available
+
+> **Note:** FTPS and FTP use the same port (2121). FTPS adds TLS encryption. Most modern cameras support FTPS—look for "FTP over TLS", "Explicit TLS", or "FTPS" in your camera's settings.
+
+### Recommended default settings for any camera
+
+| Setting | Recommendation | Notes |
+|---------|----------------|-------|
+| **Upload interval** | **1 minute** | Good balance of freshness and bandwidth |
+| **Image quality** | High (80%+) | Avoid maximum compression; pilots need detail |
+| **Resolution** | 1080p or 720p | Higher resolution = upload less frequently |
+| **File format** | JPEG | Required; PNG also accepted but larger |
+| **Timezone** | Local airport timezone | Critical for accurate observation times |
+| **Time sync** | NTP enabled | Ensures accurate timestamps |
+| **Time overlay** | Enabled | Burn timestamp into image for safety |
+| **Name overlay** | Descriptive name | E.g., "South Runway", "North Approach" |
+| **Night mode** | Camera default | Prefer usable image over perfect; avoid heavy blur |
+| **After power loss** | Auto-resume uploads | Critical for reliability |
+
+### Time and overlay settings (important for safety)
+
+Accurate timestamps and clear identification are critical for aviation weather. Pilots need to know **when** an image was captured and **what view** they're looking at.
+
+**Timezone configuration:**
+- Set the camera to your **local airport timezone** (not UTC)
+- This ensures the overlay timestamp matches what pilots expect
+- Example: If your airport is in Central Time, set the camera to Central Time
+
+**On-screen time display (OSD):**
+- Enable the camera's **timestamp overlay** feature
+- This burns the date and time directly into the image
+- Even if metadata is lost, pilots can see when the image was captured
+- Recommended format: `YYYY-MM-DD HH:MM:SS` or similar clear format
+
+**Camera name overlay:**
+- Add a **short, descriptive name** to identify the view
+- Keep it simple and aviation-relevant
+- Good examples: `South Runway`, `North Approach`, `Ramp View`, `Windsock Cam`
+- Avoid: Generic names like `Camera 1` or overly long descriptions
+
+**Overlay placement:**
+- Position overlays in a **corner** (bottom-left or top-left is common)
+- Avoid placing text over the **horizon or sky**—that's what pilots are looking at
+- Use a contrasting background (semi-transparent black) for readability
+
+> **Why this matters:** In aviation, knowing the observation time is safety-critical. A beautiful clear-sky image from 2 hours ago doesn't help a pilot making a go/no-go decision right now. The on-screen timestamp provides an instant visual confirmation of freshness.
+
+**Upload interval guidance:**
+
+| Interval | When to use |
+|----------|-------------|
+| **1 minute** | Standard recommendation for most airports |
+| **30 seconds** | Fast-changing weather, active fields |
+| **2-5 minutes** | Limited bandwidth (LTE, satellite) |
+| **5-15 minutes** | Very constrained connections, solar/battery power |
+| **15-30 minutes** | Minimum acceptable; only for severely limited setups |
+
+> **Power-saving tip:** VFR-only airports may reduce upload frequency at night (or pause entirely) to conserve data and power. If your camera or scheduling system supports time-based rules, consider uploading every 5-15 minutes after sunset and resuming 1-minute uploads at sunrise.
+
+**Resolution vs. frequency tradeoff:**
+
+AviationWX processes images automatically—we resize and optimize for web delivery regardless of what you upload. However, we recommend:
+- **1080p at 1 minute** — best balance for most connections
+- **720p at 1 minute** — good for slower connections
+- **4K at 5 minutes** — if you want maximum detail and have bandwidth
+
+Avoid: 4K every 10 seconds (excessive bandwidth, often unnecessary).
+
+We will reject images that are over-pixelated, heavily compressed, or unreadable. When in doubt, upload less frequently at higher quality.
+
+### RTSP Stream Settings
+
+> **Prefer push uploads when available:** If your camera supports FTPS/SFTP/FTP scheduled uploads, that typically produces better image quality than RTSP extraction.
+
+For cameras that don't support scheduled uploads, AviationWX can extract still images from RTSP video streams. You provide the stream URL, and AviationWX captures frames at regular intervals.
+
+**How it works:**
+- Your camera continuously broadcasts an RTSP video stream on your local network
+- You configure your router/firewall to allow AviationWX to reach the stream (port forwarding)
+- AviationWX connects periodically and extracts a single JPEG frame
+- The extraction interval is configured on the AviationWX side (not the camera)
+
+**What to provide when submitting your airport:**
+
+| Information | Example | Notes |
+|-------------|---------|-------|
+| **RTSP URL** | `rtsp://user:pass@your-ip:554/stream` | Full URL with credentials |
+| **Stream type** | Main stream or Sub stream | Main = higher quality, Sub = lower bandwidth |
+| **Port** | 554 (default) | May vary by camera |
+| **Transport** | TCP (recommended) | UDP available if needed |
+| **Desired interval** | 60 seconds | How often to capture a frame |
+
+**RTSP URL format:**
+```
+rtsp://username:password@camera-ip:port/stream-path
+```
+
+**Common stream paths by vendor:**
+
+| Vendor | Main Stream Path | Sub Stream Path |
+|--------|------------------|-----------------|
+| **Reolink** | `/h264Preview_01_main` | `/h264Preview_01_sub` |
+| **Hikvision** | `/Streaming/Channels/101` | `/Streaming/Channels/102` |
+| **Dahua** | `/cam/realmonitor?channel=1&subtype=0` | `/cam/realmonitor?channel=1&subtype=1` |
+| **Axis** | `/axis-media/media.amp` | varies |
+| **Amcrest** | `/cam/realmonitor?channel=1&subtype=0` | `/cam/realmonitor?channel=1&subtype=1` |
+| **Generic ONVIF** | varies | varies |
+
+> **Security note:** Create a **dedicated read-only user** for AviationWX rather than sharing your admin credentials. Most cameras support creating viewer accounts with limited permissions.
+
+**Main stream vs. Sub stream:**
+
+| Stream | Resolution | Bandwidth | When to use |
+|--------|------------|-----------|-------------|
+| **Main stream** | Full (e.g., 4K, 1080p) | Higher | Good internet, maximum detail needed |
+| **Sub stream** | Reduced (e.g., 720p, 480p) | Lower | Limited bandwidth, LTE connections |
+
+**Recommended defaults:**
+- Use **main stream at 1080p** for most connections
+- Use **sub stream** if bandwidth is severely limited
+- **1 minute interval** is standard; adjust based on needs
+- **TCP transport** is more reliable than UDP for most networks
+
+**Network requirements:**
+
+For AviationWX to reach your RTSP stream, you'll need:
+1. **Static IP or Dynamic DNS** — Your camera needs a reachable address
+2. **Port forwarding** — Forward the RTSP port (usually 554) to your camera's internal IP
+3. **Firewall rules** — Allow inbound connections on the RTSP port
+
+> **Alternative:** If you don't want to expose your camera to the internet, use the **AviationWX Bridge** (Guide 10). The Bridge runs on your local network and handles the upload securely.
+
+**RTSPS (Secure RTSP):**
+
+Some cameras support encrypted RTSP streams using TLS:
+- URL starts with `rtsps://` instead of `rtsp://`
+- Typically uses port 322 instead of 554
+- Provides encrypted video transport
+- AviationWX supports RTSPS—just use the `rtsps://` URL
 
 ---
 
-## Reolink (tested models) - recommended path
-Tested models:
-- **Reolink RLC-810WA**
-- **Reolink RLC-510A**
+## Reolink cameras (recommended example)
 
-### Reolink setup checklist (high-level)
-1) ☐ Update camera firmware (if appropriate)
-2) ☐ Set a strong admin password
-3) ☐ Choose one integration method:
-   - ☐ FTP/FTPs upload on a schedule (preferred)
-   - ☐ RTSP stream (fallback)
-4) ☐ Set the update interval (start at 5 minutes)
-5) ☐ Validate upload reliability for 24-72 hours
+Reolink cameras are well-tested with AviationWX and offer reliable scheduled FTP uploads. The settings below apply to most Reolink models, though exact menu labels may vary by model and firmware version.
 
-### Reolink: Scheduled upload (FTP/FTPs) - the practical recipe
-Most of the time you'll configure:
-- a destination server (FTP/FTPs/SFTP)
-- a schedule (every X minutes)
-- a JPEG snapshot/image push
+**Tested models:**
+- Reolink RLC-810WA
+- Reolink RLC-510A
+- Reolink RLC-810A
+- Other Reolink models with FTP capability
 
-**What to validate**
-- uploads arrive on schedule
-- file size is reasonable for your internet plan
-- the camera keeps uploading after a power outage / reboot
+### Reolink setup checklist
 
-> Note: exact menu labels vary by model and firmware. The goal isn't a perfect menu map - it's the reliability checks above.
+1. ☐ Update camera firmware (if appropriate)
+2. ☐ Set a strong admin password
+3. ☐ Configure FTP upload settings (see below)
+4. ☐ Set the upload schedule
+5. ☐ Test upload reliability for 24-72 hours
 
-### Reolink: RTSP fallback
-If scheduled uploads are unavailable or unreliable:
-- enable RTSP on the camera
-- ensure credentials are set
-- validate that your pipeline can consistently extract a still image every 1-15 minutes
+### Step-by-step: Configure FTP/FTPS on Reolink
+
+**Access the FTP settings:**
+
+1. Open Reolink Client on your PC (or use the web interface)
+2. Add your camera and log in
+3. Navigate to: **Device Settings** → **Network** → **Advanced** → **FTP**
+
+**Enter these settings:**
+
+| Reolink Setting | Value to Enter |
+|-----------------|----------------|
+| **FTP Server** | `upload.aviationwx.org` |
+| **Port** | `2121` |
+| **Username** | *(provided by AviationWX for your camera)* |
+| **Password** | *(provided by AviationWX for your camera)* |
+| **Directory** | `/` or leave blank |
+| **Anonymous** | Disabled / Off |
+| **Encryption** | FTPS / TLS / SSL (if available) |
+
+**Configure file upload type:**
+
+| Reolink Setting | Recommendation |
+|-----------------|----------------|
+| **File Type** | Images only (not video) |
+| **Interval** | 60 seconds (1 minute) |
+
+> **Note:** Some Reolink models show "FTP Postpone" for motion-triggered recording. For AviationWX, you want **scheduled/interval uploads**, not motion-triggered.
+
+**Enable the FTP schedule:**
+
+1. Click **FTP Schedule** or **Schedule**
+2. Enable FTP uploads
+3. Set to upload continuously (24/7) or customize for day/night if power-saving
+
+**Test your configuration:**
+
+1. Click **FTP Test** or **Test** button
+2. Confirm a test image uploads successfully
+3. Check AviationWX (after a few minutes) to verify images are appearing
+
+### Common Reolink settings to check
+
+| Setting | Where to find it | Recommendation |
+|---------|------------------|----------------|
+| **Image quality** | Display → Image | High or above |
+| **Resolution** | Display → Stream | Main stream: 1080p or higher |
+| **Timezone** | System → Time | Set to local airport timezone |
+| **Time sync** | System → Time | Enable NTP sync |
+| **Time overlay** | Display → OSD | Enable; position in corner |
+| **Camera name** | Display → OSD → Channel Name | E.g., "South Runway" |
+| **Auto-reboot** | System → Maintenance | Weekly reboot can help reliability |
+
+**Reolink OSD (On-Screen Display) setup:**
+1. Navigate to **Display** → **OSD** (or **On-Screen Display**)
+2. Enable **Time** display
+3. Set **Channel Name** to a descriptive name (e.g., "North Approach")
+4. Position both in a corner that doesn't obscure the sky/horizon
+5. Ensure font is readable but not too large
+
+### Reolink RTSP (alternative to FTP)
+
+Most Reolink cameras support both FTP uploads and RTSP. We recommend trying FTP first for better image quality, but RTSP works well if FTP isn't an option for your setup.
+
+**Enable RTSP on your Reolink:**
+
+1. Open Reolink Client or web interface
+2. Navigate to: **Device Settings** → **Network** → **Advanced** → **Port Settings**
+3. Ensure RTSP is enabled (usually on by default)
+4. Note the RTSP port (default: 554)
+
+**Reolink RTSP URL formats:**
+
+| Stream | URL Pattern |
+|--------|-------------|
+| **Main stream (high quality)** | `rtsp://username:password@camera-ip:554/h264Preview_01_main` |
+| **Sub stream (lower bandwidth)** | `rtsp://username:password@camera-ip:554/h264Preview_01_sub` |
+
+**Example:**
+```
+rtsp://admin:YourPassword@192.168.1.100:554/h264Preview_01_main
+```
+
+**What to send to AviationWX:**
+- The full RTSP URL (with credentials)
+- Your public IP address or Dynamic DNS hostname
+- Which stream (main or sub) you want us to use
+- Confirm port 554 is forwarded to the camera
+
+**Network setup for RTSP:**
+1. Assign a static internal IP to your camera (e.g., 192.168.1.100)
+2. Forward port 554 (or your RTSP port) on your router to the camera's IP
+3. Test by accessing the stream from outside your network
+
+> **Prefer not to open ports?** Use the **AviationWX Bridge** instead (Guide 10). The Bridge captures frames locally and uploads them—no port forwarding needed.
 
 ---
 
-## UniFi Protect cameras (when an airport already runs UniFi)
-UniFi can be a great fit if the airport/FBO already has a UniFi ecosystem and someone locally can maintain it.
+## UniFi Protect cameras
 
-Practical approaches:
-- use a supported method to provide **still images** to AviationWX (varies by setup)
-- if RTSP is available for the camera stream, that's often the cleanest integration option
+UniFi Protect can be a great fit if the airport/FBO already has a UniFi ecosystem and someone locally can maintain it.
 
-**Key point:** choose an approach that does not require constant manual steps or "someone has to log in every week."
+**Key limitation:** UniFi Protect does **not** support scheduled FTP uploads. Use one of these alternatives:
+
+**Option 1: AviationWX Bridge (recommended)**
+- Install the Bridge on a local device (Raspberry Pi or similar)
+- The Bridge captures snapshots via RTSP and uploads to AviationWX
+- See **Guide 10 - AviationWX Bridge**
+
+**Option 2: RTSP extraction**
+- UniFi cameras support RTSP streams
+- AviationWX can extract still images from the stream
+- Provide the RTSP URL and credentials when submitting your airport
+
+**RTSP URL format for UniFi:**
+```
+rtsp://camera-ip:7447/camera-id
+```
+(Exact format varies by UniFi version—consult UniFi documentation)
+
+**Key point:** Choose an approach that does not require constant manual steps or "someone has to log in every week."
 
 ---
 
-## Generic camera checklist (works for any vendor)
-Use this checklist when evaluating a camera for AviationWX.
+## Generic camera checklist (any vendor)
+
+Use this checklist when evaluating any camera for AviationWX.
 
 ### Capability checklist
-- ☐ Supports at least one of: **FTP/FTPs/SFTP**, **RTSP**, or **snapshot URL**
+- ☐ Supports at least one of: **FTPS/FTP/SFTP**, **RTSP**, or **snapshot URL**
+- ☐ Can upload JPEG images on a schedule (not just motion-triggered)
 - ☐ Can operate without a paid cloud plan for the features you need
 - ☐ Can be configured to auto-recover after power outages
 - ☐ Outdoor-rated or can be installed in a proper weatherproof housing
@@ -130,47 +398,130 @@ Use this checklist when evaluating a camera for AviationWX.
 ### Reliability checklist
 - ☐ Still image is readable in common conditions (rain/fog/overcast)
 - ☐ Image exposure is not constantly blown out at sunrise/sunset
-- ☐ Uploads/feeds remain stable over at least **24-72 hours**
+- ☐ Uploads remain stable over at least **24-72 hours**
 - ☐ Mount is stable (no vibration blur)
+- ☐ Camera resumes uploads after power/network outage
 
-### Security + hygiene checklist (plain language)
+### Security + hygiene checklist
 - ☐ Use a strong admin password
 - ☐ Don't expose the camera admin interface to the public internet
-- ☐ Prefer encrypted transfers when possible (**FTPs/SFTP**)
+- ☐ Use encrypted transfers (**FTPS or SFTP** preferred over plain FTP)
 - ☐ Document credentials and ownership so the airport isn't stuck if a volunteer moves on
+
+### FTP/FTPS/SFTP configuration summary
+
+| Setting | Value |
+|---------|-------|
+| Server | `upload.aviationwx.org` |
+| FTPS/FTP Port | `2121` |
+| SFTP Port | `2222` |
+| Directory | `/` (root) |
+| Filename | Timestamp preferred (e.g., `YYYYMMDD_HHMMSS.jpg`) |
+| Format | JPEG (`.jpg` / `.jpeg`) |
+| Interval | 60 seconds (adjust based on bandwidth) |
+| Encryption | FTPS recommended |
 
 ---
 
-## Troubleshooting (common issues)
+## Troubleshooting
+
+### "FTP test fails" or "Connection refused"
+- Verify the server address is exactly `upload.aviationwx.org`
+- Confirm port is `2121` for FTPS/FTP or `2222` for SFTP
+- Check username and password are entered correctly (case-sensitive)
+- Ensure your network allows outbound connections on the required port
+- Try disabling any firewall temporarily to test
+
 ### "It worked for a week then stopped"
-- confirm power stability (and consider UPS if needed)
-- confirm the router/LTE modem recovered after an outage
-- confirm the camera still has network connectivity (DHCP changes are common)
+- Confirm power stability (consider UPS if needed)
+- Confirm the router/LTE modem recovered after an outage
+- Confirm the camera still has network connectivity (DHCP lease may have changed)
+- Check if the camera rebooted and lost FTP settings (some cameras need "save" explicitly)
 
 ### "Uploads are huge / LTE costs are too high"
-- increase the interval (e.g., from 1 minute → 5 minutes)
-- reduce JPEG quality slightly
-- ensure you're not accidentally sending video
+- Increase the interval (e.g., from 1 minute → 5 minutes)
+- Reduce resolution (e.g., 4K → 1080p)
+- Reduce JPEG quality slightly (but stay above 70%)
+- Ensure you're uploading images, not video clips
+- Consider night-time upload reduction for VFR-only fields
 
 ### "Night images are unusable"
-- check camera night settings (avoid settings that create heavy motion blur)
-- consider a slightly different angle to reduce glare
-- consider a second camera optimized for sky/horizon if that helps at your field
+- Check camera night/IR settings (avoid settings that create heavy motion blur)
+- Consider a slightly different angle to reduce glare
+- Accept that some night images will be low-quality; that's okay
+- Consider a second camera optimized for sky/horizon if needed
+
+### "Images are rejected or not appearing"
+- Verify file format is JPEG (not PNG, BMP, or raw)
+- Check file size is under 100 MB
+- Ensure images aren't over-compressed or pixelated
+- Confirm the camera clock is reasonably accurate (within a few minutes)
 
 ### "The camera view is good, but not useful for pilots"
-- revisit Guide 02 framing guidance
-- consider adding a second "wide sky / horizon landmarks" camera
+- Revisit **Guide 02** framing guidance
+- Consider adding a second "wide sky / horizon landmarks" camera
+
+### RTSP: "Stream connection failed" or "Timeout"
+- Verify port forwarding is configured correctly on your router
+- Confirm the camera's internal IP hasn't changed (use static IP or DHCP reservation)
+- Check that your ISP allows inbound connections on the RTSP port
+- Some ISPs block port 554—try a non-standard port (e.g., 8554) if needed
+- Verify credentials are correct (RTSP URLs are case-sensitive)
+
+### RTSP: "Images are blurry or pixelated"
+- Switch from sub stream to main stream for higher resolution
+- Check camera's video encoding settings (H.264 is well-supported)
+- Increase bitrate if your camera allows it
+- Ensure camera lens is clean and properly focused
+
+### RTSP: "Stream works locally but not remotely"
+- Confirm Dynamic DNS is updating your public IP correctly
+- Verify port forwarding rule points to the camera's current internal IP
+- Check if your firewall is blocking the RTSP port
+- Some cameras require specific "external" or "WAN" stream settings
 
 ---
 
 ## Decision (write it down)
-- Camera model(s):
-- Integration method: FTP/FTPs/SFTP / RTSP / Snapshot URL
-- Update interval:
-- Where credentials are stored:
-- Who can reboot / access the camera:
-- How you verify it's working (simple check):
 
-## Next
-If you want, we can add **Guide 09 - Weather Station Configuration** (Tempest / Davis / Ambient defaults, siting checks, and sanity tests).
+After configuring your camera, document these details:
 
+**For all integration methods:**
+
+| Item | Your Answer |
+|------|-------------|
+| Camera model(s) | |
+| Integration method | FTPS / SFTP / FTP / RTSP / Bridge |
+| Capture/upload interval | |
+| Resolution | |
+| Where credentials are stored | |
+| Who can reboot / access the camera | |
+| How you verify it's working | |
+
+**For FTP/FTPS/SFTP (push uploads):**
+
+| Item | Your Answer |
+|------|-------------|
+| Server | `upload.aviationwx.org` |
+| Port | 2121 (FTPS/FTP) / 2222 (SFTP) |
+| Protocol | FTPS / FTP / SFTP |
+| Username | *(from AviationWX)* |
+
+**For RTSP (stream extraction):**
+
+| Item | Your Answer |
+|------|-------------|
+| RTSP URL | |
+| Stream type | Main / Sub |
+| Public IP or DDNS hostname | |
+| RTSP port (forwarded) | |
+| Camera username (view-only) | |
+
+---
+
+## Next steps
+
+1. **Submit your airport** — See **Guide 12** to request upload credentials
+2. **Configure your camera** — Use the settings in this guide
+3. **Monitor for 24-72 hours** — Verify reliable uploads before considering it "done"
+4. **Weather station setup** — See **Guide 09** for weather station configuration
