@@ -94,8 +94,9 @@ function getExifTimestamp(string $filePath): int {
             if ($dateTime !== null) {
                 // Parse EXIF format: "2024:12:26 15:30:45"
                 // Convert to: "2024-12-26 15:30:45"
+                // Our pipeline writes EXIF in UTC (using gmdate), so parse as UTC
                 $formatted = str_replace(':', '-', substr($dateTime, 0, 10)) . substr($dateTime, 10);
-                $timestamp = @strtotime($formatted);
+                $timestamp = @strtotime($formatted . ' UTC');
                 
                 if ($timestamp !== false && $timestamp > 0) {
                     return $timestamp;
@@ -114,8 +115,9 @@ function getExifTimestamp(string $filePath): int {
     
     if ($exitCode === 0 && !empty($output)) {
         // exiftool -s3 returns just the value: "2024:12:26 15:30:45"
+        // Our pipeline writes EXIF in UTC (using gmdate), so parse as UTC
         $formatted = str_replace(':', '-', substr($output, 0, 10)) . substr($output, 10);
-        $timestamp = @strtotime($formatted);
+        $timestamp = @strtotime($formatted . ' UTC');
         
         if ($timestamp !== false && $timestamp > 0) {
             return $timestamp;
@@ -174,7 +176,8 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null): bool {
     }
     
     // Format for EXIF: "2024:12:26 15:30:45"
-    $exifDateTime = date('Y:m:d H:i:s', $timestamp);
+    // Always use gmdate() to write UTC time, matching JavaScript parser expectations
+    $exifDateTime = gmdate('Y:m:d H:i:s', $timestamp);
     
     // Build exiftool command
     // -overwrite_original: Don't create backup files

@@ -176,7 +176,8 @@ function getSourceTimestamps(string $airportId, array $airport): array {
                         if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
                             $dateTime = $exif['EXIF']['DateTimeOriginal'];
                             // Parse EXIF date format: "YYYY:MM:DD HH:MM:SS"
-                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                            // Our pipeline writes EXIF in UTC, so parse as UTC
+                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
                             if ($timestamp !== false && $timestamp > 0) {
                                 $webcamTimestamp = (int)$timestamp;
                             }
@@ -184,7 +185,8 @@ function getSourceTimestamps(string $airportId, array $airport): array {
                         // Also check main EXIF array (some cameras store it there)
                         if ($webcamTimestamp === 0 && isset($exif['DateTimeOriginal'])) {
                             $dateTime = $exif['DateTimeOriginal'];
-                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                            // Our pipeline writes EXIF in UTC, so parse as UTC
+                            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
                             if ($timestamp !== false && $timestamp > 0) {
                                 $webcamTimestamp = (int)$timestamp;
                             }

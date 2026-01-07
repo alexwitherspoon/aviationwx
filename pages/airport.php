@@ -190,7 +190,8 @@ function getImageCaptureTimeForPage($filePath) {
         if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
             $dateTime = $exif['EXIF']['DateTimeOriginal'];
             // Parse EXIF date format: "YYYY:MM:DD HH:MM:SS"
-            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+            // Our pipeline writes EXIF in UTC, so parse as UTC
+            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
             if ($timestamp !== false && $timestamp > 0) {
                 return (int)$timestamp;
             }
@@ -198,7 +199,8 @@ function getImageCaptureTimeForPage($filePath) {
         // Also check main EXIF array (some cameras store it there)
         if (isset($exif['DateTimeOriginal'])) {
             $dateTime = $exif['DateTimeOriginal'];
-            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+            // Our pipeline writes EXIF in UTC, so parse as UTC
+            $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
             if ($timestamp !== false && $timestamp > 0) {
                 return (int)$timestamp;
             }

@@ -184,13 +184,15 @@ function getSourceCaptureTime($filePath) {
         if ($exif !== false) {
             if (isset($exif['EXIF']['DateTimeOriginal'])) {
                 $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                // Our pipeline writes EXIF in UTC, so parse as UTC
+                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
                 if ($timestamp !== false && $timestamp > 0) {
                     return (int)$timestamp;
                 }
             } elseif (isset($exif['DateTimeOriginal'])) {
                 $dateTime = $exif['DateTimeOriginal'];
-                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11));
+                // Our pipeline writes EXIF in UTC, so parse as UTC
+                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
                 if ($timestamp !== false && $timestamp > 0) {
                     return (int)$timestamp;
                 }
