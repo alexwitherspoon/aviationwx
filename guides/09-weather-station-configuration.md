@@ -64,7 +64,7 @@ If you can't get good wind exposure, it is usually better to:
 ### What you need to do
 - **Set up your Tempest station** following WeatherFlow's instructions
 - **Provide AviationWX with API access** (see "Connecting Your Station to AviationWX" below)
-- **That's it** — AviationWX handles polling automatically (every 60 seconds by default)
+- **That's it** - AviationWX handles polling automatically (every 60 seconds by default)
 
 You don't need to configure update cadence or push settings. We pull data from your station's API centrally.
 
@@ -85,7 +85,7 @@ You don't need to configure update cadence or push settings. We pull data from y
 ### What you need to do
 - **Set up your Davis station** with WeatherLink connectivity
 - **Provide AviationWX with API access** (see "Connecting Your Station to AviationWX" below)
-- **That's it** — AviationWX handles polling automatically
+- **That's it** - AviationWX handles polling automatically
 
 Davis installs tend to reward careful mounting and cable hygiene. If your airport or community is already familiar with Davis, lean into that expertise.
 
@@ -105,7 +105,7 @@ Davis installs tend to reward careful mounting and cable hygiene. If your airpor
 ### What you need to do
 - **Set up your Ambient station** and confirm it's reporting to ambientweather.net
 - **Provide AviationWX with API access** (see "Connecting Your Station to AviationWX" below)
-- **That's it** — AviationWX handles polling automatically
+- **That's it** - AviationWX handles polling automatically
 
 ---
 
@@ -155,7 +155,7 @@ If any of these are wildly off, fix siting first. Sensor "calibration" rarely be
 
 ## Troubleshooting data issues on AviationWX
 
-AviationWX performs quality checks on incoming weather data. If we detect problems — missing fields, implausible values, or stale data — we **fail closed** and stop displaying that data rather than show pilots something potentially misleading.
+AviationWX performs quality checks on incoming weather data. If we detect problems - missing fields, implausible values, or stale data - we **fail closed** and stop displaying that data rather than show pilots something potentially misleading.
 
 If your station's data isn't appearing correctly on AviationWX:
 
@@ -200,7 +200,7 @@ Once your station is installed and producing good data, you need to connect it t
 
 ### Your Data Helps More Than Just Pilots
 
-When you connect your station to AviationWX, your data doesn't just help pilots at your airport — **we publish quality-checked weather observations to NOAA** to support broader forecasting efforts. Your local weather station becomes part of the national observation network, contributing to better weather predictions for everyone.
+When you connect your station to AviationWX, your data doesn't just help pilots at your airport - **we publish quality-checked weather observations to NOAA** to support broader forecasting efforts. Your local weather station becomes part of the national observation network, contributing to better weather predictions for everyone.
 
 ### Supported Weather Sources
 
@@ -217,7 +217,7 @@ AviationWX supports five weather station platforms plus METAR-only configuration
 
 ---
 
-## Tempest (WeatherFlow) — What We Need
+## Tempest (WeatherFlow) - What We Need
 
 Tempest is our **recommended default** for new community installs.
 
@@ -232,14 +232,14 @@ Tempest is our **recommended default** for new community installs.
 
 1. **Create a WeatherFlow account** (if you don't have one) at [tempestwx.com](https://tempestwx.com)
 2. **Go to the developer portal**: [tempestwx.com/settings/tokens](https://tempestwx.com/settings/tokens)
-3. **Create a new token** — give it a descriptive name like "AviationWX Integration"
-4. **Copy the token** — this is your `api_key`
+3. **Create a new token** - give it a descriptive name like "AviationWX Integration"
+4. **Copy the token** - this is your `api_key`
 
 ### How to Find Your Station ID
 
 1. Open the Tempest app or go to [tempestwx.com](https://tempestwx.com)
 2. Select your station
-3. The station ID is in the URL: `tempestwx.com/station/XXXXX` — the number is your `station_id`
+3. The station ID is in the URL: `tempestwx.com/station/XXXXX` - the number is your `station_id`
 
 ### Configuration Example
 
@@ -257,7 +257,7 @@ Tempest is our **recommended default** for new community installs.
 
 ---
 
-## Ambient Weather — What We Need
+## Ambient Weather - What We Need
 
 Good for existing Ambient Weather stations or budget-conscious installs.
 
@@ -275,8 +275,8 @@ Good for existing Ambient Weather stations or budget-conscious installs.
 2. **Go to My Devices**: Click your profile → "My Devices"
 3. **Access API Keys**: Click the settings icon next to your device, then "API Keys"
 4. **Create keys**: 
-   - Click "Create API Key" — this is your `api_key`
-   - Click "Create Application Key" — this is your `application_key`
+   - Click "Create API Key" - this is your `api_key`
+   - Click "Create Application Key" - this is your `application_key`
 
 > **Note**: Ambient requires both keys for API access. The `api_key` is tied to your account, and the `application_key` is for rate limiting.
 
@@ -307,7 +307,7 @@ With specific device (if you have multiple):
 
 ---
 
-## Davis WeatherLink — What We Need
+## Davis WeatherLink - What We Need
 
 Professional-grade option for long-term, high-reliability installs.
 
@@ -347,7 +347,7 @@ Professional-grade option for long-term, high-reliability installs.
 
 ---
 
-## PWSWeather (via AerisWeather) — What We Need
+## PWSWeather (via AerisWeather) - What We Need
 
 For stations that upload to PWSWeather.com. Data is accessed through the AerisWeather API.
 
@@ -394,7 +394,7 @@ PWSWeather station owners get **free access** to the AerisWeather API for their 
 
 ---
 
-## SynopticData — What We Need
+## SynopticData - What We Need
 
 Best used as a backup source or for accessing aggregated weather networks (170,000+ stations worldwide).
 
@@ -405,7 +405,7 @@ Best used as a backup source or for accessing aggregated weather networks (170,0
 | `station_id` | SynopticData station ID (STID) |
 | **Permission** | Your authorization for AviationWX to access your station's data |
 
-> **Note**: AviationWX maintains a central API key with SynopticData. You don't need to create your own API token — just provide the station ID and permission.
+> **Note**: AviationWX maintains a central API key with SynopticData. You don't need to create your own API token - just provide the station ID and permission.
 
 ### How to Find Your Station ID
 
@@ -413,7 +413,7 @@ Best used as a backup source or for accessing aggregated weather networks (170,0
 2. **Search by location** or browse the map
 3. **Find your station** and note the **STID** (Station ID)
 
-If you're not sure whether your station is in SynopticData's network, search by location — they aggregate data from many regional and national networks.
+If you're not sure whether your station is in SynopticData's network, search by location - they aggregate data from many regional and national networks.
 
 ### What to Send Us
 
@@ -430,7 +430,7 @@ We'll handle the API integration on our end.
 
 ---
 
-## METAR Only — What We Need
+## METAR Only - What We Need
 
 If an airport has official METAR reporting, you can use that as the primary weather source. **No API key required.**
 

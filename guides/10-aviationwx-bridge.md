@@ -7,7 +7,7 @@ The AviationWX Bridge is an **optional tool** that runs on a small local device 
 - validating image quality and timestamps, and
 - uploading them reliably to AviationWX via FTPS.
 
-Think of it as a dedicated "camera assistant" that sits on your local network and makes sure images get to AviationWX—even when your cameras don't natively support scheduled FTP uploads.
+Think of it as a dedicated "camera assistant" that sits on your local network and makes sure images get to AviationWX-even when your cameras don't natively support scheduled FTP uploads.
 
 ```
 +-----------------------------------------------------------------------------+
@@ -39,7 +39,7 @@ Think of it as a dedicated "camera assistant" that sits on your local network an
 
 ### Problem: Not all cameras support scheduled uploads
 
-Many camera systems—especially **UniFi Protect**, **NVR-based systems**, and some **enterprise cameras**—don't offer built-in FTP/FTPS upload scheduling. They're designed around continuous video recording, not periodic still images.
+Many camera systems-especially **UniFi Protect**, **NVR-based systems**, and some **enterprise cameras**-don't offer built-in FTP/FTPS upload scheduling. They're designed around continuous video recording, not periodic still images.
 
 ### Problem: RTSP frame grabs can have quality issues
 
@@ -48,7 +48,7 @@ When AviationWX extracts still images from an RTSP video stream, the result depe
 - video compression artifacts
 - the camera's encoding settings
 
-This can lead to **pixelation**, **blur**, or **inconsistent quality**—especially on congested networks or over cellular connections.
+This can lead to **pixelation**, **blur**, or **inconsistent quality**-especially on congested networks or over cellular connections.
 
 ### Solution: The Bridge handles it locally
 
