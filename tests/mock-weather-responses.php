@@ -257,4 +257,3 @@ function getMockSynopticDataResponse() {
         ]]
     ]);
 }
-

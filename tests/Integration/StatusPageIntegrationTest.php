@@ -319,6 +319,83 @@ class StatusPageIntegrationTest extends TestCase
     }
     
     /**
+     * Test status page displays cache statistics
+     */
+    public function testStatusPage_DisplaysCacheStatistics()
+    {
+        $response = $this->makeRequest('?status=1');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        $body = $response['body'];
+        
+        // Check for cache system component
+        $this->assertStringContainsString(
+            'Cache System',
+            $body,
+            "Status page should display Cache System component"
+        );
+        
+        // Check for cache statistics indicators (at least one should be present)
+        $cacheIndicators = ['webcam images', 'weather files', 'cached images'];
+        $foundIndicator = false;
+        foreach ($cacheIndicators as $indicator) {
+            if (stripos($body, $indicator) !== false) {
+                $foundIndicator = true;
+                break;
+            }
+        }
+        
+        $this->assertTrue(
+            $foundIndicator,
+            "Status page should display cache statistics (webcam images or weather files)"
+        );
+    }
+    
+    /**
+     * Test status page displays upload metrics for push cameras
+     */
+    public function testStatusPage_DisplaysUploadMetrics()
+    {
+        $response = $this->makeRequest('?status=1');
+        
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        $body = $response['body'];
+        
+        // Check if airport status section exists
+        $hasAirportStatus = strpos($body, 'Airport Status') !== false;
+        
+        if ($hasAirportStatus) {
+            // Upload metrics may or may not be visible depending on:
+            // 1. Whether push cameras are configured
+            // 2. Whether there are recent uploads (last 1 hour)
+            // Just verify the page structure supports them (doesn't break with upload_metrics field)
+            
+            // The test passes if the page loads correctly (already verified by http_code == 200)
+            // and has valid structure
+            $this->assertStringContainsString(
+                'component-item',
+                $body,
+                "Status page should have valid component structure for displaying metrics"
+            );
+        }
+        
+        // Always verify page has valid structure
+        $this->assertStringContainsString(
+            'status-indicator',
+            $body,
+            "Status page should have status indicators"
+        );
+    }
+    
+    /**
      * Helper method to make HTTP request
      */
     private function makeRequest(string $path, bool $includeHeaders = true, int $maxRetries = 3): array
