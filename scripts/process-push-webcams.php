@@ -433,12 +433,12 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
 function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
     $maxWait = time() - $startTime >= $maxWaitSeconds;
     
-    // Quick check: if file is old (more than 2 seconds), assume it's stable
+    // Quick check: if file is old (more than 3 seconds), assume it's stable
     $mtime = @filemtime($file);
     if ($mtime !== false) {
         $age = time() - $mtime;
-        if ($age >= 2) {
-            // File is at least 2 seconds old, very likely fully written
+        if ($age >= 3) {
+            // File is at least 3 seconds old, very likely fully written
             // Still do a quick size check to be sure
             $size = @filesize($file);
             if ($size !== false && $size > 0) {
@@ -447,35 +447,50 @@ function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
         }
     }
     
-    // For newer files, check size stability
-    $size1 = @filesize($file);
-    if ($size1 === false) {
-        return false;
-    }
+    // For newer files or slow uploads, check size stability multiple times
+    // This handles slow network uploads that take several seconds
+    $stableChecks = 0;
+    $requiredStableChecks = 2; // Need 2 consecutive stable readings
+    $lastSize = null;
     
-    // Wait a bit and check again (only for files that might still be writing)
-    usleep(500000); // 0.5 seconds
-    
-    $size2 = @filesize($file);
-    if ($size2 === false) {
-        return false;
-    }
-    
-    // If sizes match and we've waited enough or hit max wait, consider it stable
-    if ($size1 === $size2) {
-        // Check mtime - file should be at least 1 second old (not currently being written)
-        if ($mtime === false) {
-            $mtime = @filemtime($file);
+    for ($i = 0; $i < 4; $i++) { // Up to 4 checks = ~2 seconds total wait
+        $size = @filesize($file);
+        if ($size === false) {
+            return false;
         }
-        if ($mtime !== false) {
-            $age = time() - $mtime;
-            if ($age >= 1 || $maxWait) {
-                return true;
+        
+        if ($lastSize !== null && $size === $lastSize) {
+            $stableChecks++;
+            if ($stableChecks >= $requiredStableChecks) {
+                // Size stable for multiple checks
+                // Verify file mtime hasn't changed recently
+                if ($mtime === false) {
+                    $mtime = @filemtime($file);
+                }
+                if ($mtime !== false) {
+                    $age = time() - $mtime;
+                    // File must be at least 1 second old OR we've hit max wait
+                    if ($age >= 1 || $maxWait) {
+                        return true;
+                    }
+                }
             }
         } else {
-            // Can't get mtime, but sizes match - assume stable
-            return $maxWait;
+            // Size changed, reset stability counter
+            $stableChecks = 0;
         }
+        
+        $lastSize = $size;
+        
+        // Don't wait on last iteration
+        if ($i < 3) {
+            usleep(500000); // 0.5 seconds between checks
+        }
+    }
+    
+    // If we've hit max wait time and size is stable, accept it
+    if ($maxWait && $stableChecks > 0) {
+        return true;
     }
     
     return false;
@@ -556,6 +571,65 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
             trackWebcamUploadRejected($airportId, $camIndex, 'invalid_format');
         }
         return false;
+    }
+    
+    // Check for truncated/incomplete uploads
+    // Slow/interrupted uploads can result in partial files with missing end markers
+    // This causes decoder artifacts (solid color blocks, green bars, corruption)
+    require_once __DIR__ . '/../lib/webcam-history.php';
+    
+    $isComplete = false;
+    if ($format === 'jpeg') {
+        $isComplete = isJpegComplete($file);
+    } elseif ($format === 'png') {
+        $isComplete = isPngComplete($file);
+    } elseif ($format === 'webp') {
+        $isComplete = isWebpComplete($file);
+    } else {
+        // Unknown format passed format detection - shouldn't happen, but allow
+        $isComplete = true;
+    }
+    
+    if (!$isComplete) {
+        aviationwx_log('warning', 'push webcam incomplete upload detected, rejecting', [
+            'file' => basename($file),
+            'format' => $format,
+            'size' => $size
+        ], 'app');
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'incomplete_upload');
+        }
+        return false;
+    }
+    
+    // Validate GD can parse the image (catches corruption that passes structure checks)
+    // This is critical for push cameras as we can't re-fetch a corrupt upload
+    if (function_exists('imagecreatefromstring')) {
+        $imageData = @file_get_contents($file);
+        if ($imageData === false) {
+            aviationwx_log('warning', 'push webcam file read failed during GD validation', [
+                'file' => basename($file)
+            ], 'app');
+            if ($airportId !== null && $camIndex !== null) {
+                trackWebcamUploadRejected($airportId, $camIndex, 'file_read_error');
+            }
+            return false;
+        }
+        
+        $testImg = @imagecreatefromstring($imageData);
+        if ($testImg === false) {
+            aviationwx_log('warning', 'push webcam GD parsing failed, image corrupt', [
+                'file' => basename($file),
+                'format' => $format,
+                'size' => $size
+            ], 'app');
+            if ($airportId !== null && $camIndex !== null) {
+                trackWebcamUploadRejected($airportId, $camIndex, 'image_corrupt');
+            }
+            return false;
+        }
+        imagedestroy($testImg);
+        unset($imageData); // Free memory
     }
     
     // Validate image content (error frame, uniform color, pixelation, etc.)

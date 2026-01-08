@@ -2517,6 +2517,17 @@ if (php_sapi_name() === 'cli') {
                                                 'exif_rewrite_failed' => 'EXIF Update Failed',
                                                 'invalid_exif_timestamp' => 'Invalid Timestamp',
                                                 'validation_failed' => 'Invalid Image',
+                                                'incomplete_upload' => 'Incomplete Upload',
+                                                'image_corrupt' => 'Corrupt Image',
+                                                'file_read_error' => 'File Error',
+                                                'error_frame' => 'Error Frame',
+                                                'file_not_readable' => 'File Error',
+                                                'size_too_small' => 'Too Small',
+                                                'size_limit_exceeded' => 'Too Large',
+                                                'extension_not_allowed' => 'Wrong Format',
+                                                'invalid_mime_type' => 'Invalid MIME',
+                                                'invalid_format' => 'Invalid Format',
+                                                'exif_invalid' => 'EXIF Invalid',
                                                 'system_error' => 'System Error'
                                             ];
                                             $reasonDisplay = $reasonLabels[$topReason] ?? ucwords(str_replace('_', ' ', $topReason));
