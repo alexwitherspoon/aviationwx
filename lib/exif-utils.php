@@ -16,6 +16,11 @@ require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/config.php';
 
+// EXIF Timestamp Normalization Constants
+// Used for timezone detection and validation of push camera uploads
+const EXIF_ACCEPTABLE_TIME_DRIFT_SECONDS = 300;     // 5 minutes (upload delay, clock drift, processing)
+const EXIF_TIMEZONE_DETECTION_VARIANCE = 600;       // 10 minutes (tolerance around round hour offsets)
+
 /**
  * Check if exiftool is available
  * 
@@ -249,12 +254,6 @@ function ensureExifTimestamp(string $filePath): bool {
  * @return bool True if image timestamp is reliable and normalized
  */
 function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex): bool {
-    // Time drift/inaccuracy tolerance (upload delay, clock drift, processing time)
-    $ACCEPTABLE_TIME_DRIFT_SECONDS = 300;  // 5 minutes
-    
-    // Timezone detection variance (how close to round hour to accept)
-    $TIMEZONE_DETECTION_VARIANCE = 600;    // 10 minutes around round hours
-    
     // Get server file modification time (UTC, set on upload completion)
     $mtime = filemtime($filePath);
     if ($mtime === false) {
@@ -287,7 +286,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex):
     
     // Case B: EXIF is in future (beyond acceptable drift)
     // Allows small future times for clock drift, NTP delays
-    if ($diff < -$ACCEPTABLE_TIME_DRIFT_SECONDS) {
+    if ($diff < -EXIF_ACCEPTABLE_TIME_DRIFT_SECONDS) {
         aviationwx_log('warn', 'Push camera image rejected: EXIF timestamp in future', [
             'file' => basename($filePath),
             'airport' => $airportId,
@@ -303,7 +302,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex):
     
     // Case C: EXIF ≈ mtime (already UTC, within acceptable drift)
     // This handles: camera already writes UTC, upload delays, clock drift
-    if ($absDiff <= $ACCEPTABLE_TIME_DRIFT_SECONDS) {
+    if ($absDiff <= EXIF_ACCEPTABLE_TIME_DRIFT_SECONDS) {
         aviationwx_log('debug', 'Push camera EXIF already UTC', [
             'file' => basename($filePath),
             'airport' => $airportId,
@@ -317,7 +316,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex):
     
     // Case D: Detect timezone offset
     // EXIF differs by more than drift tolerance - likely timezone issue (expected!)
-    $detectedOffset = detectTimezoneOffset($diff, $TIMEZONE_DETECTION_VARIANCE);
+    $detectedOffset = detectTimezoneOffset($diff, EXIF_TIMEZONE_DETECTION_VARIANCE);
     
     if ($detectedOffset !== null) {
         // Found a plausible timezone offset
@@ -325,7 +324,7 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex):
         $correctedDiff = $mtime - $utcTimestamp;
         
         // Validate corrected timestamp is within acceptable drift
-        if (abs($correctedDiff) <= $ACCEPTABLE_TIME_DRIFT_SECONDS) {
+        if (abs($correctedDiff) <= EXIF_ACCEPTABLE_TIME_DRIFT_SECONDS) {
             // Timezone correction successful, but check age
             $imageAge = time() - $utcTimestamp;
             $maxAge = getHistoryRetentionSeconds($airportId);
