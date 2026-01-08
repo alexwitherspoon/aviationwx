@@ -126,7 +126,7 @@ If your camera asks about FTP server mode or transfer mode, use these settings:
 | **Resolution** | 1080p or 720p | Higher resolution = upload less frequently |
 | **File format** | JPEG | Required; PNG also accepted but larger |
 | **Timezone** | Local airport timezone | Critical for accurate observation times |
-| **Time sync** | NTP enabled | Ensures accurate timestamps |
+| **Time sync (NTP)** | Enabled, sync every 60-120 minutes | Prevents time drift in outdoor conditions (see below) |
 | **Time overlay** | Enabled | Burn timestamp into image for safety |
 | **Name overlay** | Descriptive name | E.g., "South Runway", "North Approach" |
 | **Night mode** | Camera default | Prefer usable image over perfect; avoid heavy blur |
@@ -159,6 +159,53 @@ Accurate timestamps and clear identification are critical for aviation weather. 
 - Use a contrasting background (semi-transparent black) for readability
 
 > **Why this matters:** In aviation, knowing the observation time is safety-critical. A beautiful clear-sky image from 2 hours ago doesn't help a pilot making a go/no-go decision right now. The on-screen timestamp provides an instant visual confirmation of freshness.
+
+**NTP (Network Time Protocol) configuration:**
+
+Accurate time synchronization is critical for aviation weather. Cameras use a small quartz crystal oscillator to keep time between NTP syncs, and these crystals drift - especially in outdoor temperature extremes.
+
+**Why NTP sync frequency matters:**
+- Camera quartz crystals drift faster in temperature extremes (outdoor installations)
+- Default NTP sync (once per day / 1440 minutes) allows significant drift accumulation
+- A camera drifting +/- 5-10 minutes can show incorrect observation times
+- In aviation, even a few minutes matters for rapidly changing conditions
+- NTP sync requests are lightweight - syncing hourly has negligible network impact
+
+**Recommended NTP settings:**
+
+| Setting | Recommendation | Notes |
+|---------|----------------|-------|
+| **NTP enabled** | Yes (required) | Disable any manual time setting |
+| **NTP server** | Camera default (pool.ntp.org) | Or use your router/local NTP server |
+| **Sync interval** | **60-120 minutes** | Much better than default 1440 minutes (24 hours) |
+| **Time zone** | Local airport time zone | Critical - set correctly |
+| **DST (Daylight Saving Time)** | Auto (if available) | Ensures correct time year-round |
+
+> **Safety-critical recommendation:** Configure your camera to sync time every **60-120 minutes** instead of the typical default of once per day (1440 minutes). This prevents time drift from accumulating and ensures accurate observation timestamps. NTP sync is a tiny, infrequent network request and won't meaningfully impact bandwidth or power consumption.
+
+**Reolink NTP configuration:**
+1. Navigate to **Device Settings** → **System** → **Time**
+2. Enable **NTP**
+3. Set **NTP Server**: Use default or enter your preferred NTP server
+4. Set **Time Zone**: Select your local airport time zone
+5. **Sync Interval**: Look for "NTP Interval" or "Sync Frequency"
+   - Change from default 1440 minutes → **60 or 120 minutes**
+   - [Reolink NTP configuration guide](https://support.reolink.com/hc/en-us/articles/360018700554-How-to-Use-NTP-to-Synchronize-Time-via-Web-Browsers/)
+
+> **Note:** Some camera models may not expose the NTP sync interval in the UI. If you can't find this setting, verify via the web interface or contact the manufacturer. Most modern IP cameras support configurable NTP intervals.
+
+**Testing time accuracy:**
+1. Set up NTP with recommended interval (60-120 minutes)
+2. Let camera run for 24-48 hours outdoors
+3. Compare camera timestamp overlay against accurate time source
+4. Drift should be minimal (< 30 seconds) with proper NTP sync
+
+**If time drift persists:**
+- Verify NTP server is reachable (test with `ping` or check camera logs)
+- Confirm time zone is set correctly (not UTC unless your airport is in UTC)
+- Check for network issues that might prevent NTP sync
+- Consider upgrading camera firmware if available
+- As a last resort, use a more frequent sync interval (30-60 minutes)
 
 **Upload interval guidance:**
 
@@ -324,7 +371,7 @@ Reolink cameras are well-tested with AviationWX and offer reliable scheduled FTP
 | **Image quality** | Display → Image | High or above |
 | **Resolution** | Display → Stream | Main stream: 1080p or higher |
 | **Timezone** | System → Time | Set to local airport timezone |
-| **Time sync** | System → Time | Enable NTP sync |
+| **Time sync (NTP)** | System → Time | Enable NTP, set sync interval to 60-120 minutes |
 | **Time overlay** | Display → OSD | Enable; position in corner |
 | **Camera name** | Display → OSD → Channel Name | E.g., "South Runway" |
 | **Auto-reboot** | System → Maintenance | Weekly reboot can help reliability |
