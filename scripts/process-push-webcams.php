@@ -394,6 +394,11 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
                 ensureExifTimestamp($file);
             }
             
+            // Normalize EXIF timestamp to UTC (many cameras write local time)
+            // Must be done AFTER validation (which checks existing EXIF) but BEFORE moving to cache
+            // This ensures JavaScript EXIF verification succeeds (expects UTC timestamps)
+            normalizeExifToUtc($file);
+            
             // Validate image (with per-camera limits and airport for phase-aware detection)
             if (validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
                 return $file;

@@ -230,6 +230,41 @@ function ensureExifTimestamp(string $filePath): bool {
 }
 
 /**
+ * Normalize EXIF timestamp to UTC for push camera uploads
+ * 
+ * Many cameras write EXIF DateTimeOriginal in local time without timezone info.
+ * This causes verification failures when JavaScript expects UTC timestamps.
+ * 
+ * This function:
+ * 1. Uses file mtime (set by server on upload, always UTC) as authoritative timestamp
+ * 2. Overwrites EXIF DateTimeOriginal to match mtime in UTC format
+ * 3. Ensures client-side verification succeeds (JavaScript expects UTC)
+ * 
+ * Use for ALL push camera uploads after validation, before moving to cache.
+ * 
+ * @param string $filePath Path to image
+ * @return bool True on success
+ */
+function normalizeExifToUtc(string $filePath): bool {
+    if (!file_exists($filePath)) {
+        return false;
+    }
+    
+    // Use file mtime as authoritative timestamp (server time, always UTC)
+    $timestamp = filemtime($filePath);
+    
+    if ($timestamp === false) {
+        aviationwx_log('error', 'normalizeExifToUtc: Could not read file mtime', [
+            'file' => basename($filePath)
+        ]);
+        return false;
+    }
+    
+    // Overwrite EXIF with UTC timestamp
+    return addExifTimestamp($filePath, $timestamp);
+}
+
+/**
  * Add AviationWX.org attribution metadata to webcam image
  * 
  * Adds IPTC and XMP metadata for attribution, copyright, and location.
