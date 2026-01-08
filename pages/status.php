@@ -12,6 +12,7 @@ require_once __DIR__ . '/../lib/process-utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/weather-health.php';
+require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
 
 // =============================================================================
 // OPTIMIZATION: Cached data loaders
@@ -1366,7 +1367,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
             }
             
             // Add per-camera component
-            $webcamComponents[] = [
+            $webcamComponent = [
                 'name' => "{$camName} ({$cameraType})",
                 'status' => $camStatus,
                 'message' => $detailedMessage,
@@ -1375,6 +1376,14 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 'available_variants' => isset($availableVariants) ? $availableVariants : null,
                 'total_variants' => isset($totalVariants) ? $totalVariants : null
             ];
+            
+            // Add upload metrics for push cameras
+            if ($isPush) {
+                $uploadMetrics = getWebcamUploadMetrics($airportId, $idx);
+                $webcamComponent['upload_metrics'] = $uploadMetrics;
+            }
+            
+            $webcamComponents[] = $webcamComponent;
             
             // Track issues for aggregate message
             if ($camStatus === 'down') {
@@ -2510,7 +2519,20 @@ if (php_sapi_name() === 'cli') {
                         <li class="component-item">
                             <div class="component-info">
                                 <div class="component-name"><?php echo htmlspecialchars($camera['name']); ?></div>
-                                <div class="component-message"><?php echo htmlspecialchars($camera['message']); ?></div>
+                                <div class="component-message">
+                                    <?php echo htmlspecialchars($camera['message']); ?>
+                                    <?php if (isset($camera['upload_metrics'])): ?>
+                                        <?php 
+                                        $metrics = $camera['upload_metrics'];
+                                        $accepted = $metrics['accepted'] ?? 0;
+                                        $rejected = $metrics['rejected'] ?? 0;
+                                        if ($accepted > 0 || $rejected > 0): 
+                                        ?>
+                                        <span style="color: #ccc;"> • </span>
+                                        Images Accepted <?php echo $accepted; ?> / Rejected <?php echo $rejected; ?>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
                                 <?php if (isset($camera['lastChanged']) && $camera['lastChanged'] > 0): ?>
                                 <div class="component-timestamp">
                                     Last changed: <?php echo formatRelativeTime($camera['lastChanged']); ?>
