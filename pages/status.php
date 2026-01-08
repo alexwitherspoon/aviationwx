@@ -1229,47 +1229,16 @@ function checkAirportHealth(string $airportId, array $airport): array {
             
             // Check variant availability (height-based variants)
             require_once __DIR__ . '/../lib/webcam-metadata.php';
-            $variantHeights = getVariantHeights($airportId, $idx);
-            $formats = getEnabledWebcamFormats(); // Dynamic based on config (jpg always, webp if enabled)
-            $variantAvailability = [];
-            // Original is only stored in source format (not all formats), so count it once
-            // Height variants are generated in all enabled formats
-            $totalVariants = count($variantHeights) * count($formats) + 1; // 1 original + height variants in all formats
-            $availableVariants = 0;
+            require_once __DIR__ . '/../lib/webcam-variant-manifest.php';
             
             // Get latest timestamp to check variants
             $latestTimestamp = getLatestImageTimestamp($airportId, $idx);
-            if ($latestTimestamp > 0) {
-                $availableVariantsData = getAvailableVariants($airportId, $idx, $latestTimestamp);
-                
-                // Check original (only one original file exists, in source format)
-                $originalAvailable = isset($availableVariantsData['original']) && !empty($availableVariantsData['original']);
-                $variantAvailability['original'] = $originalAvailable;
-                if ($originalAvailable) {
-                    $availableVariants++;
-                }
-                
-                // Check height-based variants
-                foreach ($variantHeights as $height) {
-                    foreach ($formats as $format) {
-                        $available = isset($availableVariantsData[$height]) && in_array($format, $availableVariantsData[$height]);
-                        $variantAvailability[$height . '_' . $format] = $available;
-                        if ($available) {
-                            $availableVariants++;
-                        }
-                    }
-                }
-            } else {
-                // No image available - mark all as unavailable
-                foreach ($variantHeights as $height) {
-                    foreach ($formats as $format) {
-                        $variantAvailability[$height . '_' . $format] = false;
-                    }
-                }
-                $variantAvailability['original'] = false;
-            }
+            $variantCoverage = null;
             
-            $variantCoverage = $totalVariants > 0 ? ($availableVariants / $totalVariants) : 0;
+            if ($latestTimestamp > 0) {
+                // Use manifest-based coverage (dynamic based on actual generation)
+                $variantCoverage = getVariantCoverage($airportId, $idx, $latestTimestamp);
+            }
             
             // Get refresh seconds (min 60)
             $webcamRefresh = isset($cam['refresh_seconds']) 

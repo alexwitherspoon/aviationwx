@@ -1106,6 +1106,10 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
             return false;
         }
         
+        // Store variant manifest for status reporting
+        require_once __DIR__ . '/../lib/webcam-variant-manifest.php';
+        storeVariantManifest($airportId, $camIndex, $timestamp, $variantResult);
+        
         $promotedFormats = [];
         foreach ($variantResult['variants'] as $height => $formats) {
             $promotedFormats = array_merge($promotedFormats, array_keys($formats));

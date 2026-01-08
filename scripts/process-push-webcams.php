@@ -655,6 +655,10 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
     $success = $variantResult['original'] !== null && !empty($variantResult['variants']);
     
     if ($success) {
+        // Store variant manifest for status reporting
+        require_once __DIR__ . '/../lib/webcam-variant-manifest.php';
+        storeVariantManifest($airportId, $camIndex, $timestamp, $variantResult);
+        
         $variantCount = 0;
         foreach ($variantResult['variants'] as $formats) {
             $variantCount += count($formats);
@@ -891,6 +895,10 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
             cleanupStagingFiles($airportId, $camIndex);
             return false;
         }
+        
+        // Store variant manifest for status reporting
+        require_once __DIR__ . '/../lib/webcam-variant-manifest.php';
+        storeVariantManifest($airportId, $camIndex, $timestamp, $variantResult);
         
         $promotedFormats = [];
         foreach ($variantResult['variants'] as $height => $formats) {
