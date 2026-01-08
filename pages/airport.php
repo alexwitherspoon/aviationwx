@@ -5822,6 +5822,7 @@ const timestampCheckPending = {};
 const timestampCheckRetries = {}; // Track retry attempts
 const CAM_TS = {}; // In-memory timestamps per camera (no UI field)
 const CAM_LAST_FETCH = {}; // Track when each webcam was last successfully fetched (client time ms)
+const CAM_VARIANT_HEIGHTS = {}; // Store available variant heights per camera from API (avoid fallback on first load)
 let webcamVisibilityDebounceTimer = null; // Debounce visibility/focus events
 
 // Initialize CAM_TS with server-side timestamps from initial image load
@@ -5935,6 +5936,21 @@ function updateWebcamTimestampOnLoad(camIndex, retryCount = 0) {
                         updateTimestampDisplay(timestampElem, newTimestamp);
                     }
                     CAM_TS[camIndex] = newTimestamp;
+                    
+                    // Store variant heights from API for use in safeSwapCameraImage
+                    if (data.variantHeights && Array.isArray(data.variantHeights)) {
+                        CAM_VARIANT_HEIGHTS[camIndex] = data.variantHeights;
+                    } else if (data.variants) {
+                        // Extract from variants object
+                        const heights = Object.keys(data.variants)
+                            .filter(v => v !== 'original' && !isNaN(parseInt(v)))
+                            .map(v => parseInt(v))
+                            .sort((a, b) => b - a);
+                        if (heights.length > 0) {
+                            CAM_VARIANT_HEIGHTS[camIndex] = heights;
+                        }
+                    }
+                    
                     // Reset retry count on success
                     timestampCheckRetries[camIndex] = 0;
                 }
@@ -6469,8 +6485,11 @@ function setupWebcamRefresh(camIndex, baseInterval) {
     // Initialize last fetch tracking
     CAM_LAST_FETCH[camIndex] = Date.now();
     
-    // First refresh: Immediate (user gets data quickly, handles stale images)
-    safeSwapCameraImage(camIndex);
+    // First refresh: Delay by 100ms to allow API response to arrive with variant heights
+    // This prevents 404s on first load due to fallback variant heights ([1080, 720, 360])
+    setTimeout(() => {
+        safeSwapCameraImage(camIndex);
+    }, 100);
     
     // Register with timer worker
     const timerId = 'webcam-' + camIndex;
@@ -7313,12 +7332,18 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             
             const preferredFormat = getPreferredFormat(serverFormats);
             // Get available variant heights from API response or extract from variants
+            // Use cached value if already fetched for this camera (avoids fallback on race)
             const variantHeights = json.variantHeights && Array.isArray(json.variantHeights) 
                 ? json.variantHeights 
                 : (json.variants ? Object.keys(json.variants)
                     .filter(v => v !== 'original' && !isNaN(parseInt(v)))
                     .map(v => parseInt(v))
-                    .sort((a, b) => b - a) : [1080, 720, 360]);
+                    .sort((a, b) => b - a) 
+                : (CAM_VARIANT_HEIGHTS[camIndex] || [1080, 720, 360])); // Use cached or fallback
+            
+            // Cache variant heights for this camera to avoid fallback on first load
+            CAM_VARIANT_HEIGHTS[camIndex] = variantHeights;
+            
             const preferredVariant = getPreferredVariant(null, variantHeights);
             
             // Build image URL with timestamp and variant parameters (immutable cache busting)
