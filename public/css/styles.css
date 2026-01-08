@@ -303,7 +303,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1250px;
     margin: 0 auto;
     padding: 1rem;
 }
@@ -336,7 +336,7 @@ body {
     align-items: center;
     gap: 0.75rem;
     width: 100%;
-    max-width: 1200px;
+    max-width: 1250px;
     margin: 0 auto;
     justify-content: center;
     position: relative;
