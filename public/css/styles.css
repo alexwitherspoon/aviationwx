@@ -2470,3 +2470,45 @@ body.dark-mode .loading {
     }
 }
 
+/* =============================================================================
+ * Flight Category Colors (VFR/MVFR/IFR/LIFR)
+ * Used on airport dashboard Condition field
+ * ============================================================================= */
+
+/* Light mode flight category colors */
+.weather-value.status-vfr {
+    color: #28a745 !important; /* Green for VFR */
+    font-weight: 600;
+}
+
+.weather-value.status-mvfr {
+    color: #007bff !important; /* Blue for MVFR */
+    font-weight: 600;
+}
+
+.weather-value.status-ifr {
+    color: #dc3545 !important; /* Red for IFR */
+    font-weight: 600;
+}
+
+.weather-value.status-lifr {
+    color: #ff00ff !important; /* Magenta for LIFR */
+    font-weight: 600;
+}
+
+/* Dark mode flight category colors (explicit dark mode only) */
+body.dark-mode .weather-value.status-vfr {
+    color: #4CAF50 !important; /* Brighter green for dark mode */
+}
+
+body.dark-mode .weather-value.status-mvfr {
+    color: #2196F3 !important; /* Brighter blue for dark mode */
+}
+
+body.dark-mode .weather-value.status-ifr {
+    color: #f44336 !important; /* Brighter red for dark mode */
+}
+
+body.dark-mode .weather-value.status-lifr {
+    color: #ff4dff !important; /* Brighter magenta for dark mode */
+}
