@@ -394,14 +394,23 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
                 ensureExifTimestamp($file);
             }
             
-            // Normalize EXIF timestamp to UTC (many cameras write local time)
-            // Must be done AFTER validation (which checks existing EXIF) but BEFORE moving to cache
-            // This ensures JavaScript EXIF verification succeeds (expects UTC timestamps)
-            normalizeExifToUtc($file);
-            
             // Validate image (with per-camera limits and airport for phase-aware detection)
-            if (validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
-                return $file;
+            if (!validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
+                trackWebcamUploadRejected($airportId, $camIndex, 'validation_failed');
+                continue; // Try next file
+            }
+            
+            // Normalize EXIF timestamp to UTC
+            // Local time is ENCOURAGED (helps operators match their clocks)
+            // This detects timezone offset and rewrites EXIF to UTC for client verification
+            // Rejects images with unreliable timestamps (safety-critical)
+            if (!normalizeExifToUtc($file, $airportId, $camIndex)) {
+                trackWebcamUploadRejected($airportId, $camIndex, 'invalid_exif_timestamp');
+                continue; // Skip this image, try next
+            }
+            
+            trackWebcamUploadAccepted($airportId, $camIndex);
+            return $file;
             }
         }
     }

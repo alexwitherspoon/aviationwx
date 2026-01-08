@@ -233,35 +233,285 @@ function ensureExifTimestamp(string $filePath): bool {
  * Normalize EXIF timestamp to UTC for push camera uploads
  * 
  * Many cameras write EXIF DateTimeOriginal in local time without timezone info.
- * This causes verification failures when JavaScript expects UTC timestamps.
+ * This is ENCOURAGED for operators (matches their clocks and security footage).
+ * This function detects timezone offset and normalizes to UTC for client-side verification.
  * 
- * This function:
- * 1. Uses file mtime (set by server on upload, always UTC) as authoritative timestamp
- * 2. Overwrites EXIF DateTimeOriginal to match mtime in UTC format
- * 3. Ensures client-side verification succeeds (JavaScript expects UTC)
+ * Strategy:
+ * 1. Extract camera's EXIF timestamp (most accurate capture time)
+ * 2. Compare with file mtime (server time, UTC)
+ * 3. Detect if EXIF is already UTC or needs timezone correction
+ * 4. Validate corrected timestamp is within acceptable age (history retention)
+ * 5. Rewrite EXIF to UTC if needed, or reject if unreliable
  * 
- * Use for ALL push camera uploads after validation, before moving to cache.
- * 
- * @param string $filePath Path to image
- * @return bool True on success
+ * @param string $filePath Path to uploaded image
+ * @param string $airportId Airport identifier (for history retention lookup)
+ * @param int $camIndex Camera index (for logging)
+ * @return bool True if image timestamp is reliable and normalized
  */
-function normalizeExifToUtc(string $filePath): bool {
-    if (!file_exists($filePath)) {
-        return false;
-    }
+function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex): bool {
+    // Time drift/inaccuracy tolerance (upload delay, clock drift, processing time)
+    const ACCEPTABLE_TIME_DRIFT_SECONDS = 300;  // 5 minutes
     
-    // Use file mtime as authoritative timestamp (server time, always UTC)
-    $timestamp = filemtime($filePath);
+    // Timezone detection variance (how close to round hour to accept)
+    const TIMEZONE_DETECTION_VARIANCE = 600;    // 10 minutes around round hours
     
-    if ($timestamp === false) {
-        aviationwx_log('error', 'normalizeExifToUtc: Could not read file mtime', [
-            'file' => basename($filePath)
+    // Get server file modification time (UTC, set on upload completion)
+    $mtime = filemtime($filePath);
+    if ($mtime === false) {
+        aviationwx_log('error', 'normalizeExifToUtc: Cannot read file mtime', [
+            'file' => basename($filePath),
+            'airport' => $airportId,
+            'cam' => $camIndex
         ]);
+        logWebcamRejection($airportId, $camIndex, 'system_error', 'Cannot read file mtime', $filePath);
         return false;
     }
     
-    // Overwrite EXIF with UTC timestamp
-    return addExifTimestamp($filePath, $timestamp);
+    // Extract camera's EXIF timestamp (most accurate, but may be local time)
+    $exifTimestamp = getExifTimestamp($filePath);
+    
+    // Case A: No EXIF or unparseable → REJECT
+    if ($exifTimestamp === 0) {
+        aviationwx_log('warn', 'Push camera image rejected: no valid EXIF timestamp', [
+            'file' => basename($filePath),
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ]);
+        logWebcamRejection($airportId, $camIndex, 'no_exif', 'No valid EXIF DateTimeOriginal found', $filePath);
+        return false;
+    }
+    
+    // Calculate time difference
+    $diff = $mtime - $exifTimestamp;
+    $absDiff = abs($diff);
+    
+    // Case B: EXIF is in future (beyond acceptable drift)
+    // Allows small future times for clock drift, NTP delays
+    if ($diff < -ACCEPTABLE_TIME_DRIFT_SECONDS) {
+        aviationwx_log('warn', 'Push camera image rejected: EXIF timestamp in future', [
+            'file' => basename($filePath),
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'exif' => gmdate('Y-m-d H:i:s', $exifTimestamp) . ' UTC',
+            'mtime' => gmdate('Y-m-d H:i:s', $mtime) . ' UTC',
+            'diff_seconds' => $diff
+        ]);
+        logWebcamRejection($airportId, $camIndex, 'timestamp_future', 
+            sprintf('EXIF %d seconds in future (camera clock ahead)', -$diff), $filePath);
+        return false;
+    }
+    
+    // Case C: EXIF ≈ mtime (already UTC, within acceptable drift)
+    // This handles: camera already writes UTC, upload delays, clock drift
+    if ($absDiff <= ACCEPTABLE_TIME_DRIFT_SECONDS) {
+        aviationwx_log('debug', 'Push camera EXIF already UTC', [
+            'file' => basename($filePath),
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'exif' => gmdate('Y-m-d H:i:s', $exifTimestamp) . ' UTC',
+            'diff_seconds' => $diff
+        ]);
+        // EXIF is correct, no rewrite needed
+        return true;
+    }
+    
+    // Case D: Detect timezone offset
+    // EXIF differs by more than drift tolerance - likely timezone issue (expected!)
+    $detectedOffset = detectTimezoneOffset($diff, TIMEZONE_DETECTION_VARIANCE);
+    
+    if ($detectedOffset !== null) {
+        // Found a plausible timezone offset
+        $utcTimestamp = $exifTimestamp + $detectedOffset;
+        $correctedDiff = $mtime - $utcTimestamp;
+        
+        // Validate corrected timestamp is within acceptable drift
+        if (abs($correctedDiff) <= ACCEPTABLE_TIME_DRIFT_SECONDS) {
+            // Timezone correction successful, but check age
+            $imageAge = time() - $utcTimestamp;
+            $maxAge = getHistoryRetentionSeconds($airportId);
+            
+            if ($imageAge > $maxAge) {
+                aviationwx_log('warn', 'Push camera image rejected: too old after timezone correction', [
+                    'file' => basename($filePath),
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'image_age_hours' => round($imageAge / 3600, 2),
+                    'max_age_hours' => round($maxAge / 3600, 2),
+                    'detected_offset_hours' => $detectedOffset / 3600
+                ]);
+                logWebcamRejection($airportId, $camIndex, 'timestamp_too_old', 
+                    sprintf('Image age %.1f hours exceeds retention %.1f hours', 
+                        $imageAge / 3600, $maxAge / 3600), $filePath);
+                return false;
+            }
+            
+            // Rewrite EXIF to corrected UTC timestamp
+            if (!addExifTimestamp($filePath, $utcTimestamp)) {
+                aviationwx_log('error', 'Failed to rewrite EXIF to UTC', [
+                    'file' => basename($filePath),
+                    'airport' => $airportId,
+                    'cam' => $camIndex
+                ]);
+                logWebcamRejection($airportId, $camIndex, 'exif_rewrite_failed', 
+                    'exiftool failed to update timestamp', $filePath);
+                return false;
+            }
+            
+            aviationwx_log('info', 'Push camera EXIF normalized to UTC', [
+                'file' => basename($filePath),
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'original_exif' => gmdate('Y-m-d H:i:s', $exifTimestamp),
+                'detected_offset_hours' => $detectedOffset / 3600,
+                'corrected_utc' => gmdate('Y-m-d H:i:s', $utcTimestamp),
+                'upload_delay_sec' => $correctedDiff,
+                'image_age_minutes' => round($imageAge / 60, 1)
+            ]);
+            
+            return true;
+        }
+    }
+    
+    // Case E: Cannot reliably determine capture time → REJECT
+    // Reasons: not a timezone offset, too old even after correction, clock completely wrong
+    $reason = $detectedOffset === null 
+        ? sprintf('Timestamp diff %d seconds not a valid timezone offset', $diff)
+        : sprintf('After timezone correction (+%dh), drift %d seconds exceeds tolerance', 
+            $detectedOffset / 3600, abs($mtime - ($exifTimestamp + $detectedOffset)));
+    
+    aviationwx_log('warn', 'Push camera image rejected: unreliable timestamp', [
+        'file' => basename($filePath),
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'exif' => gmdate('Y-m-d H:i:s', $exifTimestamp),
+        'mtime' => gmdate('Y-m-d H:i:s', $mtime),
+        'diff_seconds' => $diff,
+        'detected_offset' => $detectedOffset === null ? 'none' : ($detectedOffset / 3600) . 'h'
+    ]);
+    
+    logWebcamRejection($airportId, $camIndex, 'timestamp_unreliable', $reason, $filePath);
+    
+    return false;
+}
+
+/**
+ * Detect timezone offset from time difference
+ * 
+ * Checks if difference matches a known timezone offset (full or half hours).
+ * Allows variance for upload delays and clock drift.
+ * 
+ * @param int $diff Time difference in seconds (mtime - exif)
+ * @param int $variance Allowed variance in seconds (default: 600 = 10 minutes)
+ * @return int|null Detected offset in seconds, or null if not a timezone
+ */
+function detectTimezoneOffset(int $diff, int $variance = 600): ?int {
+    // Check full hour offsets (UTC-12 to UTC+14)
+    for ($hours = -12; $hours <= 14; $hours++) {
+        if ($hours == 0) continue; // Already handled in main function
+        
+        $offset = $hours * 3600;
+        $offsetVariance = abs($diff - $offset);
+        
+        // Within variance of round hour offset?
+        if ($offsetVariance <= $variance) {
+            return $offset;
+        }
+    }
+    
+    // Check half-hour and quarter-hour offsets
+    // Examples: India +5:30, Nepal +5:45, Newfoundland -3:30
+    $fractionalOffsets = [
+        -12.75, -12.5, -9.5, -3.5,           // Americas, Pacific
+        3.5, 4.5, 5.5, 5.75, 6.5,            // Middle East, South Asia
+        9.5, 10.5, 12.75                     // Australia, Pacific
+    ];
+    
+    foreach ($fractionalOffsets as $offsetHours) {
+        $offset = (int)($offsetHours * 3600);
+        $offsetVariance = abs($diff - $offset);
+        
+        if ($offsetVariance <= $variance) {
+            return $offset;
+        }
+    }
+    
+    return null; // Not a recognizable timezone offset
+}
+
+/**
+ * Get history retention duration in seconds for an airport
+ * 
+ * Uses airport-specific setting if configured, otherwise global default.
+ * This defines how old an image can be and still be considered useful.
+ * 
+ * @param string $airportId Airport identifier
+ * @return int Maximum acceptable age in seconds
+ */
+function getHistoryRetentionSeconds(string $airportId): int {
+    static $cache = [];
+    
+    if (isset($cache[$airportId])) {
+        return $cache[$airportId];
+    }
+    
+    $config = loadConfig();
+    
+    // Try airport-specific setting first
+    if (isset($config['airports'][$airportId]['history_retention_hours'])) {
+        $hours = (int)$config['airports'][$airportId]['history_retention_hours'];
+    } 
+    // Fall back to global default
+    else if (isset($config['global']['history_retention_hours'])) {
+        $hours = (int)$config['global']['history_retention_hours'];
+    }
+    // Ultimate fallback: 24 hours
+    else {
+        $hours = 24;
+    }
+    
+    $seconds = $hours * 3600;
+    $cache[$airportId] = $seconds;
+    
+    return $seconds;
+}
+
+/**
+ * Log webcam image rejection to dedicated log file
+ * 
+ * Provides operational visibility into camera issues and rejection patterns.
+ * Log file: /var/log/aviationwx/webcam-rejections.log
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
+ * @param string $reason Machine-readable rejection reason code
+ * @param string $details Human-readable details
+ * @param string|null $filePath Optional file path
+ */
+function logWebcamRejection(string $airportId, int $camIndex, string $reason, string $details, ?string $filePath = null): void {
+    $logDir = '/var/log/aviationwx';
+    $logFile = $logDir . '/webcam-rejections.log';
+    
+    // Ensure log directory exists
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    
+    // Format: [timestamp] airport=X cam=Y reason=Z details="..." file=...
+    $timestamp = gmdate('Y-m-d H:i:s');
+    $fileName = $filePath ? basename($filePath) : 'unknown';
+    
+    $logEntry = sprintf(
+        "[%s] airport=%s cam=%d reason=%s details=\"%s\" file=%s\n",
+        $timestamp,
+        $airportId,
+        $camIndex,
+        $reason,
+        str_replace('"', "'", $details), // Escape quotes in details
+        $fileName
+    );
+    
+    // Write to log file (append mode)
+    @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
 }
 
 /**

@@ -2495,10 +2495,41 @@ if (php_sapi_name() === 'cli') {
                                         $metrics = $camera['upload_metrics'];
                                         $accepted = $metrics['accepted'] ?? 0;
                                         $rejected = $metrics['rejected'] ?? 0;
+                                        $reasons = $metrics['rejection_reasons'] ?? [];
+                                        
                                         if ($accepted > 0 || $rejected > 0): 
                                         ?>
                                         <span style="color: #ccc;"> • </span>
                                         Images Accepted <?php echo $accepted; ?> / Rejected <?php echo $rejected; ?>
+                                        <?php 
+                                        // Show most common rejection reason if rejections occurred
+                                        if ($rejected > 0 && !empty($reasons)) {
+                                            arsort($reasons); // Sort by count descending
+                                            $topReason = array_key_first($reasons);
+                                            $topCount = $reasons[$topReason];
+                                            
+                                            // Format reason for display
+                                            $reasonLabels = [
+                                                'no_exif' => 'No EXIF',
+                                                'timestamp_future' => 'Clock Ahead',
+                                                'timestamp_too_old' => 'Too Old',
+                                                'timestamp_unreliable' => 'Clock Wrong',
+                                                'exif_rewrite_failed' => 'EXIF Update Failed',
+                                                'invalid_exif_timestamp' => 'Invalid Timestamp',
+                                                'validation_failed' => 'Invalid Image',
+                                                'system_error' => 'System Error'
+                                            ];
+                                            $reasonDisplay = $reasonLabels[$topReason] ?? ucwords(str_replace('_', ' ', $topReason));
+                                            
+                                            echo ' <span style="color: #ff6b6b;">(';
+                                            if ($topCount === $rejected) {
+                                                echo $reasonDisplay;
+                                            } else {
+                                                echo $topCount . 'x ' . $reasonDisplay;
+                                            }
+                                            echo ')</span>';
+                                        }
+                                        ?>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                 </div>

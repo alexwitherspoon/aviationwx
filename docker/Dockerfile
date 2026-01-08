@@ -66,6 +66,7 @@ COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
 COPY docker/logrotate-sshd /etc/logrotate.d/sshd
 COPY docker/logrotate-aviationwx /etc/logrotate.d/aviationwx
+COPY docker/logrotate-webcam-rejections /etc/logrotate.d/webcam-rejections
 COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
 COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
 COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf
@@ -88,7 +89,7 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/resolve-upload-ip.sh \
     && chmod 644 /etc/vsftpd/vsftpd.conf \
     && chmod 644 /etc/ssh/sshd_config \
-    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx \
+    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx /etc/logrotate.d/webcam-rejections \
     && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
     && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
