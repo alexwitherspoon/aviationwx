@@ -411,7 +411,6 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
             
             trackWebcamUploadAccepted($airportId, $camIndex);
             return $file;
-            }
         }
     }
     
