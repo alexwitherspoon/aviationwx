@@ -79,6 +79,7 @@ The `airports.json` file contains:
    - Use HTTPS only (SSL certificate required)
    - Restrict `.json` file access via .htaccess if needed
    - Regularly rotate API keys and passwords
+   - Enable fail2ban for brute force protection (see below)
 
 3. **API Key Management**
    - Generate new API keys specifically for this project
@@ -100,6 +101,69 @@ The `airports.json` file contains:
 ✅ API calls use HTTPS
 ✅ Credentials are not exposed in frontend JavaScript
 ✅ Server-side only: sensitive logic runs in PHP, not client-side
+
+## Fail2ban: Brute Force Protection
+
+AviationWX uses a **dual fail2ban architecture** for defense in depth:
+
+### Container Fail2ban (Forgiving - Camera Uploads)
+
+**Purpose:** Protect FTP/SFTP camera upload services  
+**Configuration:** `docker/fail2ban-jail.conf`  
+**Policy:** Forgiving to allow camera configuration mistakes
+
+```
+Protected Services:
+- vsftpd (FTP/FTPS) on ports 2121, 2122
+- sshd-sftp (SFTP) on port 2222
+
+Ban Policy (Forgiving):
+- 10 failures in 1 hour = 1 hour ban
+- Quick recovery for legitimate cameras
+- Still prevents brute force attacks
+```
+
+**Rationale:** Cameras may have temporary misconfigurations, network issues, or power cycles. We don't want to permanently ban legitimate equipment during setup.
+
+### Host Fail2ban (Strict - Server SSH)
+
+**Purpose:** Protect server management SSH access  
+**Configuration:** `config/host-fail2ban.d/aviationwx-sshd.conf`  
+**Policy:** Strict protection for server access
+
+```
+Protected Services:
+- sshd (SSH) on port 22 (host management only)
+
+Ban Policy (Strict):
+- 5 failures in 10 minutes = 7 day ban
+- Aggressive protection for admin access
+```
+
+**Rationale:** Server SSH should only be accessed by trusted administrators. No legitimate use case for repeated failed logins.
+
+### Why Two Separate Instances?
+
+1. **Different threat models:**
+   - Host SSH: Administrators only, zero tolerance
+   - Camera FTP/SFTP: Equipment that may have temporary issues
+
+2. **Different recovery needs:**
+   - Host SSH ban: 7 days (severe deterrent)
+   - Camera upload ban: 1 hour (quick recovery)
+
+3. **Separation of concerns:**
+   - Host fail2ban protects OS-level services
+   - Container fail2ban protects application services
+   - Independent configuration and management
+
+4. **Defense in depth:**
+   - Multiple layers of protection
+   - Compromise of one doesn't affect the other
+
+### Operational Commands
+
+See [Operations Guide](OPERATIONS.md#fail2ban-management) for fail2ban management commands.
 
 ## If You Accidentally Committed Secrets
 

@@ -1200,6 +1200,60 @@ jobs:
           echo "  • Retention: 4 weeks of logs"
           EOF
 
+      - name: Deploy host-level fail2ban configuration
+        run: |
+          echo "Deploying host-level fail2ban configuration for SSH protection..."
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          cd ~/aviationwx
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Deploying host-level fail2ban (strict SSH protection on port 22)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check if fail2ban is installed on host
+          if ! command -v fail2ban-client &> /dev/null; then
+            echo "Installing fail2ban on host..."
+            sudo apt-get update
+            sudo apt-get install -y fail2ban
+            echo "✓ fail2ban installed"
+          else
+            echo "✓ fail2ban already installed"
+          fi
+          
+          # Deploy host-level fail2ban configuration (strict SSH protection)
+          if [ -f config/host-fail2ban.d/aviationwx-sshd.conf ]; then
+            sudo cp config/host-fail2ban.d/aviationwx-sshd.conf /etc/fail2ban/jail.d/aviationwx-sshd.conf
+            sudo chown root:root /etc/fail2ban/jail.d/aviationwx-sshd.conf
+            sudo chmod 644 /etc/fail2ban/jail.d/aviationwx-sshd.conf
+            echo "✓ Deployed /etc/fail2ban/jail.d/aviationwx-sshd.conf"
+          else
+            echo "⚠️  config/host-fail2ban.d/aviationwx-sshd.conf not found (will be deployed on next rsync)"
+          fi
+          
+          # Restart fail2ban to pick up config changes
+          if [ -f /etc/fail2ban/jail.d/aviationwx-sshd.conf ]; then
+            sudo systemctl restart fail2ban
+            echo "✓ fail2ban restarted"
+            
+            # Wait for fail2ban to start
+            sleep 2
+            
+            # Check status
+            sudo fail2ban-client status || echo "⚠️  fail2ban status check failed"
+            echo ""
+            echo "✓ Host-level fail2ban status:"
+            sudo fail2ban-client status sshd || echo "  sshd jail not yet active (will activate on first auth.log entry)"
+          fi
+          
+          echo ""
+          echo "Host-level fail2ban configured:"
+          echo "  • Service: SSH on port 22 (host management)"
+          echo "  • Policy: 5 failures in 10 minutes = 7 day ban"
+          echo "  • Separate from container fail2ban (forgiving camera upload policies)"
+          echo "  • Config: /etc/fail2ban/jail.d/aviationwx-sshd.conf"
+          EOF
+
       - name: Check for Docker config changes
         id: docker-config-changed
         run: |

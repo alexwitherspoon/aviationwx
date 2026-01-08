@@ -206,6 +206,92 @@ Force ALL clients to clear caches and reload:
 
 ---
 
+## Fail2ban Management
+
+AviationWX uses dual fail2ban instances for defense in depth. See [Security Guide](SECURITY.md#fail2ban-brute-force-protection) for architecture details.
+
+### Host-Level Fail2ban (SSH Protection)
+
+Protects server SSH on port 22 with strict policies (5 failures = 7 day ban).
+
+```bash
+# Check all jails status
+sudo fail2ban-client status
+
+# Check SSH jail specifically
+sudo fail2ban-client status sshd
+
+# View currently banned IPs
+sudo fail2ban-client status sshd | grep "Banned IP"
+
+# Unban an IP (if needed)
+sudo fail2ban-client set sshd unbanip <IP_ADDRESS>
+
+# View fail2ban logs
+sudo tail -f /var/log/fail2ban.log
+
+# Restart fail2ban service
+sudo systemctl restart fail2ban
+
+# Check fail2ban service status
+sudo systemctl status fail2ban
+```
+
+### Container-Level Fail2ban (Camera Upload Protection)
+
+Protects FTP/SFTP camera uploads with forgiving policies (10 failures in 1 hour = 1 hour ban).
+
+```bash
+# Check all container jails
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status
+
+# Check vsftpd jail (FTP/FTPS on ports 2121/2122)
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd
+
+# Check sshd-sftp jail (SFTP on port 2222)
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status sshd-sftp
+
+# View currently banned IPs for vsftpd
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd | grep "Banned IP"
+
+# Unban a camera IP from vsftpd
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set vsftpd unbanip <IP_ADDRESS>
+
+# Unban a camera IP from sshd-sftp
+docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set sshd-sftp unbanip <IP_ADDRESS>
+
+# View vsftpd authentication log
+docker compose -f docker/docker-compose.prod.yml exec web tail -100 /var/log/vsftpd.log | grep -i "fail\|denied"
+```
+
+### Troubleshooting Camera Bans
+
+If a legitimate camera is banned:
+
+1. **Check if banned:**
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client status vsftpd
+   ```
+
+2. **Unban the IP:**
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec web fail2ban-client set vsftpd unbanip <CAMERA_IP>
+   ```
+
+3. **Fix camera configuration:**
+   - Verify FTP/SFTP credentials in `airports.json`
+   - Check camera's upload settings
+   - Confirm network connectivity
+
+4. **Monitor logs:**
+   ```bash
+   docker compose -f docker/docker-compose.prod.yml exec web tail -f /var/log/vsftpd.log
+   ```
+
+**Note:** With forgiving policies (10 failures/hour = 1 hour ban), most configuration issues self-heal quickly.
+
+---
+
 ## Related Documentation
 
 - [Deployment Guide](DEPLOYMENT.md) - Production deployment
