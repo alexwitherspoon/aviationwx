@@ -32,6 +32,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     iptables \
     jq \
     libcap2-bin \
+    tini \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) gd zip pcntl \
     && pecl channel-update pecl.php.net \
@@ -163,7 +164,9 @@ RUN echo "LogFormat \"[apache_access] %h %l %u %t \\\"%r\\\" %>s %O \\\"%{Refere
     && echo "CustomLog /var/log/aviationwx/apache-access.log combined" >> /etc/apache2/apache2.conf
 
 # Use custom entrypoint
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Use tini as PID 1 to properly reap zombie processes
+# This is critical for containers that spawn multiple background processes
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 # Expose port 80 by default (for local/CI with bridge networking)
 # Production will use port 8080 bound to 127.0.0.1 (configured via entrypoint)
