@@ -12,6 +12,7 @@ require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/exif-utils.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
 
 // Verify exiftool is available at startup (required for EXIF validation)
 try {
@@ -340,9 +341,11 @@ function updateLastProcessedTime($airportId, $camIndex) {
  * @param int|null $lastProcessedTime Timestamp of last processed file (null = no filter)
  * @param array|null $pushConfig Optional push_config for per-camera validation
  * @param array|null $airport Optional airport config for phase-aware pixelation detection
+ * @param string|null $airportId Optional airport ID for metrics tracking
+ * @param int|null $camIndex Optional camera index for metrics tracking
  * @return string|null Path to valid image file or null
  */
-function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = null, $pushConfig = null, $airport = null) {
+function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = null, $pushConfig = null, $airport = null, $airportId = null, $camIndex = null) {
     if (!is_dir($uploadDir)) {
         return null;
     }
@@ -392,7 +395,7 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
             }
             
             // Validate image (with per-camera limits and airport for phase-aware detection)
-            if (validateImageFile($file, $pushConfig, $airport)) {
+            if (validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
                 return $file;
             }
         }
@@ -476,10 +479,15 @@ function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
  *   - max_file_size_mb: Maximum file size in MB (default: 100)
  *   - allowed_extensions: Array of allowed extensions (default: all)
  * @param array|null $airport Optional airport config for phase-aware pixelation detection
+ * @param string|null $airportId Optional airport ID for metrics tracking
+ * @param int|null $camIndex Optional camera index for metrics tracking
  * @return bool True if file is valid image, false otherwise
  */
-function validateImageFile($file, $pushConfig = null, $airport = null) {
+function validateImageFile($file, $pushConfig = null, $airport = null, $airportId = null, $camIndex = null) {
     if (!file_exists($file) || !is_readable($file)) {
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'file_not_readable');
+        }
         return false;
     }
     
@@ -487,6 +495,9 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
     
     // Check minimum size (too small to be a valid image)
     if ($size < 100) {
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'size_too_small');
+        }
         return false;
     }
     
@@ -496,6 +507,9 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
         $maxSizeBytes = intval($pushConfig['max_file_size_mb']) * 1024 * 1024;
     }
     if ($size > $maxSizeBytes) {
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'size_limit_exceeded');
+        }
         return false;
     }
     
@@ -504,6 +518,9 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
         $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $allowed = array_map('strtolower', $pushConfig['allowed_extensions']);
         if (!in_array($ext, $allowed)) {
+            if ($airportId !== null && $camIndex !== null) {
+                trackWebcamUploadRejected($airportId, $camIndex, 'extension_not_allowed');
+            }
             return false;
         }
     }
@@ -512,12 +529,18 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
     $mime = @mime_content_type($file);
     $validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!in_array($mime, $validMimes)) {
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'invalid_mime_type');
+        }
         return false;
     }
     
     // Check image headers using shared format detection
     $format = detectImageFormat($file);
     if ($format === null) {
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'invalid_format');
+        }
         return false;
     }
     
@@ -532,6 +555,9 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
                 'confidence' => $errorCheck['confidence'],
                 'reasons' => $errorCheck['reasons']
             ], 'app');
+            if ($airportId !== null && $camIndex !== null) {
+                trackWebcamUploadRejected($airportId, $camIndex, 'error_frame');
+            }
             return false;
         }
     }
@@ -544,6 +570,9 @@ function validateImageFile($file, $pushConfig = null, $airport = null) {
             'reason' => $exifCheck['reason'],
             'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
         ], 'app');
+        if ($airportId !== null && $camIndex !== null) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'exif_invalid');
+        }
         return false;
     }
     
@@ -1079,7 +1108,7 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     
     // Find newest valid image (with per-camera limits and airport for phase-aware detection)
     // Pass lastProcessed time to quickly skip old files
-    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessed, $pushConfig, $airport);
+    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessed, $pushConfig, $airport, $airportId, $camIndex);
     
     if (!$newestFile) {
         aviationwx_log('info', 'no valid image found', [
@@ -1104,6 +1133,9 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
     $cacheFile = moveToCache($newestFile, $airportId, $camIndex);
     
     if ($cacheFile) {
+        // Track successful upload
+        trackWebcamUploadAccepted($airportId, $camIndex);
+        
         // Clean up upload directory (delete only files older than or equal to processed file)
         // This prevents deleting files that started uploading after processing began
         cleanupUploadDirectory($uploadDir, null, $processedFileMtime);
