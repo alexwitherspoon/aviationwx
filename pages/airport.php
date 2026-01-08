@@ -7332,7 +7332,7 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             
             const preferredFormat = getPreferredFormat(serverFormats);
             // Get available variant heights from API response or extract from variants
-            // Use cached value if already fetched for this camera (avoids fallback on race)
+            // Priority: 1) API variantHeights, 2) Extract from variants object, 3) Use cached, 4) Global fallback
             const variantHeights = json.variantHeights && Array.isArray(json.variantHeights) 
                 ? json.variantHeights 
                 : (json.variants ? Object.keys(json.variants)
@@ -7341,8 +7341,11 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                     .sort((a, b) => b - a) 
                 : (CAM_VARIANT_HEIGHTS[camIndex] || [1080, 720, 360])); // Use cached or fallback
             
-            // Cache variant heights for this camera to avoid fallback on first load
-            CAM_VARIANT_HEIGHTS[camIndex] = variantHeights;
+            // Always update cache with latest variant heights (handles camera upgrades/downgrades)
+            // Only updates if we got valid data from API (not fallback)
+            if (json.variantHeights || json.variants) {
+                CAM_VARIANT_HEIGHTS[camIndex] = variantHeights;
+            }
             
             const preferredVariant = getPreferredVariant(null, variantHeights);
             
