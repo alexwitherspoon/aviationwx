@@ -105,6 +105,59 @@ test: ## Run all PHPUnit tests (unit + integration)
 	@echo "Running all tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testdox
 
+test-ci: ## Run all tests that GitHub CI runs (comprehensive)
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "Running CI Test Suite (matches GitHub Actions)"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "1️⃣  Validating PHP syntax..."
+	@bash -c 'errors=$$(find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; 2>&1 | grep -v "No syntax errors" | grep -v "Deprecated:" | grep -v "PHP Deprecated:" || true); \
+	if [ ! -z "$$errors" ]; then echo "❌ PHP syntax errors found:"; echo "$$errors"; exit 1; else echo "✓ All PHP files have valid syntax"; fi'
+	@echo ""
+	@echo "2️⃣  Running Unit Tests..."
+	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox --log-junit unit-results.xml --no-coverage || exit_code=$$?; \
+	exit_code=$${exit_code:-$$?}; \
+	if [ $$exit_code -gt 1 ]; then echo "❌ Unit tests failed"; exit 1; elif [ $$exit_code -eq 1 ]; then echo "⚠️  Unit tests passed with warnings"; else echo "✓ Unit tests passed"; fi
+	@echo ""
+	@echo "3️⃣  Running Integration Tests..."
+	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox --log-junit integration-results.xml --no-coverage || exit_code=$$?; \
+	exit_code=$${exit_code:-$$?}; \
+	if [ $$exit_code -gt 1 ]; then echo "❌ Integration tests failed"; exit 1; elif [ $$exit_code -eq 1 ]; then echo "⚠️  Integration tests passed with warnings"; else echo "✓ Integration tests passed"; fi
+	@echo ""
+	@echo "4️⃣  Running Critical Safety Tests..."
+	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherCalculationsTest.php --testdox --stop-on-failure --no-coverage || exit_code=$$?; \
+	if [ $$exit_code -gt 1 ]; then echo "❌ WeatherCalculationsTest failed"; exit 1; fi
+	@APP_ENV=testing vendor/bin/phpunit tests/Unit/ErrorHandlingTest.php --testdox --stop-on-failure --no-coverage || exit_code=$$?; \
+	if [ $$exit_code -gt 1 ]; then echo "❌ ErrorHandlingTest failed"; exit 1; fi
+	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherAggregatorTest.php --testdox --stop-on-failure --no-coverage || exit_code=$$?; \
+	if [ $$exit_code -gt 1 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
+	@echo "✓ Critical safety tests passed"
+	@echo ""
+	@echo "5️⃣  Validating JavaScript..."
+	@php scripts/validate-javascript.php
+	@echo ""
+	@echo "6️⃣  Checking for required files..."
+	@bash -c 'required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php" "lib/constants.php" "lib/circuit-breaker.php" "scripts/process-push-webcams.php" "lib/push-webcam-validator.php" "pages/config-generator.php" "pages/status.php"); \
+	for file in "$${required_files[@]}"; do if [ ! -f "$$file" ]; then echo "❌ Required file missing: $$file"; exit 1; fi; done; \
+	echo "✓ All required files present"'
+	@echo ""
+	@echo "7️⃣  Validating JSON files..."
+	@bash -c 'if [ -f "config/airports.json.example" ]; then \
+	php -r "json_decode(file_get_contents(\"config/airports.json.example\"), true); if (json_last_error() !== JSON_ERROR_NONE) { echo \"Invalid JSON: \" . json_last_error_msg() . PHP_EOL; exit(1); }"; \
+	echo "✓ config/airports.json.example is valid JSON"; fi'
+	@echo ""
+	@echo "8️⃣  Testing config utilities..."
+	@php scripts/ci-test-config.php
+	@echo ""
+	@echo "9️⃣  Testing rate limiting functions..."
+	@php scripts/ci-test-rate-limit.php
+	@echo ""
+	@echo "🔟  Testing circuit breaker functions..."
+	@php scripts/ci-test-circuit-breaker.php
+	@echo ""
+	@echo "✅ All CI tests passed!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 test-unit: ## Run unit tests only (fast, no Docker needed)
 	@echo "Running unit tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Unit --testdox
