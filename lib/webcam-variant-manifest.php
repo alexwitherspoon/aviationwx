@@ -11,6 +11,7 @@
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/cache-paths.php';
 
 /**
  * Store variant manifest for an image
@@ -220,18 +221,4 @@ function getVariantCoverage(string $airportId, int $camIndex, ?int $timestamp = 
     }
     
     return $expected > 0 ? ($available / $expected) : 0.0;
-}
-
-/**
- * Get webcam camera directory
- * 
- * Helper function to avoid circular dependency.
- * 
- * @param string $airportId Airport identifier
- * @param int $camIndex Camera index (0-based)
- * @return string Cache directory path
- */
-function getWebcamCameraDir(string $airportId, int $camIndex): string {
-    $baseDir = __DIR__ . '/../cache/webcams';
-    return $baseDir . '/' . strtolower($airportId) . '/' . $camIndex;
 }
