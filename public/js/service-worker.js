@@ -1066,7 +1066,8 @@ self.addEventListener('fetch', (event) => {
     
     // Handle weather API requests with network-first + dynamic timeout, then cache
     // Only serve cached data if network fails AND cache is relatively fresh (<10 minutes)
-    if (url.pathname === '/weather.php') {
+    // Support both /weather.php and /api/weather.php paths
+    if (url.pathname === '/weather.php' || url.pathname === '/api/weather.php') {
         event.respondWith(
             (async () => {
                 try {
@@ -1170,7 +1171,8 @@ const BACKGROUND_SYNC_CONCURRENCY = 3;
  * @returns {Promise<void>}
  */
 self.refreshSingleWeatherRequest = async function(request, cache) {
-    if (!request.url.includes('/weather.php')) {
+    // Only process weather requests (support both paths)
+    if (!request.url.includes('/weather.php') && !request.url.includes('/api/weather.php')) {
         return;
     }
     
@@ -1207,7 +1209,10 @@ self.refreshSingleWeatherRequest = async function(request, cache) {
  * @returns {Promise<void>}
  */
 self.processRequestsInParallel = async function(requests, cache, concurrency) {
-    const weatherRequests = requests.filter(req => req.url.includes('/weather.php'));
+    // Filter for weather requests only (support both paths)
+    const weatherRequests = requests.filter(req => 
+        req.url.includes('/weather.php') || req.url.includes('/api/weather.php')
+    );
     
     // Process in batches with concurrency limit
     for (let i = 0; i < weatherRequests.length; i += concurrency) {
