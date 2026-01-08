@@ -491,26 +491,50 @@ function checkSystemHealth(): array {
     $cacheStatus = ($cacheExists && $cacheWritable && $webcamCacheExists && $webcamCacheWritable) ? 'operational' : 'down';
     
     $latestCacheMtime = 0;
+    $webcamImageCount = 0;
+    $webcamSizeBytes = 0;
+    $weatherCacheCount = 0;
+    $weatherSizeBytes = 0;
+    
     if ($cacheExists) {
         $latestCacheMtime = filemtime($cacheDir);
+        
+        // Count webcam images (new directory structure: cache/webcams/{airport}/{cam}/*.jpg)
         if ($webcamCacheExists) {
             $webcamMtime = filemtime($webcamCacheDir);
             if ($webcamMtime > $latestCacheMtime) {
                 $latestCacheMtime = $webcamMtime;
             }
-            $files = glob($webcamCacheDir . '/*.{jpg,webp}', GLOB_BRACE);
-            if ($files) {
-                foreach ($files as $file) {
-                    $mtime = filemtime($file);
-                    if ($mtime > $latestCacheMtime) {
-                        $latestCacheMtime = $mtime;
+            
+            // Scan all airport directories
+            $airportDirs = glob($webcamCacheDir . '/*', GLOB_ONLYDIR);
+            foreach ($airportDirs as $airportDir) {
+                $camDirs = glob($airportDir . '/*', GLOB_ONLYDIR);
+                foreach ($camDirs as $camDir) {
+                    $files = glob($camDir . '/*.{jpg,webp}', GLOB_BRACE);
+                    if ($files) {
+                        foreach ($files as $file) {
+                            // Skip symlinks to avoid double-counting
+                            if (!is_link($file)) {
+                                $webcamImageCount++;
+                                $webcamSizeBytes += filesize($file);
+                                $mtime = filemtime($file);
+                                if ($mtime > $latestCacheMtime) {
+                                    $latestCacheMtime = $mtime;
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
+        
+        // Count weather cache files
         $weatherFiles = glob(CACHE_WEATHER_DIR . '/*.json');
         if ($weatherFiles) {
             foreach ($weatherFiles as $file) {
+                $weatherCacheCount++;
+                $weatherSizeBytes += filesize($file);
                 $mtime = filemtime($file);
                 if ($mtime > $latestCacheMtime) {
                     $latestCacheMtime = $mtime;
@@ -519,13 +543,43 @@ function checkSystemHealth(): array {
         }
     }
     
+    // Format sizes
+    $webcamSizeMB = round($webcamSizeBytes / (1024 * 1024), 1);
+    $weatherSizeKB = round($weatherSizeBytes / 1024, 1);
+    $totalSizeMB = round(($webcamSizeBytes + $weatherSizeBytes) / (1024 * 1024), 1);
+    
+    // Build detailed message
+    $cacheMessage = '';
+    if ($cacheStatus === 'operational') {
+        $parts = [];
+        if ($webcamImageCount > 0) {
+            $parts[] = "{$webcamImageCount} webcam images ({$webcamSizeMB} MB)";
+        }
+        if ($weatherCacheCount > 0) {
+            $parts[] = "{$weatherCacheCount} weather files ({$weatherSizeKB} KB)";
+        }
+        
+        if (!empty($parts)) {
+            $cacheMessage = implode(' • ', $parts);
+        } else {
+            $cacheMessage = 'Cache directories accessible';
+        }
+    } else {
+        $cacheMessage = 'Cache directories missing or not writable';
+    }
+    
     $health['components']['cache'] = [
         'name' => 'Cache System',
         'status' => $cacheStatus,
-        'message' => $cacheStatus === 'operational' 
-            ? 'Cache directories accessible' 
-            : 'Cache directories missing or not writable',
-        'lastChanged' => $latestCacheMtime > 0 ? $latestCacheMtime : 0
+        'message' => $cacheMessage,
+        'lastChanged' => $latestCacheMtime > 0 ? $latestCacheMtime : 0,
+        'details' => [
+            'webcam_images' => $webcamImageCount,
+            'webcam_size_mb' => $webcamSizeMB,
+            'weather_files' => $weatherCacheCount,
+            'weather_size_kb' => $weatherSizeKB,
+            'total_size_mb' => $totalSizeMB
+        ]
     ];
     
     $apcuAvailable = function_exists('apcu_fetch');
@@ -1162,25 +1216,11 @@ function checkAirportHealth(string $airportId, array $airport): array {
             $camName = $cam['name'] ?? "Webcam {$idx}";
             
             // Check cache files using new structure (per-airport/per-camera directories)
-            // Ensure webcam-format-generation.php is loaded (defensive check for CI/test environments)
-            if (!function_exists('getCacheFile')) {
-                $webcamFormatFile = __DIR__ . '/../lib/webcam-format-generation.php';
-                if (file_exists($webcamFormatFile)) {
-                    require_once $webcamFormatFile;
-                }
-                // If still not available after require, use fallback path construction
-                if (!function_exists('getCacheFile')) {
-                    $cacheDir = getWebcamCameraDir($airportId, $idx);
-                    $cacheJpg = $cacheDir . '/current.jpg';
-                    $cacheWebp = $cacheDir . '/current.webp';
-                } else {
-                    $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'original');
-                    $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'original');
-                }
-            } else {
-                $cacheJpg = getCacheFile($airportId, $idx, 'jpg', 'primary');
-                $cacheWebp = getCacheFile($airportId, $idx, 'webp', 'primary');
-            }
+            // Use current.jpg/current.webp symlinks which are the standard serving endpoints
+            // These symlinks are created by the scheduler and point to the latest 720p variant
+            $cacheDir = getWebcamCameraDir($airportId, $idx);
+            $cacheJpg = $cacheDir . '/current.jpg';
+            $cacheWebp = $cacheDir . '/current.webp';
             
             // Check if cache files exist and are readable
             $cacheExists = (@file_exists($cacheJpg) && @is_readable($cacheJpg)) 
@@ -1379,6 +1419,51 @@ function checkAirportHealth(string $airportId, array $airport): array {
         }
     }
     
+    // Calculate cache statistics for this airport
+    $airportCacheStats = [
+        'total_images' => 0,
+        'total_size_bytes' => 0,
+        'oldest_image_time' => 0,
+        'newest_image_time' => 0
+    ];
+    
+    if ($totalCams > 0) {
+        $airportWebcamDir = CACHE_WEBCAMS_DIR . '/' . $airportId;
+        if (is_dir($airportWebcamDir)) {
+            $camDirs = glob($airportWebcamDir . '/*', GLOB_ONLYDIR);
+            foreach ($camDirs as $camDir) {
+                $files = glob($camDir . '/*.{jpg,webp}', GLOB_BRACE);
+                if ($files) {
+                    foreach ($files as $file) {
+                        // Skip symlinks to avoid double-counting
+                        if (!is_link($file)) {
+                            $airportCacheStats['total_images']++;
+                            $airportCacheStats['total_size_bytes'] += filesize($file);
+                            $mtime = filemtime($file);
+                            
+                            if ($airportCacheStats['oldest_image_time'] === 0 || $mtime < $airportCacheStats['oldest_image_time']) {
+                                $airportCacheStats['oldest_image_time'] = $mtime;
+                            }
+                            if ($mtime > $airportCacheStats['newest_image_time']) {
+                                $airportCacheStats['newest_image_time'] = $mtime;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Format cache summary message
+    $cacheSummary = '';
+    if ($airportCacheStats['total_images'] > 0) {
+        $sizeMB = round($airportCacheStats['total_size_bytes'] / (1024 * 1024), 1);
+        $imagesPerCam = round($airportCacheStats['total_images'] / $totalCams);
+        $cacheSummary = "{$airportCacheStats['total_images']} cached images ({$sizeMB} MB) • ~{$imagesPerCam} per camera";
+    } else {
+        $cacheSummary = 'No cached images';
+    }
+    
     // Store webcam cameras - only if we have cameras
     if (!empty($webcamComponents)) {
         $health['components']['webcams'] = [
@@ -1386,7 +1471,9 @@ function checkAirportHealth(string $airportId, array $airport): array {
             'status' => $webcamStatus,
             'message' => $webcamMessage,
             'lastChanged' => $webcamLastChanged,
-            'cameras' => $webcamComponents // Per-camera details
+            'cameras' => $webcamComponents, // Per-camera details
+            'cache_summary' => $cacheSummary,
+            'cache_stats' => $airportCacheStats
         ];
     }
     
@@ -2440,6 +2527,38 @@ if (php_sapi_name() === 'cli') {
                             </div>
                         </li>
                         <?php endforeach; ?>
+                        
+                        <!-- Cache Summary for this airport -->
+                        <?php if (isset($component['cache_summary']) && isset($component['cache_stats'])): ?>
+                        <?php
+                        $cacheStats = $component['cache_stats'];
+                        $totalImages = $cacheStats['total_images'];
+                        $sizeMB = round($cacheStats['total_size_bytes'] / (1024 * 1024), 1);
+                        ?>
+                        <li class="component-item">
+                            <div class="component-info">
+                                <div class="component-name">Cache Summary</div>
+                                <div class="component-message usage-metrics-block">
+                                    <div class="metrics-line">
+                                        <span class="metric-group">
+                                            <span class="metric-label">Total Images:</span>
+                                            <span class="metric-value"><?php echo number_format($totalImages); ?></span>
+                                        </span>
+                                        <span class="metric-group">
+                                            <span class="metric-label">Size:</span>
+                                            <span class="metric-value"><?php echo $sizeMB; ?> MB</span>
+                                        </span>
+                                        <?php if ($totalImages > 0 && isset($component['cameras'])): ?>
+                                        <span class="metric-group">
+                                            <span class="metric-label">Avg per Camera:</span>
+                                            <span class="metric-value"><?php echo round($totalImages / count($component['cameras'])); ?></span>
+                                        </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        <?php endif; ?>
                     <?php else: ?>
                         <!-- Other components - show with status indicator -->
                         <li class="component-item">
