@@ -2004,7 +2004,7 @@ if (empty($embedAirportId) || !$airport) {
                             <?php if ($hasMetarData && $ceiling !== null): ?>
                             <div class="metric-item">
                                 <span class="label">Ceiling</span>
-                                <span class="value"><?= $ceiling >= 99999 ? 'Unlimited' : formatDist($ceiling, $distUnit, 'comma') ?></span>
+                                <span class="value"><?= $ceiling >= 99999 ? 'UNL' : formatDist($ceiling, $distUnit, 'comma') ?></span>
                             </div>
                             <?php endif; ?>
                             <div class="metric-item">

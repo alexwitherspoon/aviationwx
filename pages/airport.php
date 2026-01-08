@@ -2791,7 +2791,7 @@ function smToKm(sm) {
 function formatVisibility(sm) {
     if (sm === null || sm === undefined) return '--';  // Failed state
     // Sentinel value 999.0 represents unlimited visibility
-    if (sm === 999.0) return 'Unlimited';
+    if (sm === 999.0) return 'UNL';
     const unit = getDistanceUnit();
     if (unit === 'm') {
         return smToKm(sm).toFixed(1);
@@ -2804,7 +2804,7 @@ function formatVisibility(sm) {
 function formatCeiling(ft) {
     if (ft === null || ft === undefined) return null;  // Failed state (shows as '--' in template)
     // Sentinel value 99999 represents unlimited ceiling
-    if (ft === 99999) return 'Unlimited';
+    if (ft === 99999) return 'UNL';
     const unit = getDistanceUnit();
     return unit === 'm' ? ftToM(ft) : Math.round(ft);
 }
@@ -4281,7 +4281,7 @@ function displayWeather(weather) {
                 return `
                 <div class="weather-item"><span class="label">Condition</span><span class="weather-value ${sanitizedWeather.flight_category_class || ''}">${sanitizedWeather.flight_category || '--'} ${sanitizedWeather.flight_category ? weatherEmojis : ''}</span></div>
                 <div class="weather-item"><span class="label">Visibility</span><span class="weather-value">${formatVisibility(sanitizedWeather.visibility)}</span><span class="weather-unit">${sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? (getDistanceUnit() === 'm' ? 'km' : 'SM') : ''}</span>${sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? formatTempTimestamp(sanitizedWeather.obs_time_metar || sanitizedWeather.last_updated_metar) : ''}</div>
-                <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined ? formatCeiling(sanitizedWeather.ceiling) : (sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? 'Unlimited' : '--')}</span><span class="weather-unit">${sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined || (sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined)) ? formatTempTimestamp(sanitizedWeather.obs_time_metar || sanitizedWeather.last_updated_metar) : ''}</div>
+                <div class="weather-item"><span class="label">Ceiling</span><span class="weather-value">${sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined ? formatCeiling(sanitizedWeather.ceiling) : (sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined ? 'UNL' : '--')}</span><span class="weather-unit">${sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined ? (getDistanceUnit() === 'm' ? 'm AGL' : 'ft AGL') : ''}</span>${(sanitizedWeather.ceiling !== null && sanitizedWeather.ceiling !== undefined || (sanitizedWeather.visibility !== null && sanitizedWeather.visibility !== undefined)) ? formatTempTimestamp(sanitizedWeather.obs_time_metar || sanitizedWeather.last_updated_metar) : ''}</div>
                 `;
             })()}
         </div>
