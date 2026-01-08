@@ -15,9 +15,9 @@ body {
 
 /* OS dark mode preference - prevents flash of light content */
 /* This applies immediately on page load before JS runs */
-/* Only applies in auto mode (when no explicit dark-mode or night-mode class is set) */
+/* Only applies in auto mode (when no explicit dark-mode, night-mode, or light-mode class is set) */
 @media (prefers-color-scheme: dark) {
-    body:not(.dark-mode):not(.night-mode) {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode):not(.light-mode) {
         --dark-bg-body: #121212;
         --dark-bg-section: #1e1e1e;
         --dark-bg-header: #181818;
@@ -37,131 +37,131 @@ body {
         color: var(--dark-text-primary);
     }
     
-    body:not(.dark-mode):not(.night-mode) .header {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .header {
         background: var(--dark-bg-header);
         color: var(--dark-text-bright);
     }
     
-    body:not(.dark-mode):not(.night-mode) .header h1 {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .header h1 {
         color: var(--dark-text-bright);
     }
     
-    body:not(.dark-mode):not(.night-mode) .header h2 {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .header h2 {
         color: var(--dark-text-primary);
     }
     
-    body:not(.dark-mode):not(.night-mode) .location {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .location {
         color: var(--dark-text-muted);
     }
     
     /* Section containers (weather, webcams, etc.) */
-    body:not(.dark-mode):not(.night-mode) section {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section {
         background: var(--dark-bg-section) !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     
     /* Explicit rules for specific section classes to ensure they get dark background */
-    section.weather-section,
-    body:not(.dark-mode):not(.night-mode) section.webcam-section {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section.weather-section,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section.webcam-section {
         background: var(--dark-bg-section) !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     
-    body:not(.dark-mode):not(.night-mode) section h2 {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section h2 {
         color: var(--dark-text-bright);
     }
     
-    body:not(.dark-mode):not(.night-mode) section h3 {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) section h3 {
         color: var(--dark-text-primary);
     }
     
     /* Weather items */
-    body:not(.dark-mode):not(.night-mode) .weather-item {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .weather-item {
         background: var(--dark-bg-item);
     }
     
-    body:not(.dark-mode):not(.night-mode) .weather-item .label {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .weather-item .label {
         color: var(--dark-text-muted);
     }
     
-    body:not(.dark-mode):not(.night-mode) .weather-value {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .weather-value {
         color: var(--dark-text-bright);
     }
     
     /* Other text elements */
-    body:not(.dark-mode):not(.night-mode) .label {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .label {
         color: var(--dark-text-muted);
     }
     
-    body:not(.dark-mode):not(.night-mode) .value {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .value {
         color: var(--dark-text-bright);
     }
     
-    body:not(.dark-mode):not(.night-mode) h2 {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) h2 {
         color: var(--dark-text-bright);
     }
     
-    body:not(.dark-mode):not(.night-mode) h3 {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) h3 {
         color: var(--dark-text-primary);
     }
     
     /* Address links */
-    body:not(.dark-mode):not(.night-mode) .address-link {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .address-link {
         color: var(--dark-text-bright);
     }
     
     /* Section dividers */
-    body:not(.dark-mode):not(.night-mode) .frequencies {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .frequencies {
         border-top-color: var(--dark-border);
     }
     
-    body:not(.dark-mode):not(.night-mode) .links {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .links {
         border-top-color: var(--dark-border);
     }
     
     /* Partnerships section */
-    body:not(.dark-mode):not(.night-mode) .partnerships-section {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .partnerships-section {
         background: var(--dark-bg-section);
         border-top-color: var(--dark-border);
     }
     
-    body:not(.dark-mode):not(.night-mode) .partnerships-heading {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .partnerships-heading {
         color: var(--dark-text-bright);
     }
     
-    body:not(.dark-mode):not(.night-mode) .partnerships-subheading {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .partnerships-subheading {
         color: var(--dark-text-muted);
     }
     
-    body:not(.dark-mode):not(.night-mode) .partner-link {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .partner-link {
         background: var(--dark-bg-item);
         border-color: var(--dark-border);
         color: var(--dark-text-primary);
     }
     
     /* Embed section */
-    body:not(.dark-mode):not(.night-mode) .embed-section {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .embed-section {
         background: var(--dark-bg-section);
     }
     
     /* Toggle buttons - prevent white flash */
-    #night-mode-toggle,
-    #time-format-toggle,
-    #temp-unit-toggle,
-    #distance-unit-toggle,
-    #wind-speed-unit-toggle,
-    body:not(.dark-mode):not(.night-mode) #baro-unit-toggle {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #night-mode-toggle,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #time-format-toggle,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #temp-unit-toggle,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #distance-unit-toggle,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #wind-speed-unit-toggle,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #baro-unit-toggle {
         background: var(--dark-bg-button) !important;
         border-color: var(--dark-border) !important;
         color: var(--dark-text-primary) !important;
     }
     
-    #night-mode-toggle:hover,
-    #time-format-toggle:hover,
-    #temp-unit-toggle:hover,
-    #distance-unit-toggle:hover,
-    #wind-speed-unit-toggle:hover,
-    body:not(.dark-mode):not(.night-mode) #baro-unit-toggle:hover {
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #night-mode-toggle:hover,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #time-format-toggle:hover,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #temp-unit-toggle:hover,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #distance-unit-toggle:hover,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #wind-speed-unit-toggle:hover,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) #baro-unit-toggle:hover {
         background: var(--dark-bg-button-hover) !important;
         border-color: #555 !important;
     }

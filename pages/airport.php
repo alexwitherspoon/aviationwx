@@ -515,15 +515,17 @@ if ($themeCookie === 'dark') {
             // Apply theme class
             function applyTheme(theme) {
                 // Remove all theme classes first (in case server set one)
-                document.documentElement.classList.remove('night-mode', 'dark-mode');
+                document.documentElement.classList.remove('night-mode', 'dark-mode', 'light-mode');
                 
                 // Apply the selected theme
                 if (theme === 'night') {
                     document.documentElement.classList.add('night-mode');
                 } else if (theme === 'dark') {
                     document.documentElement.classList.add('dark-mode');
+                } else if (theme === 'day') {
+                    document.documentElement.classList.add('light-mode');
                 }
-                // 'day' = no class (default light mode)
+                // auto mode = no class (allows @media prefers-color-scheme to apply)
             }
             
             // Apply theme based on browser preference (for auto mode)
@@ -3107,8 +3109,8 @@ function isDarkModeActive() {
 
 function applyTheme(theme) {
     // Remove all theme classes
-    document.documentElement.classList.remove('night-mode', 'dark-mode');
-    document.body.classList.remove('night-mode', 'dark-mode');
+    document.documentElement.classList.remove('night-mode', 'dark-mode', 'light-mode');
+    document.body.classList.remove('night-mode', 'dark-mode', 'light-mode');
     
     // Apply the selected theme
     if (theme === 'night') {
@@ -3117,8 +3119,11 @@ function applyTheme(theme) {
     } else if (theme === 'dark') {
         document.documentElement.classList.add('dark-mode');
         document.body.classList.add('dark-mode');
+    } else if (theme === 'day') {
+        document.documentElement.classList.add('light-mode');
+        document.body.classList.add('light-mode');
     }
-    // 'day' means no class added (default light theme)
+    // auto mode = no class (allows @media prefers-color-scheme to apply)
 }
 
 // Legacy compatibility
