@@ -15,8 +15,9 @@ body {
 
 /* OS dark mode preference - prevents flash of light content */
 /* This applies immediately on page load before JS runs */
+/* Only applies in auto mode (when no explicit dark-mode or night-mode class is set) */
 @media (prefers-color-scheme: dark) {
-    body {
+    body:not(.dark-mode):not(.night-mode) {
         --dark-bg-body: #121212;
         --dark-bg-section: #1e1e1e;
         --dark-bg-header: #181818;
@@ -36,110 +37,110 @@ body {
         color: var(--dark-text-primary);
     }
     
-    .header {
+    body:not(.dark-mode):not(.night-mode) .header {
         background: var(--dark-bg-header);
         color: var(--dark-text-bright);
     }
     
-    .header h1 {
+    body:not(.dark-mode):not(.night-mode) .header h1 {
         color: var(--dark-text-bright);
     }
     
-    .header h2 {
+    body:not(.dark-mode):not(.night-mode) .header h2 {
         color: var(--dark-text-primary);
     }
     
-    .location {
+    body:not(.dark-mode):not(.night-mode) .location {
         color: var(--dark-text-muted);
     }
     
     /* Section containers (weather, webcams, etc.) */
-    section {
+    body:not(.dark-mode):not(.night-mode) section {
         background: var(--dark-bg-section) !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     
     /* Explicit rules for specific section classes to ensure they get dark background */
     section.weather-section,
-    section.webcam-section {
+    body:not(.dark-mode):not(.night-mode) section.webcam-section {
         background: var(--dark-bg-section) !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     
-    section h2 {
+    body:not(.dark-mode):not(.night-mode) section h2 {
         color: var(--dark-text-bright);
     }
     
-    section h3 {
+    body:not(.dark-mode):not(.night-mode) section h3 {
         color: var(--dark-text-primary);
     }
     
     /* Weather items */
-    .weather-item {
+    body:not(.dark-mode):not(.night-mode) .weather-item {
         background: var(--dark-bg-item);
     }
     
-    .weather-item .label {
+    body:not(.dark-mode):not(.night-mode) .weather-item .label {
         color: var(--dark-text-muted);
     }
     
-    .weather-value {
+    body:not(.dark-mode):not(.night-mode) .weather-value {
         color: var(--dark-text-bright);
     }
     
     /* Other text elements */
-    .label {
+    body:not(.dark-mode):not(.night-mode) .label {
         color: var(--dark-text-muted);
     }
     
-    .value {
+    body:not(.dark-mode):not(.night-mode) .value {
         color: var(--dark-text-bright);
     }
     
-    h2 {
+    body:not(.dark-mode):not(.night-mode) h2 {
         color: var(--dark-text-bright);
     }
     
-    h3 {
+    body:not(.dark-mode):not(.night-mode) h3 {
         color: var(--dark-text-primary);
     }
     
     /* Address links */
-    .address-link {
+    body:not(.dark-mode):not(.night-mode) .address-link {
         color: var(--dark-text-bright);
     }
     
     /* Section dividers */
-    .frequencies {
+    body:not(.dark-mode):not(.night-mode) .frequencies {
         border-top-color: var(--dark-border);
     }
     
-    .links {
+    body:not(.dark-mode):not(.night-mode) .links {
         border-top-color: var(--dark-border);
     }
     
     /* Partnerships section */
-    .partnerships-section {
+    body:not(.dark-mode):not(.night-mode) .partnerships-section {
         background: var(--dark-bg-section);
         border-top-color: var(--dark-border);
     }
     
-    .partnerships-heading {
+    body:not(.dark-mode):not(.night-mode) .partnerships-heading {
         color: var(--dark-text-bright);
     }
     
-    .partnerships-subheading {
+    body:not(.dark-mode):not(.night-mode) .partnerships-subheading {
         color: var(--dark-text-muted);
     }
     
-    .partner-link {
+    body:not(.dark-mode):not(.night-mode) .partner-link {
         background: var(--dark-bg-item);
         border-color: var(--dark-border);
         color: var(--dark-text-primary);
     }
     
     /* Embed section */
-    .embed-section {
+    body:not(.dark-mode):not(.night-mode) .embed-section {
         background: var(--dark-bg-section);
     }
     
@@ -149,7 +150,7 @@ body {
     #temp-unit-toggle,
     #distance-unit-toggle,
     #wind-speed-unit-toggle,
-    #baro-unit-toggle {
+    body:not(.dark-mode):not(.night-mode) #baro-unit-toggle {
         background: var(--dark-bg-button) !important;
         border-color: var(--dark-border) !important;
         color: var(--dark-text-primary) !important;
@@ -160,7 +161,7 @@ body {
     #temp-unit-toggle:hover,
     #distance-unit-toggle:hover,
     #wind-speed-unit-toggle:hover,
-    #baro-unit-toggle:hover {
+    body:not(.dark-mode):not(.night-mode) #baro-unit-toggle:hover {
         background: var(--dark-bg-button-hover) !important;
         border-color: #555 !important;
     }
