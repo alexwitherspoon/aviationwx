@@ -183,9 +183,14 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     echo generateStructuredDataScript(generateGuideBreadcrumbs($guideDisplayTitle));
     ?>
     
-    <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/styles.css">
     <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
+        /* Ensure guides inherit the site-wide font */
+        body, .container, .guides-content, .guides-content p, .guides-content li {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
         /* Smooth scrolling for anchor links */
         html {
             scroll-behavior: smooth;
