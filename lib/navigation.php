@@ -40,9 +40,9 @@ $baseDomain = getBaseDomain();
             <span class="site-nav-logo-text">AviationWX.org</span>
         </a>
         
-        <div class="site-nav-search-container">
+        <div class="site-nav-search-wrapper">
             <input type="text" 
-                   id="site-nav-search" 
+                   id="site-nav-airport-search" 
                    class="site-nav-search-input" 
                    placeholder="Search by name, ICAO, IATA, or FAA code..." 
                    autocomplete="off"
@@ -164,7 +164,7 @@ $baseDomain = getBaseDomain();
 }
 
 /* Compact Airport Search */
-.site-nav-search-container {
+.site-nav-search-wrapper {
     position: relative;
     flex-shrink: 0;
 }
