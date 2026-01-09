@@ -69,11 +69,12 @@ function fetchCloudflareAnalytics(): array {
     $config = loadConfig();
     
     // Check if Cloudflare credentials are configured
-    if (!isset($config['cloudflare'])) {
+    // Config structure: $config['config']['cloudflare']
+    if (!isset($config['config']['cloudflare'])) {
         return [];
     }
     
-    $cf = $config['cloudflare'];
+    $cf = $config['config']['cloudflare'];
     $apiToken = $cf['api_token'] ?? '';
     $zoneId = $cf['zone_id'] ?? '';
     $accountId = $cf['account_id'] ?? '';
@@ -91,18 +92,15 @@ function fetchCloudflareAnalytics(): array {
     $now = new DateTime('now', new DateTimeZone('UTC'));
     $yesterday = (clone $now)->modify('-24 hours');
     
-    // GraphQL query for zone analytics
+    // GraphQL query for zone analytics (using hourly groups)
     // https://developers.cloudflare.com/analytics/graphql-api/features/data-sets/
     $query = <<<'GRAPHQL'
 query GetZoneAnalytics($zoneTag: string, $since: Time!, $until: Time!) {
   viewer {
     zones(filter: {zoneTag: $zoneTag}) {
-      httpRequests1dGroups(
-        limit: 1,
-        filter: {
-          datetime_geq: $since,
-          datetime_leq: $until
-        }
+      httpRequests1hGroups(
+        limit: 24,
+        filter: {datetime_geq: $since, datetime_leq: $until}
       ) {
         sum {
           requests
@@ -156,19 +154,32 @@ GRAPHQL;
     
     $data = json_decode($response, true);
     
-    if (!isset($data['data']['viewer']['zones'][0]['httpRequests1dGroups'][0])) {
+    if (!isset($data['data']['viewer']['zones'][0]['httpRequests1hGroups'])) {
         aviationwx_log('warning', 'Cloudflare Analytics API returned unexpected structure', [
             'response' => $response
         ]);
         return [];
     }
     
-    $stats = $data['data']['viewer']['zones'][0]['httpRequests1dGroups'][0];
+    $hourlyGroups = $data['data']['viewer']['zones'][0]['httpRequests1hGroups'];
+    
+    // Sum up the hourly data to get 24-hour totals
+    $totalRequests = 0;
+    $totalBytes = 0;
+    $uniqueVisitors = 0; // Note: uniques are already deduplicated by Cloudflare per hour
+    
+    foreach ($hourlyGroups as $hour) {
+        $totalRequests += $hour['sum']['requests'] ?? 0;
+        $totalBytes += $hour['sum']['bytes'] ?? 0;
+        // For uniques, we take the maximum across hours as an approximation
+        // (Cloudflare doesn't provide true 24h unique count via this endpoint)
+        $uniqueVisitors = max($uniqueVisitors, $hour['uniq']['uniques'] ?? 0);
+    }
     
     return [
-        'unique_visitors_today' => $stats['uniq']['uniques'] ?? 0,
-        'requests_today' => $stats['sum']['requests'] ?? 0,
-        'bandwidth_today' => $stats['sum']['bytes'] ?? 0,
+        'unique_visitors_today' => $uniqueVisitors,
+        'requests_today' => $totalRequests,
+        'bandwidth_today' => $totalBytes,
         'cached_at' => time()
     ];
 }
