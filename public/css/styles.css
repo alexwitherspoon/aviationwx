@@ -345,7 +345,7 @@ body {
 .airport-search-container {
     flex: 1;
     min-width: 200px;
-    max-width: 300px;
+    max-width: 400px;
 }
 
 .airport-search-input {
@@ -372,6 +372,91 @@ body {
 
 .nearby-airports-container {
     position: relative;
+    flex-shrink: 0;
+}
+
+.nav-hamburger-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.nav-hamburger-btn {
+    padding: 0.5rem 1rem;
+    background: #444;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 38px;
+}
+
+.nav-hamburger-btn:hover {
+    background: #555;
+}
+
+.nav-hamburger-btn.active {
+    background: #333;
+    border-color: #0066cc;
+}
+
+.hamburger-icon {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+/* Hamburger dropdown menu */
+.nav-hamburger-dropdown {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    min-width: 250px;
+    max-width: 320px;
+    display: none;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.nav-hamburger-dropdown.show {
+    display: block;
+}
+
+.nav-hamburger-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    text-decoration: none;
+    color: white;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #333;
+    font-size: 0.95rem;
+    min-height: 48px; /* Touch-friendly */
+}
+
+.nav-hamburger-item:last-child {
+    border-bottom: none;
+}
+
+.nav-hamburger-item:hover {
+    background: #333;
+}
+
+.nav-item-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    width: 1.5rem;
+    text-align: center;
 }
 
 /* Unified dropdown for both search and nearby airports */
@@ -1116,13 +1201,59 @@ h3 {
         max-width: 100%;
     }
     
+    /* Mobile: Nearby Airports + Hamburger side by side */
     .nearby-airports-container {
+        width: 75%;
+    }
+    
+    .nav-hamburger-container {
+        width: 23%;
+    }
+    
+    /* Container for nearby + hamburger on mobile */
+    .airport-nav-menu > .nearby-airports-container,
+    .airport-nav-menu > .nav-hamburger-container {
+        display: inline-block;
+    }
+    
+    /* Wrap nearby airports button and hamburger in flex container on mobile */
+    .airport-nav-menu {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    
+    .airport-search-container {
+        order: 1;
         width: 100%;
+    }
+    
+    .nearby-airports-container {
+        order: 2;
+        flex: 3;
+    }
+    
+    .nav-hamburger-container {
+        order: 3;
+        flex: 1;
+        min-width: 60px;
     }
     
     .nearby-airports-btn {
         width: 100%;
         justify-content: center;
+    }
+    
+    .nav-hamburger-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.5rem;
+    }
+    
+    .nav-hamburger-dropdown {
+        right: 0;
+        left: auto;
+        min-width: 200px;
+        max-width: calc(100vw - 2rem);
     }
     
     section {
@@ -1743,6 +1874,35 @@ body.night-mode .airport-name {
     color: var(--night-text-bright) !important;
 }
 
+body.night-mode .nav-hamburger-btn {
+    background: #330000 !important;
+    border-color: var(--night-border) !important;
+    color: var(--night-text-bright) !important;
+}
+
+body.night-mode .nav-hamburger-btn:hover {
+    background: #440000 !important;
+}
+
+body.night-mode .nav-hamburger-btn.active {
+    background: #220000 !important;
+    border-color: var(--night-accent) !important;
+}
+
+body.night-mode .nav-hamburger-dropdown {
+    background: var(--night-bg-section) !important;
+    border-color: var(--night-border) !important;
+}
+
+body.night-mode .nav-hamburger-item {
+    color: var(--night-text-primary) !important;
+    border-bottom-color: var(--night-border-light) !important;
+}
+
+body.night-mode .nav-hamburger-item:hover {
+    background: var(--night-bg-item) !important;
+}
+
 body.night-mode .airport-identifier {
     color: var(--night-text-muted) !important;
 }
@@ -2169,6 +2329,35 @@ body.dark-mode .nearby-airports-btn.active {
 
 body.dark-mode .airport-name {
     color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .nav-hamburger-btn {
+    background: #2a5a8a !important;
+    border-color: var(--dark-border) !important;
+    color: var(--dark-text-bright) !important;
+}
+
+body.dark-mode .nav-hamburger-btn:hover {
+    background: #3a6a9a !important;
+}
+
+body.dark-mode .nav-hamburger-btn.active {
+    background: #1a4a7a !important;
+    border-color: var(--dark-accent) !important;
+}
+
+body.dark-mode .nav-hamburger-dropdown {
+    background: var(--dark-bg-section) !important;
+    border-color: var(--dark-border) !important;
+}
+
+body.dark-mode .nav-hamburger-item {
+    color: var(--dark-text-primary) !important;
+    border-bottom-color: var(--dark-border-light) !important;
+}
+
+body.dark-mode .nav-hamburger-item:hover {
+    background: var(--dark-bg-item) !important;
 }
 
 body.dark-mode .airport-identifier {

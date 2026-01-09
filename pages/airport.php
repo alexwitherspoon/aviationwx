@@ -1199,9 +1199,37 @@ if ($themeCookie === 'dark') {
                         <span class="dropdown-arrow">▼</span>
                     </button>
                 </div>
+                <div class="nav-hamburger-container">
+                    <button id="nav-hamburger-btn" class="nav-hamburger-btn" title="Navigation menu" aria-label="Open navigation menu">
+                        <span class="hamburger-icon">☰</span>
+                    </button>
+                </div>
                 <!-- Unified dropdown for both search and nearby airports -->
                 <div id="airport-dropdown" class="airport-dropdown">
                     <!-- Content populated by JavaScript -->
+                </div>
+                <!-- Hamburger menu dropdown -->
+                <div id="nav-hamburger-dropdown" class="nav-hamburger-dropdown">
+                    <a href="https://airports.aviationwx.org" class="nav-hamburger-item">
+                        <span class="nav-item-icon">✈️</span>
+                        <span>Browse All Airports</span>
+                    </a>
+                    <a href="https://guides.aviationwx.org" class="nav-hamburger-item">
+                        <span class="nav-item-icon">📚</span>
+                        <span>Setup Guides</span>
+                    </a>
+                    <a href="https://embed.aviationwx.org" class="nav-hamburger-item">
+                        <span class="nav-item-icon">🔗</span>
+                        <span>Embed Generator</span>
+                    </a>
+                    <a href="https://api.aviationwx.org" class="nav-hamburger-item">
+                        <span class="nav-item-icon">📡</span>
+                        <span>API Documentation</span>
+                    </a>
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="nav-hamburger-item">
+                        <span class="nav-item-icon">💻</span>
+                        <span>GitHub</span>
+                    </a>
                 </div>
             </div>
         </div>
@@ -7673,7 +7701,43 @@ window.addEventListener('beforeunload', () => {
         }
     });
     
-    // Close dropdown when clicking outside
+    // Hamburger menu functionality
+    const hamburgerBtn = document.getElementById('nav-hamburger-btn');
+    const hamburgerDropdown = document.getElementById('nav-hamburger-dropdown');
+    
+    if (hamburgerBtn && hamburgerDropdown) {
+        hamburgerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isActive = hamburgerBtn.classList.contains('active');
+            
+            if (isActive) {
+                hamburgerBtn.classList.remove('active');
+                hamburgerDropdown.classList.remove('show');
+            } else {
+                hamburgerBtn.classList.add('active');
+                hamburgerDropdown.classList.add('show');
+            }
+        });
+        
+        // Close hamburger dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!hamburgerBtn.contains(e.target) && 
+                !hamburgerDropdown.contains(e.target)) {
+                hamburgerDropdown.classList.remove('show');
+                hamburgerBtn.classList.remove('active');
+            }
+        });
+        
+        // Close hamburger on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && hamburgerDropdown.classList.contains('show')) {
+                hamburgerDropdown.classList.remove('show');
+                hamburgerBtn.classList.remove('active');
+            }
+        });
+    }
+    
+    // Close airport dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && 
             !nearbyBtn.contains(e.target) && 
