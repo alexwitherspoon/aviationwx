@@ -1210,6 +1210,10 @@ if ($themeCookie === 'dark') {
                 </div>
                 <!-- Hamburger menu dropdown -->
                 <div id="nav-hamburger-dropdown" class="nav-hamburger-dropdown">
+                    <a href="https://aviationwx.org" class="nav-hamburger-item">
+                        <span class="nav-item-icon">🏠</span>
+                        <span>AviationWX.org Home</span>
+                    </a>
                     <a href="https://airports.aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">✈️</span>
                         <span>Browse All Airports</span>
