@@ -217,7 +217,7 @@ function getCloudflareAnalyticsForStatus(): array {
     
     // Format bandwidth
     $bandwidth = $analytics['bandwidth_today'] ?? 0;
-    $bandwidthFormatted = formatBytes($bandwidth);
+    $bandwidthFormatted = formatBytesForAnalytics($bandwidth);
     
     // Calculate requests per visitor (engagement metric)
     $uniqueVisitors = $analytics['unique_visitors_today'] ?? 0;
@@ -236,12 +236,12 @@ function getCloudflareAnalyticsForStatus(): array {
 }
 
 /**
- * Format bytes to human-readable string
+ * Format bytes to human-readable string (for analytics display)
  * 
  * @param int $bytes Number of bytes
  * @return string Formatted string (e.g., "1.5 GB")
  */
-function formatBytes(int $bytes): string {
+function formatBytesForAnalytics(int $bytes): string {
     $units = ['B', 'KB', 'MB', 'GB', 'TB'];
     $index = 0;
     $value = $bytes;
