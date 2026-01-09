@@ -24,6 +24,9 @@ $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath :
 $totalAirports = 0;
 $totalWebcams = 0;
 $totalWeatherStations = 0;
+$imagesProcessedToday = 0;
+$totalDashboardVisits = 0; // TODO: Pull from Cloudflare Analytics API
+
 if (file_exists($configFile)) {
     $config = json_decode(file_get_contents($configFile), true);
     if (isset($config['airports'])) {
@@ -37,6 +40,21 @@ if (file_exists($configFile)) {
         foreach ($enabledAirports as $airportId => $airport) {
             if (isset($airport['webcams'])) {
                 $totalWebcams += count($airport['webcams']);
+                
+                // Count images processed today for each webcam
+                foreach ($airport['webcams'] as $camIndex => $webcam) {
+                    $webcamDir = getWebcamCameraDir($airportId, $camIndex);
+                    if (is_dir($webcamDir)) {
+                        // Count files created today
+                        $today = date('Y-m-d');
+                        $files = glob($webcamDir . '/*.{jpg,jpeg,webp}', GLOB_BRACE);
+                        foreach ($files as $file) {
+                            if (date('Y-m-d', filemtime($file)) === $today) {
+                                $imagesProcessedToday++;
+                            }
+                        }
+                    }
+                }
             }
             
             // Count primary weather sources (non-METAR types with unique identifiers)
@@ -65,6 +83,16 @@ if (file_exists($configFile)) {
         
         $totalWeatherStations = count($uniqueWeatherStations);
     }
+}
+
+// Format large numbers for display
+function formatMetricNumber($number) {
+    if ($number >= 1000000) {
+        return number_format($number / 1000000, 1) . 'M';
+    } elseif ($number >= 1000) {
+        return number_format($number / 1000, 1) . 'K';
+    }
+    return number_format($number);
 }
 
 // SEO variables
@@ -925,18 +953,30 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= $totalWeatherStations ?></span>
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Weather Stations</span>
                 </div>
+                <?php if ($imagesProcessedToday > 0): ?>
+                <div style="text-align: center;">
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesProcessedToday) ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Today</span>
+                </div>
+                <?php endif; ?>
+                <?php if ($totalDashboardVisits > 0): ?>
+                <div style="text-align: center;">
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($totalDashboardVisits) ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Dashboard Visits</span>
+                </div>
+                <?php endif; ?>
             </div>
             
-            <!-- Primary CTA -->
-            <div style="margin-top: 1.5rem;">
-                <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.05rem; padding: 0.85rem 2rem; margin-right: 1rem;">Add Your Airport</a>
-                <a href="https://airports.aviationwx.org" style="color: white; text-decoration: underline; font-size: 0.95rem; opacity: 0.95;">Browse Live Dashboards →</a>
+            <!-- Primary CTAs -->
+            <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.05rem; padding: 0.85rem 2rem;">Add Your Airport</a>
+                <a href="https://airports.aviationwx.org" class="btn-secondary" style="font-size: 1.05rem; padding: 0.85rem 2rem;">Browse Live Dashboards</a>
             </div>
         </div>
 
         <!-- Why Data Quality Matters -->
-        <section>
-            <h2>Why Multiple Data Sources Matter</h2>
+        <section style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Why Multiple Data Sources Matter</h2>
             
             <!-- Real-World Problem -->
             <div class="highlight-box" style="border-left-color: #dc3545; background: #fff5f5; margin-bottom: 2rem;">
@@ -945,7 +985,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                     A CFI and student approached their home airport with ASOS reporting "7,000 ft ceiling, 10 miles visibility." Actual conditions? Dense fog—they couldn't see the runway and went missed on their approach.
                 </p>
                 <p style="margin-top: 1rem;">
-                    When automated systems provide incomplete data, pilots need visual verification to make informed go/no-go decisions.
+                    We should never trust any one source of information without cross-referencing it to confirm its accuracy. Visual confirmation, when done right, provides a powerful cross-check for go/no-go decisions.
                 </p>
                 <p style="margin-top: 1rem; font-size: 0.9rem; font-style: italic;">
                     <a href="https://www.flyingmag.com/how-airport-cameras-save-pilots-from-bad-weather-data/" target="_blank" rel="noopener" style="color: #0066cc;">As Flying Magazine noted</a>: "Visual confirmation plays a critical role when automated systems are 'creatively optimistic.'"
@@ -978,18 +1018,18 @@ $ogImage = file_exists($aboutPhotoWebp)
         </section>
 
         <!-- How It Works (Condensed) -->
-        <section id="how-it-works">
-            <h2>Simple, Sustainable, Community-Driven</h2>
-            <p style="font-size: 1.05rem; line-height: 1.7;">
+        <section id="how-it-works" style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Simple, Sustainable, Community-Driven</h2>
+            <p style="font-size: 1.05rem; line-height: 1.7; text-align: center; max-width: 900px; margin: 1rem auto;">
                 <strong>Contact us</strong> with your airport information → <strong>We build and host</strong> your free dashboard → <strong>Pilots access it</strong> at <code>ICAO.aviationwx.org</code>. We handle all maintenance, integrate with your equipment, or guide your community through new installations.
             </p>
-            <p style="margin-top: 1rem;">
+            <p style="margin-top: 1rem; text-align: center;">
                 📚 <a href="https://guides.aviationwx.org" style="color: #0066cc; font-weight: 500;">Read detailed setup guides →</a>
             </p>
         </section>
 
-        <section id="for-airport-owners">
-            <h2>Built for Airports of All Sizes</h2>
+        <section id="for-airport-owners" style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Built for Airports of All Sizes</h2>
             <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem; color: #555;">Safety tools shouldn't depend on airport size or budget.</p>
             
             <div class="user-group-section" style="border-left-color: #28a745;">
@@ -1070,8 +1110,8 @@ Best regards,
         </section>
 
         <!-- For Pilots & CFIs -->
-        <section>
-            <h2>Better Data for Better Decisions</h2>
+        <section style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Better Data for Better Decisions</h2>
             
             <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
                 <!-- For Pilots -->
@@ -1112,8 +1152,8 @@ Best regards,
         </section>
 
         <!-- Data Quality & Verification -->
-        <section>
-            <h2>Verified Data You Can Trust</h2>
+        <section style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Verified Data You Can Trust</h2>
             <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem; color: #555;">Built-in quality checks that commercial systems often skip</p>
             
             <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
@@ -1170,9 +1210,9 @@ Best regards,
         </script>
 
         <!-- Participating Airports -->
-        <section id="participating-airports">
-            <h2>Live Airport Dashboards</h2>
-            <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem;">
+        <section id="participating-airports" style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Live Airport Dashboards</h2>
+            <p style="font-size: 1.05rem; text-align: center; margin-bottom: 1rem;">
                 Explore live weather dashboards at participating airports. Each dashboard includes verified cameras, real-time weather, and data quality checks.
             </p>
             <p style="text-align: center; margin-bottom: 2rem;">
@@ -1401,8 +1441,8 @@ Best regards,
         </section>
 
         <!-- Supported Equipment (Condensed) -->
-        <section>
-            <h2>Works With What You Have</h2>
+        <section style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Works With What You Have</h2>
             <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem; color: #555;">
                 We integrate with existing equipment or help you choose affordable options
             </p>
@@ -1436,8 +1476,8 @@ Best regards,
         </section>
 
         <!-- Open Source for the Long Term -->
-        <section id="about-the-project">
-            <h2>Built to Last, Built to Adapt</h2>
+        <section id="about-the-project" style="margin-top: 4rem;">
+            <h2 style="text-align: center;">Built to Last, Built to Adapt</h2>
             
             <div class="about-box" style="background: #f0f8ff; border-left-color: #0066cc;">
                 <h3 style="color: #0066cc; margin-top: 0;">Why Open Source Matters</h3>
