@@ -394,6 +394,7 @@ body {
     align-items: center;
     gap: 0.5rem;
     min-height: 38px;
+    box-sizing: border-box;
 }
 
 .nav-hamburger-btn:hover {
@@ -487,7 +488,7 @@ body {
     font-weight: 600;
     background: #0066cc;
     color: white;
-    border: none;
+    border: 1px solid #0066cc;
     border-radius: 4px;
     cursor: pointer;
     transition: background 0.2s;
@@ -495,6 +496,8 @@ body {
     align-items: center;
     gap: 0.5rem;
     white-space: nowrap;
+    min-height: 38px;
+    box-sizing: border-box;
 }
 
 .nearby-airports-btn:hover {
