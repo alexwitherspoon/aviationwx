@@ -392,6 +392,7 @@ body {
     transition: all 0.2s;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     min-height: 38px;
     box-sizing: border-box;
@@ -412,6 +413,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    transform: translateY(-1px);
 }
 
 /* Hamburger dropdown menu */
