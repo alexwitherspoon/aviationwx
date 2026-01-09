@@ -1218,21 +1218,13 @@ if ($themeCookie === 'dark') {
                         <span class="nav-item-icon">✈️</span>
                         <span>Browse All Airports</span>
                     </a>
-                    <a href="https://guides.aviationwx.org" class="nav-hamburger-item">
-                        <span class="nav-item-icon">📚</span>
-                        <span>Setup Guides</span>
-                    </a>
                     <a href="https://embed.aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">🔗</span>
                         <span>Embed Generator</span>
                     </a>
-                    <a href="https://api.aviationwx.org" class="nav-hamburger-item">
-                        <span class="nav-item-icon">📡</span>
-                        <span>API Documentation</span>
-                    </a>
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="nav-hamburger-item">
-                        <span class="nav-item-icon">💻</span>
-                        <span>GitHub</span>
+                    <a href="https://status.aviationwx.org" class="nav-hamburger-item">
+                        <span class="nav-item-icon">📊</span>
+                        <span>System Status</span>
                     </a>
                 </div>
             </div>
@@ -1813,15 +1805,6 @@ if ($themeCookie === 'dark') {
             </div>
         </section>
         <?php endif; ?>
-
-        <!-- Embed This Dashboard Section -->
-        <section class="embed-section">
-            <div class="embed-container">
-                <span class="embed-icon">🔗</span>
-                <span class="embed-text">Want to add this dashboard to your website?</span>
-                <a href="https://embed.aviationwx.org/?airport=<?= htmlspecialchars($airportId) ?>" class="embed-link" target="_blank" rel="noopener">Create Embed →</a>
-            </div>
-        </section>
 
         <!-- Footer -->
         <footer class="footer">
