@@ -145,21 +145,20 @@ $baseDomain = getBaseDomain();
 }
 
 .site-nav-search-input {
-    width: 300px;
+    width: 350px;
     padding: 0.4rem 0.6rem;
     font-size: 0.9rem;
     border: 1px solid #ddd;
     border-radius: 4px;
     background: white;
     color: #333;
-    transition: all 0.2s;
+    transition: border-color 0.2s;
     box-sizing: border-box;
 }
 
 .site-nav-search-input:focus {
     outline: none;
     border-color: #0066cc;
-    width: 350px;
 }
 
 .site-nav-search-input::placeholder {
@@ -354,6 +353,7 @@ $baseDomain = getBaseDomain();
     .site-nav-search-input {
         width: 60px;
         font-size: 0.85rem;
+        transition: all 0.2s;
     }
     
     .site-nav-search-input:focus {
