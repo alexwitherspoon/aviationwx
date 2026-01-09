@@ -608,6 +608,8 @@ $breadcrumbs = generateBreadcrumbSchema([
     }
     </script>
     
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+    
     <main>
         <header class="page-header">
             <h1>

@@ -911,6 +911,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             <strong>⚠️ JavaScript is required</strong> for this site to function properly. Please enable JavaScript in your browser to view weather data and interactive features.
         </div>
     </noscript>
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
     <main>
     <div class="container">
         <div class="hero">
