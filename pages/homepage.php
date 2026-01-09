@@ -122,6 +122,7 @@ $ogImage = file_exists($aboutPhotoWebp)
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
         /* Smooth scrolling for anchor links */
         html {

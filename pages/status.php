@@ -2239,6 +2239,7 @@ if (php_sapi_name() === 'cli') {
         
         }
     </style>
+    <link rel="stylesheet" href="/public/css/navigation.css">
 </head>
 <body>
     <script>

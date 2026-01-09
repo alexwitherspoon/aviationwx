@@ -153,6 +153,7 @@ $breadcrumbs = generateBreadcrumbSchema([
     <link rel="stylesheet" href="/public/css/leaflet.css">
     
     <link rel="stylesheet" href="/public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
         html {
             scroll-behavior: smooth;

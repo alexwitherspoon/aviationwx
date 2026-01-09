@@ -549,6 +549,7 @@ $baseUrl = getBaseUrl();
             color: #0099ff;
         }
     </style>
+    <link rel="stylesheet" href="/public/css/navigation.css">
 </head>
 <body>
     <?php require_once __DIR__ . '/../lib/navigation.php'; ?>

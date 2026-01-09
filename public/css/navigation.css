@@ -1,0 +1,477 @@
+/* ============================================
+   Main Site Navigation Styles
+   ============================================ */
+
+.site-nav {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.75rem 1.5rem;
+    position: relative;
+    z-index: 900;
+}
+
+.site-nav-container {
+    max-width: 1250px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+/* Logo */
+.site-nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: #333;
+    font-weight: 600;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+}
+
+.site-nav-logo:hover {
+    opacity: 0.8;
+}
+
+.site-nav-logo img {
+    width: 36px;
+    height: 36px;
+}
+
+.site-nav-logo-text {
+    white-space: nowrap;
+}
+
+/* Compact Airport Search */
+.site-nav-search-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.site-nav-search-input {
+    width: 350px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.site-nav-search-input:focus {
+    outline: none;
+    border-color: #0066cc;
+}
+
+.site-nav-search-input::placeholder {
+    color: #999;
+}
+
+/* Search dropdown */
+.site-nav-search-dropdown {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 280px;
+    max-height: 400px;
+    overflow-y: auto;
+    display: none;
+    z-index: 1000;
+}
+
+.site-nav-search-dropdown.show {
+    display: block;
+}
+
+.site-nav-search-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.site-nav-search-item:last-child {
+    border-bottom: none;
+}
+
+.site-nav-search-item:hover,
+.site-nav-search-item.selected {
+    background: #f0f7ff;
+}
+
+.site-nav-search-item .airport-identifier {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0066cc;
+}
+
+.site-nav-search-item .airport-name {
+    font-size: 0.85rem;
+    color: #555;
+    margin-top: 0.15rem;
+}
+
+.site-nav-search-item.no-results {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    cursor: default;
+}
+
+.site-nav-search-item.no-results:hover {
+    background: transparent;
+}
+
+/* Desktop Nav Links */
+.site-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-left: auto;
+}
+
+.site-nav-link {
+    color: #555;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: color 0.2s;
+    white-space: nowrap;
+}
+
+.site-nav-link:hover {
+    color: #0066cc;
+}
+
+/* Developers Dropdown */
+.site-nav-dropdown {
+    position: relative;
+}
+
+.site-nav-dropdown-trigger {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.dropdown-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+}
+
+.site-nav-dropdown-trigger[aria-expanded="true"] .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.site-nav-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 220px;
+    display: none;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.site-nav-dropdown-menu.show {
+    display: block;
+}
+
+.site-nav-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: #333;
+    font-size: 0.95rem;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.site-nav-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.site-nav-dropdown-item:hover {
+    background: #f8f9fa;
+}
+
+.dropdown-item-icon {
+    font-size: 1.1rem;
+    width: 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.site-nav-dropdown-divider {
+    padding: 0.5rem 1rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* Hamburger (hidden on desktop) */
+.site-nav-hamburger {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #555;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    margin-left: auto;
+}
+
+/* Mobile Menu */
+.site-nav-mobile-menu {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 280px;
+    background: white;
+    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+    z-index: 1100;
+    padding: 1rem 0;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+
+.site-nav-mobile-menu.show {
+    display: block;
+    transform: translateX(0);
+}
+
+.site-nav-mobile-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    text-decoration: none;
+    color: #333;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f0f0f0;
+    min-height: 52px; /* Touch-friendly */
+}
+
+.site-nav-mobile-item:hover {
+    background: #f8f9fa;
+}
+
+.site-nav-mobile-divider {
+    padding: 0.5rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.site-nav-mobile-indent {
+    padding-left: 2.5rem;
+    font-weight: 400;
+}
+
+.site-nav-mobile-indent .dropdown-item-icon {
+    font-size: 1rem;
+    width: 1.5rem;
+}
+
+.mobile-nav-icon {
+    font-size: 1.3rem;
+    width: 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Mobile overlay */
+.site-nav-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+}
+
+.site-nav-overlay.show {
+    display: block;
+}
+
+/* ============================================
+   Responsive Styles
+   ============================================ */
+
+@media (max-width: 900px) {
+    .site-nav-links {
+        display: none;
+    }
+    
+    .site-nav-hamburger {
+        display: block;
+    }
+}
+
+@media (max-width: 640px) {
+    .site-nav {
+        padding: 0.5rem 1rem;
+    }
+    
+    .site-nav-container {
+        gap: 0.75rem;
+    }
+    
+    .site-nav-logo-text {
+        display: none;
+    }
+    
+    .site-nav-search-input {
+        width: 140px;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    
+    .site-nav-search-input:focus {
+        width: 200px;
+    }
+    
+    .site-nav-search-dropdown {
+        min-width: 240px;
+        right: 0;
+        left: auto;
+    }
+}
+
+/* ============================================
+   Dark Mode
+   ============================================ */
+
+body.dark-mode .site-nav {
+    background: #1a1a1a;
+    border-bottom-color: #333;
+}
+
+body.dark-mode .site-nav-logo {
+    color: #e0e0e0;
+}
+
+body.dark-mode .site-nav-search-input {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-mode .site-nav-search-input::placeholder {
+    color: #777;
+}
+
+body.dark-mode .site-nav-search-input:focus {
+    border-color: #4a9eff;
+}
+
+body.dark-mode .site-nav-search-dropdown {
+    background: #2a2a2a;
+    border-color: #444;
+}
+
+body.dark-mode .site-nav-search-item {
+    border-bottom-color: #333;
+}
+
+body.dark-mode .site-nav-search-item:hover,
+body.dark-mode .site-nav-search-item.selected {
+    background: #333;
+}
+
+body.dark-mode .site-nav-search-item .airport-identifier {
+    color: #4a9eff;
+}
+
+body.dark-mode .site-nav-search-item .airport-name {
+    color: #aaa;
+}
+
+body.dark-mode .site-nav-link {
+    color: #aaa;
+}
+
+body.dark-mode .site-nav-link:hover {
+    color: #4a9eff;
+}
+
+body.dark-mode .site-nav-hamburger {
+    color: #aaa;
+}
+
+body.dark-mode .site-nav-mobile-menu {
+    background: #1a1a1a;
+}
+
+body.dark-mode .site-nav-mobile-item {
+    color: #e0e0e0;
+    border-bottom-color: #333;
+}
+
+body.dark-mode .site-nav-mobile-item:hover {
+    background: #2a2a2a;
+}
+
+body.dark-mode .site-nav-dropdown-menu {
+    background: #2a2a2a;
+    border-color: #444;
+}
+
+body.dark-mode .site-nav-dropdown-item {
+    color: #e0e0e0;
+    border-bottom-color: #333;
+}
+
+body.dark-mode .site-nav-dropdown-item:hover {
+    background: #333;
+}
+
+body.dark-mode .site-nav-dropdown-divider {
+    color: #666;
+    background: #2a2a2a;
+    border-top-color: #333;
+    border-bottom-color: #333;
+}
+
+body.dark-mode .site-nav-mobile-divider {
+    color: #666;
+    background: #2a2a2a;
+    border-bottom-color: #333;
+}

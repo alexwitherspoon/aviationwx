@@ -184,6 +184,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
         /* Smooth scrolling for anchor links */
         html {

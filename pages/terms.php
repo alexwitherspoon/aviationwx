@@ -50,6 +50,7 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
         .terms-container {
             max-width: 800px;

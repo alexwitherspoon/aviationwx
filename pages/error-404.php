@@ -44,6 +44,7 @@ $canonicalUrl = getCanonicalUrl();
     ?>
     
     <link rel="stylesheet" href="public/css/styles.css">
+    <link rel="stylesheet" href="/public/css/navigation.css">
     <style>
         .error-container {
             max-width: 700px;
