@@ -44,7 +44,7 @@ $baseDomain = getBaseDomain();
             <input type="text" 
                    id="site-nav-search" 
                    class="site-nav-search-input" 
-                   placeholder="KSPB" 
+                   placeholder="Search by name, ICAO, IATA, or FAA code..." 
                    autocomplete="off"
                    title="Search airports by code or name"
                    aria-label="Search airports">
@@ -145,7 +145,7 @@ $baseDomain = getBaseDomain();
 }
 
 .site-nav-search-input {
-    width: 120px;
+    width: 300px;
     padding: 0.4rem 0.6rem;
     font-size: 0.9rem;
     border: 1px solid #ddd;
@@ -159,7 +159,7 @@ $baseDomain = getBaseDomain();
 .site-nav-search-input:focus {
     outline: none;
     border-color: #0066cc;
-    width: 200px;
+    width: 350px;
 }
 
 .site-nav-search-input::placeholder {
