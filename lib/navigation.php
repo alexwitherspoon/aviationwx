@@ -56,9 +56,26 @@ $baseDomain = getBaseDomain();
         <div class="site-nav-links">
             <a href="https://airports.aviationwx.org" class="site-nav-link">Airports</a>
             <a href="https://guides.aviationwx.org" class="site-nav-link">Guides</a>
-            <a href="https://embed.aviationwx.org" class="site-nav-link">Embed</a>
-            <a href="https://api.aviationwx.org" class="site-nav-link">API</a>
-            <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="site-nav-link">GitHub</a>
+            <div class="site-nav-dropdown">
+                <button class="site-nav-link site-nav-dropdown-trigger" aria-expanded="false">
+                    Developers <span class="dropdown-arrow">▼</span>
+                </button>
+                <div class="site-nav-dropdown-menu">
+                    <a href="https://embed.aviationwx.org" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">🔗</span>
+                        <span>Embed Generator</span>
+                    </a>
+                    <a href="https://api.aviationwx.org" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">📡</span>
+                        <span>API Documentation</span>
+                    </a>
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">💻</span>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+            <a href="https://status.aviationwx.org" class="site-nav-link">Status</a>
         </div>
         
         <button id="site-nav-hamburger" class="site-nav-hamburger" aria-label="Open navigation menu">
@@ -77,17 +94,25 @@ $baseDomain = getBaseDomain();
         <span class="mobile-nav-icon">📚</span>
         <span>Guides</span>
     </a>
-    <a href="https://embed.aviationwx.org" class="site-nav-mobile-item">
-        <span class="mobile-nav-icon">🔗</span>
-        <span>Embed</span>
+    
+    <div class="site-nav-mobile-divider">Developers</div>
+    
+    <a href="https://embed.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">🔗</span>
+        <span>Embed Generator</span>
     </a>
-    <a href="https://api.aviationwx.org" class="site-nav-mobile-item">
-        <span class="mobile-nav-icon">📡</span>
-        <span>API</span>
+    <a href="https://api.aviationwx.org" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">📡</span>
+        <span>API Documentation</span>
     </a>
-    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="site-nav-mobile-item">
-        <span class="mobile-nav-icon">💻</span>
+    <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">💻</span>
         <span>GitHub</span>
+    </a>
+    
+    <a href="https://status.aviationwx.org" class="site-nav-mobile-item">
+        <span class="mobile-nav-icon">📊</span>
+        <span>Status</span>
     </a>
 </div>
 
@@ -249,6 +274,75 @@ $baseDomain = getBaseDomain();
     color: #0066cc;
 }
 
+/* Developers Dropdown */
+.site-nav-dropdown {
+    position: relative;
+}
+
+.site-nav-dropdown-trigger {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.dropdown-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+}
+
+.site-nav-dropdown-trigger[aria-expanded="true"] .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.site-nav-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 220px;
+    display: none;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.site-nav-dropdown-menu.show {
+    display: block;
+}
+
+.site-nav-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: #333;
+    font-size: 0.95rem;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.site-nav-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.site-nav-dropdown-item:hover {
+    background: #f8f9fa;
+}
+
+.dropdown-item-icon {
+    font-size: 1.1rem;
+    width: 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
 /* Hamburger (hidden on desktop) */
 .site-nav-hamburger {
     display: none;
@@ -298,6 +392,27 @@ $baseDomain = getBaseDomain();
 
 .site-nav-mobile-item:hover {
     background: #f8f9fa;
+}
+
+.site-nav-mobile-divider {
+    padding: 0.5rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.site-nav-mobile-indent {
+    padding-left: 2.5rem;
+    font-weight: 400;
+}
+
+.site-nav-mobile-indent .dropdown-item-icon {
+    font-size: 1rem;
+    width: 1.5rem;
 }
 
 .mobile-nav-icon {
@@ -447,6 +562,26 @@ body.dark-mode .site-nav-mobile-item {
 body.dark-mode .site-nav-mobile-item:hover {
     background: #2a2a2a;
 }
+
+body.dark-mode .site-nav-dropdown-menu {
+    background: #2a2a2a;
+    border-color: #444;
+}
+
+body.dark-mode .site-nav-dropdown-item {
+    color: #e0e0e0;
+    border-bottom-color: #333;
+}
+
+body.dark-mode .site-nav-dropdown-item:hover {
+    background: #333;
+}
+
+body.dark-mode .site-nav-mobile-divider {
+    color: #666;
+    background: #2a2a2a;
+    border-bottom-color: #333;
+}
 </style>
 
 <script>
@@ -459,10 +594,13 @@ body.dark-mode .site-nav-mobile-item:hover {
     
     // Initialize navigation
     function initSiteNavigation() {
-        const searchInput = document.getElementById('site-nav-search');
+        const searchInput = document.getElementById('site-nav-airport-search');
         const searchDropdown = document.getElementById('site-nav-search-dropdown');
         const hamburger = document.getElementById('site-nav-hamburger');
         const mobileMenu = document.getElementById('site-nav-mobile-menu');
+        const developersDropdown = document.querySelector('.site-nav-dropdown');
+        const developersButton = document.querySelector('.site-nav-dropdown-trigger');
+        const developersMenu = document.querySelector('.site-nav-dropdown-menu');
         
         if (!searchInput || !searchDropdown) return;
         
@@ -637,7 +775,34 @@ body.dark-mode .site-nav-mobile-item:hover {
             if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
                 searchDropdown.classList.remove('show');
             }
+            
+            // Close developers dropdown when clicking outside
+            if (developersDropdown && developersMenu && !developersDropdown.contains(e.target)) {
+                developersMenu.classList.remove('show');
+                if (developersButton) {
+                    developersButton.setAttribute('aria-expanded', 'false');
+                }
+            }
         });
+        
+        // Developers dropdown
+        if (developersButton && developersMenu) {
+            developersButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const isOpen = developersMenu.classList.contains('show');
+                
+                if (isOpen) {
+                    developersMenu.classList.remove('show');
+                    developersButton.setAttribute('aria-expanded', 'false');
+                } else {
+                    developersMenu.classList.add('show');
+                    developersButton.setAttribute('aria-expanded', 'true');
+                    // Close search dropdown if open
+                    searchDropdown.classList.remove('show');
+                }
+            });
+        }
         
         // Hamburger menu
         if (hamburger && mobileMenu) {
