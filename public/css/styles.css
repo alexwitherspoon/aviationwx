@@ -1183,13 +1183,15 @@ h3 {
     }
     
     .airport-nav-menu {
-        flex-direction: column;
+        display: flex;
+        flex-wrap: wrap;
         width: 100%;
         max-width: 100%;
         gap: 0.5rem;
     }
     
     .airport-search-container {
+        order: 1;
         width: 100%;
         max-width: 100%;
     }
@@ -1201,41 +1203,18 @@ h3 {
         max-width: 100%;
     }
     
-    /* Mobile: Nearby Airports + Hamburger side by side */
-    .nearby-airports-container {
-        width: 75%;
-    }
-    
-    .nav-hamburger-container {
-        width: 23%;
-    }
-    
-    /* Container for nearby + hamburger on mobile */
-    .airport-nav-menu > .nearby-airports-container,
-    .airport-nav-menu > .nav-hamburger-container {
-        display: inline-block;
-    }
-    
-    /* Wrap nearby airports button and hamburger in flex container on mobile */
-    .airport-nav-menu {
-        display: flex;
-        flex-wrap: wrap;
-    }
-    
-    .airport-search-container {
-        order: 1;
-        width: 100%;
-    }
-    
+    /* Mobile: Nearby Airports + Hamburger side by side on same row */
     .nearby-airports-container {
         order: 2;
         flex: 3;
+        min-width: 0; /* Allow flex shrinking */
     }
     
     .nav-hamburger-container {
         order: 3;
-        flex: 1;
-        min-width: 60px;
+        flex: 0 0 auto; /* Don't grow, don't shrink, auto width */
+        width: auto;
+        min-width: 0;
     }
     
     .nearby-airports-btn {
@@ -1244,9 +1223,14 @@ h3 {
     }
     
     .nav-hamburger-btn {
-        width: 100%;
+        width: auto;
+        min-width: 52px; /* Minimum touch target */
         justify-content: center;
-        padding: 0.5rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .hamburger-icon {
+        font-size: 1.3rem;
     }
     
     .nav-hamburger-dropdown {
