@@ -13,6 +13,7 @@ require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
+require_once __DIR__ . '/../lib/cloudflare-analytics.php';
 
 // =============================================================================
 // OPTIMIZATION: Cached data loaders

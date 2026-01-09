@@ -8,6 +8,7 @@ header('Expires: 0');
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+require_once __DIR__ . '/../lib/cloudflare-analytics.php';
 
 // Encode email body for mailto: URLs with readable formatting
 // Uses rawurlencode (%20 for spaces) and %0A for newlines to ensure proper display in email clients
@@ -25,7 +26,10 @@ $totalAirports = 0;
 $totalWebcams = 0;
 $totalWeatherStations = 0;
 $imagesProcessedToday = 0;
-$totalDashboardVisits = 0; // TODO: Pull from Cloudflare Analytics API
+
+// Fetch Cloudflare Analytics
+$cfAnalytics = getCloudflareAnalytics();
+$pilotsServedToday = $cfAnalytics['unique_visitors_today'] ?? 0;
 
 if (file_exists($configFile)) {
     $config = json_decode(file_get_contents($configFile), true);
@@ -959,10 +963,10 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Today</span>
                 </div>
                 <?php endif; ?>
-                <?php if ($totalDashboardVisits > 0): ?>
+                <?php if ($pilotsServedToday > 0): ?>
                 <div style="text-align: center;">
-                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($totalDashboardVisits) ?></span>
-                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Dashboard Visits</span>
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($pilotsServedToday) ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Pilots Served Today</span>
                 </div>
                 <?php endif; ?>
             </div>
@@ -982,7 +986,7 @@ $ogImage = file_exists($aboutPhotoWebp)
             <div class="highlight-box" style="border-left-color: #dc3545; background: #fff5f5; margin-bottom: 2rem;">
                 <p><strong>Automated weather stations can miss critical details</strong></p>
                 <p>
-                    A CFI and student approached their home airport with ASOS reporting "7,000 ft ceiling, 10 miles visibility." Actual conditions? Dense fog—they couldn't see the runway and went missed on their approach.
+                    A CFI and student approached their home airport with ASOS reporting "7,000 ft ceiling, 10 miles visibility." Actual conditions? Dense fog - they couldn't see the runway and went missed on their approach.
                 </p>
                 <p style="margin-top: 1rem;">
                     We should never trust any one source of information without cross-referencing it to confirm its accuracy. Visual confirmation, when done right, provides a powerful cross-check for go/no-go decisions.
@@ -1012,7 +1016,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <li>Live cameras verify automated weather reports</li>
                     <li>Quality checks catch stale or inaccurate data</li>
                     <li>Real-time updates from community weather stations</li>
-                    <li>Free for pilots, free for airports—always</li>
+                    <li>Free for pilots, free for airports - always</li>
                 </ul>
             </div>
         </section>
@@ -1126,7 +1130,7 @@ Best regards,
                         <li>See actual visibility conditions, not just reported numbers</li>
                     </ul>
                     <p style="margin-top: 1rem; font-size: 0.95rem;">
-                        Our data quality checks catch stale timestamps, incomplete uploads, and sensor errors—helping you trust what you see.
+                        Our data quality checks catch stale timestamps, incomplete uploads, and sensor errors - helping you trust what you see.
                     </p>
                 </div>
                 
@@ -1134,8 +1138,8 @@ Best regards,
                 <div class="user-group-section" style="border-left-color: #0066cc;">
                     <h3 style="color: #0066cc;">📚 For CFIs & Flight Schools</h3>
                     <p style="font-style: italic; margin-bottom: 1rem;">
-                        "CFIs love this tool—it helps teach student pilots how to make smart weather decisions." <br/>
-                        <span style="font-size: 0.9rem;">— Flying Magazine</span>
+                        "CFIs love this tool - it helps teach student pilots how to make smart weather decisions." <br/>
+                        <span style="font-size: 0.9rem;">- Flying Magazine</span>
                     </p>
                     <p><strong>Use AviationWX to demonstrate:</strong></p>
                     <ul style="margin: 0.75rem 0 0 1.5rem; line-height: 1.7; font-size: 0.95rem;">
