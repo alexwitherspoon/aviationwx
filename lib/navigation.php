@@ -80,6 +80,7 @@ $baseDomain = getBaseDomain();
                     </a>
                 </div>
             </div>
+            <a href="https://aviationwx.org#contact" class="site-nav-link">Contact</a>
             <a href="https://status.aviationwx.org" class="site-nav-link">Status</a>
         </div>
         
@@ -122,6 +123,10 @@ $baseDomain = getBaseDomain();
         <span>Camera Bridge Tool</span>
     </a>
     
+    <a href="https://aviationwx.org#contact" class="site-nav-mobile-item">
+        <span class="mobile-nav-icon">💬</span>
+        <span>Contact</span>
+    </a>
     <a href="https://status.aviationwx.org" class="site-nav-mobile-item">
         <span class="mobile-nav-icon">📊</span>
         <span>Status</span>

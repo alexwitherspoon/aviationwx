@@ -1679,12 +1679,13 @@ Best regards,
                 </div>
             </div>
             
-            <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #0066cc;">
-                <h3 style="color: #0066cc; margin-top: 0;">Report Issues</h3>
-                <p>Found a bug or have a suggestion? We'd love to hear from you!</p>
+            <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #0066cc;" id="contact">
+                <h3 style="color: #0066cc; margin-top: 0;">Get in Touch</h3>
+                <p>We'd love to hear from you! Whether you've found a bug, have a feature suggestion, want to contribute, or just want to say hello.</p>
                 <ul style="margin: 1rem 0 0 2rem;">
                     <li><strong>Email:</strong> <a href="mailto:contact@aviationwx.org">contact@aviationwx.org</a></li>
-                    <li><strong>GitHub Issues:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/issues" target="_blank" rel="noopener">Open a bug report or feature request</a></li>
+                    <li><strong>GitHub Issues:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/issues" target="_blank" rel="noopener">Report bugs or request features</a></li>
+                    <li><strong>Contribute:</strong> <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing guidelines</a></li>
                 </ul>
             </div>
         </section>
