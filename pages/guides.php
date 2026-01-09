@@ -771,6 +771,9 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         document.body.classList.add('dark-mode');
     }
     </script>
+    
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+    
     <main>
     <div class="container">
         <div class="hero">

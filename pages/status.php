@@ -2247,6 +2247,9 @@ if (php_sapi_name() === 'cli') {
         document.body.classList.add('dark-mode');
     }
     </script>
+    
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+    
     <div class="container">
         <div class="header">
             <h1>AviationWX Status</h1>

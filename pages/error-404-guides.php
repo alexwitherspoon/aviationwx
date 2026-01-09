@@ -270,6 +270,9 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
         document.body.classList.add('dark-mode');
     }
     </script>
+    
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+    
     <div class="container">
         <div class="error-container">
             <div class="error-hero">

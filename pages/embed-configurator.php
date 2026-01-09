@@ -551,6 +551,8 @@ $baseUrl = getBaseUrl();
     </style>
 </head>
 <body>
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+    
     <header class="header">
         <h1>
             <img src="<?= htmlspecialchars($baseUrl) ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX">

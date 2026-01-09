@@ -630,6 +630,9 @@ $canonicalUrl = getCanonicalUrl();
         document.body.classList.add('dark-mode');
     }
     </script>
+    
+    <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
+    
     <div class="container">
         <div class="error-container">
             <div class="error-hero">
