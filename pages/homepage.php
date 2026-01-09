@@ -957,18 +957,14 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= $totalWeatherStations ?></span>
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Weather Stations</span>
                 </div>
-                <?php if ($imagesProcessedToday > 0): ?>
                 <div style="text-align: center;">
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesProcessedToday) ?></span>
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Today</span>
                 </div>
-                <?php endif; ?>
-                <?php if ($pilotsServedToday > 0): ?>
                 <div style="text-align: center;">
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($pilotsServedToday) ?></span>
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Pilots Served Today</span>
                 </div>
-                <?php endif; ?>
             </div>
             
             <!-- Primary CTAs -->
