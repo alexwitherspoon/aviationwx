@@ -94,9 +94,9 @@ if ($isMainDomain) {
     echo "    <priority>0.3</priority>\n";
     echo "  </url>\n";
     
-    // Airports directory page
+    // Airports directory page (subdomain)
     echo "  <url>\n";
-    echo "    <loc>https://aviationwx.org/airports</loc>\n";
+    echo "    <loc>https://airports.aviationwx.org</loc>\n";
     echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>daily</changefreq>\n";
     echo "    <priority>0.8</priority>\n";

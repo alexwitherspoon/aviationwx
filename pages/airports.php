@@ -103,7 +103,7 @@ $airportsJson = json_encode($airportsForMap);
 $pageTitle = 'Airport Network Map - AviationWX.org';
 $pageDescription = 'View all ' . $totalAirports . ' airports in the AviationWX network on an interactive map. Live webcams and real-time weather data for pilots.';
 $pageKeywords = 'airport map, aviation weather network, airport webcams, pilot weather, airport directory';
-$canonicalUrl = 'https://aviationwx.org/airports';
+$canonicalUrl = 'https://airports.aviationwx.org';
 $baseUrl = getBaseUrl();
 $ogImage = $baseUrl . '/public/images/about-photo.webp';
 
@@ -753,7 +753,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         <footer>
             <p>
                 &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
-                <a href="https://aviationwx.org/airports">Airports</a> • 
+                <a href="https://airports.aviationwx.org">Airports</a> • 
                 <a href="https://guides.aviationwx.org">Guides</a> • 
                 <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
                 <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 

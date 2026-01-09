@@ -111,7 +111,14 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
     exit;
 }
 
-// Check for airports directory page (for local dev/testing and main domain)
+// Match airports subdomain exactly (e.g., airports.aviationwx.org)
+if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // Route to airports directory page
+    include 'pages/airports.php';
+    exit;
+}
+
+// Check for airports directory page (for local dev/testing)
 if (isset($_GET['airports']) || $requestPath === 'airports') {
     // Route to airports directory page
     include 'pages/airports.php';
@@ -167,7 +174,7 @@ if (!$isAirportRequest) {
             if (count($hostParts) >= 3) {
                 $potentialId = $hostParts[0];
                 // Exclude known non-airport subdomains
-                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed'])) {
+                if (!in_array($potentialId, ['www', 'status', 'aviationwx', 'guides', 'api', 'terms', 'embed', 'airports'])) {
                     $isAirportRequest = true;
                     $rawAirportIdentifier = $potentialId;
                 }
