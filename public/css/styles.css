@@ -1191,6 +1191,7 @@ h3 {
     .airport-nav-menu {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         width: 100%;
         max-width: 100%;
         gap: 0.5rem;
