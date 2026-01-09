@@ -351,13 +351,13 @@ $baseDomain = getBaseDomain();
     }
     
     .site-nav-search-input {
-        width: 60px;
+        width: 140px;
         font-size: 0.85rem;
         transition: all 0.2s;
     }
     
     .site-nav-search-input:focus {
-        width: 140px;
+        width: 200px;
     }
     
     .site-nav-search-dropdown {
