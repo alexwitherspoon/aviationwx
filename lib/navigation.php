@@ -69,9 +69,14 @@ $baseDomain = getBaseDomain();
                         <span class="dropdown-item-icon">📡</span>
                         <span>API Documentation</span>
                     </a>
+                    <div class="site-nav-dropdown-divider">Open Source</div>
                     <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="site-nav-dropdown-item">
-                        <span class="dropdown-item-icon">💻</span>
-                        <span>GitHub</span>
+                        <span class="dropdown-item-icon">🛬</span>
+                        <span>Platform Source Code</span>
+                    </a>
+                    <a href="https://github.com/alexwitherspoon/aviationwx-bridge" target="_blank" rel="noopener" class="site-nav-dropdown-item">
+                        <span class="dropdown-item-icon">📷</span>
+                        <span>Camera Bridge Tool</span>
                     </a>
                 </div>
             </div>
@@ -105,9 +110,16 @@ $baseDomain = getBaseDomain();
         <span class="dropdown-item-icon">📡</span>
         <span>API Documentation</span>
     </a>
+    
+    <div class="site-nav-mobile-divider">Open Source</div>
+    
     <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" class="site-nav-mobile-item site-nav-mobile-indent">
-        <span class="dropdown-item-icon">💻</span>
-        <span>GitHub</span>
+        <span class="dropdown-item-icon">🛬</span>
+        <span>Platform Source Code</span>
+    </a>
+    <a href="https://github.com/alexwitherspoon/aviationwx-bridge" target="_blank" rel="noopener" class="site-nav-mobile-item site-nav-mobile-indent">
+        <span class="dropdown-item-icon">📷</span>
+        <span>Camera Bridge Tool</span>
     </a>
     
     <a href="https://status.aviationwx.org" class="site-nav-mobile-item">
@@ -343,6 +355,18 @@ $baseDomain = getBaseDomain();
     flex-shrink: 0;
 }
 
+.site-nav-dropdown-divider {
+    padding: 0.5rem 1rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
 /* Hamburger (hidden on desktop) */
 .site-nav-hamburger {
     display: none;
@@ -575,6 +599,13 @@ body.dark-mode .site-nav-dropdown-item {
 
 body.dark-mode .site-nav-dropdown-item:hover {
     background: #333;
+}
+
+body.dark-mode .site-nav-dropdown-divider {
+    color: #666;
+    background: #2a2a2a;
+    border-top-color: #333;
+    border-bottom-color: #333;
 }
 
 body.dark-mode .site-nav-mobile-divider {
