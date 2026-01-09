@@ -149,34 +149,23 @@ $ogImage = file_exists($aboutPhotoWebp)
         .hero {
             background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
             color: white;
-            padding: 4rem 2rem;
+            padding: 2rem 2rem;
             text-align: center;
             margin: -1rem -1rem 3rem -1rem;
             box-sizing: border-box;
             max-width: calc(100% + 2rem);
         }
         .hero h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
         }
         .hero p {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             opacity: 0.95;
-            max-width: 700px;
+            max-width: 800px;
             margin: 0 auto 1rem;
-        }
-        .hero .subtitle {
-            font-size: 0.95rem;
-            opacity: 0.85;
-            font-style: italic;
-            margin-top: 0.5rem;
-        }
-        .hero .volunteer-note {
-            font-size: 0.9rem;
-            opacity: 0.9;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid rgba(255,255,255,0.2);
+            line-height: 1.6;
         }
         .features {
             display: grid;
@@ -915,100 +904,130 @@ $ogImage = file_exists($aboutPhotoWebp)
     <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
     <main>
     <div class="container">
+        <!-- Compact Hero Section -->
         <div class="hero">
-            <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 76px; height: 76px; background: transparent;"> AviationWX.org</h1>
-            <p style="font-size: 1.4rem; font-weight: 500; margin-bottom: 1rem;">
-                Reduce general aviation incidents, promote safety, and ensure accessible solutions for smaller airports and aviators.
+            <h1 style="font-size: 2.5rem; margin-bottom: 0.75rem;">See the complete picture before you fly.</h1>
+            <p style="font-size: 1.1rem; opacity: 0.95; margin-bottom: 1rem; max-width: 800px; margin-left: auto; margin-right: auto;">
+                Verified cameras, quality-checked weather, and real-time data help pilots at smaller airports make safer decisions. Free, open source, community-maintained.
             </p>
-            <p style="font-size: 1.1rem; opacity: 0.95; margin-bottom: 2rem;">
-                Free weather dashboards with real-time webcams and weather data. We host the dashboard and integrate with your existing cameras and sensors, or guide your community through new installations.
-            </p>
-            <div class="btn-group" style="margin-top: 1.5rem;">
-                <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">Add Your Airport</a>
-                <a href="#participating-airports" class="btn-secondary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">View Airports</a>
+            
+            <!-- Inline Stats Badges -->
+            <div style="display: flex; justify-content: center; gap: 2rem; margin: 1.5rem 0; flex-wrap: wrap;">
+                <div style="text-align: center;">
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= $totalAirports ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Airports</span>
+                </div>
+                <div style="text-align: center;">
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= $totalWebcams ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Live Webcams</span>
+                </div>
+                <div style="text-align: center;">
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= $totalWeatherStations ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Weather Stations</span>
+                </div>
+            </div>
+            
+            <!-- Primary CTA -->
+            <div style="margin-top: 1.5rem;">
+                <a href="#for-airport-owners" class="btn-primary" style="font-size: 1.05rem; padding: 0.85rem 2rem; margin-right: 1rem;">Add Your Airport</a>
+                <a href="https://airports.aviationwx.org" style="color: white; text-decoration: underline; font-size: 0.95rem; opacity: 0.95;">Browse Live Dashboards →</a>
             </div>
         </div>
 
-        <!-- Stats -->
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number"><?= $totalAirports ?></div>
-                <div class="stat-label">Participating Airports</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?= $totalWebcams ?></div>
-                <div class="stat-label">Live Webcams</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number"><?= $totalWeatherStations ?></div>
-                <div class="stat-label">Weather Stations</div>
-            </div>
-        </div>
-
+        <!-- Why Data Quality Matters -->
         <section>
-            <h2>Why This Matters</h2>
-            <div class="highlight-box" style="border-left-color: #dc3545; background: #fff5f5;">
-                <p><strong>Safety First</strong></p>
+            <h2>Why Multiple Data Sources Matter</h2>
+            
+            <!-- Real-World Problem -->
+            <div class="highlight-box" style="border-left-color: #dc3545; background: #fff5f5; margin-bottom: 2rem;">
+                <p><strong>Automated weather stations can miss critical details</strong></p>
                 <p>
-                    Weather-related factors contribute to a significant portion of general aviation accidents. Real-time webcams and weather data help pilots see actual visibility conditions and make safer go/no-go decisions. CFIs use these tools to teach student pilots how to make smart weather decisions.
+                    A CFI and student approached their home airport with ASOS reporting "7,000 ft ceiling, 10 miles visibility." Actual conditions? Dense fog—they couldn't see the runway and went missed on their approach.
                 </p>
-                
-                <p style="margin-top: 1.5rem;"><strong>Economic Impact</strong></p>
-                <p>
-                    Tools like this encourage airport use, bringing more pilots to your airport and supporting local economic activity.
+                <p style="margin-top: 1rem;">
+                    When automated systems provide incomplete data, pilots need visual verification to make informed go/no-go decisions.
                 </p>
-                
-                <p style="margin-top: 1.5rem;"><strong>Community & Culture</strong></p>
-                <p>
-                    Better weather information brings positive attention to the general aviation community, supports airport organizations, and strengthens aviation culture.
+                <p style="margin-top: 1rem; font-size: 0.9rem; font-style: italic;">
+                    <a href="https://www.flyingmag.com/how-airport-cameras-save-pilots-from-bad-weather-data/" target="_blank" rel="noopener" style="color: #0066cc;">As Flying Magazine noted</a>: "Visual confirmation plays a critical role when automated systems are 'creatively optimistic.'"
                 </p>
-                
-                <p style="margin-top: 1.5rem;">
-                    <strong>It's completely free</strong> - for the airport, for pilots, always. No fees, no subscriptions, no ads.
-                </p>
+            </div>
+            
+            <!-- Layers of Safety -->
+            <div class="feature-card" style="margin-bottom: 2rem;">
+                <h3>Layers of Safety for Better ADM</h3>
+                <p>No single data source prevents all incidents. Safe flying requires:</p>
+                <ul style="margin: 1rem 0 1rem 1.5rem; line-height: 1.8;">
+                    <li><strong>Multiple verified sources</strong> - ASOS/AWOS + cameras + local sensors</li>
+                    <li><strong>Data quality checks</strong> - Timestamp verification, staleness detection, error frame filtering</li>
+                    <li><strong>Visual confirmation</strong> - See actual conditions, not just numbers</li>
+                    <li><strong>Accessibility for all airports</strong> - Not just towered or commercial fields</li>
+                </ul>
+                <p>AviationWX adds these layers to help pilots satisfy CFR 91.103 and make better aeronautical decisions.</p>
+            </div>
+            
+            <!-- Key Benefits -->
+            <div class="highlight-box" style="border-left-color: #0066cc; background: #f0f8ff;">
+                <p><strong>What AviationWX Provides:</strong></p>
+                <ul style="margin: 0.5rem 0 0 1.5rem; line-height: 1.8;">
+                    <li>Live cameras verify automated weather reports</li>
+                    <li>Quality checks catch stale or inaccurate data</li>
+                    <li>Real-time updates from community weather stations</li>
+                    <li>Free for pilots, free for airports—always</li>
+                </ul>
             </div>
         </section>
 
+        <!-- How It Works (Condensed) -->
         <section id="how-it-works">
-            <h2>How It Works</h2>
-            <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                <div class="feature-card">
-                    <h3>1. Contact Us</h3>
-                    <p>Reach out via email with your airport information. We'll discuss your existing equipment or what's needed for new setup.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>2. We Build Your Dashboard</h3>
-                    <p>We create and host your weather dashboard. We integrate with your existing equipment or guide your community through new sensor installations.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>3. Your Airport Goes Live</h3>
-                    <p>Pilots can start using your dashboard immediately at <code>ICAO.aviationwx.org</code>. We handle all ongoing maintenance.</p>
-                </div>
-            </div>
+            <h2>Simple, Sustainable, Community-Driven</h2>
+            <p style="font-size: 1.05rem; line-height: 1.7;">
+                <strong>Contact us</strong> with your airport information → <strong>We build and host</strong> your free dashboard → <strong>Pilots access it</strong> at <code>ICAO.aviationwx.org</code>. We handle all maintenance, integrate with your equipment, or guide your community through new installations.
+            </p>
+            <p style="margin-top: 1rem;">
+                📚 <a href="https://guides.aviationwx.org" style="color: #0066cc; font-weight: 500;">Read detailed setup guides →</a>
+            </p>
         </section>
 
         <section id="for-airport-owners">
-            <h2>For Airport Owners, Operators & Organizations</h2>
+            <h2>Built for Airports of All Sizes</h2>
+            <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem; color: #555;">Safety tools shouldn't depend on airport size or budget.</p>
+            
             <div class="user-group-section" style="border-left-color: #28a745;">
-                <h3 style="color: #28a745; text-align: center;">🏢 Add Your Airport - It's Free & Easy!</h3>
-                <p><strong>Webcams and weather stations are useful, but can be expensive and a pain to operate.</strong> Some profit-driven services make it hard to bring this safety net to smaller airports in a sustainable way. METAR and other systems are good, but often aren't timely enough.</p>
+                <h3 style="color: #28a745; text-align: center;">🏢 Add Your Airport - It's Free!</h3>
                 
-                <p style="margin-top: 1rem;"><strong>Safety at your airport saves lives, saves property, and makes your airport more useful to a broader range of aviators.</strong></p>
+                <p><strong>The Problem:</strong> Smaller community airports often lack the budget for commercial weather services. Pilots want real-time data. Airport managers want to encourage safe operations. Traditional solutions are expensive and proprietary.</p>
                 
-                <p style="margin-top: 1.5rem;"><strong>What we need:</strong></p>
-                <ul>
-                    <li>Permission to partner with the AviationWX.org project</li>
-                    <li>Existing webcam and weather equipment we can integrate with, or local equipment installed by your community (we provide recommendations and guidance)</li>
+                <p style="margin-top: 1.5rem;"><strong>Our Approach:</strong></p>
+                <ul style="margin: 0.75rem 0 0 1.5rem; line-height: 1.8;">
+                    <li><strong>Free dashboards</strong> hosted at <code>ICAO.aviationwx.org</code></li>
+                    <li><strong>Works with equipment you own</strong> or helps you source affordable options</li>
+                    <li><strong>Open-source code</strong> means the solution outlasts any single maintainer</li>
+                    <li><strong>Community installations</strong> keep costs low and control local</li>
+                    <li><strong>Data quality checks</strong> ensure accuracy (many systems skip this)</li>
+                    <li><strong>SEO benefits</strong> - we link to your organization's website</li>
                 </ul>
                 
-                <p style="margin-top: 1.5rem;"><strong>What you get:</strong></p>
-                <ul>
-                    <li>Free weather dashboard at <code>ICAO.aviationwx.org</code></li>
-                    <li>We handle all dashboard hosting and software maintenance</li>
-                    <li>Equipment recommendations and installation guidance</li>
-                    <li>Equipment ownership stays with the airport</li>
-                    <li>SEO benefits - we link to your organization's website to help drive traffic</li>
-                </ul>
+                <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-top: 2rem; gap: 1.5rem;">
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border-left: 3px solid #28a745;">
+                        <h4 style="margin-top: 0; color: #28a745;">What We Need</h4>
+                        <ul style="margin: 0.5rem 0 0 1.25rem; line-height: 1.7; font-size: 0.95rem;">
+                            <li>Permission to partner with your airport</li>
+                            <li>Existing cameras/sensors we can integrate, OR</li>
+                            <li>Guidance for community-led installations (we provide recommendations)</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border-left: 3px solid #28a745;">
+                        <h4 style="margin-top: 0; color: #28a745;">What You Get</h4>
+                        <ul style="margin: 0.5rem 0 0 1.25rem; line-height: 1.7; font-size: 0.95rem;">
+                            <li>Free weather dashboard with data integrity checks</li>
+                            <li>We handle all hosting, software updates, maintenance</li>
+                            <li>Equipment ownership stays with your airport</li>
+                            <li>Setup guides and ongoing support</li>
+                        </ul>
+                    </div>
+                </div>
+                
                 <?php
                 $ownerEmailSubject = rawurlencode("Request to add airport to AviationWX.org");
                 $ownerEmailBody = encodeEmailBody("Hello AviationWX.org team,
@@ -1034,66 +1053,104 @@ I've reviewed the installation guides at guides.aviationwx.org:
 Best regards,
 [Your name]");
                 ?>
-                <p style="margin-top: 1.5rem; text-align: center;">
-                    <a href="mailto:contact@aviationwx.org?subject=<?= $ownerEmailSubject ?>&body=<?= $ownerEmailBody ?>" class="btn-primary" style="background: #28a745; border-color: #28a745; font-size: 1.1rem; padding: 1rem 2rem;">
-                        📧 Get Started - Send Setup Information
+                <p style="margin-top: 2rem; text-align: center;">
+                    <a href="mailto:contact@aviationwx.org?subject=<?= $ownerEmailSubject ?>&body=<?= $ownerEmailBody ?>" class="btn-primary" style="background: #28a745; border-color: #28a745; font-size: 1.05rem; padding: 0.85rem 2rem;">
+                        📧 Get Started - Send Airport Information
                     </a>
                 </p>
                 <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666; text-align: center;">
-                    Opens your email client with a template you can fill out with your airport's information
+                    Opens your email client with a template
                 </p>
                 <p style="margin-top: 1rem; text-align: center;">
-                    <a href="https://guides.aviationwx.org" style="color: #0066cc; text-decoration: none; font-size: 0.95rem;">
-                        📚 Read setup guides and documentation →
+                    <a href="https://guides.aviationwx.org" style="color: #0066cc; text-decoration: none; font-size: 0.95rem; font-weight: 500;">
+                        📚 Read Setup & Equipment Guides →
                     </a>
                 </p>
             </div>
         </section>
 
+        <!-- For Pilots & CFIs -->
         <section>
-            <h2>What You Get</h2>
-            <p>Each airport dashboard provides real-time, localized weather data designed for pilots making flight decisions:</p>
+            <h2>Better Data for Better Decisions</h2>
             
-            <div class="features">
+            <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                <!-- For Pilots -->
+                <div class="user-group-section" style="border-left-color: #0066cc;">
+                    <h3 style="color: #0066cc;"><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> For Pilots</h3>
+                    <p><strong>Use AviationWX dashboards to:</strong></p>
+                    <ul style="margin: 0.75rem 0 0 1.5rem; line-height: 1.7; font-size: 0.95rem;">
+                        <li>Verify ASOS/AWOS reports with live cameras before departure</li>
+                        <li>Build a complete picture with multiple data sources</li>
+                        <li>Check diversion airports in real-time during flight</li>
+                        <li>Satisfy CFR 91.103 requirements (all available information)</li>
+                        <li>See actual visibility conditions, not just reported numbers</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.95rem;">
+                        Our data quality checks catch stale timestamps, incomplete uploads, and sensor errors—helping you trust what you see.
+                    </p>
+                </div>
+                
+                <!-- For CFIs -->
+                <div class="user-group-section" style="border-left-color: #0066cc;">
+                    <h3 style="color: #0066cc;">📚 For CFIs & Flight Schools</h3>
+                    <p style="font-style: italic; margin-bottom: 1rem;">
+                        "CFIs love this tool—it helps teach student pilots how to make smart weather decisions." <br/>
+                        <span style="font-size: 0.9rem;">— Flying Magazine</span>
+                    </p>
+                    <p><strong>Use AviationWX to demonstrate:</strong></p>
+                    <ul style="margin: 0.75rem 0 0 1.5rem; line-height: 1.7; font-size: 0.95rem;">
+                        <li>How to verify automated weather</li>
+                        <li>The importance of multiple data sources in ADM</li>
+                        <li>Real-world go/no-go decision-making</li>
+                        <li>The difference between reported and actual conditions</li>
+                    </ul>
+                    <p style="margin-top: 1rem; font-size: 0.95rem; font-weight: 500;">
+                        Share AviationWX with fellow pilots and airport owners to help grow the safety network. The more airports participate, the safer GA becomes.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Quality & Verification -->
+        <section>
+            <h2>Verified Data You Can Trust</h2>
+            <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem; color: #555;">Built-in quality checks that commercial systems often skip</p>
+            
+            <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
                 <div class="feature-card">
-                    <h3>🌡️ Real-Time Weather</h3>
-                    <p>Live data from on-site weather stations (Tempest, Ambient Weather, WeatherLink, PWSWeather.com) or METAR observations.</p>
+                    <h3>🔍 Timestamp Validation</h3>
+                    <p>Rejects stale data from delayed uploads or stuck sensors. Shows data age clearly.</p>
                 </div>
                 
                 <div class="feature-card">
-                    <h3>📹 Multiple Webcams</h3>
-                    <p>Visual conditions with strategically positioned webcams showing current airport conditions.</p>
+                    <h3>📸 Camera Quality Checks</h3>
+                    <p>Detects incomplete uploads, corrupt images, and error frames before display.</p>
                 </div>
                 
                 <div class="feature-card">
-                    <h3>🎬 Time-lapse History</h3>
-                    <p>Review recent conditions with the webcam history player. Shareable URLs and kiosk mode for airport signage displays.</p>
+                    <h3>🌡️ Sensor Verification</h3>
+                    <p>Confirms weather station connectivity and validates reasonable sensor values.</p>
                 </div>
                 
                 <div class="feature-card">
-                    <h3>🧭 Wind Visualization</h3>
-                    <p>Interactive runway wind diagram with wind speed, direction, and crosswind components.</p>
+                    <h3>⏱️ Staleness Detection</h3>
+                    <p>Warns when information is outdated instead of silently showing old data.</p>
                 </div>
                 
                 <div class="feature-card">
-                    <h3><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> Aviation Metrics</h3>
-                    <p>Density altitude, pressure altitude, VFR/IFR status, and other critical pilot information.</p>
+                    <h3>🔄 Multi-Source Comparison</h3>
+                    <p>Cross-checks METAR, local sensors, and cameras for consistency.</p>
                 </div>
                 
                 <div class="feature-card">
-                    <h3>📱 Mobile & Desktop</h3>
-                    <p>Lightweight, quick-loading website optimized for mobile and desktop. Fast access when you need it most.</p>
+                    <h3>🔓 Transparent Failures</h3>
+                    <p>When data fails checks, we show it clearly instead of hiding problems.</p>
                 </div>
-                
-                <div class="feature-card">
-                    <h3>🔗 Embed Generator</h3>
-                    <p>Add weather widgets to your website, WordPress, or Google Sites. <a href="https://embed.aviationwx.org" style="color: #0066cc;">Create Embed →</a></p>
-                </div>
-                
-                <div class="feature-card">
-                    <h3>📡 Public API</h3>
-                    <p>Access weather, webcams, and 24-hour history programmatically. <a href="https://api.aviationwx.org" style="color: #0066cc;">API Documentation →</a></p>
-                </div>
+            </div>
+            
+            <div class="highlight-box" style="border-left-color: #0066cc; background: #f0f8ff; margin-top: 2rem;">
+                <p><strong>Why This Matters:</strong></p>
+                <p>Bad data leads to bad decisions. Our open-source approach means the community can audit, improve, and trust the verification logic. Transparency helps pilots make informed decisions.</p>
             </div>
         </section>
 
@@ -1111,264 +1168,30 @@ Best regards,
             window.changePage = changePage;
         })();
         </script>
-        
-        <?php
-        // Prepare all airports for homepage search
-        $homepageSearchAirports = [];
-        if (isset($enabledAirports) && is_array($enabledAirports)) {
-            foreach ($enabledAirports as $searchAirportId => $searchAirport) {
-                $searchPrimaryIdentifier = getPrimaryIdentifier($searchAirportId, $searchAirport);
-                $homepageSearchAirports[] = [
-                    'id' => $searchAirportId,
-                    'name' => $searchAirport['name'] ?? '',
-                    'identifier' => $searchPrimaryIdentifier,
-                    'icao' => $searchAirport['icao'] ?? '',
-                    'iata' => $searchAirport['iata'] ?? '',
-                    'faa' => $searchAirport['faa'] ?? ''
-                ];
-            }
-        }
-        ?>
-        <script>
-        (function() {
-            'use strict';
-            
-            // Airport data for search
-            var HOMEPAGE_AIRPORTS = <?= json_encode($homepageSearchAirports) ?>;
-            var BASE_DOMAIN = <?= json_encode(getBaseDomain()) ?>;
-            
-            function initHomepageSearch() {
-                var searchInput = document.getElementById('homepage-airport-search');
-                var dropdown = document.getElementById('homepage-airport-dropdown');
-                var selectedIndex = -1;
-                var searchTimeout = null;
-                
-                if (!searchInput || !dropdown) return;
-            
-            // Navigate to airport subdomain
-            function navigateToAirport(airportId) {
-                var protocol = window.location.protocol;
-                var newUrl = protocol + '//' + airportId.toLowerCase() + '.' + BASE_DOMAIN;
-                window.location.href = newUrl;
-            }
-            
-            // Search airports
-            function searchAirports(query) {
-                if (!query || query.length < 2) {
-                    return [];
-                }
-                
-                var queryLower = query.toLowerCase().trim();
-                var results = [];
-                
-                for (var i = 0; i < HOMEPAGE_AIRPORTS.length; i++) {
-                    var airport = HOMEPAGE_AIRPORTS[i];
-                    var nameMatch = airport.name.toLowerCase().indexOf(queryLower) !== -1;
-                    var icaoMatch = airport.icao && airport.icao.toLowerCase().indexOf(queryLower) !== -1;
-                    var iataMatch = airport.iata && airport.iata.toLowerCase().indexOf(queryLower) !== -1;
-                    var faaMatch = airport.faa && airport.faa.toLowerCase().indexOf(queryLower) !== -1;
-                    var identifierMatch = airport.identifier.toLowerCase().indexOf(queryLower) !== -1;
-                    
-                    if (nameMatch || icaoMatch || iataMatch || faaMatch || identifierMatch) {
-                        results.push(airport);
-                    }
-                }
-                
-                // Sort: exact matches first, then by name
-                results.sort(function(a, b) {
-                    var aExact = a.identifier.toLowerCase() === queryLower || 
-                                (a.icao && a.icao.toLowerCase() === queryLower) ||
-                                (a.iata && a.iata.toLowerCase() === queryLower);
-                    var bExact = b.identifier.toLowerCase() === queryLower || 
-                                (b.icao && b.icao.toLowerCase() === queryLower) ||
-                                (b.iata && b.iata.toLowerCase() === queryLower);
-                    
-                    if (aExact && !bExact) return -1;
-                    if (!aExact && bExact) return 1;
-                    
-                    return a.name.localeCompare(b.name);
-                });
-                
-                return results.slice(0, 10);
-            }
-            
-            // Populate dropdown with results
-            function populateDropdown(results) {
-                dropdown.innerHTML = '';
-                
-                if (results.length === 0) {
-                    var noResults = document.createElement('div');
-                    noResults.className = 'homepage-airport-item no-results';
-                    noResults.textContent = 'No airports found';
-                    dropdown.appendChild(noResults);
-                } else {
-                    for (var i = 0; i < results.length; i++) {
-                        (function(index) {
-                            var airport = results[index];
-                            var item = document.createElement('a');
-                            item.href = '#';
-                            item.className = 'homepage-airport-item';
-                            item.dataset.airportId = airport.id;
-                            item.dataset.index = index;
-                            
-                            var identifier = document.createElement('span');
-                            identifier.className = 'airport-identifier';
-                            identifier.textContent = airport.identifier;
-                            
-                            var name = document.createElement('span');
-                            name.className = 'airport-name';
-                            name.textContent = airport.name;
-                            
-                            item.appendChild(identifier);
-                            item.appendChild(name);
-                            
-                            item.addEventListener('click', function(e) {
-                                e.preventDefault();
-                                navigateToAirport(airport.id);
-                            });
-                            
-                            item.addEventListener('mouseenter', function() {
-                                selectedIndex = index;
-                                updateSelection();
-                            });
-                            
-                            dropdown.appendChild(item);
-                        })(i);
-                    }
-                }
-                
-                dropdown.classList.add('show');
-                selectedIndex = -1;
-            }
-            
-            function updateSelection() {
-                var items = dropdown.querySelectorAll('.homepage-airport-item');
-                for (var i = 0; i < items.length; i++) {
-                    if (i === selectedIndex) {
-                        items[i].classList.add('selected');
-                    } else {
-                        items[i].classList.remove('selected');
-                    }
-                }
-            }
-            
-            function performSearch(query) {
-                if (!query || query.length < 2) {
-                    dropdown.classList.remove('show');
-                    return;
-                }
-                
-                var results = searchAirports(query);
-                populateDropdown(results);
-            }
-            
-            // Event handlers
-            searchInput.addEventListener('input', function(e) {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(function() {
-                    performSearch(e.target.value);
-                }, 200);
-            });
-            
-            searchInput.addEventListener('focus', function() {
-                if (searchInput.value.length >= 2) {
-                    performSearch(searchInput.value);
-                }
-            });
-            
-            searchInput.addEventListener('keydown', function(e) {
-                var items = dropdown.querySelectorAll('.homepage-airport-item:not(.no-results)');
-                
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    if (items.length > 0) {
-                        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-                        updateSelection();
-                        items[selectedIndex].scrollIntoView({ block: 'nearest' });
-                    }
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    if (items.length > 0) {
-                        selectedIndex = Math.max(selectedIndex - 1, 0);
-                        updateSelection();
-                        items[selectedIndex].scrollIntoView({ block: 'nearest' });
-                    }
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (selectedIndex >= 0 && selectedIndex < items.length) {
-                        var airportId = items[selectedIndex].dataset.airportId;
-                        if (airportId) {
-                            navigateToAirport(airportId);
-                        }
-                    } else if (items.length === 1) {
-                        var airportId = items[0].dataset.airportId;
-                        if (airportId) {
-                            navigateToAirport(airportId);
-                        }
-                    }
-                } else if (e.key === 'Escape') {
-                    dropdown.classList.remove('show');
-                    searchInput.blur();
-                }
-            });
-            
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function(e) {
-                    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
-                        dropdown.classList.remove('show');
-                    }
-                });
-            }
-            
-            // Initialize when DOM is ready
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initHomepageSearch);
-            } else {
-                initHomepageSearch();
-            }
-        })();
-        </script>
 
-        <!-- For Pilots -->
-        <section>
-            <h2>For Pilots</h2>
-            <div class="user-group-section">
-                <h3 style="text-align: center;"><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="" style="vertical-align: middle; margin-right: 0.5rem; width: 24px; height: 24px; background: transparent;"> Make Better Flight Decisions</h3>
-                <p>Use AviationWX to make better-informed flight decisions with real-time weather data and visual conditions. See actual visibility conditions before departure or approach, and make informed go/no-go decisions with up-to-date information.</p>
-                <p style="margin-top: 1rem;"><strong>CFIs love this tool</strong> - it helps teach student pilots how to make smart weather decisions. Real-time webcams and weather data provide the timely, accurate information that helps prevent incidents.</p>
-                <p style="margin-top: 1rem; font-weight: 500;">Share this service with fellow pilots and airport owners to help grow the aviation weather network!</p>
-            </div>
+        <!-- Participating Airports -->
+        <section id="participating-airports">
+            <h2>Live Airport Dashboards</h2>
+            <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem;">
+                Explore live weather dashboards at participating airports. Each dashboard includes verified cameras, real-time weather, and data quality checks.
+            </p>
+            <p style="text-align: center; margin-bottom: 2rem;">
+                🗺️ <a href="https://airports.aviationwx.org" style="color: #0066cc; font-weight: 500; font-size: 1.05rem;">View All Airports on Interactive Map →</a>
+            </p>
             
-            <div id="participating-airports" style="margin-top: 3rem;">
-                <h2 style="text-align: center; margin-bottom: 1.5rem;">Participating Airports</h2>
-                
-                <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
-                <!-- Airport Search -->
-                <div class="homepage-airport-search-container">
-                    <div class="homepage-airport-search-wrapper">
-                        <input type="text" 
-                               id="homepage-airport-search" 
-                               class="homepage-airport-search-input" 
-                               placeholder="Search airports by name or identifier..." 
-                               autocomplete="off"
-                               aria-label="Search airports">
-                        <div id="homepage-airport-dropdown" class="homepage-airport-dropdown">
-                            <!-- Content populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-                <?php
-                $envConfigPath = getenv('CONFIG_PATH');
-                $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
-                $config = json_decode(file_get_contents($configFileForList), true);
-                // Only show enabled airports
-                $airports = getEnabledAirports($config ?? []);
-                $airportsPerPage = 9;
-                $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
-                $totalPages = max(1, ceil(count($airports) / $airportsPerPage));
-                $currentPage = min($currentPage, $totalPages);
-                $startIndex = ($currentPage - 1) * $airportsPerPage;
-                $airportsOnPage = array_slice($airports, $startIndex, $airportsPerPage, true);
+            <?php if ($totalAirports > 0 && file_exists($configFile)): ?>
+            <?php
+            $envConfigPath = getenv('CONFIG_PATH');
+            $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
+            $config = json_decode(file_get_contents($configFileForList), true);
+            // Only show enabled airports
+            $airports = getEnabledAirports($config ?? []);
+            $airportsPerPage = 9;
+            $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+            $totalPages = max(1, ceil(count($airports) / $airportsPerPage));
+            $currentPage = min($currentPage, $totalPages);
+            $startIndex = ($currentPage - 1) * $airportsPerPage;
+            $airportsOnPage = array_slice($airports, $startIndex, $airportsPerPage, true);
                 
                 // Always reads fresh from disk (no PHP-level caching) to ensure up-to-date data
                 function getAirportWeather($airportId) {
@@ -1575,57 +1398,59 @@ Best regards,
                 <?php else: ?>
                 <p style="text-align: center; color: #555; padding: 2rem;">No airports currently configured.</p>
                 <?php endif; ?>
-            </div>
         </section>
 
+        <!-- Supported Equipment (Condensed) -->
         <section>
-            <h2>Supported Equipment and Systems</h2>
-            <p style="text-align: center; color: #555; margin-bottom: 2rem;">We work with existing equipment, help you pick equipment or can provide new equipment. We can integrate with a broad range of equipment, and if it isn't supported today we can probably add support quickly. All formats are automatically processed and optimized.</p>
+            <h2>Works With What You Have</h2>
+            <p style="font-size: 1.05rem; text-align: center; margin-bottom: 2rem; color: #555;">
+                We integrate with existing equipment or help you choose affordable options
+            </p>
             
-            <div class="equipment-grid">
-                <div>
-                    <h3 style="color: #0066cc; margin-bottom: 1rem;">🌡️ Weather Sources</h3>
-                    <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
-                        <li>Tempest Weather</li>
-                        <li>Ambient Weather</li>
-                        <li>Davis WeatherLink</li>
-                        <li>PWSWeather.com</li>
-                        <li>METAR observations</li>
-                    </ul>
+            <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+                <div class="feature-card">
+                    <h3 style="color: #0066cc;">🌡️ Weather Stations</h3>
+                    <p><strong>Tempest, Ambient Weather, WeatherLink, PWSWeather.com, METAR</strong></p>
+                    <p style="margin-top: 0.5rem; font-size: 0.95rem; color: #666;">Live data from personal weather stations or official observations</p>
                 </div>
                 
-                <div>
-                    <h3 style="color: #0066cc; margin-bottom: 1rem;">📹 Webcam Connectivity Types</h3>
-                    <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
-                        <li>MJPEG streams</li>
-                        <li>RTSP/RTSPS streams</li>
-                        <li>Static images (JPEG/PNG)</li>
-                        <li>Push uploads via SFTP/FTP/FTPS</li>
-                    </ul>
+                <div class="feature-card">
+                    <h3 style="color: #0066cc;">📹 Cameras</h3>
+                    <p><strong>Reolink, Axis, Hikvision, Dahua, Amcrest</strong></p>
+                    <p style="margin-top: 0.5rem; font-size: 0.95rem; color: #666;">FTP push or RTSP pull protocols supported</p>
                 </div>
                 
-                <div>
-                    <h3 style="color: #0066cc; margin-bottom: 1rem;">⚡ Infrastructure</h3>
-                    <ul style="margin: 0 0 0 2rem; line-height: 1.8;">
-                        <li>Hardline Power</li>
-                        <li>POE (Power over Ethernet)</li>
-                        <li>Solar powered</li>
-                        <li>WiFi internet</li>
-                        <li>Hardline internet</li>
-                        <li>Cellular</li>
-                        <li>Satellite</li>
-                    </ul>
+                <div class="feature-card">
+                    <h3 style="color: #0066cc;">🔧 Integration</h3>
+                    <p><strong>FTP, RTSP, API</strong></p>
+                    <p style="margin-top: 0.5rem; font-size: 0.95rem; color: #666;">If your equipment isn't listed, we can likely add support</p>
                 </div>
             </div>
             
             <p style="text-align: center; margin-top: 2rem;">
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" class="btn-secondary" target="_blank" rel="noopener">View Technical Details on GitHub</a>
+                <strong>Open-source means adaptability.</strong> Need support for new equipment? The community can add it.
+            </p>
+            <p style="text-align: center; margin-top: 1rem;">
+                🔧 <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500;">View Technical Details & Compatibility →</a>
             </p>
         </section>
 
-        <!-- About the Project -->
+        <!-- Open Source for the Long Term -->
         <section id="about-the-project">
-            <h2>About the Project</h2>
+            <h2>Built to Last, Built to Adapt</h2>
+            
+            <div class="about-box" style="background: #f0f8ff; border-left-color: #0066cc;">
+                <h3 style="color: #0066cc; margin-top: 0;">Why Open Source Matters</h3>
+                <p>Proprietary weather services come and go. Subscription models make smaller airports choose between cost and safety. Open-source infrastructure means:</p>
+                <ul style="margin: 1rem 0 0 2rem; line-height: 1.8;">
+                    <li>The code outlasts any single maintainer</li>
+                    <li>Communities can self-host if needed</li>
+                    <li>Anyone can audit data quality logic</li>
+                    <li>Solutions adapt as technology and aviation needs evolve</li>
+                    <li>No vendor lock-in or surprise price changes</li>
+                </ul>
+            </div>
+            
             <picture>
                 <?php
                 $aboutPhotoWebpPath = __DIR__ . '/../public/images/about-photo.webp';
@@ -1635,46 +1460,64 @@ Best regards,
                 <?php endif; ?>
                 <img src="/public/images/about-photo.jpg" alt="AviationWX - Built for pilots, by pilots" class="about-image">
             </picture>
+            
             <div class="about-box">
+                <h3 style="color: #0066cc;">About the Project</h3>
                 <p>
-                    <strong>AviationWX.org</strong> is a volunteer effort by <strong>Alex Witherspoon</strong>, a pilot dedicated to helping fellow aviators make safer flight decisions through better, more timely weather information.
+                    <strong>AviationWX.org</strong> is maintained by <strong>Alex Witherspoon</strong>, a pilot dedicated to helping fellow aviators make safer flight decisions through better, more accessible weather information.
                 </p>
                 <p style="margin-top: 1rem;">
-                    Some of the best flying can take us into small airports or grass strips that don't always come with infrastructure to help us make smart calls. While I've seen many great implementations, we often have to re-invent the wheel to display that information for pilots to use. I was particularly inspired by <a href="http://www.twinoakswx.com" target="_blank" rel="noopener">Twin Oaks Airpark's dashboard</a>, and wanted to make something this simple available for all airports. No app, no usernames, no fees, no ads, this is a safety oriented service for pilots that will work on mobile or desktop. This service can interface with many different camera systems, and weather systems and make it available online for pilots. I'm happy to try to add more support for other systems as needed to make this as universal as possible. While a group could host this themselves, I'm happy to host any and all airports on this service. This project will also be compatible with the FAA Weathercam project, and we can make webcam data available to that group as well. All weather data comes from platforms that contribute to NOAA's forecasting models to help pilots and well, all people who have to deal with weather.
+                    Some of the best flying can take us into small airports or grass strips that don't always come with infrastructure to help us make smart calls. While I've seen many great implementations, we often have to re-invent the wheel to display that information for pilots to use. I was particularly inspired by <a href="http://www.twinoakswx.com" target="_blank" rel="noopener">Twin Oaks Airpark's dashboard</a>, and wanted to make something this simple available for all airports.
                 </p>
                 <p style="margin-top: 1rem;">
-                    This service is provided <strong>free of charge</strong> to the aviation community, including all upkeep and maintenance costs. The project is entirely open source, so if Alex is unable to continue the effort for any reason, the community can continue to maintain and improve it.
+                    This service is provided <strong>free of charge</strong> to the aviation community, including all upkeep and maintenance costs. The project is entirely open source, ensuring that if Alex is unable to continue the effort, others can step in to maintain and improve it.
                 </p>
                 <p style="margin-top: 1rem;">
-                    Built for pilots, owners, airport operators, and the entire aviation community.
+                    Built for pilots, airport operators, and the entire aviation community.
                 </p>
             </div>
             
             <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #0066cc;">
-                <h3 style="color: #0066cc; margin-top: 0;">💻 Open Source Project</h3>
-                <p>AviationWX is fully open source and welcomes contributions. View the codebase, submit issues, or contribute improvements.</p>
+                <h3 style="color: #0066cc; margin-top: 0;">💻 Open Source Projects</h3>
+                <p>AviationWX is fully open source and welcomes contributions from the community.</p>
                 
-                <div class="btn-group" style="margin-top: 1.5rem; justify-content: center;">
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org" class="btn-primary" target="_blank" rel="noopener">
-                        View on GitHub
-                    </a>
-                    <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" class="btn-secondary" target="_blank" rel="noopener">
-                        Contributing Guidelines
-                    </a>
+                <div class="features" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 1.5rem; gap: 1.5rem;">
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border-left: 3px solid #0066cc;">
+                        <h4 style="margin-top: 0; color: #0066cc;">🛬 AviationWX Platform</h4>
+                        <p style="font-size: 0.95rem;">Weather dashboard system with data quality checks, multi-source integration, and responsive design.</p>
+                        <div style="margin-top: 1rem;">
+                            <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">View on GitHub →</a> | 
+                            <a href="https://github.com/alexwitherspoon/aviationwx.org/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">Contributing Guidelines →</a>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border-left: 3px solid #0066cc;">
+                        <h4 style="margin-top: 0; color: #0066cc;">📷 AviationWX Bridge</h4>
+                        <p style="font-size: 0.95rem;">Camera integration tool for Axis, Reolink, and other RTSP-capable cameras to work with the platform.</p>
+                        <div style="margin-top: 1rem;">
+                            <a href="https://github.com/alexwitherspoon/aviationwx-bridge" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">View on GitHub →</a>
+                        </div>
+                    </div>
                 </div>
-                <p style="margin-top: 1rem; font-size: 0.9rem; color: #666; text-align: center;">Deep technical documentation lives in the GitHub repository.</p>
+                
+                <p style="margin-top: 1.5rem; font-size: 0.95rem; color: #666; text-align: center;">
+                    Deep technical documentation lives in the GitHub repositories.
+                </p>
             </div>
             
             <div class="about-box" style="margin-top: 2rem; border-top: 3px solid #28a745;">
-                <h3 style="color: #28a745; margin-top: 0;">Donating</h3>
+                <h3 style="color: #28a745; margin-top: 0;">Support the Project (Optional)</h3>
                 <p>
                     If you'd like to support this project financially, that's wonderful and greatly appreciated! However, <strong>donations are completely optional</strong> - AviationWX will always remain free to use for everyone in the aviation community.
                 </p>
                 <p style="margin-top: 1rem;">
-                    You can sponsor this project through <a href="https://github.com/sponsors/alexwitherspoon" target="_blank" rel="noopener">GitHub Sponsors</a>. Every contribution helps cover hosting costs, maintenance, and continued development of new features.
+                    Donations help cover hosting costs for all airport dashboards, server infrastructure for weather data processing, ongoing development of new features and equipment support, and maintenance and data integrity improvements.
                 </p>
-                <div class="btn-group" style="margin-top: 1.5rem; justify-content: center;">
-                    <a href="https://github.com/sponsors/alexwitherspoon" class="btn-primary" target="_blank" rel="noopener">
+                <p style="margin-top: 1rem;">
+                    Every contribution keeps this service free for the entire GA community. You can sponsor this project through <a href="https://github.com/sponsors/alexwitherspoon" target="_blank" rel="noopener" style="color: #28a745; font-weight: 500;">GitHub Sponsors</a>.
+                </p>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <a href="https://github.com/sponsors/alexwitherspoon" class="btn-primary" target="_blank" rel="noopener" style="background: #28a745; border-color: #28a745;">
                         Support on GitHub Sponsors
                     </a>
                 </div>
