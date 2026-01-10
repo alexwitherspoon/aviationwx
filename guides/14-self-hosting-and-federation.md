@@ -23,11 +23,26 @@ Self-hosting means running your own complete copy of AviationWX on your own serv
 - ✅ **Independence** - Works even if aviationwx.org is offline
 - ✅ **Customization** - Modify the code for your needs
 
-**Requirements:**
-- Linux server (physical or cloud VM)
-- Docker & Docker Compose installed
-- Basic Linux/server administration skills
-- Domain name (recommended)
+**Infrastructure Requirements:**
+- ✅ **Server** - Linux server (physical or cloud VM)
+- ✅ **Public IP** - Static public IP address (for external access)
+- ✅ **Domain Name** - DNS name pointing to your server (e.g., weather.myairport.com)
+- ✅ **SSL Certificate** - HTTPS required for production (Let's Encrypt is free)
+- ✅ **Bandwidth** - Sufficient for serving images and API requests
+- ✅ **Security** - Firewall, updates, monitoring for public-facing services
+
+**Technical Skills Required:**
+- Linux server administration
+- Docker & Docker Compose
+- DNS configuration
+- SSL/TLS certificate management
+- Basic security hardening
+- Log monitoring and troubleshooting
+
+**Time Commitment:**
+- Initial setup: 4-8 hours
+- Ongoing maintenance: 1-4 hours/month
+- Security updates: As needed (often automated)
 
 ---
 
@@ -107,13 +122,43 @@ Your Self-Hosted Install          AviationWX.org Network
 
 ### Step 1: Server Setup
 
-Minimum requirements:
-- 2 CPU cores
-- 2GB RAM
-- 20GB storage
-- Ubuntu 22.04 LTS or similar
-- Docker & Docker Compose installed
+**Minimum requirements:**
+- **CPU:** 2 cores (4+ recommended for high traffic)
+- **RAM:** 2GB minimum (4GB+ for multiple airports or high traffic)
+- **Storage:** 20GB minimum (more if storing webcam history)
+- **OS:** Ubuntu 22.04 LTS (or similar Linux distribution)
+- **Network:** Static public IP address
+- **Bandwidth:** 
+  - Download: 10 Mbps minimum (for fetching from cameras/weather)
+  - Upload: 25+ Mbps (for serving images to pilots)
+  - Monthly transfer: 100GB minimum (varies with traffic)
 
+**Infrastructure considerations:**
+
+**Option A: Cloud VPS (Recommended for beginners)**
+- **Pros:** Public IP included, high bandwidth, managed infrastructure
+- **Cons:** Monthly cost, external dependency
+- **Providers:** DigitalOcean, Linode, AWS, Hetzner
+- **Static IP:** Automatically included
+- **DNS:** Easy to configure (just point A record to IP)
+
+**Option B: Home Server / Datacenter**
+- **Pros:** One-time hardware cost, complete control
+- **Cons:** Need static IP from ISP, port forwarding, higher complexity
+- **Requirements:**
+  - Static public IP (contact ISP, often $5-15/month extra)
+  - Router with port forwarding (80/443)
+  - UPS recommended (prevent corruption during power loss)
+  - Reliable internet connection
+
+⚠️ **Security Note:** Running a public-facing server requires ongoing security:
+- Keep system updated (`unattended-upgrades` recommended)
+- Configure firewall (ufw or iptables)
+- Monitor logs for suspicious activity
+- Use fail2ban to prevent brute force attacks
+- Regular backups
+
+Install Docker:
 ```bash
 # Install Docker (Ubuntu example)
 curl -fsSL https://get.docker.com -o get-docker.sh
@@ -123,16 +168,87 @@ sudo usermod -aG docker $USER
 # Verify
 docker --version
 docker compose version
+
+# Enable automatic security updates (Ubuntu)
+sudo apt install unattended-upgrades
+sudo dpkg-reconfigure --priority=low unattended-upgrades
 ```
 
-### Step 2: Clone Repository
+Configure firewall:
+```bash
+# Install and configure UFW (Uncomplicated Firewall)
+sudo apt install ufw
+
+# Allow SSH (adjust port if you changed it)
+sudo ufw allow 22/tcp
+
+# Allow HTTP/HTTPS
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Enable firewall
+sudo ufw enable
+sudo ufw status
+```
+
+### Step 2: DNS & Domain Setup
+
+**You need a domain name** for production use. Internal-only testing can use IP addresses, but production requires:
+- ✅ Valid domain name (e.g., weather.myairport.com)
+- ✅ DNS A record pointing to your server's public IP
+- ✅ SSL certificate (HTTPS required for API and security)
+
+**Option A: Subdomain from Airport Domain (Recommended)**
+If your airport has a domain (e.g., myairport.com):
+```
+Create subdomain: weather.myairport.com
+DNS A record: weather.myairport.com -> YOUR_SERVER_IP
+```
+
+**Option B: Dedicated Domain**
+Register a new domain ($10-15/year):
+```
+Examples:
+- k0s9weather.com
+- weather-k0s9.org
+- jeffersoncountyairportwx.com
+```
+
+**DNS Configuration:**
+```
+Type: A
+Name: @ (or weather if using subdomain)
+Value: YOUR_SERVER_PUBLIC_IP
+TTL: 3600 (1 hour)
+
+Optional AAAA record for IPv6:
+Type: AAAA
+Name: @ (or weather)
+Value: YOUR_SERVER_IPv6 (if available)
+TTL: 3600
+```
+
+**Verify DNS propagation:**
+```bash
+# Check DNS resolution
+nslookup weather.myairport.com
+
+# Or use dig
+dig weather.myairport.com A
+
+# Should return your server's public IP
+```
+
+DNS propagation typically takes 5-60 minutes, but can take up to 24 hours globally.
+
+### Step 3: Clone Repository
 
 ```bash
 git clone https://github.com/alexwitherspoon/aviationwx.org.git
 cd aviationwx.org
 ```
 
-### Step 3: Configure Your Airport
+### Step 4: Configure Your Airport
 
 Create your configuration:
 ```bash
@@ -184,7 +300,86 @@ Example single-airport config:
 
 See [Guide 12](12-submit-an-airport-to-aviationwx.md) for details on weather source and camera configuration.
 
-### Step 4: Start the Platform
+### Step 5: SSL Certificate Setup
+
+**HTTPS is required** for production, especially for federation. Use Let's Encrypt for free SSL certificates.
+
+**Install Certbot:**
+```bash
+sudo apt update
+sudo apt install certbot
+```
+
+**Generate SSL certificate:**
+```bash
+# Make sure ports 80/443 are open and DNS is working
+sudo certbot certonly --standalone -d weather.myairport.com
+
+# Follow prompts, provide email for renewal notifications
+# Certificates stored in: /etc/letsencrypt/live/weather.myairport.com/
+```
+
+**Update Docker configuration:**
+
+Create `docker/docker-compose.override.yml`:
+```yaml
+version: '3.8'
+
+services:
+  web:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    environment:
+      - VIRTUAL_HOST=weather.myairport.com
+      - LETSENCRYPT_HOST=weather.myairport.com
+```
+
+**Configure nginx for SSL:**
+
+Update `docker/nginx.conf` to include SSL configuration:
+```nginx
+server {
+    listen 80;
+    server_name weather.myairport.com;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name weather.myairport.com;
+    
+    # SSL certificates
+    ssl_certificate /etc/letsencrypt/live/weather.myairport.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/weather.myairport.com/privkey.pem;
+    
+    # SSL security settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+    
+    # Your existing nginx config continues here...
+    root /var/www/html;
+    index index.php;
+    
+    # ... rest of config
+}
+```
+
+**Auto-renewal:**
+```bash
+# Test renewal
+sudo certbot renew --dry-run
+
+# Certbot auto-renews via systemd timer
+systemctl status certbot.timer
+```
+
+### Step 6: Start the Platform
 
 ```bash
 # Development mode (with logs)
@@ -195,19 +390,110 @@ make up
 ```
 
 Access your dashboard:
-- **Single airport:** `http://localhost:8080` (auto-redirects to your airport)
-- **API docs:** `http://localhost:8080/api/docs`
-- **Status:** `http://localhost:8080/status.php`
+- **HTTPS URL:** `https://weather.myairport.com` (production)
+- **Single airport:** Auto-redirects to your airport dashboard
+- **API docs:** `https://weather.myairport.com/api/docs`
+- **Status:** `https://weather.myairport.com/status.php`
 
-### Step 5: Production Setup (Optional)
+⚠️ **Security Checklist Before Going Public:**
+- [ ] Firewall configured (only ports 22, 80, 443 open)
+- [ ] SSL certificate installed and working
+- [ ] All default passwords changed
+- [ ] Automatic security updates enabled
+- [ ] Fail2ban installed (optional but recommended)
+- [ ] Server logs monitoring set up
+- [ ] Backup strategy in place
 
-For production with SSL/domain:
-1. Point your domain to your server
-2. Set up nginx as reverse proxy with Let's Encrypt SSL
-3. Update `base_domain` in config to your domain
-4. Use `docker-compose.prod.yml` for production settings
+### Step 7: Traffic & Performance Optimization
 
-See `docs/DEPLOYMENT.md` for production setup details.
+**Monitor traffic and performance:**
+```bash
+# Check current connections
+netstat -an | grep :443 | wc -l
+
+# Monitor bandwidth usage
+sudo apt install vnstat
+vnstat -l  # Live traffic
+
+# Check Docker container resources
+docker stats
+
+# View access logs
+docker compose logs web | grep "GET /api"
+```
+
+**Traffic estimation:**
+- **Low traffic** (10-50 pilots/day): 1-5GB/month, 2GB RAM sufficient
+- **Medium traffic** (100-500 pilots/day): 10-50GB/month, 4GB RAM recommended
+- **High traffic** (1000+ pilots/day): 100-500GB/month, 8GB+ RAM, consider CDN
+
+**Optimization for high traffic:**
+
+1. **Enable CDN (CloudFlare free tier):**
+   - Caches images globally
+   - Reduces bandwidth costs
+   - DDoS protection included
+   - SSL included
+
+2. **Optimize image sizes:**
+   ```json
+   {
+     "webcam_variant_heights": [360, 720, 1080],
+     "webcam_generate_webp": true  // 30% smaller than JPEG
+   }
+   ```
+
+3. **Add Redis caching (optional):**
+   ```yaml
+   services:
+     redis:
+       image: redis:7-alpine
+       restart: unless-stopped
+   ```
+
+4. **Rate limiting:**
+   - Already built-in for API endpoints
+   - Adjust in `config/airports.json` if needed
+
+### Step 8: Production Setup & Hardening
+
+**Additional security measures:**
+
+```bash
+# Install fail2ban (prevent brute force)
+sudo apt install fail2ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+
+# Configure SSH key-only authentication
+sudo nano /etc/ssh/sshd_config
+# Set: PasswordAuthentication no
+# Set: PermitRootLogin no
+sudo systemctl restart sshd
+
+# Set up log monitoring
+sudo apt install logwatch
+sudo logwatch --detail Med --range today --mailto your@email.com
+```
+
+**Backup strategy:**
+```bash
+# Backup config and data
+mkdir -p /backup
+cp -r /path/to/aviationwx.org/config /backup/
+cp -r /path/to/aviationwx.org/cache /backup/
+
+# Automated daily backups (cron)
+0 2 * * * rsync -av /path/to/aviationwx.org/config /backup/
+```
+
+**Monitoring recommendations:**
+- **Uptime monitoring:** UptimeRobot (free), Pingdom, or StatusCake
+- **Server monitoring:** Netdata, Prometheus + Grafana
+- **Log aggregation:** Loki, or cloud provider's log service
+- **Alerts:** Set up email/SMS for downtime or errors
+
+See `docs/DEPLOYMENT.md` for additional production deployment details.
 
 ---
 
@@ -216,10 +502,12 @@ See `docs/DEPLOYMENT.md` for production setup details.
 **Use case:** Control your own infrastructure but share data with aviationwx.org for pilot discovery
 
 ### Prerequisites
-- Self-hosting working (Option 1 above)
-- Domain name pointing to your server
-- SSL certificate (Let's Encrypt recommended)
-- Public API enabled
+- Self-hosting working (Option 1 above) ✅
+- **Domain name pointing to your server** ✅
+- **SSL certificate installed and working** ✅
+- **Public API enabled** (see below)
+- **Server accessible from internet** (ports 80/443 open)
+- **Sufficient bandwidth** for API requests (see traffic estimates above)
 
 ### Step 1: Enable Public API
 
@@ -299,10 +587,14 @@ Email `contact@aviationwx.org` with:
 - **Local steward contact:** (for technical issues)
 
 Include confirmation that:
-- ✅ Your API is publicly accessible with SSL
+- ✅ Your API is publicly accessible with SSL (HTTPS)
+- ✅ DNS resolves correctly to your server
+- ✅ Firewall allows incoming traffic on ports 80/443
 - ✅ You understand federated data will appear on aviationwx.org
 - ✅ You can revoke the API key anytime to stop sharing
 - ✅ You'll maintain reasonable uptime (>95% recommended)
+- ✅ You have sufficient bandwidth for API requests
+- ✅ Your server has security hardening in place
 
 ### Step 5: What Happens Next
 
@@ -370,10 +662,19 @@ Your airport will appear on:
 
 ### Security & Privacy
 
+**Infrastructure Security:**
+- **Firewall:** Only ports 22 (SSH), 80 (HTTP), 443 (HTTPS) open
+- **SSL/TLS:** HTTPS required for all production traffic
+- **Updates:** Automatic security updates enabled
+- **Fail2ban:** Prevents brute force attacks (recommended)
+- **SSH:** Key-only authentication, no password login
+- **Monitoring:** Log monitoring and alerts configured
+
 **Authentication:**
 - Partner API keys identify and authorize requests
 - Rate limiting prevents abuse
 - Keys can be revoked instantly
+- No shared secrets exposed in URLs
 
 **Data Validation:**
 - Main platform validates all responses
@@ -495,19 +796,35 @@ Your local install continues working normally.
 
 **Monthly recurring:**
 - **VPS/Cloud Server:** $5-50/month
-  - DigitalOcean Droplet: $6/month (2GB RAM)
-  - Linode Nanode: $5/month (1GB RAM, tight but works)
-  - AWS t3.small: ~$15/month (2GB RAM, more robust)
-  - Hetzner CX11: €4.5/month (~$5, EU-based)
+  - DigitalOcean Droplet: $12/month (2GB RAM, 50GB transfer)
+  - Linode Nanode: $5/month (1GB RAM, 1TB transfer, tight but works)
+  - AWS t3.small: ~$15/month (2GB RAM, pay for bandwidth)
+  - Hetzner CX21: €5.8/month (~$6.50, 3GB RAM, 20TB transfer)
+  - Vultr: $6/month (1GB RAM, 1TB transfer)
   
 - **Domain:** $1-2/month ($12-24/year)
-- **Bandwidth:** Usually included (20-50GB transfer minimum)
+  - .com domains: ~$12-15/year
+  - .org domains: ~$12-15/year
+  - Subdomain from existing: Free
+  
+- **Bandwidth:** 
+  - Usually included in VPS (50GB-1TB+)
+  - Overages: $0.01-0.10 per GB
+  - CloudFlare CDN: Free (unlimited bandwidth)
+
+- **Static IP:** Included with most VPS
+  - Home ISP static IP: $5-15/month extra (if available)
 
 **One-time:**
-- Setup time: 2-8 hours (first time)
+- Setup time: 4-8 hours (first time)
 - SSL certificate: Free (Let's Encrypt)
+- Initial hardware (if self-hosting at home): $200-1000
 
-**Total: ~$10-60/month** depending on server choice and traffic.
+**Total: ~$10-60/month** depending on:
+- Server choice (1-4GB RAM)
+- Traffic volume (CDN helps)
+- Domain (new vs subdomain)
+- Location (home vs cloud)
 
 ### Shared Network (Guide 12)
 
@@ -545,17 +862,26 @@ Your local install continues working normally.
 **Self-Hosting:**
 - ✅ Full control over data and infrastructure
 - ✅ Works independently of main network
-- ⚠️ Requires technical skills and server costs
+- ✅ Privacy and compliance control
+- ⚠️ Requires technical skills (Linux, Docker, DNS, SSL)
+- ⚠️ Server costs ($10-60/month typically)
 - ⚠️ Ongoing maintenance responsibility
+- ⚠️ Must handle security, backups, monitoring
+- ⚠️ Need public IP, domain, bandwidth
 
 **Federation:**
 - ✅ Best of both worlds: control + discovery
 - ✅ Participate in network without vendor lock-in
 - ✅ Pilots find your airport on main platform
+- ✅ Redundancy (both sites work independently)
 - ⚠️ Requires public API and SSL setup
+- ⚠️ Must maintain >95% uptime for good experience
+- ⚠️ Additional security considerations (public-facing)
 
 **Most airports:** Use [Guide 12](12-submit-an-airport-to-aviationwx.md) to join shared network directly.
 
 **Advanced users:** Self-host for complete control, federate for pilot discovery.
+
+**Infrastructure requirements matter:** If you don't have experience with public web hosting, DNS, SSL certificates, and server security, the shared network is a better choice.
 
 **Need help deciding?** Email `contact@aviationwx.org` and we'll help you pick the best path for your airport.
