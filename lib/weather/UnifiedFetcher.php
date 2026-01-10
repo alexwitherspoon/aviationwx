@@ -58,7 +58,6 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     
     // Parse responses into snapshots
     $snapshots = [];
-    $maxAges = [];
     
     foreach ($sources as $sourceKey => $source) {
         if (!isset($responses[$sourceKey]) || $responses[$sourceKey] === null) {
@@ -68,15 +67,14 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
         $snapshot = parseSourceResponse($source, $responses[$sourceKey], $airport);
         if ($snapshot !== null && $snapshot->isValid) {
             $snapshots[] = $snapshot;
-            // Key maxAges by the snapshot's actual source type (e.g., "ambient", "metar")
-            // not by the source key (e.g., "primary", "backup") to match aggregator lookups
-            $maxAges[$snapshot->source] = getSourceMaxAge($source);
         }
     }
     
     // Aggregate using the new aggregator
+    // Aggregator now uses failclosed threshold (3 hours) for all sources
+    // Staleness indicators (warning/error) are applied later during display
     $aggregator = new WeatherAggregator();
-    $result = $aggregator->aggregate($snapshots, $maxAges);
+    $result = $aggregator->aggregate($snapshots);
     
     // Validate and fix pressure if it's clearly in wrong units
     // Normal pressure range is 28-32 inHg. Values > 100 indicate unit conversion issues.
@@ -316,28 +314,6 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'metar' => MetarAdapter::parseToSnapshot($response, $airport),
         'aviationwx_api' => AviationWXAPIAdapter::parseResponse($response, $source),
         default => null,
-    };
-}
-
-/**
- * Get max age for a source
- * 
- * @param array $source Source configuration
- * @return int Max age in seconds
- */
-function getSourceMaxAge(array $source): int {
-    $type = $source['type'] ?? 'unknown';
-    
-    return match($type) {
-        'tempest' => TempestAdapter::getMaxAcceptableAge(),
-        'ambient' => AmbientAdapter::getMaxAcceptableAge(),
-        'synopticdata' => SynopticDataAdapter::getMaxAcceptableAge(),
-        'weatherlink_v2' => WeatherLinkV2Adapter::getMaxAcceptableAge(),
-        'weatherlink_v1' => WeatherLinkV1Adapter::getMaxAcceptableAge(),
-        'pwsweather' => PWSWeatherAdapter::getMaxAcceptableAge(),
-        'metar' => MetarAdapter::getMaxAcceptableAge(),
-        'aviationwx_api' => AviationWXAPIAdapter::getMaxAcceptableAge(),
-        default => 600, // 10 minutes default
     };
 }
 
