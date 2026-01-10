@@ -399,7 +399,6 @@ $attribution = getPublicApiAttributionText();
     }
     </script>
     <?php require_once __DIR__ . '/../../lib/navigation.php'; ?>
-    <main>
     <div class="container">
         <header>
             <h1>AviationWX Public API</h1>
@@ -664,7 +663,6 @@ $attribution = getPublicApiAttributionText();
             </p>
         </footer>
     </div>
-    </main>
 </body>
 </html>
 

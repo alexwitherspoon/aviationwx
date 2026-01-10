@@ -1198,6 +1198,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     $webcamStatus = 'operational';
     $webcamIssues = [];
     $webcamComponents = [];
+    $totalCams = 0;
     
     // Check if cache directory exists and is readable
     $webcamCacheDirExists = is_dir($webcamCacheDirResolved);

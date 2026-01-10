@@ -698,35 +698,6 @@ if (empty($embedAirportId) || !$airport) {
             object-fit: cover;
         }
         
-        .style-webcam .live-badge {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            background: rgba(220, 53, 69, 0.9);
-            color: white;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-        }
-        
-        .style-webcam .live-badge::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            background: white;
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
         .style-webcam .overlay-info {
             position: absolute;
             bottom: 0;
@@ -1105,18 +1076,6 @@ if (empty($embedAirportId) || !$airport) {
             object-fit: cover;
         }
         
-        .style-full .webcam-section .live-badge {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            background: rgba(220, 53, 69, 0.9);
-            color: white;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-        
         .style-full .data-row {
             display: flex;
             background: <?= $bgColor ?>;
@@ -1469,7 +1428,6 @@ if (empty($embedAirportId) || !$airport) {
                              class="webcam-image"
                              <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
                     </picture>
-                    <div class="live-badge">LIVE</div>
                 <?php else: ?>
                     <div class="no-webcam-placeholder">No webcam available</div>
                 <?php endif; ?>
@@ -1979,7 +1937,6 @@ if (empty($embedAirportId) || !$airport) {
                                  alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam"
                                  <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
                         </picture>
-                        <div class="live-badge">🔴 LIVE</div>
                     <?php else: ?>
                         <div class="no-webcam-placeholder" style="height: 100%;">No webcam available</div>
                     <?php endif; ?>
@@ -2273,7 +2230,6 @@ if (empty($embedAirportId) || !$airport) {
                                  alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam"
                                  <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
                         </picture>
-                        <div class="live-badge">🔴 LIVE</div>
                     <?php else: ?>
                         <div class="no-webcam-placeholder" style="height: 100%;">No webcam available</div>
                     <?php endif; ?>
@@ -2580,9 +2536,6 @@ if (empty($embedAirportId) || !$airport) {
                                  <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
                         </picture>
                         <span style="position: absolute; bottom: 0.25rem; left: 0.25rem; background: rgba(0,0,0,0.7); color: white; padding: 0.15rem 0.4rem; font-size: 0.7rem; border-radius: 3px;"><?= htmlspecialchars($camName) ?></span>
-                        <?php if ($slot === 0): ?>
-                        <div class="live-badge" style="top: 0.5rem; right: 0.5rem;">🔴 LIVE</div>
-                        <?php endif; ?>
                     </div>
                     <?php 
                         endfor; 
@@ -2900,9 +2853,6 @@ if (empty($embedAirportId) || !$airport) {
                                  <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
                         </picture>
                         <span style="position: absolute; bottom: 0.25rem; left: 0.25rem; background: rgba(0,0,0,0.7); color: white; padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 3px;"><?= htmlspecialchars($camName) ?></span>
-                        <?php if ($slot === 0): ?>
-                        <div class="live-badge" style="top: 0.5rem; right: 0.5rem;">🔴 LIVE</div>
-                        <?php endif; ?>
                     </div>
                     <?php 
                         endfor; 

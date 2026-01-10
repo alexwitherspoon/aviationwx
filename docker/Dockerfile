@@ -16,8 +16,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     git \
     unzip \
     ffmpeg \
-    libavif-dev \
-    libaom-dev \
     libimage-exiftool-perl \
     cron \
     vsftpd \

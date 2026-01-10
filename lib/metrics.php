@@ -796,6 +796,9 @@ function metrics_get_rolling(int $days = 7): array {
                 ];
             }
             foreach ($webcamData['by_format'] ?? [] as $fmt => $count) {
+                if (!isset($result['webcams'][$webcamKey]['by_format'][$fmt])) {
+                    $result['webcams'][$webcamKey]['by_format'][$fmt] = 0;
+                }
                 $result['webcams'][$webcamKey]['by_format'][$fmt] += $count;
             }
             foreach ($webcamData['by_size'] ?? [] as $sz => $count) {
@@ -813,6 +816,9 @@ function metrics_get_rolling(int $days = 7): array {
         $result['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
         
         foreach ($global['format_served'] ?? [] as $fmt => $count) {
+            if (!isset($result['global']['format_served'][$fmt])) {
+                $result['global']['format_served'][$fmt] = 0;
+            }
             $result['global']['format_served'][$fmt] += $count;
         }
         foreach ($global['size_served'] ?? [] as $sz => $count) {
@@ -822,6 +828,9 @@ function metrics_get_rolling(int $days = 7): array {
             $result['global']['size_served'][$sz] += $count;
         }
         foreach ($global['browser_support'] ?? [] as $type => $count) {
+            if (!isset($result['global']['browser_support'][$type])) {
+                $result['global']['browser_support'][$type] = 0;
+            }
             $result['global']['browser_support'][$type] += $count;
         }
         $result['global']['cache']['hits'] += $global['cache']['hits'] ?? 0;
