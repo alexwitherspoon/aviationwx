@@ -19,10 +19,8 @@ if ($config === null || !isset($config['airports'])) {
 }
 
 // Get base URL (protocol + domain)
-// Check both HTTPS and X-Forwarded-Proto for proxy setups (CDN, nginx)
-$protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || 
-            (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') 
-            ? 'https' : 'http';
+// Always use HTTPS in sitemap (HTTP redirects to HTTPS via nginx)
+$protocol = 'https'; // Force HTTPS - all HTTP URLs redirect to HTTPS
 $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
 $baseUrl = $protocol . '://' . $host;
 
@@ -57,7 +55,7 @@ if ($isMainDomain) {
 // Add each enabled airport page
 $enabledAirports = getEnabledAirports($config);
 foreach ($enabledAirports as $airportId => $airport) {
-    $airportUrl = $protocol . '://' . $airportId . '.aviationwx.org';
+    $airportUrl = 'https://' . $airportId . '.aviationwx.org/'; // Trailing slash for subdomain homepage
     
     // Determine lastmod date
     // Try to get from weather cache file modification time
@@ -88,7 +86,7 @@ if ($isMainDomain) {
     
     // Status page
     echo "  <url>\n";
-    echo "    <loc>https://status.aviationwx.org</loc>\n";
+    echo "    <loc>https://status.aviationwx.org/</loc>\n";
     echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>daily</changefreq>\n";
     echo "    <priority>0.3</priority>\n";
@@ -96,7 +94,7 @@ if ($isMainDomain) {
     
     // Airports directory page (subdomain)
     echo "  <url>\n";
-    echo "    <loc>https://airports.aviationwx.org</loc>\n";
+    echo "    <loc>https://airports.aviationwx.org/</loc>\n";
     echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>daily</changefreq>\n";
     echo "    <priority>0.8</priority>\n";
@@ -110,7 +108,7 @@ if ($isMainDomain) {
     if (file_exists($readmePath)) {
         $guidesIndexLastmod = date('Y-m-d', filemtime($readmePath));
         echo "  <url>\n";
-        echo "    <loc>https://guides.aviationwx.org</loc>\n";
+        echo "    <loc>https://guides.aviationwx.org/</loc>\n";
         echo "    <lastmod>{$guidesIndexLastmod}</lastmod>\n";
         echo "    <changefreq>weekly</changefreq>\n";
         echo "    <priority>0.7</priority>\n";
@@ -139,7 +137,7 @@ if ($isMainDomain) {
     
     // Terms of Service
     echo "  <url>\n";
-    echo "    <loc>https://terms.aviationwx.org</loc>\n";
+    echo "    <loc>https://terms.aviationwx.org/</loc>\n";
     echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>yearly</changefreq>\n";
     echo "    <priority>0.2</priority>\n";
@@ -147,7 +145,7 @@ if ($isMainDomain) {
     
     // API Documentation
     echo "  <url>\n";
-    echo "    <loc>https://api.aviationwx.org</loc>\n";
+    echo "    <loc>https://api.aviationwx.org/</loc>\n";
     echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>monthly</changefreq>\n";
     echo "    <priority>0.5</priority>\n";
@@ -155,7 +153,7 @@ if ($isMainDomain) {
     
     // Embed Generator
     echo "  <url>\n";
-    echo "    <loc>https://embed.aviationwx.org</loc>\n";
+    echo "    <loc>https://embed.aviationwx.org/</loc>\n";
     echo "    <lastmod>{$pageLastmod}</lastmod>\n";
     echo "    <changefreq>monthly</changefreq>\n";
     echo "    <priority>0.5</priority>\n";

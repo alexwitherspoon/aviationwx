@@ -2,8 +2,37 @@
 # Allow all crawlers to index public pages
 User-agent: *
 Allow: /
-Allow: /weather.php
-Allow: /webcam.php
+
+# Disallow API endpoints with query parameters (not indexable pages)
+Disallow: /weather.php?*
+Disallow: /webcam.php?*
+
+# Disallow JavaScript files from indexing (source maps, service workers, etc.)
+Disallow: *.js$
+Disallow: *.js.map$
+
+# Disallow admin/diagnostic endpoints
+Disallow: /admin/
+Disallow: /diagnostics.php
+Disallow: /clear-cache.php
+Disallow: /metrics.php
+
+# Disallow health check endpoints (not user-facing pages)
+Disallow: /health.php
+Disallow: /ready.php
+Disallow: /health/
+
+# Disallow API v1 endpoints (documented separately in API docs)
+Disallow: /api/v1/
+
+# Disallow internal API endpoints
+Disallow: /notam.php
+Disallow: /outage-status.php
+Disallow: /partner-logo.php
+Disallow: /webcam-history.php
+
+# Allow API documentation page (user-facing)
+Allow: /api/docs/
 
 # Disallow access to sensitive areas
 Disallow: /scripts/
@@ -16,12 +45,11 @@ Disallow: /airports.json
 Disallow: /composer.json
 Disallow: /phpunit.xml
 Disallow: /dev/
-Disallow: /diagnostics.php
-Disallow: /clear-cache.php
-Disallow: /metrics.php
 Disallow: /.htaccess
 Disallow: /.git/
 Disallow: /.github/
+Disallow: /lib/
+Disallow: /docker/
 
 # Sitemap
 Sitemap: https://aviationwx.org/sitemap.xml

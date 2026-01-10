@@ -15,7 +15,8 @@ $requestedGuide = !empty($requestPath) ? htmlspecialchars($requestPath) : '';
 // SEO variables
 $pageTitle = 'Guide Not Found - AviationWX Guides';
 $pageDescription = 'The guide you\'re looking for doesn\'t exist. Return to the guides index to browse all available guides.';
-$canonicalUrl = getCanonicalUrl();
+// For 404 pages, canonical should point to guides homepage, not the invalid URL
+$canonicalUrl = 'https://guides.aviationwx.org/';
 
 // Set cache headers for 404 pages - shorter cache since content might change
 // Cache for 5 minutes, allow stale-while-revalidate for 15 minutes
@@ -42,8 +43,14 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
     echo generateFaviconTags();
     echo "\n    ";
     
-    // Enhanced meta tags
-    echo generateEnhancedMetaTags($pageDescription, 'guide not found, 404, guides, documentation');
+    // 404 pages should not be indexed
+    echo '<meta name="robots" content="noindex, nofollow">';
+    echo "\n    ";
+    
+    // Enhanced meta tags (but skip robots meta since we set it above)
+    echo '<meta name="description" content="' . htmlspecialchars($pageDescription) . '">';
+    echo "\n    ";
+    echo '<meta name="keywords" content="guide not found, 404, guides, documentation">';
     echo "\n    ";
     
     // Canonical URL

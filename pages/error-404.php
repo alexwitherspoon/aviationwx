@@ -9,7 +9,8 @@ $baseUrl = getBaseUrl();
 // SEO variables
 $pageTitle = 'Page Not Found - AviationWX.org';
 $pageDescription = 'The page you\'re looking for doesn\'t exist. Return to AviationWX.org to find airport weather dashboards.';
-$canonicalUrl = getCanonicalUrl();
+// For 404 pages, canonical should point to homepage, not the invalid URL
+$canonicalUrl = 'https://aviationwx.org/';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -31,8 +32,14 @@ $canonicalUrl = getCanonicalUrl();
     echo generateFaviconTags();
     echo "\n    ";
     
-    // Enhanced meta tags
-    echo generateEnhancedMetaTags($pageDescription, 'page not found, 404, aviation weather');
+    // 404 pages should not be indexed
+    echo '<meta name="robots" content="noindex, nofollow">';
+    echo "\n    ";
+    
+    // Enhanced meta tags (but skip robots meta since we set it above)
+    echo '<meta name="description" content="' . htmlspecialchars($pageDescription) . '">';
+    echo "\n    ";
+    echo '<meta name="keywords" content="page not found, 404, aviation weather">';
     echo "\n    ";
     
     // Canonical URL
