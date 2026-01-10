@@ -47,6 +47,9 @@ const CLOUDFLARE_ANALYTICS_CACHE_KEY = 'cloudflare_analytics';
 // Fallback cache file for persistence across APCu restarts
 const CLOUDFLARE_ANALYTICS_FALLBACK_FILE = __DIR__ . '/../cache/cloudflare_analytics.json';
 
+// File cache TTL (how long to use stale file data if API fails)
+const CLOUDFLARE_ANALYTICS_FILE_CACHE_TTL = 7200; // 2 hours
+
 /**
  * Get Cloudflare Analytics data with multi-layer caching
  * 
@@ -121,6 +124,11 @@ function getCloudflareAnalytics(): array {
  * @return array Analytics data or empty array on failure
  */
 function fetchCloudflareAnalytics(): array {
+    // In test mode, return mock data immediately (don't require config)
+    if (isTestMode() || shouldMockExternalServices()) {
+        return getMockCloudflareAnalytics();
+    }
+    
     $config = loadConfig();
     
     // Check if Cloudflare credentials are configured
@@ -136,11 +144,6 @@ function fetchCloudflareAnalytics(): array {
     
     if (empty($apiToken) || empty($zoneId)) {
         return [];
-    }
-    
-    // In test mode, return mock data
-    if (isTestMode() || shouldMockExternalServices()) {
-        return getMockCloudflareAnalytics();
     }
     
     // Calculate time range (last 24 hours)
@@ -264,6 +267,10 @@ function getMockCloudflareAnalytics(): array {
         'unique_visitors_today' => 1250,
         'requests_today' => 45600,
         'bandwidth_today' => 2147483648, // ~2GB
+        'page_views_today' => 15300,
+        'threats_blocked_today' => 42,
+        'cached_requests_today' => 38400,
+        'cached_bandwidth_today' => 1932735283, // ~1.8GB cached
         'cached_at' => time()
     ];
 }
@@ -313,6 +320,7 @@ function getCloudflareAnalyticsForStatus(): array {
         'threats_blocked_today' => $analytics['threats_blocked_today'] ?? 0,
         'requests_per_visitor' => $requestsPerVisitor,
         'cache_age_seconds' => $cacheAge,
+        'cache_age_minutes' => round($cacheAge / 60, 1),
         'cached_at' => $analytics['cached_at'] ?? null
     ];
 }
@@ -337,5 +345,5 @@ function formatBytesForAnalytics(int $bytes): string {
         return $value . ' ' . $units[$index];
     }
     
-    return number_format($value, 1) . ' ' . $units[$index];
+    return number_format($value, 2) . ' ' . $units[$index];
 }

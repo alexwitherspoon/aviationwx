@@ -30,6 +30,10 @@ All configuration lives in a single `airports.json` file with two sections:
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
 | `notam_api_client_secret` | — | NOTAM API client secret |
+| **Cloudflare Analytics** |||
+| `cloudflare.api_token` | — | Cloudflare API token (Analytics:Read) |
+| `cloudflare.zone_id` | — | Cloudflare Zone ID |
+| `cloudflare.account_id` | — | Cloudflare Account ID |
 | **Client Version Management** |||
 | `dead_man_switch_days` | `7` | Days without update before cleanup (0 = disabled) |
 | `force_cleanup` | `false` | Emergency flag to force all clients to cleanup |
@@ -163,7 +167,13 @@ Unit toggle defaults resolve in this order (first match wins):
     
     "notam_cache_ttl_seconds": 3600,
     "notam_api_client_id": "your-client-id",
-    "notam_api_client_secret": "your-secret"
+    "notam_api_client_secret": "your-secret",
+    
+    "cloudflare": {
+      "api_token": "your-analytics-read-token",
+      "zone_id": "your-zone-id",
+      "account_id": "your-account-id"
+    }
   },
   "airports": { ... }
 }
@@ -786,6 +796,120 @@ docker compose -f docker/docker-compose.prod.yml exec web enable-vsftpd-ssl.sh
 4. Restart container after renewal
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for full certificate setup.
+
+---
+
+## Cloudflare Analytics Integration
+
+AviationWX can integrate with Cloudflare Analytics to display real-time traffic, bandwidth, and security metrics on the status page and homepage.
+
+### What It Provides
+
+When configured, Cloudflare Analytics provides:
+
+- **Unique Visitors** - Daily unique visitors across all pages
+- **Total Requests** - Total HTTP requests (includes images, API calls, assets)
+- **Bandwidth** - Total data transferred (GB)
+- **Requests/Visitor** - Engagement metric (avg requests per visitor)
+- **Threats Blocked** - Security events blocked by Cloudflare
+
+These metrics appear on:
+- **Status Page** (`status.aviationwx.org`) - Full metrics grid in header
+- **Homepage** (`aviationwx.org`) - "Pilots Served Today" in hero section
+
+### Configuration
+
+Add the following to your `airports.json` config section:
+
+```json
+{
+  "config": {
+    "cloudflare": {
+      "api_token": "your-analytics-read-token",
+      "zone_id": "your-zone-id",
+      "account_id": "your-account-id"
+    }
+  }
+}
+```
+
+### Setup Steps
+
+1. **Create API Token** (Cloudflare Dashboard → My Profile → API Tokens):
+   - Use "Analytics:Read" template
+   - Or create custom token with permissions:
+     - Zone → Analytics → Read
+     - Account → Analytics → Read (optional, for account-level metrics)
+   - Scope to specific zone or all zones
+   - Copy the token (only shown once!)
+
+2. **Find Zone ID**:
+   - Go to your domain in Cloudflare Dashboard
+   - Right sidebar → "API" section → Zone ID
+   - Copy the ID (format: `a1b2c3d4e5f6...`)
+
+3. **Find Account ID** (optional):
+   - Cloudflare Dashboard → Click domain
+   - Right sidebar → Account ID
+   - Copy the ID
+
+4. **Add to Configuration**:
+   - Update `airports.json` with credentials
+   - Restart application: `make restart`
+   - Verify: Check status page for metrics
+
+### Caching Behavior
+
+- **APCu Cache**: 30 minutes (in-memory, fast)
+- **File Cache Fallback**: 2 hours (if APCu cleared)
+- **Stale Data Strategy**: Shows last valid data if API fails (better than showing zeros)
+- **API Rate Limits**: Respects Cloudflare's GraphQL API limits
+
+### Privacy & Security
+
+- **Read-Only**: Token has no write permissions
+- **Analytics Only**: Cannot modify DNS, firewall, or other settings
+- **No PII**: Only aggregated metrics (no visitor IPs or user data)
+- **Local Caching**: Reduces API calls and improves performance
+
+### Disabling Analytics
+
+To disable Cloudflare Analytics:
+
+1. **Remove config**: Delete `cloudflare` section from `airports.json`
+2. **Restart**: `make restart`
+3. **Result**: Metrics section hidden on status page, homepage shows static airport counts
+
+### Testing
+
+Run the Cloudflare Analytics test suite:
+
+```bash
+# Unit tests (includes mock mode tests)
+vendor/bin/phpunit tests/Unit/CloudflareAnalyticsTest.php
+
+# Check configuration
+php -r "require 'lib/config.php'; \$c = loadConfig(); var_dump(isset(\$c['config']['cloudflare']));"
+```
+
+### Troubleshooting
+
+**Metrics showing zeros:**
+- Check API token permissions (Analytics:Read required)
+- Verify Zone ID is correct
+- Check Cloudflare has data for your zone (may take 24h for new zones)
+- Review logs: `grep -i cloudflare /var/log/aviationwx/app.log`
+
+**Metrics not appearing:**
+- Ensure `cloudflare` config section exists
+- Restart after config changes: `make restart`
+- Check APCu is available: `php -r "var_dump(function_exists('apcu_fetch'));"`
+- Verify file cache fallback: `ls -la cache/cloudflare_analytics.json`
+
+**API errors:**
+- Token expired or revoked (regenerate in Cloudflare Dashboard)
+- Rate limit exceeded (wait 5-10 minutes, caching should prevent this)
+- Zone not on account (verify Zone ID matches your domain)
 
 ---
 
