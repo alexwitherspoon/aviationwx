@@ -83,17 +83,25 @@ function getNewestDataTimestampForDirectory($weather) {
     return !empty($timestamps) ? max($timestamps) : null;
 }
 
-// Prepare airport data for map (JSON)
+// Prepare airport data for map (JSON) - include weather data
 $airportsForMap = [];
 foreach ($airports as $airportId => $airport) {
     if (isset($airport['lat']) && isset($airport['lon'])) {
+        // Get weather data for flight category
+        $hasMetar = isMetarEnabled($airport);
+        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
+        $hasAnyWeather = $hasWeatherSource || $hasMetar;
+        $weather = $hasAnyWeather ? getAirportWeatherForDirectory($airportId) : [];
+        $flightCategory = $hasMetar ? ($weather['flight_category'] ?? null) : null;
+        
         $airportsForMap[] = [
             'id' => $airportId,
             'identifier' => getPrimaryIdentifier($airportId, $airport),
             'name' => $airport['name'],
             'lat' => $airport['lat'],
             'lon' => $airport['lon'],
-            'url' => 'https://' . $airportId . '.aviationwx.org'
+            'url' => 'https://' . $airportId . '.aviationwx.org',
+            'flightCategory' => $flightCategory // null if no METAR data
         ];
     }
 }
@@ -151,6 +159,9 @@ $breadcrumbs = generateBreadcrumbSchema([
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="/public/css/leaflet.css">
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
     
     <link rel="stylesheet" href="/public/css/styles.css">
     <link rel="stylesheet" href="/public/css/navigation.css">
@@ -164,42 +175,170 @@ $breadcrumbs = generateBreadcrumbSchema([
             padding: 0;
         }
         
-        .page-header {
-            background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-        }
-        
-        .page-header h1 {
-            margin: 0 0 0.5rem 0;
-            font-size: 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-        
-        .page-header p {
-            margin: 0;
-            opacity: 0.9;
-            font-size: 1.1rem;
-        }
-        
-        .page-header img {
-            width: 48px;
-            height: 48px;
-        }
-        
         #map {
             width: 100%;
-            height: calc(66vh - 100px);
-            min-height: 300px;
-            max-height: 500px;
+            height: calc(85vh - 60px);
+            min-height: 500px;
+            max-height: 1200px;
         }
         
         .map-container {
             border-bottom: 3px solid #0066cc;
+            position: relative;
+        }
+        
+        /* Map Control Buttons */
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .map-control-btn {
+            background: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+        
+        .map-control-btn:hover {
+            background: #f8f9fa;
+            transform: scale(1.05);
+        }
+        
+        .map-control-btn.active {
+            background: #0066cc;
+            color: white;
+            border-color: #0066cc;
+        }
+        
+        /* Flight Category Legend */
+        .flight-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 0.85rem;
+        }
+        
+        .flight-legend h4 {
+            margin: 0 0 8px 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        
+        .legend-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        
+        .legend-color.vfr { background: #4ade80; }
+        .legend-color.mvfr { background: #3b82f6; }
+        .legend-color.ifr { background: #ef4444; }
+        .legend-color.lifr { background: #d946ef; }
+        
+        /* Jump to Map Button */
+        .jump-to-map {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1001;
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,102,204,0.4);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .jump-to-map:hover {
+            background: #0052a3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,102,204,0.5);
+        }
+        
+        .jump-to-map.visible {
+            display: flex;
+        }
+        
+        /* Full-screen mode */
+        .map-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            border-bottom: none;
+        }
+        
+        .map-container.fullscreen #map {
+            height: 100vh;
+            max-height: none;
+        }
+        
+        /* Weather radar controls */
+        .radar-controls {
+            position: absolute;
+            top: 10px;
+            left: 60px;
+            z-index: 1000;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        .radar-controls.visible {
+            display: block;
+        }
+        
+        .radar-controls label {
+            font-size: 0.85rem;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .radar-opacity-slider {
+            width: 120px;
+            margin-left: 8px;
         }
         
         .airports-section {
@@ -232,8 +371,9 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
             
             #map {
-                height: 50vh;
-                min-height: 250px;
+                height: 60vh;
+                min-height: 300px;
+                max-height: 600px;
             }
             
             .airports-section {
@@ -505,10 +645,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #e0e0e0;
         }
         
-        body.dark-mode .page-header {
-            background: linear-gradient(135deg, #0a0a0a 0%, #003d7a 100%);
-        }
-        
         body.dark-mode .airports-section h2 {
             color: #e0e0e0;
         }
@@ -600,6 +736,49 @@ $breadcrumbs = generateBreadcrumbSchema([
         body.dark-mode .map-container {
             border-bottom-color: #4a9eff;
         }
+        
+        /* Dark mode map controls */
+        body.dark-mode .map-control-btn {
+            background: #2a2a2a;
+            border-color: #444;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .map-control-btn:hover {
+            background: #333;
+        }
+        
+        body.dark-mode .map-control-btn.active {
+            background: #4a9eff;
+            border-color: #4a9eff;
+            color: white;
+        }
+        
+        body.dark-mode .flight-legend {
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .flight-legend h4 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .jump-to-map {
+            background: #4a9eff;
+        }
+        
+        body.dark-mode .jump-to-map:hover {
+            background: #3b8cee;
+        }
+        
+        body.dark-mode .radar-controls {
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .radar-controls label {
+            color: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -612,21 +791,66 @@ $breadcrumbs = generateBreadcrumbSchema([
     <?php require_once __DIR__ . '/../lib/navigation.php'; ?>
     
     <main>
-        <header class="page-header">
-            <h1>
-                <img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX">
-                Airport Network
-            </h1>
-            <p><?= $totalAirports ?> airports with live webcams and real-time weather</p>
-        </header>
-        
         <div class="map-container">
+            <!-- Map Control Buttons -->
+            <div class="map-controls">
+                <button id="fullscreen-btn" class="map-control-btn" title="Toggle Fullscreen" aria-label="Toggle fullscreen map">
+                    ⛶
+                </button>
+                <button id="radar-btn" class="map-control-btn" title="Toggle Precipitation Radar" aria-label="Toggle precipitation radar overlay">
+                    🌧️
+                </button>
+                <button id="clouds-btn" class="map-control-btn" title="Toggle Cloud Cover" aria-label="Toggle cloud cover overlay">
+                    ☁️
+                </button>
+            </div>
+            
+            <!-- Weather Layer Controls -->
+            <div id="weather-controls" class="radar-controls">
+                <div id="precip-control" style="display: none; margin-bottom: 0.5rem;">
+                    <label style="display: block;">
+                        Precip Opacity:
+                        <input type="range" id="radar-opacity" class="radar-opacity-slider" min="0" max="100" value="70">
+                    </label>
+                </div>
+                <div id="clouds-control" style="display: none;">
+                    <label style="display: block;">
+                        Clouds Opacity:
+                        <input type="range" id="clouds-opacity" class="radar-opacity-slider" min="0" max="100" value="60">
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Flight Category Legend -->
+            <div class="flight-legend">
+                <h4>Flight Categories</h4>
+                <div class="legend-item">
+                    <div class="legend-color vfr"></div>
+                    <span>VFR (>5 mi, >3000 ft)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color mvfr"></div>
+                    <span>MVFR (3-5 mi, 1000-3000 ft)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color ifr"></div>
+                    <span>IFR (1-3 mi, 500-1000 ft)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color lifr"></div>
+                    <span>LIFR (<1 mi, <500 ft)</span>
+                </div>
+            </div>
+            
             <div id="map"></div>
         </div>
         
+        <!-- Jump to Map Button -->
+        <button id="jump-to-map" class="jump-to-map">
+            📍 <span>Back to Map</span>
+        </button>
+        
         <section class="airports-section">
-            <h2>All Airports (<?= $totalAirports ?>)</h2>
-            
             <div class="airports-grid">
                 <?php foreach ($airports as $airportId => $airport): 
                     $url = 'https://' . $airportId . '.aviationwx.org';
@@ -769,6 +993,8 @@ $breadcrumbs = generateBreadcrumbSchema([
     
     <!-- Leaflet JS -->
     <script src="/public/js/leaflet.js"></script>
+    <!-- Leaflet MarkerCluster -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     
     <script>
     (function() {
@@ -782,14 +1008,11 @@ $breadcrumbs = generateBreadcrumbSchema([
             return;
         }
         
-        // Configure Leaflet default icon path to prevent 404s
-        // (We use custom divIcon, but this prevents Leaflet from trying default paths)
-        // Note: In Leaflet 1.9.4, we override the _getIconUrl method
+        // Configure Leaflet default icon path
         if (L.Icon.Default && L.Icon.Default.prototype) {
             var originalGetIconUrl = L.Icon.Default.prototype._getIconUrl;
             L.Icon.Default.prototype._getIconUrl = function(name) {
                 var url = originalGetIconUrl ? originalGetIconUrl.call(this, name) : name;
-                // Extract filename and prepend our path
                 var filename = url.split('/').pop();
                 return '/public/images/leaflet/' + filename;
             };
@@ -802,42 +1025,338 @@ $breadcrumbs = generateBreadcrumbSchema([
         });
         
         // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        var baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
         
-        // Custom airplane icon
-        var airportIcon = L.divIcon({
-            className: 'airport-marker',
-            html: '<svg viewBox="0 0 24 24" width="28" height="28" style="filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.3));"><path fill="#0066cc" d="M21,16V14L13,9V3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5V9L2,14V16L10,13.5V19L8,20.5V22L11.5,21L15,22V20.5L13,19V13.5L21,16Z"/></svg>',
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-            popupAnchor: [0, -14]
+        // Weather Radar Layer (RainViewer API)
+        var radarLayer = null;
+        var radarTimestamp = null;
+        
+        // Cloud Cover Layer (OpenWeatherMap)
+        var cloudsLayer = null;
+        
+        function addRadarLayer() {
+            // Fetch latest radar timestamp from RainViewer
+            fetch('https://api.rainviewer.com/public/weather-maps.json')
+                .then(function(response) { 
+                    if (!response.ok) {
+                        throw new Error('Radar API response not OK');
+                    }
+                    return response.json(); 
+                })
+                .then(function(data) {
+                    if (data.radar && data.radar.past && data.radar.past.length > 0) {
+                        // Get most recent radar frame
+                        radarTimestamp = data.radar.past[data.radar.past.length - 1].time;
+                        
+                        // RainViewer tile URL format
+                        // size/smoothing_quality/color_scheme
+                        var radarUrl = 'https://tilecache.rainviewer.com/v2/radar/' + radarTimestamp + '/256/{z}/{x}/{y}/6/1_1.png';
+                        
+                        radarLayer = L.tileLayer(radarUrl, {
+                            opacity: 0.7,
+                            attribution: 'Radar © <a href="https://www.rainviewer.com">RainViewer</a>',
+                            zIndex: 500,
+                            maxZoom: 19
+                        });
+                        
+                        radarLayer.addTo(map);
+                        document.getElementById('precip-control').style.display = 'block';
+                        updateWeatherControlsVisibility();
+                        
+                        console.log('Radar layer added with timestamp:', radarTimestamp);
+                    } else {
+                        console.warn('No radar data available in API response');
+                    }
+                })
+                .catch(function(err) {
+                    console.error('Failed to load radar data:', err);
+                    alert('Precipitation radar temporarily unavailable. Please try again later.');
+                });
+        }
+        
+        function removeRadarLayer() {
+            if (radarLayer) {
+                map.removeLayer(radarLayer);
+                radarLayer = null;
+                document.getElementById('precip-control').style.display = 'none';
+                updateWeatherControlsVisibility();
+            }
+        }
+        
+        function addCloudsLayer() {
+            // OpenWeatherMap Clouds layer
+            // API key not required for tile access (free tier)
+            var cloudsUrl = 'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02';
+            
+            cloudsLayer = L.tileLayer(cloudsUrl, {
+                opacity: 0.6,
+                attribution: 'Clouds © <a href="https://openweathermap.org">OpenWeatherMap</a>',
+                zIndex: 400,
+                maxZoom: 19
+            });
+            
+            cloudsLayer.addTo(map);
+            document.getElementById('clouds-control').style.display = 'block';
+            updateWeatherControlsVisibility();
+            
+            console.log('Cloud layer added');
+        }
+        
+        function removeCloudsLayer() {
+            if (cloudsLayer) {
+                map.removeLayer(cloudsLayer);
+                cloudsLayer = null;
+                document.getElementById('clouds-control').style.display = 'none';
+                updateWeatherControlsVisibility();
+            }
+        }
+        
+        function updateWeatherControlsVisibility() {
+            var weatherControls = document.getElementById('weather-controls');
+            var precipControl = document.getElementById('precip-control');
+            var cloudsControl = document.getElementById('clouds-control');
+            
+            // Show weather controls panel if any layer is active
+            if (precipControl.style.display === 'block' || cloudsControl.style.display === 'block') {
+                weatherControls.classList.add('visible');
+            } else {
+                weatherControls.classList.remove('visible');
+            }
+        }
+        
+        // Custom airplane icon (function to create colored icons based on flight category)
+        function createAirportIcon(flightCategory) {
+            var color = '#666'; // Default gray for no data
+            
+            if (flightCategory) {
+                switch(flightCategory.toUpperCase()) {
+                    case 'VFR':
+                        color = '#4ade80'; // Green
+                        break;
+                    case 'MVFR':
+                        color = '#3b82f6'; // Blue
+                        break;
+                    case 'IFR':
+                        color = '#ef4444'; // Red
+                        break;
+                    case 'LIFR':
+                        color = '#d946ef'; // Magenta
+                        break;
+                }
+            }
+            
+            return L.divIcon({
+                className: 'airport-marker',
+                html: '<svg viewBox="0 0 24 24" width="28" height="28" style="filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.4));"><path fill="' + color + '" d="M21,16V14L13,9V3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5V9L2,14V16L10,13.5V19L8,20.5V22L11.5,21L15,22V20.5L13,19V13.5L21,16Z"/></svg>',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                popupAnchor: [0, -14]
+            });
+        }
+        
+        // Create marker cluster group
+        var markers = L.markerClusterGroup({
+            maxClusterRadius: 60,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            iconCreateFunction: function(cluster) {
+                var count = cluster.getChildCount();
+                var size = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
+                return L.divIcon({
+                    html: '<div style="background: #0066cc; color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">' + count + '</div>',
+                    className: 'marker-cluster',
+                    iconSize: [40, 40]
+                });
+            }
         });
         
         // Add markers for each airport
-        var markers = [];
+        var allMarkers = [];
         airports.forEach(function(airport) {
-            var marker = L.marker([airport.lat, airport.lon], { icon: airportIcon })
+            // Create icon with flight category color
+            var icon = createAirportIcon(airport.flightCategory);
+            
+            var marker = L.marker([airport.lat, airport.lon], { icon: icon })
                 .bindPopup(
                     '<div class="popup-airport-code">' + airport.identifier + '</div>' +
                     '<div class="popup-airport-name">' + airport.name + '</div>' +
+                    (airport.flightCategory ? '<div style="margin: 0.5rem 0; padding: 0.25rem 0.5rem; background: ' + getFlightCategoryBgColor(airport.flightCategory) + '; color: ' + getFlightCategoryTextColor(airport.flightCategory) + '; border-radius: 4px; font-size: 0.85rem; font-weight: 600; text-align: center; text-transform: uppercase;">' + airport.flightCategory + '</div>' : '') +
                     '<a href="' + airport.url + '" class="popup-link">View Dashboard →</a>'
                 );
-            marker.addTo(map);
-            markers.push(marker);
+            
+            marker._airportData = airport; // Store for search
+            markers.addLayer(marker);
+            allMarkers.push(marker);
         });
         
+        // Helper functions for popup styling
+        function getFlightCategoryBgColor(cat) {
+            switch(cat.toUpperCase()) {
+                case 'VFR': return '#d4edda';
+                case 'MVFR': return '#cce5ff';
+                case 'IFR': return '#f8d7da';
+                case 'LIFR': return '#ffccff';
+                default: return '#e9ecef';
+            }
+        }
+        
+        function getFlightCategoryTextColor(cat) {
+            switch(cat.toUpperCase()) {
+                case 'VFR': return '#1e7e34';
+                case 'MVFR': return '#0066cc';
+                case 'IFR': return '#dc3545';
+                case 'LIFR': return '#ff00ff';
+                default: return '#6c757d';
+            }
+        }
+        
+        map.addLayer(markers);
+        
         // Fit map to show all airports
-        if (markers.length > 0) {
-            var group = L.featureGroup(markers);
+        if (allMarkers.length > 0) {
+            var group = L.featureGroup(allMarkers);
             map.fitBounds(group.getBounds().pad(0.1));
         }
         
         // Limit max zoom when fitting bounds
         if (map.getZoom() > 10) {
             map.setZoom(10);
+        }
+        
+        // ========================================================================
+        // FEATURE: Fullscreen Toggle
+        // ========================================================================
+        var fullscreenBtn = document.getElementById('fullscreen-btn');
+        var mapContainer = document.querySelector('.map-container');
+        var isFullscreen = false;
+        
+        fullscreenBtn.addEventListener('click', function() {
+            isFullscreen = !isFullscreen;
+            
+            if (isFullscreen) {
+                mapContainer.classList.add('fullscreen');
+                fullscreenBtn.classList.add('active');
+                fullscreenBtn.innerHTML = '✕';
+                fullscreenBtn.title = 'Exit Fullscreen';
+            } else {
+                mapContainer.classList.remove('fullscreen');
+                fullscreenBtn.classList.remove('active');
+                fullscreenBtn.innerHTML = '⛶';
+                fullscreenBtn.title = 'Toggle Fullscreen';
+            }
+            
+            // Invalidate map size after transition
+            setTimeout(function() {
+                map.invalidateSize();
+            }, 300);
+        });
+        
+        // Exit fullscreen with ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isFullscreen) {
+                fullscreenBtn.click();
+            }
+        });
+        
+        // ========================================================================
+        // FEATURE: Weather Layer Toggles
+        // ========================================================================
+        var radarBtn = document.getElementById('radar-btn');
+        var cloudsBtn = document.getElementById('clouds-btn');
+        var radarEnabled = false;
+        var cloudsEnabled = false;
+        
+        radarBtn.addEventListener('click', function() {
+            radarEnabled = !radarEnabled;
+            
+            if (radarEnabled) {
+                radarBtn.classList.add('active');
+                addRadarLayer();
+            } else {
+                radarBtn.classList.remove('active');
+                removeRadarLayer();
+            }
+        });
+        
+        cloudsBtn.addEventListener('click', function() {
+            cloudsEnabled = !cloudsEnabled;
+            
+            if (cloudsEnabled) {
+                cloudsBtn.classList.add('active');
+                addCloudsLayer();
+            } else {
+                cloudsBtn.classList.remove('active');
+                removeCloudsLayer();
+            }
+        });
+        
+        // Precipitation opacity slider
+        var radarOpacitySlider = document.getElementById('radar-opacity');
+        radarOpacitySlider.addEventListener('input', function() {
+            if (radarLayer) {
+                radarLayer.setOpacity(this.value / 100);
+            }
+        });
+        
+        // Cloud cover opacity slider
+        var cloudsOpacitySlider = document.getElementById('clouds-opacity');
+        cloudsOpacitySlider.addEventListener('input', function() {
+            if (cloudsLayer) {
+                cloudsLayer.setOpacity(this.value / 100);
+            }
+        });
+        
+        // ========================================================================
+        // FEATURE: Jump to Map Button
+        // ========================================================================
+        var jumpBtn = document.getElementById('jump-to-map');
+        
+        window.addEventListener('scroll', function() {
+            // Show button when scrolled past map
+            var mapBottom = mapContainer.offsetTop + mapContainer.offsetHeight;
+            if (window.scrollY > mapBottom) {
+                jumpBtn.classList.add('visible');
+            } else {
+                jumpBtn.classList.remove('visible');
+            }
+        });
+        
+        jumpBtn.addEventListener('click', function() {
+            mapContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        
+        // ========================================================================
+        // FEATURE: Search Integration (highlights marker on map)
+        // ========================================================================
+        var searchInput = document.getElementById('site-nav-airport-search');
+        if (searchInput) {
+            var highlightedMarker = null;
+            
+            // Listen for custom event from navigation.php search
+            document.addEventListener('airportSearchSelect', function(e) {
+                var airportId = e.detail.airportId;
+                
+                // Find matching marker
+                allMarkers.forEach(function(marker) {
+                    if (marker._airportData && marker._airportData.id === airportId) {
+                        // Zoom to marker
+                        map.setView(marker.getLatLng(), 12);
+                        
+                        // Open popup with highlight
+                        marker.openPopup();
+                        
+                        // Store for cleanup
+                        highlightedMarker = marker;
+                        
+                        // Scroll to map
+                        mapContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
         }
     })();
     </script>

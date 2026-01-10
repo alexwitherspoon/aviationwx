@@ -232,7 +232,17 @@ $baseDomain = getBaseDomain();
                     
                     item.addEventListener('click', (e) => {
                         e.preventDefault();
-                        navigateToAirport(airport.id);
+                        
+                        // Dispatch custom event for map integration
+                        const event = new CustomEvent('airportSearchSelect', {
+                            detail: { airportId: airport.id, airport: airport }
+                        });
+                        document.dispatchEvent(event);
+                        
+                        // Navigate after brief delay (allows map to respond)
+                        setTimeout(() => {
+                            navigateToAirport(airport.id);
+                        }, 800);
                     });
                     
                     item.addEventListener('mouseenter', () => {
