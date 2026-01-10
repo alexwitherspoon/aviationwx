@@ -221,11 +221,16 @@ function fetchAllSources(array $sources, string $airportId): array {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $sourceType = $sources[$sourceKey]['type'];
         
-        if ($httpCode >= 200 && $httpCode < 300 && !empty($response)) {
-            $responses[$sourceKey] = $response;
+        // Circuit breaker should only open on API/auth failures (HTTP errors, network issues)
+        // Valid responses (2xx) should always pass through, even if data is null/empty
+        // The aggregator and staleness system will handle missing/old weather data
+        if ($httpCode >= 200 && $httpCode < 300) {
+            // Success: API returned valid response (even if weather data is null/empty)
+            $responses[$sourceKey] = $response; // Pass through even if empty - aggregator will handle it
             recordWeatherSuccess($airportId, $sourceType);
             weather_health_track_fetch($airportId, $sourceType, true, $httpCode);
         } else {
+            // Failure: HTTP error or network issue - trigger circuit breaker
             $responses[$sourceKey] = null;
             recordWeatherFailure($airportId, $sourceType, 'transient', $httpCode);
             weather_health_track_fetch($airportId, $sourceType, false, $httpCode);

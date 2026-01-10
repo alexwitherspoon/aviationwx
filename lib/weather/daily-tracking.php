@@ -8,6 +8,39 @@
 
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/utils.php';
+require_once __DIR__ . '/../cache-paths.php';
+
+/**
+ * Clear weather cache file for an airport
+ * 
+ * Deletes cached weather data to force fresh fetch.
+ * Used during daily resets to prevent serving stale observation times.
+ * 
+ * @param string $airportId Airport identifier (e.g., 'kspb')
+ * @return bool True if cache was cleared or didn't exist, false on error
+ */
+function clearWeatherCache($airportId) {
+    $cacheFile = getWeatherCachePath($airportId);
+    
+    if (!file_exists($cacheFile)) {
+        return true; // Already doesn't exist
+    }
+    
+    $result = @unlink($cacheFile);
+    if ($result) {
+        aviationwx_log('info', 'cleared weather cache for new day', [
+            'airport' => $airportId,
+            'cache_file' => basename($cacheFile)
+        ], 'app');
+    } else {
+        aviationwx_log('warning', 'failed to clear weather cache', [
+            'airport' => $airportId,
+            'cache_file' => $cacheFile
+        ], 'app');
+    }
+    
+    return $result;
+}
 
 /**
  * Update today's peak gust for an airport
@@ -128,7 +161,13 @@ function updatePeakGust($airportId, $currentGust, $airport = null, $obsTimestamp
         // If no entry for today (new day), current gust is higher, or current gust equals existing but timestamp is newer
         // This ensures we never use yesterday's data for today, and we always show the most recent timestamp for equal values
         if (!isset($peakGusts[$dateKey][$airportId])) {
-            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGustFloat, 'obs_ts' => $timestamp], 'app');$peakGusts[$dateKey][$airportId] = [
+            aviationwx_log('info', 'initializing new day peak gust', ['airport' => $airportId, 'date_key' => $dateKey, 'gust' => $currentGustFloat, 'obs_ts' => $timestamp], 'app');
+            
+            // Clear weather cache to force fresh fetch with new observation times
+            // This prevents serving cached data with yesterday's observation timestamps
+            clearWeatherCache($airportId);
+            
+            $peakGusts[$dateKey][$airportId] = [
                 'value' => $currentGustFloat,
                 'ts' => $timestamp,
             ];
@@ -453,6 +492,11 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
         // This ensures we never use yesterday's data for today
         if (!isset($tempExtremes[$dateKey][$airportId])) {
             aviationwx_log('info', 'initializing new day temp extremes', ['airport' => $airportId, 'date_key' => $dateKey, 'temp' => $currentTempFloat, 'obs_ts' => $obsTs], 'app');
+            
+            // Clear weather cache to force fresh fetch with new observation times
+            // This prevents serving cached data with yesterday's observation timestamps
+            clearWeatherCache($airportId);
+            
             $tempExtremes[$dateKey][$airportId] = [
                 'high' => $currentTempFloat,
                 'low' => $currentTempFloat,
