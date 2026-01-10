@@ -931,6 +931,19 @@ $ogImage = file_exists($aboutPhotoWebp)
         body.dark-mode .homepage-airport-item .airport-name {
             color: #a0a0a0;
         }
+        
+        /* Dark mode for "What We Need/What You Get" boxes */
+        body.dark-mode div[style*="background: #f8f9fa"] {
+            background: #1e1e1e !important;
+        }
+        
+        body.dark-mode div[style*="background: #f8f9fa"] ul {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode div[style*="background: #f8f9fa"] li {
+            color: #e0e0e0;
+        }
     </style>
 </head>
 <body>
