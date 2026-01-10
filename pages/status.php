@@ -1673,6 +1673,9 @@ $systemHealth = getCachedStatusData(function() {
     return checkSystemHealth();
 }, 'status_system_health', 30);
 
+// Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
+$cfAnalytics = getCloudflareAnalyticsForStatus();
+
 // Get node performance metrics (cached for 30s)
 $nodePerformance = getCachedStatusData(function() {
     return getNodePerformance();
@@ -1761,11 +1764,54 @@ if (php_sapi_name() === 'cli') {
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 2rem;
+            text-align: center;
         }
         
         .header h1 {
             font-size: 2rem;
             font-weight: 600;
+            margin: 0 0 0.5rem 0;
+        }
+        
+        .header .subtitle {
+            color: #666;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .cloudflare-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .cf-metric {
+            text-align: center;
+        }
+        
+        .cf-metric-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #0066cc;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+        
+        .cf-metric-label {
+            font-size: 0.85rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .cf-metric-subtext {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 0.25rem;
+        }
             margin-bottom: 0.5rem;
             color: #1a1a1a;
         }
@@ -2131,6 +2177,22 @@ if (php_sapi_name() === 'cli') {
             color: #a0a0a0;
         }
         
+        body.dark-mode .cloudflare-metrics {
+            border-top-color: #333;
+        }
+        
+        body.dark-mode .cf-metric-value {
+            color: #4a9eff;
+        }
+        
+        body.dark-mode .cf-metric-label {
+            color: #a0a0a0;
+        }
+        
+        body.dark-mode .cf-metric-subtext {
+            color: #666;
+        }
+        
         body.dark-mode .status-card {
             background: #1e1e1e;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
@@ -2256,6 +2318,32 @@ if (php_sapi_name() === 'cli') {
         <div class="header">
             <h1>AviationWX Status</h1>
             <div class="subtitle">Real-time status of AviationWX.org services</div>
+            
+            <?php if (!empty($cfAnalytics)): ?>
+            <!-- Cloudflare Analytics (Last 24 Hours) -->
+            <div class="cloudflare-metrics">
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['unique_visitors_today']) ?></span>
+                    <span class="cf-metric-label">Unique Visitors</span>
+                    <div class="cf-metric-subtext">Last 24 hours</div>
+                </div>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['requests_today']) ?></span>
+                    <span class="cf-metric-label">Total Requests</span>
+                    <div class="cf-metric-subtext">Last 24 hours</div>
+                </div>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= $cfAnalytics['bandwidth_formatted'] ?></span>
+                    <span class="cf-metric-label">Bandwidth</span>
+                    <div class="cf-metric-subtext">Last 24 hours</div>
+                </div>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['requests_per_visitor'], 1) ?></span>
+                    <span class="cf-metric-label">Requests/Visitor</span>
+                    <div class="cf-metric-subtext">Engagement</div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
         
         <!-- System Status Card -->
