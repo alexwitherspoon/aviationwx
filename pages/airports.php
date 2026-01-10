@@ -1099,7 +1099,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             };
         }
         
-        // Initialize map
+        // Initialize map (will set view after location detection or fallback)
         var map = L.map('map', {
             scrollWheelZoom: true,
             zoomControl: true
@@ -1274,16 +1274,59 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         map.addLayer(markers);
         
-        // Fit map to show all airports
+        // Fit map to show all airports (or center on user location if available)
         if (allMarkers.length > 0) {
             var group = L.featureGroup(allMarkers);
-            map.fitBounds(group.getBounds().pad(0.1));
+            var locationDetected = false;
+            
+            // Try to center map on user's location, fall back to fitting all markers
+            if (navigator.geolocation) {
+                // Request user location (non-blocking)
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        // Success - center on user location
+                        var userLat = position.coords.latitude;
+                        var userLon = position.coords.longitude;
+                        
+                        map.setView([userLat, userLon], 8); // Zoom 8 shows ~100-200 mile radius
+                        locationDetected = true;
+                        
+                        console.log('Map centered on user location:', userLat, userLon);
+                    },
+                    function(error) {
+                        // Error or denied - fall back to showing all airports
+                        if (!locationDetected) {
+                            map.fitBounds(group.getBounds().pad(0.1));
+                            if (map.getZoom() > 10) {
+                                map.setZoom(10);
+                            }
+                            console.log('Location access denied or unavailable, showing all airports');
+                        }
+                    },
+                    {
+                        enableHighAccuracy: false, // Don't need GPS precision
+                        timeout: 5000,             // 5 second timeout
+                        maximumAge: 300000         // Accept 5-minute cached position
+                    }
+                );
+                
+                // Set initial view immediately while waiting for location
+                // (prevents blank map during permission prompt)
+                map.fitBounds(group.getBounds().pad(0.1));
+                if (map.getZoom() > 10) {
+                    map.setZoom(10);
+                }
+            } else {
+                // Geolocation not supported - fall back to showing all airports
+                map.fitBounds(group.getBounds().pad(0.1));
+                if (map.getZoom() > 10) {
+                    map.setZoom(10);
+                }
+                console.log('Geolocation not supported by browser, showing all airports');
+            }
         }
         
-        // Limit max zoom when fitting bounds
-        if (map.getZoom() > 10) {
-            map.setZoom(10);
-        }
+        // (Note: No need for separate zoom limit - handled in fallback logic above)
         
         // ========================================================================
         // FEATURE: Fullscreen Toggle
