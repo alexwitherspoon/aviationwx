@@ -6,17 +6,65 @@
  * - Image processing time (webcam variant generation)
  * - Page render time (full request-response cycle)
  * 
- * Metrics are stored in APCu and aggregated for status page display.
+ * Metrics are stored in both APCu (for speed) and file cache (for CLI/web sharing).
+ * This ensures metrics tracked in CLI scripts (e.g., process-push-webcams.php)
+ * are visible on web pages (e.g., status.php).
  */
 
 require_once __DIR__ . '/logger.php';
 
-// APCu keys for performance metrics
+// File cache paths for cross-context metric sharing
+const PERF_CACHE_DIR = __DIR__ . '/../cache/performance';
+const PERF_IMAGE_PROCESSING_FILE = PERF_CACHE_DIR . '/image_processing.json';
+const PERF_PAGE_RENDER_FILE = PERF_CACHE_DIR . '/page_render.json';
+
+// APCu keys for performance metrics (faster but context-specific)
 const PERF_IMAGE_PROCESSING_KEY = 'perf_image_processing';
 const PERF_PAGE_RENDER_KEY = 'perf_page_render';
 
 // How many samples to keep for calculating averages
 const PERF_SAMPLE_SIZE = 100;
+
+/**
+ * Ensure performance cache directory exists
+ */
+function ensurePerfCacheDir(): void {
+    if (!is_dir(PERF_CACHE_DIR)) {
+        @mkdir(PERF_CACHE_DIR, 0755, true);
+    }
+}
+
+/**
+ * Load samples from file cache
+ * 
+ * @param string $filePath File path
+ * @return array Array of samples
+ */
+function loadSamplesFromFile(string $filePath): array {
+    if (!file_exists($filePath)) {
+        return [];
+    }
+    
+    $content = @file_get_contents($filePath);
+    if ($content === false) {
+        return [];
+    }
+    
+    $data = @json_decode($content, true);
+    return is_array($data) ? $data : [];
+}
+
+/**
+ * Save samples to file cache
+ * 
+ * @param string $filePath File path
+ * @param array $samples Samples array
+ */
+function saveSamplesToFile(string $filePath, array $samples): void {
+    ensurePerfCacheDir();
+    $json = json_encode($samples, JSON_PRETTY_PRINT);
+    @file_put_contents($filePath, $json, LOCK_EX);
+}
 
 /**
  * Track image processing time
@@ -26,14 +74,8 @@ const PERF_SAMPLE_SIZE = 100;
  * @param int $camIndex Camera index
  */
 function trackImageProcessingTime(float $durationMs, string $airportId = '', int $camIndex = 0): void {
-    if (!function_exists('apcu_fetch')) {
-        return; // APCu not available
-    }
-    
-    $samples = apcu_fetch(PERF_IMAGE_PROCESSING_KEY, $success);
-    if (!$success || !is_array($samples)) {
-        $samples = [];
-    }
+    // Load existing samples from file
+    $samples = loadSamplesFromFile(PERF_IMAGE_PROCESSING_FILE);
     
     // Add new sample
     $samples[] = [
@@ -48,7 +90,13 @@ function trackImageProcessingTime(float $durationMs, string $airportId = '', int
         $samples = array_slice($samples, -PERF_SAMPLE_SIZE);
     }
     
-    apcu_store(PERF_IMAGE_PROCESSING_KEY, $samples, 3600); // 1 hour TTL
+    // Save to file for CLI/web sharing
+    saveSamplesToFile(PERF_IMAGE_PROCESSING_FILE, $samples);
+    
+    // Also store in APCu if available (5min TTL for fresher data on status page)
+    if (function_exists('apcu_store')) {
+        apcu_store(PERF_IMAGE_PROCESSING_KEY, $samples, 300);
+    }
 }
 
 /**
@@ -59,14 +107,8 @@ function trackImageProcessingTime(float $durationMs, string $airportId = '', int
  * @param string $path Request path
  */
 function trackPageRenderTime(float $durationMs, string $page = '', string $path = ''): void {
-    if (!function_exists('apcu_fetch')) {
-        return; // APCu not available
-    }
-    
-    $samples = apcu_fetch(PERF_PAGE_RENDER_KEY, $success);
-    if (!$success || !is_array($samples)) {
-        $samples = [];
-    }
+    // Load existing samples from file
+    $samples = loadSamplesFromFile(PERF_PAGE_RENDER_FILE);
     
     // Add new sample
     $samples[] = [
@@ -81,7 +123,13 @@ function trackPageRenderTime(float $durationMs, string $page = '', string $path 
         $samples = array_slice($samples, -PERF_SAMPLE_SIZE);
     }
     
-    apcu_store(PERF_PAGE_RENDER_KEY, $samples, 3600); // 1 hour TTL
+    // Save to file for CLI/web sharing
+    saveSamplesToFile(PERF_PAGE_RENDER_FILE, $samples);
+    
+    // Also store in APCu if available (5min TTL for fresher data on status page)
+    if (function_exists('apcu_store')) {
+        apcu_store(PERF_PAGE_RENDER_KEY, $samples, 300);
+    }
 }
 
 /**
@@ -95,12 +143,27 @@ function trackPageRenderTime(float $durationMs, string $page = '', string $path 
  *   - last_hour_count: Samples from last hour
  */
 function getImageProcessingMetrics(): array {
-    if (!function_exists('apcu_fetch')) {
-        return [];
+    $samples = [];
+    
+    // Try APCu first (fastest)
+    if (function_exists('apcu_fetch')) {
+        $samples = apcu_fetch(PERF_IMAGE_PROCESSING_KEY, $success);
+        if (!$success || !is_array($samples)) {
+            $samples = [];
+        }
     }
     
-    $samples = apcu_fetch(PERF_IMAGE_PROCESSING_KEY, $success);
-    if (!$success || !is_array($samples) || empty($samples)) {
+    // If APCu is empty, load from file and populate APCu
+    if (empty($samples)) {
+        $samples = loadSamplesFromFile(PERF_IMAGE_PROCESSING_FILE);
+        
+        // Warm up APCu cache with file data (5min TTL for fresher data)
+        if (!empty($samples) && function_exists('apcu_store')) {
+            apcu_store(PERF_IMAGE_PROCESSING_KEY, $samples, 300);
+        }
+    }
+    
+    if (empty($samples)) {
         return [
             'avg_ms' => 0,
             'p50_ms' => 0,
@@ -148,12 +211,27 @@ function getImageProcessingMetrics(): array {
  *   - last_hour_count: Samples from last hour
  */
 function getPageRenderMetrics(): array {
-    if (!function_exists('apcu_fetch')) {
-        return [];
+    $samples = [];
+    
+    // Try APCu first (fastest)
+    if (function_exists('apcu_fetch')) {
+        $samples = apcu_fetch(PERF_PAGE_RENDER_KEY, $success);
+        if (!$success || !is_array($samples)) {
+            $samples = [];
+        }
     }
     
-    $samples = apcu_fetch(PERF_PAGE_RENDER_KEY, $success);
-    if (!$success || !is_array($samples) || empty($samples)) {
+    // If APCu is empty, load from file and populate APCu
+    if (empty($samples)) {
+        $samples = loadSamplesFromFile(PERF_PAGE_RENDER_FILE);
+        
+        // Warm up APCu cache with file data (5min TTL for fresher data)
+        if (!empty($samples) && function_exists('apcu_store')) {
+            apcu_store(PERF_PAGE_RENDER_KEY, $samples, 300);
+        }
+    }
+    
+    if (empty($samples)) {
         return [
             'avg_ms' => 0,
             'p50_ms' => 0,
