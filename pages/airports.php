@@ -185,41 +185,54 @@ $breadcrumbs = generateBreadcrumbSchema([
         .map-container {
             border-bottom: 3px solid #0066cc;
             position: relative;
+            overflow: hidden; /* Prevent content overflow */
         }
         
-        /* Map Control Buttons */
+        /* Map Control Buttons - Horizontal Bar */
         .map-controls {
             position: absolute;
             top: 10px;
+            left: 10px;
             right: 10px;
             z-index: 1000;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            align-items: center;
             gap: 8px;
             background: rgba(255, 255, 255, 0.95);
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .control-divider {
+            width: 1px;
+            height: 32px;
+            background: rgba(0,0,0,0.15);
+            margin: 0 4px;
+            flex-shrink: 0;
         }
         
         .weather-control-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            flex: 1;
+            min-width: 0; /* Allow flex item to shrink below content size */
         }
         
         .map-control-btn {
             background: white;
             border: 2px solid rgba(0,0,0,0.2);
             border-radius: 4px;
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             box-shadow: 0 1px 5px rgba(0,0,0,0.2);
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             transition: all 0.2s;
             flex-shrink: 0;
         }
@@ -235,14 +248,28 @@ $breadcrumbs = generateBreadcrumbSchema([
             border-color: #0066cc;
         }
         
+        .map-control-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .map-control-btn:disabled:hover {
+            transform: none;
+            background: white;
+        }
+        
         .weather-opacity-control {
             display: flex;
             flex-direction: column;
+            align-items: center;
             gap: 2px;
+            flex: 1;
+            min-width: 60px; /* Minimum slider width */
+            max-width: 200px; /* Maximum slider width */
         }
         
         .weather-opacity-slider {
-            width: 100px;
+            width: 100%;
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
@@ -274,10 +301,11 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         .opacity-label {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: #666;
             text-align: center;
             font-weight: 500;
+            white-space: nowrap;
         }
         
         /* Flight Category Legend */
@@ -285,12 +313,25 @@ $breadcrumbs = generateBreadcrumbSchema([
             position: absolute;
             bottom: 30px;
             left: 10px;
-            z-index: 1000;
+            z-index: 1001; /* Higher than map controls */
             background: white;
             padding: 10px 12px;
             border-radius: 6px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             font-size: 0.85rem;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: auto; /* Ensure it's always clickable */
+        }
+        
+        .flight-legend.hidden {
+            display: none;
+        }
+        
+        .flight-legend .legend-title {
+            margin: 0 0 8px 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #333;
         }
         
         .flight-legend h4 {
@@ -428,13 +469,77 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
             
             #map {
-                height: 60vh;
-                min-height: 300px;
-                max-height: 600px;
+                height: 70vh;
+                min-height: 400px;
+                max-height: 700px;
             }
             
             .airports-section {
                 padding: 1rem;
+            }
+            
+            /* Smaller controls on mobile - stay in one row */
+            .map-controls {
+                top: 5px;
+                left: 5px;
+                right: 5px;
+                padding: 6px;
+                gap: 4px;
+                font-size: 0.85rem;
+                /* Remove flex-wrap to keep everything in one row */
+            }
+            
+            .map-control-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 0.95rem;
+                flex-shrink: 0;
+            }
+            
+            .control-divider {
+                height: 26px;
+                margin: 0 2px;
+                display: none; /* Hide dividers on mobile to save space */
+            }
+            
+            .weather-control-group {
+                gap: 4px;
+                min-width: 0; /* Allow to shrink as needed */
+            }
+            
+            .weather-opacity-control {
+                min-width: 40px; /* Smaller minimum on mobile */
+                max-width: 80px; /* Smaller maximum on mobile */
+            }
+            
+            .opacity-label {
+                font-size: 0.6rem;
+            }
+            
+            /* Smaller legend on mobile */
+            .flight-legend {
+                bottom: 15px;
+                left: 5px;
+                padding: 8px 10px;
+                font-size: 0.75rem;
+                max-width: calc(100vw - 80px);
+                z-index: 1002; /* Even higher on mobile to stay above everything */
+            }
+            
+            .flight-legend .legend-title {
+                font-size: 0.85rem;
+                margin-bottom: 6px;
+            }
+            
+            .legend-color {
+                width: 16px;
+                height: 12px;
+            }
+            
+            .legend-item {
+                font-size: 0.75rem;
+                margin-bottom: 3px;
+                gap: 6px;
             }
         }
         
@@ -809,10 +914,14 @@ $breadcrumbs = generateBreadcrumbSchema([
             background: #333;
         }
         
-        body.dark-mode .map-control-btn.active {
-            background: #4a9eff;
-            border-color: #4a9eff;
-            color: white;
+        body.dark-mode .map-control-btn:disabled {
+            background: #1a1a1a;
+            border-color: #333;
+            color: #555;
+        }
+        
+        body.dark-mode .control-divider {
+            background: rgba(255,255,255,0.15);
         }
         
         body.dark-mode .opacity-label {
@@ -837,6 +946,10 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         body.dark-mode .flight-legend h4 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .flight-legend .legend-title {
             color: #e0e0e0;
         }
         
@@ -869,11 +982,31 @@ $breadcrumbs = generateBreadcrumbSchema([
     
     <main>
         <div class="map-container">
-            <!-- Map Control Buttons with Inline Sliders -->
+            <!-- Map Control Buttons - Horizontal Bar -->
             <div class="map-controls">
+                <!-- Zoom Controls -->
+                <button id="zoom-in-btn" class="map-control-btn" title="Zoom in" aria-label="Zoom in">
+                    +
+                </button>
+                <button id="zoom-out-btn" class="map-control-btn" title="Zoom out" aria-label="Zoom out">
+                    −
+                </button>
+                
+                <div class="control-divider"></div>
+                
+                <!-- Fullscreen -->
                 <button id="fullscreen-btn" class="map-control-btn" title="Toggle Fullscreen" aria-label="Toggle fullscreen map">
                     ⛶
                 </button>
+                
+                <div class="control-divider"></div>
+                
+                <!-- Legend Toggle -->
+                <button id="legend-toggle-btn" class="map-control-btn active" title="Toggle Flight Category Legend" aria-label="Toggle flight category legend">
+                    🏷️
+                </button>
+                
+                <div class="control-divider"></div>
                 
                 <!-- Precipitation Control Group -->
                 <div class="weather-control-group">
@@ -885,6 +1018,8 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <label for="radar-opacity" class="opacity-label">Precip</label>
                     </div>
                 </div>
+                
+                <div class="control-divider"></div>
                 
                 <!-- Cloud Cover Control Group -->
                 <div class="weather-control-group">
@@ -899,27 +1034,29 @@ $breadcrumbs = generateBreadcrumbSchema([
             </div>
             
             <!-- Flight Category Legend -->
-            <div class="flight-legend">
-                <h4>Flight Categories</h4>
-                <div class="legend-item">
-                    <div class="legend-color vfr"></div>
-                    <span>VFR (>5 mi, >3000 ft)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color mvfr"></div>
-                    <span>MVFR (3-5 mi, 1000-3000 ft)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color ifr"></div>
-                    <span>IFR (1-3 mi, 500-1000 ft)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color lifr"></div>
-                    <span>LIFR (<1 mi, <500 ft)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color unknown"></div>
-                    <span>Not Enough Data</span>
+            <div class="flight-legend" id="flight-legend">
+                <h4 class="legend-title">Flight Categories</h4>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color vfr"></div>
+                        <span>VFR (>5 mi, >3000 ft)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color mvfr"></div>
+                        <span>MVFR (3-5 mi, 1000-3000 ft)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color ifr"></div>
+                        <span>IFR (1-3 mi, 500-1000 ft)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color lifr"></div>
+                        <span>LIFR (<1 mi, <500 ft)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color unknown"></div>
+                        <span>Not Enough Data</span>
+                    </div>
                 </div>
             </div>
             
@@ -1102,7 +1239,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         // Initialize map (will set view after location detection or fallback)
         var map = L.map('map', {
             scrollWheelZoom: true,
-            zoomControl: true
+            zoomControl: false // Disable default zoom controls, we'll use custom ones
         });
         
         // Add OpenStreetMap tiles
@@ -1352,6 +1489,41 @@ $breadcrumbs = generateBreadcrumbSchema([
         // (Note: No need for separate zoom limit - handled in fallback logic above)
         
         // ========================================================================
+        // FEATURE: Custom Zoom Controls
+        // ========================================================================
+        var zoomInBtn = document.getElementById('zoom-in-btn');
+        var zoomOutBtn = document.getElementById('zoom-out-btn');
+        
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', function() {
+                map.zoomIn();
+            });
+        }
+        
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', function() {
+                map.zoomOut();
+            });
+        }
+        
+        // Update button states based on zoom level
+        function updateZoomButtons() {
+            var currentZoom = map.getZoom();
+            var maxZoom = map.getMaxZoom();
+            var minZoom = map.getMinZoom();
+            
+            if (zoomInBtn) {
+                zoomInBtn.disabled = currentZoom >= maxZoom;
+            }
+            if (zoomOutBtn) {
+                zoomOutBtn.disabled = currentZoom <= minZoom;
+            }
+        }
+        
+        map.on('zoomend', updateZoomButtons);
+        updateZoomButtons(); // Initial state
+        
+        // ========================================================================
         // FEATURE: Fullscreen Toggle
         // ========================================================================
         var fullscreenBtn = document.getElementById('fullscreen-btn');
@@ -1461,6 +1633,31 @@ $breadcrumbs = generateBreadcrumbSchema([
         jumpBtn.addEventListener('click', function() {
             mapContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
+        
+        // ========================================================================
+        // FEATURE: Collapsible Flight Legend
+        // ========================================================================
+        // FEATURE: Flight Category Legend Toggle
+        // ========================================================================
+        var flightLegend = document.getElementById('flight-legend');
+        var legendToggleBtn = document.getElementById('legend-toggle-btn');
+        
+        // Check if legend was previously hidden (localStorage)
+        var legendHidden = localStorage.getItem('legendHidden') === 'true';
+        if (legendHidden) {
+            flightLegend.classList.add('hidden');
+            legendToggleBtn.classList.remove('active');
+        }
+        
+        if (legendToggleBtn) {
+            legendToggleBtn.addEventListener('click', function() {
+                var isHidden = flightLegend.classList.toggle('hidden');
+                legendToggleBtn.classList.toggle('active', !isHidden);
+                
+                // Save preference
+                localStorage.setItem('legendHidden', isHidden);
+            });
+        }
         
         // ========================================================================
         // FEATURE: Search Integration (highlights marker on map)
