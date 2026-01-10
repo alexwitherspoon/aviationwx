@@ -2371,9 +2371,14 @@ if (php_sapi_name() === 'cli') {
                     <div class="cf-metric-subtext">Avg (<?= $pageRenderMetrics['sample_count'] ?> samples)</div>
                 </div>
                 <?php endif; ?>
-                <div class="cf-metric" title="OpenWeatherMap: <?= number_format($rolling24h['global']['tiles_by_source']['openweathermap'] ?? 0) ?> · RainViewer: <?= number_format($rolling24h['global']['tiles_by_source']['rainviewer'] ?? 0) ?>">
-                    <span class="cf-metric-value"><?= number_format($rolling24h['global']['tiles_served'] ?? 0) ?></span>
-                    <span class="cf-metric-label">Map Tiles Served</span>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($rolling24h['global']['tiles_by_source']['openweathermap'] ?? 0) ?></span>
+                    <span class="cf-metric-label">Cloud Tiles Served</span>
+                    <div class="cf-metric-subtext">Last 24 hours</div>
+                </div>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($rolling24h['global']['tiles_by_source']['rainviewer'] ?? 0) ?></span>
+                    <span class="cf-metric-label">Rain Tiles Served</span>
                     <div class="cf-metric-subtext">Last 24 hours</div>
                 </div>
             </div>
