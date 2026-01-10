@@ -44,6 +44,9 @@ Most installs follow the same "pick a path" sequence:
 8) **Learn how to use the dashboard**
 - [13 - Using the Airport Dashboard](13-using-the-airport-dashboard.md)
 
+9) **Advanced: Self-Hosting & Federation** *(optional - for technical users)*
+- [14 - Self-Hosting & Federation](14-self-hosting-and-federation.md)
+
 ---
 
 ## What AviationWX is (plain language)
@@ -57,8 +60,11 @@ This is a **supplemental** source of information and does not replace official b
 
 ## Open source and portability
 AviationWX is open source. Airports and local groups are not locked into a proprietary solution:
-- participate in the shared AviationWX network, or
-- self-host and continue using your equipment independently.
+- **Join the shared network** (Guide 12) - recommended for most airports
+- **Self-host independently** (Guide 14) - for advanced users wanting complete control
+- **Self-host + federate** (Guide 14) - get control AND pilot discovery
+
+All options use the same equipment and configuration. You can switch paths anytime.
 
 ---
 
