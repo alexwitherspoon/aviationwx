@@ -222,6 +222,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Aviation Weather',
                 'url' => 'https://aviationweather.gov'
             ];
+        case 'aviationwx_api':
+            return [
+                'name' => 'Federated AviationWX',
+                'url' => null
+            ];
         default:
             return null;
     }

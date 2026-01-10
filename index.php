@@ -74,6 +74,17 @@ if ($config === null) {
 $baseDomain = getBaseDomain();
 // Match guides subdomain exactly (e.g., guides.aviationwx.org)
 if (preg_match('/^guides\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // In single-airport mode, redirect to the single airport dashboard
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+    
     // Route to guides page
     include 'pages/guides.php';
     exit;
@@ -102,6 +113,18 @@ if (preg_match('/^embed\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 // Check for guides query parameter or path (for local dev/testing)
 // This must be after config is loaded because guides.php needs config
 if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 'guides/') === 0) {
+    // In single-airport mode, redirect to the single airport dashboard
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $baseDomain = getBaseDomain();
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+    
     // If path-based route, strip 'guides/' prefix so guides.php can handle it correctly
     if (strpos($requestPath, 'guides/') === 0) {
         // Extract the guide name after 'guides/'
@@ -117,6 +140,17 @@ if (isset($_GET['guides']) || $requestPath === 'guides' || strpos($requestPath, 
 
 // Match airports subdomain exactly (e.g., airports.aviationwx.org)
 if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
+    // In single-airport mode, redirect to the single airport dashboard
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+    
     // Route to airports directory page
     include 'pages/airports.php';
     exit;
@@ -124,6 +158,18 @@ if (preg_match('/^airports\.' . preg_quote($baseDomain, '/') . '$/i', $host)) {
 
 // Check for airports directory page (for local dev/testing)
 if (isset($_GET['airports']) || $requestPath === 'airports') {
+    // In single-airport mode, redirect to the single airport dashboard
+    if (isSingleAirportMode()) {
+        $singleAirportId = getSingleAirportId();
+        if ($singleAirportId) {
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $baseDomain = getBaseDomain();
+            $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+            header('Location: ' . $redirectUrl, true, 302);
+            exit;
+        }
+    }
+    
     // Route to airports directory page
     include 'pages/airports.php';
     exit;
@@ -314,7 +360,20 @@ if ($hasPathComponent) {
     exit;
 }
 
-// No airport and no path - show homepage
+// No airport and no path - show homepage or redirect in single-airport mode
+if (isSingleAirportMode()) {
+    // Single-airport mode: redirect to the single airport dashboard
+    $singleAirportId = getSingleAirportId();
+    if ($singleAirportId) {
+        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $baseDomain = getBaseDomain();
+        $redirectUrl = $protocol . '://' . strtolower($singleAirportId) . '.' . $baseDomain;
+        header('Location: ' . $redirectUrl, true, 302);
+        exit;
+    }
+}
+
+// Multi-airport mode: show homepage
 include 'pages/homepage.php';
 
 // Track page render performance

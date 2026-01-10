@@ -12,6 +12,12 @@ if (!function_exists('loadConfig')) {
     require_once __DIR__ . '/config.php';
 }
 
+// In single-airport mode, don't show main navigation
+// Single-airport installs use only the dashboard UI
+if (isSingleAirportMode()) {
+    return;
+}
+
 // Get all airports for search
 $navConfig = loadConfig();
 $navAirports = [];

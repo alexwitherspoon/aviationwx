@@ -1630,13 +1630,74 @@ function getEnabledAirports(array $config): array {
 }
 
 /**
- * Get the current Git commit SHA (short version)
+ * Check if the system is running in single-airport mode
  * 
+ * Single-airport mode is triggered when exactly 1 airport is enabled.
+ * This simplifies the UI by hiding multi-airport navigation elements.
+ * 
+ * @return bool True if only 1 airport is enabled, false otherwise
+ */
+function isSingleAirportMode(): bool {
+    static $cachedResult = null;
+    
+    // Use static cache to avoid repeated config loads in same request
+    if ($cachedResult !== null) {
+        return $cachedResult;
+    }
+    
+    $config = loadConfig();
+    if (!$config) {
+        $cachedResult = false;
+        return false;
+    }
+    
+    $enabledAirports = getEnabledAirports($config);
+    $cachedResult = (count($enabledAirports) === 1);
+    
+    return $cachedResult;
+}
+
+/**
+ * Get the single airport ID when in single-airport mode
+ * 
+ * @return string|null Airport ID if in single-airport mode, null otherwise
+ */
+function getSingleAirportId(): ?string {
+    static $cachedId = null;
+    static $cached = false;
+    
+    if ($cached) {
+        return $cachedId;
+    }
+    
+    if (!isSingleAirportMode()) {
+        $cached = true;
+        $cachedId = null;
+        return null;
+    }
+    
+    $config = loadConfig();
+    if (!$config) {
+        $cached = true;
+        $cachedId = null;
+        return null;
+    }
+    
+    $enabledAirports = getEnabledAirports($config);
+    $cachedId = array_key_first($enabledAirports);
+    $cached = true;
+    
+    return $cachedId;
+}
+
+/**
+ * Get the current Git commit SHA (short version)
+ *
  * Tries multiple methods to get the SHA for display in footers:
  * 1. Environment variable (set during deployment)
  * 2. .git/HEAD file (if in git repository)
  * 3. git command (if available)
- * 
+ *
  * @return string Short SHA (7 characters) or empty string if unavailable
  */
 function getGitSha(): string {

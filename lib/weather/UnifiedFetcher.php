@@ -25,6 +25,7 @@ require_once __DIR__ . '/adapter/weatherlink-v2-api.php';
 require_once __DIR__ . '/adapter/weatherlink-v1-api.php';
 require_once __DIR__ . '/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
+require_once __DIR__ . '/adapter/aviationwx-api-v1.php';
 require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
@@ -34,6 +35,7 @@ require_once __DIR__ . '/../weather-health.php';
 
 use AviationWX\Weather\Data\WeatherSnapshot;
 use AviationWX\Weather\WeatherAggregator;
+use AviationWX\Weather\Adapter\AviationWXAPIAdapter;
 
 /**
  * Fetch weather from all configured sources and aggregate
@@ -255,6 +257,7 @@ function buildSourceUrl(array $source): ?string {
         'weatherlink_v1' => WeatherLinkV1Adapter::buildUrl($source),
         'pwsweather' => buildPWSWeatherUrl($source),
         'metar' => MetarAdapter::buildUrl($source['station_id'] ?? ''),
+        'aviationwx_api' => AviationWXAPIAdapter::buildUrl($source),
         default => null,
     };
 }
@@ -304,6 +307,7 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'weatherlink_v1' => WeatherLinkV1Adapter::parseToSnapshot($response, $source),
         'pwsweather' => PWSWeatherAdapter::parseToSnapshot($response, $source),
         'metar' => MetarAdapter::parseToSnapshot($response, $airport),
+        'aviationwx_api' => AviationWXAPIAdapter::parseResponse($response, $source),
         default => null,
     };
 }
@@ -325,6 +329,7 @@ function getSourceMaxAge(array $source): int {
         'weatherlink_v1' => WeatherLinkV1Adapter::getMaxAcceptableAge(),
         'pwsweather' => PWSWeatherAdapter::getMaxAcceptableAge(),
         'metar' => MetarAdapter::getMaxAcceptableAge(),
+        'aviationwx_api' => AviationWXAPIAdapter::getMaxAcceptableAge(),
         default => 600, // 10 minutes default
     };
 }

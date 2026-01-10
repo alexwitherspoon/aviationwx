@@ -35,6 +35,116 @@ try {
 }
 
 /**
+ * Fetch webcam image from federated AviationWX API source
+ * 
+ * Fetches a webcam image from another AviationWX instance's public API.
+ * Enables federation where single-airport installs can share webcam data.
+ * 
+ * @param string $baseUrl Base URL of federated source (e.g., "https://weather.myairport.com")
+ * @param string $airportId Airport identifier
+ * @param int $cameraIndex Camera index
+ * @param string $outputFile Path to save fetched image
+ * @param string|null $apiKey Optional API key for authentication
+ * @param int $timeout Timeout in seconds
+ * @return bool True if image was successfully fetched and saved
+ */
+function fetchFederatedWebcam(string $baseUrl, string $airportId, int $cameraIndex, string $outputFile, ?string $apiKey = null, int $timeout = 15): bool {
+    require_once __DIR__ . '/../lib/circuit-breaker.php';
+    require_once __DIR__ . '/../lib/logger.php';
+    
+    $baseUrl = rtrim($baseUrl, '/');
+    $breakerKey = "aviationwx_api_webcam_{$baseUrl}_{$airportId}_{$cameraIndex}";
+    
+    // Check circuit breaker
+    if (isCircuitOpen($breakerKey)) {
+        aviationwx_log('warning', 'Federated webcam: Circuit breaker open', [
+            'airport_id' => $airportId,
+            'camera_index' => $cameraIndex,
+            'base_url' => $baseUrl
+        ]);
+        return false;
+    }
+    
+    try {
+        // Build API URL for latest webcam image
+        $url = "{$baseUrl}/api/v1/webcams/{$airportId}/{$cameraIndex}/latest";
+        
+        // Set up headers
+        $headers = ['Accept: image/jpeg'];
+        if ($apiKey) {
+            $headers[] = "X-API-Key: {$apiKey}";
+        }
+        
+        // Fetch image
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_USERAGENT => 'AviationWX-Federation/1.0',
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3
+        ]);
+        
+        $imageData = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($imageData === false || $httpCode !== 200) {
+            recordCircuitBreakerFailure($breakerKey);
+            aviationwx_log('error', 'Federated webcam: HTTP error', [
+                'airport_id' => $airportId,
+                'camera_index' => $cameraIndex,
+                'base_url' => $baseUrl,
+                'http_code' => $httpCode,
+                'error' => $error
+            ]);
+            return false;
+        }
+        
+        // Validate it's actually an image
+        if (!isValidImageData($imageData)) {
+            recordCircuitBreakerFailure($breakerKey);
+            aviationwx_log('error', 'Federated webcam: Invalid image data', [
+                'airport_id' => $airportId,
+                'camera_index' => $cameraIndex,
+                'base_url' => $baseUrl
+            ]);
+            return false;
+        }
+        
+        // Save to output file
+        $saved = file_put_contents($outputFile, $imageData);
+        if ($saved === false) {
+            recordCircuitBreakerFailure($breakerKey);
+            aviationwx_log('error', 'Federated webcam: Failed to save image', [
+                'airport_id' => $airportId,
+                'camera_index' => $cameraIndex,
+                'output_file' => $outputFile
+            ]);
+            return false;
+        }
+        
+        // Success!
+        recordCircuitBreakerSuccess($breakerKey);
+        return true;
+        
+    } catch (Exception $e) {
+        recordCircuitBreakerFailure($breakerKey);
+        aviationwx_log('error', 'Federated webcam: Exception', [
+            'airport_id' => $airportId,
+            'camera_index' => $cameraIndex,
+            'base_url' => $baseUrl,
+            'exception' => $e->getMessage()
+        ]);
+        return false;
+    }
+}
+
+/**
  * Detect webcam source type from URL
  * 
  * Analyzes URL to determine webcam source type. Checks for RTSP protocol,
@@ -1050,6 +1160,13 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
     $fetchStartTime = microtime(true);
     $success = false;
     switch ($sourceType) {
+        case 'aviationwx_api':
+            $baseUrl = $cam['base_url'] ?? '';
+            $apiKey = $cam['api_key'] ?? null;
+            $timeout = $cam['timeout_seconds'] ?? 15;
+            $success = fetchFederatedWebcam($baseUrl, $airportId, $camIndex, $stagingFile, $apiKey, $timeout);
+            break;
+            
         case 'rtsp':
             $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: RTSP_DEFAULT_TIMEOUT);
             $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : RTSP_MAX_RUNTIME;

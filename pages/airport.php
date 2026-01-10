@@ -1184,6 +1184,7 @@ if ($themeCookie === 'dark') {
         <!-- Airport Navigation Menu -->
         <div class="airport-nav-container">
             <div class="airport-nav-menu">
+                <?php if (!isSingleAirportMode()): ?>
                 <div class="airport-search-container">
                     <input type="text" 
                            id="airport-search" 
@@ -1199,17 +1200,21 @@ if ($themeCookie === 'dark') {
                         <span class="dropdown-arrow">▼</span>
                     </button>
                 </div>
+                <?php endif; ?>
                 <div class="nav-hamburger-container">
                     <button id="nav-hamburger-btn" class="nav-hamburger-btn" title="Navigation menu" aria-label="Open navigation menu">
                         <span class="hamburger-icon">☰</span>
                     </button>
                 </div>
+                <?php if (!isSingleAirportMode()): ?>
                 <!-- Unified dropdown for both search and nearby airports -->
                 <div id="airport-dropdown" class="airport-dropdown">
                     <!-- Content populated by JavaScript -->
                 </div>
+                <?php endif; ?>
                 <!-- Hamburger menu dropdown -->
                 <div id="nav-hamburger-dropdown" class="nav-hamburger-dropdown">
+                    <?php if (!isSingleAirportMode()): ?>
                     <a href="https://aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">🏠</span>
                         <span>AviationWX.org Home</span>
@@ -1218,9 +1223,19 @@ if ($themeCookie === 'dark') {
                         <span class="nav-item-icon">✈️</span>
                         <span>Browse All Airports</span>
                     </a>
+                    <?php else: ?>
+                    <a href="/<?= strtolower($airportId) ?>" class="nav-hamburger-item">
+                        <span class="nav-item-icon">🏠</span>
+                        <span>Dashboard</span>
+                    </a>
+                    <?php endif; ?>
                     <a href="https://embed.aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">🔗</span>
                         <span>Embed Generator</span>
+                    </a>
+                    <a href="https://<?= getBaseDomain() ?>/api/docs" class="nav-hamburger-item">
+                        <span class="nav-item-icon">📡</span>
+                        <span>API Documentation</span>
                     </a>
                     <a href="https://status.aviationwx.org" class="nav-hamburger-item">
                         <span class="nav-item-icon">📊</span>
@@ -1237,7 +1252,8 @@ if ($themeCookie === 'dark') {
                 baseDomain: <?= json_encode(getBaseDomain()) ?>,
                 nearbyAirports: <?= json_encode($nearbyAirports) ?>,
                 allAirports: <?= json_encode($allAirportsForSearch) ?>,
-                webcamHistoryEnabled: <?= json_encode(isWebcamHistoryEnabledForAirport($airportId)) ?>
+                webcamHistoryEnabled: <?= json_encode(isWebcamHistoryEnabledForAirport($airportId)) ?>,
+                isSingleAirportMode: <?= json_encode(isSingleAirportMode()) ?>
             };
         </script>
         <?php endif; ?>
@@ -7421,12 +7437,18 @@ window.addEventListener('beforeunload', () => {
         if (!window.AIRPORT_NAV_DATA) {
             return;
         }
-        
+
         const navData = window.AIRPORT_NAV_DATA;
         const searchInput = document.getElementById('airport-search');
         const nearbyBtn = document.getElementById('nearby-airports-btn');
         const airportDropdown = document.getElementById('airport-dropdown');
         
+        // In single-airport mode, search and nearby dropdowns don't exist
+        if (navData.isSingleAirportMode) {
+            // Only hamburger menu functionality needed (handled separately below)
+            return;
+        }
+
         if (!searchInput || !nearbyBtn || !airportDropdown) {
             return;
         }
