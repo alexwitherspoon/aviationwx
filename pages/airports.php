@@ -192,8 +192,10 @@ $breadcrumbs = generateBreadcrumbSchema([
         .map-controls {
             position: absolute;
             top: 10px;
-            left: 10px;
-            right: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 750px;
+            width: calc(100% - 20px);
             z-index: 1000;
             display: flex;
             flex-direction: row;
@@ -481,8 +483,8 @@ $breadcrumbs = generateBreadcrumbSchema([
             /* Smaller controls on mobile - stay in one row */
             .map-controls {
                 top: 5px;
-                left: 5px;
-                right: 5px;
+                width: calc(100% - 10px);
+                max-width: none; /* Full width on mobile */
                 padding: 6px;
                 gap: 4px;
                 font-size: 0.85rem;
@@ -920,6 +922,12 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #555;
         }
         
+        body.dark-mode .map-control-btn.active {
+            background: #4a9eff;
+            border-color: #4a9eff;
+            color: white;
+        }
+        
         body.dark-mode .control-divider {
             background: rgba(255,255,255,0.15);
         }
@@ -1002,7 +1010,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 <div class="control-divider"></div>
                 
                 <!-- Legend Toggle -->
-                <button id="legend-toggle-btn" class="map-control-btn active" title="Toggle Flight Category Legend" aria-label="Toggle flight category legend">
+                <button id="legend-toggle-btn" class="map-control-btn" title="Toggle Flight Category Legend" aria-label="Toggle flight category legend">
                     🏷️
                 </button>
                 
@@ -1010,7 +1018,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 
                 <!-- Precipitation Control Group -->
                 <div class="weather-control-group">
-                    <button id="radar-btn" class="map-control-btn active" title="Toggle Precipitation Radar" aria-label="Toggle precipitation radar overlay">
+                    <button id="radar-btn" class="map-control-btn" title="Toggle Precipitation Radar" aria-label="Toggle precipitation radar overlay">
                         🌧️
                     </button>
                     <div class="weather-opacity-control">
@@ -1023,7 +1031,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 
                 <!-- Cloud Cover Control Group -->
                 <div class="weather-control-group">
-                    <button id="clouds-btn" class="map-control-btn active" title="Toggle Cloud Cover" aria-label="Toggle cloud cover overlay">
+                    <button id="clouds-btn" class="map-control-btn" title="Toggle Cloud Cover" aria-label="Toggle cloud cover overlay">
                         ☁️
                     </button>
                     <div class="weather-opacity-control">
@@ -1563,12 +1571,31 @@ $breadcrumbs = generateBreadcrumbSchema([
         // ========================================================================
         var radarBtn = document.getElementById('radar-btn');
         var cloudsBtn = document.getElementById('clouds-btn');
-        var radarEnabled = true;  // Start enabled
-        var cloudsEnabled = true; // Start enabled
         
-        // Auto-enable both layers on page load
-        addRadarLayer();
-        addCloudsLayer();
+        // Determine default state based on screen size and saved preferences
+        var isMobile = window.innerWidth <= 640;
+        
+        // Check saved preferences or use defaults (off on mobile, on on desktop)
+        var radarSavedState = localStorage.getItem('radarEnabled');
+        var cloudsSavedState = localStorage.getItem('cloudsEnabled');
+        
+        var radarEnabled = radarSavedState !== null ? radarSavedState === 'true' : !isMobile;
+        var cloudsEnabled = cloudsSavedState !== null ? cloudsSavedState === 'true' : !isMobile;
+        
+        // Apply initial states
+        if (radarEnabled) {
+            radarBtn.classList.add('active');
+            addRadarLayer();
+        } else {
+            radarBtn.classList.remove('active');
+        }
+        
+        if (cloudsEnabled) {
+            cloudsBtn.classList.add('active');
+            addCloudsLayer();
+        } else {
+            cloudsBtn.classList.remove('active');
+        }
         
         radarBtn.addEventListener('click', function() {
             // Don't allow toggling if radar is unavailable
@@ -1585,6 +1612,9 @@ $breadcrumbs = generateBreadcrumbSchema([
                 radarBtn.classList.remove('active');
                 removeRadarLayer();
             }
+            
+            // Save preference
+            localStorage.setItem('radarEnabled', radarEnabled);
         });
         
         cloudsBtn.addEventListener('click', function() {
@@ -1597,6 +1627,9 @@ $breadcrumbs = generateBreadcrumbSchema([
                 cloudsBtn.classList.remove('active');
                 removeCloudsLayer();
             }
+            
+            // Save preference
+            localStorage.setItem('cloudsEnabled', cloudsEnabled);
         });
         
         // Precipitation opacity slider
@@ -1642,11 +1675,26 @@ $breadcrumbs = generateBreadcrumbSchema([
         var flightLegend = document.getElementById('flight-legend');
         var legendToggleBtn = document.getElementById('legend-toggle-btn');
         
-        // Check if legend was previously hidden (localStorage)
-        var legendHidden = localStorage.getItem('legendHidden') === 'true';
+        // Determine default visibility based on screen size and saved preference
+        var isMobile = window.innerWidth <= 640;
+        var savedPreference = localStorage.getItem('legendHidden');
+        var legendHidden;
+        
+        if (savedPreference !== null) {
+            // User has a saved preference - use it
+            legendHidden = savedPreference === 'true';
+        } else {
+            // No saved preference - hide on mobile, show on desktop
+            legendHidden = isMobile;
+        }
+        
+        // Apply initial state
         if (legendHidden) {
             flightLegend.classList.add('hidden');
             legendToggleBtn.classList.remove('active');
+        } else {
+            flightLegend.classList.remove('hidden');
+            legendToggleBtn.classList.add('active');
         }
         
         if (legendToggleBtn) {
