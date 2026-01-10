@@ -22,6 +22,9 @@
  * │   └── {airport}.json           # NOTAM cache
  * ├── partners/
  * │   └── {hash}.{ext}             # Partner logo cache
+ * ├── map_tiles/
+ * │   └── {layer}/
+ * │       └── {z}_{x}_{y}.png      # Cached map tiles (OpenWeatherMap proxy)
  * ├── rate_limits/                 # Rate limit state files
  * ├── backoff.json                 # Circuit breaker state
  * ├── peak_gusts.json              # Daily peak gust tracking
@@ -423,6 +426,37 @@ if (!defined('CACHE_FAA_MAPPING_FILE')) {
 }
 
 // =============================================================================
+// MAP TILES CACHE (OpenWeatherMap Proxy)
+// =============================================================================
+
+if (!defined('CACHE_MAP_TILES_DIR')) {
+    define('CACHE_MAP_TILES_DIR', CACHE_BASE_DIR . '/map_tiles');
+}
+
+/**
+ * Get directory for map tile cache (by layer type)
+ * 
+ * @param string $layer Layer type (e.g., 'clouds_new')
+ * @return string Full path to tile layer directory
+ */
+function getMapTileLayerDir(string $layer): string {
+    return CACHE_MAP_TILES_DIR . '/' . $layer;
+}
+
+/**
+ * Get path to cached map tile
+ * 
+ * @param string $layer Layer type (e.g., 'clouds_new')
+ * @param int $z Zoom level
+ * @param int $x Tile X coordinate
+ * @param int $y Tile Y coordinate
+ * @return string Full path to cached tile
+ */
+function getMapTileCachePath(string $layer, int $z, int $x, int $y): string {
+    return getMapTileLayerDir($layer) . '/' . $z . '_' . $x . '_' . $y . '.png';
+}
+
+// =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 
@@ -460,6 +494,7 @@ function ensureAllCacheDirs(): array {
         CACHE_METRICS_HOURLY_DIR,
         CACHE_METRICS_DAILY_DIR,
         CACHE_METRICS_WEEKLY_DIR,
+        CACHE_MAP_TILES_DIR,
     ];
     
     $results = [];

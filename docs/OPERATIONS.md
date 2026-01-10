@@ -77,7 +77,7 @@ Application logs use JSONL format:
 Shows:
 - System health (Config, Cache, APCu, Logging, Error Rate)
 - Per-airport status (Weather API, Webcams)
-- Usage metrics (Views, API requests)
+- Usage metrics (Views, API requests, Map tiles served)
 
 ### Health Endpoints
 
@@ -105,6 +105,14 @@ docker compose -f docker/docker-compose.prod.yml exec web pkill -f scheduler.php
 Metrics tracked in APCu, flushed to JSON files every 5 minutes:
 - **Hourly**: `cache/metrics/hourly/YYYY-MM-DD-HH.json`
 - **Daily**: `cache/metrics/daily/YYYY-MM-DD.json`
+
+**Tracked metrics:**
+- Airport page views
+- Weather API requests
+- Webcam serves (by format and size)
+- Map tile serves (by source: OpenWeatherMap, RainViewer)
+- Browser format support
+- Cache hit/miss rates
 
 Manual flush: `curl https://aviationwx.org/health/metrics-flush.php`
 

@@ -20,6 +20,10 @@ uasort($airports, function($a, $b) {
 
 $totalAirports = count($airports);
 
+// Check if OpenWeatherMap API key is configured
+$openWeatherMapApiKey = $config['config']['openweathermap_api_key'] ?? '';
+$hasCloudLayer = !empty($openWeatherMapApiKey);
+
 // Helper function to get airport weather (same as homepage)
 function getAirportWeatherForDirectory($airportId) {
     $cacheFile = getWeatherCachePath($airportId);
@@ -991,6 +995,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 <div class="control-divider"></div>
                 
                 <!-- Cloud Cover Control Group -->
+                <?php if ($hasCloudLayer): ?>
                 <div class="weather-control-group">
                     <button id="clouds-btn" class="map-control-btn" title="Toggle Cloud Cover" aria-label="Toggle cloud cover overlay">
                         ☁️
@@ -1000,6 +1005,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                         <label for="clouds-opacity" class="opacity-label">Clouds</label>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
             
             <!-- Flight Category Legend -->
@@ -1182,6 +1188,10 @@ $breadcrumbs = generateBreadcrumbSchema([
     (function() {
         'use strict';
         
+        // Configuration from PHP
+        var openWeatherMapApiKey = <?= json_encode($openWeatherMapApiKey) ?>;
+        var hasCloudLayer = <?= json_encode($hasCloudLayer) ?>;
+        
         // Airport data from PHP
         var airports = <?= $airportsJson ?>;
         
@@ -1234,20 +1244,29 @@ $breadcrumbs = generateBreadcrumbSchema([
                         // Get most recent radar frame
                         radarTimestamp = data.radar.past[data.radar.past.length - 1].time;
                         
-                        // RainViewer tile URL format
-                        // size/smoothing_quality/color_scheme
-                        var radarUrl = 'https://tilecache.rainviewer.com/v2/radar/' + radarTimestamp + '/256/{z}/{x}/{y}/6/1_1.png';
+                        // RainViewer tile URL through our proxy
+                        // This allows server-side caching and usage metrics
+                        var radarUrl = '/api/map-tiles.php?layer=rainviewer&timestamp=' + radarTimestamp + '&z={z}&x={x}&y={y}';
                         
                         radarLayer = L.tileLayer(radarUrl, {
                             opacity: 0.7,
                             attribution: 'Radar © <a href="https://www.rainviewer.com">RainViewer</a>',
                             zIndex: 500,
-                            maxZoom: 19
+                            maxZoom: 19,
+                            minZoom: 3,
+                            updateWhenIdle: true,
+                            updateWhenZooming: false,
+                            keepBuffer: 2
                         });
                         
                         radarLayer.addTo(map);
                         radarAvailable = true;
                         console.log('Radar layer added with timestamp:', radarTimestamp);
+                        
+                        // Log tile errors
+                        radarLayer.on('tileerror', function(error) {
+                            console.error('Radar tile error:', error);
+                        });
                     } else {
                         console.warn('No radar data available in API response');
                         disableRadarControls();
@@ -1287,15 +1306,49 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         function addCloudsLayer() {
+            // Only add cloud layer if API key is configured
+            if (!hasCloudLayer || !openWeatherMapApiKey) {
+                console.warn('Cloud layer not available: API key not configured');
+                return;
+            }
+            
             // OpenWeatherMap Clouds layer
-            // API key not required for tile access (free tier)
-            var cloudsUrl = 'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02';
+            // Note: Server-side caching via proxy reduces API calls dramatically.
+            // Tiles are cached for 1 hour on server, then browser caches additionally.
+            // Free tier: 60 calls/min, 1M/month. Server cache reduces this to ~100 calls/day typically.
+            var cloudsUrl = '/api/map-tiles.php?layer=clouds_new&z={z}&x={x}&y={y}';
             
             cloudsLayer = L.tileLayer(cloudsUrl, {
                 opacity: 0.6,
                 attribution: 'Clouds © <a href="https://openweathermap.org">OpenWeatherMap</a>',
                 zIndex: 400,
-                maxZoom: 19
+                maxZoom: 12, // Limit max zoom for cloud layer (aviation planning doesn't need super close zoom)
+                minZoom: 3,  // Don't load cloud tiles at very far zoom levels
+                updateWhenIdle: true, // Only request tiles after user stops panning/zooming
+                updateWhenZooming: false, // Don't update tiles during zoom animation
+                keepBuffer: 2 // Keep more tiles in memory to reduce re-fetching
+            });
+            
+            // Add error handler for rate limiting (HTTP 429)
+            cloudsLayer.on('tileerror', function(error) {
+                // Suppress 429 errors in console (rate limit - tiles will retry)
+                // Suppress 401 errors (API key issues are visible to admin, not user)
+                // Log other errors for debugging
+                if (error.tile && error.tile.src) {
+                    fetch(error.tile.src, { method: 'HEAD' })
+                        .then(function(response) {
+                            if (response.status === 429) {
+                                console.warn('OpenWeatherMap rate limit reached (tiles will retry)');
+                            } else if (response.status === 401) {
+                                console.error('OpenWeatherMap API key invalid or expired');
+                            } else if (response.status !== 200) {
+                                console.error('Cloud tile error:', response.status);
+                            }
+                        })
+                        .catch(function() {
+                            // Network error, ignore (tile will retry)
+                        });
+                }
             });
             
             cloudsLayer.addTo(map);
@@ -1546,11 +1599,14 @@ $breadcrumbs = generateBreadcrumbSchema([
             radarBtn.classList.remove('active');
         }
         
-        if (cloudsEnabled) {
-            cloudsBtn.classList.add('active');
-            addCloudsLayer();
-        } else {
-            cloudsBtn.classList.remove('active');
+        // Only initialize cloud layer if it's available
+        if (hasCloudLayer && cloudsBtn) {
+            if (cloudsEnabled) {
+                cloudsBtn.classList.add('active');
+                addCloudsLayer();
+            } else {
+                cloudsBtn.classList.remove('active');
+            }
         }
         
         radarBtn.addEventListener('click', function() {
@@ -1573,20 +1629,23 @@ $breadcrumbs = generateBreadcrumbSchema([
             localStorage.setItem('radarEnabled', radarEnabled);
         });
         
-        cloudsBtn.addEventListener('click', function() {
-            cloudsEnabled = !cloudsEnabled;
-            
-            if (cloudsEnabled) {
-                cloudsBtn.classList.add('active');
-                addCloudsLayer();
-            } else {
-                cloudsBtn.classList.remove('active');
-                removeCloudsLayer();
-            }
-            
-            // Save preference
-            localStorage.setItem('cloudsEnabled', cloudsEnabled);
-        });
+        // Only add cloud button listener if cloud layer is available
+        if (hasCloudLayer && cloudsBtn) {
+            cloudsBtn.addEventListener('click', function() {
+                cloudsEnabled = !cloudsEnabled;
+                
+                if (cloudsEnabled) {
+                    cloudsBtn.classList.add('active');
+                    addCloudsLayer();
+                } else {
+                    cloudsBtn.classList.remove('active');
+                    removeCloudsLayer();
+                }
+                
+                // Save preference
+                localStorage.setItem('cloudsEnabled', cloudsEnabled);
+            });
+        }
         
         // Precipitation opacity slider
         var radarOpacitySlider = document.getElementById('radar-opacity');
@@ -1596,13 +1655,17 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
         });
         
-        // Cloud cover opacity slider
-        var cloudsOpacitySlider = document.getElementById('clouds-opacity');
-        cloudsOpacitySlider.addEventListener('input', function() {
-            if (cloudsLayer) {
-                cloudsLayer.setOpacity(this.value / 100);
+        // Cloud cover opacity slider (only if cloud layer is available)
+        if (hasCloudLayer) {
+            var cloudsOpacitySlider = document.getElementById('clouds-opacity');
+            if (cloudsOpacitySlider) {
+                cloudsOpacitySlider.addEventListener('input', function() {
+                    if (cloudsLayer) {
+                        cloudsLayer.setOpacity(this.value / 100);
+                    }
+                });
             }
-        });
+        }
         
         // ========================================================================
         // FEATURE: Flight Category Legend Toggle

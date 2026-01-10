@@ -47,6 +47,10 @@
     "notam_api_client_id": "nMrmYk4UzonK4Ny1mGNGBpecTM4hodoGgyEZzsk3dYdaHAq8",
     "notam_api_client_secret": "p3rJGiTJgsOTWn8gMqmdhu7F1hqPPebakpAYhWTT1gNwKK2TOQuQlU1Sv66NFxk8",
     "notam_api_base_url": "https://api-staging.cgifederal-aim.com",
+    
+    "_comment_openweathermap": "OpenWeatherMap API key for cloud cover tiles on airports map. Get free key at: https://home.openweathermap.org/api_keys",
+    "openweathermap_api_key": "",
+    
     "default_preferences": {
       "time_format": "12hr",
       "temp_unit": "F",

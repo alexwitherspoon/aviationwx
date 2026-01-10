@@ -77,8 +77,16 @@ class ExternalApiDependenciesTest extends TestCase
             $this->markTestSkipped('cURL not available');
         }
         
+        // Load config to get API key
+        $config = loadConfig();
+        $apiKey = $config['config']['openweathermap_api_key'] ?? '';
+        
+        if (empty($apiKey)) {
+            $this->markTestSkipped('OpenWeatherMap API key not configured in airports.json');
+        }
+        
         // Test a sample tile (zoom 0, x 0, y 0 - world view)
-        $url = 'https://tile.openweathermap.org/map/clouds_new/0/0/0.png?appid=439d4b804bc8187953eb36d2a8c26a02';
+        $url = 'https://tile.openweathermap.org/map/clouds_new/0/0/0.png?appid=' . $apiKey;
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);

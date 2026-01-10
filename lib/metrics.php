@@ -10,6 +10,7 @@
  * - Weather API requests per airport
  * - Webcam serves by format (jpg, webp)
  * - Webcam serves by size (thumb, small, medium, large, primary, full)
+ * - Map tile serves by source (openweathermap, rainviewer)
  * - Cache hit/miss rates
  * - Browser format support
  * 
@@ -231,6 +232,22 @@ function metrics_track_cache(bool $hit): void {
     }
 }
 
+/**
+ * Track map tile serve
+ * 
+ * @param string $source Tile source ('openweathermap' or 'rainviewer')
+ * @return void
+ */
+function metrics_track_tile_serve(string $source): void {
+    $source = strtolower($source);
+    
+    // Track per-source
+    metrics_increment("tiles_{$source}_served");
+    
+    // Track global total
+    metrics_increment('global_tiles_served');
+}
+
 // =============================================================================
 // FLUSH FUNCTIONS
 // =============================================================================
@@ -316,6 +333,8 @@ function metrics_flush(): bool {
                 'weather_requests' => 0,
                 'webcam_requests' => 0,
                 'webcam_serves' => 0,
+                'tiles_served' => 0,
+                'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
                 'format_served' => ['jpg' => 0, 'webp' => 0],
                 'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
                 'browser_support' => ['webp' => 0, 'jpg_only' => 0],
@@ -327,6 +346,14 @@ function metrics_flush(): bool {
     // Ensure webcam_requests field exists for older data structures
     if (!isset($hourData['global']['webcam_requests'])) {
         $hourData['global']['webcam_requests'] = 0;
+    }
+    
+    // Ensure tile tracking fields exist for older data structures
+    if (!isset($hourData['global']['tiles_served'])) {
+        $hourData['global']['tiles_served'] = 0;
+    }
+    if (!isset($hourData['global']['tiles_by_source'])) {
+        $hourData['global']['tiles_by_source'] = ['openweathermap' => 0, 'rainviewer' => 0];
     }
     
     // Merge counters into hourly data
@@ -410,6 +437,14 @@ function metrics_flush(): bool {
             $hourData['global']['webcam_requests'] += $value;
         } elseif ($key === 'global_webcam_serves') {
             $hourData['global']['webcam_serves'] += $value;
+        } elseif ($key === 'global_tiles_served') {
+            $hourData['global']['tiles_served'] += $value;
+        } elseif (preg_match('/^tiles_(openweathermap|rainviewer)_served$/', $key, $m)) {
+            $source = $m[1];
+            if (!isset($hourData['global']['tiles_by_source'][$source])) {
+                $hourData['global']['tiles_by_source'][$source] = 0;
+            }
+            $hourData['global']['tiles_by_source'][$source] += $value;
         } elseif ($key === 'browser_webp_support') {
             $hourData['global']['browser_support']['webp'] += $value;
         } elseif ($key === 'browser_jpg_only') {
@@ -516,6 +551,8 @@ function metrics_aggregate_daily(string $dateId): bool {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
+            'tiles_served' => 0,
+            'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
             'format_served' => ['jpg' => 0, 'webp' => 0],
             'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
             'browser_support' => ['webp' => 0, 'jpg_only' => 0],
@@ -577,7 +614,14 @@ function metrics_aggregate_daily(string $dateId): bool {
         $dailyData['global']['page_views'] += $global['page_views'] ?? 0;
         $dailyData['global']['weather_requests'] += $global['weather_requests'] ?? 0;
         $dailyData['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
+        $dailyData['global']['tiles_served'] += $global['tiles_served'] ?? 0;
         
+        foreach ($global['tiles_by_source'] ?? [] as $source => $count) {
+            if (!isset($dailyData['global']['tiles_by_source'][$source])) {
+                $dailyData['global']['tiles_by_source'][$source] = 0;
+            }
+            $dailyData['global']['tiles_by_source'][$source] += $count;
+        }
         foreach ($global['format_served'] ?? [] as $fmt => $count) {
             $dailyData['global']['format_served'][$fmt] += $count;
         }
@@ -635,6 +679,8 @@ function metrics_aggregate_weekly(string $weekId): bool {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
+            'tiles_served' => 0,
+            'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
             'format_served' => ['jpg' => 0, 'webp' => 0],
             'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
             'browser_support' => ['webp' => 0, 'jpg_only' => 0],
@@ -697,7 +743,14 @@ function metrics_aggregate_weekly(string $weekId): bool {
         $weeklyData['global']['page_views'] += $global['page_views'] ?? 0;
         $weeklyData['global']['weather_requests'] += $global['weather_requests'] ?? 0;
         $weeklyData['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
+        $weeklyData['global']['tiles_served'] += $global['tiles_served'] ?? 0;
         
+        foreach ($global['tiles_by_source'] ?? [] as $source => $count) {
+            if (!isset($weeklyData['global']['tiles_by_source'][$source])) {
+                $weeklyData['global']['tiles_by_source'][$source] = 0;
+            }
+            $weeklyData['global']['tiles_by_source'][$source] += $count;
+        }
         foreach ($global['format_served'] ?? [] as $fmt => $count) {
             $weeklyData['global']['format_served'][$fmt] += $count;
         }
@@ -750,6 +803,8 @@ function metrics_get_rolling(int $days = 7): array {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
+            'tiles_served' => 0,
+            'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
             'format_served' => ['jpg' => 0, 'webp' => 0],
             'size_served' => [], // Dynamic: height-based variants like '720', '360', 'original'
             'browser_support' => ['webp' => 0, 'jpg_only' => 0],
@@ -814,7 +869,14 @@ function metrics_get_rolling(int $days = 7): array {
         $result['global']['page_views'] += $global['page_views'] ?? 0;
         $result['global']['weather_requests'] += $global['weather_requests'] ?? 0;
         $result['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
+        $result['global']['tiles_served'] += $global['tiles_served'] ?? 0;
         
+        foreach ($global['tiles_by_source'] ?? [] as $source => $count) {
+            if (!isset($result['global']['tiles_by_source'][$source])) {
+                $result['global']['tiles_by_source'][$source] = 0;
+            }
+            $result['global']['tiles_by_source'][$source] += $count;
+        }
         foreach ($global['format_served'] ?? [] as $fmt => $count) {
             if (!isset($result['global']['format_served'][$fmt])) {
                 $result['global']['format_served'][$fmt] = 0;
@@ -889,7 +951,14 @@ function metrics_get_rolling(int $days = 7): array {
         $result['global']['page_views'] += $global['page_views'] ?? 0;
         $result['global']['weather_requests'] += $global['weather_requests'] ?? 0;
         $result['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
+        $result['global']['tiles_served'] += $global['tiles_served'] ?? 0;
         
+        foreach ($global['tiles_by_source'] ?? [] as $source => $count) {
+            if (!isset($result['global']['tiles_by_source'][$source])) {
+                $result['global']['tiles_by_source'][$source] = 0;
+            }
+            $result['global']['tiles_by_source'][$source] += $count;
+        }
         foreach ($global['format_served'] ?? [] as $fmt => $count) {
             $result['global']['format_served'][$fmt] += $count;
         }
@@ -1273,6 +1342,12 @@ function metrics_prometheus_export(): array {
     $lines[] = sprintf('aviationwx_page_views_total %d', $rolling['global']['page_views']);
     $lines[] = sprintf('aviationwx_weather_requests_total %d', $rolling['global']['weather_requests']);
     $lines[] = sprintf('aviationwx_webcam_serves_total %d', $rolling['global']['webcam_serves']);
+    
+    // Map tile metrics
+    $lines[] = sprintf('aviationwx_map_tiles_served_total %d', $rolling['global']['tiles_served'] ?? 0);
+    foreach ($rolling['global']['tiles_by_source'] ?? [] as $source => $count) {
+        $lines[] = sprintf('aviationwx_map_tiles_served_by_source_total{source="%s"} %d', $source, $count);
+    }
     
     return $lines;
 }

@@ -235,6 +235,16 @@ cleanupFilesByPattern(
     $stats, $dryRun, $verbose
 );
 
+// Map tiles (cached for 15min-1hr, clean up after 7 days)
+// Structure: cache/map_tiles/{layer}/{z}_{x}_{y}.png
+// Includes both OpenWeatherMap and RainViewer tiles
+cleanupFilesByPattern(
+    CACHE_MAP_TILES_DIR . '/*/*.png',
+    604800, // 7 days
+    'Map tiles (OpenWeatherMap + RainViewer cache)',
+    $stats, $dryRun, $verbose
+);
+
 // Clean stale entries in peak_gusts.json and temp_extremes.json
 cleanupDailyTrackingEntries(
     CACHE_PEAK_GUSTS_FILE,
@@ -332,6 +342,7 @@ cleanupEmptyDirectories(CACHE_WEATHER_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories(CACHE_WEATHER_HISTORY_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/notam', $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/rate_limits', $stats, $dryRun, $verbose);
+cleanupEmptyDirectories($cacheDir . '/map_tiles', $stats, $dryRun, $verbose);
 
 // ============================================================================
 // SUMMARY

@@ -30,6 +30,8 @@ All configuration lives in a single `airports.json` file with two sections:
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
 | `notam_api_client_secret` | — | NOTAM API client secret |
+| **OpenWeatherMap Integration** |||
+| `openweathermap_api_key` | — | API key for cloud layer tiles (optional, [free at openweathermap.org](https://home.openweathermap.org/api_keys)) |
 | **Cloudflare Analytics** |||
 | `cloudflare.api_token` | — | Cloudflare API token (Analytics:Read) |
 | `cloudflare.zone_id` | — | Cloudflare Zone ID |
@@ -691,6 +693,153 @@ Configure default units for the airport page toggle buttons. User preferences (s
 4. **Built-in** — US aviation standards (12hr, °F, ft, inHg, kts)
 
 Only include preferences you want to change from defaults. Users who have previously set a preference will keep their choice.
+
+---
+
+## Weather Overlays (Airport Map)
+
+The airport network map at https://airports.aviationwx.org/ can display weather overlays from two sources:
+1. **RainViewer** - Precipitation radar (no API key required)
+2. **OpenWeatherMap** - Cloud cover, temperature, wind, pressure (requires free API key)
+
+Both services are proxied through `/api/map-tiles.php` for server-side caching and usage metrics.
+
+---
+
+### RainViewer Precipitation Radar
+
+**Always available** - No configuration required. Displays real-time precipitation radar overlay.
+
+- **Source**: [RainViewer](https://www.rainviewer.com/)
+- **Data**: Precipitation intensity (rain/snow)
+- **Update frequency**: Every 10 minutes
+- **Cache TTL**: 15 minutes (server-side)
+- **API key**: Not required
+
+The precipitation radar layer is always enabled and accessible through the map controls (☔).
+
+---
+
+### OpenWeatherMap Weather Layers
+
+**Optional** - Requires a free API key. When configured, enables cloud cover and other weather overlays.
+
+#### Available Weather Layers
+
+When configured, the following layers are available:
+- **Cloud Cover** (`clouds_new`) - Cloud coverage overlay (exposed in UI)
+- **Precipitation** (`precipitation_new`) - Rain/snow intensity  
+- **Temperature** (`temp_new`) - Temperature gradient map
+- **Wind Speed** (`wind_new`) - Wind speed visualization
+- **Pressure** (`pressure_new`) - Atmospheric pressure
+
+Currently, only the cloud layer is exposed in the UI. Additional layers can be added to the map controls in `pages/airports.php` if desired.
+
+#### Getting an API Key
+
+1. Sign up for a free account at [OpenWeatherMap](https://home.openweathermap.org/users/sign_up)
+2. Navigate to [API Keys](https://home.openweathermap.org/api_keys)
+3. Generate a new API key
+4. Wait 10-20 minutes for the key to activate (standard OpenWeatherMap activation time)
+
+#### Configuration
+
+Add your API key to the global `config` section in `airports.json`:
+
+```json
+{
+  "config": {
+    "openweathermap_api_key": "your_api_key_here"
+  }
+}
+```
+
+#### Behavior
+
+- **When configured**: Cloud layer toggle (☁️) appears in the map controls
+- **When not configured**: Cloud layer toggle is hidden (precipitation radar still works)
+- Free tier includes 60 calls/minute, 1,000,000 calls/month (sufficient for most deployments)
+
+---
+
+### Tile Proxy and Caching
+
+All weather tiles (RainViewer and OpenWeatherMap) are proxied through `/api/map-tiles.php` for:
+- **Server-side caching** - Reduces external API calls
+- **Usage metrics** - Track tile requests for monitoring
+- **Consistent CORS** - Unified cross-origin handling
+- **Rate limiting** - Abuse protection
+
+#### Multi-Layer Caching Architecture
+
+**Caching layers (from fastest to slowest):**
+1. **Browser cache** - Tiles cached in user's browser (session-based)
+2. **Nginx proxy cache** - Shared cache at reverse proxy level
+   - OpenWeatherMap: 1 hour TTL
+   - RainViewer: 15 minutes TTL (radar updates frequently)
+3. **PHP file cache** - Server-side cache at application level
+   - OpenWeatherMap: 1 hour TTL
+   - RainViewer: 15 minutes TTL
+4. **External API** - Only hit when caches miss
+
+**How this works in practice:**
+- First user viewing a tile: Hits external API (counts against rate limit if applicable)
+- Same user viewing same tile again: Browser cache (0 API calls)
+- Different user viewing same tile (within TTL): Nginx cache (0 API calls)
+- All users share the same server-side caches
+
+**Optimization settings:**
+- Tiles only load between zoom levels 3-12 (aviation planning range)
+- Tiles only refresh when user stops panning (not during drag)
+- Additional tiles kept in memory to reduce re-fetching
+- Cache headers include `stale-while-revalidate` for resilience
+
+#### Estimated Usage (OpenWeatherMap)
+
+With server caching:
+- First deployment day: ~500-2,000 tiles fetched (filling cache)
+- Subsequent days: ~50-200 tiles/day (cache refreshes)
+- Per user: Typically 0-5 API calls (most tiles already cached)
+- High traffic (100 users/day): Still under 1,000 API calls/day
+- **Total monthly: ~10,000-50,000 calls** (well under 1M limit)
+
+**Rate limit handling:**
+If you exceed 60 calls/minute (very rare with caching), OpenWeatherMap returns HTTP 429. The proxy will serve stale cached tiles as fallback.
+
+**Monitoring your usage:**
+- Check your API usage at: https://home.openweathermap.org/statistics
+- If you consistently hit rate limits, consider starting with cloud layer disabled by default
+
+---
+
+### Abuse Protection
+
+The tile proxy includes **permissive rate limiting** (300 requests/minute per IP):
+- Legitimate users won't hit this limit (normal usage: ~10-50 tiles/session)
+- Blocks obvious abuse (bots, scrapers, automated tools)
+- Returns HTTP 429 with `Retry-After: 60` header when exceeded
+- Rate limit window resets every minute
+
+**Why permissive?**
+- Panning the map quickly can load 20-50 tiles in seconds
+- Multiple browser tabs or family members sharing IP need headroom
+- Focus is on abuse prevention, not usage restriction
+
+**Monitoring:**
+Rate limit violations are logged to help identify abuse patterns:
+```
+aviationwx_log('warning', 'map tiles rate limit exceeded', ...)
+```
+
+---
+
+### Testing
+
+After adding your API key:
+1. Visit https://airports.aviationwx.org/
+2. Look for the cloud toggle button (☁️) in the map controls
+3. Click to enable/disable the cloud overlay
+4. Adjust opacity using the slider
 
 ---
 

@@ -1669,6 +1669,9 @@ require_once __DIR__ . '/../lib/metrics.php';
 $usageMetrics = metrics_get_rolling(METRICS_STATUS_PAGE_DAYS);
 $multiPeriodMetrics = metrics_get_multi_period();
 
+// Get 24h metrics for hero display
+$rolling24h = metrics_get_rolling(1); // Last 24 hours
+
 // Get system health (cached for 30s)
 $systemHealth = getCachedStatusData(function() {
     return checkSystemHealth();
@@ -2368,6 +2371,11 @@ if (php_sapi_name() === 'cli') {
                     <div class="cf-metric-subtext">Avg (<?= $pageRenderMetrics['sample_count'] ?> samples)</div>
                 </div>
                 <?php endif; ?>
+                <div class="cf-metric" title="OpenWeatherMap: <?= number_format($rolling24h['global']['tiles_by_source']['openweathermap'] ?? 0) ?> · RainViewer: <?= number_format($rolling24h['global']['tiles_by_source']['rainviewer'] ?? 0) ?>">
+                    <span class="cf-metric-value"><?= number_format($rolling24h['global']['tiles_served'] ?? 0) ?></span>
+                    <span class="cf-metric-label">Map Tiles Served</span>
+                    <div class="cf-metric-subtext">Last 24 hours</div>
+                </div>
             </div>
             <?php endif; ?>
         </div>
