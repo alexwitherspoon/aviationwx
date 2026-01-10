@@ -175,6 +175,9 @@ function fetchAllSources(array $sources, string $airportId): array {
             continue;
         }
         
+        // Get headers for this source
+        $headers = buildSourceHeaders($source);
+        
         // Create curl handle
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -185,6 +188,7 @@ function fetchAllSources(array $sources, string $airportId): array {
             CURLOPT_FAILONERROR => false,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
+            CURLOPT_HTTPHEADER => $headers,
         ]);
         
         curl_multi_add_handle($mh, $ch);
@@ -252,6 +256,22 @@ function buildSourceUrl(array $source): ?string {
         'pwsweather' => buildPWSWeatherUrl($source),
         'metar' => MetarAdapter::buildUrl($source['station_id'] ?? ''),
         default => null,
+    };
+}
+
+/**
+ * Build HTTP headers for a source
+ * 
+ * @param array $source Source configuration
+ * @return array HTTP headers array
+ */
+function buildSourceHeaders(array $source): array {
+    $type = $source['type'] ?? null;
+    
+    return match($type) {
+        'weatherlink_v2' => WeatherLinkV2Adapter::getHeaders($source),
+        'weatherlink_v1' => WeatherLinkV1Adapter::getHeaders($source),
+        default => ['Accept: application/json'],
     };
 }
 
