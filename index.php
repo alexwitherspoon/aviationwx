@@ -288,6 +288,13 @@ if ($isAirportRequest && !empty($rawAirportIdentifier)) {
         
         // Include the airport template
         include 'pages/airport.php';
+        
+        // Track airport dashboard render performance (critical for pilots)
+        if (isset($perfPageStart)) {
+            $renderTimeMs = (microtime(true) - $perfPageStart) * 1000;
+            trackPageRenderTime($renderTimeMs, 'airport', $airportId);
+        }
+        
         exit;
     } else {
         // Airport not found - show airport-specific 404
@@ -310,3 +317,10 @@ if ($hasPathComponent) {
 // No airport and no path - show homepage
 include 'pages/homepage.php';
 
+// Track page render performance
+if (isset($perfPageStart)) {
+    $renderTimeMs = (microtime(true) - $perfPageStart) * 1000;
+    $pageName = isset($airportId) ? 'airport' : 'homepage';
+    $path = $_SERVER['REQUEST_URI'] ?? '/';
+    trackPageRenderTime($renderTimeMs, $pageName, $path);
+}

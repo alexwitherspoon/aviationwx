@@ -1676,6 +1676,11 @@ $systemHealth = getCachedStatusData(function() {
 // Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
 $cfAnalytics = getCloudflareAnalyticsForStatus();
 
+// Get local performance metrics
+require_once __DIR__ . '/../lib/performance-metrics.php';
+$imageProcessingMetrics = getImageProcessingMetrics();
+$pageRenderMetrics = getPageRenderMetrics();
+
 // Get node performance metrics (cached for 30s)
 $nodePerformance = getCachedStatusData(function() {
     return getNodePerformance();
@@ -2342,6 +2347,25 @@ if (php_sapi_name() === 'cli') {
                     <span class="cf-metric-label">Requests/Visitor</span>
                     <div class="cf-metric-subtext">Engagement</div>
                 </div>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['threats_blocked_today']) ?></span>
+                    <span class="cf-metric-label">Threats Blocked</span>
+                    <div class="cf-metric-subtext">Last 24 hours</div>
+                </div>
+                <?php if (!empty($imageProcessingMetrics) && $imageProcessingMetrics['sample_count'] > 0): ?>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($imageProcessingMetrics['avg_ms'], 0) ?>ms</span>
+                    <span class="cf-metric-label">Image Processing</span>
+                    <div class="cf-metric-subtext">Avg (<?= $imageProcessingMetrics['sample_count'] ?> samples)</div>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($pageRenderMetrics) && $pageRenderMetrics['sample_count'] > 0): ?>
+                <div class="cf-metric">
+                    <span class="cf-metric-value"><?= number_format($pageRenderMetrics['avg_ms'], 0) ?>ms</span>
+                    <span class="cf-metric-label">Dashboard Load</span>
+                    <div class="cf-metric-subtext">Avg (<?= $pageRenderMetrics['sample_count'] ?> samples)</div>
+                </div>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
         </div>
