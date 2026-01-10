@@ -84,7 +84,7 @@
     max-height: 400px;
     overflow-y: auto;
     display: none;
-    z-index: 1000;
+    z-index: 10000;
 }
 
 .site-nav-search-dropdown.show {
@@ -189,7 +189,7 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     min-width: 220px;
     display: none;
-    z-index: 1000;
+    z-index: 10000;
     overflow: hidden;
 }
 
