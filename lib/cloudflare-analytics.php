@@ -160,6 +160,7 @@ query GetZoneAnalytics($zoneTag: string, $since: Time!, $until: Time!) {
         sum {
           requests
           bytes
+          threats
         }
         uniq {
           uniques
@@ -221,6 +222,7 @@ GRAPHQL;
     // Aggregate hourly data to get 24-hour totals
     $totalRequests = 0;
     $totalBytes = 0;
+    $totalThreats = 0;
     
     // Track unique visitors across all hours
     // Note: Cloudflare's zone-level GraphQL API doesn't provide true 24h unique
@@ -239,6 +241,7 @@ GRAPHQL;
     foreach ($hourlyGroups as $hour) {
         $totalRequests += $hour['sum']['requests'] ?? 0;
         $totalBytes += $hour['sum']['bytes'] ?? 0;
+        $totalThreats += $hour['sum']['threats'] ?? 0;
         $totalUniques += $hour['uniq']['uniques'] ?? 0;
     }
     
@@ -246,6 +249,7 @@ GRAPHQL;
         'unique_visitors_today' => $totalUniques,
         'requests_today' => $totalRequests,
         'bandwidth_today' => $totalBytes,
+        'threats_blocked_today' => $totalThreats,
         'cached_at' => time()
     ];
 }
@@ -306,6 +310,7 @@ function getCloudflareAnalyticsForStatus(): array {
         'requests_today' => $requests,
         'bandwidth_today' => $bandwidth,
         'bandwidth_formatted' => $bandwidthFormatted,
+        'threats_blocked_today' => $analytics['threats_blocked_today'] ?? 0,
         'requests_per_visitor' => $requestsPerVisitor,
         'cache_age_seconds' => $cacheAge,
         'cached_at' => $analytics['cached_at'] ?? null

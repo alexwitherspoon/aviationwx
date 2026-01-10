@@ -4,8 +4,12 @@
  * Routes requests based on airport parameter or subdomain to airport-specific pages
  */
 
+// Start performance timing
+$perfPageStart = microtime(true);
+
 require_once __DIR__ . '/lib/config.php';
 require_once __DIR__ . '/lib/metrics.php';
+require_once __DIR__ . '/lib/performance-metrics.php';
 
 // Check if this is a status page request
 $requestUri = $_SERVER['REQUEST_URI'] ?? '/';

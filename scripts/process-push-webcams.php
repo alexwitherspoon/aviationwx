@@ -729,7 +729,13 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
     }
     
     // Generate variants from original
+    require_once __DIR__ . '/../lib/performance-metrics.php';
+    $perfStart = perfStart();
     $variantResult = generateVariantsFromOriginal($stagingFile, $airportId, $camIndex, $timestamp);
+    $processingTimeMs = perfEnd($perfStart);
+    
+    // Track image processing performance
+    trackImageProcessingTime($processingTimeMs, $airportId, $camIndex);
     
     // Cleanup staging file (original is now preserved)
     @unlink($stagingFile);
