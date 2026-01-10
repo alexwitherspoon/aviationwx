@@ -1675,6 +1675,7 @@ $systemHealth = getCachedStatusData(function() {
 
 // Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
 $cfAnalytics = getCloudflareAnalyticsForStatus();
+$cloudflareConfigured = !empty($cfAnalytics); // Show all CF metrics if configured
 
 // Get local performance metrics
 require_once __DIR__ . '/../lib/performance-metrics.php';
@@ -2324,31 +2325,31 @@ if (php_sapi_name() === 'cli') {
             <h1>AviationWX Status</h1>
             <div class="subtitle">Real-time status of AviationWX.org services</div>
             
-            <?php if (!empty($cfAnalytics)): ?>
+            <?php if ($cloudflareConfigured): ?>
             <!-- Cloudflare Analytics (Last 24 Hours) -->
             <div class="cloudflare-metrics">
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= number_format($cfAnalytics['unique_visitors_today']) ?></span>
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['unique_visitors_today'] ?? 0) ?></span>
                     <span class="cf-metric-label">Unique Visitors</span>
                     <div class="cf-metric-subtext">Last 24 hours</div>
                 </div>
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= number_format($cfAnalytics['requests_today']) ?></span>
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['requests_today'] ?? 0) ?></span>
                     <span class="cf-metric-label">Total Requests</span>
                     <div class="cf-metric-subtext">Last 24 hours</div>
                 </div>
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= $cfAnalytics['bandwidth_formatted'] ?></span>
+                    <span class="cf-metric-value"><?= $cfAnalytics['bandwidth_formatted'] ?? '0 B' ?></span>
                     <span class="cf-metric-label">Bandwidth</span>
                     <div class="cf-metric-subtext">Last 24 hours</div>
                 </div>
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= number_format($cfAnalytics['requests_per_visitor'], 1) ?></span>
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['requests_per_visitor'] ?? 0, 1) ?></span>
                     <span class="cf-metric-label">Requests/Visitor</span>
                     <div class="cf-metric-subtext">Engagement</div>
                 </div>
                 <div class="cf-metric">
-                    <span class="cf-metric-value"><?= number_format($cfAnalytics['threats_blocked_today']) ?></span>
+                    <span class="cf-metric-value"><?= number_format($cfAnalytics['threats_blocked_today'] ?? 0) ?></span>
                     <span class="cf-metric-label">Threats Blocked</span>
                     <div class="cf-metric-subtext">Last 24 hours</div>
                 </div>
