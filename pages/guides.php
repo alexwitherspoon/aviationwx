@@ -250,6 +250,10 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             height: fit-content;
             position: sticky;
             top: 2rem;
+            max-height: calc(100vh - 4rem);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
         
         .guides-sidebar h3 {
@@ -263,6 +267,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             list-style: none;
             padding: 0;
             margin: 0;
+            overflow-y: auto;
         }
         
         .guides-sidebar li {
@@ -292,6 +297,12 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
             margin-bottom: 1rem;
             padding-bottom: 1rem;
             border-bottom: 1px solid #ddd;
+            position: sticky;
+            top: -1.5rem; /* Stick to top of sidebar (accounting for padding) */
+            background: #f8f9fa;
+            z-index: 10;
+            margin: -1.5rem -1.5rem 1rem -1.5rem; /* Expand to full width */
+            padding: 1.5rem 1.5rem 1rem 1.5rem; /* Restore padding */
         }
         
         .guides-sidebar .back-link a {
@@ -673,6 +684,7 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
         
         body.dark-mode .guides-sidebar .back-link {
             border-bottom-color: #333;
+            background: #1e1e1e; /* Match sidebar background in dark mode */
         }
         
         body.dark-mode .guides-sidebar .back-link a {
@@ -782,13 +794,6 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     
     <main>
     <div class="container">
-        <div class="hero">
-            <h1><img src="<?= $baseUrl ?>/public/favicons/android-chrome-192x192.png" alt="AviationWX" style="vertical-align: middle; margin-right: 0.5rem; width: 76px; height: 76px; background: transparent;"> AviationWX Guides</h1>
-            <p style="font-size: 1.2rem; opacity: 0.95;">
-                Documentation and guides for using and contributing to AviationWX.org
-            </p>
-        </div>
-
         <?php if ($isIndex): ?>
             <!-- Index page - no sidebar -->
             <div class="guides-index">
