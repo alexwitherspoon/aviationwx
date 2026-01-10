@@ -179,7 +179,7 @@ default-src 'self';
 img-src 'self' data: blob: https:;
 script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com;
 style-src 'self' 'unsafe-inline';
-connect-src 'self' https://cloudflareinsights.com;
+connect-src 'self' https://cloudflareinsights.com https://api.rainviewer.com https://tilecache.rainviewer.com https://tile.openweathermap.org;
 worker-src 'self' blob:;
 frame-ancestors 'self';
 base-uri 'self';
@@ -195,6 +195,12 @@ The CSP explicitly allows:
 - ✅ **Cloudflare Web Analytics** (`static.cloudflareinsights.com`, `cloudflareinsights.com`)
 - ✅ **Cloudflare Email Obfuscation** (via `/cdn-cgi/` paths covered by `'self'`)
 - ✅ **Inline scripts** (via `'unsafe-inline'` - required for legacy code)
+
+### Weather Overlay Services
+
+The CSP allows connections to external weather overlay services:
+- ✅ **RainViewer API** (`api.rainviewer.com`, `tilecache.rainviewer.com`) - Precipitation radar
+- ✅ **OpenWeatherMap** (`tile.openweathermap.org`) - Cloud cover tiles
 
 ### CSP-Report-Only Warnings
 

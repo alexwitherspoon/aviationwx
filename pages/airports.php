@@ -1114,6 +1114,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         // Weather Radar Layer (RainViewer API)
         var radarLayer = null;
         var radarTimestamp = null;
+        var radarAvailable = true;
         
         // Cloud Cover Layer (OpenWeatherMap)
         var cloudsLayer = null;
@@ -1144,15 +1145,37 @@ $breadcrumbs = generateBreadcrumbSchema([
                         });
                         
                         radarLayer.addTo(map);
+                        radarAvailable = true;
                         console.log('Radar layer added with timestamp:', radarTimestamp);
                     } else {
                         console.warn('No radar data available in API response');
+                        disableRadarControls();
                     }
                 })
                 .catch(function(err) {
                     console.error('Failed to load radar data:', err);
-                    alert('Precipitation radar temporarily unavailable. Please try again later.');
+                    disableRadarControls();
                 });
+        }
+        
+        function disableRadarControls() {
+            radarAvailable = false;
+            var radarBtn = document.getElementById('radar-btn');
+            var radarOpacitySlider = document.getElementById('radar-opacity');
+            
+            if (radarBtn) {
+                radarBtn.classList.remove('active');
+                radarBtn.disabled = true;
+                radarBtn.style.opacity = '0.4';
+                radarBtn.style.cursor = 'not-allowed';
+                radarBtn.title = 'Precipitation radar temporarily unavailable';
+            }
+            
+            if (radarOpacitySlider) {
+                radarOpacitySlider.disabled = true;
+                radarOpacitySlider.style.opacity = '0.4';
+                radarOpacitySlider.style.cursor = 'not-allowed';
+            }
         }
         
         function removeRadarLayer() {
@@ -1376,6 +1399,11 @@ $breadcrumbs = generateBreadcrumbSchema([
         addCloudsLayer();
         
         radarBtn.addEventListener('click', function() {
+            // Don't allow toggling if radar is unavailable
+            if (!radarAvailable) {
+                return;
+            }
+            
             radarEnabled = !radarEnabled;
             
             if (radarEnabled) {
