@@ -60,6 +60,10 @@ $baseUrl = getBaseUrl();
             box-sizing: border-box;
         }
         
+        /* ============================================
+           LIGHT MODE (DEFAULT)
+           ============================================ */
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
@@ -68,37 +72,12 @@ $baseUrl = getBaseUrl();
             min-height: 100vh;
         }
         
-        /* Dark mode support */
-        @media (prefers-color-scheme: dark) {
-            body {
-                color: #e0e0e0;
-                background: #1a1a1a;
-            }
-        }
-        
-        body.dark-mode {
-            color: #e0e0e0;
-            background: #1a1a1a;
-        }
-        
         .header {
             background: linear-gradient(135deg, #f8f9fa 0%, #0066cc 100%);
             color: white;
             padding: 1.5rem 2rem;
             text-align: center;
             border-bottom: 1px solid #ddd;
-        }
-        
-        @media (prefers-color-scheme: dark) {
-            .header {
-                background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
-                border-bottom: 1px solid #333;
-            }
-        }
-        
-        body.dark-mode .header {
-            background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
-            border-bottom: 1px solid #333;
         }
         
         .header h1 {
@@ -574,320 +553,62 @@ $baseUrl = getBaseUrl();
             color: #0099ff;
         }
         
-        /* ============================================
-           LIGHT MODE OVERRIDES
-           ============================================ */
-        
-        .config-panel {
-            background: #ffffff;
-            border: 1px solid #ddd;
+        /* Force navigation to light mode on this dark-themed page */
+        .site-nav {
+            background: #f8f9fa !important;
+            border-bottom: 1px solid #e0e0e0 !important;
         }
         
-        .config-section h3 {
-            color: #0066cc;
-            border-bottom: 1px solid #ddd;
+        .site-nav-logo-text {
+            color: #333 !important;
         }
         
-        .form-group label {
-            color: #666;
+        .site-nav-search-input {
+            background: #ffffff !important;
+            color: #333 !important;
+            border-color: #ddd !important;
         }
         
-        .form-group input[type="text"],
-        .form-group select {
-            background: #ffffff;
-            color: #333;
-            border: 1px solid #ddd;
+        .site-nav-search-input::placeholder {
+            color: #999 !important;
         }
         
-        .form-group input[type="text"]:focus,
-        .form-group select:focus {
-            border-color: #0066cc;
+        .site-nav-link {
+            color: #333 !important;
         }
         
-        .radio-group label {
-            background: #f8f9fa;
-            border: 2px solid #ddd;
-            color: #333;
+        .site-nav-link:hover {
+            color: #0066cc !important;
         }
         
-        .radio-group input[type="radio"]:checked + span {
-            background: #0066cc;
-            border-color: #0066cc;
+        .site-nav-dropdown-menu {
+            background: #ffffff !important;
+            border-color: #ddd !important;
         }
         
-        .preview-panel {
-            background: #ffffff;
-            border: 1px solid #ddd;
+        .site-nav-dropdown-item {
+            color: #333 !important;
         }
         
-        .preview-header h2 {
-            color: #0066cc;
-            border-bottom: 1px solid #ddd;
+        .site-nav-dropdown-item:hover {
+            background: #f8f9fa !important;
         }
         
-        .preview-size {
-            color: #999;
+        .site-nav-hamburger {
+            color: #333 !important;
         }
         
-        .preview-container {
-            background: #f8f9fa;
+        .site-nav-mobile-menu {
+            background: #ffffff !important;
         }
         
-        .code-section {
-            background: #ffffff;
-            border: 1px solid #ddd;
+        .site-nav-mobile-item {
+            color: #333 !important;
+            border-bottom-color: #f0f0f0 !important;
         }
         
-        .code-section h3 {
-            color: #0066cc;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        .code-block {
-            background: #f8f9fa;
-            border: 1px solid #ddd;
-        }
-        
-        .code-block code {
-            color: #333;
-        }
-        
-        .copy-btn {
-            background: #0066cc;
-            color: white;
-        }
-        
-        .copy-btn:hover {
-            background: #0052a3;
-        }
-        
-        .footer {
-            color: #666;
-            border-top: 1px solid #ddd;
-        }
-        
-        .footer a {
-            color: #0066cc;
-        }
-        
-        .info-callout {
-            background: rgba(0, 102, 204, 0.1);
-            border: 1px solid rgba(0, 102, 204, 0.3);
-            color: #0066cc;
-        }
-        
-        .info-callout strong {
-            color: #0052a3;
-        }
-        
-        /* ============================================
-           DARK MODE OVERRIDES
-           ============================================ */
-        
-        @media (prefers-color-scheme: dark) {
-            .config-panel {
-                background: #242424;
-                border: 1px solid #333;
-            }
-            
-            .config-section h3 {
-                color: #0099ff;
-                border-bottom: 1px solid #333;
-            }
-            
-            .form-group label {
-                color: #aaa;
-            }
-            
-            .form-group input[type="text"],
-            .form-group select {
-                background: #1a1a1a;
-                color: #e0e0e0;
-                border: 1px solid #333;
-            }
-            
-            .form-group input[type="text"]:focus,
-            .form-group select:focus {
-                border-color: #0099ff;
-            }
-            
-            .radio-group label {
-                background: #1a1a1a;
-                border: 2px solid #333;
-                color: #e0e0e0;
-            }
-            
-            .radio-group input[type="radio"]:checked + span {
-                background: #0099ff;
-                border-color: #0099ff;
-            }
-            
-            .preview-panel {
-                background: #242424;
-                border: 1px solid #333;
-            }
-            
-            .preview-header h2 {
-                color: #0099ff;
-                border-bottom: 1px solid #333;
-            }
-            
-            .preview-size {
-                color: #666;
-            }
-            
-            .preview-container {
-                background: #1a1a1a;
-            }
-            
-            .code-section {
-                background: #242424;
-                border: 1px solid #333;
-            }
-            
-            .code-section h3 {
-                color: #0099ff;
-                border-bottom: 1px solid #333;
-            }
-            
-            .code-block {
-                background: #1a1a1a;
-                border: 1px solid #333;
-            }
-            
-            .code-block code {
-                color: #e0e0e0;
-            }
-            
-            .copy-btn {
-                background: #0099ff;
-                color: white;
-            }
-            
-            .copy-btn:hover {
-                background: #007acc;
-            }
-            
-            .footer {
-                color: #666;
-                border-top: 1px solid #333;
-            }
-            
-            .footer a {
-                color: #0099ff;
-            }
-            
-            .info-callout {
-                background: rgba(0, 102, 204, 0.15);
-                border: 1px solid rgba(0, 102, 204, 0.3);
-                color: #8cc4ff;
-            }
-            
-            .info-callout strong {
-                color: #0099ff;
-            }
-        }
-        
-        body.dark-mode .config-panel {
-            background: #242424;
-            border: 1px solid #333;
-        }
-        
-        body.dark-mode .config-section h3 {
-            color: #0099ff;
-            border-bottom: 1px solid #333;
-        }
-        
-        body.dark-mode .form-group label {
-            color: #aaa;
-        }
-        
-        body.dark-mode .form-group input[type="text"],
-        body.dark-mode .form-group select {
-            background: #1a1a1a;
-            color: #e0e0e0;
-            border: 1px solid #333;
-        }
-        
-        body.dark-mode .form-group input[type="text"]:focus,
-        body.dark-mode .form-group select:focus {
-            border-color: #0099ff;
-        }
-        
-        body.dark-mode .radio-group label {
-            background: #1a1a1a;
-            border: 2px solid #333;
-            color: #e0e0e0;
-        }
-        
-        body.dark-mode .radio-group input[type="radio"]:checked + span {
-            background: #0099ff;
-            border-color: #0099ff;
-        }
-        
-        body.dark-mode .preview-panel {
-            background: #242424;
-            border: 1px solid #333;
-        }
-        
-        body.dark-mode .preview-header h2 {
-            color: #0099ff;
-            border-bottom: 1px solid #333;
-        }
-        
-        body.dark-mode .preview-size {
-            color: #666;
-        }
-        
-        body.dark-mode .preview-container {
-            background: #1a1a1a;
-        }
-        
-        body.dark-mode .code-section {
-            background: #242424;
-            border: 1px solid #333;
-        }
-        
-        body.dark-mode .code-section h3 {
-            color: #0099ff;
-            border-bottom: 1px solid #333;
-        }
-        
-        body.dark-mode .code-block {
-            background: #1a1a1a;
-            border: 1px solid #333;
-        }
-        
-        body.dark-mode .code-block code {
-            color: #e0e0e0;
-        }
-        
-        body.dark-mode .copy-btn {
-            background: #0099ff;
-            color: white;
-        }
-        
-        body.dark-mode .copy-btn:hover {
-            background: #007acc;
-        }
-        
-        body.dark-mode .footer {
-            color: #666;
-            border-top: 1px solid #333;
-        }
-        
-        body.dark-mode .footer a {
-            color: #0099ff;
-        }
-        
-        body.dark-mode .info-callout {
-            background: rgba(0, 102, 204, 0.15);
-            border: 1px solid rgba(0, 102, 204, 0.3);
-            color: #8cc4ff;
-        }
-        
-        body.dark-mode .info-callout strong {
-            color: #0099ff;
+        .site-nav-mobile-item:hover {
+            background: #f8f9fa !important;
         }
     </style>
     <link rel="stylesheet" href="/public/css/navigation.css">

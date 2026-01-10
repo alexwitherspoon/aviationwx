@@ -168,72 +168,52 @@ class ExternalApiDependenciesTest extends TestCase
     }
     
     /**
-     * Test Leaflet.js CDN is accessible
+     * Test Leaflet.js local file exists
      */
-    public function testLeafletJsCdn_IsAccessible()
+    public function testLeafletJsLocal_Exists()
     {
-        if (isTestMode()) {
-            $this->markTestSkipped('Skipping external CDN test in test mode');
-        }
+        $path = __DIR__ . '/../../public/js/leaflet.js';
         
-        if (!function_exists('curl_init')) {
-            $this->markTestSkipped('cURL not available');
-        }
+        $this->assertFileExists(
+            $path,
+            'Leaflet.js should exist locally at public/js/leaflet.js'
+        );
         
-        $url = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_NOBODY, true); // HEAD request only
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        
-        $this->assertEquals(
-            200,
-            $httpCode,
-            "Leaflet.js CDN should return 200 OK (got: $httpCode, error: $error)"
+        $this->assertGreaterThan(
+            1000,
+            filesize($path),
+            'Leaflet.js should have substantial content'
         );
     }
     
     /**
-     * Test Leaflet MarkerCluster plugin CDN is accessible
+     * Test Leaflet MarkerCluster plugin local file exists
      */
-    public function testLeafletMarkerClusterCdn_IsAccessible()
+    public function testLeafletMarkerClusterLocal_Exists()
     {
-        if (isTestMode()) {
-            $this->markTestSkipped('Skipping external CDN test in test mode');
-        }
+        $jsPath = __DIR__ . '/../../public/js/leaflet.markercluster.js';
+        $cssPath1 = __DIR__ . '/../../public/css/MarkerCluster.css';
+        $cssPath2 = __DIR__ . '/../../public/css/MarkerCluster.Default.css';
         
-        if (!function_exists('curl_init')) {
-            $this->markTestSkipped('cURL not available');
-        }
+        $this->assertFileExists(
+            $jsPath,
+            'MarkerCluster JS should exist locally at public/js/leaflet.markercluster.js'
+        );
         
-        $url = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+        $this->assertFileExists(
+            $cssPath1,
+            'MarkerCluster CSS should exist locally at public/css/MarkerCluster.css'
+        );
         
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_NOBODY, true); // HEAD request only
+        $this->assertFileExists(
+            $cssPath2,
+            'MarkerCluster Default CSS should exist locally at public/css/MarkerCluster.Default.css'
+        );
         
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        
-        $this->assertEquals(
-            200,
-            $httpCode,
-            "Leaflet MarkerCluster CDN should return 200 OK (got: $httpCode, error: $error)"
+        $this->assertGreaterThan(
+            1000,
+            filesize($jsPath),
+            'MarkerCluster JS should have substantial content'
         );
     }
     

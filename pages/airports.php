@@ -160,8 +160,8 @@ $breadcrumbs = generateBreadcrumbSchema([
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="/public/css/leaflet.css">
     <!-- Leaflet MarkerCluster CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+    <link rel="stylesheet" href="/public/css/MarkerCluster.css">
+    <link rel="stylesheet" href="/public/css/MarkerCluster.Default.css">
     
     <link rel="stylesheet" href="/public/css/styles.css">
     <link rel="stylesheet" href="/public/css/navigation.css">
@@ -1075,7 +1075,7 @@ $breadcrumbs = generateBreadcrumbSchema([
     <!-- Leaflet JS -->
     <script src="/public/js/leaflet.js"></script>
     <!-- Leaflet MarkerCluster -->
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="/public/js/leaflet.markercluster.js"></script>
     
     <script>
     (function() {
