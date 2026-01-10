@@ -461,23 +461,23 @@ $baseUrl = getBaseUrl();
         }
         
         .embed-code-container {
-            background: #1a1a1a;
+            background: #f8f9fa;
             border-radius: 8px;
-            border: 1px solid #333;
+            border: 1px solid #ddd;
             overflow: hidden;
         }
         
         .embed-code-header {
-            background: #242424;
+            background: #e9ecef;
             padding: 0.75rem 1rem;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #ddd;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .embed-code-header span {
-            color: #888;
+            color: #666;
             font-size: 0.85rem;
         }
         
