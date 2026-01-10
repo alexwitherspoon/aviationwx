@@ -151,6 +151,62 @@ Your Self-Hosted Install          AviationWX.org Network
   - UPS recommended (prevent corruption during power loss)
   - Reliable internet connection
 
+**Option C: Raspberry Pi 5 (Supported, but with caveats)**
+
+The platform was designed to run on Raspberry Pi 5, making it a viable low-cost option:
+
+**Pros:**
+- **Low cost:** ~$80 for 8GB model + accessories
+- **Low power:** ~5-15W (vs 50-200W for servers)
+- **Quiet operation:** Fanless or minimal fan
+- **Compact:** Fits anywhere
+- **Good for:** Single airport, low-moderate traffic
+
+**Cons:**
+- **Limited resources:** 8GB RAM maximum
+- **SD card concerns:** Use high-quality SD or NVMe for reliability
+- **ARM architecture:** Pre-built Docker images work, but less tested
+- **Thermal throttling:** Can occur under heavy load (use case/heatsink)
+- **Not for high traffic:** 100-500 pilots/day max
+
+**Recommended Pi 5 specs:**
+- **Model:** Raspberry Pi 5 8GB (4GB insufficient for production)
+- **Storage:** NVMe SSD via M.2 HAT (preferred) OR high-endurance SD card
+- **Cooling:** Active cooling case or fan
+- **Power:** Official 27W USB-C power supply
+- **Ethernet:** Use wired connection (not Wi-Fi) for reliability
+
+**Setup notes:**
+```bash
+# Use Raspberry Pi OS (64-bit)
+# Docker installation works the same
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# May need to increase swap for image processing
+sudo dphys-swapfile swapoff
+sudo nano /etc/dphys-swapfile
+# Set CONF_SWAPSIZE=2048
+sudo dphys-swapfile setup
+sudo dphys-swapfile swapon
+```
+
+**When to use Pi 5:**
+- ✅ Single airport installation
+- ✅ Budget-conscious deployment
+- ✅ Low-moderate traffic (under 500 pilots/day)
+- ✅ Power efficiency matters (remote sites, solar)
+- ✅ Testing/development before committing to larger hardware
+
+**When NOT to use Pi 5:**
+- ❌ Multiple airports
+- ❌ High traffic expectations (1000+ pilots/day)
+- ❌ Storing extensive webcam history
+- ❌ Mission-critical with no redundancy
+- ❌ You need guaranteed performance under all conditions
+
+> **Bottom line:** Pi 5 works well for single-airport installations with reasonable traffic. Use quality storage, ensure good cooling, and monitor performance. For high-traffic or multi-airport deployments, use a VPS or dedicated server.
+
 ⚠️ **Security Note:** Running a public-facing server requires ongoing security:
 - Keep system updated (`unattended-upgrades` recommended)
 - Configure firewall (ufw or iptables)
@@ -802,6 +858,15 @@ Your local install continues working normally.
   - Hetzner CX21: €5.8/month (~$6.50, 3GB RAM, 20TB transfer)
   - Vultr: $6/month (1GB RAM, 1TB transfer)
   
+- **Raspberry Pi 5 (one-time hardware, ongoing ISP):**
+  - Pi 5 8GB: $80
+  - Case with cooling: $15-25
+  - NVMe HAT + SSD: $40-60 (or quality SD card: $20-30)
+  - Power supply: $12
+  - **Total hardware:** ~$150-180 one-time
+  - **ISP static IP:** $5-15/month (if not included)
+  - **Power:** ~$1-2/month (very low)
+  
 - **Domain:** $1-2/month ($12-24/year)
   - .com domains: ~$12-15/year
   - .org domains: ~$12-15/year
@@ -821,10 +886,12 @@ Your local install continues working normally.
 - Initial hardware (if self-hosting at home): $200-1000
 
 **Total: ~$10-60/month** depending on:
-- Server choice (1-4GB RAM)
+- Server choice (VPS vs Pi 5 + ISP)
 - Traffic volume (CDN helps)
 - Domain (new vs subdomain)
 - Location (home vs cloud)
+
+**Pi 5 total cost:** ~$150-180 hardware + $5-15/month ISP static IP + $1-2/month domain = **~$8-20/month** after initial hardware investment. Most cost-effective for long-term use (breaks even vs VPS in 3-4 months).
 
 ### Shared Network (Guide 12)
 
