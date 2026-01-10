@@ -944,6 +944,27 @@ $ogImage = file_exists($aboutPhotoWebp)
         body.dark-mode div[style*="background: #f8f9fa"] li {
             color: #e0e0e0;
         }
+        
+        /* Dark mode for light blue info boxes (#f0f8ff) */
+        body.dark-mode div[style*="background: #f0f8ff"] {
+            background: #1a2a3a !important;
+        }
+        
+        body.dark-mode div[style*="background: #f0f8ff"] p {
+            color: #e0e0e0 !important;
+        }
+        
+        body.dark-mode div[style*="background: #f0f8ff"] ul {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode div[style*="background: #f0f8ff"] li {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode div[style*="background: #f0f8ff"] h3 {
+            color: #4a9eff !important;
+        }
     </style>
 </head>
 <body>
