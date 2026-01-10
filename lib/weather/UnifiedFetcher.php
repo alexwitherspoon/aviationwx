@@ -68,6 +68,8 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
         $snapshot = parseSourceResponse($source, $responses[$sourceKey], $airport);
         if ($snapshot !== null && $snapshot->isValid) {
             $snapshots[] = $snapshot;
+            // Key maxAges by the snapshot's actual source type (e.g., "ambient", "metar")
+            // not by the source key (e.g., "primary", "backup") to match aggregator lookups
             $maxAges[$snapshot->source] = getSourceMaxAge($source);
         }
     }
