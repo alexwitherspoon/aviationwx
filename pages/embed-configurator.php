@@ -508,7 +508,7 @@ $baseUrl = getBaseUrl();
         .embed-code pre {
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
             font-size: 0.85rem;
-            color: #e0e0e0;
+            color: #333;
             white-space: pre-wrap;
             word-break: break-all;
             margin: 0;
@@ -516,7 +516,7 @@ $baseUrl = getBaseUrl();
         }
         
         .embed-code code {
-            color: #4ec9b0;
+            color: #0066cc;
         }
         
         /* Footer */
@@ -525,12 +525,12 @@ $baseUrl = getBaseUrl();
             padding: 2rem;
             color: #666;
             font-size: 0.85rem;
-            border-top: 1px solid #333;
+            border-top: 1px solid #e0e0e0;
             margin-top: 2rem;
         }
         
         .footer a {
-            color: #0099ff;
+            color: #0066cc;
             text-decoration: none;
         }
         
@@ -540,17 +540,17 @@ $baseUrl = getBaseUrl();
         
         /* Info callout */
         .info-callout {
-            background: rgba(0, 102, 204, 0.15);
+            background: rgba(0, 102, 204, 0.1);
             border: 1px solid rgba(0, 102, 204, 0.3);
             border-radius: 8px;
             padding: 1rem;
             margin-top: 1rem;
             font-size: 0.85rem;
-            color: #8cc4ff;
+            color: #0066cc;
         }
         
         .info-callout strong {
-            color: #0099ff;
+            color: #0052a3;
         }
         
         /* ============================================
@@ -638,11 +638,9 @@ $baseUrl = getBaseUrl();
                 color: #888;
             }
             
-            .size-inputs {
+            .size-inputs input {
                 background: #1a1a1a;
-            }
-            
-            .size-input {
+                border-color: #444;
                 color: #e0e0e0;
             }
             
@@ -651,17 +649,58 @@ $baseUrl = getBaseUrl();
                 border-color: #333;
             }
             
+            .preview-header {
+                background: #2a2a2a;
+                border-bottom-color: #333;
+            }
+            
             .preview-header h2 {
                 color: #e0e0e0;
             }
             
-            .preview-size {
+            .preview-container {
+                background: #1a1a1a;
+            }
+            
+            .preview-dimensions {
                 color: #888;
             }
             
             .preview-container {
                 background: #1a1a1a;
+            }
+            
+            .embed-tab {
+                background: #2a2a2a;
+                border-color: #444;
+                color: #888;
+            }
+            
+            .embed-tab:hover {
+                background: #333;
+                color: #ccc;
+            }
+            
+            .embed-code-container {
+                background: #1a1a1a;
                 border-color: #333;
+            }
+            
+            .embed-code-header {
+                background: #242424;
+                border-bottom-color: #333;
+            }
+            
+            .embed-code-header span {
+                color: #888;
+            }
+            
+            .embed-code pre {
+                color: #e0e0e0;
+            }
+            
+            .embed-code code {
+                color: #4ec9b0;
             }
             
             .placeholder-state {
@@ -804,11 +843,9 @@ $baseUrl = getBaseUrl();
             color: #888;
         }
         
-        body.dark-mode .size-inputs {
+        body.dark-mode .size-inputs input {
             background: #1a1a1a;
-        }
-        
-        body.dark-mode .size-input {
+            border-color: #444;
             color: #e0e0e0;
         }
         
@@ -817,17 +854,21 @@ $baseUrl = getBaseUrl();
             border-color: #333;
         }
         
+        body.dark-mode .preview-header {
+            background: #2a2a2a;
+            border-bottom-color: #333;
+        }
+        
         body.dark-mode .preview-header h2 {
             color: #e0e0e0;
         }
         
-        body.dark-mode .preview-size {
+        body.dark-mode .preview-dimensions {
             color: #888;
         }
         
         body.dark-mode .preview-container {
             background: #1a1a1a;
-            border-color: #333;
         }
         
         body.dark-mode .placeholder-state {
@@ -835,14 +876,20 @@ $baseUrl = getBaseUrl();
             background: #1e1e1e;
         }
         
+        body.dark-mode .embed-tab {
+            background: #2a2a2a;
+            border-color: #444;
+            color: #888;
+        }
+        
+        body.dark-mode .embed-tab:hover {
+            background: #333;
+            color: #ccc;
+        }
+        
         body.dark-mode .embed-tabs {
             background: #1a1a1a;
             border-color: #333;
-        }
-        
-        body.dark-mode .embed-tab {
-            color: #888;
-            border-right-color: #333;
         }
         
         body.dark-mode .embed-tab.active {
@@ -857,6 +904,28 @@ $baseUrl = getBaseUrl();
         body.dark-mode .code-panel {
             background: #1a1a1a;
             border-color: #333;
+        }
+        
+        body.dark-mode .embed-code-container {
+            background: #1a1a1a;
+            border-color: #333;
+        }
+        
+        body.dark-mode .embed-code-header {
+            background: #242424;
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .embed-code-header span {
+            color: #888;
+        }
+        
+        body.dark-mode .embed-code pre {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .embed-code code {
+            color: #4ec9b0;
         }
         
         body.dark-mode .copy-btn {
@@ -906,13 +975,13 @@ $baseUrl = getBaseUrl();
                             <div id="airport-dropdown" class="airport-dropdown"></div>
                         </div>
                     </div>
-                    <div id="selected-airport" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: #1a1a1a; border-radius: 6px; border: 1px solid #0066cc;">
+                    <div id="selected-airport" style="display: none; margin-top: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; border: 1px solid #0066cc;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <span id="selected-identifier" style="font-weight: 600; color: #0099ff;"></span>
-                                <span id="selected-name" style="color: #888; font-size: 0.85rem; margin-left: 0.5rem;"></span>
+                                <span id="selected-identifier" style="font-weight: 600; color: #0066cc;"></span>
+                                <span id="selected-name" style="color: #666; font-size: 0.85rem; margin-left: 0.5rem;"></span>
                             </div>
-                            <button id="clear-airport" style="background: none; border: none; color: #888; cursor: pointer; font-size: 1.2rem;">&times;</button>
+                            <button id="clear-airport" style="background: none; border: none; color: #666; cursor: pointer; font-size: 1.2rem;">&times;</button>
                         </div>
                     </div>
                 </div>
