@@ -35,7 +35,7 @@ class WeatherAggregatorTest extends TestCase {
     private function createSnapshot(
         string $source,
         array $fields,
-        int $obsTime = null
+        ?int $obsTime = null
     ): WeatherSnapshot {
         $obsTime = $obsTime ?? $this->now;
         

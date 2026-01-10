@@ -532,32 +532,43 @@ function isImageComplete(string $file, ?string $format = null): bool {
 }
 
 /**
- * Validate image is complete and suitable for processing
+ * Validate image is complete and suitable for history storage
  * 
- * Combines standard validation with end-of-file completeness check.
- * Use this for validating push camera uploads.
+ * This is a lighter validation than validateImageFile() (for push camera uploads).
+ * History validation focuses on completeness checks rather than strict upload validation.
  * 
  * @param string $file Image file path
- * @param array|null $pushConfig Push config for validation limits
+ * @param array|null $pushConfig Push config for validation limits (optional)
  * @return bool True if valid and complete
  */
 function validateImageForHistory(string $file, ?array $pushConfig = null): bool {
-    // Use standard validation if available (from process-push-webcams.php)
-    if (function_exists('validateImageFile')) {
-        if (!validateImageFile($file, $pushConfig)) {
-            return false;
-        }
-    } else {
-        // Fallback: basic checks
-        if (!file_exists($file) || !is_readable($file)) {
-            return false;
-        }
-        $size = @filesize($file);
-        if ($size === false || $size < 100 || $size > 100 * 1024 * 1024) {
-            return false;
-        }
+    // Basic file checks
+    if (!file_exists($file) || !is_readable($file)) {
+        return false;
     }
     
-    // Additional check: verify file is complete (not truncated)
+    $size = @filesize($file);
+    if ($size === false || $size < 100) {
+        return false;
+    }
+    
+    // Check max size
+    $maxSizeBytes = 100 * 1024 * 1024; // Default 100MB
+    if ($pushConfig && isset($pushConfig['max_file_size_mb'])) {
+        $maxSizeBytes = intval($pushConfig['max_file_size_mb']) * 1024 * 1024;
+    }
+    if ($size > $maxSizeBytes) {
+        return false;
+    }
+    
+    // Check MIME type
+    $mime = @mime_content_type($file);
+    $validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!in_array($mime, $validMimes)) {
+        return false;
+    }
+    
+    // Verify file is complete (not truncated)
+    // This is the most important check for history - we don't want partial frames
     return isImageComplete($file);
 }

@@ -112,8 +112,10 @@ All configuration lives in a single `airports.json` file with two sections:
 | `push_config.protocol` | — | `sftp`, `ftp`, or `ftps` |
 | `push_config.username` | — | 14 alphanumeric chars |
 | `push_config.password` | — | 14 alphanumeric chars |
-| `push_config.max_file_size_mb` | `100` | Max upload size |
+| `push_config.max_file_size_mb` | `100` | Max upload size (1-100 MB) |
 | `push_config.allowed_extensions` | `["jpg","jpeg","png"]` | Allowed file types |
+| `push_config.upload_file_max_age_seconds` | `1800` | Max file age before abandonment (600-7200) |
+| `push_config.stability_check_timeout_seconds` | `15` | Stability check timeout (10-30) |
 
 ### Configuration Hierarchy
 
@@ -502,7 +504,11 @@ For cameras that upload images to the server:
     "username": "kspbCam0Push01",
     "password": "SecurePass1234",
     "max_file_size_mb": 10,
-    "allowed_extensions": ["jpg", "jpeg"]
+    "allowed_extensions": ["jpg", "jpeg"],
+    
+    // Optional: Advanced tuning (usually not needed)
+    "upload_file_max_age_seconds": 1800,      // Max age before file abandonment (default: 1800, range: 600-7200)
+    "stability_check_timeout_seconds": 15     // Stability check timeout (default: 15, range: 10-30)
   }
 }
 ```
@@ -514,6 +520,12 @@ For cameras that upload images to the server:
 Cameras upload directly to `/` (chroot root). Files are processed automatically.
 
 **Subfolder support:** Cameras that create date-based folder structures (e.g., `2026/01/06/image.jpg`) are fully supported. The system recursively searches up to 10 levels deep and automatically cleans up empty folders after processing.
+
+**Upload stability detection:** The system uses adaptive stability checking that starts conservative (20 consecutive stable checks = 10 seconds) and automatically optimizes based on the camera's historical upload performance. After 20+ successful uploads, it can reduce to as low as 5 checks (2.5 seconds) for fast connections.
+
+**Advanced tuning parameters:**
+- `upload_file_max_age_seconds`: Files older than this are considered stuck/abandoned and deleted (default: 30 minutes). Increase for known very slow connections (up to 2 hours).
+- `stability_check_timeout_seconds`: How long the worker waits for an in-progress upload before returning to try again later (default: 15 seconds). Most sites should use the default.
 
 ### Webcam Variants
 

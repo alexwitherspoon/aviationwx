@@ -259,6 +259,288 @@ function cleanupEmptyDirectories($dir, $stopAt) {
 }
 
 /**
+ * Get maximum age for upload files before abandonment
+ * 
+ * Files older than this are considered stuck/abandoned and will be deleted.
+ * Prevents worker from repeatedly checking files that will never complete.
+ * 
+ * @param array|null $cam Camera config
+ * @return int Max age in seconds
+ */
+function getUploadFileMaxAge($cam) {
+    // Allow per-camera override
+    if ($cam && isset($cam['push_config']['upload_file_max_age_seconds'])) {
+        $override = intval($cam['push_config']['upload_file_max_age_seconds']);
+        return max(
+            MIN_UPLOAD_FILE_MAX_AGE_SECONDS,
+            min(MAX_UPLOAD_FILE_MAX_AGE_SECONDS, $override)
+        );
+    }
+    
+    return UPLOAD_FILE_MAX_AGE_SECONDS;
+}
+
+/**
+ * Get stability check timeout for this camera
+ * 
+ * How long to wait in the stability checking loop before giving up.
+ * This is NOT the overall worker timeout - just for the upload stability check.
+ * 
+ * @param array|null $cam Camera config
+ * @return int Timeout in seconds
+ */
+function getStabilityCheckTimeout($cam) {
+    // Allow per-camera override
+    if ($cam && isset($cam['push_config']['stability_check_timeout_seconds'])) {
+        $override = intval($cam['push_config']['stability_check_timeout_seconds']);
+        return max(
+            MIN_STABILITY_CHECK_TIMEOUT_SECONDS,
+            min(MAX_STABILITY_CHECK_TIMEOUT_SECONDS, $override)
+        );
+    }
+    
+    return DEFAULT_STABILITY_CHECK_TIMEOUT_SECONDS;
+}
+
+/**
+ * Get required stable checks based on historical performance
+ * 
+ * Uses P95 of stability times from last N uploads to determine
+ * how many consecutive stable checks are needed.
+ * Adjusts based on rejection rate (higher rejections = more conservative).
+ * 
+ * Metrics are persisted to disk and loaded on startup to survive restarts.
+ * 
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index
+ * @return int Number of required consecutive stable checks
+ */
+function getRequiredStableChecks($airportId, $camIndex) {
+    $key = "stability_metrics_{$airportId}_{$camIndex}";
+    $metrics = apcu_fetch($key);
+    
+    // If not in APCu, try loading from disk
+    if (!$metrics) {
+        $metrics = loadStabilityMetricsFromDisk($airportId, $camIndex);
+        if ($metrics) {
+            // Restore to APCu for faster access
+            apcu_store($key, $metrics, 7 * 86400);
+        }
+    }
+    
+    // Cold start: use conservative default
+    if (!$metrics || count($metrics['stability_times']) < MIN_SAMPLES_FOR_OPTIMIZATION) {
+        return DEFAULT_STABLE_CHECKS;
+    }
+    
+    // Calculate rejection rate
+    $totalUploads = $metrics['accepted'] + $metrics['rejected'];
+    $rejectionRate = $totalUploads > 0 ? ($metrics['rejected'] / $totalUploads) : 0;
+    
+    // If rejection rate is high, be more conservative
+    if ($rejectionRate > REJECTION_RATE_THRESHOLD_HIGH) {
+        aviationwx_log('info', 'high rejection rate, using conservative checks', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'rejection_rate' => round($rejectionRate * 100, 1) . '%',
+            'required_checks' => DEFAULT_STABLE_CHECKS
+        ], 'app');
+        return DEFAULT_STABLE_CHECKS;
+    }
+    
+    // Calculate P95 of stability times
+    $times = $metrics['stability_times'];
+    sort($times);
+    $p95Index = (int) ceil(0.95 * count($times)) - 1;
+    $p95Time = $times[max(0, $p95Index)];
+    
+    // Convert P95 time to number of checks with safety margin
+    $checksNeeded = ceil(($p95Time / (STABILITY_CHECK_INTERVAL_MS / 1000)) * P95_SAFETY_MARGIN);
+    
+    // Apply bounds
+    $requiredChecks = max(MIN_STABLE_CHECKS, min(MAX_STABLE_CHECKS, $checksNeeded));
+    
+    aviationwx_log('debug', 'calculated required stability checks', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'samples' => count($times),
+        'p95_time' => round($p95Time, 2),
+        'required_checks' => $requiredChecks,
+        'rejection_rate' => round($rejectionRate * 100, 1) . '%'
+    ], 'app');
+    
+    return $requiredChecks;
+}
+
+/**
+ * Load stability metrics from disk
+ * 
+ * Provides persistence across PHP restarts (APCu is cleared on restart).
+ * Metrics are stored per-camera to allow granular management.
+ * 
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index
+ * @return array|false Metrics array or false if not found
+ */
+function loadStabilityMetricsFromDisk($airportId, $camIndex) {
+    $cacheDir = __DIR__ . '/../cache/stability_metrics';
+    if (!is_dir($cacheDir)) {
+        return false;
+    }
+    
+    $file = $cacheDir . "/{$airportId}_{$camIndex}.json";
+    if (!file_exists($file)) {
+        return false;
+    }
+    
+    $data = @file_get_contents($file);
+    if ($data === false) {
+        return false;
+    }
+    
+    $metrics = @json_decode($data, true);
+    if (!is_array($metrics)) {
+        return false;
+    }
+    
+    // Validate structure
+    if (!isset($metrics['stability_times']) || !isset($metrics['accepted']) || !isset($metrics['rejected'])) {
+        return false;
+    }
+    
+    return $metrics;
+}
+
+/**
+ * Save stability metrics to disk
+ * 
+ * Persists metrics to survive PHP restarts.
+ * Uses atomic write (tmp + rename) to prevent corruption.
+ * 
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index
+ * @param array $metrics Metrics data to save
+ * @return bool True on success, false on failure
+ */
+function saveStabilityMetricsToDisk($airportId, $camIndex, $metrics) {
+    $cacheDir = __DIR__ . '/../cache/stability_metrics';
+    
+    // Ensure directory exists
+    if (!is_dir($cacheDir)) {
+        if (!@mkdir($cacheDir, 0755, true)) {
+            return false;
+        }
+    }
+    
+    $file = $cacheDir . "/{$airportId}_{$camIndex}.json";
+    $tmpFile = $file . '.tmp.' . getmypid() . '.' . mt_rand();
+    
+    // Write to temp file
+    $json = json_encode($metrics, JSON_PRETTY_PRINT);
+    if (@file_put_contents($tmpFile, $json) === false) {
+        return false;
+    }
+    
+    // Atomic rename
+    if (!@rename($tmpFile, $file)) {
+        @unlink($tmpFile);
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Record stability metrics for a camera upload
+ * 
+ * IMPORTANT: Records rejection counts for ALL uploads (accepted + rejected).
+ * Only records stability times for accepted uploads (prevents data poisoning).
+ * Uses rolling window (last N samples).
+ * Persists to disk to survive PHP restarts (APCu is cleared on restart).
+ * 
+ * Why track rejections even when validation fails?
+ * - Rejection rate is used to adjust required_stable_checks
+ * - High rejection rate triggers more conservative behavior
+ * - Helps detect cameras with consistent issues
+ * 
+ * Why NOT record stability times for rejected uploads?
+ * - Rejected uploads might be partial/incomplete
+ * - Including their stability times would poison the P95 calculation
+ * - We only want to learn from successful, complete uploads
+ * 
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index
+ * @param float $stabilityTime Time in seconds to achieve stability
+ * @param bool $accepted Whether upload was accepted (passed all validation)
+ * @return void
+ */
+function recordStabilityMetrics($airportId, $camIndex, $stabilityTime, $accepted) {
+    $key = "stability_metrics_{$airportId}_{$camIndex}";
+    
+    // Fetch existing metrics or initialize
+    $metrics = apcu_fetch($key);
+    if (!$metrics) {
+        // Try loading from disk first (might have persisted data)
+        $metrics = loadStabilityMetricsFromDisk($airportId, $camIndex);
+    }
+    if (!$metrics) {
+        $metrics = [
+            'stability_times' => [],
+            'accepted' => 0,
+            'rejected' => 0,
+            'last_updated' => time()
+        ];
+    }
+    
+    // ALWAYS update counts (even for rejected uploads)
+    if ($accepted) {
+        $metrics['accepted']++;
+        
+        // Only record stability time for accepted uploads
+        // This prevents poisoning data with partial uploads
+        $metrics['stability_times'][] = $stabilityTime;
+        
+        // Keep only last N samples (rolling window)
+        $metrics['stability_times'] = array_slice(
+            $metrics['stability_times'],
+            -STABILITY_SAMPLES_TO_KEEP
+        );
+    } else {
+        // Track rejection even though validation failed
+        // This is critical for the feedback loop
+        $metrics['rejected']++;
+    }
+    
+    $metrics['last_updated'] = time();
+    
+    // Store in APCu with 7 day TTL
+    apcu_store($key, $metrics, 7 * 86400);
+    
+    // Persist to disk (survives PHP restarts)
+    // Only save every Nth update to reduce I/O (save on every 5th update)
+    static $updateCounter = [];
+    $cameraKey = "{$airportId}_{$camIndex}";
+    if (!isset($updateCounter[$cameraKey])) {
+        $updateCounter[$cameraKey] = 0;
+    }
+    $updateCounter[$cameraKey]++;
+    
+    if ($updateCounter[$cameraKey] % 5 === 0) {
+        saveStabilityMetricsToDisk($airportId, $camIndex, $metrics);
+    }
+    
+    aviationwx_log('debug', 'recorded stability metrics', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'stability_time' => round($stabilityTime, 2),
+        'accepted' => $accepted,
+        'total_samples' => count($metrics['stability_times']),
+        'total_accepted' => $metrics['accepted'],
+        'total_rejected' => $metrics['rejected']
+    ], 'app');
+}
+
+/**
  * Get last processed time for a camera
  * 
  * Retrieves the timestamp of the last successfully processed image for a camera.
@@ -333,19 +615,23 @@ function updateLastProcessedTime($airportId, $camIndex) {
 
 /**
  * Find newest valid image in upload directory
- * Optimized to exit quickly if no new files are found
- * Supports recursive search for date-based subfolder structures (year/month/day)
+ * 
+ * Optimized to exit quickly if no new files are found.
+ * Supports recursive search for date-based subfolder structures (year/month/day).
+ * Uses adaptive stability checking based on camera's historical performance.
+ * Enforces file age limits to prevent processing stuck/abandoned uploads.
  * 
  * @param string $uploadDir Upload directory path
- * @param int $maxWaitSeconds Maximum wait time for file to be fully written
+ * @param int $stabilityTimeout Maximum time to spend in stability checking loop
  * @param int|null $lastProcessedTime Timestamp of last processed file (null = no filter)
  * @param array|null $pushConfig Optional push_config for per-camera validation
- * @param array|null $airport Optional airport config for phase-aware pixelation detection
+ * @param array|null $airport Optional airport config for phase-aware pixelation detection  
+ * @param array|null $cam Optional full camera config for getting max file age
  * @param string|null $airportId Optional airport ID for metrics tracking
  * @param int|null $camIndex Optional camera index for metrics tracking
  * @return string|null Path to valid image file or null
  */
-function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = null, $pushConfig = null, $airport = null, $airportId = null, $camIndex = null) {
+function findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessedTime = null, $pushConfig = null, $airport = null, $cam = null, $airportId = null, $camIndex = null) {
     if (!is_dir($uploadDir)) {
         return null;
     }
@@ -384,113 +670,205 @@ function findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessedTime = 
         return $mtimeB - $mtimeA;
     });
     
-    $startTime = time();
+    // Get required stability checks for this camera (adaptive based on history)
+    $requiredStableChecks = getRequiredStableChecks($airportId, $camIndex);
+    
+    // Get max file age for this camera (fail-closed protection)
+    $maxFileAge = getUploadFileMaxAge($cam);
+    
     foreach ($files as $file) {
-        // Check if file is fully written (only wait if we have a candidate)
-        if (isFileFullyWritten($file, $maxWaitSeconds, $startTime)) {
-            // Push cameras may not have EXIF - add from file mtime before validation
-            // Server-fetched webcams have EXIF added after capture, but push cameras bypass that step
-            if (!hasExifTimestamp($file)) {
-                ensureExifTimestamp($file);
-            }
+        // Check file age (must be between MIN and MAX)
+        $fileAge = time() - @filemtime($file);
+        
+        // Too new - don't check yet (MIN_FILE_AGE_SECONDS = 3)
+        if ($fileAge < 3) {
+            aviationwx_log('debug', 'file too new, skipping', [
+                'file' => basename($file),
+                'age' => $fileAge,
+                'min_age' => 3
+            ], 'app');
             
-            // Validate image (with per-camera limits and airport for phase-aware detection)
-            if (!validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
-                trackWebcamUploadRejected($airportId, $camIndex, 'validation_failed');
-                continue; // Try next file
-            }
-            
-            // Normalize EXIF timestamp to UTC
-            // Local time is ENCOURAGED (helps operators match their clocks)
-            // This detects timezone offset and rewrites EXIF to UTC for client verification
-            // Rejects images with unreliable timestamps (safety-critical)
-            if (!normalizeExifToUtc($file, $airportId, $camIndex)) {
-                trackWebcamUploadRejected($airportId, $camIndex, 'invalid_exif_timestamp');
-                continue; // Skip this image, try next
-            }
-            
-            trackWebcamUploadAccepted($airportId, $camIndex);
-            return $file;
+            // This is the newest file and it's too new
+            // Skip to next file (might have older valid files)
+            continue;
         }
+        
+        // Too old - abandoned/stuck upload, clean it up
+        if ($fileAge > $maxFileAge) {
+            aviationwx_log('warning', 'upload file too old (abandoned/stuck), deleting', [
+                'file' => basename($file),
+                'age_seconds' => $fileAge,
+                'max_age' => $maxFileAge,
+                'airport' => $airportId,
+                'cam' => $camIndex
+            ], 'app');
+            
+            // Track as rejection (unhealthy camera / failed upload)
+            trackWebcamUploadRejected($airportId, $camIndex, 'file_too_old');
+            recordStabilityMetrics($airportId, $camIndex, 0, false); // No stability time, rejected
+            
+            // Attempt to delete the file (cleanup job is defensive backup)
+            if (@unlink($file)) {
+                aviationwx_log('info', 'deleted abandoned upload file', [
+                    'file' => basename($file),
+                    'airport' => $airportId,
+                    'cam' => $camIndex
+                ], 'app');
+            } else {
+                aviationwx_log('error', 'failed to delete abandoned upload file', [
+                    'file' => basename($file),
+                    'airport' => $airportId,
+                    'cam' => $camIndex
+                ], 'app');
+            }
+            
+            // Try next file (iterate through all files to clean up state)
+            // There should only be one file uploading at a time per camera,
+            // so other files should be valid or also need cleanup
+            continue;
+        }
+        
+        // File age is OK (between MIN and MAX), proceed with stability checks
+        
+        // Check stability (limited by stabilityTimeout, not overall worker time)
+        $stabilityTime = 0;
+        $isStable = isFileStable($file, $requiredStableChecks, $stabilityTimeout, $stabilityTime);
+        
+        if (!$isStable) {
+            // File still being written OR timeout reached - skip and try next file
+            // Worker will come back later and try again
+            aviationwx_log('info', 'file not stable, skipping (will retry next worker run)', [
+                'file' => basename($file),
+                'stability_time' => round($stabilityTime, 2),
+                'required_checks' => $requiredStableChecks,
+                'timeout' => $stabilityTimeout
+            ], 'app');
+            continue; // Try next file
+        }
+        
+        // File is stable - now validate it
+        
+        // Push cameras may not have EXIF - add from file mtime before validation
+        // Server-fetched webcams have EXIF added after capture, but push cameras bypass that step
+        if (!hasExifTimestamp($file)) {
+            ensureExifTimestamp($file);
+        }
+        
+        // Validate image (with per-camera limits and airport for phase-aware detection)
+        if (!validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'validation_failed');
+            recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
+            continue; // Try next file
+        }
+        
+        // Normalize EXIF timestamp to UTC
+        // Local time is ENCOURAGED (helps operators match their clocks)
+        // This detects timezone offset and rewrites EXIF to UTC for client verification
+        // Rejects images with unreliable timestamps (safety-critical)
+        if (!normalizeExifToUtc($file, $airportId, $camIndex)) {
+            trackWebcamUploadRejected($airportId, $camIndex, 'invalid_exif_timestamp');
+            recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
+            continue; // Skip this image, try next
+        }
+        
+        // SUCCESS - file is stable and valid
+        trackWebcamUploadAccepted($airportId, $camIndex);
+        recordStabilityMetrics($airportId, $camIndex, $stabilityTime, true);
+        return $file;
     }
     
     return null;
 }
 
 /**
- * Check if file is fully written
+ * Check if file has achieved stability
  * 
- * Determines if a file has finished being written by checking size stability.
- * Optimized to quickly return true for old files (>= 2 seconds old).
- * For newer files, waits and checks if size remains stable.
+ * Performs stability checks (size + mtime) for up to stabilityTimeout seconds.
+ * Uses adaptive number of required checks based on camera's historical performance.
+ * Returns immediately if required stable checks achieved.
  * 
- * @param string $file File path to check
- * @param int $maxWaitSeconds Maximum wait time in seconds
- * @param int $startTime Start timestamp (for calculating elapsed time)
- * @return bool True if file appears fully written, false otherwise
+ * @param string $file File path
+ * @param int $requiredStableChecks Number of consecutive stable checks needed
+ * @param int $stabilityTimeout Maximum time to spend checking in this loop (not overall worker timeout)
+ * @param float &$stabilityTime OUT: Time spent achieving stability (seconds)
+ * @return bool True if stable, false if timeout
  */
-function isFileFullyWritten($file, $maxWaitSeconds, $startTime) {
-    $maxWait = time() - $startTime >= $maxWaitSeconds;
+function isFileStable($file, $requiredStableChecks, $stabilityTimeout, &$stabilityTime) {
+    $startTime = microtime(true);
+    $maxWaitTime = $startTime + $stabilityTimeout;
     
-    // Quick check: if file is old (more than 3 seconds), assume it's stable
-    $mtime = @filemtime($file);
-    if ($mtime !== false) {
-        $age = time() - $mtime;
-        if ($age >= 3) {
-            // File is at least 3 seconds old, very likely fully written
-            // Still do a quick size check to be sure
-            $size = @filesize($file);
-            if ($size !== false && $size > 0) {
-                return true;
-            }
-        }
-    }
-    
-    // For newer files or slow uploads, check size stability multiple times
-    // This handles slow network uploads that take several seconds
-    $stableChecks = 0;
-    $requiredStableChecks = 2; // Need 2 consecutive stable readings
     $lastSize = null;
+    $lastMtime = null;
+    $stableChecks = 0;
+    $totalChecks = 0;
     
-    for ($i = 0; $i < 4; $i++) { // Up to 4 checks = ~2 seconds total wait
-        $size = @filesize($file);
-        if ($size === false) {
+    while (microtime(true) < $maxWaitTime) {
+        $totalChecks++;
+        
+        // Get current state
+        $currentSize = @filesize($file);
+        $currentMtime = @filemtime($file);
+        
+        if ($currentSize === false || $currentMtime === false) {
+            // File disappeared or became unreadable
+            $stabilityTime = microtime(true) - $startTime;
             return false;
         }
         
-        if ($lastSize !== null && $size === $lastSize) {
-            $stableChecks++;
-            if ($stableChecks >= $requiredStableChecks) {
-                // Size stable for multiple checks
-                // Verify file mtime hasn't changed recently
-                if ($mtime === false) {
-                    $mtime = @filemtime($file);
+        // Check if size AND mtime are stable
+        if ($lastSize !== null && $lastMtime !== null) {
+            if ($currentSize === $lastSize && $currentMtime === $lastMtime) {
+                $stableChecks++;
+                
+                if ($stableChecks >= $requiredStableChecks) {
+                    // SUCCESS: File is stable
+                    $stabilityTime = microtime(true) - $startTime;
+                    
+                    aviationwx_log('debug', 'file stability achieved', [
+                        'file' => basename($file),
+                        'required_checks' => $requiredStableChecks,
+                        'total_checks' => $totalChecks,
+                        'stability_time' => round($stabilityTime, 2),
+                        'final_size' => $currentSize
+                    ], 'app');
+                    
+                    return true;
                 }
-                if ($mtime !== false) {
-                    $age = time() - $mtime;
-                    // File must be at least 1 second old OR we've hit max wait
-                    if ($age >= 1 || $maxWait) {
-                        return true;
-                    }
+            } else {
+                // Size or mtime changed - reset counter
+                if ($stableChecks > 0) {
+                    aviationwx_log('debug', 'file stability reset', [
+                        'file' => basename($file),
+                        'had_stable_checks' => $stableChecks,
+                        'size_changed' => ($currentSize !== $lastSize),
+                        'mtime_changed' => ($currentMtime !== $lastMtime)
+                    ], 'app');
                 }
+                $stableChecks = 0;
             }
-        } else {
-            // Size changed, reset stability counter
-            $stableChecks = 0;
         }
         
-        $lastSize = $size;
+        $lastSize = $currentSize;
+        $lastMtime = $currentMtime;
         
-        // Don't wait on last iteration
-        if ($i < 3) {
-            usleep(500000); // 0.5 seconds between checks
+        // Wait before next check (unless this is the last possible check)
+        if (microtime(true) + (STABILITY_CHECK_INTERVAL_MS / 1000) < $maxWaitTime) {
+            usleep(STABILITY_CHECK_INTERVAL_MS * 1000);
         }
     }
     
-    // If we've hit max wait time and size is stable, accept it
-    if ($maxWait && $stableChecks > 0) {
-        return true;
-    }
+    // TIMEOUT: Ran out of time in stability checking loop
+    // This doesn't mean the upload failed - just that we need to come back later
+    $stabilityTime = microtime(true) - $startTime;
+    
+    aviationwx_log('info', 'file stability timeout (will retry next worker run)', [
+        'file' => basename($file),
+        'required_checks' => $requiredStableChecks,
+        'achieved_checks' => $stableChecks,
+        'total_checks' => $totalChecks,
+        'timeout_seconds' => $stabilityTimeout,
+        'actual_time' => round($stabilityTime, 2)
+    ], 'app');
     
     return false;
 }
@@ -1191,7 +1569,8 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         return false; // Not due yet
     }
     
-    $maxWaitSeconds = intval($refreshSeconds / 2);
+    // Get stability check timeout (just for stability checking loop)
+    $stabilityTimeout = getStabilityCheckTimeout($cam);
     
     // Get push_config for per-camera validation limits
     $pushConfig = $cam['push_config'] ?? null;
@@ -1207,9 +1586,10 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         ], 'app');
     }
     
-    // Find newest valid image (with per-camera limits and airport for phase-aware detection)
+    // Find newest valid image with adaptive stability checking
     // Pass lastProcessed time to quickly skip old files
-    $newestFile = findNewestValidImage($uploadDir, $maxWaitSeconds, $lastProcessed, $pushConfig, $airport, $airportId, $camIndex);
+    // Pass cam for getting max file age configuration
+    $newestFile = findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessed, $pushConfig, $airport, $cam, $airportId, $camIndex);
     
     if (!$newestFile) {
         aviationwx_log('info', 'no valid image found', [

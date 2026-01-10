@@ -366,6 +366,59 @@ if (!defined('METAR_OBS_TIME_PAST_THRESHOLD_DAYS')) {
     define('METAR_OBS_TIME_PAST_THRESHOLD_DAYS', 25); // If observation is >25 days in past, try next month
 }
 
+// Push webcam upload file age limits (fail-closed protection)
+// Files in upload directory older than this are considered abandoned/stuck
+if (!defined('UPLOAD_FILE_MAX_AGE_SECONDS')) {
+    define('UPLOAD_FILE_MAX_AGE_SECONDS', 1800); // 30 minutes default
+}
+if (!defined('MIN_UPLOAD_FILE_MAX_AGE_SECONDS')) {
+    define('MIN_UPLOAD_FILE_MAX_AGE_SECONDS', 600); // 10 minutes minimum (config override)
+}
+if (!defined('MAX_UPLOAD_FILE_MAX_AGE_SECONDS')) {
+    define('MAX_UPLOAD_FILE_MAX_AGE_SECONDS', 7200); // 2 hours maximum (config override)
+}
+
+// Push webcam adaptive stability checking
+// How long to wait in stability checking loop for in-progress upload
+if (!defined('DEFAULT_STABILITY_CHECK_TIMEOUT_SECONDS')) {
+    define('DEFAULT_STABILITY_CHECK_TIMEOUT_SECONDS', 15); // 15 seconds (20 checks * 0.5s + buffer)
+}
+if (!defined('MIN_STABILITY_CHECK_TIMEOUT_SECONDS')) {
+    define('MIN_STABILITY_CHECK_TIMEOUT_SECONDS', 10); // 10 seconds minimum
+}
+if (!defined('MAX_STABILITY_CHECK_TIMEOUT_SECONDS')) {
+    define('MAX_STABILITY_CHECK_TIMEOUT_SECONDS', 30); // 30 seconds maximum
+}
+
+// Adaptive stability metrics
+if (!defined('MIN_STABLE_CHECKS')) {
+    define('MIN_STABLE_CHECKS', 5); // Absolute minimum consecutive stable checks
+}
+if (!defined('MAX_STABLE_CHECKS')) {
+    define('MAX_STABLE_CHECKS', 20); // Conservative maximum consecutive stable checks
+}
+if (!defined('DEFAULT_STABLE_CHECKS')) {
+    define('DEFAULT_STABLE_CHECKS', 20); // Start conservative
+}
+if (!defined('STABILITY_CHECK_INTERVAL_MS')) {
+    define('STABILITY_CHECK_INTERVAL_MS', 500); // 0.5 seconds between checks
+}
+if (!defined('STABILITY_SAMPLES_TO_KEEP')) {
+    define('STABILITY_SAMPLES_TO_KEEP', 100); // Rolling window size
+}
+if (!defined('REJECTION_RATE_THRESHOLD_HIGH')) {
+    define('REJECTION_RATE_THRESHOLD_HIGH', 0.05); // >5% rejected = more conservative
+}
+if (!defined('REJECTION_RATE_THRESHOLD_LOW')) {
+    define('REJECTION_RATE_THRESHOLD_LOW', 0.02); // <2% rejected = can optimize
+}
+if (!defined('P95_SAFETY_MARGIN')) {
+    define('P95_SAFETY_MARGIN', 1.5); // Multiply P95 time by 1.5 (50% buffer)
+}
+if (!defined('MIN_SAMPLES_FOR_OPTIMIZATION')) {
+    define('MIN_SAMPLES_FOR_OPTIMIZATION', 20); // Need 20 samples before optimizing
+}
+
 // Webcam error frame detection thresholds
 if (!defined('WEBCAM_ERROR_MIN_WIDTH')) {
     define('WEBCAM_ERROR_MIN_WIDTH', 100); // Minimum image width to be considered valid

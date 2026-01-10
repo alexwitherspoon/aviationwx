@@ -45,9 +45,10 @@ class WeatherAggregator {
      * Staleness indicators (warning/error) are applied later during display.
      * 
      * @param array<WeatherSnapshot> $snapshots Snapshots in preference order
+     * @param array<string, int>|null $maxAges Optional per-source max age overrides (source => seconds)
      * @return array Aggregated weather data with attribution
      */
-    public function aggregate(array $snapshots): array {
+    public function aggregate(array $snapshots, ?array $maxAges = null): array {
         if (empty($snapshots)) {
             return $this->emptyResult();
         }
@@ -60,7 +61,7 @@ class WeatherAggregator {
         // STEP 1: Select wind group (must be complete from single source)
         // ═══════════════════════════════════════════════════════════════════
         
-        $windResult = $this->selectWindGroup($snapshots);
+        $windResult = $this->selectWindGroup($snapshots, $maxAges);
         $result = array_merge($result, $windResult['fields']);
         $fieldObsTimeMap = array_merge($fieldObsTimeMap, $windResult['obs_times']);
         $fieldSourceMap = array_merge($fieldSourceMap, $windResult['sources']);
@@ -70,7 +71,7 @@ class WeatherAggregator {
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::METAR_PREFERRED_FIELDS as $fieldName) {
-            $reading = $this->selectMetarPreferredField($fieldName, $snapshots);
+            $reading = $this->selectMetarPreferredField($fieldName, $snapshots, $maxAges);
             $result[$fieldName] = $reading->value;
             if ($reading->observationTime !== null) {
                 $fieldObsTimeMap[$fieldName] = $reading->observationTime;
@@ -85,7 +86,7 @@ class WeatherAggregator {
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::INDEPENDENT_FIELDS as $fieldName) {
-            $reading = $this->selectBestField($fieldName, $snapshots);
+            $reading = $this->selectBestField($fieldName, $snapshots, $maxAges);
             $result[$fieldName] = $reading->value;
             if ($reading->observationTime !== null) {
                 $fieldObsTimeMap[$fieldName] = $reading->observationTime;
@@ -130,20 +131,17 @@ class WeatherAggregator {
      * We don't mix wind speed from one source with direction from another.
      * 
      * @param array<WeatherSnapshot> $snapshots
+     * @param array<string, int>|null $maxAges Optional per-source max age overrides
      * @return array{fields: array, obs_times: array, sources: array}
      */
-    private function selectWindGroup(array $snapshots): array {
+    private function selectWindGroup(array $snapshots, ?array $maxAges = null): array {
         foreach ($snapshots as $snapshot) {
             if (!$snapshot->hasCompleteWind()) {
                 continue;
             }
             
-            // Aggregator is permissive: accept data up to failclosed threshold (3 hours)
-            // Staleness warnings/errors are applied later during display
-            $isMetar = $snapshot->source === 'metar';
-            $maxAge = $isMetar 
-                ? AggregationPolicy::getMetarStaleFailclosedSeconds() 
-                : AggregationPolicy::getStaleFailclosedSeconds();
+            // Determine max age for this source
+            $maxAge = $this->getMaxAgeForSource($snapshot->source, $maxAges);
             
             if ($snapshot->wind->isStale($maxAge, $this->now)) {
                 continue;
@@ -188,9 +186,10 @@ class WeatherAggregator {
      * 
      * @param string $fieldName
      * @param array<WeatherSnapshot> $snapshots
+     * @param array<string, int>|null $maxAges Optional per-source max age overrides
      * @return WeatherReading
      */
-    private function selectMetarPreferredField(string $fieldName, array $snapshots): WeatherReading {
+    private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null): WeatherReading {
         // First, look for METAR source
         foreach ($snapshots as $snapshot) {
             if ($snapshot->source !== 'metar') {
@@ -202,8 +201,9 @@ class WeatherAggregator {
                 break; // METAR doesn't have this field, fall back
             }
             
-            // Aggregator is permissive: accept METAR data up to failclosed threshold
-            $maxAge = AggregationPolicy::getMetarStaleFailclosedSeconds();
+            // Determine max age for METAR
+            $maxAge = $this->getMaxAgeForSource('metar', $maxAges);
+            
             if (!$reading->isStale($maxAge, $this->now)) {
                 return $reading->withSource('metar');
             }
@@ -212,7 +212,7 @@ class WeatherAggregator {
         }
         
         // Fall back to regular selection
-        return $this->selectBestField($fieldName, $snapshots);
+        return $this->selectBestField($fieldName, $snapshots, $maxAges);
     }
     
     /**
@@ -222,21 +222,18 @@ class WeatherAggregator {
      * 
      * @param string $fieldName
      * @param array<WeatherSnapshot> $snapshots
+     * @param array<string, int>|null $maxAges Optional per-source max age overrides
      * @return WeatherReading
      */
-    private function selectBestField(string $fieldName, array $snapshots): WeatherReading {
+    private function selectBestField(string $fieldName, array $snapshots, ?array $maxAges = null): WeatherReading {
         foreach ($snapshots as $snapshot) {
             $reading = $snapshot->getField($fieldName);
             if ($reading === null || !$reading->hasValue()) {
                 continue;
             }
             
-            $isMetar = $snapshot->source === 'metar';
-            // Aggregator is permissive: accept data up to failclosed threshold (3 hours)
-            // Staleness warnings/errors are applied later during display
-            $maxAge = $isMetar 
-                ? AggregationPolicy::getMetarStaleFailclosedSeconds() 
-                : AggregationPolicy::getStaleFailclosedSeconds();
+            // Determine max age for this source
+            $maxAge = $this->getMaxAgeForSource($snapshot->source, $maxAges);
             
             if (!$reading->isStale($maxAge, $this->now)) {
                 return $reading->withSource($snapshot->source);
@@ -245,6 +242,26 @@ class WeatherAggregator {
         
         // No valid value found
         return WeatherReading::null();
+    }
+    
+    /**
+     * Get max age for a source (with override support)
+     * 
+     * @param string $source Source identifier
+     * @param array<string, int>|null $maxAges Optional per-source overrides
+     * @return int Max age in seconds
+     */
+    private function getMaxAgeForSource(string $source, ?array $maxAges = null): int {
+        // Check for explicit override
+        if ($maxAges !== null && isset($maxAges[$source])) {
+            return $maxAges[$source];
+        }
+        
+        // Use default thresholds
+        $isMetar = $source === 'metar';
+        return $isMetar 
+            ? AggregationPolicy::getMetarStaleFailclosedSeconds() 
+            : AggregationPolicy::getStaleFailclosedSeconds();
     }
     
     /**

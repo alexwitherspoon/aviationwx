@@ -732,6 +732,25 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
   - Bridge uploads: EXIF `DateTimeOriginal` interpreted as UTC
   - Direct uploads: EXIF `DateTimeOriginal` interpreted as local time
   - Detection via "AviationWX-Bridge" marker in EXIF UserComment
+- **Upload Stability Detection** (Adaptive):
+  - Files must achieve stability (size + mtime unchanged) before processing
+  - **Adaptive checking**: Starts conservative (20 consecutive stable checks), optimizes based on camera history
+  - **P95-based optimization**: Uses 95th percentile of successful upload times to determine required checks
+  - **Minimum checks**: 5 (after optimization, 2.5 seconds verification)
+  - **Maximum checks**: 20 (conservative default, 10 seconds verification)
+  - **Feedback loop**: High rejection rate (>5%) triggers more conservative behavior
+  - **Metrics tracking**: Rolling window of last 100 uploads per camera stored in APCu
+- **File Age Limits** (Fail-Closed Protection):
+  - **Minimum age**: 3 seconds (files must age before checking, prevents checking mid-transfer)
+  - **Maximum age**: 30 minutes default (configurable 10min-2hr per camera)
+  - Files older than max age are considered abandoned/stuck and automatically deleted
+  - Prevents worker from repeatedly checking files that will never complete
+  - Tracks as rejection for metrics (unhealthy camera indicator)
+- **Worker Protection**:
+  - **Stability timeout**: 15 seconds default (configurable 10-30s per camera)
+  - If file not stable within timeout, worker returns and retries next run
+  - Prevents blocking worker pool on slow uploads
+  - File continues uploading in background
 
 ### Source Type Detection
 

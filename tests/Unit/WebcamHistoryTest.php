@@ -20,6 +20,9 @@ use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/webcam-history.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
+require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/logger.php';
+require_once __DIR__ . '/../../scripts/process-push-webcams.php';
 
 class WebcamHistoryTest extends TestCase
 {
@@ -380,9 +383,13 @@ class WebcamHistoryTest extends TestCase
     public function testValidateImageForHistory_ValidImage_ReturnsTrue(): void
     {
         $file = $this->testImageDir . '/valid.jpg';
-        // Create a "valid" JPEG that passes basic checks
-        $jpeg = "\xFF\xD8\xFF\xE0" . str_repeat("\x00", 200) . "\xFF\xD9";
-        file_put_contents($file, $jpeg);
+        
+        // Create a real JPEG image using GD (10x10 pixel red square)
+        $img = imagecreatetruecolor(10, 10);
+        $red = imagecolorallocate($img, 255, 0, 0);
+        imagefilledrectangle($img, 0, 0, 10, 10, $red);
+        imagejpeg($img, $file, 90);
+        imagedestroy($img);
         
         $result = validateImageForHistory($file);
         $this->assertTrue($result);
