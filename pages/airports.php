@@ -321,6 +321,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         .legend-color.mvfr { background: #3b82f6; }
         .legend-color.ifr { background: #ef4444; }
         .legend-color.lifr { background: #d946ef; }
+        .legend-color.unknown { background: #6b7280; }
         
         /* Jump to Map Button */
         .jump-to-map {
@@ -915,6 +916,10 @@ $breadcrumbs = generateBreadcrumbSchema([
                 <div class="legend-item">
                     <div class="legend-color lifr"></div>
                     <span>LIFR (<1 mi, <500 ft)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color unknown"></div>
+                    <span>Not Enough Data</span>
                 </div>
             </div>
             
