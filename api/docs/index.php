@@ -35,6 +35,14 @@ $attribution = getPublicApiAttributionText();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Apply dark mode immediately based on browser preference to prevent flash
+(function() {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark-mode');
+    }
+})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -44,8 +52,27 @@ $attribution = getPublicApiAttributionText();
     
     <?php echo generateFaviconTags(); ?>
     
+    <link rel="stylesheet" href="/public/css/navigation.css">
+    
     <style>
+        /* Light mode variables */
         :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #e9ecef;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555;
+            --text-muted: #666;
+            --accent-blue: #0066cc;
+            --accent-green: #28a745;
+            --accent-yellow: #d29922;
+            --accent-red: #dc3545;
+            --border-color: #e0e0e0;
+            --code-bg: #f4f4f4;
+        }
+        
+        /* Dark mode variables (explicit) */
+        body.dark-mode {
             --bg-primary: #0d1117;
             --bg-secondary: #161b22;
             --bg-tertiary: #21262d;
@@ -60,6 +87,24 @@ $attribution = getPublicApiAttributionText();
             --code-bg: #1a1f26;
         }
         
+        /* Auto dark mode from OS preference */
+        @media (prefers-color-scheme: dark) {
+            body:not(.light-mode) {
+                --bg-primary: #0d1117;
+                --bg-secondary: #161b22;
+                --bg-tertiary: #21262d;
+                --text-primary: #e6edf3;
+                --text-secondary: #8b949e;
+                --text-muted: #6e7681;
+                --accent-blue: #58a6ff;
+                --accent-green: #3fb950;
+                --accent-yellow: #d29922;
+                --accent-red: #f85149;
+                --border-color: #30363d;
+                --code-bg: #1a1f26;
+            }
+        }
+        
         * {
             box-sizing: border-box;
             margin: 0;
@@ -72,12 +117,17 @@ $attribution = getPublicApiAttributionText();
             color: var(--text-primary);
             line-height: 1.6;
             font-size: 16px;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         
         .container {
             max-width: 1000px;
             margin: 0 auto;
             padding: 2rem;
+        }
+        
+        main {
+            margin-top: 1rem;
         }
         
         header {
@@ -287,10 +337,18 @@ $attribution = getPublicApiAttributionText();
             border-top: 1px solid var(--border-color);
             text-align: center;
             color: var(--text-muted);
+            font-size: 0.9rem;
         }
         
         footer a {
-            color: var(--text-secondary);
+            color: var(--accent-blue);
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        
+        footer a:hover {
+            opacity: 0.8;
+            text-decoration: none;
         }
         
         .stats {
@@ -334,6 +392,14 @@ $attribution = getPublicApiAttributionText();
     </style>
 </head>
 <body>
+    <script>
+    // Sync dark-mode class from html to body
+    if (document.documentElement.classList.contains('dark-mode')) {
+        document.body.classList.add('dark-mode');
+    }
+    </script>
+    <?php require_once __DIR__ . '/../../lib/navigation.php'; ?>
+    <main>
     <div class="container">
         <header>
             <h1>AviationWX Public API</h1>
@@ -587,16 +653,18 @@ $attribution = getPublicApiAttributionText();
         
         <footer>
             <p>
-                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> | 
-                <a href="https://airports.aviationwx.org">Airports</a> | 
-                <a href="https://guides.aviationwx.org">Guides</a> | 
-                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> | 
-                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> | 
-                <a href="https://terms.aviationwx.org">Terms of Service</a> | 
+                &copy; <?= date('Y') ?> <a href="https://aviationwx.org">AviationWX.org</a> • 
+                <a href="https://airports.aviationwx.org">Airports</a> • 
+                <a href="https://guides.aviationwx.org">Guides</a> • 
+                <a href="https://aviationwx.org#about-the-project">Built for pilots, by pilots</a> • 
+                <a href="https://github.com/alexwitherspoon/aviationwx.org" target="_blank" rel="noopener">Open Source<?php $gitSha = getGitSha(); echo $gitSha ? ' - ' . htmlspecialchars($gitSha) : ''; ?></a> • 
+                <a href="https://terms.aviationwx.org">Terms of Service</a> • 
+                <a href="https://api.aviationwx.org">API</a> • 
                 <a href="https://status.aviationwx.org">Status</a>
             </p>
         </footer>
     </div>
+    </main>
 </body>
 </html>
 
