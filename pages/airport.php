@@ -1195,7 +1195,7 @@ if ($themeCookie === 'dark') {
                 </div>
                 <div class="nearby-airports-container">
                     <button id="nearby-airports-btn" class="nearby-airports-btn" title="Show airports within 200 miles" aria-label="Show nearby airports within 200 miles">
-                        <span>Nearby Airports</span>
+                        <span class="nearby-btn-text">Nearby<span class="nearby-btn-text-long"> Airports</span></span>
                         <span class="dropdown-arrow">▼</span>
                     </button>
                 </div>
