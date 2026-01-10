@@ -1203,10 +1203,10 @@ $breadcrumbs = generateBreadcrumbSchema([
             
             return L.divIcon({
                 className: 'airport-marker',
-                html: '<svg viewBox="0 0 24 24" width="28" height="28" style="filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.4));"><path fill="' + color + '" d="M21,16V14L13,9V3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5V9L2,14V16L10,13.5V19L8,20.5V22L11.5,21L15,22V20.5L13,19V13.5L21,16Z"/></svg>',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14],
-                popupAnchor: [0, -14]
+                html: '<svg viewBox="0 0 24 24" width="32" height="32"><path fill="' + color + '" stroke="#1a1a1a" stroke-width="1.5" stroke-linejoin="round" d="M21,16V14L13,9V3.5A1.5,1.5 0 0,0 11.5,2A1.5,1.5 0 0,0 10,3.5V9L2,14V16L10,13.5V19L8,20.5V22L11.5,21L15,22V20.5L13,19V13.5L21,16Z"/></svg>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
             });
         }
         
