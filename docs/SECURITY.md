@@ -165,6 +165,72 @@ Ban Policy (Strict):
 
 See [Operations Guide](OPERATIONS.md#fail2ban-management) for fail2ban management commands.
 
+## Content Security Policy (CSP)
+
+AviationWX implements a Content Security Policy to prevent XSS attacks and unauthorized resource loading.
+
+### Current CSP Configuration
+
+The CSP is configured in `docker/nginx.conf` with different policies for different subdomains:
+
+**Main Site & Airport Pages** (`aviationwx.org`, `*.aviationwx.org`):
+```
+default-src 'self';
+img-src 'self' data: blob: https:;
+script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com;
+style-src 'self' 'unsafe-inline';
+connect-src 'self' https://cloudflareinsights.com;
+worker-src 'self' blob:;
+frame-ancestors 'self';
+base-uri 'self';
+form-action 'self';
+```
+
+**Embed Subdomain** (`embed.aviationwx.org`):
+- Same as main site but with `frame-ancestors *` to allow embedding anywhere
+
+### Cloudflare Integration
+
+The CSP explicitly allows:
+- ✅ **Cloudflare Web Analytics** (`static.cloudflareinsights.com`, `cloudflareinsights.com`)
+- ✅ **Cloudflare Email Obfuscation** (via `/cdn-cgi/` paths covered by `'self'`)
+- ✅ **Inline scripts** (via `'unsafe-inline'` - required for legacy code)
+
+### CSP-Report-Only Warnings
+
+If you see **"[Report Only]"** CSP violations in browser console:
+
+**These are NOT blocking any functionality** - they're just monitoring reports.
+
+**Source**: Likely from Cloudflare's dashboard settings:
+1. **Cloudflare Dashboard** → **Security** → **Page Rules**
+2. Look for CSP-Report-Only headers in Transform Rules or WAF settings
+3. This is used for testing stricter CSP policies without breaking the site
+
+**Options**:
+- **Keep as-is**: Report-Only mode is safe for monitoring
+- **Disable in Cloudflare**: Remove any CSP-Report-Only rules if not needed
+- **Tighten actual CSP**: Migrate to stricter policy based on reports
+
+### Troubleshooting CSP Issues
+
+**Symptom**: Scripts/styles not loading, console shows CSP errors
+
+**Solutions**:
+1. Check if errors are `[Report Only]` (safe) vs actual blocks
+2. Verify `docker/nginx.conf` CSP matches expected policy
+3. Check Cloudflare Dashboard for additional CSP rules
+4. Test with Cloudflare proxy disabled (DNS-only mode)
+
+**Adding new external resources**:
+1. Update `script-src` or `style-src` in `docker/nginx.conf`
+2. Apply to ALL server blocks (embed + main site)
+3. Test thoroughly before deploying
+
+### Operational Commands
+
+See [Operations Guide](OPERATIONS.md#fail2ban-management) for fail2ban management commands.
+
 ## If You Accidentally Committed Secrets
 
 1. **Immediately rotate all exposed credentials**
