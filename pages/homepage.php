@@ -212,6 +212,22 @@ $ogImage = file_exists($aboutPhotoWebp)
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* Hero Metrics Mobile Optimization */
+        @media (max-width: 640px) {
+            .hero > div[style*="gap: 2rem"] {
+                gap: 1rem !important; /* Tighter spacing on mobile */
+            }
+            .hero > div[style*="gap: 2rem"] > div {
+                min-width: 70px; /* Prevent cramping while allowing wrapping */
+            }
+            .hero h1 {
+                font-size: 2rem !important; /* Slightly smaller on mobile */
+            }
+            .hero p {
+                font-size: 1rem !important;
+            }
+        }
         .features-webcam {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

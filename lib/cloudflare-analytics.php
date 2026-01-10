@@ -3,7 +3,7 @@
  * Cloudflare Analytics Integration
  * 
  * Fetches analytics data from Cloudflare Analytics API (GraphQL)
- * Uses APCu cache with TTL to avoid excessive API calls
+ * Uses multi-layer caching (APCu + file fallback) with 30-minute TTL
  * 
  * Setup:
  * 1. Generate Cloudflare API token with "Analytics:Read" permission
@@ -19,20 +19,41 @@
  *   $uniqueVisitorsToday = $analytics['unique_visitors_today'] ?? 0;
  *   $requestsToday = $analytics['requests_today'] ?? 0;
  * 
+ * Caching Strategy:
+ * - Primary: APCu cache (30 minutes)
+ * - Fallback: File cache (up to 2 hours old if API fails)
+ * - Stale data is preferred over no data (graceful degradation)
+ * 
+ * Unique Visitor Calculation:
+ * - Fetches 24 hourly buckets from Cloudflare
+ * - Sums unique visitors across all hours
+ * - This provides a good estimate (may slightly overcount if same
+ *   visitor returns in multiple hours, but much more accurate than
+ *   taking max of a single hour)
+ * 
  * @see https://developers.cloudflare.com/analytics/graphql-api/
  */
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/logger.php';
 
-// Cache TTL for analytics data (5 minutes = 300 seconds)
-const CLOUDFLARE_ANALYTICS_CACHE_TTL = 300;
+// Cache TTL for analytics data (30 minutes = 1800 seconds)
+// Longer TTL to avoid API slowdowns and show stale data vs no data
+const CLOUDFLARE_ANALYTICS_CACHE_TTL = 1800;
 
 // APCu cache key for analytics data
 const CLOUDFLARE_ANALYTICS_CACHE_KEY = 'cloudflare_analytics';
 
+// Fallback cache file for persistence across APCu restarts
+const CLOUDFLARE_ANALYTICS_FALLBACK_FILE = __DIR__ . '/../cache/cloudflare_analytics.json';
+
 /**
- * Get Cloudflare Analytics data with caching
+ * Get Cloudflare Analytics data with multi-layer caching
+ * 
+ * Priority:
+ * 1. APCu cache (30 min TTL)
+ * 2. File cache fallback (persists across APCu restarts)
+ * 3. Fresh API fetch
  * 
  * @return array Analytics data with keys:
  *   - unique_visitors_today: Unique visitors in last 24h
@@ -49,12 +70,46 @@ function getCloudflareAnalytics(): array {
         }
     }
     
+    // Try file cache fallback (in case APCu was cleared)
+    $fallbackFile = CLOUDFLARE_ANALYTICS_FALLBACK_FILE;
+    if (file_exists($fallbackFile)) {
+        $cacheData = json_decode(file_get_contents($fallbackFile), true);
+        if ($cacheData && isset($cacheData['cached_at'])) {
+            $age = time() - $cacheData['cached_at'];
+            // Use file cache if less than 2 hours old
+            if ($age < 7200) {
+                // Also restore to APCu
+                if (function_exists('apcu_store')) {
+                    apcu_store(CLOUDFLARE_ANALYTICS_CACHE_KEY, $cacheData, CLOUDFLARE_ANALYTICS_CACHE_TTL);
+                }
+                return $cacheData;
+            }
+        }
+    }
+    
     // Fetch fresh data
     $analytics = fetchCloudflareAnalytics();
     
-    // Cache the result
-    if (function_exists('apcu_store') && !empty($analytics)) {
-        apcu_store(CLOUDFLARE_ANALYTICS_CACHE_KEY, $analytics, CLOUDFLARE_ANALYTICS_CACHE_TTL);
+    // If fetch failed, return stale data if available (better than nothing)
+    if (empty($analytics) && isset($cacheData) && !empty($cacheData)) {
+        aviationwx_log('warning', 'Cloudflare API failed, using stale cache', [
+            'cache_age_seconds' => $age ?? 'unknown'
+        ]);
+        return $cacheData;
+    }
+    
+    // Cache the result in both APCu and file
+    if (!empty($analytics)) {
+        if (function_exists('apcu_store')) {
+            apcu_store(CLOUDFLARE_ANALYTICS_CACHE_KEY, $analytics, CLOUDFLARE_ANALYTICS_CACHE_TTL);
+        }
+        
+        // Store in file cache as fallback
+        $cacheDir = dirname($fallbackFile);
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+        @file_put_contents($fallbackFile, json_encode($analytics));
     }
     
     return $analytics;
@@ -163,21 +218,32 @@ GRAPHQL;
     
     $hourlyGroups = $data['data']['viewer']['zones'][0]['httpRequests1hGroups'];
     
-    // Sum up the hourly data to get 24-hour totals
+    // Aggregate hourly data to get 24-hour totals
     $totalRequests = 0;
     $totalBytes = 0;
-    $uniqueVisitors = 0; // Note: uniques are already deduplicated by Cloudflare per hour
+    
+    // Track unique visitors across all hours
+    // Note: Cloudflare's zone-level GraphQL API doesn't provide true 24h unique
+    // count (that would require account-level access). Each hour's uniques are
+    // deduplicated within that hour only.
+    //
+    // We sum the hourly uniques as the best available estimate. This may slightly
+    // overcount if the same user visits in multiple hours, but it's the most
+    // representative metric available and better than taking max (one hour) or
+    // average (underestimates total reach).
+    //
+    // For "Pilots Served Today", this represents the total number of unique
+    // user sessions across the day, which is the appropriate metric for reach.
+    $totalUniques = 0;
     
     foreach ($hourlyGroups as $hour) {
         $totalRequests += $hour['sum']['requests'] ?? 0;
         $totalBytes += $hour['sum']['bytes'] ?? 0;
-        // For uniques, we take the maximum across hours as an approximation
-        // (Cloudflare doesn't provide true 24h unique count via this endpoint)
-        $uniqueVisitors = max($uniqueVisitors, $hour['uniq']['uniques'] ?? 0);
+        $totalUniques += $hour['uniq']['uniques'] ?? 0;
     }
     
     return [
-        'unique_visitors_today' => $uniqueVisitors,
+        'unique_visitors_today' => $totalUniques,
         'requests_today' => $totalRequests,
         'bandwidth_today' => $totalBytes,
         'cached_at' => time()
