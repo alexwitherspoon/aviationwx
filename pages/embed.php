@@ -132,8 +132,8 @@ if (!in_array($style, $validStyles)) {
 }
 
 // Validate theme
-if (!in_array($theme, ['dark', 'light'])) {
-    $theme = 'dark';
+if (!in_array($theme, ['dark', 'light', 'auto'])) {
+    $theme = 'auto'; // Default to auto for best user experience
 }
 
 // Validate target
@@ -388,7 +388,8 @@ function formatLocalTimeEmbed($timestamp, $timezone = 'America/Los_Angeles') {
 
 // Flight category colors
 function getFlightCategoryColors($category, $theme) {
-    $isDark = $theme === 'dark';
+    $isDark = ($theme === 'dark');
+    $useAuto = ($theme === 'auto');
     
     switch (strtoupper($category ?? '')) {
         case 'VFR':
@@ -400,19 +401,29 @@ function getFlightCategoryColors($category, $theme) {
         case 'LIFR':
             return ['bg' => '#ff00ff', 'text' => '#fff'];
         default:
+            // For auto theme, use CSS variable; for static themes, use fixed color
+            if ($useAuto) {
+                return ['bg' => 'var(--unknown-bg)', 'text' => '#fff'];
+            }
             return ['bg' => $isDark ? '#444' : '#888', 'text' => '#fff'];
     }
 }
 
 $categoryColors = getFlightCategoryColors($flightCategory, $theme);
 
-// Theme colors
-$isDark = $theme === 'dark';
-$bgColor = $isDark ? '#1a1a1a' : '#ffffff';
-$cardBg = $isDark ? '#242424' : '#f8f9fa';
-$textColor = $isDark ? '#e0e0e0' : '#333333';
-$mutedColor = $isDark ? '#888888' : '#666666';
-$borderColor = $isDark ? '#333333' : '#dddddd';
+// Determine if we need dynamic theming based on user preference
+$useAutoTheme = ($theme === 'auto');
+$isDark = ($theme === 'dark');
+
+// For static themes (light/dark), set colors via PHP
+// For auto theme, we'll use CSS variables with media queries
+if (!$useAutoTheme) {
+    $bgColor = $isDark ? '#1a1a1a' : '#ffffff';
+    $cardBg = $isDark ? '#242424' : '#f8f9fa';
+    $textColor = $isDark ? '#e0e0e0' : '#333333';
+    $mutedColor = $isDark ? '#888888' : '#666666';
+    $borderColor = $isDark ? '#333333' : '#dddddd';
+}
 $accentColor = '#0066cc';
 
 // Set no-cache headers for embeds
@@ -433,6 +444,62 @@ if (empty($embedAirportId) || !$airport) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($primaryIdentifier) ?> Weather - AviationWX</title>
     <style>
+        <?php if ($useAutoTheme): ?>
+        /* Auto theme: Use CSS variables that respond to system preference */
+        :root {
+            /* Light mode colors (default) */
+            --bg-color: #ffffff;
+            --card-bg: #f8f9fa;
+            --text-color: #333333;
+            --muted-color: #666666;
+            --border-color: #dddddd;
+            --accent-color: #0066cc;
+            --footer-bg: rgba(0,0,0,0.05);
+            --webcam-placeholder-bg: #ddd;
+            --unknown-bg: #888;
+            --no-metar-bg: #666;
+            --peak-item-bg: rgba(255,150,0,0.15);
+            --fog-warning-bg: rgba(255,100,100,0.15);
+            --wind-compass-bg: #f0f0f0;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            :root {
+                /* Dark mode colors (auto-detected) */
+                --bg-color: #1a1a1a;
+                --card-bg: #242424;
+                --text-color: #e0e0e0;
+                --muted-color: #888888;
+                --border-color: #333333;
+                --accent-color: #0066cc;
+                --footer-bg: rgba(0,0,0,0.3);
+                --webcam-placeholder-bg: #333;
+                --unknown-bg: #444;
+                --no-metar-bg: #444;
+                --peak-item-bg: rgba(255,150,0,0.2);
+                --fog-warning-bg: rgba(255,100,100,0.2);
+                --wind-compass-bg: #1a1a1a;
+            }
+        }
+        <?php else: ?>
+        /* Static theme: Use CSS variables with fixed values */
+        :root {
+            --bg-color: <?= $bgColor ?>;
+            --card-bg: <?= $cardBg ?>;
+            --text-color: <?= $textColor ?>;
+            --muted-color: <?= $mutedColor ?>;
+            --border-color: <?= $borderColor ?>;
+            --accent-color: <?= $accentColor ?>;
+            --footer-bg: <?= $isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)' ?>;
+            --webcam-placeholder-bg: <?= $isDark ? '#333' : '#ddd' ?>;
+            --unknown-bg: <?= $isDark ? '#444' : '#888' ?>;
+            --no-metar-bg: <?= $isDark ? '#444' : '#666' ?>;
+            --peak-item-bg: <?= $isDark ? 'rgba(255,150,0,0.2)' : 'rgba(255,150,0,0.15)' ?>;
+            --fog-warning-bg: <?= $isDark ? 'rgba(255,100,100,0.2)' : 'rgba(255,100,100,0.15)' ?>;
+            --wind-compass-bg: <?= $isDark ? '#1a1a1a' : '#f0f0f0' ?>;
+        }
+        <?php endif; ?>
+        
         * {
             margin: 0;
             padding: 0;
@@ -443,8 +510,8 @@ if (empty($embedAirportId) || !$airport) {
             width: 100%;
             height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: <?= $bgColor ?>;
-            color: <?= $textColor ?>;
+            background: var(--bg-color);
+            color: var(--text-color);
             line-height: 1.4;
             overflow: hidden;
         }
@@ -474,7 +541,7 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .flight-category.unknown {
-            background: <?= $isDark ? '#444' : '#888' ?>;
+            background: var(--unknown-bg);
         }
         
         /* Unified footer */
@@ -483,9 +550,9 @@ if (empty($embedAirportId) || !$airport) {
             justify-content: space-between;
             align-items: center;
             padding: 0.3rem 0.5rem;
-            background: <?= $isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)' ?>;
+            background: var(--footer-bg);
             font-size: 0.7rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             gap: 0.5rem;
             flex-shrink: 0;
         }
@@ -498,7 +565,7 @@ if (empty($embedAirportId) || !$airport) {
         .embed-footer .footer-center {
             flex: 1;
             text-align: center;
-            color: <?= $accentColor ?>;
+            color: var(--accent-color);
             font-weight: 500;
         }
         
@@ -520,9 +587,9 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-card .card-header {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid <?= $borderColor ?>;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -542,13 +609,13 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-card .airport-info .identifier {
             font-size: 0.8rem;
-            color: <?= $accentColor ?>;
+            color: var(--accent-color);
             font-weight: 600;
         }
         
         .style-card .airport-info .webcam-count {
             font-size: 0.7rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
         }
         
         .style-card .card-body {
@@ -561,12 +628,12 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-card .weather-row {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.75rem 0.5rem;
             display: flex;
             justify-content: space-around;
             align-items: center;
-            border-bottom: 1px solid <?= $borderColor ?>;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .style-card .weather-row:last-child {
@@ -579,7 +646,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-card .weather-row .label {
             font-size: 0.65rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             text-transform: uppercase;
         }
         
@@ -688,11 +755,11 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-webcam .weather-bar {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.5rem 0.75rem;
             display: flex;
             justify-content: space-around;
-            border-top: 1px solid <?= $borderColor ?>;
+            border-top: 1px solid var(--border-color);
         }
         
         .style-webcam .weather-bar .item {
@@ -702,7 +769,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-webcam .weather-bar .item .label {
             font-size: 0.65rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             text-transform: uppercase;
         }
         
@@ -732,12 +799,12 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-dual .dual-header {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.5rem 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid <?= $borderColor ?>;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .style-dual .dual-header h2 {
@@ -748,13 +815,13 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-dual .dual-header .code {
-            color: <?= $accentColor ?>;
+            color: var(--accent-color);
         }
         
         .style-dual .dual-header .cam-count {
             font-size: 0.7rem;
             font-weight: normal;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             margin-left: 0.5rem;
         }
         
@@ -763,7 +830,7 @@ if (empty($embedAirportId) || !$airport) {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 2px;
-            background: <?= $borderColor ?>;
+            background: var(--border-color);
         }
         
         .style-dual .dual-webcam-cell {
@@ -809,21 +876,21 @@ if (empty($embedAirportId) || !$airport) {
             display: flex;
             align-items: center;
             justify-content: center;
-            background: <?= $isDark ? '#1a1a1a' : '#f0f0f0' ?>;
+            background: var(--wind-compass-bg);
         }
         
         .style-dual .dual-webcam-cell .no-webcam-placeholder {
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             font-size: 0.85rem;
         }
         
         .style-dual .dual-weather-bar {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.5rem 1rem;
             display: flex;
             justify-content: space-around;
             align-items: center;
-            border-top: 1px solid <?= $borderColor ?>;
+            border-top: 1px solid var(--border-color);
         }
         
         .style-dual .dual-weather-bar .item {
@@ -832,7 +899,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-dual .dual-weather-bar .label {
             font-size: 0.65rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             text-transform: uppercase;
         }
         
@@ -863,12 +930,12 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-multi .multi-header {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.5rem 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid <?= $borderColor ?>;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .style-multi .multi-header h2 {
@@ -879,20 +946,20 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-multi .multi-header .code {
-            color: <?= $accentColor ?>;
+            color: var(--accent-color);
         }
         
         .style-multi .multi-header .cam-count {
             font-size: 0.7rem;
             font-weight: normal;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             margin-left: 0.5rem;
         }
         
         .style-multi .webcam-grid {
             display: grid;
             gap: 2px;
-            background: <?= $borderColor ?>;
+            background: var(--border-color);
         }
         
         .style-multi .webcam-grid.cams-1 {
@@ -942,12 +1009,12 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-multi .weather-summary {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.5rem 1rem;
             display: flex;
             justify-content: space-around;
             align-items: center;
-            border-top: 1px solid <?= $borderColor ?>;
+            border-top: 1px solid var(--border-color);
         }
         
         .style-multi .weather-summary .item {
@@ -956,7 +1023,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-multi .weather-summary .label {
             font-size: 0.65rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             text-transform: uppercase;
         }
         
@@ -987,12 +1054,12 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-full .full-header {
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             padding: 0.75rem 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid <?= $borderColor ?>;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .style-full .airport-title {
@@ -1006,14 +1073,14 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-full .airport-title .code {
-            color: <?= $accentColor ?>;
+            color: var(--accent-color);
             font-weight: 700;
         }
         
         .style-full .airport-title .cam-count {
             font-size: 0.75rem;
             font-weight: normal;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             margin-left: 0.5rem;
         }
         
@@ -1053,14 +1120,14 @@ if (empty($embedAirportId) || !$airport) {
         .style-full .data-row {
             display: flex;
             background: <?= $bgColor ?>;
-            border-top: 1px solid <?= $borderColor ?>;
+            border-top: 1px solid var(--border-color);
             flex-shrink: 0;
         }
         
         .style-full .wind-section {
             display: flex;
-            background: <?= $cardBg ?>;
-            border-right: 1px solid <?= $borderColor ?>;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
         }
         
         .style-full .wind-viz-container {
@@ -1074,7 +1141,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-full .wind-section .wind-details {
             padding: 0.4rem 0.5rem;
-            border-left: 1px solid <?= $borderColor ?>;
+            border-left: 1px solid var(--border-color);
             min-width: 100px;
         }
         
@@ -1099,7 +1166,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-full .wind-section .wind-details .metric-item .value {
             font-weight: 600;
-            color: <?= $textColor ?>;
+            color: var(--text-color);
         }
         
         .style-full .wind-section .wind-details .peak-item .value {
@@ -1129,7 +1196,7 @@ if (empty($embedAirportId) || !$airport) {
         .style-full .wind-summary .wind-value {
             font-size: 0.85rem;
             font-weight: 600;
-            color: <?= $textColor ?>;
+            color: var(--text-color);
         }
         
         .style-full .metrics-section {
@@ -1151,7 +1218,7 @@ if (empty($embedAirportId) || !$airport) {
             display: flex;
             flex-direction: column;
             gap: 0.25rem;
-            background: <?= $cardBg ?>;
+            background: var(--card-bg);
             border-radius: 6px;
             padding: 0.4rem;
         }
@@ -1159,9 +1226,9 @@ if (empty($embedAirportId) || !$airport) {
         .style-full .column-header {
             font-size: 0.7rem;
             font-weight: 600;
-            color: <?= $accentColor ?>;
+            color: var(--accent-color);
             padding-bottom: 0.25rem;
-            border-bottom: 1px solid <?= $borderColor ?>;
+            border-bottom: 1px solid var(--border-color);
             margin-bottom: 0.15rem;
         }
         
@@ -1173,14 +1240,14 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .style-full .metric-item.peak-item {
-            background: <?= $isDark ? 'rgba(255,150,0,0.2)' : 'rgba(255,150,0,0.15)' ?>;
+            background: var(--peak-item-bg);
             border-radius: 3px;
             padding: 0.15rem 0.25rem;
             margin: 0 -0.25rem;
         }
         
         .style-full .metric-item.fog-warning {
-            background: <?= $isDark ? 'rgba(255,100,100,0.2)' : 'rgba(255,100,100,0.15)' ?>;
+            background: var(--fog-warning-bg);
             border-radius: 3px;
             padding: 0.15rem 0.25rem;
             margin: 0 -0.25rem;
@@ -1188,7 +1255,7 @@ if (empty($embedAirportId) || !$airport) {
         
         .style-full .metric-item .label {
             font-size: 0.6rem;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
         }
         
         .style-full .metric-item .value {
@@ -1204,7 +1271,7 @@ if (empty($embedAirportId) || !$airport) {
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             text-align: center;
             padding: 1rem;
         }
@@ -1215,11 +1282,11 @@ if (empty($embedAirportId) || !$airport) {
         }
         
         .no-webcam-placeholder {
-            background: <?= $isDark ? '#333' : '#ddd' ?>;
+            background: var(--webcam-placeholder-bg);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: <?= $mutedColor ?>;
+            color: var(--muted-color);
             font-size: 0.9rem;
         }
     </style>
@@ -1231,7 +1298,7 @@ if (empty($embedAirportId) || !$airport) {
         <div class="icon">✈️</div>
         <p>Airport not found</p>
         <p style="font-size: 0.8rem; margin-top: 0.5rem;">
-            <a href="https://<?= htmlspecialchars($baseDomain) ?>" target="<?= htmlspecialchars($target) ?>" style="color: <?= $accentColor ?>;">
+            <a href="https://<?= htmlspecialchars($baseDomain) ?>" target="<?= htmlspecialchars($target) ?>" style="color: var(--accent-color);">
                 View all airports →
             </a>
         </p>
@@ -1258,7 +1325,7 @@ if (empty($embedAirportId) || !$airport) {
                     </span>
                 <?php else: ?>
                     <!-- No METAR: show weather source indicator -->
-                    <span class="flight-category" style="background: <?= $isDark ? '#444' : '#666' ?>; font-size: 0.7rem;">
+                    <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
                         <?= htmlspecialchars($sourceDisplayShort) ?>
                     </span>
                 <?php endif; ?>
@@ -1320,7 +1387,11 @@ if (empty($embedAirportId) || !$airport) {
                 var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
                 var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
                 var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+                <?php if ($useAutoTheme): ?>
+                var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                <?php else: ?>
                 var isDark = <?= $isDark ? 'true' : 'false' ?>;
+                <?php endif; ?>
                 
                 // Draw circle
                 ctx.strokeStyle = isDark ? '#555' : '#ccc';
@@ -1461,7 +1532,11 @@ if (empty($embedAirportId) || !$airport) {
                 var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
                 var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
                 var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+                <?php if ($useAutoTheme): ?>
+                var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                <?php else: ?>
                 var isDark = <?= $isDark ? 'true' : 'false' ?>;
+                <?php endif; ?>
                 
                 // Draw circle
                 ctx.strokeStyle = isDark ? '#555' : '#ccc';
@@ -1532,7 +1607,7 @@ if (empty($embedAirportId) || !$airport) {
                         <?= htmlspecialchars($flightCategory) ?>
                     </span>
                 <?php else: ?>
-                    <span class="flight-category" style="background: <?= $isDark ? '#444' : '#666' ?>; font-size: 0.7rem;">
+                    <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
                         <?php if ($gustSpeed !== null && $gustSpeed > 0): ?>
                             G<?= round($gustSpeed) ?>kt
                         <?php else: ?>
@@ -1627,7 +1702,11 @@ if (empty($embedAirportId) || !$airport) {
                 var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
                 var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
                 var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+                <?php if ($useAutoTheme): ?>
+                var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                <?php else: ?>
                 var isDark = <?= $isDark ? 'true' : 'false' ?>;
+                <?php endif; ?>
                 
                 // Draw circle
                 ctx.strokeStyle = isDark ? '#555' : '#ccc';
@@ -1698,7 +1777,7 @@ if (empty($embedAirportId) || !$airport) {
                         <?= htmlspecialchars($flightCategory) ?>
                     </span>
                 <?php else: ?>
-                    <span class="flight-category" style="background: <?= $isDark ? '#444' : '#666' ?>; font-size: 0.7rem;">
+                    <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
                         <?php if ($gustSpeed !== null && $gustSpeed > 0): ?>
                             G<?= round($gustSpeed) ?>kt
                         <?php else: ?>
@@ -1798,7 +1877,11 @@ if (empty($embedAirportId) || !$airport) {
                 var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
                 var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
                 var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+                <?php if ($useAutoTheme): ?>
+                var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                <?php else: ?>
                 var isDark = <?= $isDark ? 'true' : 'false' ?>;
+                <?php endif; ?>
                 
                 // Draw circle
                 ctx.strokeStyle = isDark ? '#555' : '#ccc';
@@ -1870,7 +1953,7 @@ if (empty($embedAirportId) || !$airport) {
                             <?= htmlspecialchars($flightCategory) ?>
                         </span>
                     <?php elseif ($gustSpeed !== null && $gustSpeed > 0): ?>
-                        <span class="flight-category" style="background: <?= $isDark ? '#444' : '#666' ?>; font-size: 0.7rem;">
+                        <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
                             G<?= round($gustSpeed) ?>kt
                         </span>
                     <?php endif; ?>

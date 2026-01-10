@@ -615,6 +615,10 @@ $baseUrl = getBaseUrl();
                             <input type="radio" name="theme" value="dark">
                             <span>Dark</span>
                         </label>
+                        <label class="radio-item">
+                            <input type="radio" name="theme" value="auto">
+                            <span>Auto (System)</span>
+                        </label>
                     </div>
                 </div>
                 
@@ -1444,7 +1448,7 @@ $baseUrl = getBaseUrl();
             
             // Theme
             var theme = params.get('theme');
-            if (theme && ['light', 'dark'].indexOf(theme) !== -1) {
+            if (theme && ['light', 'dark', 'auto'].indexOf(theme) !== -1) {
                 state.theme = theme;
                 var themeRadio = document.querySelector('input[name="theme"][value="' + theme + '"]');
                 if (themeRadio) themeRadio.checked = true;
