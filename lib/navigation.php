@@ -141,6 +141,9 @@ $baseDomain = getBaseDomain();
     const AIRPORTS = <?= json_encode($navAirports) ?>;
     const BASE_DOMAIN = <?= json_encode($baseDomain) ?>;
     
+    // Global dropdown close functions exposed on window object
+    window.aviationwxNav = window.aviationwxNav || {};
+    
     // Initialize navigation
     function initSiteNavigation() {
         const searchInput = document.getElementById('site-nav-airport-search');
@@ -155,6 +158,35 @@ $baseDomain = getBaseDomain();
         
         let selectedIndex = -1;
         let searchTimeout = null;
+        let overlay = null;
+        
+        // Expose close functions globally for coordination
+        window.aviationwxNav.closeSearchDropdown = function() {
+            searchDropdown.classList.remove('show');
+        };
+        
+        window.aviationwxNav.closeDevelopersDropdown = function() {
+            if (developersMenu) {
+                developersMenu.classList.remove('show');
+                if (developersButton) {
+                    developersButton.setAttribute('aria-expanded', 'false');
+                }
+            }
+        };
+        
+        window.aviationwxNav.closeMobileMenu = function() {
+            if (mobileMenu && overlay) {
+                mobileMenu.classList.remove('show');
+                overlay.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+        };
+        
+        window.aviationwxNav.closeAllNavDropdowns = function() {
+            window.aviationwxNav.closeSearchDropdown();
+            window.aviationwxNav.closeDevelopersDropdown();
+            window.aviationwxNav.closeMobileMenu();
+        };
         
         // Navigate to airport
         function navigateToAirport(airportId) {
@@ -290,6 +322,10 @@ $baseDomain = getBaseDomain();
         searchInput.addEventListener('focus', () => {
             if (searchInput.value.length >= 2) {
                 performSearch(searchInput.value);
+                
+                // Close other nav dropdowns when search opens
+                window.aviationwxNav.closeDevelopersDropdown();
+                window.aviationwxNav.closeMobileMenu();
             }
         });
         
@@ -359,6 +395,7 @@ $baseDomain = getBaseDomain();
                     developersButton.setAttribute('aria-expanded', 'true');
                     // Close search dropdown if open
                     searchDropdown.classList.remove('show');
+                    window.aviationwxNav.closeMobileMenu();
                 }
             });
         }
@@ -366,15 +403,27 @@ $baseDomain = getBaseDomain();
         // Hamburger menu
         if (hamburger && mobileMenu) {
             // Create overlay
-            const overlay = document.createElement('div');
+            overlay = document.createElement('div');
             overlay.className = 'site-nav-overlay';
             document.body.appendChild(overlay);
             
             hamburger.addEventListener('click', (e) => {
                 e.stopPropagation();
-                mobileMenu.classList.toggle('show');
-                overlay.classList.toggle('show');
-                document.body.style.overflow = mobileMenu.classList.contains('show') ? 'hidden' : '';
+                const isOpen = mobileMenu.classList.contains('show');
+                
+                if (isOpen) {
+                    mobileMenu.classList.remove('show');
+                    overlay.classList.remove('show');
+                    document.body.style.overflow = '';
+                } else {
+                    mobileMenu.classList.add('show');
+                    overlay.classList.add('show');
+                    document.body.style.overflow = 'hidden';
+                    
+                    // Close other dropdowns when hamburger opens
+                    searchDropdown.classList.remove('show');
+                    window.aviationwxNav.closeDevelopersDropdown();
+                }
             });
             
             overlay.addEventListener('click', () => {

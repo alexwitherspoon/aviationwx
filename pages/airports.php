@@ -366,37 +366,6 @@ $breadcrumbs = generateBreadcrumbSchema([
         .legend-color.lifr { background: #d946ef; }
         .legend-color.unknown { background: #6b7280; }
         
-        /* Jump to Map Button */
-        .jump-to-map {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            z-index: 1001;
-            background: #0066cc;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 30px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,102,204,0.4);
-            display: none;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-        
-        .jump-to-map:hover {
-            background: #0052a3;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,102,204,0.5);
-        }
-        
-        .jump-to-map.visible {
-            display: flex;
-        }
-        
         /* Full-screen mode */
         .map-container.fullscreen {
             position: fixed;
@@ -961,14 +930,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             color: #e0e0e0;
         }
         
-        body.dark-mode .jump-to-map {
-            background: #4a9eff;
-        }
-        
-        body.dark-mode .jump-to-map:hover {
-            background: #3b8cee;
-        }
-        
         body.dark-mode .radar-controls {
             background: #2a2a2a;
             color: #e0e0e0;
@@ -1070,11 +1031,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             
             <div id="map"></div>
         </div>
-        
-        <!-- Jump to Map Button -->
-        <button id="jump-to-map" class="jump-to-map">
-            📍 <span>Back to Map</span>
-        </button>
         
         <section class="airports-section">
             <div class="airports-grid">
@@ -1648,27 +1604,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
         });
         
-        // ========================================================================
-        // FEATURE: Jump to Map Button
-        // ========================================================================
-        var jumpBtn = document.getElementById('jump-to-map');
-        
-        window.addEventListener('scroll', function() {
-            // Show button when scrolled past map
-            var mapBottom = mapContainer.offsetTop + mapContainer.offsetHeight;
-            if (window.scrollY > mapBottom) {
-                jumpBtn.classList.add('visible');
-            } else {
-                jumpBtn.classList.remove('visible');
-            }
-        });
-        
-        jumpBtn.addEventListener('click', function() {
-            mapContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-        
-        // ========================================================================
-        // FEATURE: Collapsible Flight Legend
         // ========================================================================
         // FEATURE: Flight Category Legend Toggle
         // ========================================================================

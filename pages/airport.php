@@ -7631,6 +7631,17 @@ window.addEventListener('beforeunload', () => {
         // If there's a search query, show results
         if (searchInput.value.length >= 2) {
             performSearch(searchInput.value);
+            
+            // Close hamburger menu when search dropdown opens
+            if (hamburgerBtn && hamburgerDropdown) {
+                hamburgerBtn.classList.remove('active');
+                hamburgerDropdown.classList.remove('show');
+            }
+            
+            // Close navigation dropdowns
+            if (window.aviationwxNav && window.aviationwxNav.closeAllNavDropdowns) {
+                window.aviationwxNav.closeAllNavDropdowns();
+            }
         }
     });
     
@@ -7685,6 +7696,17 @@ window.addEventListener('beforeunload', () => {
             displayNearbyAirports();
             // Update distances in case unit changed
             updateDistanceDisplays();
+            
+            // Close hamburger menu when airport dropdown opens
+            if (hamburgerBtn && hamburgerDropdown) {
+                hamburgerBtn.classList.remove('active');
+                hamburgerDropdown.classList.remove('show');
+            }
+            
+            // Close navigation dropdowns
+            if (window.aviationwxNav && window.aviationwxNav.closeAllNavDropdowns) {
+                window.aviationwxNav.closeAllNavDropdowns();
+            }
         }
     });
     
@@ -7703,6 +7725,16 @@ window.addEventListener('beforeunload', () => {
             } else {
                 hamburgerBtn.classList.add('active');
                 hamburgerDropdown.classList.add('show');
+                
+                // Close airport dropdown when hamburger opens
+                airportDropdown.classList.remove('show');
+                nearbyBtn.classList.remove('active');
+                currentMode = null;
+                
+                // Close navigation dropdowns
+                if (window.aviationwxNav && window.aviationwxNav.closeAllNavDropdowns) {
+                    window.aviationwxNav.closeAllNavDropdowns();
+                }
             }
         });
         
