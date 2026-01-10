@@ -126,7 +126,7 @@ function formatRainfall($value, $distUnit) {
 }
 
 // Validate style
-$validStyles = ['card', 'webcam', 'dual', 'multi', 'full'];
+$validStyles = ['card', 'webcam', 'dual', 'multi', 'full', 'full-single', 'full-dual', 'full-multi'];
 if (!in_array($style, $validStyles)) {
     $style = 'card';
 }
@@ -2132,6 +2132,935 @@ if (empty($embedAirportId) || !$airport) {
         <script>
         (function() {
             var canvas = document.getElementById('wind-canvas');
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 12;
+            
+            var runways = <?= json_encode($runways) ?>;
+            var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
+            var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
+            var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+            var isDark = <?= $isDark ? 'true' : 'false' ?>;
+            
+            // Draw outer circle
+            ctx.strokeStyle = isDark ? '#555' : '#ccc';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Draw runways
+            runways.forEach(function(rw) {
+                var h1 = rw.heading_1 || 0;
+                var angle = (h1 * Math.PI) / 180;
+                var rwLen = r * 0.7;
+                
+                ctx.strokeStyle = isDark ? '#666' : '#999';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx - Math.sin(angle) * rwLen, cy + Math.cos(angle) * rwLen);
+                ctx.lineTo(cx + Math.sin(angle) * rwLen, cy - Math.cos(angle) * rwLen);
+                ctx.stroke();
+                
+                // Runway labels
+                var label1 = String(Math.round(h1 / 10)).padStart(2, '0');
+                var label2 = String(Math.round(((h1 + 180) % 360) / 10)).padStart(2, '0');
+                ctx.font = 'bold 9px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = isDark ? '#888' : '#666';
+                ctx.fillText(label1, cx - Math.sin(angle) * (rwLen + 10), cy + Math.cos(angle) * (rwLen + 10));
+                ctx.fillText(label2, cx + Math.sin(angle) * (rwLen + 10), cy - Math.cos(angle) * (rwLen + 10));
+            });
+            
+            // Draw wind arrow
+            var CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
+            if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
+                var windAngle = ((windDir + 180) % 360) * Math.PI / 180; // Convert FROM to TOWARD
+                var arrowLen = Math.min(windSpeed * 3, r - 15);
+                var endX = cx + Math.sin(windAngle) * arrowLen;
+                var endY = cy - Math.cos(windAngle) * arrowLen;
+                
+                // Arrow glow
+                ctx.fillStyle = 'rgba(220, 53, 69, 0.15)';
+                ctx.beginPath();
+                ctx.arc(cx, cy, Math.max(12, windSpeed * 2), 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Arrow line
+                ctx.strokeStyle = '#dc3545';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                // Arrow head
+                var headAngle = Math.atan2(endY - cy, endX - cx);
+                ctx.fillStyle = '#dc3545';
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - 8 * Math.cos(headAngle - Math.PI / 6), endY - 8 * Math.sin(headAngle - Math.PI / 6));
+                ctx.lineTo(endX - 8 * Math.cos(headAngle + Math.PI / 6), endY - 8 * Math.sin(headAngle + Math.PI / 6));
+                ctx.closePath();
+                ctx.fill();
+            } else if (isVRB && windSpeed >= CALM_WIND_THRESHOLD) {
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#dc3545';
+                ctx.fillText('VRB', cx, cy + 4);
+            } else if (windSpeed === null || windSpeed < CALM_WIND_THRESHOLD) {
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = isDark ? '#666' : '#999';
+                ctx.fillText('CALM', cx, cy + 4);
+            }
+            
+            // Cardinal directions
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillStyle = isDark ? '#888' : '#666';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ['N', 'E', 'S', 'W'].forEach(function(d, i) {
+                var ang = (i * 90 * Math.PI) / 180;
+                ctx.fillText(d, cx + Math.sin(ang) * (r + 8), cy - Math.cos(ang) * (r + 8));
+            });
+        })();
+        </script>
+        
+    <?php elseif ($style === 'full-single'): ?>
+        <!-- FULL SINGLE WEBCAM STYLE -->
+        <div class="style-full">
+            <div class="full-header">
+                <div class="airport-title">
+                    <h2>
+                        <span class="code"><?= htmlspecialchars($primaryIdentifier) ?></span>
+                        <?= htmlspecialchars($airportName) ?>
+                        <?php if ($webcamCount > 0): ?>
+                        <span class="cam-count">📷 <?= $webcamCount ?></span>
+                        <?php endif; ?>
+                    </h2>
+                    <?php if ($hasMetarData): ?>
+                        <span class="flight-category">
+                            <?= htmlspecialchars($flightCategory) ?>
+                        </span>
+                    <?php elseif ($gustSpeed !== null && $gustSpeed > 0): ?>
+                        <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
+                            G<?= round($gustSpeed) ?>kt
+                        </span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="full-body">
+                <div class="webcam-section">
+                    <?php if ($webcamUrl): 
+                        $meta = $webcamMetadata[$webcamIndex] ?? null;
+                        $enabledFormats = getEnabledWebcamFormats();
+                        $timestamp = $meta['timestamp'] ?? 0;
+                        $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $webcamIndex;
+                        if ($timestamp > 0) {
+                            $baseUrl .= '&ts=' . $timestamp;
+                        }
+                    ?>
+                        <picture>
+                            <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $webcamIndex, $meta, 'webp')) ?>" type="image/webp" sizes="400px">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($webcamUrl) ?>" 
+                                 <?php if ($webcamSrcset): ?>srcset="<?= htmlspecialchars($webcamSrcset) ?>" sizes="400px"<?php endif; ?>
+                                 alt="<?= htmlspecialchars($primaryIdentifier) ?> Webcam"
+                                 <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                        </picture>
+                        <div class="live-badge">🔴 LIVE</div>
+                    <?php else: ?>
+                        <div class="no-webcam-placeholder" style="height: 100%;">No webcam available</div>
+                    <?php endif; ?>
+                </div>
+                <div class="data-row">
+                    <!-- Wind Section (Compass + Wind Column) -->
+                    <div class="wind-section">
+                        <div class="wind-viz-container">
+                            <canvas id="wind-canvas-full-single" width="100" height="100"></canvas>
+                            <div class="wind-summary">
+                                <?php 
+                                $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
+                                $windSpd = $windSpeed !== null ? round(convertWindSpeed($windSpeed, $windUnit)) : '--';
+                                $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round(convertWindSpeed($gustSpeed, $windUnit)) : '';
+                                $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
+                                ?>
+                                <span class="wind-value"><?= $windDir ?>@<?= $windSpd ?><?= $gustVal ?><?= $windUnitLabel ?></span>
+                            </div>
+                        </div>
+                        <!-- Wind Column next to compass -->
+                        <div class="metric-column wind-details">
+                            <div class="column-header">💨 Wind</div>
+                            <div class="metric-item">
+                                <span class="label">Direction</span>
+                                <span class="value"><?= $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--' ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Speed</span>
+                                <span class="value"><?= formatWindSpeed($windSpeed, $windUnit) ?></span>
+                            </div>
+                            <?php if ($gustSpeed !== null && $gustSpeed > 0): ?>
+                            <div class="metric-item">
+                                <span class="label">Gusting</span>
+                                <span class="value"><?= formatWindSpeed($gustSpeed, $windUnit) ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($peakGustToday !== null && $peakGustToday > 0): ?>
+                            <div class="metric-item peak-item">
+                                <span class="label">Peak Gust</span>
+                                <span class="value"><?= formatWindSpeed($peakGustToday, $windUnit) ?></span>
+                            </div>
+                            <?php if ($peakGustTime !== null): ?>
+                            <div class="metric-item peak-time-item">
+                                <span class="label">@ Time</span>
+                                <span class="value peak-time"><?php
+                                    try {
+                                        $tz = new DateTimeZone($airportTimezone);
+                                        $dt = new DateTime('@' . $peakGustTime);
+                                        $dt->setTimezone($tz);
+                                        echo $dt->format('g:ia');
+                                    } catch (Exception $e) {
+                                        echo date('g:ia', $peakGustTime);
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <!-- Grouped Metrics by Column -->
+                    <div class="metrics-section">
+                    <div class="metrics-columns">
+                        <!-- Temperature Column -->
+                        <div class="metric-column">
+                            <div class="column-header">🌡️ Temperature</div>
+                            <div class="metric-item">
+                                <span class="label">Temp</span>
+                                <span class="value"><?= formatTemp($temperature, $tempUnit) ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Dewpt</span>
+                                <span class="value"><?= formatTemp($dewpoint, $tempUnit) ?></span>
+                            </div>
+                            <?php if ($dewpointSpread !== null): ?>
+                            <div class="metric-item <?= $dewpointSpread <= 3 ? 'fog-warning' : '' ?>">
+                                <span class="label">Spread</span>
+                                <span class="value"><?php 
+                                    // Spread is always the same in F or C (just smaller numbers in C)
+                                    if ($tempUnit === 'C') {
+                                        echo round($dewpointSpread * 5 / 9) . '°C';
+                                    } else {
+                                        echo round($dewpointSpread) . '°F';
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Today's Hi/Lo</span>
+                                <span class="value"><?php
+                                    $hi = $tempHighToday !== null ? round(convertTemp($tempHighToday, $tempUnit)) : '--';
+                                    $lo = $tempLowToday !== null ? round(convertTemp($tempLowToday, $tempUnit)) : '--';
+                                    echo $hi . '/' . $lo . '°' . $tempUnit;
+                                ?></span>
+                            </div>
+                        </div>
+                        <!-- Sky/Visibility Column -->
+                        <div class="metric-column">
+                            <div class="column-header">👁️ Conditions</div>
+                            <?php if ($hasMetarData && $visibility !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Visibility</span>
+                                <span class="value"><?= $visibility >= 10 ? '10+' : round($visibility, 1) ?> SM</span>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($hasMetarData && $ceiling !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Ceiling</span>
+                                <span class="value"><?= $ceiling >= 99999 ? 'UNL' : formatDist($ceiling, $distUnit, 'comma') ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Humidity</span>
+                                <span class="value"><?= $humidity !== null ? round($humidity) . ' %' : '--' ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Rain Today</span>
+                                <span class="value"><?= formatRainfall($rainfallToday, $distUnit) ?></span>
+                            </div>
+                        </div>
+                        <!-- Pressure/Altitude Column -->
+                        <div class="metric-column">
+                            <div class="column-header">📊 Altitude</div>
+                            <div class="metric-item">
+                                <span class="label">Altimeter</span>
+                                <span class="value"><?= formatPressure($pressure, $baroUnit) ?></span>
+                            </div>
+                            <?php if ($pressureAltitude !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Press Alt</span>
+                                <span class="value"><?= formatDist($pressureAltitude, $distUnit, 'comma') ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Density Alt</span>
+                                <span class="value"><?= formatDist($densityAltitude, $distUnit, 'comma') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="embed-footer">
+            <div class="footer-left">Last Updated: <?= htmlspecialchars(formatLocalTimeEmbed($lastUpdated, $airportTimezone)) ?></div>
+            <div class="footer-center">View Dashboard</div>
+            <div class="footer-right">Powered by AviationWX<?= htmlspecialchars($sourceAttribution) ?></div>
+        </div>
+        
+        <!-- Wind Visualization Script -->
+        <script>
+        (function() {
+            var canvas = document.getElementById('wind-canvas-full-single');
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 12;
+            
+            var runways = <?= json_encode($runways) ?>;
+            var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
+            var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
+            var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+            var isDark = <?= $isDark ? 'true' : 'false' ?>;
+            
+            // Draw outer circle
+            ctx.strokeStyle = isDark ? '#555' : '#ccc';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Draw runways
+            runways.forEach(function(rw) {
+                var h1 = rw.heading_1 || 0;
+                var angle = (h1 * Math.PI) / 180;
+                var rwLen = r * 0.7;
+                
+                ctx.strokeStyle = isDark ? '#666' : '#999';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx - Math.sin(angle) * rwLen, cy + Math.cos(angle) * rwLen);
+                ctx.lineTo(cx + Math.sin(angle) * rwLen, cy - Math.cos(angle) * rwLen);
+                ctx.stroke();
+                
+                // Runway labels
+                var label1 = String(Math.round(h1 / 10)).padStart(2, '0');
+                var label2 = String(Math.round(((h1 + 180) % 360) / 10)).padStart(2, '0');
+                ctx.font = 'bold 9px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = isDark ? '#888' : '#666';
+                ctx.fillText(label1, cx - Math.sin(angle) * (rwLen + 10), cy + Math.cos(angle) * (rwLen + 10));
+                ctx.fillText(label2, cx + Math.sin(angle) * (rwLen + 10), cy - Math.cos(angle) * (rwLen + 10));
+            });
+            
+            // Draw wind arrow
+            var CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
+            if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
+                var windAngle = ((windDir + 180) % 360) * Math.PI / 180; // Convert FROM to TOWARD
+                var arrowLen = Math.min(windSpeed * 3, r - 15);
+                var endX = cx + Math.sin(windAngle) * arrowLen;
+                var endY = cy - Math.cos(windAngle) * arrowLen;
+                
+                // Arrow glow
+                ctx.fillStyle = 'rgba(220, 53, 69, 0.15)';
+                ctx.beginPath();
+                ctx.arc(cx, cy, Math.max(12, windSpeed * 2), 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Arrow line
+                ctx.strokeStyle = '#dc3545';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                // Arrow head
+                var headAngle = Math.atan2(endY - cy, endX - cx);
+                ctx.fillStyle = '#dc3545';
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - 8 * Math.cos(headAngle - Math.PI / 6), endY - 8 * Math.sin(headAngle - Math.PI / 6));
+                ctx.lineTo(endX - 8 * Math.cos(headAngle + Math.PI / 6), endY - 8 * Math.sin(headAngle + Math.PI / 6));
+                ctx.closePath();
+                ctx.fill();
+            } else if (isVRB && windSpeed >= CALM_WIND_THRESHOLD) {
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#dc3545';
+                ctx.fillText('VRB', cx, cy + 4);
+            } else if (windSpeed === null || windSpeed < CALM_WIND_THRESHOLD) {
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = isDark ? '#666' : '#999';
+                ctx.fillText('CALM', cx, cy + 4);
+            }
+            
+            // Cardinal directions
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillStyle = isDark ? '#888' : '#666';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ['N', 'E', 'S', 'W'].forEach(function(d, i) {
+                var ang = (i * 90 * Math.PI) / 180;
+                ctx.fillText(d, cx + Math.sin(ang) * (r + 8), cy - Math.cos(ang) * (r + 8));
+            });
+        })();
+        </script>
+        
+    <?php elseif ($style === 'full-dual'): ?>
+        <!-- FULL DUAL CAMERA STYLE -->
+        <div class="style-full">
+            <div class="full-header">
+                <div class="airport-title">
+                    <h2>
+                        <span class="code"><?= htmlspecialchars($primaryIdentifier) ?></span>
+                        <?= htmlspecialchars($airportName) ?>
+                        <?php if ($webcamCount > 0): ?>
+                        <span class="cam-count">📷 <?= $webcamCount ?></span>
+                        <?php endif; ?>
+                    </h2>
+                    <?php if ($hasMetarData): ?>
+                        <span class="flight-category">
+                            <?= htmlspecialchars($flightCategory) ?>
+                        </span>
+                    <?php elseif ($gustSpeed !== null && $gustSpeed > 0): ?>
+                        <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
+                            G<?= round($gustSpeed) ?>kt
+                        </span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="full-body">
+                <!-- Dual Webcam Grid Section -->
+                <div class="webcam-section" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; background: var(--border-color);">
+                    <?php 
+                    if ($webcamCount > 0): 
+                        // Use selected camera indices from $cams array
+                        for ($slot = 0; $slot < 2; $slot++): 
+                            $camIdx = $cams[$slot] ?? $slot;
+                            // Ensure camera index is valid
+                            if ($camIdx >= $webcamCount) $camIdx = $slot < $webcamCount ? $slot : 0;
+                            $meta = $webcamMetadata[$camIdx] ?? null;
+                            $camUrl = buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx, 'jpg', 'original');
+                            $camSrcset = buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'jpg');
+                            $camName = $airport['webcams'][$camIdx]['name'] ?? 'Camera ' . ($camIdx + 1);
+                            $enabledFormats = getEnabledWebcamFormats();
+                            $timestamp = $meta['timestamp'] ?? 0;
+                            $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIdx;
+                            if ($timestamp > 0) {
+                                $baseUrl .= '&ts=' . $timestamp;
+                            }
+                    ?>
+                    <div style="position: relative; background: #000; overflow: hidden;">
+                        <picture>
+                            <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'webp')) ?>" type="image/webp" sizes="300px">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($camUrl) ?>" 
+                                 <?php if ($camSrcset): ?>srcset="<?= htmlspecialchars($camSrcset) ?>" sizes="300px"<?php endif; ?>
+                                 alt="<?= htmlspecialchars($camName) ?>"
+                                 style="width: 100%; height: 100%; object-fit: cover;"
+                                 <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                        </picture>
+                        <span style="position: absolute; bottom: 0.25rem; left: 0.25rem; background: rgba(0,0,0,0.7); color: white; padding: 0.15rem 0.4rem; font-size: 0.7rem; border-radius: 3px;"><?= htmlspecialchars($camName) ?></span>
+                        <?php if ($slot === 0): ?>
+                        <div class="live-badge" style="top: 0.5rem; right: 0.5rem;">🔴 LIVE</div>
+                        <?php endif; ?>
+                    </div>
+                    <?php 
+                        endfor; 
+                    else: 
+                    ?>
+                    <div style="display: flex; align-items: center; justify-content: center; background: var(--wind-compass-bg);">
+                        <div class="no-webcam-placeholder">No webcams available</div>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: center; background: var(--wind-compass-bg);">
+                        <div class="no-webcam-placeholder">No webcams available</div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="data-row">
+                    <!-- Wind Section (Compass + Wind Column) -->
+                    <div class="wind-section">
+                        <div class="wind-viz-container">
+                            <canvas id="wind-canvas-full-dual" width="100" height="100"></canvas>
+                            <div class="wind-summary">
+                                <?php 
+                                $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
+                                $windSpd = $windSpeed !== null ? round(convertWindSpeed($windSpeed, $windUnit)) : '--';
+                                $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round(convertWindSpeed($gustSpeed, $windUnit)) : '';
+                                $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
+                                ?>
+                                <span class="wind-value"><?= $windDir ?>@<?= $windSpd ?><?= $gustVal ?><?= $windUnitLabel ?></span>
+                            </div>
+                        </div>
+                        <!-- Wind Column next to compass -->
+                        <div class="metric-column wind-details">
+                            <div class="column-header">💨 Wind</div>
+                            <div class="metric-item">
+                                <span class="label">Direction</span>
+                                <span class="value"><?= $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--' ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Speed</span>
+                                <span class="value"><?= formatWindSpeed($windSpeed, $windUnit) ?></span>
+                            </div>
+                            <?php if ($gustSpeed !== null && $gustSpeed > 0): ?>
+                            <div class="metric-item">
+                                <span class="label">Gusting</span>
+                                <span class="value"><?= formatWindSpeed($gustSpeed, $windUnit) ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($peakGustToday !== null && $peakGustToday > 0): ?>
+                            <div class="metric-item peak-item">
+                                <span class="label">Peak Gust</span>
+                                <span class="value"><?= formatWindSpeed($peakGustToday, $windUnit) ?></span>
+                            </div>
+                            <?php if ($peakGustTime !== null): ?>
+                            <div class="metric-item peak-time-item">
+                                <span class="label">@ Time</span>
+                                <span class="value peak-time"><?php
+                                    try {
+                                        $tz = new DateTimeZone($airportTimezone);
+                                        $dt = new DateTime('@' . $peakGustTime);
+                                        $dt->setTimezone($tz);
+                                        echo $dt->format('g:ia');
+                                    } catch (Exception $e) {
+                                        echo date('g:ia', $peakGustTime);
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <!-- Grouped Metrics by Column -->
+                    <div class="metrics-section">
+                    <div class="metrics-columns">
+                        <!-- Temperature Column -->
+                        <div class="metric-column">
+                            <div class="column-header">🌡️ Temperature</div>
+                            <div class="metric-item">
+                                <span class="label">Temp</span>
+                                <span class="value"><?= formatTemp($temperature, $tempUnit) ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Dewpt</span>
+                                <span class="value"><?= formatTemp($dewpoint, $tempUnit) ?></span>
+                            </div>
+                            <?php if ($dewpointSpread !== null): ?>
+                            <div class="metric-item <?= $dewpointSpread <= 3 ? 'fog-warning' : '' ?>">
+                                <span class="label">Spread</span>
+                                <span class="value"><?php 
+                                    // Spread is always the same in F or C (just smaller numbers in C)
+                                    if ($tempUnit === 'C') {
+                                        echo round($dewpointSpread * 5 / 9) . '°C';
+                                    } else {
+                                        echo round($dewpointSpread) . '°F';
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Today's Hi/Lo</span>
+                                <span class="value"><?php
+                                    $hi = $tempHighToday !== null ? round(convertTemp($tempHighToday, $tempUnit)) : '--';
+                                    $lo = $tempLowToday !== null ? round(convertTemp($tempLowToday, $tempUnit)) : '--';
+                                    echo $hi . '/' . $lo . '°' . $tempUnit;
+                                ?></span>
+                            </div>
+                        </div>
+                        <!-- Sky/Visibility Column -->
+                        <div class="metric-column">
+                            <div class="column-header">👁️ Conditions</div>
+                            <?php if ($hasMetarData && $visibility !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Visibility</span>
+                                <span class="value"><?= $visibility >= 10 ? '10+' : round($visibility, 1) ?> SM</span>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($hasMetarData && $ceiling !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Ceiling</span>
+                                <span class="value"><?= $ceiling >= 99999 ? 'UNL' : formatDist($ceiling, $distUnit, 'comma') ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Humidity</span>
+                                <span class="value"><?= $humidity !== null ? round($humidity) . ' %' : '--' ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Rain Today</span>
+                                <span class="value"><?= formatRainfall($rainfallToday, $distUnit) ?></span>
+                            </div>
+                        </div>
+                        <!-- Pressure/Altitude Column -->
+                        <div class="metric-column">
+                            <div class="column-header">📊 Altitude</div>
+                            <div class="metric-item">
+                                <span class="label">Altimeter</span>
+                                <span class="value"><?= formatPressure($pressure, $baroUnit) ?></span>
+                            </div>
+                            <?php if ($pressureAltitude !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Press Alt</span>
+                                <span class="value"><?= formatDist($pressureAltitude, $distUnit, 'comma') ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Density Alt</span>
+                                <span class="value"><?= formatDist($densityAltitude, $distUnit, 'comma') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="embed-footer">
+            <div class="footer-left">Last Updated: <?= htmlspecialchars(formatLocalTimeEmbed($lastUpdated, $airportTimezone)) ?></div>
+            <div class="footer-center">View Dashboard</div>
+            <div class="footer-right">Powered by AviationWX<?= htmlspecialchars($sourceAttribution) ?></div>
+        </div>
+        
+        <!-- Wind Visualization Script -->
+        <script>
+        (function() {
+            var canvas = document.getElementById('wind-canvas-full-dual');
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 12;
+            
+            var runways = <?= json_encode($runways) ?>;
+            var windSpeed = <?= $windSpeed !== null ? round($windSpeed) : 'null' ?>;
+            var windDir = <?= ($windDirection !== null && is_numeric($windDirection)) ? round($windDirection) : 'null' ?>;
+            var isVRB = <?= $windDirection === 'VRB' ? 'true' : 'false' ?>;
+            var isDark = <?= $isDark ? 'true' : 'false' ?>;
+            
+            // Draw outer circle
+            ctx.strokeStyle = isDark ? '#555' : '#ccc';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Draw runways
+            runways.forEach(function(rw) {
+                var h1 = rw.heading_1 || 0;
+                var angle = (h1 * Math.PI) / 180;
+                var rwLen = r * 0.7;
+                
+                ctx.strokeStyle = isDark ? '#666' : '#999';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx - Math.sin(angle) * rwLen, cy + Math.cos(angle) * rwLen);
+                ctx.lineTo(cx + Math.sin(angle) * rwLen, cy - Math.cos(angle) * rwLen);
+                ctx.stroke();
+                
+                // Runway labels
+                var label1 = String(Math.round(h1 / 10)).padStart(2, '0');
+                var label2 = String(Math.round(((h1 + 180) % 360) / 10)).padStart(2, '0');
+                ctx.font = 'bold 9px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = isDark ? '#888' : '#666';
+                ctx.fillText(label1, cx - Math.sin(angle) * (rwLen + 10), cy + Math.cos(angle) * (rwLen + 10));
+                ctx.fillText(label2, cx + Math.sin(angle) * (rwLen + 10), cy - Math.cos(angle) * (rwLen + 10));
+            });
+            
+            // Draw wind arrow
+            var CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
+            if (windSpeed !== null && windSpeed >= CALM_WIND_THRESHOLD && windDir !== null && !isVRB) {
+                var windAngle = ((windDir + 180) % 360) * Math.PI / 180; // Convert FROM to TOWARD
+                var arrowLen = Math.min(windSpeed * 3, r - 15);
+                var endX = cx + Math.sin(windAngle) * arrowLen;
+                var endY = cy - Math.cos(windAngle) * arrowLen;
+                
+                // Arrow glow
+                ctx.fillStyle = 'rgba(220, 53, 69, 0.15)';
+                ctx.beginPath();
+                ctx.arc(cx, cy, Math.max(12, windSpeed * 2), 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Arrow line
+                ctx.strokeStyle = '#dc3545';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                // Arrow head
+                var headAngle = Math.atan2(endY - cy, endX - cx);
+                ctx.fillStyle = '#dc3545';
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - 8 * Math.cos(headAngle - Math.PI / 6), endY - 8 * Math.sin(headAngle - Math.PI / 6));
+                ctx.lineTo(endX - 8 * Math.cos(headAngle + Math.PI / 6), endY - 8 * Math.sin(headAngle + Math.PI / 6));
+                ctx.closePath();
+                ctx.fill();
+            } else if (isVRB && windSpeed >= CALM_WIND_THRESHOLD) {
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#dc3545';
+                ctx.fillText('VRB', cx, cy + 4);
+            } else if (windSpeed === null || windSpeed < CALM_WIND_THRESHOLD) {
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = isDark ? '#666' : '#999';
+                ctx.fillText('CALM', cx, cy + 4);
+            }
+            
+            // Cardinal directions
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillStyle = isDark ? '#888' : '#666';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ['N', 'E', 'S', 'W'].forEach(function(d, i) {
+                var ang = (i * 90 * Math.PI) / 180;
+                ctx.fillText(d, cx + Math.sin(ang) * (r + 8), cy - Math.cos(ang) * (r + 8));
+            });
+        })();
+        </script>
+        
+    <?php elseif ($style === 'full-multi'): ?>
+        <!-- FULL 4 CAMERA GRID STYLE -->
+        <div class="style-full">
+            <div class="full-header">
+                <div class="airport-title">
+                    <h2>
+                        <span class="code"><?= htmlspecialchars($primaryIdentifier) ?></span>
+                        <?= htmlspecialchars($airportName) ?>
+                        <?php if ($webcamCount > 0): ?>
+                        <span class="cam-count">📷 <?= $webcamCount ?></span>
+                        <?php endif; ?>
+                    </h2>
+                    <?php if ($hasMetarData): ?>
+                        <span class="flight-category">
+                            <?= htmlspecialchars($flightCategory) ?>
+                        </span>
+                    <?php elseif ($gustSpeed !== null && $gustSpeed > 0): ?>
+                        <span class="flight-category" style="background: var(--no-metar-bg); font-size: 0.7rem;">
+                            G<?= round($gustSpeed) ?>kt
+                        </span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="full-body">
+                <!-- 4 Webcam Grid Section -->
+                <div class="webcam-section" style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 2px; background: var(--border-color);">
+                    <?php 
+                    if ($webcamCount > 0): 
+                        $displayCamCount = min($webcamCount, 4);
+                        for ($slot = 0; $slot < 4; $slot++): 
+                            // Use selected camera index from $cams array
+                            $camIdx = $cams[$slot] ?? $slot;
+                            // Ensure camera index is valid
+                            if ($camIdx >= $webcamCount) $camIdx = $slot < $webcamCount ? $slot : 0;
+                            $meta = $webcamMetadata[$camIdx] ?? null;
+                            $camUrl = buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx, 'jpg', 'original');
+                            $camSrcset = buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'jpg');
+                            $camName = $airport['webcams'][$camIdx]['name'] ?? 'Camera ' . ($camIdx + 1);
+                            $enabledFormats = getEnabledWebcamFormats();
+                            $aspectRatio = $meta ? $meta['aspect_ratio'] : 1.777;
+                            $timestamp = $meta['timestamp'] ?? 0;
+                            $baseUrl = $dashboardUrl . '/webcam.php?id=' . urlencode($airportId) . '&cam=' . $camIdx;
+                            if ($timestamp > 0) {
+                                $baseUrl .= '&ts=' . $timestamp;
+                            }
+                    ?>
+                    <div style="position: relative; background: #000; overflow: hidden; aspect-ratio: <?= $aspectRatio ?>;">
+                        <picture>
+                            <?php if (in_array('webp', $enabledFormats) && $meta): ?>
+                            <source srcset="<?= htmlspecialchars(buildEmbedWebcamSrcset($dashboardUrl, $airportId, $camIdx, $meta, 'webp')) ?>" type="image/webp" sizes="300px">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($camUrl) ?>" 
+                                 <?php if ($camSrcset): ?>srcset="<?= htmlspecialchars($camSrcset) ?>" sizes="300px"<?php endif; ?>
+                                 alt="<?= htmlspecialchars($camName) ?>"
+                                 style="width: 100%; height: 100%; object-fit: cover;"
+                                 <?php if ($meta): ?>width="<?= $meta['width'] ?>" height="<?= $meta['height'] ?>"<?php endif; ?>>
+                        </picture>
+                        <span style="position: absolute; bottom: 0.25rem; left: 0.25rem; background: rgba(0,0,0,0.7); color: white; padding: 0.15rem 0.4rem; font-size: 0.65rem; border-radius: 3px;"><?= htmlspecialchars($camName) ?></span>
+                        <?php if ($slot === 0): ?>
+                        <div class="live-badge" style="top: 0.5rem; right: 0.5rem;">🔴 LIVE</div>
+                        <?php endif; ?>
+                    </div>
+                    <?php 
+                        endfor; 
+                    else: 
+                    ?>
+                    <div style="display: flex; align-items: center; justify-content: center; background: var(--wind-compass-bg);">
+                        <div class="no-webcam-placeholder">No webcams available</div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="data-row">
+                    <!-- Wind Section (Compass + Wind Column) -->
+                    <div class="wind-section">
+                        <div class="wind-viz-container">
+                            <canvas id="wind-canvas-full-multi" width="100" height="100"></canvas>
+                            <div class="wind-summary">
+                                <?php 
+                                $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
+                                $windSpd = $windSpeed !== null ? round(convertWindSpeed($windSpeed, $windUnit)) : '--';
+                                $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round(convertWindSpeed($gustSpeed, $windUnit)) : '';
+                                $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
+                                ?>
+                                <span class="wind-value"><?= $windDir ?>@<?= $windSpd ?><?= $gustVal ?><?= $windUnitLabel ?></span>
+                            </div>
+                        </div>
+                        <!-- Wind Column next to compass -->
+                        <div class="metric-column wind-details">
+                            <div class="column-header">💨 Wind</div>
+                            <div class="metric-item">
+                                <span class="label">Direction</span>
+                                <span class="value"><?= $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--' ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Speed</span>
+                                <span class="value"><?= formatWindSpeed($windSpeed, $windUnit) ?></span>
+                            </div>
+                            <?php if ($gustSpeed !== null && $gustSpeed > 0): ?>
+                            <div class="metric-item">
+                                <span class="label">Gusting</span>
+                                <span class="value"><?= formatWindSpeed($gustSpeed, $windUnit) ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($peakGustToday !== null && $peakGustToday > 0): ?>
+                            <div class="metric-item peak-item">
+                                <span class="label">Peak Gust</span>
+                                <span class="value"><?= formatWindSpeed($peakGustToday, $windUnit) ?></span>
+                            </div>
+                            <?php if ($peakGustTime !== null): ?>
+                            <div class="metric-item peak-time-item">
+                                <span class="label">@ Time</span>
+                                <span class="value peak-time"><?php
+                                    try {
+                                        $tz = new DateTimeZone($airportTimezone);
+                                        $dt = new DateTime('@' . $peakGustTime);
+                                        $dt->setTimezone($tz);
+                                        echo $dt->format('g:ia');
+                                    } catch (Exception $e) {
+                                        echo date('g:ia', $peakGustTime);
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <!-- Grouped Metrics by Column -->
+                    <div class="metrics-section">
+                    <div class="metrics-columns">
+                        <!-- Temperature Column -->
+                        <div class="metric-column">
+                            <div class="column-header">🌡️ Temperature</div>
+                            <div class="metric-item">
+                                <span class="label">Temp</span>
+                                <span class="value"><?= formatTemp($temperature, $tempUnit) ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Dewpt</span>
+                                <span class="value"><?= formatTemp($dewpoint, $tempUnit) ?></span>
+                            </div>
+                            <?php if ($dewpointSpread !== null): ?>
+                            <div class="metric-item <?= $dewpointSpread <= 3 ? 'fog-warning' : '' ?>">
+                                <span class="label">Spread</span>
+                                <span class="value"><?php 
+                                    // Spread is always the same in F or C (just smaller numbers in C)
+                                    if ($tempUnit === 'C') {
+                                        echo round($dewpointSpread * 5 / 9) . '°C';
+                                    } else {
+                                        echo round($dewpointSpread) . '°F';
+                                    }
+                                ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Today's Hi/Lo</span>
+                                <span class="value"><?php
+                                    $hi = $tempHighToday !== null ? round(convertTemp($tempHighToday, $tempUnit)) : '--';
+                                    $lo = $tempLowToday !== null ? round(convertTemp($tempLowToday, $tempUnit)) : '--';
+                                    echo $hi . '/' . $lo . '°' . $tempUnit;
+                                ?></span>
+                            </div>
+                        </div>
+                        <!-- Sky/Visibility Column -->
+                        <div class="metric-column">
+                            <div class="column-header">👁️ Conditions</div>
+                            <?php if ($hasMetarData && $visibility !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Visibility</span>
+                                <span class="value"><?= $visibility >= 10 ? '10+' : round($visibility, 1) ?> SM</span>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($hasMetarData && $ceiling !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Ceiling</span>
+                                <span class="value"><?= $ceiling >= 99999 ? 'UNL' : formatDist($ceiling, $distUnit, 'comma') ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Humidity</span>
+                                <span class="value"><?= $humidity !== null ? round($humidity) . ' %' : '--' ?></span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="label">Rain Today</span>
+                                <span class="value"><?= formatRainfall($rainfallToday, $distUnit) ?></span>
+                            </div>
+                        </div>
+                        <!-- Pressure/Altitude Column -->
+                        <div class="metric-column">
+                            <div class="column-header">📊 Altitude</div>
+                            <div class="metric-item">
+                                <span class="label">Altimeter</span>
+                                <span class="value"><?= formatPressure($pressure, $baroUnit) ?></span>
+                            </div>
+                            <?php if ($pressureAltitude !== null): ?>
+                            <div class="metric-item">
+                                <span class="label">Press Alt</span>
+                                <span class="value"><?= formatDist($pressureAltitude, $distUnit, 'comma') ?></span>
+                            </div>
+                            <?php endif; ?>
+                            <div class="metric-item">
+                                <span class="label">Density Alt</span>
+                                <span class="value"><?= formatDist($densityAltitude, $distUnit, 'comma') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="embed-footer">
+            <div class="footer-left">Last Updated: <?= htmlspecialchars(formatLocalTimeEmbed($lastUpdated, $airportTimezone)) ?></div>
+            <div class="footer-center">View Dashboard</div>
+            <div class="footer-right">Powered by AviationWX<?= htmlspecialchars($sourceAttribution) ?></div>
+        </div>
+        
+        <!-- Wind Visualization Script -->
+        <script>
+        (function() {
+            var canvas = document.getElementById('wind-canvas-full-multi');
             if (!canvas) return;
             var ctx = canvas.getContext('2d');
             var cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 12;

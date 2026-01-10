@@ -991,23 +991,31 @@ $baseUrl = getBaseUrl();
                     <div class="radio-group">
                         <label class="radio-item">
                             <input type="radio" name="style" value="card" checked>
-                            <span>Mini Airport Card (300×300)</span>
+                            <span>Mini Card (300×300)</span>
                         </label>
                         <label class="radio-item" id="style-webcam">
                             <input type="radio" name="style" value="webcam">
-                            <span>Single Webcam (400×320)</span>
+                            <span>Compact Single (400×320)</span>
                         </label>
                         <label class="radio-item" id="style-dual">
                             <input type="radio" name="style" value="dual">
-                            <span>Dual Camera (600×320)</span>
+                            <span>Compact Dual (600×320)</span>
                         </label>
                         <label class="radio-item" id="style-multi">
                             <input type="radio" name="style" value="multi">
-                            <span>4 Camera Grid (600×600)</span>
+                            <span>Compact Quad (600×600)</span>
                         </label>
-                        <label class="radio-item">
-                            <input type="radio" name="style" value="full">
-                            <span>Full Widget (800×700)</span>
+                        <label class="radio-item" id="style-full-single">
+                            <input type="radio" name="style" value="full-single">
+                            <span>Full Single (600×600)</span>
+                        </label>
+                        <label class="radio-item" id="style-full-dual">
+                            <input type="radio" name="style" value="full-dual">
+                            <span>Full Dual (600×430)</span>
+                        </label>
+                        <label class="radio-item" id="style-full-multi">
+                            <input type="radio" name="style" value="full-multi">
+                            <span>Full Quad (600×600)</span>
                         </label>
                     </div>
                 </div>
@@ -1268,7 +1276,10 @@ $baseUrl = getBaseUrl();
             webcam: { width: 400, height: 320 },
             dual: { width: 600, height: 320 },
             multi: { width: 600, height: 600 },
-            full: { width: 800, height: 700 }
+            full: { width: 800, height: 700 },
+            'full-single': { width: 600, height: 600 },
+            'full-dual': { width: 600, height: 430 },
+            'full-multi': { width: 600, height: 600 }
         };
         
         // DOM elements
@@ -1291,7 +1302,10 @@ $baseUrl = getBaseUrl();
             webcamOptions: document.getElementById('webcam-options'),
             webcamSelect: document.getElementById('webcam-select'),
             styleWebcam: document.getElementById('style-webcam'),
-            styleMulti: document.getElementById('style-multi')
+            styleMulti: document.getElementById('style-multi'),
+            styleFullSingle: document.getElementById('style-full-single'),
+            styleFullDual: document.getElementById('style-full-dual'),
+            styleFullMulti: document.getElementById('style-full-multi')
         };
         
         // Generate embed URL (for actual embed widget with render=1)
@@ -1314,13 +1328,13 @@ $baseUrl = getBaseUrl();
             params.push('airport=' + state.airport.id);
             params.push('style=' + state.style);
             params.push('theme=' + state.theme);
-            if (state.style === 'webcam' || state.style === 'full') {
+            if (state.style === 'webcam' || state.style === 'full' || state.style === 'full-single') {
                 params.push('webcam=' + state.webcam);
             }
-            if (state.style === 'dual') {
+            if (state.style === 'dual' || state.style === 'full-dual') {
                 params.push('cams=' + state.cams.slice(0, 2).join(','));
             }
-            if (state.style === 'multi') {
+            if (state.style === 'multi' || state.style === 'full-multi') {
                 params.push('cams=' + state.cams.slice(0, 4).join(','));
             }
             params.push('target=' + state.target);
@@ -1341,14 +1355,14 @@ $baseUrl = getBaseUrl();
             if (state.airport) params.set('airport', state.airport.id);
             params.set('style', state.style);
             params.set('theme', state.theme);
-            if (state.style === 'webcam' || state.style === 'full') {
+            if (state.style === 'webcam' || state.style === 'full' || state.style === 'full-single') {
                 // Explicitly convert to string to handle webcam=0 correctly
                 params.set('webcam', String(state.webcam));
             }
-            if (state.style === 'dual') {
+            if (state.style === 'dual' || state.style === 'full-dual') {
                 params.set('cams', state.cams.slice(0, 2).join(','));
             }
-            if (state.style === 'multi') {
+            if (state.style === 'multi' || state.style === 'full-multi') {
                 params.set('cams', state.cams.slice(0, 4).join(','));
             }
             // Explicitly convert to string to handle width=0 or height=0 correctly
@@ -1488,7 +1502,7 @@ $baseUrl = getBaseUrl();
             }
             
             // Show webcam options for webcam styles
-            if (state.style === 'webcam' || state.style === 'dual' || state.style === 'multi' || state.style === 'full') {
+            if (state.style === 'webcam' || state.style === 'dual' || state.style === 'multi' || state.style === 'full' || state.style === 'full-single' || state.style === 'full-dual' || state.style === 'full-multi') {
                 elements.webcamOptions.style.display = 'block';
                 
                 var camCount = state.airport.webcam_count;
@@ -1505,12 +1519,12 @@ $baseUrl = getBaseUrl();
                     return html;
                 }
                 
-                if (state.style === 'webcam' || state.style === 'full') {
+                if (state.style === 'webcam' || state.style === 'full' || state.style === 'full-single') {
                     // Single webcam selector
                     singleSelectGroup.style.display = 'block';
                     multiCamSlots.style.display = 'none';
                     elements.webcamSelect.innerHTML = buildOptions(state.webcam);
-                } else if (state.style === 'dual') {
+                } else if (state.style === 'dual' || state.style === 'full-dual') {
                     // Dual camera selectors
                     singleSelectGroup.style.display = 'none';
                     multiCamSlots.style.display = 'block';
@@ -1519,7 +1533,7 @@ $baseUrl = getBaseUrl();
                     
                     document.getElementById('cam-slot-0').innerHTML = buildOptions(state.cams[0]);
                     document.getElementById('cam-slot-1').innerHTML = buildOptions(state.cams[1] < camCount ? state.cams[1] : Math.min(1, camCount - 1));
-                } else if (state.style === 'multi') {
+                } else if (state.style === 'multi' || state.style === 'full-multi') {
                     // 4 camera grid selectors
                     singleSelectGroup.style.display = 'none';
                     multiCamSlots.style.display = 'block';
@@ -1542,20 +1556,35 @@ $baseUrl = getBaseUrl();
             var hasWebcams = state.airport && state.airport.has_webcams;
             var webcamRadio = elements.styleWebcam.querySelector('input');
             var multiRadio = elements.styleMulti.querySelector('input');
+            var fullSingleRadio = elements.styleFullSingle.querySelector('input');
+            var fullDualRadio = elements.styleFullDual.querySelector('input');
+            var fullMultiRadio = elements.styleFullMulti.querySelector('input');
             
             if (hasWebcams) {
                 elements.styleWebcam.classList.remove('disabled');
                 elements.styleMulti.classList.remove('disabled');
+                elements.styleFullSingle.classList.remove('disabled');
+                elements.styleFullDual.classList.remove('disabled');
+                elements.styleFullMulti.classList.remove('disabled');
                 webcamRadio.disabled = false;
                 multiRadio.disabled = false;
+                fullSingleRadio.disabled = false;
+                fullDualRadio.disabled = false;
+                fullMultiRadio.disabled = false;
             } else {
                 elements.styleWebcam.classList.add('disabled');
                 elements.styleMulti.classList.add('disabled');
+                elements.styleFullSingle.classList.add('disabled');
+                elements.styleFullDual.classList.add('disabled');
+                elements.styleFullMulti.classList.add('disabled');
                 webcamRadio.disabled = true;
                 multiRadio.disabled = true;
+                fullSingleRadio.disabled = true;
+                fullDualRadio.disabled = true;
+                fullMultiRadio.disabled = true;
                 
                 // If webcam style was selected, switch to card
-                if (state.style === 'webcam' || state.style === 'multi') {
+                if (state.style === 'webcam' || state.style === 'multi' || state.style === 'full-single' || state.style === 'full-dual' || state.style === 'full-multi') {
                     state.style = 'card';
                     document.querySelector('input[name="style"][value="card"]').checked = true;
                     updateSizeFromStyle();
@@ -1848,7 +1877,7 @@ $baseUrl = getBaseUrl();
             
             // Style
             var style = params.get('style');
-            if (style && ['card', 'webcam', 'dual', 'multi', 'full'].indexOf(style) !== -1) {
+            if (style && ['card', 'webcam', 'dual', 'multi', 'full', 'full-single', 'full-dual', 'full-multi'].indexOf(style) !== -1) {
                 state.style = style;
                 var styleRadio = document.querySelector('input[name="style"][value="' + style + '"]');
                 if (styleRadio) styleRadio.checked = true;
