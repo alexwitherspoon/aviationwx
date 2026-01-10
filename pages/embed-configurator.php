@@ -120,10 +120,10 @@ $baseUrl = getBaseUrl();
         
         /* Configuration Panel */
         .config-panel {
-            background: #242424;
+            background: #ffffff;
             border-radius: 12px;
             padding: 1.5rem;
-            border: 1px solid #333;
+            border: 1px solid #ddd;
         }
         
         .config-section {
@@ -135,13 +135,13 @@ $baseUrl = getBaseUrl();
         }
         
         .config-section h3 {
-            color: #0099ff;
+            color: #0066cc;
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 0.75rem;
             padding-bottom: 0.5rem;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #ddd;
         }
         
         .form-group {
@@ -150,7 +150,7 @@ $baseUrl = getBaseUrl();
         
         .form-group label {
             display: block;
-            color: #aaa;
+            color: #666;
             font-size: 0.85rem;
             margin-bottom: 0.35rem;
         }
@@ -159,18 +159,18 @@ $baseUrl = getBaseUrl();
         .form-group select {
             width: 100%;
             padding: 0.6rem 0.75rem;
-            background: #1a1a1a;
-            border: 1px solid #444;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
             border-radius: 6px;
-            color: #e0e0e0;
+            color: #333;
             font-size: 0.95rem;
         }
         
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
-            border-color: #0099ff;
-            box-shadow: 0 0 0 2px rgba(0, 153, 255, 0.2);
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
         }
         
         /* Airport Search */
@@ -183,8 +183,8 @@ $baseUrl = getBaseUrl();
             top: 100%;
             left: 0;
             right: 0;
-            background: #1a1a1a;
-            border: 1px solid #444;
+            background: #ffffff;
+            border: 1px solid #ddd;
             border-top: none;
             border-radius: 0 0 6px 6px;
             max-height: 250px;
@@ -200,7 +200,7 @@ $baseUrl = getBaseUrl();
         .airport-option {
             padding: 0.6rem 0.75rem;
             cursor: pointer;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #f0f0f0;
             transition: background 0.15s;
         }
         
@@ -210,17 +210,17 @@ $baseUrl = getBaseUrl();
         
         .airport-option:hover,
         .airport-option.selected {
-            background: #2a2a2a;
+            background: #f8f9fa;
         }
         
         .airport-option .identifier {
             font-weight: 600;
-            color: #0099ff;
+            color: #0066cc;
         }
         
         .airport-option .name {
             font-size: 0.85rem;
-            color: #888;
+            color: #666;
         }
         
         /* Radio/Checkbox styling */
@@ -242,12 +242,12 @@ $baseUrl = getBaseUrl();
         
         .radio-item input,
         .checkbox-item input {
-            accent-color: #0099ff;
+            accent-color: #0066cc;
         }
         
         .radio-item span,
         .checkbox-item span {
-            color: #ccc;
+            color: #333;
             font-size: 0.9rem;
         }
         
@@ -269,7 +269,7 @@ $baseUrl = getBaseUrl();
             justify-content: space-between;
             align-items: center;
             padding: 0.5rem 0;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #e0e0e0;
         }
         
         .unit-row:last-child {
@@ -277,14 +277,14 @@ $baseUrl = getBaseUrl();
         }
         
         .unit-label {
-            color: #999;
+            color: #666;
             font-size: 0.85rem;
         }
         
         .unit-toggle-group {
             display: flex;
             gap: 0.25rem;
-            background: #1a1a1a;
+            background: #f8f9fa;
             border-radius: 6px;
             padding: 0.25rem;
         }
@@ -302,7 +302,7 @@ $baseUrl = getBaseUrl();
             padding: 0.35rem 0.6rem;
             border-radius: 4px;
             font-size: 0.8rem;
-            color: #888;
+            color: #666;
             transition: all 0.2s;
         }
         
@@ -312,7 +312,7 @@ $baseUrl = getBaseUrl();
         }
         
         .unit-option:hover span {
-            color: #ccc;
+            color: #333;
         }
         
         .unit-option input:checked + span:hover {
@@ -329,10 +329,10 @@ $baseUrl = getBaseUrl();
         .size-inputs input {
             width: 80px;
             padding: 0.5rem;
-            background: #1a1a1a;
-            border: 1px solid #444;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
             border-radius: 6px;
-            color: #e0e0e0;
+            color: #333;
             text-align: center;
         }
         
@@ -361,16 +361,16 @@ $baseUrl = getBaseUrl();
         
         /* Preview Panel */
         .preview-panel {
-            background: #242424;
+            background: #ffffff;
             border-radius: 12px;
-            border: 1px solid #333;
+            border: 1px solid #ddd;
             overflow: hidden;
         }
         
         .preview-header {
-            background: #2a2a2a;
+            background: #f8f9fa;
             padding: 1rem 1.5rem;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #ddd;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -378,12 +378,12 @@ $baseUrl = getBaseUrl();
         
         .preview-header h2 {
             font-size: 1.1rem;
-            color: #e0e0e0;
+            color: #333;
         }
         
         .preview-dimensions {
             font-size: 0.85rem;
-            color: #888;
+            color: #666;
         }
         
         .preview-container {
@@ -418,7 +418,7 @@ $baseUrl = getBaseUrl();
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            color: #888;
+            color: #666;
             padding: 2rem;
         }
         
@@ -440,18 +440,18 @@ $baseUrl = getBaseUrl();
         
         .embed-tab {
             padding: 0.6rem 1.2rem;
-            background: #2a2a2a;
-            border: 1px solid #444;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
             border-radius: 6px;
-            color: #888;
+            color: #666;
             cursor: pointer;
             transition: all 0.2s;
             font-size: 0.9rem;
         }
         
         .embed-tab:hover {
-            background: #333;
-            color: #ccc;
+            background: #e9ecef;
+            color: #333;
         }
         
         .embed-tab.active {
@@ -553,62 +553,339 @@ $baseUrl = getBaseUrl();
             color: #0099ff;
         }
         
-        /* Force navigation to light mode on this dark-themed page */
-        .site-nav {
-            background: #f8f9fa !important;
-            border-bottom: 1px solid #e0e0e0 !important;
+        /* ============================================
+           DARK MODE SUPPORT
+           ============================================ */
+        
+        @media (prefers-color-scheme: dark) {
+            body {
+                color: #e0e0e0;
+                background: #1a1a1a;
+            }
+            
+            .header {
+                background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
+                border-bottom-color: #333;
+            }
+            
+            .config-panel {
+                background: #242424;
+                border-color: #333;
+            }
+            
+            .config-section h3 {
+                color: #0099ff;
+                border-bottom-color: #333;
+            }
+            
+            .form-group label {
+                color: #aaa;
+            }
+            
+            .form-group input[type="text"],
+            .form-group select {
+                background: #1a1a1a;
+                border-color: #444;
+                color: #e0e0e0;
+            }
+            
+            .form-group input:focus,
+            .form-group select:focus {
+                border-color: #0099ff;
+                box-shadow: 0 0 0 2px rgba(0, 153, 255, 0.2);
+            }
+            
+            .airport-dropdown {
+                background: #1a1a1a;
+                border-color: #444;
+            }
+            
+            .airport-option {
+                border-bottom-color: #333;
+            }
+            
+            .airport-option:hover,
+            .airport-option.selected {
+                background: #2a2a2a;
+            }
+            
+            .airport-option .identifier {
+                color: #0099ff;
+            }
+            
+            .airport-option .name {
+                color: #888;
+            }
+            
+            .radio-item span,
+            .checkbox-item span {
+                color: #ccc;
+            }
+            
+            .unit-row {
+                border-bottom-color: #333;
+            }
+            
+            .unit-label {
+                color: #999;
+            }
+            
+            .unit-toggle-group {
+                background: #1a1a1a;
+            }
+            
+            .unit-option span {
+                color: #888;
+            }
+            
+            .size-inputs {
+                background: #1a1a1a;
+            }
+            
+            .size-input {
+                color: #e0e0e0;
+            }
+            
+            .preview-panel {
+                background: #242424;
+                border-color: #333;
+            }
+            
+            .preview-header h2 {
+                color: #e0e0e0;
+            }
+            
+            .preview-size {
+                color: #888;
+            }
+            
+            .preview-container {
+                background: #1a1a1a;
+                border-color: #333;
+            }
+            
+            .placeholder-state {
+                color: #888;
+                background: #1e1e1e;
+            }
+            
+            .embed-tabs {
+                background: #1a1a1a;
+                border-color: #333;
+            }
+            
+            .embed-tab {
+                color: #888;
+                border-right-color: #333;
+            }
+            
+            .embed-tab.active {
+                background: #242424;
+                color: #0099ff;
+            }
+            
+            .embed-tab:hover:not(.active) {
+                background: #1e1e1e;
+            }
+            
+            .code-panel {
+                background: #1a1a1a;
+                border-color: #333;
+            }
+            
+            .copy-btn {
+                background: #0066cc;
+            }
+            
+            .copy-btn:hover {
+                background: #0052a3;
+            }
+            
+            .info-callout {
+                background: rgba(0, 153, 255, 0.1);
+                border-color: #0099ff;
+            }
+            
+            .info-callout strong {
+                color: #0099ff;
+            }
+            
+            footer {
+                border-top-color: #333;
+            }
+            
+            footer a {
+                color: #0099ff;
+            }
+            
+            footer a:hover {
+                color: #33adff;
+            }
         }
         
-        .site-nav-logo-text {
-            color: #333 !important;
+        /* Explicit dark mode class support (in addition to system preference) */
+        body.dark-mode {
+            color: #e0e0e0;
+            background: #1a1a1a;
         }
         
-        .site-nav-search-input {
-            background: #ffffff !important;
-            color: #333 !important;
-            border-color: #ddd !important;
+        body.dark-mode .header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0066cc 100%);
+            border-bottom-color: #333;
         }
         
-        .site-nav-search-input::placeholder {
-            color: #999 !important;
+        body.dark-mode .config-panel {
+            background: #242424;
+            border-color: #333;
         }
         
-        .site-nav-link {
-            color: #333 !important;
+        body.dark-mode .config-section h3 {
+            color: #0099ff;
+            border-bottom-color: #333;
         }
         
-        .site-nav-link:hover {
-            color: #0066cc !important;
+        body.dark-mode .form-group label {
+            color: #aaa;
         }
         
-        .site-nav-dropdown-menu {
-            background: #ffffff !important;
-            border-color: #ddd !important;
+        body.dark-mode .form-group input[type="text"],
+        body.dark-mode .form-group select {
+            background: #1a1a1a;
+            border-color: #444;
+            color: #e0e0e0;
         }
         
-        .site-nav-dropdown-item {
-            color: #333 !important;
+        body.dark-mode .form-group input:focus,
+        body.dark-mode .form-group select:focus {
+            border-color: #0099ff;
+            box-shadow: 0 0 0 2px rgba(0, 153, 255, 0.2);
         }
         
-        .site-nav-dropdown-item:hover {
-            background: #f8f9fa !important;
+        body.dark-mode .airport-dropdown {
+            background: #1a1a1a;
+            border-color: #444;
         }
         
-        .site-nav-hamburger {
-            color: #333 !important;
+        body.dark-mode .airport-option {
+            border-bottom-color: #333;
         }
         
-        .site-nav-mobile-menu {
-            background: #ffffff !important;
+        body.dark-mode .airport-option:hover,
+        body.dark-mode .airport-option.selected {
+            background: #2a2a2a;
         }
         
-        .site-nav-mobile-item {
-            color: #333 !important;
-            border-bottom-color: #f0f0f0 !important;
+        body.dark-mode .airport-option .identifier {
+            color: #0099ff;
         }
         
-        .site-nav-mobile-item:hover {
-            background: #f8f9fa !important;
+        body.dark-mode .airport-option .name {
+            color: #888;
+        }
+        
+        body.dark-mode .radio-item span,
+        body.dark-mode .checkbox-item span {
+            color: #ccc;
+        }
+        
+        body.dark-mode .unit-row {
+            border-bottom-color: #333;
+        }
+        
+        body.dark-mode .unit-label {
+            color: #999;
+        }
+        
+        body.dark-mode .unit-toggle-group {
+            background: #1a1a1a;
+        }
+        
+        body.dark-mode .unit-option span {
+            color: #888;
+        }
+        
+        body.dark-mode .size-inputs {
+            background: #1a1a1a;
+        }
+        
+        body.dark-mode .size-input {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .preview-panel {
+            background: #242424;
+            border-color: #333;
+        }
+        
+        body.dark-mode .preview-header h2 {
+            color: #e0e0e0;
+        }
+        
+        body.dark-mode .preview-size {
+            color: #888;
+        }
+        
+        body.dark-mode .preview-container {
+            background: #1a1a1a;
+            border-color: #333;
+        }
+        
+        body.dark-mode .placeholder-state {
+            color: #888;
+            background: #1e1e1e;
+        }
+        
+        body.dark-mode .embed-tabs {
+            background: #1a1a1a;
+            border-color: #333;
+        }
+        
+        body.dark-mode .embed-tab {
+            color: #888;
+            border-right-color: #333;
+        }
+        
+        body.dark-mode .embed-tab.active {
+            background: #242424;
+            color: #0099ff;
+        }
+        
+        body.dark-mode .embed-tab:hover:not(.active) {
+            background: #1e1e1e;
+        }
+        
+        body.dark-mode .code-panel {
+            background: #1a1a1a;
+            border-color: #333;
+        }
+        
+        body.dark-mode .copy-btn {
+            background: #0066cc;
+        }
+        
+        body.dark-mode .copy-btn:hover {
+            background: #0052a3;
+        }
+        
+        body.dark-mode .info-callout {
+            background: rgba(0, 153, 255, 0.1);
+            border-color: #0099ff;
+        }
+        
+        body.dark-mode .info-callout strong {
+            color: #0099ff;
+        }
+        
+        body.dark-mode footer {
+            border-top-color: #333;
+        }
+        
+        body.dark-mode footer a {
+            color: #0099ff;
+        }
+        
+        body.dark-mode footer a:hover {
+            color: #33adff;
         }
     </style>
     <link rel="stylesheet" href="/public/css/navigation.css">
