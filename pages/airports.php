@@ -196,6 +196,16 @@ $breadcrumbs = generateBreadcrumbSchema([
             display: flex;
             flex-direction: column;
             gap: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .weather-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .map-control-btn {
@@ -211,6 +221,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             box-shadow: 0 1px 5px rgba(0,0,0,0.2);
             font-size: 1.2rem;
             transition: all 0.2s;
+            flex-shrink: 0;
         }
         
         .map-control-btn:hover {
@@ -222,6 +233,51 @@ $breadcrumbs = generateBreadcrumbSchema([
             background: #0066cc;
             color: white;
             border-color: #0066cc;
+        }
+        
+        .weather-opacity-control {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .weather-opacity-slider {
+            width: 100px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(to right, transparent 0%, #0066cc 100%);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .weather-opacity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #0066cc;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .weather-opacity-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: #0066cc;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .opacity-label {
+            font-size: 0.7rem;
+            color: #666;
+            text-align: center;
+            font-weight: 500;
         }
         
         /* Flight Category Legend */
@@ -738,6 +794,10 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         /* Dark mode map controls */
+        body.dark-mode .map-controls {
+            background: rgba(42, 42, 42, 0.95);
+        }
+        
         body.dark-mode .map-control-btn {
             background: #2a2a2a;
             border-color: #444;
@@ -752,6 +812,22 @@ $breadcrumbs = generateBreadcrumbSchema([
             background: #4a9eff;
             border-color: #4a9eff;
             color: white;
+        }
+        
+        body.dark-mode .opacity-label {
+            color: #bbb;
+        }
+        
+        body.dark-mode .weather-opacity-slider {
+            background: linear-gradient(to right, transparent 0%, #4a9eff 100%);
+        }
+        
+        body.dark-mode .weather-opacity-slider::-webkit-slider-thumb {
+            background: #4a9eff;
+        }
+        
+        body.dark-mode .weather-opacity-slider::-moz-range-thumb {
+            background: #4a9eff;
         }
         
         body.dark-mode .flight-legend {
@@ -792,32 +868,32 @@ $breadcrumbs = generateBreadcrumbSchema([
     
     <main>
         <div class="map-container">
-            <!-- Map Control Buttons -->
+            <!-- Map Control Buttons with Inline Sliders -->
             <div class="map-controls">
                 <button id="fullscreen-btn" class="map-control-btn" title="Toggle Fullscreen" aria-label="Toggle fullscreen map">
                     ⛶
                 </button>
-                <button id="radar-btn" class="map-control-btn" title="Toggle Precipitation Radar" aria-label="Toggle precipitation radar overlay">
-                    🌧️
-                </button>
-                <button id="clouds-btn" class="map-control-btn" title="Toggle Cloud Cover" aria-label="Toggle cloud cover overlay">
-                    ☁️
-                </button>
-            </div>
-            
-            <!-- Weather Layer Controls -->
-            <div id="weather-controls" class="radar-controls">
-                <div id="precip-control" style="display: none; margin-bottom: 0.5rem;">
-                    <label style="display: block;">
-                        Precip Opacity:
-                        <input type="range" id="radar-opacity" class="radar-opacity-slider" min="0" max="100" value="70">
-                    </label>
+                
+                <!-- Precipitation Control Group -->
+                <div class="weather-control-group">
+                    <button id="radar-btn" class="map-control-btn active" title="Toggle Precipitation Radar" aria-label="Toggle precipitation radar overlay">
+                        🌧️
+                    </button>
+                    <div class="weather-opacity-control">
+                        <input type="range" id="radar-opacity" class="weather-opacity-slider" min="0" max="100" value="70" title="Precipitation opacity">
+                        <label for="radar-opacity" class="opacity-label">Precip</label>
+                    </div>
                 </div>
-                <div id="clouds-control" style="display: none;">
-                    <label style="display: block;">
-                        Clouds Opacity:
-                        <input type="range" id="clouds-opacity" class="radar-opacity-slider" min="0" max="100" value="60">
-                    </label>
+                
+                <!-- Cloud Cover Control Group -->
+                <div class="weather-control-group">
+                    <button id="clouds-btn" class="map-control-btn active" title="Toggle Cloud Cover" aria-label="Toggle cloud cover overlay">
+                        ☁️
+                    </button>
+                    <div class="weather-opacity-control">
+                        <input type="range" id="clouds-opacity" class="weather-opacity-slider" min="0" max="100" value="60" title="Cloud cover opacity">
+                        <label for="clouds-opacity" class="opacity-label">Clouds</label>
+                    </div>
                 </div>
             </div>
             
@@ -1063,9 +1139,6 @@ $breadcrumbs = generateBreadcrumbSchema([
                         });
                         
                         radarLayer.addTo(map);
-                        document.getElementById('precip-control').style.display = 'block';
-                        updateWeatherControlsVisibility();
-                        
                         console.log('Radar layer added with timestamp:', radarTimestamp);
                     } else {
                         console.warn('No radar data available in API response');
@@ -1081,8 +1154,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             if (radarLayer) {
                 map.removeLayer(radarLayer);
                 radarLayer = null;
-                document.getElementById('precip-control').style.display = 'none';
-                updateWeatherControlsVisibility();
             }
         }
         
@@ -1099,9 +1170,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             });
             
             cloudsLayer.addTo(map);
-            document.getElementById('clouds-control').style.display = 'block';
-            updateWeatherControlsVisibility();
-            
             console.log('Cloud layer added');
         }
         
@@ -1109,21 +1177,6 @@ $breadcrumbs = generateBreadcrumbSchema([
             if (cloudsLayer) {
                 map.removeLayer(cloudsLayer);
                 cloudsLayer = null;
-                document.getElementById('clouds-control').style.display = 'none';
-                updateWeatherControlsVisibility();
-            }
-        }
-        
-        function updateWeatherControlsVisibility() {
-            var weatherControls = document.getElementById('weather-controls');
-            var precipControl = document.getElementById('precip-control');
-            var cloudsControl = document.getElementById('clouds-control');
-            
-            // Show weather controls panel if any layer is active
-            if (precipControl.style.display === 'block' || cloudsControl.style.display === 'block') {
-                weatherControls.classList.add('visible');
-            } else {
-                weatherControls.classList.remove('visible');
             }
         }
         
@@ -1267,8 +1320,12 @@ $breadcrumbs = generateBreadcrumbSchema([
         // ========================================================================
         var radarBtn = document.getElementById('radar-btn');
         var cloudsBtn = document.getElementById('clouds-btn');
-        var radarEnabled = false;
-        var cloudsEnabled = false;
+        var radarEnabled = true;  // Start enabled
+        var cloudsEnabled = true; // Start enabled
+        
+        // Auto-enable both layers on page load
+        addRadarLayer();
+        addCloudsLayer();
         
         radarBtn.addEventListener('click', function() {
             radarEnabled = !radarEnabled;
