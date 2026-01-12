@@ -1386,44 +1386,6 @@ if ($themeCookie === 'dark') {
         </section>
         <?php endif; ?>
 
-        <?php 
-        // Show weather section if weather_source is configured OR if metar_station is configured
-        // This matches the JavaScript condition that determines whether to fetch weather
-        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-        $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
-        if ($hasWeatherSource || $hasMetarStation): ?>
-        <!-- Weather Data -->
-        <section class="weather-section">
-            <div class="weather-header-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
-                <div class="weather-header-left" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                    <h2 class="weather-header-title" style="margin: 0;">Current Conditions</h2>
-                    <div class="weather-toggle-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 40px; height: auto;" title="Toggle theme: Auto → Day → Dark → Night">
-                            <span id="night-mode-icon">🌙</span>
-                        </button>
-                        <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
-                            <span id="time-format-display">12hr</span>
-                        </button>
-                        <button id="temp-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle temperature unit (F/C)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
-                            <span id="temp-unit-display">°F</span>
-                        </button>
-                        <button id="distance-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle distance unit (ft/m)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
-                            <span id="distance-unit-display">ft</span>
-                        </button>
-                        <button id="baro-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 60px; height: auto;" title="Toggle barometer unit (inHg/hPa/mmHg)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
-                            <span id="baro-unit-display">inHg</span>
-                        </button>
-                    </div>
-                </div>
-                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
-            </div>
-            <div id="weather-data" class="weather-grid">
-                <div class="weather-item loading">
-                    <span class="label">Loading...</span>
-                </div>
-            </div>
-        </section>
-
         <!-- Build weather sources for attribution -->
         <?php
         // Credit any source that is actively providing data, regardless of hierarchy
@@ -1484,6 +1446,12 @@ if ($themeCookie === 'dark') {
         }
         ?>
 
+        <?php 
+        // Show runway wind section if weather_source is configured OR if metar_station is configured
+        // This matches the JavaScript condition that determines whether to fetch weather
+        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
+        $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
+        if ($hasWeatherSource || $hasMetarStation): ?>
         <!-- Runway Wind Visual -->
         <section class="wind-visual-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -1516,6 +1484,45 @@ if ($themeCookie === 'dark') {
                 </div>
             </div>
             <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php 
+        // Show weather section if weather_source is configured OR if metar_station is configured
+        // This matches the JavaScript condition that determines whether to fetch weather
+        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
+        $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
+        if ($hasWeatherSource || $hasMetarStation): ?>
+        <!-- Weather Data -->
+        <section class="weather-section">
+            <div class="weather-header-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                <div class="weather-header-left" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <h2 class="weather-header-title" style="margin: 0;">Current Conditions</h2>
+                    <div class="weather-toggle-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 40px; height: auto;" title="Toggle theme: Auto → Day → Dark → Night">
+                            <span id="night-mode-icon">🌙</span>
+                        </button>
+                        <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                            <span id="time-format-display">12hr</span>
+                        </button>
+                        <button id="temp-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle temperature unit (F/C)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                            <span id="temp-unit-display">°F</span>
+                        </button>
+                        <button id="distance-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle distance unit (ft/m)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                            <span id="distance-unit-display">ft</span>
+                        </button>
+                        <button id="baro-unit-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 60px; height: auto;" title="Toggle barometer unit (inHg/hPa/mmHg)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
+                            <span id="baro-unit-display">inHg</span>
+                        </button>
+                    </div>
+                </div>
+                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
+            </div>
+            <div id="weather-data" class="weather-grid">
+                <div class="weather-item loading">
+                    <span class="label">Loading...</span>
+                </div>
+            </div>
         </section>
         <?php endif; ?>
 

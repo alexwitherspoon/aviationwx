@@ -1,7 +1,7 @@
 // AviationWX Service Worker
 // Provides offline support and background sync for weather data
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `aviationwx-${CACHE_VERSION}`;
 const STATIC_CACHE = `${CACHE_NAME}-static`;
 const WEATHER_CACHE = `${CACHE_NAME}-weather`;
