@@ -701,12 +701,106 @@ if ($themeCookie === 'dark') {
                 const swMtime = <?= file_exists(__DIR__ . '/../public/js/service-worker.js') ? filemtime(__DIR__ . '/../public/js/service-worker.js') : time() ?>;
                 const swUrl = '/public/js/service-worker.js?v=' + swMtime;
                 
+                // Track recovery attempts for last-resort page reload
+                let swRecoveryAttempts = 0;
+                const MAX_RECOVERY_ATTEMPTS = 3;
+                const RECOVERY_RESET_TIME = 3600000; // Reset counter after 1 hour of successful updates
+                let lastSuccessfulUpdate = Date.now();
+                
+                /**
+                 * Safely update service worker registration with recovery logic
+                 * Handles cases where registration becomes stale after long periods (sleep/wake)
+                 */
+                async function safeUpdateServiceWorker(registration) {
+                    try {
+                        // Check if registration still has an active or waiting worker
+                        if (!registration.active && !registration.waiting) {
+                            console.warn('[SW] Registration has no active or waiting worker - attempting recovery');
+                            swRecoveryAttempts++;
+                            
+                            // Strategy 1: Try to get a fresh registration
+                            try {
+                                const freshRegistration = await navigator.serviceWorker.ready;
+                                if (freshRegistration && (freshRegistration.active || freshRegistration.waiting)) {
+                                    console.log('[SW] Successfully re-established registration');
+                                    await freshRegistration.update();
+                                    swRecoveryAttempts = 0; // Reset on success
+                                    lastSuccessfulUpdate = Date.now();
+                                    return;
+                                }
+                            } catch (readyError) {
+                                console.warn('[SW] Failed to get ready registration:', readyError);
+                            }
+                            
+                            // Strategy 2: Re-register the service worker
+                            console.log('[SW] Attempting to re-register service worker');
+                            try {
+                                const newRegistration = await navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' });
+                                console.log('[SW] Successfully re-registered service worker');
+                                swRecoveryAttempts = 0; // Reset on success
+                                lastSuccessfulUpdate = Date.now();
+                                return;
+                            } catch (registerError) {
+                                console.error('[SW] Failed to re-register:', registerError);
+                            }
+                            
+                            // Strategy 3: Last resort - force page reload after multiple failures
+                            if (swRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+                                console.error('[SW] Recovery failed after ' + MAX_RECOVERY_ATTEMPTS + ' attempts - forcing page reload');
+                                sessionStorage.setItem('aviationwx-sw-recovery-reload', Date.now().toString());
+                                window.location.reload();
+                                return;
+                            }
+                            
+                            console.warn('[SW] Recovery attempt ' + swRecoveryAttempts + ' of ' + MAX_RECOVERY_ATTEMPTS + ' - will retry on next interval');
+                            return;
+                        }
+                        
+                        // Registration looks valid - perform normal update
+                        await registration.update();
+                        
+                        // Reset recovery counter after successful update
+                        const timeSinceLastSuccess = Date.now() - lastSuccessfulUpdate;
+                        if (timeSinceLastSuccess > RECOVERY_RESET_TIME && swRecoveryAttempts > 0) {
+                            console.log('[SW] Resetting recovery counter after successful operation');
+                            swRecoveryAttempts = 0;
+                        }
+                        lastSuccessfulUpdate = Date.now();
+                        
+                    } catch (error) {
+                        // Handle InvalidStateError and other update failures
+                        if (error.name === 'InvalidStateError') {
+                            console.error('[SW] InvalidStateError during update:', error.message);
+                            swRecoveryAttempts++;
+                            
+                            if (swRecoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+                                console.error('[SW] Multiple InvalidStateErrors - forcing page reload');
+                                sessionStorage.setItem('aviationwx-sw-recovery-reload', Date.now().toString());
+                                window.location.reload();
+                            }
+                        } else {
+                            console.error('[SW] Update failed:', error);
+                        }
+                    }
+                }
+                
                 navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' })
                     .then((registration) => {
                         console.log('[SW] Registered:', registration.scope);
+                        
+                        // Check if this page load was triggered by recovery reload
+                        const recoveryReload = sessionStorage.getItem('aviationwx-sw-recovery-reload');
+                        if (recoveryReload) {
+                            const reloadTime = parseInt(recoveryReload, 10);
+                            const timeSinceReload = Date.now() - reloadTime;
+                            if (timeSinceReload < 5000) { // Within 5 seconds of reload
+                                console.log('[SW] Page reloaded after recovery - service worker re-established');
+                            }
+                            sessionStorage.removeItem('aviationwx-sw-recovery-reload');
+                        }
 
                         // Check for updates immediately after registration
-                        registration.update();
+                        safeUpdateServiceWorker(registration);
 
                         // If there's a waiting SW, activate it immediately
                         if (registration.waiting) {
@@ -754,9 +848,9 @@ if ($themeCookie === 'dark') {
                             }
                         });
 
-                        // Check for updates every 5 minutes (reduced from 1 hour for faster updates)
+                        // Check for updates every 5 minutes with safe recovery logic
                         setInterval(() => {
-                            registration.update();
+                            safeUpdateServiceWorker(registration);
                         }, 300000); // 5 minutes
                     })
                     .catch((err) => {
