@@ -6993,7 +6993,13 @@ async function verifyAndDisplayImage(blob, camIndex, expectedTimestamp, context 
  */
 async function loadImageFromUrl(url, camIndex, timestamp) {
     try {
-        const response = await fetch(url, {
+        // Add cache-busting parameter to bypass stale-while-revalidate caching
+        // This ensures we always get fresh images, not stale cached versions
+        const separator = url.includes('?') ? '&' : '?';
+        const cacheBust = Date.now() + Math.random().toString(36).substring(7);
+        const urlWithCacheBust = `${url}${separator}_cb=${cacheBust}`;
+        
+        const response = await fetch(urlWithCacheBust, {
             cache: 'no-store',
             credentials: 'same-origin'
         });
@@ -7006,6 +7012,7 @@ async function loadImageFromUrl(url, camIndex, timestamp) {
         // Silent error - user already has image or placeholder
     }
 }
+
 
 /**
  * Handle JPEG generating (aggressive backoff)
@@ -7556,10 +7563,12 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             const preferredVariant = getPreferredVariant(null, variantHeights);
             
             // Build image URL with timestamp and variant parameters (immutable cache busting)
-            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}&size={height|original}
-            // This ensures automatic cache busting when timestamp changes
-            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&ts=${newTs}&fmt=${preferredFormat}&size=${preferredVariant}`;
-            
+            // Format: /webcam.php?id={airport}&cam={index}&ts={timestamp}&fmt={format}&size={height|original}&_cb={random}
+            // The ts parameter provides timestamp-based caching, while _cb provides cache-busting
+            // for stale-while-revalidate scenarios where browser may serve stale cached content
+            const cacheBust = Date.now() + Math.random().toString(36).substring(7);
+            const imageUrl = `${protocol}//${host}/webcam.php?id=${AIRPORT_ID}&cam=${camIndex}&ts=${newTs}&fmt=${preferredFormat}&size=${preferredVariant}&_cb=${cacheBust}`;
+
             // Log successful update
             console.log('[Webcam ' + camIndex + '] Updating - new image at ' + new Date(newTs * 1000).toLocaleTimeString() + ' (format: ' + preferredFormat + ', variant: ' + preferredVariant + ')');
             
