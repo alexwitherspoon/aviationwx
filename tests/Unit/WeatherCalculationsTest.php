@@ -126,55 +126,196 @@ class WeatherCalculationsTest extends TestCase
     /**
      * Ensures boundary values are handled correctly to prevent misclassification at thresholds
      */
-    public function testCalculateFlightCategory_EdgeCase_BoundaryValues()
+    public function testCalculateFlightCategory_EdgeCase_ThreeStatuteMiles()
     {
-        // Visibility exactly at 3 SM (IFR threshold)
+        // Visibility exactly at 3 SM (MVFR lower threshold per FAA)
+        // FAA: IFR is "1 to less than 3 SM", so 3 SM exactly is MVFR
         $weather = [
             'visibility' => 3.0,
             'ceiling' => 5000
         ];
         $result = calculateFlightCategory($weather);
-        $this->assertEquals('IFR', $result);  // Exactly 3 SM is IFR
+        $this->assertEquals('MVFR', $result);  // Exactly 3 SM is MVFR, not IFR
     }
 
-    public function testCalculateFlightCategory_EdgeCase_JustAboveIFR()
+    public function testCalculateFlightCategory_EdgeCase_JustBelowThreeSM()
     {
         $weather = [
-            'visibility' => 3.1,
+            'visibility' => 2.9,
             'ceiling' => 5000
         ];
         $result = calculateFlightCategory($weather);
-        $this->assertEquals('MVFR', $result);  // Just above 3 SM is MVFR
+        $this->assertEquals('IFR', $result);  // Just below 3 SM is IFR
     }
 
     /**
      * Ensures density altitude is calculated correctly for aircraft performance planning
+     * 
+     * SAFETY CRITICAL: These tests verify the FAA-approved density altitude formula.
+     * Incorrect calculations could lead to runway overruns or inability to climb.
+     * 
+     * Test values calculated using FAA formula:
+     * DA = PA + [120 × (OAT - ISA Temp)]
+     * Where: PA = Elevation + (29.92 - Altimeter) × 1000
+     *        ISA Temp = 59°F - (3.57°F × PA/1000)
      */
-    public function testCalculateDensityAltitude_StandardConditions()
+    public function testCalculateDensityAltitude_StandardConditions_SeaLevel()
     {
+        // Standard conditions at sea level
+        // Temp: 15°C (59°F), Pressure: 29.92 inHg
+        // Expected: PA = 0, ISA = 59°F, DA = 0 + 120 × (59 - 59) = 0
         $weather = createTestWeatherData([
             'temperature' => 15.0,  // 59°F
             'pressure' => 29.92
         ]);
-        $airport = createTestAirport(['elevation_ft' => 100]);
+        $airport = createTestAirport(['elevation_ft' => 0]);
         
         $result = calculateDensityAltitude($weather, $airport);
-        $this->assertNotNull($result);
-        $this->assertIsInt($result);
+        $this->assertEquals(0, $result);  // Standard conditions = 0 density altitude
     }
 
-    public function testCalculateDensityAltitude_HotConditions()
+    public function testCalculateDensityAltitude_StandardConditions_1000ft()
     {
+        // Standard conditions at 1000 ft elevation
+        // Temp: 15°C (59°F), Pressure: 29.92 inHg
+        // Expected: PA = 1000, ISA = 59 - 3.57 = 55.43°F, DA = 1000 + 120 × (59 - 55.43) = 1428
         $weather = createTestWeatherData([
-            'temperature' => 35.0,  // 95°F - hot day
+            'temperature' => 15.0,  // 59°F
             'pressure' => 29.92
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 1000]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
+        // Allow ±10 ft tolerance for rounding
+        $this->assertEqualsWithDelta(1428, $result, 10);
+    }
+
+    public function testCalculateDensityAltitude_HotDay_SeaLevel()
+    {
+        // Hot day at sea level: 35°C (95°F), standard pressure
+        // Expected: PA = 0, ISA = 59°F, DA = 0 + 120 × (95 - 59) = 4320
+        $weather = createTestWeatherData([
+            'temperature' => 35.0,  // 95°F
+            'pressure' => 29.92
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 0]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
+        $this->assertEqualsWithDelta(4320, $result, 10);
+        $this->assertGreaterThan($airport['elevation_ft'], $result);
+    }
+
+    public function testCalculateDensityAltitude_HotDay_HighElevation()
+    {
+        // Hot day at high elevation: 5000 ft, 30°C (86°F), pressure 24.92 inHg (low)
+        // PA = 5000 + (29.92 - 24.92) × 1000 = 10,000 ft
+        // ISA at 10,000 ft = 59 - (3.57 × 10) = 23.3°F
+        // DA = 10,000 + 120 × (86 - 23.3) = 10,000 + 7,524 = 17,524 ft
+        $weather = createTestWeatherData([
+            'temperature' => 30.0,  // 86°F
+            'pressure' => 24.92
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 5000]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
+        $this->assertEqualsWithDelta(17524, $result, 10);
+        // This is a dangerous condition - DA is 3.5x field elevation!
+        $this->assertGreaterThan(15000, $result);
+    }
+
+    public function testCalculateDensityAltitude_ColdDay_SeaLevel()
+    {
+        // Cold day at sea level: 0°C (32°F), standard pressure
+        // Expected: PA = 0, ISA = 59°F, DA = 0 + 120 × (32 - 59) = -3240
+        $weather = createTestWeatherData([
+            'temperature' => 0.0,  // 32°F
+            'pressure' => 29.92
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 0]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
+        $this->assertEqualsWithDelta(-3240, $result, 10);
+        $this->assertLessThan($airport['elevation_ft'], $result);
+    }
+
+    public function testCalculateDensityAltitude_HighPressure_BetterPerformance()
+    {
+        // High pressure day (30.92 inHg), standard temp
+        // PA = 100 + (29.92 - 30.92) × 1000 = 100 - 1000 = -900 ft
+        // ISA at -900 ft = 59 - (3.57 × -0.9) = 62.21°F
+        // DA = -900 + 120 × (59 - 62.21) = -900 - 385 = -1285
+        $weather = createTestWeatherData([
+            'temperature' => 15.0,  // 59°F
+            'pressure' => 30.92
         ]);
         $airport = createTestAirport(['elevation_ft' => 100]);
         
         $result = calculateDensityAltitude($weather, $airport);
-        $this->assertNotNull($result);
-        // Density altitude should be higher than field elevation on hot days
+        $this->assertLessThan($airport['elevation_ft'], $result);
+        $this->assertEqualsWithDelta(-1285, $result, 10);
+    }
+
+    public function testCalculateDensityAltitude_LowPressure_WorsePerformance()
+    {
+        // Low pressure day (29.42 inHg), standard temp
+        // PA = 100 + (29.92 - 29.42) × 1000 = 100 + 500 = 600 ft
+        // ISA at 600 ft = 59 - (3.57 × 0.6) = 56.86°F
+        // DA = 600 + 120 × (59 - 56.86) = 600 + 257 = 857
+        $weather = createTestWeatherData([
+            'temperature' => 15.0,  // 59°F
+            'pressure' => 29.42
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 100]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
         $this->assertGreaterThan($airport['elevation_ft'], $result);
+        $this->assertEqualsWithDelta(857, $result, 10);
+    }
+
+    public function testCalculateDensityAltitude_RealWorld_KDEN_SummerDay()
+    {
+        // Denver International (KDEN) on a hot summer day
+        // Elevation: 5434 ft, Temp: 35°C (95°F), Pressure: 24.50 inHg
+        // PA = 5434 + (29.92 - 24.50) × 1000 = 10,854 ft
+        // ISA at 10,854 ft = 59 - (3.57 × 10.854) = 20.25°F
+        // DA = 10,854 + 120 × (95 - 20.25) = 10,854 + 8,970 = 19,824 ft
+        $weather = createTestWeatherData([
+            'temperature' => 35.0,  // 95°F
+            'pressure' => 24.50
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 5434]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
+        $this->assertEqualsWithDelta(19824, $result, 20);
+        // This is extreme - aircraft performance is severely degraded
+        $this->assertGreaterThan(19000, $result);
+    }
+
+    public function testCalculateDensityAltitude_OldFormulaComparison()
+    {
+        // This test ensures the new formula differs from the old (incorrect) formula
+        // Old formula used station elevation for ISA calculation instead of pressure altitude
+        // Test with conditions where the difference is significant
+        $weather = createTestWeatherData([
+            'temperature' => 30.0,  // 86°F
+            'pressure' => 28.92     // Low pressure (+1000 ft PA)
+        ]);
+        $airport = createTestAirport(['elevation_ft' => 5000]);
+        
+        $result = calculateDensityAltitude($weather, $airport);
+        
+        // New formula (correct):
+        // PA = 5000 + (29.92 - 28.92) × 1000 = 6000 ft
+        // ISA = 59 - (3.57 × 6) = 37.58°F
+        // DA = 6000 + 120 × (86 - 37.58) = 6000 + 5810 = 11,810 ft
+        $this->assertEqualsWithDelta(11810, $result, 10);
+        
+        // Old formula (incorrect) would have calculated:
+        // ISA = 59 - (3.57 × 5) = 41.15°F (based on station elevation, not PA)
+        // DA = 5000 + 120 × (86 - 41.15) = 5000 + 5382 = 10,382 ft
+        // The old formula underestimated by ~1428 ft - a dangerous error!
+        $oldFormulaResult = 10382;
+        $this->assertGreaterThan($oldFormulaResult + 1000, $result);
     }
 
     public function testCalculateDensityAltitude_MissingTemperature()

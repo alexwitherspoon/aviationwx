@@ -7,9 +7,33 @@
  */
 
 /**
- * Calculate dewpoint from temperature and humidity
+ * Calculate dewpoint from temperature and humidity using Magnus formula
  * 
- * Uses Magnus formula to calculate dewpoint temperature in Celsius.
+ * Uses the Magnus-Tetens approximation to calculate dewpoint temperature in Celsius.
+ * This is a widely accepted empirical formula in meteorology with good accuracy
+ * for typical atmospheric conditions.
+ * 
+ * Formula:
+ *   γ = ln(RH/100) + [(b × T) / (c + T)]
+ *   Td = (c × γ) / (b - γ)
+ * 
+ * Constants (Alduchov and Eskridge, 1996):
+ *   a = 6.1121 (mb, not used in dewpoint calculation but part of full Magnus formula)
+ *   b = 17.368 (dimensionless)
+ *   c = 238.88 (°C)
+ * 
+ * Valid range: -40°C to +50°C (typical atmospheric conditions)
+ * Accuracy: ±0.4°C within valid range
+ * 
+ * Alternative constants exist for different temperature ranges:
+ *   - b=17.27, c=237.7 (Buck, 1981) - commonly used for 0°C to 50°C
+ *   - b=17.368, c=238.88 (Alduchov & Eskridge, 1996) - improved accuracy
+ * 
+ * Sources:
+ *   - Alduchov, O. A., and Eskridge, R. E. (1996): "Improved Magnus Form
+ *     Approximation of Saturation Vapor Pressure", Journal of Applied Meteorology, 35(4)
+ *   - Lawrence, M. G. (2005): "The Relationship between Relative Humidity and the
+ *     Dewpoint Temperature in Moist Air", Bulletin of the American Meteorological Society
  * 
  * @param float|null $tempC Temperature in Celsius
  * @param float|null $humidity Relative humidity percentage (0-100)
@@ -18,6 +42,7 @@
 function calculateDewpoint($tempC, $humidity) {
     if ($tempC === null || $humidity === null) return null;
     
+    // Magnus formula constants (Alduchov and Eskridge, 1996)
     $a = 6.1121;
     $b = 17.368;
     $c = 238.88;
@@ -29,9 +54,32 @@ function calculateDewpoint($tempC, $humidity) {
 }
 
 /**
- * Calculate humidity from temperature and dewpoint
+ * Calculate humidity from temperature and dewpoint using Magnus formula
  * 
- * Uses Magnus formula to calculate relative humidity from temperature and dewpoint.
+ * Uses the Magnus-Tetens approximation to calculate relative humidity from
+ * temperature and dewpoint. This is the inverse of the dewpoint calculation.
+ * 
+ * Formula:
+ *   e_sat = 6.112 × exp[(17.67 × T) / (T + 243.5)]
+ *   e = 6.112 × exp[(17.67 × Td) / (Td + 243.5)]
+ *   RH = (e / e_sat) × 100
+ * 
+ * Where:
+ *   - e_sat = saturation vapor pressure at temperature T (mb)
+ *   - e = actual vapor pressure at dewpoint Td (mb)
+ *   - RH = relative humidity (%)
+ * 
+ * Constants used: 6.112 (mb), 17.67, 243.5°C (Buck, 1981)
+ * Note: Uses slightly different constants than calculateDewpoint() for compatibility
+ * with existing meteorological practice.
+ * 
+ * Valid range: -40°C to +50°C (typical atmospheric conditions)
+ * 
+ * Sources:
+ *   - Buck, A. L. (1981): "New Equations for Computing Vapor Pressure and
+ *     Enhancement Factor", Journal of Applied Meteorology, 20(12)
+ *   - World Meteorological Organization (WMO) Guide to Instruments and
+ *     Methods of Observation (CIMO Guide)
  * 
  * @param float|null $tempC Temperature in Celsius
  * @param float|null $dewpointC Dewpoint in Celsius
@@ -40,20 +88,38 @@ function calculateDewpoint($tempC, $humidity) {
 function calculateHumidityFromDewpoint($tempC, $dewpointC) {
     if ($tempC === null || $dewpointC === null) return null;
     
-    // Magnus formula
+    // Magnus formula (Buck, 1981)
     $esat = 6.112 * exp((17.67 * $tempC) / ($tempC + 243.5));
     $e = 6.112 * exp((17.67 * $dewpointC) / ($dewpointC + 243.5));
-    
     $humidity = ($e / $esat) * 100;
     
     return round($humidity);
 }
 
 /**
- * Calculate pressure altitude
+ * Calculate pressure altitude using FAA-approved formula
  * 
  * Calculates pressure altitude in feet based on station elevation and altimeter setting.
- * Formula: Pressure Altitude = Station Elevation + (29.92 - Altimeter) × 1000
+ * Pressure altitude is the altitude in the standard atmosphere corresponding to a particular
+ * pressure value. It's the altitude indicated when the altimeter is set to 29.92 inHg.
+ * 
+ * Formula (per FAA handbooks):
+ *   Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
+ * 
+ * The formula derives from the standard atmosphere pressure lapse rate of approximately
+ * 1 inch of mercury per 1,000 feet of altitude change.
+ * 
+ * Examples:
+ *   - Altimeter = 29.92 inHg (standard) → PA = Field Elevation
+ *   - Altimeter < 29.92 inHg (low pressure) → PA > Field Elevation (worse performance)
+ *   - Altimeter > 29.92 inHg (high pressure) → PA < Field Elevation (better performance)
+ * 
+ * SAFETY CRITICAL: Used as input for density altitude calculation, which affects
+ * aircraft performance decisions (takeoff/landing distance, climb rate).
+ * 
+ * Sources:
+ *   - FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25)
+ *   - FAA Instrument Flying Handbook (FAA-H-8083-15B)
  * 
  * @param array $weather Weather data array (must contain 'pressure' key in inHg)
  * @param array $airport Airport configuration array (must contain 'elevation_ft')
@@ -67,19 +133,41 @@ function calculatePressureAltitude($weather, $airport) {
     $stationElevation = $airport['elevation_ft'];
     $pressureInHg = $weather['pressure'];
     
-    
-    // Calculate pressure altitude
+    // PA = Station Elevation + (29.92 - Altimeter) × 1000
     $pressureAlt = $stationElevation + (29.92 - $pressureInHg) * 1000;
-    
     
     return round($pressureAlt);
 }
 
 /**
- * Calculate density altitude
+ * Calculate density altitude using FAA-approved formula
  * 
- * Calculates density altitude in feet based on station elevation, temperature, and pressure.
+ * Calculates density altitude in feet based on pressure altitude and temperature.
  * Density altitude accounts for both pressure and temperature effects on aircraft performance.
+ * Higher density altitude = reduced aircraft performance (longer takeoff/landing distances, reduced climb rate).
+ * 
+ * Formula (per FAA Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25):
+ *   Density Altitude = Pressure Altitude + [120 × (OAT - ISA Temperature)]
+ * 
+ * Where:
+ *   - Pressure Altitude = Station Elevation + [(29.92 - Altimeter) × 1000]
+ *   - ISA Temperature = 15°C - [2°C × (Pressure Altitude / 1000)]
+ *                    or 59°F - [3.57°F × (Pressure Altitude / 1000)]
+ *   - OAT = Outside Air Temperature (actual temperature)
+ *   - 120 = Standard coefficient (feet per degree Fahrenheit deviation from ISA)
+ * 
+ * Standard Atmosphere (ICAO/ISA):
+ *   - Sea level: 15°C (59°F), 29.92 inHg (1013.25 hPa)
+ *   - Lapse rate: 2°C per 1,000 ft (6.5°C per kilometer) or 3.57°F per 1,000 ft
+ *   - Valid up to tropopause (36,089 ft / 11 km)
+ * 
+ * SAFETY CRITICAL: This calculation directly affects takeoff/landing performance decisions.
+ * An underestimated density altitude can lead to runway overruns or inability to climb.
+ * 
+ * Sources:
+ *   - FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25)
+ *   - FAA Aviation Weather Handbook (FAA-H-8083-28)
+ *   - ICAO Standard Atmosphere (Doc 7488)
  * 
  * @param array $weather Weather data array (must contain 'temperature' in Celsius and 'pressure' in inHg)
  * @param array $airport Airport configuration array (must contain 'elevation_ft')
@@ -94,13 +182,18 @@ function calculateDensityAltitude($weather, $airport) {
     $tempC = $weather['temperature'];
     $pressureInHg = $weather['pressure'];
     
-    // Convert to feet
+    // Calculate pressure altitude (used for ISA temperature, not station elevation)
     $pressureAlt = $stationElevation + (29.92 - $pressureInHg) * 1000;
     
-    // Calculate density altitude (simplified)
-    $stdTempF = 59 - (0.003566 * $stationElevation);
+    // Calculate ISA temperature at pressure altitude (critical: use PA, not elevation)
+    // ISA sea level: 59°F, lapse rate: 3.57°F per 1,000 ft
+    $isaTemperatureF = 59 - (3.57 * ($pressureAlt / 1000));
+    
     $actualTempF = ($tempC * 9/5) + 32;
-    $densityAlt = $stationElevation + (120 * ($actualTempF - $stdTempF));
+    
+    // DA = PA + [120 × (OAT - ISA Temp)]
+    // 120 coefficient = feet of density altitude change per degree Fahrenheit
+    $densityAlt = $pressureAlt + (120 * ($actualTempF - $isaTemperatureF));
     
     return (int)round($densityAlt);
 }
@@ -108,14 +201,56 @@ function calculateDensityAltitude($weather, $airport) {
 /**
  * Calculate flight category (VFR, MVFR, IFR, LIFR) based on ceiling and visibility
  * 
- * Uses standard FAA aviation weather category definitions (worst-case rule):
- * - LIFR (Magenta): Visibility < 1 mile OR Ceiling < 500 feet
- * - IFR (Red): Visibility 1 to <= 3 miles OR Ceiling 500 to < 1,000 feet
- * - MVFR (Blue): Visibility 3 to 5 miles OR Ceiling 1,000 to < 3,000 feet
- * - VFR (Green): Visibility > 3 miles AND Ceiling >= 1,000 feet (BOTH must be true)
+ * Uses standard FAA aviation weather category definitions for situational awareness.
+ * These categories indicate general ceiling and visibility conditions and help pilots
+ * assess whether VFR or IFR flight is appropriate.
  * 
- * For categories other than VFR, the WORST of the two conditions determines the category.
- * VFR requires BOTH conditions to meet minimums per FAA standards.
+ * IMPORTANT: These categories are for planning and situational awareness only.
+ * They do NOT represent the minimum weather requirements for VFR flight under
+ * 14 CFR § 91.155, which vary by airspace class and time of day.
+ * 
+ * FAA Flight Category Definitions (Worst-Case Rule):
+ * 
+ * VFR (Visual Flight Rules) - Green:
+ *   - Ceiling: Greater than 3,000 feet AGL
+ *   - Visibility: Greater than 5 statute miles
+ *   - Rule: BOTH conditions must be met
+ * 
+ * MVFR (Marginal VFR) - Blue:
+ *   - Ceiling: 1,000 to 3,000 feet AGL
+ *   - Visibility: 3 to 5 statute miles
+ *   - Rule: Either condition qualifies
+ * 
+ * IFR (Instrument Flight Rules) - Red:
+ *   - Ceiling: 500 to less than 1,000 feet AGL
+ *   - Visibility: 1 to less than 3 statute miles
+ *   - Rule: Either condition qualifies
+ * 
+ * LIFR (Low IFR) - Magenta:
+ *   - Ceiling: Less than 500 feet AGL
+ *   - Visibility: Less than 1 statute mile
+ *   - Rule: Either condition qualifies
+ * 
+ * Decision Logic:
+ *   1. Categorize ceiling and visibility independently
+ *   2. For VFR: BOTH must be VFR (AND logic)
+ *   3. For all other categories: Use WORST case (most restrictive)
+ *   4. Category order (most to least restrictive): LIFR > IFR > MVFR > VFR
+ * 
+ * Special Cases:
+ *   - Unlimited ceiling (null/no clouds): Treated as VFR for ceiling
+ *   - Unlimited visibility (>10 SM or sentinel value): Treated as VFR for visibility
+ *   - Missing ceiling + VFR visibility: Assumes unlimited ceiling → VFR
+ *   - Missing visibility + VFR ceiling: Conservative → MVFR (cannot confirm VFR)
+ * 
+ * SAFETY CRITICAL: Incorrect categorization could lead pilots to attempt VFR flight
+ * in marginal or IFR conditions, potentially leading to controlled flight into terrain
+ * (CFIT) or loss of control accidents.
+ * 
+ * Sources:
+ *   - FAA Aeronautical Information Manual (AIM) Chapter 7, Section 7-1-6
+ *   - FAA Aviation Weather Handbook (FAA-H-8083-28A), Chapter 13
+ *   - 14 CFR § 91.155 (Basic VFR weather minimums - separate from categories)
  * 
  * @param array $weather Weather data array (should contain 'ceiling' in feet and 'visibility' in SM)
  * @return string|null Flight category ('VFR', 'MVFR', 'IFR', 'LIFR'), or null if insufficient data
@@ -127,37 +262,36 @@ function calculateFlightCategory($weather) {
     $ceiling = $weather['ceiling'] ?? null;
     $visibility = $weather['visibility'] ?? null;
     
-    // Check for unlimited sentinel values FIRST
+    // Check for unlimited sentinel values before categorization
     $isUnlimitedVisibility = isUnlimitedVisibility($visibility);
     $isUnlimitedCeiling = isUnlimitedCeiling($ceiling);
     
-    // Cannot determine category without any data (and not unlimited)
     if (!$isUnlimitedVisibility && $visibility === null && !$isUnlimitedCeiling && $ceiling === null) {
         return null;
     }
     
-    // Determine category for visibility and ceiling separately (worst-case rule)
+    // Categorize visibility and ceiling independently (worst-case rule applies)
     $visibilityCategory = null;
     $ceilingCategory = null;
     
     // Categorize visibility
     if ($isUnlimitedVisibility) {
-        $visibilityCategory = 'VFR';  // Unlimited = VFR
+        $visibilityCategory = 'VFR';
     } elseif ($visibility !== null) {
         if ($visibility < 1) {
             $visibilityCategory = 'LIFR';
-        } elseif ($visibility >= 1 && $visibility <= 3) {
-            $visibilityCategory = 'IFR';
-        } elseif ($visibility > 3 && $visibility <= 5) {
-            $visibilityCategory = 'MVFR';
+        } elseif ($visibility >= 1 && $visibility < 3) {
+            $visibilityCategory = 'IFR';  // FAA: 1 to less than 3 SM
+        } elseif ($visibility >= 3 && $visibility <= 5) {
+            $visibilityCategory = 'MVFR';  // FAA: 3 to 5 SM (inclusive)
         } else {
-            $visibilityCategory = 'VFR';  // > 5 SM
+            $visibilityCategory = 'VFR';
         }
     }
     
     // Categorize ceiling
     if ($isUnlimitedCeiling) {
-        $ceilingCategory = 'VFR';  // Unlimited = VFR
+        $ceilingCategory = 'VFR';
     } elseif ($ceiling !== null) {
         if ($ceiling < 500) {
             $ceilingCategory = 'LIFR';
@@ -166,20 +300,18 @@ function calculateFlightCategory($weather) {
         } elseif ($ceiling >= 1000 && $ceiling < 3000) {
             $ceilingCategory = 'MVFR';
         } else {
-            $ceilingCategory = 'VFR';  // >= 3000 ft
+            $ceilingCategory = 'VFR';
         }
     }
     
-    // If both are categorized, use worst-case (most restrictive) category
-    // Order of restrictiveness: LIFR > IFR > MVFR > VFR
+    // Apply worst-case rule: LIFR > IFR > MVFR > VFR
     if ($visibilityCategory !== null && $ceilingCategory !== null) {
-        // VFR requires BOTH conditions to be VFR (or better)
-        // If either is not VFR, use the worst of the two
+        // VFR requires BOTH conditions to be VFR
         if ($visibilityCategory === 'VFR' && $ceilingCategory === 'VFR') {
             return 'VFR';
         }
         
-        // Otherwise, use worst-case category
+        // Use most restrictive category
         $categoryOrder = ['LIFR' => 0, 'IFR' => 1, 'MVFR' => 2, 'VFR' => 3];
         $visibilityOrder = $categoryOrder[$visibilityCategory];
         $ceilingOrder = $categoryOrder[$ceilingCategory];
@@ -187,29 +319,23 @@ function calculateFlightCategory($weather) {
         return ($visibilityOrder < $ceilingOrder) ? $visibilityCategory : $ceilingCategory;
     }
     
-    // If only one is known, check if VFR is still possible
-    // VFR requires visibility >= 3 SM AND ceiling >= 1,000 ft
+    // Handle single known value
     if ($visibilityCategory !== null && $ceiling === null) {
-        // If visibility is not VFR, use that category
         if ($visibilityCategory !== 'VFR') {
             return $visibilityCategory;
         }
-        // If visibility is VFR and ceiling is null (unlimited/no clouds), ceiling is effectively VFR
-        // Unlimited ceiling means no restriction - this is VFR conditions
+        // VFR visibility + unlimited ceiling = VFR
         return 'VFR';
     }
     
     if ($ceilingCategory !== null && $visibility === null) {
-        // If ceiling is not VFR, use that category
         if ($ceilingCategory !== 'VFR') {
             return $ceilingCategory;
         }
-        // If ceiling is VFR but visibility unknown, cannot confirm VFR
-        // Return MVFR as conservative estimate (visibility could be 3-5 SM)
+        // VFR ceiling but unknown visibility = conservative MVFR
         return 'MVFR';
     }
     
-    // Should not reach here, but fallback
     return null;
 }
 

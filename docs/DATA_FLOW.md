@@ -284,16 +284,45 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
 
 ### Dewpoint Calculations
 
-**From Temperature and Humidity** (Magnus Formula):
+**From Temperature and Humidity** (Magnus-Tetens Approximation):
 - Used when dewpoint not provided by source
-- Formula: `gamma = ln(humidity/100) + (b × tempC) / (c + tempC)`
-- `dewpoint = (c × gamma) / (b - gamma)`
-- Constants: a=6.1121, b=17.368, c=238.88
+- Widely accepted empirical formula in meteorology with good accuracy for typical atmospheric conditions
+
+**Formula**:
+```
+γ = ln(RH/100) + [(b × T) / (c + T)]
+Td = (c × γ) / (b - γ)
+```
+
+**Constants** (Alduchov and Eskridge, 1996):
+- a = 6.1121 mb (saturation vapor pressure at 0°C, not used in dewpoint calc)
+- b = 17.368 (dimensionless)
+- c = 238.88°C
+
+**Valid Range**: -40°C to +50°C (typical atmospheric conditions)
+**Accuracy**: ±0.4°C within valid range
+
+**Alternative Constants**: b=17.27, c=237.7 (Buck, 1981) - commonly used for 0°C to 50°C
+
+**Sources**:
+- Alduchov, O. A., and Eskridge, R. E. (1996): "Improved Magnus Form Approximation of Saturation Vapor Pressure", Journal of Applied Meteorology, 35(4)
+- Lawrence, M. G. (2005): "The Relationship between Relative Humidity and the Dewpoint Temperature in Moist Air", Bulletin of the American Meteorological Society
 
 **Humidity from Dewpoint** (Reverse Magnus):
 - Used when humidity not provided but dewpoint is
-- Formula: `humidity = (e / esat) × 100`
-- Where `e` and `esat` calculated using Magnus formula
+- Formula: 
+  ```
+  e_sat = 6.112 × exp[(17.67 × T) / (T + 243.5)]
+  e = 6.112 × exp[(17.67 × Td) / (Td + 243.5)]
+  RH = (e / e_sat) × 100
+  ```
+- Where e_sat = saturation vapor pressure at temperature T (mb)
+- e = actual vapor pressure at dewpoint Td (mb)
+- Constants: 6.112 mb, 17.67, 243.5°C (Buck, 1981)
+
+**Sources**:
+- Buck, A. L. (1981): "New Equations for Computing Vapor Pressure and Enhancement Factor", Journal of Applied Meteorology, 20(12)
+- World Meteorological Organization (WMO) Guide to Instruments and Methods of Observation (CIMO Guide)
 
 ### Dewpoint Spread
 
@@ -325,55 +354,135 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
 
 ### Pressure Altitude
 
-**Formula**: `Pressure Altitude = Station Elevation + (29.92 - Altimeter) × 1000`
+**Formula** (per FAA handbooks):
 
-**Purpose**: Indicates aircraft performance at current pressure
+```
+Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
+```
+
+**Purpose**: Indicates the altitude in the standard atmosphere corresponding to a particular pressure value
+- It's the altitude indicated when the altimeter is set to 29.92 inHg
 - Higher pressure altitude = reduced aircraft performance
-- Used for takeoff/landing distance calculations
+- Used as input for density altitude calculation
+
+**Standard Atmosphere Reference**:
+- Sea level standard pressure: 29.92 inHg (1013.25 hPa)
+- Pressure lapse rate: ~1 inHg per 1,000 feet
+
+**Examples**:
+- Altimeter = 29.92 inHg (standard) → PA = Field Elevation
+- Altimeter < 29.92 inHg (low pressure) → PA > Field Elevation (worse performance)
+- Altimeter > 29.92 inHg (high pressure) → PA < Field Elevation (better performance)
 
 **Requirements**: 
 - Station elevation (from airport config)
 - Altimeter setting (from weather data, in inHg)
 
+**Sources**:
+- FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25)
+- FAA Instrument Flying Handbook (FAA-H-8083-15B)
+
 ### Density Altitude
 
-**Formula**: 
-1. Calculate pressure altitude first
-2. `Standard Temp (°F) = 59 - (0.003566 × elevation)`
-3. `Actual Temp (°F) = (tempC × 9/5) + 32`
-4. `Density Altitude = Elevation + (120 × (Actual Temp - Standard Temp))`
+**SAFETY CRITICAL**: This calculation directly affects takeoff/landing performance decisions. An underestimated density altitude can lead to runway overruns or inability to climb.
 
-**Purpose**: Accounts for both pressure AND temperature effects
+**Formula** (per FAA Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25):
+
+```
+Step 1: Calculate Pressure Altitude
+PA = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
+
+Step 2: Calculate ISA Temperature at Pressure Altitude
+ISA Temp (°F) = 59 - [3.57 × (PA / 1000)]
+
+Step 3: Convert Actual Temperature to Fahrenheit
+Actual Temp (°F) = (tempC × 9/5) + 32
+
+Step 4: Calculate Density Altitude
+Density Altitude = PA + [120 × (Actual Temp - ISA Temp)]
+```
+
+**Key Point**: ISA temperature MUST be calculated at **pressure altitude**, not station elevation. This is critical for accuracy, especially:
+- At high altitude airports
+- On low pressure days (where PA significantly differs from elevation)
+- In hot conditions (where errors compound)
+
+**Standard Atmosphere (ICAO/ISA) Reference**:
+- Sea level: 15°C (59°F), 29.92 inHg (1013.25 hPa)
+- Temperature lapse rate: 2°C per 1,000 ft (6.5°C per kilometer) or 3.57°F per 1,000 ft
+- Valid up to tropopause: 36,089 ft (11 km)
+- The 120 coefficient represents feet of density altitude change per degree Fahrenheit deviation from ISA
+
+**Purpose**: Accounts for both pressure AND temperature effects on air density
 - Higher density altitude = significantly reduced aircraft performance
+- Affects: takeoff distance, landing distance, climb rate, engine power
 - Critical for hot/high altitude operations
 
+**Real-World Example** (Denver International on hot summer day):
+- Elevation: 5,434 ft
+- Temperature: 35°C (95°F)
+- Pressure: 24.50 inHg
+- Pressure Altitude: 10,854 ft
+- Density Altitude: **19,824 ft** (3.6× field elevation!)
+
 **Requirements**:
-- Station elevation
-- Temperature (Celsius)
-- Pressure/Altimeter (inHg)
+- Station elevation (ft)
+- Temperature (Celsius, converted to Fahrenheit)
+- Altimeter setting (inHg)
+
+**Sources**:
+- FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25)
+- FAA Aviation Weather Handbook (FAA-H-8083-28)
+- ICAO Standard Atmosphere (Doc 7488)
 
 ### Flight Category Calculation
 
-**Purpose**: Categorizes flight conditions (VFR, MVFR, IFR, LIFR) based on visibility and ceiling
+**SAFETY CRITICAL**: Incorrect categorization could lead pilots to attempt VFR flight in marginal or IFR conditions, potentially leading to controlled flight into terrain (CFIT) or loss of control accidents.
+
+**Purpose**: Categorizes flight conditions (VFR, MVFR, IFR, LIFR) based on visibility and ceiling for situational awareness and flight planning.
+
+**IMPORTANT**: These categories are for planning and situational awareness only. They do NOT represent the minimum weather requirements for VFR flight under 14 CFR § 91.155, which vary by airspace class and time of day.
 
 **Categories** (FAA Standard):
-- **LIFR** (Low Instrument Flight Rules): Visibility < 1 SM OR Ceiling < 500 ft
-- **IFR** (Instrument Flight Rules): Visibility 1-3 SM OR Ceiling 500-999 ft
-- **MVFR** (Marginal VFR): Visibility 3-5 SM OR Ceiling 1,000-2,999 ft
-- **VFR** (Visual Flight Rules): Visibility > 3 SM AND Ceiling ≥ 1,000 ft
 
-**Calculation Logic**:
-1. Categorize visibility separately
-2. Categorize ceiling separately
-3. Use **worst-case rule**: Most restrictive category wins
-4. **Exception**: VFR requires BOTH conditions to be VFR (or better)
-   - If visibility is VFR but ceiling is unknown/unlimited, assume VFR
-   - If ceiling is VFR but visibility unknown, assume MVFR (conservative)
+**VFR (Visual Flight Rules)** - Green:
+- Ceiling: Greater than 3,000 feet AGL
+- Visibility: Greater than 5 statute miles
+- Rule: **BOTH** conditions must be met
+
+**MVFR (Marginal VFR)** - Blue:
+- Ceiling: 1,000 to 3,000 feet AGL
+- Visibility: 3 to 5 statute miles
+- Rule: **Either** condition qualifies
+
+**IFR (Instrument Flight Rules)** - Red:
+- Ceiling: 500 to less than 1,000 feet AGL
+- Visibility: 1 to **less than** 3 statute miles
+- Rule: **Either** condition qualifies
+- Note: 3 SM exactly is MVFR, not IFR
+
+**LIFR (Low IFR)** - Magenta:
+- Ceiling: Less than 500 feet AGL
+- Visibility: Less than 1 statute mile
+- Rule: **Either** condition qualifies
+
+**Decision Logic**:
+1. Categorize ceiling and visibility independently
+2. For VFR: **BOTH** must be VFR (AND logic)
+3. For all other categories: Use **WORST** case (most restrictive)
+4. Category order (most to least restrictive): LIFR > IFR > MVFR > VFR
 
 **Special Cases**:
-- Unlimited ceiling (null) = no ceiling restriction = VFR for ceiling
-- Missing visibility = cannot determine category (may use ceiling only)
-- Missing both = null category
+- Unlimited ceiling (null/no clouds): Treated as VFR for ceiling
+- Unlimited visibility (>10 SM or sentinel value): Treated as VFR for visibility
+- Missing ceiling + VFR visibility: Assumes unlimited ceiling → VFR
+- Missing visibility + VFR ceiling: Conservative → MVFR (cannot confirm VFR)
+
+**Sources**:
+- FAA Aeronautical Information Manual (AIM) Chapter 7, Section 7-1-6
+- FAA Aviation Weather Handbook (FAA-H-8083-28A), Chapter 13
+- 14 CFR § 91.155 (Basic VFR weather minimums - separate from categories)
+- National Weather Service Directive on Aviation Weather Services
 
 ---
 
