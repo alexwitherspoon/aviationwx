@@ -528,9 +528,10 @@ if ($themeCookie === 'dark') {
                 // auto mode = no class (allows @media prefers-color-scheme to apply)
             }
             
-            // Apply theme based on browser preference (for auto mode)
+            // Apply auto mode - removes all classes to let browser preference work
             function applyAutoTheme() {
-                applyTheme(browserPrefersDark() ? 'dark' : 'day');
+                // Remove all theme classes - let CSS @media handle it
+                document.documentElement.classList.remove('night-mode', 'dark-mode', 'light-mode');
             }
             
             // Check if it's currently night at the airport
@@ -552,25 +553,32 @@ if ($themeCookie === 'dark') {
             if (!themePref) {
                 var oldNightPref = getCookie('aviationwx_night_mode');
                 if (oldNightPref === 'off') themePref = 'day';
-                // Note: 'night' is no longer stored - it's purely time-based
             }
             
-            // Ignore legacy 'night' preference (should not be stored anymore)
-            if (themePref === 'night') themePref = null;
+            // Note: 'night' preference is now valid (manually selected by user)
             
             // PRIORITY 1: Mobile after sunset → Auto night mode (safety priority)
             if (isMobile() && isNightTime()) {
-                // Unless user manually overrode today with day/dark
-                if (nightData && manualOverride === nightData.todayDate && (themePref === 'day' || themePref === 'dark')) {
-                    applyTheme(themePref);
+                // Check if user manually overrode auto-night today
+                if (nightData && manualOverride === nightData.todayDate) {
+                    // User has manually interacted with the toggle today
+                    // Respect their choice, apply their saved preference
+                    if (themePref === 'day' || themePref === 'dark' || themePref === 'night') {
+                        applyTheme(themePref);
+                    } else {
+                        // They're in auto mode but clicked away from auto-night
+                        // Don't auto-night them again today
+                        applyAutoTheme();
+                    }
                 } else {
+                    // No manual override today, auto-night for safety
                     applyTheme('night');
                 }
                 return;
             }
             
-            // PRIORITY 2: Saved cookie preference (day/dark - explicit choice)
-            if (themePref === 'day' || themePref === 'dark') {
+            // PRIORITY 2: Saved cookie preference (day/dark/night - explicit choice)
+            if (themePref === 'day' || themePref === 'dark' || themePref === 'night') {
                 applyTheme(themePref);
                 return;
             }
@@ -1201,6 +1209,11 @@ if ($themeCookie === 'dark') {
                     </button>
                 </div>
                 <?php endif; ?>
+                <div class="nav-theme-toggle-container">
+                    <button id="night-mode-toggle" title="Toggle theme: Auto → Day → Dark → Night" aria-label="Toggle theme mode">
+                        <span id="night-mode-icon">🔄</span>
+                    </button>
+                </div>
                 <div class="nav-hamburger-container">
                     <button id="nav-hamburger-btn" class="nav-hamburger-btn" title="Navigation menu" aria-label="Open navigation menu">
                         <span class="hamburger-icon">☰</span>
@@ -1499,9 +1512,6 @@ if ($themeCookie === 'dark') {
                 <div class="weather-header-left" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <h2 class="weather-header-title" style="margin: 0;">Current Conditions</h2>
                     <div class="weather-toggle-buttons" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                        <button id="night-mode-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 40px; height: auto;" title="Toggle theme: Auto → Day → Dark → Night">
-                            <span id="night-mode-icon">🌙</span>
-                        </button>
                         <button id="time-format-toggle" style="background: #f5f5f5; border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; color: #333; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); min-width: 50px; height: auto;" title="Toggle time format (12hr/24hr)" onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#999';" onmouseout="this.style.background='#f5f5f5'; this.style.borderColor='#ccc';">
                             <span id="time-format-display">12hr</span>
                         </button>
@@ -3098,9 +3108,9 @@ var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
 function getThemePreference() {
     // Try cookie first (source of truth), then localStorage (cache)
     var pref = getCookie('aviationwx_theme') || localStorage.getItem('aviationwx_theme');
-    // Valid stored preferences: auto/day/dark
-    // Night mode is never stored - it's determined by airport time on mobile
-    if (pref === 'auto' || pref === 'day' || pref === 'dark') {
+    // Valid stored preferences: auto/day/dark/night
+    // Night mode can now be stored when manually selected by user
+    if (pref === 'auto' || pref === 'day' || pref === 'dark' || pref === 'night') {
         return pref;
     }
     return 'auto'; // Default to auto (follows browser preference)
@@ -3132,7 +3142,9 @@ function setThemeManualOverride() {
 function getCurrentTheme() {
     if (document.body.classList.contains('night-mode')) return 'night';
     if (document.body.classList.contains('dark-mode')) return 'dark';
-    return 'day';
+    if (document.body.classList.contains('light-mode')) return 'day';
+    // No class = auto mode (follows browser preference)
+    return 'auto';
 }
 
 function isNightModeActive() {
@@ -3249,12 +3261,12 @@ function initThemeToggle() {
     function updateToggle() {
         var visualTheme = getCurrentTheme();
         
-        // If in night mode (mobile auto-night), show night icon
-        if (visualTheme === 'night') {
+        // If in night mode (mobile auto-night or manual), show night icon
+        if (visualTheme === 'night' || currentPreference === 'night') {
             icon.textContent = '🌙';
-            toggle.title = 'Night vision mode (auto) - click to switch to auto mode';
-        } else if (currentPreference === 'auto') {
-            // Auto mode - show auto icon regardless of visual theme
+            toggle.title = 'Night vision mode - click to switch to auto mode';
+        } else if (visualTheme === 'auto' || currentPreference === 'auto') {
+            // Auto mode - show auto icon regardless of visual appearance
             icon.textContent = '🔄';
             toggle.title = 'Auto mode (follows browser preference) - click to switch to day mode';
         } else if (currentPreference === 'dark') {
@@ -3277,7 +3289,7 @@ function initThemeToggle() {
         if (visualTheme === 'night') {
             // From night (visual) -> auto
             newPreference = 'auto';
-            newVisualTheme = browserPrefersDark() ? 'dark' : 'day';
+            newVisualTheme = 'auto';
         } else if (currentPreference === 'auto') {
             // From auto -> day
             newPreference = 'day';
@@ -3287,13 +3299,13 @@ function initThemeToggle() {
             newPreference = 'dark';
             newVisualTheme = 'dark';
         } else if (currentPreference === 'dark') {
-            // From dark -> night
-            newPreference = 'night'; // This is a visual choice, not stored
+            // From dark -> night (manually selected by user)
+            newPreference = 'night'; // Saved to cookie so it persists
             newVisualTheme = 'night';
         } else {
             // Fallback: go to auto
             newPreference = 'auto';
-            newVisualTheme = browserPrefersDark() ? 'dark' : 'day';
+            newVisualTheme = 'auto';
         }
         
         // Apply the visual theme
@@ -3302,8 +3314,9 @@ function initThemeToggle() {
         // Update tracked preference
         currentPreference = newPreference;
         
-        // Save preference to cookie (auto/day/dark - night is not stored)
-        if (newPreference === 'auto' || newPreference === 'day' || newPreference === 'dark') {
+        // Save preference to cookie (auto/day/dark/night)
+        // Night mode IS saved when manually selected by user
+        if (newPreference === 'auto' || newPreference === 'day' || newPreference === 'dark' || newPreference === 'night') {
             setThemePreference(newPreference);
         }
         
@@ -3325,7 +3338,10 @@ function initThemeToggle() {
         document.body.classList.add('night-mode');
     } else if (document.documentElement.classList.contains('dark-mode')) {
         document.body.classList.add('dark-mode');
+    } else if (document.documentElement.classList.contains('light-mode')) {
+        document.body.classList.add('light-mode');
     }
+    // Note: No classes = auto mode (CSS @media handles styling)
     
     // Initial update (after sync)
     updateToggle();
@@ -3335,7 +3351,7 @@ function initThemeToggle() {
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
             // Only react if we're in auto mode and not in mobile night mode
             if (currentPreference === 'auto' && getCurrentTheme() !== 'night') {
-                applyTheme(e.matches ? 'dark' : 'day');
+                applyTheme('auto'); // Reapply auto mode (removes all classes)
                 // Update wind canvas if needed
                 if (typeof updateWindVisual === 'function' && currentWeatherData) {
                     updateWindVisual(currentWeatherData);
@@ -3365,7 +3381,23 @@ function checkNightModeAuto() {
     
     var shouldBeNight = isNightTimeAtAirport();
     var currentTheme = getCurrentTheme();
+    var savedPref = getThemePreference();
     var isCurrentlyNight = (currentTheme === 'night');
+    
+    // If user has manually saved night mode, respect it
+    if (savedPref === 'night') {
+        // User wants night mode - keep it unless it's daytime and they haven't overridden
+        if (!shouldBeNight && !hasManualOverrideToday()) {
+            // It's daytime, exit night mode, return to auto
+            applyTheme('auto');
+            setThemePreference('auto');
+            updateThemeToggleDisplay();
+            if (typeof updateWindVisual === 'function' && currentWeatherData) {
+                updateWindVisual(currentWeatherData);
+            }
+        }
+        return; // Otherwise stay in night mode
+    }
     
     if (shouldBeNight !== isCurrentlyNight) {
         // Determine target theme
@@ -3374,13 +3406,12 @@ function checkNightModeAuto() {
             targetTheme = 'night';
         } else {
             // Transitioning from night to daytime at sunrise
-            // Use saved preference: day/dark are explicit, auto follows browser
-            var savedPref = getThemePreference();
+            // Use saved preference: day/dark are explicit, auto removes classes
             if (savedPref === 'day' || savedPref === 'dark') {
                 targetTheme = savedPref;
             } else {
-                // Auto mode (or legacy null): follow browser preference
-                targetTheme = browserPrefersDark() ? 'dark' : 'day';
+                // Auto mode: remove all classes, let CSS handle it
+                targetTheme = 'auto';
             }
         }
         
@@ -3427,14 +3458,15 @@ if (window.matchMedia) {
         // Don't switch if mobile and it's nighttime (night mode takes priority)
         if (isMobileDevice() && isNightTimeAtAirport()) return;
         
-        var currentTheme = getCurrentTheme();
-        var browserWantsDark = e.matches;
-        var targetTheme = browserWantsDark ? 'dark' : 'day';
+        // Only switch if we're in auto mode
+        var pref = getThemePreference();
+        if (pref !== 'auto') return;
         
-        // Only switch between day/dark based on browser preference
-        // Night mode is never triggered by browser preference (only by time)
-        if (currentTheme !== 'night' && currentTheme !== targetTheme) {
-            applyTheme(targetTheme);
+        var currentTheme = getCurrentTheme();
+        
+        // If in auto mode and not in night mode, reapply auto (CSS will handle the visual change)
+        if (currentTheme !== 'night') {
+            applyTheme('auto'); // This removes all classes, letting CSS handle it
             updateThemeToggleDisplay();
             
             // Update wind canvas colors
@@ -3459,14 +3491,22 @@ function updateThemeToggleDisplay() {
     var icon = document.getElementById('night-mode-icon');
     if (!toggle || !icon) return;
     
-    var theme = getCurrentTheme();
-    if (theme === 'night') {
+    var visualTheme = getCurrentTheme();
+    var preference = getThemePreference();
+    
+    // If in night mode (visual or saved preference), show night icon
+    if (visualTheme === 'night' || preference === 'night') {
         icon.textContent = '🌙';
-        toggle.title = 'Night vision mode - click to switch to day mode';
-    } else if (theme === 'dark') {
+        toggle.title = 'Night vision mode - click to switch to auto mode';
+    } else if (visualTheme === 'auto' || preference === 'auto') {
+        // Auto mode - show auto icon regardless of visual appearance
+        icon.textContent = '🔄';
+        toggle.title = 'Auto mode (follows browser preference) - click to switch to day mode';
+    } else if (preference === 'dark') {
         icon.textContent = '🌑';
         toggle.title = 'Dark mode - click to switch to night vision mode';
     } else {
+        // day mode
         icon.textContent = '☀️';
         toggle.title = 'Day mode - click to switch to dark mode';
     }
@@ -4522,10 +4562,36 @@ function updateWindVisual(weather) {
     const ctx = canvas.getContext('2d');
     const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 20;
     
+    // Detect night mode for red color scheme
+    const isNightMode = document.body.classList.contains('night-mode');
+    
+    // Color scheme based on theme
+    const colors = isNightMode ? {
+        circle: '#660000',          // Dark red circle
+        runway: '#cc4444',          // Red runways
+        runwayLabel: '#ff5555',     // Bright red runway labels
+        labelOutline: '#330000',    // Dark red outline
+        compass: '#993333',         // Muted red compass
+        windArrow: '#ff4444',       // Red wind arrow
+        windFill: 'rgba(255, 68, 68, 0.2)',  // Red transparent fill
+        calmText: '#cc4444',        // Red calm text
+        vrbText: '#ff4444'          // Red VRB text
+    } : {
+        circle: '#333',
+        runway: '#0066cc',
+        runwayLabel: '#0066cc',
+        labelOutline: '#ffffff',
+        compass: '#666',
+        windArrow: '#dc3545',
+        windFill: 'rgba(220, 53, 69, 0.2)',
+        calmText: '#333',
+        vrbText: '#dc3545'
+    };
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Draw outer circle
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.strokeStyle = colors.circle; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
     
     // Group parallel runways
     const runwayGroups = groupParallelRunways(RUNWAYS);
@@ -4546,7 +4612,7 @@ function updateWindVisual(weather) {
             const offset = calculateRunwayOffset(heading1, groupIndex, group.length, maxOffset);
             
             // Draw runway as a single line (not twice!)
-            ctx.strokeStyle = '#0066cc';
+            ctx.strokeStyle = colors.runway;
             ctx.lineWidth = 8;
             ctx.lineCap = 'round';
             ctx.beginPath();
@@ -4576,12 +4642,12 @@ function updateWindVisual(weather) {
             const label1X = (cx - Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
             const label1Y = (cy + Math.cos(angle1) * (runwayLength / 2 + labelOffset)) + offset.y;
             
-            // Draw white outline for label 1
-            ctx.strokeStyle = '#ffffff';
+            // Draw outline for label 1
+            ctx.strokeStyle = colors.labelOutline;
             ctx.lineWidth = 3;
             ctx.strokeText(label1, label1X, label1Y);
             // Draw label text
-            ctx.fillStyle = '#0066cc';
+            ctx.fillStyle = colors.runwayLabel;
             ctx.fillText(label1, label1X, label1Y);
             
             // Label for heading 2 (at end end)
@@ -4591,12 +4657,12 @@ function updateWindVisual(weather) {
             const label2X = (cx + Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
             const label2Y = (cy - Math.cos(angle1) * (runwayLength / 2 + labelOffset)) + offset.y;
             
-            // Draw white outline for label 2
-            ctx.strokeStyle = '#ffffff';
+            // Draw outline for label 2
+            ctx.strokeStyle = colors.labelOutline;
             ctx.lineWidth = 3;
             ctx.strokeText(label2, label2X, label2Y);
             // Draw label text
-            ctx.fillStyle = '#0066cc';
+            ctx.fillStyle = colors.runwayLabel;
             ctx.fillText(label2, label2X, label2Y);
         });
     });
@@ -4682,26 +4748,26 @@ function updateWindVisual(weather) {
             windDirection = (windDirToward * Math.PI) / 180;
             windSpeed = ws;
             
-            drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0);
+            drawWindArrow(ctx, cx, cy, r, windDirection, windSpeed, 0, colors);
         } else if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && isVariableWind) {
             // Variable wind - draw "VRB" text
             ctx.font = 'bold 20px sans-serif'; 
             ctx.textAlign = 'center';
-            ctx.strokeStyle = '#fff'; 
+            ctx.strokeStyle = colors.labelOutline; 
             ctx.lineWidth = 3;
             ctx.lineJoin = 'round'; // Prevent miter spike artifacts on letters
             ctx.strokeText('VRB', cx, cy);
-            ctx.fillStyle = '#dc3545';
+            ctx.fillStyle = colors.vrbText;
             ctx.fillText('VRB', cx, cy);
         } else if (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) {
             // Calm conditions (< 3 knots) - draw CALM text (only when data is fresh)
             ctx.font = 'bold 20px sans-serif'; 
             ctx.textAlign = 'center';
-            ctx.strokeStyle = '#fff'; 
+            ctx.strokeStyle = colors.labelOutline; 
             ctx.lineWidth = 3;
             ctx.lineJoin = 'round'; // Prevent miter spike artifacts on letters like M
             ctx.strokeText('CALM', cx, cy);
-            ctx.fillStyle = '#333';
+            ctx.fillStyle = colors.calmText;
             ctx.fillText('CALM', cx, cy);
         }
     }
@@ -4710,23 +4776,31 @@ function updateWindVisual(weather) {
     // Draw cardinal directions
     ['N', 'E', 'S', 'W'].forEach((l, i) => {
         const ang = (i * 90 * Math.PI) / 180;
-        ctx.fillStyle = '#666'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = colors.compass; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(l, cx + Math.sin(ang) * (r + 10), cy - Math.cos(ang) * (r + 10));
     });
 }
 
-function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0) {
+function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0, colors = null) {
+    // Use default colors if not provided (for backwards compatibility)
+    if (!colors) {
+        colors = {
+            windFill: 'rgba(220, 53, 69, 0.2)',
+            windArrow: '#dc3545'
+        };
+    }
+    
     // Arrow points in direction wind is blowing TOWARD (windsock behavior)
     // angle is already in TOWARD direction (caller converts FROM by adding 180°)
     const arrowLength = Math.min(speed * 6, r - 30);
     const arrowEndX = cx + Math.sin(angle) * arrowLength;
     const arrowEndY = cy - Math.cos(angle) * arrowLength;
     
-    ctx.fillStyle = 'rgba(220, 53, 69, 0.2)';
+    ctx.fillStyle = colors.windFill;
     const circleRadius = Math.max(20, speed * 4);
     ctx.beginPath(); ctx.arc(cx, cy, circleRadius, 0, 2 * Math.PI); ctx.fill();
     
-    ctx.strokeStyle = '#dc3545'; ctx.fillStyle = '#dc3545'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.strokeStyle = colors.windArrow; ctx.fillStyle = colors.windArrow; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(arrowEndX, arrowEndY); ctx.stroke();
     
     const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
