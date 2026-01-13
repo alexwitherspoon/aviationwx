@@ -19,8 +19,34 @@ class MapTilesProxyTest extends TestCase
         // Use localhost for integration tests (assumes dev environment running)
         $this->baseUrl = 'http://localhost:8080';
         
+        // Check if Docker/server is running
+        if (!$this->isServerRunning()) {
+            $this->markTestSkipped('Server not running on localhost:8080 - start with "make up"');
+        }
+        
         // Check if we're rate limited (for tests that were run earlier)
         $this->checkRateLimitStatus();
+    }
+    
+    /**
+     * Check if the server is running and accessible
+     */
+    private function isServerRunning(): bool
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->baseUrl . '/');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_NOBODY, true);
+        
+        curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errno = curl_errno($ch);
+        curl_close($ch);
+        
+        // If we got any HTTP response (even 404), server is running
+        return ($httpCode > 0 && $errno === 0);
     }
     
     /**
