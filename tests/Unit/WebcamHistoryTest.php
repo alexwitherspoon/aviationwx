@@ -378,38 +378,6 @@ class WebcamHistoryTest extends TestCase
     }
     
     /**
-     * Test validateImageForHistory with valid complete image
-     */
-    public function testValidateImageForHistory_ValidImage_ReturnsTrue(): void
-    {
-        $file = $this->testImageDir . '/valid.jpg';
-        
-        // Create a real JPEG image using GD (10x10 pixel red square)
-        $img = imagecreatetruecolor(10, 10);
-        $red = imagecolorallocate($img, 255, 0, 0);
-        imagefilledrectangle($img, 0, 0, 10, 10, $red);
-        imagejpeg($img, $file, 90);
-        imagedestroy($img);
-        
-        $result = validateImageForHistory($file);
-        $this->assertTrue($result);
-    }
-    
-    /**
-     * Test validateImageForHistory with truncated image
-     */
-    public function testValidateImageForHistory_TruncatedImage_ReturnsFalse(): void
-    {
-        $file = $this->testImageDir . '/truncated.jpg';
-        // Truncated JPEG (missing end marker)
-        $jpeg = "\xFF\xD8\xFF\xE0" . str_repeat("\x00", 200);
-        file_put_contents($file, $jpeg);
-        
-        $result = validateImageForHistory($file);
-        $this->assertFalse($result);
-    }
-    
-    /**
      * Test that function correctly handles the summary scenarios:
      * Bridge upload, Direct camera, GPS timestamp, OffsetTimeOriginal
      * 

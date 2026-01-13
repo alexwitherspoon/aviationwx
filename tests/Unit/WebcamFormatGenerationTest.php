@@ -300,9 +300,9 @@ class WebcamFormatGenerationTest extends TestCase
     public function testGetTimestampCacheFilePath_ReturnsTimestampPath(): void
     {
         $timestamp = 1703700000;
-        $path = getTimestampCacheFilePath('kspb', 0, $timestamp, 'jpg', 'primary');
+        $path = getTimestampCacheFilePath('kspb', 0, $timestamp, 'jpg', 'original');
         $this->assertStringContainsString('cache/webcams', $path);
-        $this->assertStringContainsString('kspb/0/1703700000_primary.jpg', $path);
+        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
     }
 
     /**
@@ -324,8 +324,8 @@ class WebcamFormatGenerationTest extends TestCase
         
         // Create test .tmp files using the new path structure
         $tmpFiles = [
-            getStagingFilePath($testAirport, 0, 'jpg', 'primary'),
-            getStagingFilePath($testAirport, 0, 'webp', 'primary')
+            getStagingFilePath($testAirport, 0, 'jpg', 'original'),
+            getStagingFilePath($testAirport, 0, 'webp', 'original')
         ];
         
         // Create the test files (getStagingFilePath ensures directory exists)
@@ -526,7 +526,7 @@ class WebcamFormatGenerationTest extends TestCase
         $this->assertTrue($formatResults['webp'], 'WebP generation should succeed');
         
         // Verify staging file exists and is valid WebP
-        $stagingFile = getStagingFilePath($testAirport, 0, 'webp', 'primary');
+        $stagingFile = getStagingFilePath($testAirport, 0, 'webp', 'original');
         $this->assertFileExists($stagingFile, 'WebP staging file should exist');
         
         // Verify it's a valid WebP file
@@ -599,7 +599,7 @@ class WebcamFormatGenerationTest extends TestCase
                 $this->assertTrue($formatResults[$format], "Format {$format} generation should succeed");
                 
                 // Verify staging file exists and is valid
-                $stagingFile = getStagingFilePath($testAirport, 0, $format, 'primary');
+                $stagingFile = getStagingFilePath($testAirport, 0, $format, 'original');
                 $this->assertFileExists($stagingFile, "Staging file for {$format} should exist");
                 
                 // Verify it's a valid file of the expected format
@@ -642,7 +642,7 @@ class WebcamFormatGenerationTest extends TestCase
         @unlink($sourceFile);
         // Clean up staging files
         foreach (['jpg', 'webp'] as $format) {
-            $stagingFile = getStagingFilePath($testAirport, 0, $format, 'primary');
+            $stagingFile = getStagingFilePath($testAirport, 0, $format, 'original');
             @unlink($stagingFile);
             $timestampFile = getFinalFilePath($testAirport, 0, $format, $captureTime);
             @unlink($timestampFile);
@@ -829,7 +829,7 @@ class WebcamFormatGenerationTest extends TestCase
         $this->createTestJpeg('source.jpg');
         
         $variantDims = ['width' => 1920, 'height' => 1080];
-        $cmd = buildVariantCommand($sourceFile, $destFile, 'primary', 'jpg', $variantDims, true, 0);
+        $cmd = buildVariantCommand($sourceFile, $destFile, 'original', 'jpg', $variantDims, true, 0);
         
         $this->assertStringContainsString('pad=', $cmd);
         $this->assertStringContainsString('color=black', $cmd);
@@ -840,8 +840,8 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetTimestampCacheFilePath_WithVariant_IncludesVariant(): void
     {
-        $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'primary');
-        $this->assertStringContainsString('kspb/0/1703700000_primary.jpg', $path);
+        $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'original');
+        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
     }
     
     /**
@@ -849,8 +849,8 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetTimestampCacheFilePath_WithoutVariant_UsesPrimary(): void
     {
-        $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'primary');
-        $this->assertStringContainsString('kspb/0/1703700000_primary.jpg', $path);
+        $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'original');
+        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
     }
 }
 
