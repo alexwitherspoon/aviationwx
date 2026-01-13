@@ -395,7 +395,7 @@ function getCacheFile(string $airportId, int $camIndex, string $format, string|i
     if ($jpgFile !== null) {
         $jpgBasename = basename($jpgFile);
         // Extract timestamp from filename (supports both old and new naming)
-        // Old: "1766944401_primary.jpg" or "1766944401.jpg"
+        // Old formats: "1766944401_primary.jpg" (legacy) or "1766944401.jpg" (very old)
         // New: "1766944401_original.jpg" or "1766944401_720.jpg"
         if (preg_match('/^(\d+)(?:_(?:primary|original|\d+))?\.jpg$/', $jpgBasename, $matches)) {
             $timestamp = $matches[1];
@@ -519,7 +519,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         }
         
         $basename = basename($file);
-        // Match timestamp-based filename: "1703700000_primary.jpg" or "1703700000.jpg"
+        // Match timestamp-based filename: "1703700000_original.jpg" or "1703700000.jpg"
         if (preg_match('/^(\d+)(?:_[^_]+)?\.(jpg|webp)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             if (!isset($timestampFiles[$timestamp])) {
@@ -638,33 +638,6 @@ function getVariantDimensions(string|int $variant, ?array $actualDimensions = nu
  * @param bool $letterbox Whether to letterbox to 16:9 (default: false)
  * @return string Shell command string
  */
-function buildResizeCommand(string $sourceFile, string $destFile, int $targetWidth, int $targetHeight, bool $letterbox = false): string {
-    if ($letterbox) {
-        // Letterbox to 16:9 using pad filter
-        // Calculate padding to center image
-        $cmd = sprintf(
-            "ffmpeg -hide_banner -loglevel error -y -i %s -vf \"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black\" -frames:v 1 %s",
-            escapeshellarg($sourceFile),
-            $targetWidth,
-            $targetHeight,
-            $targetWidth,
-            $targetHeight,
-            escapeshellarg($destFile)
-        );
-    } else {
-        // Simple resize
-        $cmd = sprintf(
-            "ffmpeg -hide_banner -loglevel error -y -i %s -vf \"scale=%d:%d:force_original_aspect_ratio=decrease\" -frames:v 1 %s",
-            escapeshellarg($sourceFile),
-            $targetWidth,
-            $targetHeight,
-            escapeshellarg($destFile)
-        );
-    }
-    
-    return $cmd;
-}
-
 /**
  * Build ffmpeg command for variant generation (resize + format)
  * 
@@ -673,10 +646,10 @@ function buildResizeCommand(string $sourceFile, string $destFile, int $targetWid
  * 
  * @param string $sourceFile Source image file path
  * @param string $destFile Destination file path (with correct extension)
- * @param string $variant Variant name (thumb, small, medium, large, primary, full)
+ * @param string $variant Variant name ('original' or height in pixels like 720, 360)
  * @param string $format Target format (webp, jpg)
  * @param array $variantDimensions Target dimensions for variant
- * @param bool $letterbox Whether to letterbox (for primary/full only)
+ * @param bool $letterbox Whether to letterbox (for 'original' variant only)
  * @param int $captureTime Source capture time for mtime sync
  * @return string Shell command string
  */
@@ -993,359 +966,6 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
 }
 
 /**
- * Generate all variants and formats synchronously in parallel
- * 
- * Main function for variant generation. Handles:
- * - Input dimension detection
- * - Resolution capping (downscale if > max)
- * - Variant size calculation
- * - Letterboxing for primary/full
- * - Parallel generation of all variants × formats
- * 
- * @param string $sourceFile Source image file path (staging .tmp file)
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @param string $sourceFormat Format of source file (jpg, webp, png)
- * @param array|null $inputDimensions Optional input dimensions (detected if null)
- * @return array Results: ['variant_format' => bool success, ...] and metadata
- */
-function generateVariantsSync(string $sourceFile, string $airportId, int $camIndex, string $sourceFormat, ?array $inputDimensions = null): array {
-    $timeout = getFormatGenerationTimeout();
-    $deadline = time() + $timeout;
-    $captureTime = getSourceCaptureTime($sourceFile);
-    
-    // Get input dimensions if not provided
-    if ($inputDimensions === null) {
-        $inputDimensions = getImageDimensions($sourceFile);
-        if ($inputDimensions === null) {
-            aviationwx_log('error', 'webcam variant generation: unable to detect input dimensions', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'source_file' => $sourceFile
-            ], 'app');
-            return ['results' => [], 'actual_primary' => null, 'actual_full' => null, 'delete_original' => false];
-        }
-    }
-    
-    // Get resolution config
-    $config = getImageResolutionConfig();
-    if ($config['primary'] === null || $config['max'] === null) {
-        aviationwx_log('error', 'webcam variant generation: invalid resolution config', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'config' => $config
-        ], 'app');
-        return ['results' => [], 'actual_primary' => null, 'actual_full' => null, 'delete_original' => false];
-    }
-    
-    $primaryConfig = $config['primary'];
-    $maxConfig = $config['max'];
-    $variantsToGenerate = $config['variants'];
-    
-    // Calculate actual sizes (min of input, config)
-    $inputPixels = $inputDimensions['width'] * $inputDimensions['height'];
-    $maxPixels = $maxConfig['width'] * $maxConfig['height'];
-    $primaryPixels = $primaryConfig['width'] * $primaryConfig['height'];
-    
-    // Determine actual_full and actual_primary
-    $deleteOriginal = false;
-    if ($inputPixels > $maxPixels) {
-        // Input exceeds max - downscale to max
-        $actualFull = $maxConfig;
-        $deleteOriginal = true;
-    } else {
-        // Input is within max - use input as full
-        $actualFull = $inputDimensions;
-    }
-    
-    // Primary is min of actual_full and configured primary
-    if ($actualFull['width'] * $actualFull['height'] <= $primaryPixels) {
-        $actualPrimary = $actualFull;
-    } else {
-        $actualPrimary = $primaryConfig;
-    }
-    
-    // Determine which variants to generate (using height-based naming)
-    $variantsToProcess = [];
-    
-    // Always generate 'original' (full resolution)
-    $variantsToProcess[] = 'original';
-    
-    // Add primary height variant if different from original
-    $primaryHeight = $actualPrimary['height'];
-    if ($actualPrimary['width'] !== $actualFull['width'] || $actualPrimary['height'] !== $actualFull['height']) {
-        $variantsToProcess[] = $primaryHeight;
-    }
-    
-    // Add configured height variants if they're smaller than actual_primary
-    foreach ($variantsToGenerate as $height) {
-        $variantDims = getVariantDimensions($height);
-        if ($variantDims !== null && shouldGenerateVariant($variantDims, $actualPrimary)) {
-            // Avoid duplicates
-            if (!in_array($height, $variantsToProcess)) {
-                $variantsToProcess[] = $height;
-            }
-        }
-    }
-    
-    // Determine which formats to generate
-    $formatsToGenerate = [];
-    
-    // Always need JPG (if source isn't JPG)
-    if ($sourceFormat !== 'jpg') {
-        $formatsToGenerate[] = 'jpg';
-    }
-    
-    // WebP if enabled and source isn't WebP
-    if (isWebpGenerationEnabled() && $sourceFormat !== 'webp') {
-        $formatsToGenerate[] = 'webp';
-    }
-    
-    // Always include source format (we'll copy it for variants)
-    if (!in_array($sourceFormat, $formatsToGenerate)) {
-        $formatsToGenerate[] = $sourceFormat;
-    }
-    
-    // If no variants or formats to generate, return early
-    if (empty($variantsToProcess) || empty($formatsToGenerate)) {
-        return [
-            'results' => [],
-            'actual_primary' => $actualPrimary,
-            'actual_full' => $actualFull,
-            'delete_original' => $deleteOriginal
-        ];
-    }
-    
-    aviationwx_log('info', 'webcam variant generation starting', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'source_format' => $sourceFormat,
-        'input_dimensions' => $inputDimensions,
-        'actual_primary' => $actualPrimary,
-        'actual_full' => $actualFull,
-        'variants_to_process' => $variantsToProcess,
-        'formats_to_generate' => $formatsToGenerate,
-        'delete_original' => $deleteOriginal,
-        'timeout_seconds' => $timeout,
-        'capture_time' => $captureTime
-    ], 'app');
-    
-    $results = [];
-    $processes = [];
-    
-    // Start all variant × format generation processes in parallel
-    foreach ($variantsToProcess as $variant) {
-        // For 'original', use actualFull dimensions; for heights, calculate from aspect ratio
-        $variantDims = ($variant === 'original') ? $actualFull : getVariantDimensions($variant, $actualFull);
-        if ($variantDims === null) {
-            continue;
-        }
-        
-        // Letterboxing only for 'original' variant (preserves source aspect ratio with bars)
-        $letterbox = ($variant === 'original');
-        
-        foreach ($formatsToGenerate as $format) {
-            // Create staging file path with variant and format
-            $stagingFile = getStagingFilePath($airportId, $camIndex, $format, $variant);
-            
-            $cmd = buildVariantCommand($sourceFile, $stagingFile, $variant, $format, $variantDims, $letterbox, $captureTime);
-            
-            // Redirect stderr to stdout for capture
-            $cmd = $cmd . ' 2>&1';
-            
-            $descriptorSpec = [
-                0 => ['pipe', 'r'], // stdin
-                1 => ['pipe', 'w'], // stdout
-                2 => ['pipe', 'w'], // stderr
-            ];
-            
-            $process = @proc_open($cmd, $descriptorSpec, $pipes);
-            
-            $key = $variant . '_' . $format;
-            
-            if (is_resource($process)) {
-                // Close stdin immediately
-                @fclose($pipes[0]);
-                
-                // Set stdout to non-blocking for polling
-                stream_set_blocking($pipes[1], false);
-                stream_set_blocking($pipes[2], false);
-                
-                $processes[$key] = [
-                    'handle' => $process,
-                    'pipes' => $pipes,
-                    'dest' => $stagingFile,
-                    'variant' => $variant,
-                    'format' => $format,
-                    'started' => microtime(true)
-                ];
-                
-                aviationwx_log('debug', 'webcam variant process started', [
-                    'airport' => $airportId,
-                    'cam' => $camIndex,
-                    'variant' => $variant,
-                    'format' => $format
-                ], 'app');
-            } else {
-                $results[$key] = false;
-                aviationwx_log('error', 'webcam variant process failed to start', [
-                    'airport' => $airportId,
-                    'cam' => $camIndex,
-                    'variant' => $variant,
-                    'format' => $format
-                ], 'app');
-            }
-        }
-    }
-    
-    // Wait for all processes to complete (or timeout)
-    while (!empty($processes) && time() < $deadline) {
-        foreach ($processes as $key => $proc) {
-            $status = @proc_get_status($proc['handle']);
-            
-            if (!$status['running']) {
-                // Process finished
-                $elapsed = round((microtime(true) - $proc['started']) * 1000, 2);
-                $exitCode = $status['exitcode'];
-                
-                // Read any remaining output
-                $stdout = @stream_get_contents($proc['pipes'][1]);
-                $stderr = @stream_get_contents($proc['pipes'][2]);
-                
-                // Close pipes
-                @fclose($proc['pipes'][1]);
-                @fclose($proc['pipes'][2]);
-                @proc_close($proc['handle']);
-                
-                // Check success: file exists with size > 0
-                // Accept exit codes: 0 (success), 1 (EXIF copy may have failed but image generated), 234 (output same as input - no resize needed)
-                $fileExists = file_exists($proc['dest']);
-                $fileSize = $fileExists ? filesize($proc['dest']) : 0;
-                $success = $fileExists && $fileSize > 0 && ($exitCode === 0 || $exitCode === 1 || $exitCode === 234);
-                $results[$key] = $success;
-                
-                if ($success) {
-                    aviationwx_log('info', 'webcam variant generation complete', [
-                        'airport' => $airportId,
-                        'cam' => $camIndex,
-                        'variant' => $proc['variant'],
-                        'format' => $proc['format'],
-                        'duration_ms' => $elapsed,
-                        'size_bytes' => filesize($proc['dest']),
-                        'dest_file' => basename($proc['dest']),
-                        'dest_full_path' => $proc['dest'],
-                        'result_key' => $key
-                    ], 'app');
-                } else {
-                    aviationwx_log('warning', 'webcam variant generation failed', [
-                        'airport' => $airportId,
-                        'cam' => $camIndex,
-                        'variant' => $proc['variant'],
-                        'format' => $proc['format'],
-                        'exit_code' => $exitCode,
-                        'duration_ms' => $elapsed,
-                        'file_exists' => file_exists($proc['dest']),
-                        'file_size' => file_exists($proc['dest']) ? filesize($proc['dest']) : 0,
-                        'dest_file' => $proc['dest'],
-                        'result_key' => $key,
-                        'stderr_preview' => substr($stderr, 0, 500),
-                        'stdout_preview' => substr($stdout, 0, 200)
-                    ], 'app');
-                    
-                    // Only clean up staging file if it truly failed (no file or zero size)
-                    // Don't delete files that were created but had non-zero exit codes (EXIF copy failures, etc.)
-                    $fileExists = file_exists($proc['dest']);
-                    $fileSize = $fileExists ? filesize($proc['dest']) : 0;
-                    if (!$fileExists || $fileSize === 0) {
-                        if (file_exists($proc['dest'])) {
-                            @unlink($proc['dest']);
-                        }
-                    } else {
-                        // File exists and has content - log as partial success and mark as success
-                        aviationwx_log('info', 'webcam variant generation partial success (non-zero exit but file created)', [
-                            'airport' => $airportId,
-                            'cam' => $camIndex,
-                            'variant' => $proc['variant'],
-                            'format' => $proc['format'],
-                            'exit_code' => $exitCode,
-                            'file_size' => $fileSize,
-                            'dest_file' => basename($proc['dest']),
-                            'result_key' => $key
-                        ], 'app');
-                        // Mark as success since file was created
-                        $results[$key] = true;
-                    }
-                }
-                
-                unset($processes[$key]);
-            }
-        }
-        
-        // Small sleep to avoid busy-waiting
-        if (!empty($processes)) {
-            usleep(50000); // 50ms
-        }
-    }
-    
-    // Handle any remaining processes (timed out)
-    foreach ($processes as $key => $proc) {
-        aviationwx_log('warning', 'webcam variant generation timeout', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'variant' => $proc['variant'],
-            'format' => $proc['format'],
-            'timeout_seconds' => $timeout
-        ], 'app');
-        
-        // Terminate the process
-        @proc_terminate($proc['handle'], SIGTERM);
-        usleep(100000); // 100ms grace period
-        
-        $status = @proc_get_status($proc['handle']);
-        if ($status['running']) {
-            @proc_terminate($proc['handle'], SIGKILL);
-        }
-        
-        // Close pipes
-        @fclose($proc['pipes'][1]);
-        @fclose($proc['pipes'][2]);
-        @proc_close($proc['handle']);
-        
-        // Clean up partial file
-        if (file_exists($proc['dest'])) {
-            @unlink($proc['dest']);
-        }
-        
-        $results[$key] = false;
-    }
-    
-    // Log final results summary
-    $successCount = count(array_filter($results, function($v) { return $v === true; }));
-    $totalCount = count($results);
-    aviationwx_log('info', 'webcam variant generation completed', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'success_count' => $successCount,
-        'total_count' => $totalCount,
-        'results' => $results,
-        'result_keys' => array_keys($results),
-        'actual_primary' => $actualPrimary,
-        'actual_full' => $actualFull,
-        'delete_original' => $deleteOriginal
-    ], 'app');
-    
-    // Track generation health metrics
-    variant_health_track_generation($airportId, $camIndex, $successCount, $totalCount);
-    
-    return [
-        'results' => $results,
-        'actual_primary' => $actualPrimary,
-        'actual_full' => $actualFull,
-        'delete_original' => $deleteOriginal
-    ];
-}
-
-/**
  * Create or update symlink to point to timestamp-based file
  * 
  * Atomically updates symlink by creating new symlink then renaming.
@@ -1548,414 +1168,6 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
 }
 
 /**
- * Promote variant staging files to final cache location (timestamp-based with symlinks)
- * 
- * Atomically renames .tmp files to timestamp-based filenames with variant names
- * and creates/updates symlinks for easy lookup. Only promotes variants that generated successfully.
- * Deletes original file if it exceeded max resolution.
- * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @param array $variantResults Results from generateVariantsSync: ['variant_format' => bool, ...]
- * @param string $sourceFormat The original source format
- * @param int $timestamp Unix timestamp for the image (0 to auto-detect from source file)
- * @param bool $deleteOriginal Whether to delete the original source file (if it exceeded max resolution)
- * @param string|null $originalSourceFile Path to original source file to delete (if deleteOriginal is true)
- * @return array Promoted variants: ['variant' => ['format1', 'format2', ...], ...]
- */
-function promoteVariants(string $airportId, int $camIndex, array $variantResults, string $sourceFormat, int $timestamp = 0, bool $deleteOriginal = false, ?string $originalSourceFile = null): array {
-    $promoted = [];
-    
-    // Log promotion attempt with full context
-    aviationwx_log('debug', 'webcam variant promotion starting', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'variant_results_count' => count($variantResults),
-        'variant_results_keys' => array_keys($variantResults),
-        'variant_results' => $variantResults,
-        'source_format' => $sourceFormat,
-        'timestamp' => $timestamp,
-        'delete_original' => $deleteOriginal
-    ], 'app');
-    
-    if ($timestamp <= 0) {
-        $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-        $stagingPattern = $cacheDir . '/staging_*.tmp';
-        $stagingFiles = glob($stagingPattern);
-        if (!empty($stagingFiles)) {
-            $timestamp = getSourceCaptureTime($stagingFiles[0]);
-        }
-        if ($timestamp <= 0) {
-            $timestamp = time();
-        }
-    }
-    
-    // Group results by variant
-    $variantsByFormat = [];
-    foreach ($variantResults as $key => $success) {
-        if (!$success) {
-            aviationwx_log('debug', 'webcam variant promotion: skipping failed result', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'key' => $key,
-                'success' => $success
-            ], 'app');
-            continue;
-        }
-        
-        // Key format: "variant_format" (e.g., "primary_jpg", "thumb_webp")
-        if (preg_match('/^(.+)_(.+)$/', $key, $matches)) {
-            $variant = $matches[1];
-            $format = $matches[2];
-            
-            if (!isset($variantsByFormat[$variant])) {
-                $variantsByFormat[$variant] = [];
-            }
-            $variantsByFormat[$variant][] = $format;
-        } else {
-            aviationwx_log('warning', 'webcam variant promotion: invalid result key format', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'key' => $key
-            ], 'app');
-        }
-    }
-    
-    aviationwx_log('debug', 'webcam variant promotion: grouped by variant', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'variants_by_format' => $variantsByFormat
-    ], 'app');
-    
-    // Check what staging files actually exist before promotion
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    $existingStagingFiles = glob($cacheDir . '/staging_*.tmp*');
-    aviationwx_log('debug', 'webcam variant promotion: staging files check', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'cache_dir' => $cacheDir,
-        'existing_staging_files' => array_map('basename', $existingStagingFiles),
-        'staging_file_count' => count($existingStagingFiles)
-    ], 'app');
-    
-    // Promote each variant's formats
-    foreach ($variantsByFormat as $variant => $formats) {
-        $promotedFormats = [];
-        
-        foreach ($formats as $format) {
-            // Get staging file path (with variant in name)
-            $stagingFile = getStagingFilePath($airportId, $camIndex, $format, $variant);
-            
-            // Get final file path
-            $finalFile = getFinalFilePath($airportId, $camIndex, $format, $timestamp, $variant);
-            
-            aviationwx_log('debug', 'webcam variant promotion: attempting promotion', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'variant' => $variant,
-                'format' => $format,
-                'staging_file' => $stagingFile,
-                'staging_exists' => file_exists($stagingFile),
-                'staging_size' => file_exists($stagingFile) ? filesize($stagingFile) : 0,
-                'final_file' => $finalFile,
-                'final_exists' => file_exists($finalFile)
-            ], 'app');
-            
-            if (file_exists($stagingFile)) {
-                // Rename staging file to timestamp-based file
-                if (@rename($stagingFile, $finalFile)) {
-                    $promotedFormats[] = $format;
-                    
-                    // Copy EXIF metadata from original source to variant (ensures timestamps are preserved)
-                    if ($originalSourceFile !== null && file_exists($originalSourceFile)) {
-                        copyExifMetadata($originalSourceFile, $finalFile);
-                    }
-                    
-                    // Update symlinks based on variant type
-                    // 'original' variant gets original.{format} symlink
-                    // Primary height variant gets current.{format} symlink
-                    $config = getImageResolutionConfig();
-                    $primaryHeight = $config['primary']['height'] ?? 720;
-                    
-                    if ($variant === 'original') {
-                        // Create original.{format} symlink
-                        $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-                        $symlink = $cacheDir . '/original.' . $format;
-                        if (!updateCacheSymlink($symlink, $finalFile)) {
-                            aviationwx_log('error', 'webcam original symlink failed', [
-                                'airport' => $airportId,
-                                'cam' => $camIndex,
-                                'variant' => $variant,
-                                'format' => $format,
-                                'error' => error_get_last()['message'] ?? 'unknown'
-                            ], 'app');
-                        }
-                    } elseif ((string)$variant === (string)$primaryHeight) {
-                        // Create current.{format} symlink for primary height variant
-                        $symlink = getCacheSymlinkPath($airportId, $camIndex, $format);
-                        if (!updateCacheSymlink($symlink, $finalFile)) {
-                            aviationwx_log('error', 'webcam variant symlink failed', [
-                                'airport' => $airportId,
-                                'cam' => $camIndex,
-                                'variant' => $variant,
-                                'format' => $format,
-                                'error' => error_get_last()['message'] ?? 'unknown'
-                            ], 'app');
-                        }
-                    }
-                } else {
-                    $error = error_get_last();
-                    aviationwx_log('error', 'webcam variant promotion failed', [
-                        'airport' => $airportId,
-                        'cam' => $camIndex,
-                        'variant' => $variant,
-                        'format' => $format,
-                        'staging_file' => $stagingFile,
-                        'final_file' => $finalFile,
-                        'staging_exists' => file_exists($stagingFile),
-                        'final_exists' => file_exists($finalFile),
-                        'staging_readable' => is_readable($stagingFile),
-                        'final_dir_writable' => is_writable(dirname($finalFile)),
-                        'error' => $error['message'] ?? 'unknown',
-                        'error_file' => $error['file'] ?? null,
-                        'error_line' => $error['line'] ?? null
-                    ], 'app');
-                }
-            } else {
-                aviationwx_log('warning', 'webcam variant promotion: staging file not found', [
-                    'airport' => $airportId,
-                    'cam' => $camIndex,
-                    'variant' => $variant,
-                    'format' => $format,
-                    'staging_file' => $stagingFile,
-                    'staging_file_dir' => dirname($stagingFile),
-                    'staging_dir_exists' => is_dir(dirname($stagingFile)),
-                    'staging_dir_readable' => is_readable(dirname($stagingFile)),
-                    'all_staging_files' => array_map('basename', glob(dirname($stagingFile) . '/staging_*.tmp*'))
-                ], 'app');
-            }
-        }
-        
-        if (!empty($promotedFormats)) {
-            $promoted[$variant] = $promotedFormats;
-        }
-    }
-    
-    // Delete original file if it exceeded max resolution
-    if ($deleteOriginal && $originalSourceFile !== null && file_exists($originalSourceFile)) {
-        if (@unlink($originalSourceFile)) {
-            aviationwx_log('info', 'webcam original file deleted (exceeded max resolution)', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'original_file' => basename($originalSourceFile)
-            ], 'app');
-        } else {
-            aviationwx_log('warning', 'webcam original file deletion failed', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'original_file' => $originalSourceFile,
-                'error' => error_get_last()['message'] ?? 'unknown'
-            ], 'app');
-        }
-    }
-    
-    // Log promotion result
-    $totalPromoted = array_sum(array_map('count', $promoted));
-    $totalAttempted = count($variantResults);
-    
-    if ($totalPromoted === $totalAttempted) {
-        aviationwx_log('info', 'webcam variants promoted successfully', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'variants' => array_keys($promoted),
-            'total_formats' => $totalPromoted,
-            'timestamp' => $timestamp,
-            'original_deleted' => $deleteOriginal
-        ], 'app');
-    } elseif ($totalPromoted > 0) {
-        aviationwx_log('warning', 'webcam partial variant promotion', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'promoted' => $promoted,
-            'promoted_count' => $totalPromoted,
-            'attempted_count' => $totalAttempted,
-            'timestamp' => $timestamp
-        ], 'app');
-    } else {
-        aviationwx_log('error', 'webcam variant promotion failed completely', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'attempted_count' => $totalAttempted,
-            'timestamp' => $timestamp
-        ], 'app');
-    }
-    
-    // Track promotion health metrics
-    $promotionSuccess = $totalPromoted > 0;
-    variant_health_track_promotion($airportId, $camIndex, $promotionSuccess, $totalPromoted, $totalAttempted);
-    
-    return $promoted;
-}
-
-/**
- * Generate WEBP version of image (non-blocking with mtime sync)
- * 
- * Converts source image to WEBP format using ffmpeg. Runs in background
- * and automatically syncs mtime to match source file's capture time.
- * 
- * @param string $sourceFile Source image file path (any format)
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @return bool True if WEBP generation started, false on failure
- */
-function generateWebp($sourceFile, $airportId, $camIndex) {
-    // Check if format generation is enabled
-    if (!isWebpGenerationEnabled()) {
-        return false; // Format disabled, don't generate
-    }
-    
-    if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
-        return false;
-    }
-    
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
-        return false;
-    }
-    
-    $cacheWebp = getCacheSymlinkPath($airportId, $camIndex, 'webp');
-    
-    // Log job start
-    aviationwx_log('info', 'webcam format generation job started', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'format' => 'webp',
-        'source_file' => basename($sourceFile),
-        'source_size' => filesize($sourceFile),
-        'timestamp' => time()
-    ], 'app');
-    
-    // Get source capture time before starting generation
-    $captureTime = getSourceCaptureTime($sourceFile);
-    
-    // Build ffmpeg command with nice 10 (low priority to avoid interfering with normal operations)
-    $cmdWebp = sprintf(
-        "nice -n 10 ffmpeg -hide_banner -loglevel error -y -i %s -frames:v 1 -q:v %d -compression_level %d -preset default %s",
-        escapeshellarg($sourceFile),
-        getWebcamWebpQuality(),
-        WEBCAM_WEBP_COMPRESSION_LEVEL,
-        escapeshellarg($cacheWebp)
-    );
-    
-    // Chain mtime sync after generation (only if capture time available)
-    if ($captureTime > 0) {
-        $dateStr = date('YmdHi.s', $captureTime); // Format: YYYYMMDDhhmm.ss (touch -t requires dot before seconds)
-        $cmdSync = sprintf("touch -t %s %s", $dateStr, escapeshellarg($cacheWebp));
-        $cmd = $cmdWebp . ' && ' . $cmdSync;
-    } else {
-        $cmd = $cmdWebp;
-    }
-    
-    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
-    if (isExiftoolAvailable()) {
-        $cmdExif = sprintf(
-            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s || true",
-            escapeshellarg($sourceFile),
-            escapeshellarg($cacheWebp)
-        );
-        $cmd = $cmd . ' && ' . $cmdExif;
-    }
-    
-    // Run in background (non-blocking)
-    // Result will be logged when format status is checked (in getFormatStatus or isFormatGenerating)
-    if (function_exists('exec')) {
-        $cmd = $cmd . ' > /dev/null 2>&1 &';
-        @exec($cmd);
-        return true;
-    }
-    
-    // Log failure if exec not available
-    aviationwx_log('error', 'webcam format generation job failed - exec not available', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'format' => 'webp',
-        'error' => 'exec_function_not_available',
-        'troubleshooting' => 'PHP exec() function is disabled or not available'
-    ], 'app');
-    
-    return false;
-}
-
-/**
- * Generate JPEG from source image (non-blocking with mtime sync)
- * 
- * Converts source image to JPEG format using ffmpeg. Runs in background
- * and automatically syncs mtime to match source file's capture time.
- * Only generates if JPEG doesn't already exist.
- * 
- * @param string $sourceFile Source image file path (any format)
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @return bool True if JPEG generation started, false on failure
- */
-function generateJpeg($sourceFile, $airportId, $camIndex) {
-    if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
-        return false;
-    }
-    
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
-        return false;
-    }
-    
-    $cacheJpeg = getCacheSymlinkPath($airportId, $camIndex, 'jpg');
-    
-    // Skip if already exists
-    if (file_exists($cacheJpeg)) {
-        return true;
-    }
-    
-    // Get source capture time before starting generation
-    $captureTime = getSourceCaptureTime($sourceFile);
-    
-    // Build ffmpeg command
-    $cmdJpeg = sprintf(
-        "ffmpeg -hide_banner -loglevel error -y -i %s -q:v %d %s",
-        escapeshellarg($sourceFile),
-        getWebcamJpegQuality(),
-        escapeshellarg($cacheJpeg)
-    );
-    
-    // Chain mtime sync after generation (only if capture time available)
-    if ($captureTime > 0) {
-        $dateStr = date('YmdHi.s', $captureTime); // Format: YYYYMMDDhhmm.ss (touch -t requires dot before seconds)
-        $cmdSync = sprintf("touch -t %s %s", $dateStr, escapeshellarg($cacheJpeg));
-        $cmd = $cmdJpeg . ' && ' . $cmdSync;
-    } else {
-        $cmd = $cmdJpeg;
-    }
-    
-    // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
-    if (isExiftoolAvailable()) {
-        $cmdExif = sprintf(
-            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s || true",
-            escapeshellarg($sourceFile),
-            escapeshellarg($cacheJpeg)
-        );
-        $cmd = $cmd . ' && ' . $cmdExif;
-    }
-    
-    // Run in background (non-blocking)
-    if (function_exists('exec')) {
-        $cmd = $cmd . ' > /dev/null 2>&1 &';
-        @exec($cmd);
-        return true;
-    }
-    
-    return false;
-}
-
-/**
  * Generate variants from original image
  * 
  * Preserves the original image and generates height-based variants.
@@ -2039,7 +1251,11 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
                     'file' => basename($originalPath),
                     'note' => 'This indicates a filesystem or code bug - EXIF should be preserved by rename()'
                 ], 'app');
-                @unlink($originalPath);
+                require_once __DIR__ . '/webcam-quarantine.php';
+                quarantineImage($originalPath, $airportId, $camIndex, 'exif_lost_after_move', [
+                    'file' => basename($originalPath),
+                    'note' => 'EXIF lost after rename() - filesystem bug'
+                ]);
                 return ['original' => null, 'variants' => [], 'metadata' => null];
             }
             
@@ -2071,7 +1287,11 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
                             'cam' => $camIndex,
                             'file' => basename($originalPath)
                         ], 'app');
-                        @unlink($originalPath);
+                        require_once __DIR__ . '/webcam-quarantine.php';
+                        quarantineImage($originalPath, $airportId, $camIndex, 'exif_copy_failed', [
+                            'file' => basename($originalPath),
+                            'note' => 'copy() fallback succeeded but EXIF copy failed'
+                        ]);
                         return ['original' => null, 'variants' => [], 'metadata' => null];
                     }
                 }
@@ -2117,7 +1337,7 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
             
             $scaleFilter = sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", $targetWidth, $targetHeight);
             
-            $cmd = buildVariantCommandByFormat($sourceFile, $stagingFile, $format, $targetWidth, $targetHeight, $scaleFilter, $captureTime);
+            $cmd = buildVariantCommandByFormat($originalPath, $stagingFile, $format, $targetWidth, $targetHeight, $scaleFilter, $captureTime);
             
             if ($cmd === null) {
                 continue;
@@ -2221,8 +1441,12 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
                         'file' => basename($finalPath),
                         'note' => 'Variant generated but lacks EXIF - will fail browser verification'
                     ], 'app');
-                    // Don't promote this variant - delete it
-                    @unlink($finalPath);
+                    // Don't promote this variant - quarantine it
+                    require_once __DIR__ . '/webcam-quarantine.php';
+                    quarantineImage($finalPath, $airportId, $camIndex, 'variant_missing_exif', [
+                        'variant' => $height . '_' . $format,
+                        'file' => basename($finalPath)
+                    ]);
                     continue;
                 }
             }

@@ -98,7 +98,7 @@ for ($i = 0; $i < $numFrames; $i++) {
     // Calculate timestamp (oldest to newest)
     $timestamp = $now - (($numFrames - 1 - $i) * $intervalSeconds);
     // Use variant naming for unified storage
-    $destFile = $cacheDir . '/' . $timestamp . '_primary.jpg';
+    $destFile = $cacheDir . '/' . $timestamp . '_original.jpg';
     
     if (file_exists($destFile)) {
         echo "  [{$i}] SKIP: " . date('H:i:s', $timestamp) . " (already exists)\n";

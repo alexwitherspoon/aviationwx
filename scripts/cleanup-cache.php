@@ -171,6 +171,23 @@ cleanupFilesByPattern(
     $stats, $dryRun, $verbose
 );
 
+// Quarantined webcam images (7 days)
+echo "Cleaning quarantined webcam images...\n";
+require_once __DIR__ . '/../lib/webcam-quarantine.php';
+if (!$dryRun) {
+    $quarantineResult = cleanupQuarantine(7);
+    $stats['files_deleted'] += $quarantineResult['deleted'];
+    $stats['errors'] += $quarantineResult['errors'];
+    echo "  ✓ Deleted {$quarantineResult['deleted']} quarantined files";
+    if ($quarantineResult['errors'] > 0) {
+        echo " ({$quarantineResult['errors']} errors)";
+    }
+    echo "\n";
+} else {
+    echo "  [DRY RUN] Would clean quarantine directory (7 days old)\n";
+}
+echo "\n";
+
 // Public API rate limit files (1 hour)
 cleanupFilesByPattern(
     $cacheDir . '/public_api_rate_*.json',
