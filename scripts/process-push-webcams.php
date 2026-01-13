@@ -1101,9 +1101,53 @@ function processHistoryFrame($sourceFile, $airportId, $camIndex) {
             return false;
         }
     } else {
-        if (!@copy($sourceFile, $stagingFile)) {
-            return false;
+        // Move (not copy) to preserve EXIF metadata and be more efficient
+        // Upload directory is ephemeral - files only exist there temporarily
+        if (!@rename($sourceFile, $stagingFile)) {
+            // Fallback: rename() failed, try copy() with explicit EXIF preservation
+            aviationwx_log('warning', 'processHistoryFrame: rename() failed, falling back to copy()', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'source' => basename($sourceFile),
+                'dest' => basename($stagingFile),
+                'note' => 'This may indicate permission or filesystem issues'
+            ], 'app');
+            
+            if (!@copy($sourceFile, $stagingFile)) {
+                return false;
+            }
+            
+            // Explicitly copy EXIF since copy() doesn't preserve it
+            require_once __DIR__ . '/../lib/exif-utils.php';
+            if (isExiftoolAvailable() && hasExifTimestamp($sourceFile)) {
+                if (!copyExifMetadata($sourceFile, $stagingFile)) {
+                    aviationwx_log('error', 'processHistoryFrame: EXIF copy failed after fallback', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'file' => basename($stagingFile)
+                    ], 'app');
+                    @unlink($stagingFile);
+                    return false;
+                }
+            }
+            
+            // Clean up source file after successful copy
+            @unlink($sourceFile);
         }
+    }
+    
+    // Defensive validation: Verify EXIF was preserved after move
+    // This should never fail (rename preserves metadata) but catches bugs early
+    require_once __DIR__ . '/../lib/exif-utils.php';
+    if (!hasExifTimestamp($stagingFile)) {
+        aviationwx_log('error', 'processHistoryFrame: EXIF lost after move to staging', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'file' => basename($stagingFile),
+            'note' => 'This indicates a filesystem or code bug - EXIF should be preserved by rename()'
+        ], 'app');
+        @unlink($stagingFile);
+        return false;
     }
     
     // Generate variants from original

@@ -2020,22 +2020,71 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
     $originalPreserved = false;
     
     if (!file_exists($originalPath)) {
-        // Copy source to original location
-        if (@copy($sourceFile, $originalPath)) {
+        // Move source to original location (preserves EXIF automatically)
+        // rename() is atomic and preserves all metadata including EXIF
+        if (@rename($sourceFile, $originalPath)) {
             // Sync mtime to capture time
-            $captureTime = getSourceCaptureTime($sourceFile);
+            $captureTime = getSourceCaptureTime($originalPath);
             if ($captureTime > 0) {
                 $dateStr = date('YmdHi.s', $captureTime);
                 @exec("touch -t {$dateStr} " . escapeshellarg($originalPath) . " 2>/dev/null");
             }
+            
+            // Defensive validation: Verify EXIF was preserved
+            require_once __DIR__ . '/exif-utils.php';
+            if (!hasExifTimestamp($originalPath)) {
+                aviationwx_log('error', 'generateVariantsFromOriginal: EXIF lost after move to original', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'file' => basename($originalPath),
+                    'note' => 'This indicates a filesystem or code bug - EXIF should be preserved by rename()'
+                ], 'app');
+                @unlink($originalPath);
+                return ['original' => null, 'variants' => [], 'metadata' => null];
+            }
+            
             $originalPreserved = true;
         } else {
-            aviationwx_log('error', 'generateVariantsFromOriginal: failed to preserve original', [
+            // Fallback: rename() failed, try copy() with explicit EXIF preservation
+            aviationwx_log('warning', 'generateVariantsFromOriginal: rename() failed, falling back to copy()', [
                 'airport' => $airportId,
                 'cam' => $camIndex,
-                'source' => $sourceFile,
-                'dest' => $originalPath
+                'source' => basename($sourceFile),
+                'dest' => basename($originalPath),
+                'note' => 'This may indicate permission or filesystem issues'
             ], 'app');
+            
+            if (@copy($sourceFile, $originalPath)) {
+                // Sync mtime to capture time
+                $captureTime = getSourceCaptureTime($sourceFile);
+                if ($captureTime > 0) {
+                    $dateStr = date('YmdHi.s', $captureTime);
+                    @exec("touch -t {$dateStr} " . escapeshellarg($originalPath) . " 2>/dev/null");
+                }
+                
+                // Explicitly copy EXIF since copy() doesn't preserve it
+                require_once __DIR__ . '/exif-utils.php';
+                if (isExiftoolAvailable() && hasExifTimestamp($sourceFile)) {
+                    if (!copyExifMetadata($sourceFile, $originalPath)) {
+                        aviationwx_log('error', 'generateVariantsFromOriginal: EXIF copy failed after fallback', [
+                            'airport' => $airportId,
+                            'cam' => $camIndex,
+                            'file' => basename($originalPath)
+                        ], 'app');
+                        @unlink($originalPath);
+                        return ['original' => null, 'variants' => [], 'metadata' => null];
+                    }
+                }
+                
+                $originalPreserved = true;
+            } else {
+                aviationwx_log('error', 'generateVariantsFromOriginal: failed to preserve original (both rename and copy failed)', [
+                    'airport' => $airportId,
+                    'cam' => $camIndex,
+                    'source' => $sourceFile,
+                    'dest' => $originalPath
+                ], 'app');
+            }
         }
     } else {
         $originalPreserved = true; // Already exists
@@ -2161,6 +2210,21 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
             // Copy EXIF metadata from original to variant (ensures timestamps are preserved)
             if (file_exists($originalPath)) {
                 copyExifMetadata($originalPath, $finalPath);
+                
+                // Defensive validation: Verify EXIF was copied successfully
+                // This is critical for browser-side verification
+                if (!hasExifTimestamp($finalPath)) {
+                    aviationwx_log('warning', 'generateVariantsFromOriginal: EXIF copy failed for variant', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'variant' => $height . '_' . $format,
+                        'file' => basename($finalPath),
+                        'note' => 'Variant generated but lacks EXIF - will fail browser verification'
+                    ], 'app');
+                    // Don't promote this variant - delete it
+                    @unlink($finalPath);
+                    continue;
+                }
             }
             $promoted[$height][$format] = $finalPath;
         } else {
