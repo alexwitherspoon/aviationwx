@@ -50,14 +50,21 @@ $cookieDomain = '.' . $baseDomainForCookie;
 $cookieExpiry = time() + 31536000; // 1 year
 
 // Set cookie with proper options
-setcookie('aviationwx_v', $versionCookieValue, [
+$cookieOptions = [
     'expires' => $cookieExpiry,
     'path' => '/',
-    'domain' => $cookieDomain,
     'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
     'httponly' => false, // JS needs to read it
     'samesite' => 'Lax'
-]);
+];
+
+// Only set domain for non-localhost environments (localhost doesn't support domain cookies)
+$hostname = $_SERVER['HTTP_HOST'] ?? 'localhost';
+if (!str_contains($hostname, 'localhost') && !str_contains($hostname, '127.0.0.1')) {
+    $cookieOptions['domain'] = $cookieDomain;
+}
+
+setcookie('aviationwx_v', $versionCookieValue, $cookieOptions);
 
 // Detect stuck clients: no version cookie OR stale version cookie
 // Only perform stuck client cleanup detection if enabled in config
