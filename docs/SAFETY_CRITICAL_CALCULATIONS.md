@@ -92,12 +92,12 @@ Per **ICAO Standard Atmosphere (Doc 7488)**:
 
 ### Test-Driven Development (TDD) Approach
 
-This calculation was fixed using TDD methodology:
+All safety-critical calculations use TDD methodology:
 
-1. **Reference Tests First**: Created `SafetyCriticalReferenceTest.php` with 23 static test cases from authoritative sources (E6B manuals, FAA handbooks)
-2. **Tests Failed**: Confirmed old implementation was wrong (failed E6B examples by 1,200+ ft)
-3. **Fix Implementation**: Corrected formula to use 120 with Celsius
-4. **Tests Pass**: All 23 reference tests now pass within expected tolerance
+1. **Reference Tests First**: Create test cases using known-good values from authoritative sources (E6B manuals, FAA handbooks, NOAA calculators)
+2. **Verify Against Standards**: Confirm implementation matches FAA/ICAO specifications
+3. **Implementation**: Code formula per official specifications
+4. **Validate**: All reference tests pass within expected tolerance
 5. **Continuous Validation**: Tests run on every commit via CI
 
 **Test Philosophy**:
