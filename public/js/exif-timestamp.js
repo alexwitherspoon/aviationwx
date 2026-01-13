@@ -21,7 +21,10 @@
 
     // EXIF Tag IDs
     const TAG_EXIF_IFD_POINTER = 0x8769;  // Pointer to EXIF sub-IFD
-    const TAG_DATETIME_ORIGINAL = 0x9003; // DateTimeOriginal tag
+    const TAG_GPS_IFD_POINTER = 0x8825;   // Pointer to GPS sub-IFD
+    const TAG_DATETIME_ORIGINAL = 0x9003; // DateTimeOriginal tag (local time)
+    const TAG_GPS_DATE_STAMP = 0x001D;    // GPSDateStamp tag (UTC date)
+    const TAG_GPS_TIME_STAMP = 0x0007;    // GPSTimeStamp tag (UTC time)
 
     // JPEG Markers
     const JPEG_SOI = 0xFFD8;   // Start of Image
@@ -297,43 +300,58 @@
      * @returns {string|null} Tag string value or null if not found
      */
     function findStringTagInIfd(view, buffer, tiffStart, ifdOffset, targetTag, littleEndian) {
-        const numEntries = view.getUint16(ifdOffset, littleEndian);
-
-        for (let i = 0; i < numEntries; i++) {
-            const entryOffset = ifdOffset + 2 + (i * 12);
-            const tag = view.getUint16(entryOffset, littleEndian);
-
-            if (tag === targetTag) {
-                const type = view.getUint16(entryOffset + 2, littleEndian);
-                const count = view.getUint32(entryOffset + 4, littleEndian);
-
-                // Must be ASCII type
-                if (type !== EXIF_TYPE_ASCII) {
-                    return null;
-                }
-
-                // Determine string location
-                // If count <= 4, string is stored inline in value field
-                // Otherwise, value field contains offset to string
-                let stringOffset;
-                if (count <= 4) {
-                    stringOffset = entryOffset + 8;
-                } else {
-                    stringOffset = tiffStart + view.getUint32(entryOffset + 8, littleEndian);
-                }
-
-                // Bounds check
-                if (stringOffset + count > buffer.byteLength) {
-                    return null;
-                }
-
-                // Read string (excluding null terminator)
-                const bytes = new Uint8Array(buffer, stringOffset, count - 1);
-                return String.fromCharCode.apply(null, bytes);
+        try {
+            if (!(view instanceof DataView)) {
+                console.error('[EXIF GPS] findStringTagInIfd: view is not a DataView', typeof view);
+                return null;
             }
-        }
+            
+            if (!(buffer instanceof ArrayBuffer)) {
+                console.error('[EXIF GPS] findStringTagInIfd: buffer is not ArrayBuffer', typeof buffer);
+                return null;
+            }
+            
+            const numEntries = view.getUint16(ifdOffset, littleEndian);
 
-        return null;
+            for (let i = 0; i < numEntries; i++) {
+                const entryOffset = ifdOffset + 2 + (i * 12);
+                const tag = view.getUint16(entryOffset, littleEndian);
+
+                if (tag === targetTag) {
+                    const type = view.getUint16(entryOffset + 2, littleEndian);
+                    const count = view.getUint32(entryOffset + 4, littleEndian);
+
+                    // Must be ASCII type
+                    if (type !== EXIF_TYPE_ASCII) {
+                        return null;
+                    }
+
+                    // Determine string location
+                    // If count <= 4, string is stored inline in value field
+                    // Otherwise, value field contains offset to string
+                    let stringOffset;
+                    if (count <= 4) {
+                        stringOffset = entryOffset + 8;
+                    } else {
+                        stringOffset = tiffStart + view.getUint32(entryOffset + 8, littleEndian);
+                    }
+
+                    // Bounds check
+                    if (stringOffset + count > buffer.byteLength) {
+                        return null;
+                    }
+
+                    // Read string (excluding null terminator)
+                    const bytes = new Uint8Array(buffer, stringOffset, count - 1);
+                    return String.fromCharCode.apply(null, bytes);
+                }
+            }
+
+            return null;
+        } catch (e) {
+            console.error('[EXIF GPS] findStringTagInIfd error:', e.message);
+            return null;
+        }
     }
 
     /**
@@ -374,6 +392,206 @@
         }
 
         return Math.floor(date.getTime() / 1000);
+    }
+
+    /**
+     * Extract GPS timestamp (UTC) from image data
+     * 
+     * Reads GPS fields per EXIF standard:
+     * - GPSDateStamp: YYYY:MM:DD (UTC date)
+     * - GPSTimeStamp: HH:MM:SS or HH/1 MM/1 SS/1 (UTC time)
+     * 
+     * @param {ArrayBuffer} buffer - Image file data
+     * @returns {number|null} Unix timestamp (seconds) or null if not found/invalid
+     */
+    function extractGpsTimestamp(buffer) {
+        try {
+            if (buffer.byteLength < 12) {
+                return null;
+            }
+
+            const view = new DataView(buffer);
+
+            // Find EXIF offset based on format
+            let exifOffset = null;
+            
+            // Check for JPEG (FFD8)
+            if (view.getUint16(0) === JPEG_SOI) {
+                exifOffset = findExifMarker(view, buffer.byteLength);
+            }
+            // Check for WebP (RIFF....WEBP)
+            else if (view.getUint32(0) === RIFF_SIGNATURE && view.getUint32(8) === WEBP_SIGNATURE) {
+                // Find EXIF chunk in WebP
+                let offset = 12; // After RIFF header
+                while (offset < buffer.byteLength - 8) {
+                    const chunkView = new DataView(buffer, offset);
+                    const chunkType = String.fromCharCode(
+                        chunkView.getUint8(0),
+                        chunkView.getUint8(1),
+                        chunkView.getUint8(2),
+                        chunkView.getUint8(3)
+                    );
+                    const chunkSize = chunkView.getUint32(4, true);
+                    
+                    if (chunkType === 'EXIF') {
+                        // WebP EXIF chunk: skip the 4-byte "Exif\0\0" header if present
+                        let tiffOffset = offset + 8;
+                        const exifView = new DataView(buffer, tiffOffset);
+                        
+                        // Check if it starts with "Exif\0\0" (0x45786966 0x0000)
+                        if (exifView.getUint32(0) === 0x45786966) {
+                            tiffOffset += 4; // Skip "Exif" header
+                        }
+                        
+                        exifOffset = tiffOffset;
+                        break;
+                    }
+                    
+                    offset += 8 + chunkSize + (chunkSize % 2);
+                }
+            }
+            
+            if (exifOffset === null) {
+                return null; // No EXIF found
+            }
+            
+            // Parse TIFF header
+            const tiffStart = exifOffset;
+            const tiffView = new DataView(buffer, tiffStart);
+            const byteOrder = tiffView.getUint16(0);
+            const littleEndian = (byteOrder === TIFF_LITTLE_ENDIAN);
+            
+            // Find GPS IFD pointer in IFD0
+            const ifd0Offset = tiffView.getUint32(4, littleEndian);
+            const gpsIfdOffset = findTagInIfd(tiffView, 0, ifd0Offset, TAG_GPS_IFD_POINTER, littleEndian);
+            
+            if (gpsIfdOffset === null) {
+                return null; // No GPS IFD
+            }
+            
+            // Read GPS tags (gpsIfdOffset is relative to TIFF start, so add tiffStart for buffer offset)
+            const gpsDateStamp = readGpsDateStamp(buffer, tiffStart, tiffStart + gpsIfdOffset, littleEndian);
+            const gpsTimeStamp = readGpsTimeStamp(buffer, tiffStart, tiffStart + gpsIfdOffset, littleEndian);
+            
+            if (!gpsDateStamp || !gpsTimeStamp) {
+                return null; // Missing GPS date or time
+            }
+            
+            // Parse GPS date: "YYYY:MM:DD"
+            const dateMatch = gpsDateStamp.match(/^(\d{4}):(\d{2}):(\d{2})$/);
+            if (!dateMatch) {
+                return null;
+            }
+            
+            // Parse GPS time: "HH:MM:SS" or extract from rational
+            let hour, minute, second;
+            const timeMatch = gpsTimeStamp.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+            if (timeMatch) {
+                hour = parseInt(timeMatch[1], 10);
+                minute = parseInt(timeMatch[2], 10);
+                second = parseInt(timeMatch[3], 10);
+            } else {
+                // Try rational format: [HH/1, MM/1, SS/1]
+                if (Array.isArray(gpsTimeStamp) && gpsTimeStamp.length === 3) {
+                    hour = Math.floor(gpsTimeStamp[0]);
+                    minute = Math.floor(gpsTimeStamp[1]);
+                    second = Math.floor(gpsTimeStamp[2]);
+                } else {
+                    return null;
+                }
+            }
+            
+            // Create UTC date from GPS fields
+            const year = parseInt(dateMatch[1], 10);
+            const month = parseInt(dateMatch[2], 10);
+            const day = parseInt(dateMatch[3], 10);
+            
+            const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+            
+            if (isNaN(date.getTime())) {
+                return null;
+            }
+            
+            return Math.floor(date.getTime() / 1000);
+        } catch (e) {
+            console.error('[EXIF GPS] Parse error:', e.message);
+            return null;
+        }
+    }
+
+    /**
+     * Read GPS DateStamp from GPS IFD
+     * 
+     * @param {ArrayBuffer} buffer - Image buffer
+     * @param {number} tiffStart - Start of TIFF header
+     * @param {number} ifdOffset - GPS IFD offset
+     * @param {boolean} littleEndian - Byte order
+     * @returns {string|null} GPS date string "YYYY:MM:DD" or null
+     */
+    function readGpsDateStamp(buffer, tiffStart, ifdOffset, littleEndian) {
+        try {
+            const view = new DataView(buffer);
+            const value = findStringTagInIfd(view, buffer, tiffStart, ifdOffset, TAG_GPS_DATE_STAMP, littleEndian);
+            return (value && typeof value === 'string') ? value.trim() : null;
+        } catch (e) {
+            console.error('[EXIF GPS] readGpsDateStamp error:', e.message);
+            return null;
+        }
+    }
+
+    /**
+     * Read GPS TimeStamp from GPS IFD
+     * 
+     * @param {ArrayBuffer} buffer - Image buffer
+     * @param {number} tiffStart - Start of TIFF header
+     * @param {number} ifdOffset - GPS IFD offset
+     * @param {boolean} littleEndian - Byte order
+     * @returns {string|Array|null} GPS time "HH:MM:SS" or [HH/1, MM/1, SS/1] or null
+     */
+    function readGpsTimeStamp(buffer, tiffStart, ifdOffset, littleEndian) {
+        try {
+            const view = new DataView(buffer);
+            
+            // Try to read as string first
+            const stringValue = findStringTagInIfd(view, buffer, tiffStart, ifdOffset, TAG_GPS_TIME_STAMP, littleEndian);
+            if (stringValue) {
+                return stringValue.trim();
+            }
+            
+            // GPS TimeStamp is typically stored as 3 rationals [H, M, S]
+            // Each rational is numerator/denominator (8 bytes)
+            const numEntries = view.getUint16(ifdOffset, littleEndian);
+            
+            for (let i = 0; i < numEntries; i++) {
+                const entryOffset = ifdOffset + 2 + (i * 12);
+                const tag = view.getUint16(entryOffset, littleEndian);
+                
+                if (tag === TAG_GPS_TIME_STAMP) {
+                    const type = view.getUint16(entryOffset + 2, littleEndian);
+                    const count = view.getUint32(entryOffset + 4, littleEndian);
+                    
+                    // Type 5 = RATIONAL (2 LONGs: numerator/denominator)
+                    if (type === 5 && count === 3) {
+                        const dataOffset = tiffStart + view.getUint32(entryOffset + 8, littleEndian);
+                        const dataView = new DataView(buffer, dataOffset);
+                        
+                        // Read 3 rationals
+                        const hour = dataView.getUint32(0, littleEndian) / dataView.getUint32(4, littleEndian);
+                        const minute = dataView.getUint32(8, littleEndian) / dataView.getUint32(12, littleEndian);
+                        const second = dataView.getUint32(16, littleEndian) / dataView.getUint32(20, littleEndian);
+                        
+                        // Format as HH:MM:SS string
+                        const pad = (n) => String(Math.floor(n)).padStart(2, '0');
+                        return `${pad(hour)}:${pad(minute)}:${pad(second)}`;
+                    }
+                }
+            }
+            
+            return null;
+        } catch (e) {
+            console.error('[EXIF GPS] readGpsTimeStamp error:', e.message);
+            return null;
+        }
     }
 
     /**
@@ -420,13 +638,42 @@
                 };
             }
 
-            const exifTimestamp = extractDateTimeOriginal(buffer);
+            // CRITICAL CHANGE: Use GPS timestamp (UTC) instead of DateTimeOriginal (local time)
+            // Per EXIF standard:
+            // - DateTimeOriginal = local time at camera location
+            // - GPS fields = UTC (Zulu time) for aviation use
+            // Client must verify against GPS timestamp for accuracy
+            const exifTimestamp = extractGpsTimestamp(buffer);
 
             if (exifTimestamp === null) {
+                // Fallback to DateTimeOriginal for backwards compatibility
+                // (for images processed before GPS requirement)
+                const fallbackTimestamp = extractDateTimeOriginal(buffer);
+                
+                if (fallbackTimestamp === null) {
+                    return {
+                        verified: false,
+                        reason: 'no_gps_timestamp',
+                        exifTimestamp: null
+                    };
+                }
+                
+                // Using DateTimeOriginal fallback
+                const difference = Math.abs(fallbackTimestamp - expectedTimestamp);
+                
+                if (difference > toleranceSeconds) {
+                    return {
+                        verified: false,
+                        reason: 'timestamp_mismatch_fallback',
+                        exifTimestamp: fallbackTimestamp,
+                        difference: difference
+                    };
+                }
+                
                 return {
-                    verified: false,
-                    reason: 'no_exif',
-                    exifTimestamp: null
+                    verified: true,
+                    reason: 'ok_fallback',
+                    exifTimestamp: fallbackTimestamp
                 };
             }
 
@@ -435,7 +682,7 @@
             if (difference > toleranceSeconds) {
                 return {
                     verified: false,
-                    reason: 'timestamp_mismatch',
+                    reason: 'gps_timestamp_mismatch',
                     exifTimestamp: exifTimestamp,
                     difference: difference
                 };
@@ -443,7 +690,7 @@
 
             return {
                 verified: true,
-                reason: 'ok',
+                reason: 'ok_gps',
                 exifTimestamp: exifTimestamp
             };
         } catch (e) {
@@ -459,6 +706,7 @@
     // Export functions
     global.ExifTimestamp = {
         extract: extractDateTimeOriginal,
+        extractGps: extractGpsTimestamp,
         verify: verifyImageTimestamp,
         parseDateTime: parseDateTimeString
     };

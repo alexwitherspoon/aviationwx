@@ -748,10 +748,18 @@ function findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessedTime 
         
         // File is stable - now validate it
         
-        // Push cameras may not have EXIF - add from file mtime before validation
-        // Server-fetched webcams have EXIF added after capture, but push cameras bypass that step
-        if (!hasExifTimestamp($file)) {
-            ensureExifTimestamp($file);
+        // CRITICAL: Ensure EXIF exists early (mandatory for all webcam images)
+        require_once __DIR__ . '/../lib/exif-utils.php';
+        $timezone = $airport['timezone'] ?? 'UTC';
+        if (!ensureImageHasExif($file, null, $timezone)) {
+            aviationwx_log('debug', 'push webcam: image rejected - no valid timestamp in upload scanning', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'file' => basename($file)
+            ], 'app');
+            trackWebcamUploadRejected($airportId, $camIndex, 'no_exif');
+            recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
+            continue; // Try next file
         }
         
         // Validate image (with per-camera limits and airport for phase-aware detection)
@@ -761,11 +769,12 @@ function findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessedTime 
             continue; // Try next file
         }
         
-        // Normalize EXIF timestamp to UTC
-        // Local time is ENCOURAGED (helps operators match their clocks)
-        // This detects timezone offset and rewrites EXIF to UTC for client verification
+        // Normalize EXIF timestamp and add GPS UTC fields
+        // Local time is ENCOURAGED in DateTimeOriginal (helps operators match their clocks)
+        // This detects timezone offset and adds GPS UTC fields for client verification
         // Rejects images with unreliable timestamps (safety-critical)
-        if (!normalizeExifToUtc($file, $airportId, $camIndex)) {
+        $timezone = $airport['timezone'] ?? 'UTC';
+        if (!normalizeExifToUtc($file, $airportId, $camIndex, $timezone)) {
             trackWebcamUploadRejected($airportId, $camIndex, 'invalid_exif_timestamp');
             recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
             continue; // Skip this image, try next
@@ -1055,214 +1064,6 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
  * @param int $camIndex Camera index (0-based)
  * @return bool True on success, false on failure
  */
-function processHistoryFrame($sourceFile, $airportId, $camIndex) {
-    if (!file_exists($sourceFile) || !is_readable($sourceFile)) {
-        return false;
-    }
-    
-    // Detect format
-    $format = detectImageFormat($sourceFile);
-    if ($format === null) {
-        aviationwx_log('debug', 'processHistoryFrame: unable to detect format', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'file' => basename($sourceFile)
-        ], 'app');
-        return false;
-    }
-    
-    // Get timestamp from EXIF or file mtime
-    $timestamp = getSourceCaptureTime($sourceFile);
-    if ($timestamp <= 0) {
-        $timestamp = @filemtime($sourceFile) ?: time();
-    }
-    
-    // Determine primary format (PNG converts to JPEG)
-    $primaryFormat = ($format === 'png') ? 'jpg' : $format;
-    
-    // Create a temporary staging file for this frame
-    $stagingFile = getWebcamCameraDir($airportId, $camIndex) . '/history_staging_' . $timestamp . '.' . $primaryFormat . '.tmp';
-    
-    // Ensure camera directory exists
-    $cameraDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!ensureCacheDir($cameraDir)) {
-        return false;
-    }
-    
-    // Convert PNG or copy to staging
-    if ($format === 'png') {
-        if (!convertPngToJpeg($sourceFile, $stagingFile)) {
-            aviationwx_log('debug', 'processHistoryFrame: PNG conversion failed', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'file' => basename($sourceFile)
-            ], 'app');
-            @unlink($stagingFile);
-            return false;
-        }
-    } else {
-        // Move (not copy) to preserve EXIF metadata and be more efficient
-        // Upload directory is ephemeral - files only exist there temporarily
-        if (!@rename($sourceFile, $stagingFile)) {
-            // Fallback: rename() failed, try copy() with explicit EXIF preservation
-            aviationwx_log('warning', 'processHistoryFrame: rename() failed, falling back to copy()', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'source' => basename($sourceFile),
-                'dest' => basename($stagingFile),
-                'note' => 'This may indicate permission or filesystem issues'
-            ], 'app');
-            
-            if (!@copy($sourceFile, $stagingFile)) {
-                return false;
-            }
-            
-            // Explicitly copy EXIF since copy() doesn't preserve it
-            require_once __DIR__ . '/../lib/exif-utils.php';
-            if (isExiftoolAvailable() && hasExifTimestamp($sourceFile)) {
-                if (!copyExifMetadata($sourceFile, $stagingFile)) {
-                    aviationwx_log('error', 'processHistoryFrame: EXIF copy failed after fallback', [
-                        'airport' => $airportId,
-                        'cam' => $camIndex,
-                        'file' => basename($stagingFile)
-                    ], 'app');
-                    @unlink($stagingFile);
-                    return false;
-                }
-            }
-            
-            // Clean up source file after successful copy
-            @unlink($sourceFile);
-        }
-    }
-    
-    // Defensive validation: Verify EXIF was preserved after move
-    // This should never fail (rename preserves metadata) but catches bugs early
-    require_once __DIR__ . '/../lib/exif-utils.php';
-    if (!hasExifTimestamp($stagingFile)) {
-        aviationwx_log('error', 'processHistoryFrame: EXIF lost after move to staging', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'file' => basename($stagingFile),
-            'note' => 'This indicates a filesystem or code bug - EXIF should be preserved by rename()'
-        ], 'app');
-        @unlink($stagingFile);
-        return false;
-    }
-    
-    // Generate variants from original
-    require_once __DIR__ . '/../lib/performance-metrics.php';
-    $perfStart = perfStart();
-    $variantResult = generateVariantsFromOriginal($stagingFile, $airportId, $camIndex, $timestamp);
-    $processingTimeMs = perfEnd($perfStart);
-    
-    // Track image processing performance
-    trackImageProcessingTime($processingTimeMs, $airportId, $camIndex);
-    
-    // Cleanup staging file (original is now preserved)
-    @unlink($stagingFile);
-    
-    // Cleanup any remaining staging files
-    foreach (glob($cameraDir . '/staging*.tmp') as $stageFile) {
-        @unlink($stageFile);
-    }
-    
-    $success = $variantResult['original'] !== null && !empty($variantResult['variants']);
-    
-    if ($success) {
-        // Store variant manifest for status reporting
-        require_once __DIR__ . '/../lib/webcam-variant-manifest.php';
-        storeVariantManifest($airportId, $camIndex, $timestamp, $variantResult);
-        
-        $variantCount = 0;
-        foreach ($variantResult['variants'] as $formats) {
-            $variantCount += count($formats);
-        }
-        aviationwx_log('debug', 'processHistoryFrame: generated variants', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'timestamp' => $timestamp,
-            'variants' => $variantCount
-        ], 'app');
-    }
-    
-    return $success;
-}
-
-/**
- * Harvest all valid images from upload directory for history
- * 
- * For push cameras, multiple images may accumulate between processing intervals.
- * When history is enabled, process all valid images with full variant generation.
- * This captures intermediate frames with all size variants for high-quality timelapse.
- * Supports recursive search for date-based subfolder structures (year/month/day).
- * 
- * @param string $uploadDir Upload directory path
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @param array|null $pushConfig Push config for validation limits
- * @param int|null $lastProcessedTime Only harvest files newer than this timestamp
- * @return int Number of frames harvested
- */
-function harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig = null, $lastProcessedTime = null) {
-    // Check if history is enabled for this airport
-    if (!isWebcamHistoryEnabledForAirport($airportId)) {
-        return 0;
-    }
-    
-    if (!is_dir($uploadDir)) {
-        return 0;
-    }
-    
-    // Use recursive search to find images in subfolders (handles date-based folder structures)
-    $files = recursiveGlobImages($uploadDir);
-    if (empty($files)) {
-        return 0;
-    }
-    
-    // Filter to files newer than last processed (if specified)
-    if ($lastProcessedTime !== null && $lastProcessedTime > 0) {
-        $files = array_filter($files, function($file) use ($lastProcessedTime) {
-            $mtime = @filemtime($file);
-            return $mtime !== false && $mtime > $lastProcessedTime;
-        });
-        
-        if (empty($files)) {
-            return 0;
-        }
-    }
-    
-    // Sort by modification time (oldest first for chronological history)
-    usort($files, function($a, $b) {
-        $mtimeA = @filemtime($a);
-        $mtimeB = @filemtime($b);
-        if ($mtimeA === false) return 1;
-        if ($mtimeB === false) return -1;
-        return $mtimeA - $mtimeB;
-    });
-    
-    $harvested = 0;
-    
-    foreach ($files as $file) {
-        // Validate image is complete and not corrupted
-        if (!validateImageForHistory($file, $pushConfig)) {
-            aviationwx_log('debug', 'harvest: skipping invalid/incomplete image', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'file' => basename($file)
-            ], 'app');
-            continue;
-        }
-        
-        // Process with full variant generation (generates all sizes × formats)
-        if (processHistoryFrame($file, $airportId, $camIndex)) {
-            $harvested++;
-        }
-    }
-    
-    return $harvested;
-}
-
 /**
  * Move image to cache and generate missing formats
  * 
@@ -1325,10 +1126,10 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         return false;
     }
     
-    // Determine primary format and staging file
+    // Determine source format and staging file
     // PNG is always converted to JPEG (we don't serve PNG)
     if ($format === 'png') {
-        $primaryFormat = 'jpg';
+        $sourceFormat = 'jpg';
         $stagingFile = getStagingFilePath($airportId, $camIndex, 'jpg');
         
         // Convert PNG to JPEG in staging
@@ -1346,8 +1147,8 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
         @unlink($sourceFile);
     } else {
         // Keep original format (JPEG or WebP)
-        $primaryFormat = $format;
-        $stagingFile = getStagingFilePath($airportId, $camIndex, $primaryFormat);
+        $sourceFormat = $format;
+        $stagingFile = getStagingFilePath($airportId, $camIndex, $sourceFormat);
         
         // Move to staging
         if (!@rename($sourceFile, $stagingFile)) {
@@ -1385,13 +1186,13 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
             'cam' => $camIndex
         ], 'app');
         // Fallback to old format-only generation
-        $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $primaryFormat);
-        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $primaryFormat, $timestamp);
+        $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, $sourceFormat);
+        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, $sourceFormat, $timestamp);
         if (empty($promotedFormats)) {
             aviationwx_log('error', 'moveToCache: no formats promoted', [
                 'airport' => $airportId,
                 'cam' => $camIndex,
-                'primary_format' => $primaryFormat
+                'source_format' => $sourceFormat
             ], 'app');
             cleanupStagingFiles($airportId, $camIndex);
             return false;
@@ -1403,7 +1204,7 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
             aviationwx_log('error', 'moveToCache: variant generation failed', [
                 'airport' => $airportId,
                 'cam' => $camIndex,
-                'primary_format' => $primaryFormat,
+                'source_format' => $sourceFormat,
                 'has_original' => $variantResult['original'] !== null,
                 'variant_count' => count($variantResult['variants'])
             ], 'app');
@@ -1426,9 +1227,9 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     cleanupOldTimestampFiles($airportId, $camIndex);
     
     // Log final result
-    $allRequestedFormats = [$primaryFormat];
-    if ($primaryFormat !== 'jpg') $allRequestedFormats[] = 'jpg';
-    if (isWebpGenerationEnabled() && $primaryFormat !== 'webp') $allRequestedFormats[] = 'webp';
+    $allRequestedFormats = [$sourceFormat];
+    if ($sourceFormat !== 'jpg') $allRequestedFormats[] = 'jpg';
+    if (isWebpGenerationEnabled() && $sourceFormat !== 'webp') $allRequestedFormats[] = 'webp';
     $failedFormats = array_diff($allRequestedFormats, $promotedFormats);
     
     if (!empty($failedFormats)) {
@@ -1441,7 +1242,7 @@ function moveToCache($sourceFile, $airportId, $camIndex) {
     }
     
     // Return primary cache file path (primary variant)
-    return getFinalFilePath($airportId, $camIndex, $primaryFormat, $timestamp, 'primary');
+    return getFinalFilePath($airportId, $camIndex, $sourceFormat, $timestamp, 'original');
 }
 
 
@@ -1573,14 +1374,32 @@ function cleanupUploadDirectory($uploadDir, $keepFile = null, $maxMtime = null) 
  * @return void
  */
 function processPushCamera($airportId, $camIndex, $cam, $airport) {
-    // Airport-scoped directory: /uploads/{airport}/{username}/
-    $username = $cam['push_config']['username'] ?? null;
+    // Acquire per-airport-camera lock to prevent concurrent processing
+    require_once __DIR__ . '/../lib/cache-paths.php';
+    $lockFile = getPushWebcamLockPath($airportId, $camIndex);
+    $lockHandle = @fopen($lockFile, 'w');
     
-    if (!$username) {
-        return false; // No username configured
+    if (!$lockHandle || !@flock($lockHandle, LOCK_EX | LOCK_NB)) {
+        aviationwx_log('debug', 'push webcam: already processing (locked)', [
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+        
+        if ($lockHandle) {
+            @fclose($lockHandle);
+        }
+        return false;
     }
     
-    $uploadDir = getWebcamUploadDir($airportId, $username) . '/';
+    try {
+        // Airport-scoped directory: /uploads/{airport}/{username}/
+        $username = $cam['push_config']['username'] ?? null;
+        
+        if (!$username) {
+            return false; // No username configured
+        }
+        
+        $uploadDir = getWebcamUploadDir($airportId, $username) . '/';
     
     // Quick check: if directory doesn't exist or has no files, exit immediately
     if (!is_dir($uploadDir)) {
@@ -1613,71 +1432,147 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         return false; // Not due yet
     }
     
+    // Time-boxed processing: Use 50% of worker timeout
+    require_once __DIR__ . '/../lib/config.php';
+    $workerTimeout = getWorkerTimeout();
+    $processingBudget = $workerTimeout * 0.5;
+    $startTime = microtime(true);
+    $maxImages = 8;
+    $processedCount = 0;
+    $successCount = 0;
+    
     // Get stability check timeout (just for stability checking loop)
     $stabilityTimeout = getStabilityCheckTimeout($cam);
     
     // Get push_config for per-camera validation limits
     $pushConfig = $cam['push_config'] ?? null;
     
-    // Harvest all valid images for history before processing
-    // This captures intermediate frames that accumulated since last processing
-    $harvestedCount = harvestHistoryFrames($uploadDir, $airportId, $camIndex, $pushConfig, $lastProcessed);
-    if ($harvestedCount > 0) {
-        aviationwx_log('info', 'harvested frames for history', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'frames' => $harvestedCount
-        ], 'app');
+    aviationwx_log('info', 'push webcam: starting time-boxed processing', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'processing_budget_seconds' => $processingBudget,
+        'max_images' => $maxImages,
+        'last_processed' => $lastProcessed,
+        'refresh_seconds' => $refreshSeconds
+    ], 'app');
+    
+    // Process multiple images until time budget exhausted or no more files
+    while ($processedCount < $maxImages) {
+        // Check time budget
+        $elapsed = microtime(true) - $startTime;
+        if ($elapsed >= $processingBudget) {
+            aviationwx_log('info', 'push webcam: time budget exhausted', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'elapsed_seconds' => round($elapsed, 2),
+                'processed' => $processedCount,
+                'successful' => $successCount
+            ], 'app');
+            break;
+        }
+        
+        // Find newest unprocessed stable image
+        // findNewestValidImage already respects lastProcessed and filters old files
+        $uploadFile = findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessed, $pushConfig, $airport, $cam, $airportId, $camIndex);
+        
+        if (!$uploadFile) {
+            // No more files to process
+            aviationwx_log('debug', 'push webcam: no more files to process', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'processed' => $processedCount
+            ], 'app');
+            break;
+        }
+        
+        $processedCount++;
+        
+        // CRITICAL: Ensure EXIF exists BEFORE processing
+        require_once __DIR__ . '/../lib/exif-utils.php';
+        $timezone = $airport['timezone'] ?? 'UTC';
+        if (!ensureImageHasExif($uploadFile, null, $timezone)) {
+            aviationwx_log('error', 'push webcam: image rejected - no valid timestamp', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'file' => basename($uploadFile),
+                'number' => $processedCount,
+                'note' => 'Could not extract timestamp from EXIF, filename, folder, or mtime'
+            ], 'app');
+            // Quarantine rejected image
+            require_once __DIR__ . '/../lib/webcam-quarantine.php';
+            quarantineImage($uploadFile, $airportId, $camIndex, 'no_exif', [
+                'file' => basename($uploadFile),
+                'note' => 'Could not extract timestamp from EXIF, filename, folder, or mtime'
+            ]);
+            continue;
+        }
+        
+        // Capture processed file's modification time before moving it
+        $processedFileMtime = @filemtime($uploadFile);
+        if ($processedFileMtime === false) {
+            $processedFileMtime = time();
+        }
+        
+        // Move to cache
+        $cacheFile = moveToCache($uploadFile, $airportId, $camIndex);
+        
+        if ($cacheFile) {
+            $successCount++;
+            
+            // Track successful upload
+            trackWebcamUploadAccepted($airportId, $camIndex);
+            
+            // Update last processed time
+            updateLastProcessedTime($airportId, $camIndex);
+            
+            aviationwx_log('info', 'push webcam: processed successfully', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'file' => basename($uploadFile),
+                'cache_file' => basename($cacheFile),
+                'number' => $processedCount,
+                'success_count' => $successCount
+            ], 'app');
+        } else {
+            aviationwx_log('error', 'push webcam: processing failed', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'file' => basename($uploadFile),
+                'number' => $processedCount
+            ], 'app');
+        }
     }
     
-    // Find newest valid image with adaptive stability checking
-    // Pass lastProcessed time to quickly skip old files
-    // Pass cam for getting max file age configuration
-    $newestFile = findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessed, $pushConfig, $airport, $cam, $airportId, $camIndex);
+    // Cleanup old files and empty directories
+    // Get max age from config
+    $maxAgeMinutes = getUploadFileMaxAge($cam);
+    $maxAge = time() - ($maxAgeMinutes * 60);
+    cleanupUploadDirectory($uploadDir, null, $maxAge);
+    cleanupEmptyDirectories($uploadDir, $uploadDir);
     
-    if (!$newestFile) {
-        aviationwx_log('info', 'no valid image found', [
-            'airport' => $airportId,
-            'cam' => $camIndex
-        ], 'app');
-        return false;
+    // Summary
+    $elapsed = microtime(true) - $startTime;
+    aviationwx_log('info', 'push webcam: processing complete', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'processed' => $processedCount,
+        'successful' => $successCount,
+        'failed' => $processedCount - $successCount,
+        'elapsed_seconds' => round($elapsed, 2)
+    ], 'app');
+    
+    return $successCount > 0;
+    
+    } finally {
+        // Release lock
+        if (isset($lockHandle) && is_resource($lockHandle)) {
+            @flock($lockHandle, LOCK_UN);
+            @fclose($lockHandle);
+        }
+        if (isset($lockFile) && file_exists($lockFile)) {
+            @unlink($lockFile);
+        }
     }
-    
-    // Capture processed file's modification time before moving it
-    // This ensures cleanup only deletes files older than or equal to the processed file
-    // Use @ to suppress errors for non-critical file operations
-    // We handle failures explicitly with fallback mechanism below
-    $processedFileMtime = @filemtime($newestFile);
-    if ($processedFileMtime === false) {
-        // Fallback to current time if mtime unavailable
-        // This is conservative - preserves files if we can't determine their age
-        $processedFileMtime = time();
-    }
-    
-    // Move to cache
-    $cacheFile = moveToCache($newestFile, $airportId, $camIndex);
-    
-    if ($cacheFile) {
-        // Track successful upload
-        trackWebcamUploadAccepted($airportId, $camIndex);
-        
-        // Clean up upload directory (delete only files older than or equal to processed file)
-        // This prevents deleting files that started uploading after processing began
-        cleanupUploadDirectory($uploadDir, null, $processedFileMtime);
-        
-        // Update last processed time
-        updateLastProcessedTime($airportId, $camIndex);
-        
-        aviationwx_log('info', 'push webcam processed successfully', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'cache_file' => $cacheFile
-        ], 'app');
-        
-        return true;
-    }
-    
-    return false;
 }
 
 /**

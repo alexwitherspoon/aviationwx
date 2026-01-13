@@ -145,16 +145,21 @@ function hasExifTimestamp(string $filePath): bool {
 /**
  * Add EXIF DateTimeOriginal to image using exiftool
  * 
- * For server-generated images (RTSP/MJPEG), uses file mtime as capture time.
- * Must be called immediately after capture (within 1 second) to ensure
- * accuracy of timestamp.
+ * Follows EXIF standard:
+ * - DateTimeOriginal: Local time at the location (camera's timezone)
+ * - GPS fields: UTC (Zulu time)
+ * 
+ * For server-generated images (RTSP/MJPEG/static), uses file mtime as capture time.
+ * Must be called immediately after capture (within 1 second) to ensure accuracy.
  * 
  * @param string $filePath Path to image
  * @param int|null $timestamp Unix timestamp to set (default: file mtime)
+ * @param string $timezone IANA timezone (e.g., 'America/Los_Angeles') for DateTimeOriginal
+ * @param bool $preserveOriginalDateTime If true, keep existing DateTimeOriginal (only update GPS)
  * @return bool True on success
  * @throws RuntimeException If exiftool not available (unless in test mode)
  */
-function addExifTimestamp(string $filePath, ?int $timestamp = null): bool {
+function addExifTimestamp(string $filePath, ?int $timestamp = null, string $timezone = 'UTC', bool $preserveOriginalDateTime = false): bool {
     // In test mode without exiftool, simulate success
     if (function_exists('isTestMode') && isTestMode()) {
         exec('which exiftool 2>/dev/null', $output, $exitCode);
@@ -180,19 +185,55 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null): bool {
         }
     }
     
-    // Format for EXIF: "2024:12:26 15:30:45"
-    // Always use gmdate() to write UTC time, matching JavaScript parser expectations
-    $exifDateTime = gmdate('Y:m:d H:i:s', $timestamp);
+    // EXIF Standard:
+    // - DateTimeOriginal: Local time at the location (camera's timezone)
+    // - GPS fields: UTC (Zulu time) for aviation use
     
-    // Build exiftool command
+    // DateTimeOriginal: Local time in the specified timezone
+    $localDateTime = null;
+    try {
+        $dt = new DateTime('@' . $timestamp); // Create from UTC timestamp
+        $dt->setTimezone(new DateTimeZone($timezone)); // Convert to local timezone
+        $localDateTime = $dt->format('Y:m:d H:i:s'); // EXIF format with local time
+    } catch (Exception $e) {
+        // Invalid timezone, fall back to UTC
+        aviationwx_log('warning', 'addExifTimestamp: invalid timezone, using UTC', [
+            'timezone' => $timezone,
+            'file' => basename($filePath)
+        ], 'app');
+        $localDateTime = gmdate('Y:m:d H:i:s', $timestamp);
+    }
+    
+    // GPS timestamp components (always UTC for aviation standard)
+    $gpsDate = gmdate('Y:m:d', $timestamp);
+    $gpsTime = gmdate('H:i:s', $timestamp);
+    
+    // Build exiftool command with all EXIF fields
     // -overwrite_original: Don't create backup files
     // -q: Quiet mode (less output)
     // -P: Preserve file modification time
-    $cmd = sprintf(
-        'exiftool -overwrite_original -q -P -DateTimeOriginal=%s %s 2>&1',
-        escapeshellarg($exifDateTime),
-        escapeshellarg($filePath)
-    );
+    $cmd = 'exiftool -overwrite_original -q -P';
+    
+    // Add DateTimeOriginal only if not preserving existing
+    // Uses LOCAL time per EXIF standard
+    if (!$preserveOriginalDateTime) {
+        $cmd .= ' ' . escapeshellarg('-DateTimeOriginal=' . $localDateTime);
+    }
+    
+    // Always add GPS fields (UTC per EXIF standard)
+    $cmd .= ' ' . escapeshellarg('-GPSDateStamp=' . $gpsDate);
+    $cmd .= ' ' . escapeshellarg('-GPSTimeStamp=' . $gpsTime);
+    
+    // Always add attribution fields
+    $cmd .= ' ' . escapeshellarg('-Copyright=© AviationWX.org and image contributors');
+    $cmd .= ' ' . escapeshellarg('-Artist=AviationWX.org');
+    $cmd .= ' ' . escapeshellarg('-Rights=© AviationWX.org and image contributors');
+    $cmd .= ' ' . escapeshellarg('-ImageDescription=Aviation weather webcam image processed by AviationWX.org');
+    $cmd .= ' ' . escapeshellarg('-UserComment=Processed by AviationWX.org');
+    
+    // Add file path
+    $cmd .= ' ' . escapeshellarg($filePath);
+    $cmd .= ' 2>&1';
     
     exec($cmd, $output, $exitCode);
     
@@ -219,9 +260,10 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null): bool {
  * Use for server-generated images (RTSP/MJPEG/static fetch) and push camera uploads.
  * 
  * @param string $filePath Path to image
+ * @param string $timezone IANA timezone for DateTimeOriginal
  * @return bool True if EXIF now exists
  */
-function ensureExifTimestamp(string $filePath): bool {
+function ensureExifTimestamp(string $filePath, string $timezone = 'UTC'): bool {
     // Already has valid EXIF? Done.
     if (hasExifTimestamp($filePath)) {
         return true;
@@ -231,29 +273,28 @@ function ensureExifTimestamp(string $filePath): bool {
     $timestamp = getTimestampForExif($filePath);
     
     // Add EXIF with determined timestamp
-    return addExifTimestamp($filePath, $timestamp);
+    return addExifTimestamp($filePath, $timestamp, $timezone);
 }
 
 /**
- * Normalize EXIF timestamp to UTC for push camera uploads
+ * Normalize EXIF for push camera uploads (EXIF standard compliant)
  * 
  * Many cameras write EXIF DateTimeOriginal in local time without timezone info.
  * This is ENCOURAGED for operators (matches their clocks and security footage).
- * This function detects timezone offset and normalizes to UTC for client-side verification.
  * 
- * Strategy:
- * 1. Extract camera's EXIF timestamp (most accurate capture time)
- * 2. Compare with file mtime (server time, UTC)
- * 3. Detect if EXIF is already UTC or needs timezone correction
- * 4. Validate corrected timestamp is within acceptable age (history retention)
- * 5. Rewrite EXIF to UTC if needed, or reject if unreliable
+ * This function:
+ * 1. Validates the camera's DateTimeOriginal is reasonable
+ * 2. Detects timezone offset by comparing EXIF vs file mtime
+ * 3. Adds GPS UTC fields for client-side verification
+ * 4. PRESERVES the original DateTimeOriginal (local time per EXIF standard)
  * 
  * @param string $filePath Path to uploaded image
  * @param string $airportId Airport identifier (for history retention lookup)
  * @param int $camIndex Camera index (for logging)
- * @return bool True if image timestamp is reliable and normalized
+ * @param string $timezone Airport timezone (for adding GPS fields with correct UTC conversion)
+ * @return bool True if image timestamp is reliable and GPS fields added
  */
-function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex): bool {
+function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, string $timezone = 'UTC'): bool {
     // Get server file modification time (UTC, set on upload completion)
     $mtime = filemtime($filePath);
     if ($mtime === false) {
@@ -344,9 +385,10 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex):
                 return false;
             }
             
-            // Rewrite EXIF to corrected UTC timestamp
-            if (!addExifTimestamp($filePath, $utcTimestamp)) {
-                aviationwx_log('error', 'Failed to rewrite EXIF to UTC', [
+            // Add GPS UTC fields, preserve original DateTimeOriginal (local time)
+            // The GPS fields will be used by client for verification, not DateTimeOriginal
+            if (!addExifTimestamp($filePath, $utcTimestamp, $timezone, true)) {
+                aviationwx_log('error', 'Failed to add GPS UTC fields', [
                     'file' => basename($filePath),
                     'airport' => $airportId,
                     'cam' => $camIndex
@@ -868,6 +910,45 @@ function parseFilenameTimestamp(string $filePath): array {
         }
     }
     
+    // Pattern 6: Folder-based patterns /YYYY/MM/DD/HH/MM/
+    // Example: /uploads/keul/2026/01/13/14/30/image.jpg
+    if (preg_match('#/(\d{4})/(\d{2})/(\d{2})/(\d{2})/(\d{2})/#', $filePath, $matches)) {
+        $parsed = parseTimestampComponents($matches[1], $matches[2], $matches[3], $matches[4], $matches[5], '00');
+        
+        if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+            $result['found'] = true;
+            $result['timestamp'] = $parsed;
+            $result['pattern'] = 'folder_YYYY_MM_DD_HH_MM';
+            return $result;
+        }
+    }
+    
+    // Pattern 7: Folder-based patterns /YYYY/MM/DD/
+    // Example: /uploads/keul/2026/01/13/image.jpg
+    // Use file mtime for time-of-day component
+    if (preg_match('#/(\d{4})/(\d{2})/(\d{2})/#', $filePath, $matches)) {
+        $year = $matches[1];
+        $month = $matches[2];
+        $day = $matches[3];
+        
+        // Create date at midnight
+        $dateStr = "{$year}-{$month}-{$day} 00:00:00";
+        $dayStart = strtotime($dateStr);
+        
+        if ($dayStart !== false && isTimestampReasonable($dayStart, $fileMtime)) {
+            // Use mtime's time-of-day with folder's date
+            $timeOfDay = $fileMtime % 86400; // Seconds since midnight
+            $timestamp = $dayStart + $timeOfDay;
+            
+            if (isTimestampReasonable($timestamp, $fileMtime)) {
+                $result['found'] = true;
+                $result['timestamp'] = $timestamp;
+                $result['pattern'] = 'folder_YYYY_MM_DD';
+                return $result;
+            }
+        }
+    }
+    
     return $result;
 }
 
@@ -1023,6 +1104,62 @@ function getTimestampForExif(string $filePath): int {
     }
     
     return $mtime;
+}
+
+/**
+ * Ensure image has valid EXIF timestamp (defensive entry point)
+ * 
+ * Priority order:
+ * 1. Existing EXIF DateTimeOriginal (if valid) - ensures GPS fields added
+ * 2. Filename/folder timestamp pattern
+ * 3. File mtime
+ * 4. Provided fallback timestamp
+ * 
+ * @param string $filePath Path to image file
+ * @param int|null $fallbackTimestamp Fallback if no other timestamp found
+ * @return bool True if image has valid EXIF, false otherwise
+ */
+function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, string $timezone = 'UTC'): bool {
+    if (!isExiftoolAvailable()) {
+        return false;
+    }
+    
+    if (!file_exists($filePath)) {
+        return false;
+    }
+    
+    // Already has valid EXIF with DateTimeOriginal?
+    if (hasExifTimestamp($filePath)) {
+        // Ensure GPS UTC fields exist (for old images processed before GPS requirement)
+        $timestamp = getTimestampForExif($filePath);
+        if ($timestamp > 0) {
+            // Add GPS fields, preserve original DateTimeOriginal
+            addExifTimestamp($filePath, $timestamp, $timezone, true);
+        }
+        return true;
+    }
+    
+    // Priority 1: Try to extract from filename/folder
+    $filenameResult = parseFilenameTimestamp($filePath);
+    $timestamp = $filenameResult['found'] ? $filenameResult['timestamp'] : 0;
+    
+    // Priority 2: Try mtime
+    if ($timestamp <= 0) {
+        $timestamp = @filemtime($filePath) ?: 0;
+    }
+    
+    // Priority 3: Use provided fallback
+    if ($timestamp <= 0 && $fallbackTimestamp > 0) {
+        $timestamp = $fallbackTimestamp;
+    }
+    
+    // No valid timestamp found
+    if ($timestamp <= 0) {
+        return false;
+    }
+    
+    // Add EXIF with timestamp (local time in DateTimeOriginal, UTC in GPS fields)
+    return addExifTimestamp($filePath, $timestamp, $timezone, false);
 }
 
 

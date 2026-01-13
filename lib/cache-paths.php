@@ -257,6 +257,37 @@ function getWebcamUploadDir(string $airportId, string $username): string {
     return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
 }
 
+/**
+ * Get quarantine directory for rejected webcam images
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return string Full path to quarantine directory
+ */
+function getWebcamQuarantineDir(string $airportId, int $camIndex): string {
+    return CACHE_WEBCAMS_DIR . '/quarantine/' . strtolower($airportId) . '/' . $camIndex;
+}
+
+// =============================================================================
+// TEMPORARY AND LOCK FILE PATHS
+// =============================================================================
+
+if (!defined('TEMP_DIR')) {
+    define('TEMP_DIR', sys_get_temp_dir());
+}
+
+/**
+ * Get lock file path for push webcam processing
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return string Full path to lock file
+ */
+function getPushWebcamLockPath(string $airportId, int $camIndex): string {
+    return TEMP_DIR . '/push_webcam_lock_' . strtolower($airportId) . '_' . $camIndex . '.lock';
+}
+
+
 // =============================================================================
 // NOTAM CACHE PATHS
 // =============================================================================

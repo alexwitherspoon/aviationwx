@@ -182,7 +182,7 @@ function detectWebcamSourceType($url) {
  * @param string $cacheFile Target cache file path (JPG format)
  * @return bool True on success, false on failure
  */
-function fetchStaticImage($url, $cacheFile) {
+function fetchStaticImage($url, $cacheFile, $airport, $airportId, $camIndex) {
     // Check for mock response in test mode
     if (function_exists('getMockHttpResponse')) {
         $mockResponse = getMockHttpResponse($url);
@@ -266,12 +266,19 @@ function fetchStaticImage($url, $cacheFile) {
                     return false;
                 }
                 
-                // Ensure EXIF timestamp exists (add from mtime if needed)
-                if (!ensureExifTimestamp($tmpFile)) {
-                    aviationwx_log('warning', 'webcam EXIF timestamp could not be added', [
-                        'file' => basename($tmpFile)
+                // CRITICAL: Ensure EXIF exists before validation (mandatory for all sources)
+                require_once __DIR__ . '/../lib/exif-utils.php';
+                $timestamp = time(); // Static images use current time
+                $timezone = $airport['timezone'] ?? 'UTC';
+                if (!ensureImageHasExif($tmpFile, $timestamp, $timezone)) {
+                    aviationwx_log('error', 'webcam: failed to add EXIF - rejecting image', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'file' => basename($tmpFile),
+                        'note' => 'EXIF is mandatory for all webcam images'
                     ], 'app');
-                    // Don't fail - timestamp is best-effort for static images
+                    @unlink($tmpFile);
+                    return false;
                 }
                 
                 // Validate EXIF timestamp is reasonable
@@ -323,15 +330,22 @@ function fetchStaticImage($url, $cacheFile) {
                         @unlink($tmpFile);
                         return false;
                     }
-                    
-                    // Ensure EXIF timestamp exists (add from mtime if needed)
-                    // PNG converted to JPEG loses original PNG metadata, so add fresh timestamp
-                    if (!ensureExifTimestamp($tmpFile)) {
-                        aviationwx_log('warning', 'webcam EXIF timestamp could not be added to converted PNG', [
-                            'file' => basename($tmpFile)
+
+                    // CRITICAL: Ensure EXIF exists before validation (mandatory for all sources)
+                    require_once __DIR__ . '/../lib/exif-utils.php';
+                    $timestamp = time(); // PNG converted images use current time
+                    $timezone = $airport['timezone'] ?? 'UTC';
+                    if (!ensureImageHasExif($tmpFile, $timestamp, $timezone)) {
+                        aviationwx_log('error', 'webcam: failed to add EXIF after PNG conversion - rejecting', [
+                            'airport' => $airportId,
+                            'cam' => $camIndex,
+                            'file' => basename($tmpFile),
+                            'note' => 'EXIF is mandatory for all webcam images'
                         ], 'app');
+                        @unlink($tmpFile);
+                        return false;
                     }
-                    
+
                     // Validate EXIF timestamp is reasonable
                     $exifCheck = validateExifTimestamp($tmpFile);
                     if (!$exifCheck['valid']) {
@@ -502,7 +516,7 @@ function isFfmpegAvailable() {
  * @param int $maxRuntime Maximum runtime for ffmpeg in seconds (default: RTSP_MAX_RUNTIME)
  * @return bool True on success, false on failure
  */
-function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = RTSP_DEFAULT_TIMEOUT, $retries = RTSP_DEFAULT_RETRIES, $maxRuntime = RTSP_MAX_RUNTIME) {
+function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = RTSP_DEFAULT_TIMEOUT, $retries = RTSP_DEFAULT_RETRIES, $maxRuntime = RTSP_MAX_RUNTIME, $airport = null, $airportId = null, $camIndex = null) {
     // Check if ffmpeg is available
     if (!isFfmpegAvailable()) {
         aviationwx_log('error', 'ffmpeg not available for RTSP capture', [
@@ -600,14 +614,21 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
                 @unlink($jpegTmp);
                 // Continue to retry
             } else {
-                // Ensure EXIF timestamp exists (add from mtime - ffmpeg just created the file)
-                if (!ensureExifTimestamp($jpegTmp)) {
-                    aviationwx_log('warning', 'webcam EXIF timestamp could not be added to RTSP frame', [
-                        'file' => basename($jpegTmp)
+                // CRITICAL: Ensure EXIF exists before validation (mandatory for all sources)
+                require_once __DIR__ . '/../lib/exif-utils.php';
+                $timestamp = time(); // RTSP frames use current time
+                $timezone = $airport['timezone'] ?? 'UTC';
+                if (!ensureImageHasExif($jpegTmp, $timestamp, $timezone)) {
+                    aviationwx_log('error', 'webcam: failed to add EXIF to RTSP frame - rejecting', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'file' => basename($jpegTmp),
+                        'note' => 'EXIF is mandatory for all webcam images'
                     ], 'app');
-                    // Don't fail - continue to validation
+                    @unlink($jpegTmp);
+                    return false;
                 }
-                
+
                 // Validate EXIF timestamp is reasonable
                 $exifCheck = validateExifTimestamp($jpegTmp);
                 if (!$exifCheck['valid']) {
@@ -698,7 +719,7 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
  * @param string $cacheFile Target cache file path (JPG format)
  * @return bool True on success, false on failure
  */
-function fetchMJPEGStream($url, $cacheFile) {
+function fetchMJPEGStream($url, $cacheFile, $airport, $airportId, $camIndex) {
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
@@ -837,15 +858,21 @@ function fetchMJPEGStream($url, $cacheFile) {
         @unlink($tmpFile);
         return false;
     }
-    
-    // Ensure EXIF timestamp exists (add from mtime if needed)
-    if (!ensureExifTimestamp($tmpFile)) {
-        aviationwx_log('warning', 'webcam EXIF timestamp could not be added to MJPEG frame', [
-            'file' => basename($tmpFile)
+
+    // CRITICAL: Ensure EXIF exists before validation (mandatory for all sources)
+    require_once __DIR__ . '/../lib/exif-utils.php';
+    $timestamp = time(); // MJPEG frames use current time
+    $timezone = $airport['timezone'] ?? 'UTC';
+    if (!ensureImageHasExif($tmpFile, $timestamp, $timezone)) {
+        aviationwx_log('error', 'webcam: failed to add EXIF to MJPEG frame - rejecting', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'file' => basename($tmpFile),
+            'note' => 'EXIF is mandatory for all webcam images'
         ], 'app');
-        // Don't fail - continue to validation
+        return false;
     }
-    
+
     // Validate EXIF timestamp is reasonable
     $exifCheck = validateExifTimestamp($tmpFile);
     if (!$exifCheck['valid']) {
@@ -1057,34 +1084,88 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
                     $timestamp = time();
                 }
                 
+                // CRITICAL: Ensure EXIF exists before validation (mandatory for all sources)
+                require_once __DIR__ . '/../lib/exif-utils.php';
+                $timezone = $airport['timezone'] ?? 'UTC';
+                if (!ensureImageHasExif($stagingFile, $timestamp, $timezone)) {
+                    aviationwx_log('error', 'pull webcam: failed to add EXIF - rejecting image', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'file' => basename($stagingFile),
+                        'timestamp' => $timestamp,
+                        'note' => 'EXIF is mandatory for all webcam images'
+                    ], 'app');
+                    recordFailure($airportId, $camIndex, 'exif_add_failed', 'persistent');
+                    cleanupStagingFiles($airportId, $camIndex);
+                    releaseCameraLock($lockFp);
+                    return false;
+                }
+                
                 // Get input dimensions for variant generation
                 $inputDimensions = getImageDimensions($stagingFile);
                 if ($inputDimensions === null) {
-                    // Fallback to format-only generation
+                    // Fallback: Format-only generation (no resizing)
                     $formatResults = generateFormatsSync($stagingFile, $airportId, $camIndex, 'jpg');
                     $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
+                    
+                    if (empty($promotedFormats)) {
+                        aviationwx_log('error', 'pull webcam: no formats promoted', [
+                            'airport' => $airportId,
+                            'cam' => $camIndex
+                        ], 'app');
+                        recordFailure($airportId, $camIndex, 'format_generation_failed', 'transient');
+                        cleanupStagingFiles($airportId, $camIndex);
+                        releaseCameraLock($lockFp);
+                        return false;
+                    }
+                    
+                    recordSuccess($airportId, $camIndex, $timestamp);
+                    aviationwx_log('info', 'pull webcam: processed successfully (format-only)', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'formats' => $promotedFormats
+                    ], 'app');
                 } else {
-                    // Generate all variants and formats in parallel (synchronous wait)
-                    $variantResult = generateVariantsSync($stagingFile, $airportId, $camIndex, 'jpg', $inputDimensions);
+                    // UNIFIED: Use same pipeline as push cameras
+                    $variantResult = generateVariantsFromOriginal($stagingFile, $airportId, $camIndex, $timestamp);
                     
-                    // Promote all successful variants
-                    $promotedVariants = promoteVariants(
-                        $airportId,
-                        $camIndex,
-                        $variantResult['results'],
-                        'jpg',
-                        $timestamp,
-                        $variantResult['delete_original'],
-                        $variantResult['delete_original'] ? $stagingFile : null
-                    );
+                    if ($variantResult['original'] === null || empty($variantResult['variants'])) {
+                        aviationwx_log('error', 'pull webcam: variant generation failed', [
+                            'airport' => $airportId,
+                            'cam' => $camIndex,
+                            'has_original' => $variantResult['original'] !== null,
+                            'variant_count' => count($variantResult['variants'])
+                        ], 'app');
+                        recordFailure($airportId, $camIndex, 'variant_generation_failed', 'transient');
+                        cleanupStagingFiles($airportId, $camIndex);
+                        releaseCameraLock($lockFp);
+                        return false;
+                    }
                     
-                    // Convert for logging
+                    // Store variant manifest
+                    require_once __DIR__ . '/../lib/webcam-variant-manifest.php';
+                    storeVariantManifest($airportId, $camIndex, $timestamp, $variantResult);
+                    
+                    // Success
+                    recordSuccess($airportId, $camIndex, $timestamp);
+                    
+                    // Extract format list for logging
                     $promotedFormats = [];
-                    foreach ($promotedVariants as $variant => $formats) {
-                        $promotedFormats = array_merge($promotedFormats, $formats);
+                    foreach ($variantResult['variants'] as $height => $formats) {
+                        $promotedFormats = array_merge($promotedFormats, array_keys($formats));
                     }
                     $promotedFormats = array_unique($promotedFormats);
+                    
+                    aviationwx_log('info', 'pull webcam: processed successfully with variants', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'variants' => count($variantResult['variants']),
+                        'formats' => $promotedFormats
+                    ], 'app');
                 }
+                
+                // Cleanup old timestamp files
+                cleanupOldTimestampFiles($airportId, $camIndex);
                 
                 aviationwx_log('info', 'webcam mock generated', [
                     'invocation_id' => $invocationId,
@@ -1170,17 +1251,17 @@ function processWebcam($airportId, $camIndex, $cam, $airport, $cacheDir, $invoca
         case 'rtsp':
             $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: RTSP_DEFAULT_TIMEOUT);
             $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : RTSP_MAX_RUNTIME;
-            $success = fetchRTSPFrame($url, $stagingFile, $transport, $fetchTimeout, RTSP_DEFAULT_RETRIES, $maxRuntime);
+            $success = fetchRTSPFrame($url, $stagingFile, $transport, $fetchTimeout, RTSP_DEFAULT_RETRIES, $maxRuntime, $airport, $airportId, $camIndex);
             break;
             
         case 'static_jpeg':
         case 'static_png':
-            $success = fetchStaticImage($url, $stagingFile);
+            $success = fetchStaticImage($url, $stagingFile, $airport, $airportId, $camIndex);
             break;
             
         case 'mjpeg':
         default:
-            $success = fetchMJPEGStream($url, $stagingFile);
+            $success = fetchMJPEGStream($url, $stagingFile, $airport, $airportId, $camIndex);
             break;
     }
     $fetchDuration = round((microtime(true) - $fetchStartTime) * 1000, 2);
