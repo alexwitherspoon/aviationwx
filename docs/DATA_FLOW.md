@@ -288,6 +288,8 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
 - Used when dewpoint not provided by source
 - Widely accepted empirical formula in meteorology with good accuracy for typical atmospheric conditions
 
+**For detailed formulas, constants, and accuracy specifications, see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#dewpoint-calculations)**
+
 **Formula**:
 ```
 γ = ln(RH/100) + [(b × T) / (c + T)]
@@ -360,6 +362,8 @@ Td = (c × γ) / (b - γ)
 Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 ```
 
+**For detailed technical specifications and test methodology, see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#pressure-altitude)**
+
 **Purpose**: Indicates the altitude in the standard atmosphere corresponding to a particular pressure value
 - It's the altitude indicated when the altimeter is set to 29.92 inHg
 - Higher pressure altitude = reduced aircraft performance
@@ -386,58 +390,70 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 
 **SAFETY CRITICAL**: This calculation directly affects takeoff/landing performance decisions. An underestimated density altitude can lead to runway overruns or inability to climb.
 
-**Formula** (per FAA Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25):
+**For detailed technical specifications, formulas, and test methodology, see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#density-altitude)**
 
-```
-Step 1: Calculate Pressure Altitude
-PA = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
+**Calculation Logic** (per FAA-H-8083-25C):
 
-Step 2: Calculate ISA Temperature at Pressure Altitude
-ISA Temp (°F) = 59 - [3.57 × (PA / 1000)]
+1. **Calculate pressure altitude from station conditions**:
+   - Take the station elevation
+   - Add 1000 feet for every inch of mercury below standard pressure (29.92 inHg)
+   - Subtract 1000 feet for every inch of mercury above standard pressure
+   - Result: Pressure altitude (PA)
 
-Step 3: Convert Actual Temperature to Fahrenheit
-Actual Temp (°F) = (tempC × 9/5) + 32
+2. **Determine standard temperature at that pressure altitude**:
+   - Start with standard sea level temperature (15°C)
+   - Subtract 2 degrees Celsius for every 1000 feet of pressure altitude
+   - Result: ISA (International Standard Atmosphere) temperature
 
-Step 4: Calculate Density Altitude
-Density Altitude = PA + [120 × (Actual Temp - ISA Temp)]
-```
+3. **Compare actual temperature to standard temperature**:
+   - Measure the difference between actual temperature and ISA temperature
+   - Use Celsius for this comparison (critical!)
+   - Result: Temperature deviation from standard
 
-**Key Point**: ISA temperature MUST be calculated at **pressure altitude**, not station elevation. This is critical for accuracy, especially:
-- At high altitude airports
-- On low pressure days (where PA significantly differs from elevation)
-- In hot conditions (where errors compound)
+4. **Calculate density altitude from the deviation**:
+   - Add 120 feet of density altitude for every degree Celsius above ISA
+   - Subtract 120 feet of density altitude for every degree Celsius below ISA
+   - Result: Density altitude
 
-**Standard Atmosphere (ICAO/ISA) Reference**:
-- Sea level: 15°C (59°F), 29.92 inHg (1013.25 hPa)
-- Temperature lapse rate: 2°C per 1,000 ft (6.5°C per kilometer) or 3.57°F per 1,000 ft
-- Valid up to tropopause: 36,089 ft (11 km)
-- The 120 coefficient represents feet of density altitude change per degree Fahrenheit deviation from ISA
+**Critical Implementation Details**:
+- Step 2 MUST use pressure altitude, not station elevation
+- The 120 coefficient is for Celsius, NOT Fahrenheit (using Fahrenheit overestimates by ~80%)
+- This matters most at high airports, on low-pressure days, and in hot conditions
 
-**Purpose**: Accounts for both pressure AND temperature effects on air density
-- Higher density altitude = significantly reduced aircraft performance
-- Affects: takeoff distance, landing distance, climb rate, engine power
-- Critical for hot/high altitude operations
+**Plain English Summary**:
+- If actual temperature equals ISA temperature → density altitude equals pressure altitude
+- If actual temperature is hotter than ISA → density altitude is higher than pressure altitude (worse performance)
+- If actual temperature is colder than ISA → density altitude is lower than pressure altitude (better performance)
 
 **Real-World Example** (Denver International on hot summer day):
-- Elevation: 5,434 ft
-- Temperature: 35°C (95°F)
-- Pressure: 24.50 inHg
-- Pressure Altitude: 10,854 ft
-- Density Altitude: **19,824 ft** (3.6× field elevation!)
+- Station elevation: 5,434 ft
+- Altimeter setting: 24.50 inHg (5.42 inHg below standard)
+- Temperature: 35°C (hot!)
+- **Step 1**: PA = 5,434 + (5.42 × 1000) = 10,854 ft
+- **Step 2**: ISA = 15 - (2 × 10.854) = -6.7°C
+- **Step 3**: Deviation = 35 - (-6.7) = 41.7°C above ISA
+- **Step 4**: DA = 10,854 + (120 × 41.7) = **15,858 ft**
+- Result: Aircraft performs as if at 15,858 ft (3× field elevation!)
 
 **Requirements**:
 - Station elevation (ft)
-- Temperature (Celsius, converted to Fahrenheit)
+- Temperature (Celsius)
 - Altimeter setting (inHg)
 
+**Testing**: 
+- Reference tests: `tests/Unit/SafetyCriticalReferenceTest.php` (23 tests with known-good values from E6B manuals)
+- Implementation tests: `tests/Unit/WeatherCalculationsTest.php` (real-world scenarios)
+
 **Sources**:
-- FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25)
+- FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25C)
 - FAA Aviation Weather Handbook (FAA-H-8083-28)
 - ICAO Standard Atmosphere (Doc 7488)
 
 ### Flight Category Calculation
 
 **SAFETY CRITICAL**: Incorrect categorization could lead pilots to attempt VFR flight in marginal or IFR conditions, potentially leading to controlled flight into terrain (CFIT) or loss of control accidents.
+
+**For detailed category definitions, decision logic, and special cases, see [SAFETY_CRITICAL_CALCULATIONS.md](SAFETY_CRITICAL_CALCULATIONS.md#flight-category)**
 
 **Purpose**: Categorizes flight conditions (VFR, MVFR, IFR, LIFR) based on visibility and ceiling for situational awareness and flight planning.
 

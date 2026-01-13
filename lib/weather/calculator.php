@@ -142,36 +142,17 @@ function calculatePressureAltitude($weather, $airport) {
 /**
  * Calculate density altitude using FAA-approved formula
  * 
- * Calculates density altitude in feet based on pressure altitude and temperature.
- * Density altitude accounts for both pressure and temperature effects on aircraft performance.
- * Higher density altitude = reduced aircraft performance (longer takeoff/landing distances, reduced climb rate).
+ * SAFETY CRITICAL: Directly affects takeoff/landing performance decisions.
  * 
- * Formula (per FAA Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25):
- *   Density Altitude = Pressure Altitude + [120 × (OAT - ISA Temperature)]
+ * Formula: DA = PA + [120 × (OAT - ISA_Temp)]
+ * Where ISA_Temp = 15°C - [2°C × (PA / 1000)]
  * 
- * Where:
- *   - Pressure Altitude = Station Elevation + [(29.92 - Altimeter) × 1000]
- *   - ISA Temperature = 15°C - [2°C × (Pressure Altitude / 1000)]
- *                    or 59°F - [3.57°F × (Pressure Altitude / 1000)]
- *   - OAT = Outside Air Temperature (actual temperature)
- *   - 120 = Standard coefficient (feet per degree Fahrenheit deviation from ISA)
+ * CRITICAL: 120 coefficient is for CELSIUS (per FAA-H-8083-25C).
+ * Using Fahrenheit would overestimate DA by ~80% (common implementation error).
  * 
- * Standard Atmosphere (ICAO/ISA):
- *   - Sea level: 15°C (59°F), 29.92 inHg (1013.25 hPa)
- *   - Lapse rate: 2°C per 1,000 ft (6.5°C per kilometer) or 3.57°F per 1,000 ft
- *   - Valid up to tropopause (36,089 ft / 11 km)
- * 
- * SAFETY CRITICAL: This calculation directly affects takeoff/landing performance decisions.
- * An underestimated density altitude can lead to runway overruns or inability to climb.
- * 
- * Sources:
- *   - FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25)
- *   - FAA Aviation Weather Handbook (FAA-H-8083-28)
- *   - ICAO Standard Atmosphere (Doc 7488)
- * 
- * @param array $weather Weather data array (must contain 'temperature' in Celsius and 'pressure' in inHg)
- * @param array $airport Airport configuration array (must contain 'elevation_ft')
- * @return int|null Density altitude in feet, or null if required data is missing
+ * @param array $weather Weather data (must contain 'temperature' in Celsius and 'pressure' in inHg)
+ * @param array $airport Airport config (must contain 'elevation_ft')
+ * @return int|null Density altitude in feet, or null if required data missing
  */
 function calculateDensityAltitude($weather, $airport) {
     if (!isset($weather['temperature']) || !isset($weather['pressure'])) {
@@ -182,18 +163,14 @@ function calculateDensityAltitude($weather, $airport) {
     $tempC = $weather['temperature'];
     $pressureInHg = $weather['pressure'];
     
-    // Calculate pressure altitude (used for ISA temperature, not station elevation)
+    // Calculate PA using station elevation, NOT just elevation
+    // (critical for hot/low-pressure days where PA differs significantly)
     $pressureAlt = $stationElevation + (29.92 - $pressureInHg) * 1000;
     
-    // Calculate ISA temperature at pressure altitude (critical: use PA, not elevation)
-    // ISA sea level: 59°F, lapse rate: 3.57°F per 1,000 ft
-    $isaTemperatureF = 59 - (3.57 * ($pressureAlt / 1000));
+    // ISA uses environmental lapse rate (2°C/1000ft), not adiabatic (~3°C/1000ft)
+    $isaTemperatureC = 15 - (2.0 * ($pressureAlt / 1000));
     
-    $actualTempF = ($tempC * 9/5) + 32;
-    
-    // DA = PA + [120 × (OAT - ISA Temp)]
-    // 120 coefficient = feet of density altitude change per degree Fahrenheit
-    $densityAlt = $pressureAlt + (120 * ($actualTempF - $isaTemperatureF));
+    $densityAlt = $pressureAlt + (120 * ($tempC - $isaTemperatureC));
     
     return (int)round($densityAlt);
 }
