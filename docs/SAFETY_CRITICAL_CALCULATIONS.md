@@ -88,7 +88,7 @@ Per **ICAO Standard Atmosphere (Doc 7488)**:
   - Static hardcoded test data (no external dependencies)
 - **Implementation Tests**: `tests/Unit/WeatherCalculationsTest.php`
   - 11 tests covering standard conditions, extremes, real-world scenarios
-  - Includes boundary tests and formula comparison tests
+  - Includes boundary tests and formula validation tests
 
 ### Test-Driven Development (TDD) Approach
 
@@ -415,7 +415,7 @@ All safety-critical calculations follow Test-Driven Development (TDD) methodolog
 **Characteristics**:
 - Real-world scenarios (Denver hot day, etc.)
 - Null/missing data handling
-- Formula comparison tests (old vs new)
+- Formula validation tests
 - Integration with weather data structures
 
 **Test Counts**:
