@@ -86,7 +86,7 @@ RUN chmod 0644 /etc/cron.d/aviationwx-cron \
     && chmod +x /usr/local/bin/resolve-upload-ip.sh \
     && chmod 644 /etc/vsftpd/vsftpd.conf \
     && chmod 644 /etc/ssh/sshd_config \
-    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx /etc/logrotate.d/webcam-rejections \
+    && chmod 644 /etc/logrotate.d/vsftpd /etc/logrotate.d/sshd /etc/logrotate.d/aviationwx \
     && chmod 644 /etc/fail2ban/jail.d/aviationwx.conf \
     && chmod 644 /etc/fail2ban/filter.d/vsftpd.conf \
     && chmod 644 /etc/fail2ban/filter.d/sshd-sftp.conf
