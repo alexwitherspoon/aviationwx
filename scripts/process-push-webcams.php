@@ -13,6 +13,7 @@ require_once __DIR__ . '/../lib/exif-utils.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
+require_once __DIR__ . '/../lib/webcam-rejection-logger.php';
 
 // Verify exiftool is available at startup (required for EXIF validation)
 try {
@@ -883,6 +884,28 @@ function isFileStable($file, $requiredStableChecks, $stabilityTimeout, &$stabili
 }
 
 /**
+ * Handle webcam rejection with logging
+ * 
+ * Tracks rejection metrics and saves image/log to rejections directory.
+ * 
+ * @param string $file Path to rejected file
+ * @param string|null $airportId Airport ID
+ * @param int|null $camIndex Camera index
+ * @param string $reason Rejection reason code
+ * @param array $diagnosticData Additional diagnostic data
+ * @return void
+ */
+function handleWebcamRejection(string $file, ?string $airportId, ?int $camIndex, string $reason, array $diagnosticData = []) {
+    if ($airportId !== null && $camIndex !== null) {
+        // Track metrics in APCu
+        trackWebcamUploadRejected($airportId, $camIndex, $reason);
+        
+        // Save rejected image and diagnostic log
+        saveRejectedWebcam($file, $airportId, $camIndex, $reason, $diagnosticData);
+    }
+}
+
+/**
  * Validate image file
  * 
  * Validates that a file is a valid image meeting size, extension, and MIME type
@@ -900,9 +923,9 @@ function isFileStable($file, $requiredStableChecks, $stabilityTimeout, &$stabili
  */
 function validateImageFile($file, $pushConfig = null, $airport = null, $airportId = null, $camIndex = null) {
     if (!file_exists($file) || !is_readable($file)) {
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'file_not_readable');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'file_not_readable', [
+            'error' => 'File does not exist or is not readable'
+        ]);
         return false;
     }
     
@@ -910,9 +933,10 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
     
     // Check minimum size (too small to be a valid image)
     if ($size < 100) {
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'size_too_small');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'size_too_small', [
+            'file_size' => $size,
+            'minimum_size' => 100
+        ]);
         return false;
     }
     
@@ -922,9 +946,12 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
         $maxSizeBytes = intval($pushConfig['max_file_size_mb']) * 1024 * 1024;
     }
     if ($size > $maxSizeBytes) {
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'size_limit_exceeded');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'size_limit_exceeded', [
+            'file_size' => $size,
+            'max_size' => $maxSizeBytes,
+            'file_size_mb' => round($size / 1024 / 1024, 2),
+            'max_size_mb' => round($maxSizeBytes / 1024 / 1024, 2)
+        ]);
         return false;
     }
     
@@ -933,9 +960,10 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
         $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $allowed = array_map('strtolower', $pushConfig['allowed_extensions']);
         if (!in_array($ext, $allowed)) {
-            if ($airportId !== null && $camIndex !== null) {
-                trackWebcamUploadRejected($airportId, $camIndex, 'extension_not_allowed');
-            }
+            handleWebcamRejection($file, $airportId, $camIndex, 'extension_not_allowed', [
+                'extension' => $ext,
+                'allowed_extensions' => $allowed
+            ]);
             return false;
         }
     }
@@ -944,18 +972,20 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
     $mime = @mime_content_type($file);
     $validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!in_array($mime, $validMimes)) {
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'invalid_mime_type');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'invalid_mime_type', [
+            'mime_type' => $mime,
+            'valid_mime_types' => $validMimes
+        ]);
         return false;
     }
     
     // Check image headers using shared format detection
     $format = detectImageFormat($file);
     if ($format === null) {
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'invalid_format');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'invalid_format', [
+            'mime_type' => $mime,
+            'error' => 'Image format detection failed'
+        ]);
         return false;
     }
     
@@ -982,9 +1012,11 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
             'format' => $format,
             'size' => $size
         ], 'app');
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'incomplete_upload');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'incomplete_upload', [
+            'format' => $format,
+            'file_size' => $size,
+            'error' => 'File is incomplete or truncated'
+        ]);
         return false;
     }
     
@@ -996,9 +1028,9 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
             aviationwx_log('warning', 'push webcam file read failed during GD validation', [
                 'file' => basename($file)
             ], 'app');
-            if ($airportId !== null && $camIndex !== null) {
-                trackWebcamUploadRejected($airportId, $camIndex, 'file_read_error');
-            }
+            handleWebcamRejection($file, $airportId, $camIndex, 'file_read_error', [
+                'error' => 'Failed to read file contents for validation'
+            ]);
             return false;
         }
         
@@ -1009,9 +1041,11 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
                 'format' => $format,
                 'size' => $size
             ], 'app');
-            if ($airportId !== null && $camIndex !== null) {
-                trackWebcamUploadRejected($airportId, $camIndex, 'image_corrupt');
-            }
+            handleWebcamRejection($file, $airportId, $camIndex, 'image_corrupt', [
+                'format' => $format,
+                'file_size' => $size,
+                'error' => 'GD library cannot parse image (corrupt data)'
+            ]);
             return false;
         }
         imagedestroy($testImg);
@@ -1029,9 +1063,11 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
                 'confidence' => $errorCheck['confidence'],
                 'reasons' => $errorCheck['reasons']
             ], 'app');
-            if ($airportId !== null && $camIndex !== null) {
-                trackWebcamUploadRejected($airportId, $camIndex, 'error_frame');
-            }
+            handleWebcamRejection($file, $airportId, $camIndex, 'error_frame', [
+                'confidence' => $errorCheck['confidence'],
+                'reasons' => $errorCheck['reasons'],
+                'details' => $errorCheck
+            ]);
             return false;
         }
     }
@@ -1044,9 +1080,11 @@ function validateImageFile($file, $pushConfig = null, $airport = null, $airportI
             'reason' => $exifCheck['reason'],
             'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
         ], 'app');
-        if ($airportId !== null && $camIndex !== null) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'exif_invalid');
-        }
+        handleWebcamRejection($file, $airportId, $camIndex, 'exif_invalid', [
+            'reason' => $exifCheck['reason'],
+            'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none',
+            'details' => $exifCheck
+        ]);
         return false;
     }
     

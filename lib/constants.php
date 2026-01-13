@@ -522,12 +522,13 @@ if (!defined('WEBCAM_ERROR_UNIFORM_COLOR_SAMPLE_SIZE')) {
 // Conservative thresholds to avoid false positives (fog, overcast, snow are legitimately soft)
 // Phase-specific thresholds: day has more detail, night is naturally softer
 //
-// Laplacian variance values:
+// Laplacian variance values observed in real-world conditions:
 // - Crisp daytime image: 500-2000+
-// - Foggy/overcast: 100-300
+// - Foggy/overcast day: 100-300
 // - Night with lights: 50-200
 // - Dark night: 20-100
-// - Severely pixelated/corrupted: <10
+// - Foggy night/twilight: 2-8 (legitimate but very soft)
+// - Severely pixelated/corrupted: <2 (essentially flat/broken)
 //
 // Thresholds are set conservatively low to avoid false positives
 if (!defined('WEBCAM_PIXELATION_THRESHOLD_DAY')) {
@@ -537,10 +538,10 @@ if (!defined('WEBCAM_PIXELATION_THRESHOLD_CIVIL')) {
     define('WEBCAM_PIXELATION_THRESHOLD_CIVIL', 10); // Civil twilight: lower threshold
 }
 if (!defined('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL', 8); // Nautical twilight: even lower
+    define('WEBCAM_PIXELATION_THRESHOLD_NAUTICAL', 5); // Nautical twilight: more lenient for foggy conditions
 }
 if (!defined('WEBCAM_PIXELATION_THRESHOLD_NIGHT')) {
-    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 3); // Night: very conservative (dark images are soft, Reolink cameras have low variance ~3.2)
+    define('WEBCAM_PIXELATION_THRESHOLD_NIGHT', 2); // Night: very conservative (fog/dark conditions have low variance ~2-8)
 }
 // Sample size for Laplacian calculation (grid of NxN samples across image)
 if (!defined('WEBCAM_PIXELATION_SAMPLE_GRID')) {

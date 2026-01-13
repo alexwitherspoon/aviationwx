@@ -9,133 +9,173 @@
 /**
  * Track accepted upload for a camera
  * 
- * Increments counter in APCu for accepted uploads in last hour.
- * Uses sliding window approach with timestamp bucketing.
+ * Uses lightweight counter approach following existing metrics.php pattern.
+ * Counters are flushed to hourly JSON files every 5 minutes.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @return void
  */
-function trackWebcamUploadAccepted($airportId, $camIndex) {
+function trackWebcamUploadAccepted(string $airportId, int $camIndex): void {
     if (!function_exists('apcu_enabled') || !apcu_enabled()) {
         return; // APCu not available
     }
     
-    $now = time();
-    $key = "webcam:upload:accepted:{$airportId}:{$camIndex}";
+    require_once __DIR__ . '/metrics.php';
     
-    // Store as array of timestamps for accurate 1-hour sliding window
-    $data = apcu_fetch($key);
-    if ($data === false) {
-        $data = [];
-    }
+    $airportId = strtolower($airportId);
     
-    // Add current timestamp
-    $data[] = $now;
-    
-    // Remove timestamps older than 1 hour
-    $oneHourAgo = $now - 3600;
-    $data = array_filter($data, function($timestamp) use ($oneHourAgo) {
-        return $timestamp > $oneHourAgo;
-    });
-    
-    // Store back to cache (expire after 2 hours to auto-cleanup)
-    apcu_store($key, $data, 7200);
+    // Use lightweight counter (follows metrics.php pattern)
+    metrics_increment("webcam_{$airportId}_{$camIndex}_uploads_accepted");
+    metrics_increment("webcam_uploads_accepted_global");
 }
 
 /**
  * Track rejected upload for a camera
  * 
- * Increments counter in APCu for rejected uploads in last hour.
- * Also tracks rejection reason for diagnostics.
+ * Uses lightweight counter approach following existing metrics.php pattern.
+ * Counters are flushed to hourly JSON files every 5 minutes.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param string $reason Rejection reason (e.g., 'error_frame', 'exif_invalid', 'size_limit')
  * @return void
  */
-function trackWebcamUploadRejected($airportId, $camIndex, $reason) {
+function trackWebcamUploadRejected(string $airportId, int $camIndex, string $reason): void {
     if (!function_exists('apcu_enabled') || !apcu_enabled()) {
         return; // APCu not available
     }
     
-    $now = time();
-    $key = "webcam:upload:rejected:{$airportId}:{$camIndex}";
+    require_once __DIR__ . '/metrics.php';
     
-    // Store as array of [timestamp, reason] tuples for diagnostics
-    $data = apcu_fetch($key);
-    if ($data === false) {
-        $data = [];
-    }
+    $airportId = strtolower($airportId);
+    $reason = strtolower($reason);
     
-    // Add current rejection
-    $data[] = [$now, $reason];
+    // Track per-camera rejections
+    metrics_increment("webcam_{$airportId}_{$camIndex}_uploads_rejected");
     
-    // Remove rejections older than 1 hour
-    $oneHourAgo = $now - 3600;
-    $data = array_filter($data, function($entry) use ($oneHourAgo) {
-        return $entry[0] > $oneHourAgo;
-    });
+    // Track per-camera rejection reasons  
+    metrics_increment("webcam_{$airportId}_{$camIndex}_rejection_{$reason}");
     
-    // Store back to cache (expire after 2 hours to auto-cleanup)
-    apcu_store($key, $data, 7200);
+    // Track global totals
+    metrics_increment("webcam_uploads_rejected_global");
+    metrics_increment("webcam_rejection_reason_{$reason}_global");
 }
 
 /**
  * Get upload metrics for a camera
  * 
- * Retrieves accepted/rejected counts for the last hour.
- * Returns structured data for display on status page.
+ * Retrieves accepted/rejected counts from rolling 24-hour metrics.
+ * Follows existing metrics.php pattern: reads from hourly JSON files + current APCu.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @return array {
  *   'accepted' => int,
  *   'rejected' => int,
- *   'rejection_reasons' => array (reason => count)
+ *   'rejection_reasons' => array (reason => count),
+ *   'rejection_rate' => float
  * }
  */
-function getWebcamUploadMetrics($airportId, $camIndex) {
+function getWebcamUploadMetrics(string $airportId, int $camIndex): array {
+    require_once __DIR__ . '/metrics.php';
+    
+    $airportId = strtolower($airportId);
+    $webcamKey = "webcam_{$airportId}_{$camIndex}";
+    
     $metrics = [
         'accepted' => 0,
         'rejected' => 0,
-        'rejection_reasons' => []
+        'rejection_reasons' => [],
+        'rejection_rate' => 0.0
     ];
     
-    if (!function_exists('apcu_enabled') || !apcu_enabled()) {
-        return $metrics; // APCu not available
+    // Get 24-hour rolling metrics (follows metrics_get_rolling pattern)
+    $now = time();
+    
+    // Read yesterday's hourly files
+    $yesterday = gmdate('Y-m-d', $now - 86400);
+    $currentHour = (int)gmdate('H', $now);
+    
+    for ($h = $currentHour + 1; $h < 24; $h++) {
+        $hourId = $yesterday . '-' . sprintf('%02d', $h);
+        $metrics = aggregateWebcamMetricsFromHour($hourId, $webcamKey, $metrics);
     }
     
-    // Get accepted count
-    $acceptedKey = "webcam:upload:accepted:{$airportId}:{$camIndex}";
-    $accepted = apcu_fetch($acceptedKey);
-    if ($accepted !== false && is_array($accepted)) {
-        // Filter to last hour (defensive check)
-        $oneHourAgo = time() - 3600;
-        $accepted = array_filter($accepted, function($timestamp) use ($oneHourAgo) {
-            return $timestamp > $oneHourAgo;
-        });
-        $metrics['accepted'] = count($accepted);
+    // Read today's hourly files  
+    $today = gmdate('Y-m-d', $now);
+    for ($h = 0; $h <= $currentHour; $h++) {
+        $hourId = $today . '-' . sprintf('%02d', $h);
+        $metrics = aggregateWebcamMetricsFromHour($hourId, $webcamKey, $metrics);
     }
     
-    // Get rejected count and reasons
-    $rejectedKey = "webcam:upload:rejected:{$airportId}:{$camIndex}";
-    $rejected = apcu_fetch($rejectedKey);
-    if ($rejected !== false && is_array($rejected)) {
-        // Filter to last hour (defensive check)
-        $oneHourAgo = time() - 3600;
-        $rejected = array_filter($rejected, function($entry) use ($oneHourAgo) {
-            return $entry[0] > $oneHourAgo;
-        });
-        $metrics['rejected'] = count($rejected);
+    // Add current APCu counters (not yet flushed)
+    if (function_exists('apcu_enabled') && apcu_enabled()) {
+        $accepted = metrics_get("{$webcamKey}_uploads_accepted");
+        $rejected = metrics_get("{$webcamKey}_uploads_rejected");
         
-        // Count rejection reasons
-        foreach ($rejected as $entry) {
-            $reason = $entry[1];
+        $metrics['accepted'] += $accepted;
+        $metrics['rejected'] += $rejected;
+        
+        // Get rejection reasons from APCu
+        $allCounters = metrics_get_all();
+        foreach ($allCounters as $key => $value) {
+            if (preg_match("/^{$webcamKey}_rejection_(.+)$/", $key, $m)) {
+                $reason = $m[1];
+                if (!isset($metrics['rejection_reasons'][$reason])) {
+                    $metrics['rejection_reasons'][$reason] = 0;
+                }
+                $metrics['rejection_reasons'][$reason] += $value;
+            }
+        }
+    }
+    
+    // Calculate rejection rate
+    $total = $metrics['accepted'] + $metrics['rejected'];
+    $metrics['rejection_rate'] = $total > 0 ? ($metrics['rejected'] / $total) : 0.0;
+    
+    return $metrics;
+}
+
+/**
+ * Aggregate webcam metrics from a single hour file
+ * 
+ * Helper function for getWebcamUploadMetrics.
+ * 
+ * @param string $hourId Hour ID (e.g., '2026-01-13-14')
+ * @param string $webcamKey Webcam key (e.g., 'webcam_kspb_0')
+ * @param array $metrics Existing metrics to add to
+ * @return array Updated metrics
+ */
+function aggregateWebcamMetricsFromHour(string $hourId, string $webcamKey, array $metrics): array {
+    require_once __DIR__ . '/cache-paths.php';
+    
+    $hourFile = getMetricsHourlyPath($hourId);
+    if (!file_exists($hourFile)) {
+        return $metrics;
+    }
+    
+    $content = @file_get_contents($hourFile);
+    if ($content === false) {
+        return $metrics;
+    }
+    
+    $hourData = @json_decode($content, true);
+    if (!is_array($hourData)) {
+        return $metrics;
+    }
+    
+    // Check if this hour has webcam upload metrics
+    if (isset($hourData['webcam_uploads'][$webcamKey])) {
+        $webcamData = $hourData['webcam_uploads'][$webcamKey];
+        $metrics['accepted'] += $webcamData['accepted'] ?? 0;
+        $metrics['rejected'] += $webcamData['rejected'] ?? 0;
+        
+        foreach ($webcamData['rejection_reasons'] ?? [] as $reason => $count) {
             if (!isset($metrics['rejection_reasons'][$reason])) {
                 $metrics['rejection_reasons'][$reason] = 0;
             }
-            $metrics['rejection_reasons'][$reason]++;
+            $metrics['rejection_reasons'][$reason] += $count;
         }
     }
     

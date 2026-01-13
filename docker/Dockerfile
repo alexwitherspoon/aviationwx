@@ -64,7 +64,6 @@ COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/logrotate-vsftpd /etc/logrotate.d/vsftpd
 COPY docker/logrotate-sshd /etc/logrotate.d/sshd
 COPY docker/logrotate-aviationwx /etc/logrotate.d/aviationwx
-COPY docker/logrotate-webcam-rejections /etc/logrotate.d/webcam-rejections
 COPY docker/fail2ban-jail.conf /etc/fail2ban/jail.d/aviationwx.conf
 COPY docker/fail2ban-vsftpd.conf /etc/fail2ban/filter.d/vsftpd.conf
 COPY docker/fail2ban-sshd.conf /etc/fail2ban/filter.d/sshd-sftp.conf

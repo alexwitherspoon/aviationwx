@@ -20,6 +20,7 @@ require_once __DIR__ . '/../lib/webcam-error-detector.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/exif-utils.php';
+require_once __DIR__ . '/../lib/webcam-rejection-logger.php';
 
 // Verify exiftool is available at startup (required for EXIF handling)
 try {
@@ -249,12 +250,22 @@ function fetchStaticImage($url, $cacheFile, $airport, $airportId, $camIndex) {
             $tmpFile = getUniqueTmpFile($cacheFile);
             if (@file_put_contents($tmpFile, $data) !== false) {
                 // Validate image is not an error frame
-                $errorCheck = detectErrorFrame($tmpFile);
+                $errorCheck = detectErrorFrame($tmpFile, $airport);
                 if ($errorCheck['is_error']) {
                     aviationwx_log('warning', 'webcam error frame detected, rejecting', [
                         'confidence' => $errorCheck['confidence'],
                         'reasons' => $errorCheck['reasons']
                     ], 'app');
+                    
+                    // Save rejected image with diagnostics
+                    saveRejectedWebcam($tmpFile, $airportId, $camIndex, 'error_frame', [
+                        'source' => 'static_image',
+                        'url' => $url,
+                        'confidence' => $errorCheck['confidence'],
+                        'reasons' => $errorCheck['reasons'],
+                        'details' => $errorCheck
+                    ]);
+                    
                     $errorFile = $cacheFile . '.error.json';
                     @file_put_contents($errorFile, json_encode([
                         'code' => 'error_frame',
@@ -288,6 +299,16 @@ function fetchStaticImage($url, $cacheFile, $airport, $airportId, $camIndex) {
                         'reason' => $exifCheck['reason'],
                         'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none'
                     ], 'app');
+                    
+                    // Save rejected image with diagnostics
+                    saveRejectedWebcam($tmpFile, $airportId, $camIndex, 'exif_invalid', [
+                        'source' => 'static_image',
+                        'url' => $url,
+                        'reason' => $exifCheck['reason'],
+                        'timestamp' => $exifCheck['timestamp'] > 0 ? date('Y-m-d H:i:s', $exifCheck['timestamp']) : 'none',
+                        'details' => $exifCheck
+                    ]);
+                    
                     $errorFile = $cacheFile . '.error.json';
                     @file_put_contents($errorFile, json_encode([
                         'code' => 'exif_invalid',
@@ -321,12 +342,22 @@ function fetchStaticImage($url, $cacheFile, $airport, $airportId, $camIndex) {
                     imagedestroy($img);
                     
                     // Validate image is not an error frame
-                    $errorCheck = detectErrorFrame($tmpFile);
+                    $errorCheck = detectErrorFrame($tmpFile, $airport);
                     if ($errorCheck['is_error']) {
                         aviationwx_log('warning', 'webcam error frame detected, rejecting', [
                             'confidence' => $errorCheck['confidence'],
                             'reasons' => $errorCheck['reasons']
                         ], 'app');
+                        
+                        // Save rejected image with diagnostics
+                        saveRejectedWebcam($tmpFile, $airportId, $camIndex, 'error_frame', [
+                            'source' => 'png_converted',
+                            'url' => $url,
+                            'confidence' => $errorCheck['confidence'],
+                            'reasons' => $errorCheck['reasons'],
+                            'details' => $errorCheck
+                        ]);
+                        
                         @unlink($tmpFile);
                         return false;
                     }
@@ -599,7 +630,7 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
         
         if ($code === 0 && file_exists($jpegTmp) && filesize($jpegTmp) > 1000) {
             // Validate image is not an error frame
-            $errorCheck = detectErrorFrame($jpegTmp);
+            $errorCheck = detectErrorFrame($jpegTmp, $airport);
             if ($errorCheck['is_error']) {
                 if ($isWeb) {
                     echo "<span class='error'>✗ Error frame detected (confidence: " . round($errorCheck['confidence'] * 100) . "%)</span><br>\n";
@@ -611,6 +642,16 @@ function fetchRTSPFrame($url, $cacheFile, $transport = 'tcp', $timeoutSeconds = 
                     'reasons' => $errorCheck['reasons'],
                     'url' => preg_replace('/:[^:@]*@/', ':****@', $url)
                 ], 'app');
+                
+                // Save rejected image with diagnostics
+                saveRejectedWebcam($jpegTmp, $airportId, $camIndex, 'error_frame', [
+                    'source' => 'rtsp',
+                    'url' => preg_replace('/:[^:@]*@/', ':****@', $url),
+                    'confidence' => $errorCheck['confidence'],
+                    'reasons' => $errorCheck['reasons'],
+                    'details' => $errorCheck
+                ]);
+                
                 @unlink($jpegTmp);
                 // Continue to retry
             } else {
@@ -842,12 +883,22 @@ function fetchMJPEGStream($url, $cacheFile, $airport, $airportId, $camIndex) {
     }
     
     // Validate image is not an error frame
-    $errorCheck = detectErrorFrame($tmpFile);
+    $errorCheck = detectErrorFrame($tmpFile, $airport);
     if ($errorCheck['is_error']) {
         aviationwx_log('warning', 'webcam error frame detected from MJPEG, rejecting', [
             'confidence' => $errorCheck['confidence'],
             'reasons' => $errorCheck['reasons']
         ], 'app');
+        
+        // Save rejected image with diagnostics
+        saveRejectedWebcam($tmpFile, $airportId, $camIndex, 'error_frame', [
+            'source' => 'mjpeg',
+            'url' => $url,
+            'confidence' => $errorCheck['confidence'],
+            'reasons' => $errorCheck['reasons'],
+            'details' => $errorCheck
+        ]);
+        
         $errorFile = $cacheFile . '.error.json';
         @file_put_contents($errorFile, json_encode([
             'code' => 'error_frame',

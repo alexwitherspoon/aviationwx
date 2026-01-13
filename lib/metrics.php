@@ -328,11 +328,14 @@ function metrics_flush(): bool {
             'bucket_end' => strtotime(gmdate('Y-m-d H:00:00', $now) . ' UTC') + 3600,
             'airports' => [],
             'webcams' => [],
+            'webcam_uploads' => [], // Track accepted/rejected uploads per camera
             'global' => [
                 'page_views' => 0,
                 'weather_requests' => 0,
                 'webcam_requests' => 0,
                 'webcam_serves' => 0,
+                'webcam_uploads_accepted' => 0,
+                'webcam_uploads_rejected' => 0,
                 'tiles_served' => 0,
                 'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
                 'format_served' => ['jpg' => 0, 'webp' => 0],
@@ -453,6 +456,49 @@ function metrics_flush(): bool {
             $hourData['global']['cache']['hits'] += $value;
         } elseif ($key === 'cache_misses') {
             $hourData['global']['cache']['misses'] += $value;
+        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_uploads_accepted$/', $key, $m)) {
+            // Track accepted uploads per camera
+            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
+            if (!isset($hourData['webcam_uploads'][$webcamKey])) {
+                $hourData['webcam_uploads'][$webcamKey] = [
+                    'accepted' => 0,
+                    'rejected' => 0,
+                    'rejection_reasons' => []
+                ];
+            }
+            $hourData['webcam_uploads'][$webcamKey]['accepted'] += $value;
+            $hourData['global']['webcam_uploads_accepted'] += $value;
+        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_uploads_rejected$/', $key, $m)) {
+            // Track rejected uploads per camera
+            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
+            if (!isset($hourData['webcam_uploads'][$webcamKey])) {
+                $hourData['webcam_uploads'][$webcamKey] = [
+                    'accepted' => 0,
+                    'rejected' => 0,
+                    'rejection_reasons' => []
+                ];
+            }
+            $hourData['webcam_uploads'][$webcamKey]['rejected'] += $value;
+            $hourData['global']['webcam_uploads_rejected'] += $value;
+        } elseif (preg_match('/^webcam_([a-z0-9]+)_(\d+)_rejection_(.+)$/', $key, $m)) {
+            // Track rejection reasons per camera
+            $webcamKey = "webcam_{$m[1]}_{$m[2]}";
+            $reason = $m[3];
+            if (!isset($hourData['webcam_uploads'][$webcamKey])) {
+                $hourData['webcam_uploads'][$webcamKey] = [
+                    'accepted' => 0,
+                    'rejected' => 0,
+                    'rejection_reasons' => []
+                ];
+            }
+            if (!isset($hourData['webcam_uploads'][$webcamKey]['rejection_reasons'][$reason])) {
+                $hourData['webcam_uploads'][$webcamKey]['rejection_reasons'][$reason] = 0;
+            }
+            $hourData['webcam_uploads'][$webcamKey]['rejection_reasons'][$reason] += $value;
+        } elseif ($key === 'webcam_uploads_accepted_global') {
+            $hourData['global']['webcam_uploads_accepted'] += $value;
+        } elseif ($key === 'webcam_uploads_rejected_global') {
+            $hourData['global']['webcam_uploads_rejected'] += $value;
         }
     }
     
