@@ -146,7 +146,7 @@ function processWebcamWidgetData($data, $options) {
     $timezone = $airport['timezone'] ?? 'America/Los_Angeles';
     $dataSource = getWeatherSourceAttribution($weather, $hasMetarData);
     
-    // Runway data for wind compass
+    // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
     
     // For dark mode detection: 'dark' = true, 'light' = false, 'auto' = null (JS will detect)

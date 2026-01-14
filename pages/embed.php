@@ -68,7 +68,8 @@ if (!in_array($target, ['_blank', '_self', '_parent', '_top'])) {
 require_once __DIR__ . '/../lib/embed-helpers.php';
 $data = fetchEmbedDataFromApi($embedAirportId);
 
-// If no airport found, show error
+// ERROR: If we cannot retrieve airport information, this is an error condition
+// Missing runways are NOT an error - compass will render without runway line
 if ($data === null || !isset($data['airport']) || !isset($data['airportId'])) {
     http_response_code(404);
     ?>

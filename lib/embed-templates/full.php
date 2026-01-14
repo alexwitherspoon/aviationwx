@@ -259,6 +259,7 @@ function renderFullSingleWidget($data, $options) {
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
     
+    // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
     // For auto mode, pass null to let JavaScript detect system preference
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
@@ -484,6 +485,7 @@ function renderFullDualWidget($data, $options) {
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
     
+    // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
     // For auto mode, pass null to let JavaScript detect system preference
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
@@ -723,6 +725,7 @@ function renderFullMultiWidget($data, $options) {
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
     
+    // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
     // For auto mode, pass null to let JavaScript detect system preference
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
