@@ -41,10 +41,9 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     $html .= "\n                    <div class=\"metric-column\">";
     $html .= "\n                        <div class=\"column-header\">🌡️ Temperature</div>";
     
-    // Today's High
+    // Today's High (1 decimal precision for full widgets)
     if ($tempHighToday !== null) {
-        $hiTemp = round(($tempUnit === 'C') ? (($tempHighToday - 32) * 5 / 9) : $tempHighToday);
-        $hiDisplay = formatEmbedTemp($tempHighToday, $tempUnit);
+        $hiDisplay = formatEmbedTemp($tempHighToday, $tempUnit, 1);
         if ($hiDisplay !== '--') {
             $html .= "\n                        <div class=\"metric-item\">";
             $html .= "\n                            <span class=\"label\">Today's High</span>";
@@ -53,9 +52,9 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
         }
     }
     
-    // Current Temperature
+    // Current Temperature (1 decimal precision for full widgets)
     if ($temperature !== null) {
-        $tempDisplay = formatEmbedTemp($temperature, $tempUnit);
+        $tempDisplay = formatEmbedTemp($temperature, $tempUnit, 1);
         if ($tempDisplay !== '--') {
             $html .= "\n                        <div class=\"metric-item\">";
             $html .= "\n                            <span class=\"label\">Current</span>";
@@ -64,9 +63,9 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
         }
     }
     
-    // Today's Low
+    // Today's Low (1 decimal precision for full widgets)
     if ($tempLowToday !== null) {
-        $loDisplay = formatEmbedTemp($tempLowToday, $tempUnit);
+        $loDisplay = formatEmbedTemp($tempLowToday, $tempUnit, 1);
         if ($loDisplay !== '--') {
             $html .= "\n                        <div class=\"metric-item\">";
             $html .= "\n                            <span class=\"label\">Today's Low</span>";
@@ -81,12 +80,12 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     $html .= "\n                    <div class=\"metric-column\">";
     $html .= "\n                        <div class=\"column-header\">💧 Moisture</div>";
     
-    // Dewpoint Spread (with fog warning)
+    // Dewpoint Spread (with fog warning, 1 decimal precision)
     if ($dewpointSpread !== null) {
         if ($tempUnit === 'C') {
-            $spreadDisplay = round($dewpointSpread * 5 / 9) . '°C';
+            $spreadDisplay = number_format($dewpointSpread * 5 / 9, 1) . '°C';
         } else {
-            $spreadDisplay = round($dewpointSpread) . '°F';
+            $spreadDisplay = number_format($dewpointSpread, 1) . '°F';
         }
         $spreadClass = $dewpointSpread <= 3 ? ' fog-warning' : '';
         $html .= "\n                        <div class=\"metric-item{$spreadClass}\">";
@@ -95,9 +94,9 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
         $html .= "\n                        </div>";
     }
     
-    // Dewpoint
+    // Dewpoint (1 decimal precision for full widgets)
     if ($dewpoint !== null) {
-        $dewptDisplay = formatEmbedTemp($dewpoint, $tempUnit);
+        $dewptDisplay = formatEmbedTemp($dewpoint, $tempUnit, 1);
         if ($dewptDisplay !== '--') {
             $html .= "\n                        <div class=\"metric-item\">";
             $html .= "\n                            <span class=\"label\">Dewpoint</span>";

@@ -71,10 +71,11 @@ function processCardWidgetData($data, $options) {
     }
     
     // Format weather display - ensure '---' for missing values (not '--')
-    $tempDisplay = formatEmbedTemp($temperature, $tempUnit);
+    // Use 1 decimal precision for temperature values
+    $tempDisplay = formatEmbedTemp($temperature, $tempUnit, 1);
     if ($tempDisplay === '--') $tempDisplay = '---';
-    
-    $dewpointDisplay = formatEmbedTemp($dewpoint, $tempUnit);
+
+    $dewpointDisplay = formatEmbedTemp($dewpoint, $tempUnit, 1);
     if ($dewpointDisplay === '--') $dewpointDisplay = '---';
     
     $densityAltitudeDisplay = formatEmbedDist($densityAltitude, $distUnit, true);

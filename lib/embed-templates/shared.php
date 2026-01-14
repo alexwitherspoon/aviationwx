@@ -69,15 +69,23 @@ function getFlightCategoryData($flightCategory) {
  * @param string $unit Unit ('F' or 'C')
  * @return string Formatted temperature string (e.g., '72°F' or '22°C')
  */
-function formatEmbedTemp($tempF, $unit) {
+/**
+ * Format temperature with unit conversion
+ *
+ * @param float|null $tempF Temperature in Fahrenheit
+ * @param string $unit Unit ('F' or 'C')
+ * @param int $precision Decimal places (0 for integer, 1 for one decimal)
+ * @return string Formatted temperature or '--' if null
+ */
+function formatEmbedTemp($tempF, $unit, $precision = 0) {
     if ($tempF === null) return '--';
-    
+
     if ($unit === 'C') {
         $tempC = ($tempF - 32) * 5 / 9;
-        return round($tempC) . '°C';
+        return number_format($tempC, $precision) . '°C';
     }
-    
-    return round($tempF) . '°F';
+
+    return number_format($tempF, $precision) . '°F';
 }
 
 /**
@@ -518,9 +526,9 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     // Build priority-ordered list of available metrics
     $availableMetrics = [];
     
-    // 1. Temperature (always show if available)
+    // 1. Temperature (always show if available, 1 decimal precision)
     if ($temperature !== null) {
-        $tempDisplay = formatEmbedTemp($temperature, $tempUnit);
+        $tempDisplay = formatEmbedTemp($temperature, $tempUnit, 1);
         if ($tempDisplay !== '--') {
             $availableMetrics[] = ['label' => 'Temp', 'value' => $tempDisplay];
         }
@@ -558,17 +566,17 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
         }
     }
     
-    // 6. Dewpoint (show if available)
+    // 6. Dewpoint (show if available, 1 decimal precision)
     if ($dewpoint !== null) {
-        $dewptDisplay = formatEmbedTemp($dewpoint, $tempUnit);
+        $dewptDisplay = formatEmbedTemp($dewpoint, $tempUnit, 1);
         if ($dewptDisplay !== '--') {
             $availableMetrics[] = ['label' => 'Dewpt', 'value' => $dewptDisplay];
         }
     }
     
-    // 7. Dewpoint Spread (show if available)
+    // 7. Dewpoint Spread (show if available, 1 decimal precision)
     if ($dewpointSpread !== null) {
-        $spreadDisplay = round($dewpointSpread) . '°' . $tempUnit;
+        $spreadDisplay = number_format($dewpointSpread, 1) . '°' . $tempUnit;
         $availableMetrics[] = ['label' => 'Spread', 'value' => $spreadDisplay];
     }
     
@@ -588,17 +596,17 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
         }
     }
     
-    // 10. Today's High (show if available)
+    // 10. Today's High (show if available, 1 decimal precision)
     if ($tempHigh !== null) {
-        $highDisplay = formatEmbedTemp($tempHigh, $tempUnit);
+        $highDisplay = formatEmbedTemp($tempHigh, $tempUnit, 1);
         if ($highDisplay !== '--') {
             $availableMetrics[] = ['label' => 'High', 'value' => $highDisplay];
         }
     }
     
-    // 11. Today's Low (show if available)
+    // 11. Today's Low (show if available, 1 decimal precision)
     if ($tempLow !== null) {
-        $lowDisplay = formatEmbedTemp($tempLow, $tempUnit);
+        $lowDisplay = formatEmbedTemp($tempLow, $tempUnit, 1);
         if ($lowDisplay !== '--') {
             $availableMetrics[] = ['label' => 'Low', 'value' => $lowDisplay];
         }
