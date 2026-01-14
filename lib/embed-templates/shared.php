@@ -435,7 +435,7 @@ function renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution = '') {
         <div class="footer-center">View Dashboard</div>
         <div class="footer-right">
             <span class="footer-powered">Powered by</span>
-            <span class="footer-attribution">AviationWX{$attribution}</span>
+            <span class="footer-attribution">AviationWX.org{$attribution}</span>
         </div>
     </div>
 HTML;
