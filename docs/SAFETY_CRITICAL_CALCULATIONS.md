@@ -383,6 +383,157 @@ Gust Factor = Peak Gust - Steady Wind Speed
 
 ---
 
+## Unit Conversions
+
+**⚠️ SAFETY CRITICAL**: Incorrect unit conversions can cause dangerous misinterpretation of weather data. A pressure value in the wrong unit could result in dangerous altimeter settings. All conversion factors are verified against authoritative sources and tested with TDD methodology.
+
+### Conversion Libraries
+
+**PHP Library**: `lib/units.php`  
+**JavaScript Library**: `public/js/units.js`
+
+Both libraries use identical conversion factors to ensure consistency between server-side calculations and client-side display.
+
+### Conversion Constants (Exact Values)
+
+| Conversion | Factor | Source |
+|------------|--------|--------|
+| 1 inHg → hPa | 33.8639 | ICAO Standard |
+| 1 statute mile → meters | 1609.344 (exact) | US Code Title 15 §205 |
+| 1 inch → mm | 25.4 (exact) | International Yard and Pound Agreement 1959 |
+| 1 knot → km/h | 1.852 (exact) | Nautical mile = 1852 meters |
+| 1 knot → mph | 1.15078 | NOAA standard |
+| 1 foot → meters | 0.3048 (exact) | International Yard and Pound Agreement 1959 |
+
+### Internal Standard Units
+
+AviationWX stores weather data internally using these standard units:
+
+| Field | Internal Unit | Notes |
+|-------|--------------|-------|
+| Temperature | Celsius (°C) | ICAO standard |
+| Dewpoint | Celsius (°C) | ICAO standard |
+| Pressure | inHg | US aviation standard |
+| Visibility | Statute miles (SM) | FAA standard for US aviation |
+| Precipitation | Inches (in) | US standard |
+| Wind Speed | Knots (kt) | ICAO standard |
+| Altitude/Ceiling | Feet (ft) | ICAO standard |
+| Humidity | Percent (%) | Universal |
+
+### WeatherReading Unit Tracking
+
+Each `WeatherReading` object carries its unit explicitly for safety:
+
+```php
+// Factory methods ensure correct unit assignment
+$temp = WeatherReading::celsius($value, $source, $obsTime);
+$pressure = WeatherReading::inHg($value, $source, $obsTime);
+$visibility = WeatherReading::statuteMiles($value, $source, $obsTime);
+
+// Convert between units safely
+$tempFahrenheit = $temp->convertTo('F');
+$pressureHpa = $pressure->convertTo('hPa');
+```
+
+### Pressure Conversions
+
+**Formula**:
+```
+hPa = inHg × 33.8639
+inHg = hPa / 33.8639
+```
+
+**Key Values**:
+- 29.92 inHg = 1013.25 hPa (ISA sea level standard)
+- 30.00 inHg = 1015.92 hPa
+- 28.00 inHg = 948.19 hPa (low pressure system)
+
+**Critical**: Used in altimeter setting calculations. Incorrect conversion can cause dangerous altitude errors.
+
+### Visibility Conversions
+
+**Formula**:
+```
+meters = SM × 1609.344
+SM = meters / 1609.344
+```
+
+**Key Values**:
+- 10 SM = 16,093.44 meters (unrestricted)
+- 3 SM = 4,828.03 meters (MVFR threshold)
+- 1 SM = 1,609.344 meters (IFR threshold)
+
+### Wind Speed Conversions
+
+**Formulas**:
+```
+km/h = knots × 1.852
+mph = knots × 1.15078
+knots = km/h / 1.852
+knots = mph / 1.15078
+```
+
+**Key Values**:
+- 10 kt = 18.52 km/h = 11.51 mph
+- 25 kt = 46.30 km/h = 28.77 mph
+- 50 kt = 92.60 km/h = 57.54 mph
+
+### Altitude Conversions
+
+**Formula**:
+```
+meters = feet × 0.3048
+feet = meters / 0.3048
+```
+
+**Key Values**:
+- 1,000 ft = 304.8 m
+- 3,000 ft = 914.4 m (typical pattern altitude)
+- 10,000 ft = 3,048 m (Class B floor)
+- 18,000 ft = 5,486.4 m (Class A floor / FL180)
+
+### Precipitation Conversions
+
+**Formula**:
+```
+mm = inches × 25.4
+inches = mm / 25.4
+```
+
+**Key Values**:
+- 0.01 in = 0.254 mm (trace)
+- 1.00 in = 25.4 mm
+- 2.00 in = 50.8 mm (heavy rain)
+
+### Implementation
+
+- **PHP Library**: `lib/units.php`
+- **JavaScript Library**: `public/js/units.js`
+- **Reference Tests (PHP)**: `tests/Unit/SafetyCriticalReferenceTest.php`
+  - 41 unit conversion tests with authoritative values
+  - Covers pressure, visibility (meters and kilometers), precipitation, temperature, wind, altitude
+  - Round-trip conversion tests verify accuracy
+- **Reference Tests (JS)**: `tests/js/unit-conversion.test.js`
+  - 41 identical tests using same reference values as PHP
+  - Ensures PHP and JS implementations produce identical results
+
+### TDD Approach for Unit Conversions
+
+1. **Reference tests created first** with exact values from authoritative sources
+2. **Conversion factors verified** against ICAO, FAA, BIPM SI Brochure
+3. **Round-trip tests** ensure conversions preserve precision
+4. **Cross-language consistency** - PHP and JS use identical factors
+
+### Official Sources
+
+1. **BIPM SI Brochure** - Exact metric definitions
+2. **ICAO Doc 8400** - Aviation abbreviations and codes
+3. **US Code Title 15 Section 205** - Legal definitions for inch, foot, mile
+4. **International Yard and Pound Agreement (1959)** - Exact imperial-metric conversions
+5. **NOAA/NWS Conversion Tables** - Standard meteorological conversions
+
+---
+
 ## Validation Strategy
 
 All safety-critical calculations follow Test-Driven Development (TDD) methodology:
@@ -405,8 +556,9 @@ All safety-critical calculations follow Test-Driven Development (TDD) methodolog
 - Dewpoint: 3 tests
 - Temperature Conversions: 6 tests (C→F and F→C)
 - Wind Calculations: 5 tests (gust factor validation)
+- Unit Conversions: 41 tests (pressure, visibility including km, precipitation, wind, altitude)
 
-**Total**: 34 static reference tests with known-good values
+**Total**: 75 static reference tests with known-good values
 
 ### Implementation Test Suite (`tests/Unit/WeatherCalculationsTest.php`)
 

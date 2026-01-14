@@ -92,6 +92,13 @@ class TempestAdapter {
     /**
      * Parse API response into a WeatherSnapshot
      * 
+     * Units returned:
+     * - Temperature/Dewpoint: Celsius
+     * - Humidity: Percent
+     * - Pressure: inHg (converted from mb)
+     * - Precipitation: inches (converted from mm)
+     * - Wind: knots (converted from m/s)
+     * 
      * @param string $response Raw API response
      * @param array $config Source configuration
      * @return WeatherSnapshot|null
@@ -109,21 +116,11 @@ class TempestAdapter {
         return new WeatherSnapshot(
             source: $source,
             fetchTime: time(),
-            temperature: $parsed['temperature'] !== null 
-                ? WeatherReading::from($parsed['temperature'], $source, $obsTime)
-                : WeatherReading::null($source),
-            dewpoint: $parsed['dewpoint'] !== null
-                ? WeatherReading::from($parsed['dewpoint'], $source, $obsTime)
-                : WeatherReading::null($source),
-            humidity: $parsed['humidity'] !== null
-                ? WeatherReading::from($parsed['humidity'], $source, $obsTime)
-                : WeatherReading::null($source),
-            pressure: $parsed['pressure'] !== null
-                ? WeatherReading::from($parsed['pressure'], $source, $obsTime)
-                : WeatherReading::null($source),
-            precipAccum: $parsed['precip_accum'] !== null
-                ? WeatherReading::from($parsed['precip_accum'], $source, $obsTime)
-                : WeatherReading::null($source),
+            temperature: WeatherReading::celsius($parsed['temperature'], $source, $obsTime),
+            dewpoint: WeatherReading::celsius($parsed['dewpoint'], $source, $obsTime),
+            humidity: WeatherReading::percent($parsed['humidity'], $source, $obsTime),
+            pressure: WeatherReading::inHg($parsed['pressure'], $source, $obsTime),
+            precipAccum: WeatherReading::inches($parsed['precip_accum'], $source, $obsTime),
             wind: ($parsed['wind_speed'] !== null && $parsed['wind_direction'] !== null)
                 ? WindGroup::from(
                     $parsed['wind_speed'],

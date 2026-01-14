@@ -81,9 +81,9 @@ class WindGroup {
         $obsTime = $observationTime ?? time();
         
         return new self(
-            $speed !== null ? new WeatherReading($speed, $obsTime, $source, true) : WeatherReading::null($source),
-            $direction !== null ? new WeatherReading($direction, $obsTime, $source, true) : WeatherReading::null($source),
-            $gust !== null ? new WeatherReading($gust, $obsTime, $source, true) : WeatherReading::null($source),
+            $speed !== null ? WeatherReading::knots((float)$speed, $source, $obsTime) : WeatherReading::null($source),
+            $direction !== null ? WeatherReading::degrees($direction, $source, $obsTime) : WeatherReading::null($source),
+            $gust !== null ? WeatherReading::knots((float)$gust, $source, $obsTime) : WeatherReading::null($source),
             $source
         );
     }

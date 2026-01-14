@@ -395,6 +395,130 @@ function publicFunction(): void { }
 
 ---
 
+## Unit Handling
+
+### Overview
+
+**Critical**: Incorrect unit handling is a common source of aviation accidents. All weather data must carry explicit unit information to prevent dangerous misinterpretations.
+
+### Internal Standard Units
+
+AviationWX stores weather data using these standard units:
+
+| Field | Internal Unit | Factory Method |
+|-------|--------------|----------------|
+| Temperature | Celsius (°C) | `WeatherReading::celsius()` |
+| Dewpoint | Celsius (°C) | `WeatherReading::celsius()` |
+| Pressure | inHg | `WeatherReading::inHg()` |
+| Visibility | Statute miles (SM) | `WeatherReading::statuteMiles()` |
+| Precipitation | Inches (in) | `WeatherReading::inches()` |
+| Wind Speed | Knots (kt) | `WeatherReading::knots()` |
+| Altitude/Ceiling | Feet (ft) | `WeatherReading::feet()` |
+| Humidity | Percent (%) | `WeatherReading::percent()` |
+| Wind Direction | Degrees | `WeatherReading::degrees()` |
+
+### WeatherReading Factory Methods
+
+**Always use factory methods** to create WeatherReading objects. This ensures the unit is explicitly tracked:
+
+```php
+// ✅ CORRECT: Use factory method - unit is explicit
+$temp = WeatherReading::celsius(15.5, 'tempest', $obsTime);
+$pressure = WeatherReading::inHg(29.92, 'metar', $obsTime);
+$wind = WeatherReading::knots(10.0, 'ambient', $obsTime);
+
+// ❌ WRONG: Don't use generic constructor - unit is not tracked
+$temp = new WeatherReading(15.5, '', time(), 'tempest', true);
+```
+
+### Converting Units
+
+Use the `convertTo()` method for unit conversions:
+
+```php
+// Convert temperature from Celsius to Fahrenheit
+$tempC = WeatherReading::celsius(20.0, 'source', $time);
+$tempF = $tempC->convertTo('F');
+
+// Convert pressure from inHg to hPa
+$pressureInHg = WeatherReading::inHg(29.92, 'source', $time);
+$pressureHpa = $pressureInHg->convertTo('hPa');
+```
+
+### Conversion Libraries
+
+Use the centralized conversion libraries for all unit conversions:
+
+**PHP**: `lib/units.php`
+```php
+require_once 'lib/units.php';
+
+$hpa = inhgToHpa(29.92);           // Convert inHg to hPa
+$mph = knotsToMph(25);             // Convert knots to mph
+$meters = feetToMeters(3000);      // Convert feet to meters
+```
+
+**JavaScript**: `public/js/units.js`
+```javascript
+const hpa = AviationWX.units.inhgToHpa(29.92);
+const mph = AviationWX.units.knotsToMph(25);
+const meters = AviationWX.units.feetToMeters(3000);
+```
+
+### Weather Adapter Guidelines
+
+When creating or modifying weather adapters:
+
+1. **Parse raw data** using the legacy parser function
+2. **Create WeatherSnapshot** using factory methods for each field
+3. **Document units** in the adapter's parseToSnapshot PHPDoc
+
+```php
+public static function parseToSnapshot(string $response, array $config = []): ?WeatherSnapshot {
+    $parsed = parseMyApiResponse($response);
+    if ($parsed === null) {
+        return WeatherSnapshot::empty(self::SOURCE_TYPE);
+    }
+    
+    $obsTime = $parsed['obs_time'] ?? time();
+    $source = self::SOURCE_TYPE;
+    
+    return new WeatherSnapshot(
+        source: $source,
+        fetchTime: time(),
+        temperature: WeatherReading::celsius($parsed['temperature'], $source, $obsTime),
+        pressure: WeatherReading::inHg($parsed['pressure'], $source, $obsTime),
+        // ... other fields with appropriate factory methods
+    );
+}
+```
+
+### Conversion Constants
+
+All conversion factors are defined in `lib/units.php` with authoritative sources:
+
+- **1 inHg = 33.8639 hPa** (ICAO standard)
+- **1 statute mile = 1609.344 meters** (exact, US Code Title 15 §205)
+- **1 inch = 25.4 mm** (exact, International Yard and Pound Agreement 1959)
+- **1 knot = 1.852 km/h** (exact, nautical mile definition)
+- **1 foot = 0.3048 meters** (exact, International Yard and Pound Agreement 1959)
+
+**Never hardcode conversion factors** - always use the conversion library.
+
+### Testing Unit Conversions
+
+Unit conversion tests are in `tests/Unit/SafetyCriticalReferenceTest.php`:
+
+```bash
+# Run unit conversion tests
+vendor/bin/phpunit tests/Unit/SafetyCriticalReferenceTest.php --filter "Conversion"
+
+# Run JavaScript unit conversion tests
+node tests/js/unit-conversion.test.js
+```
+
+---
+
 ## Error Handling
 
 ### Explicit Error Handling

@@ -21,9 +21,9 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     $distUnit = $options['distUnit'];
     $baroUnit = $options['baroUnit'];
     
-    // Extract weather values
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    // Extract weather values (temperatures in Celsius - internal storage standard)
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
@@ -81,11 +81,13 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
     $html .= "\n                        <div class=\"column-header\">💧 Moisture</div>";
     
     // Dewpoint Spread (with fog warning, 1 decimal precision)
+    // Spread is in Celsius (temperature - dewpoint). Convert to F if needed.
+    // Note: For temperature differences, multiply by 9/5 (no +32 offset)
     if ($dewpointSpread !== null) {
         if ($tempUnit === 'C') {
-            $spreadDisplay = number_format($dewpointSpread * 5 / 9, 1) . '°C';
+            $spreadDisplay = number_format($dewpointSpread, 1) . '°C';
         } else {
-            $spreadDisplay = number_format($dewpointSpread, 1) . '°F';
+            $spreadDisplay = number_format($dewpointSpread * 9 / 5, 1) . '°F';
         }
         $spreadClass = $dewpointSpread <= 3 ? ' fog-warning' : '';
         $html .= "\n                        <div class=\"metric-item{$spreadClass}\">";
@@ -136,10 +138,10 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
         
         // Visibility
         if ($visibility !== null) {
-            $visDisplay = $visibility >= 10 ? '10+' : round($visibility, 1);
+            $visDisplay = formatEmbedVisibility($visibility, $distUnit);
             $html .= "\n                        <div class=\"metric-item\">";
             $html .= "\n                            <span class=\"label\">Visibility</span>";
-            $html .= "\n                            <span class=\"value\">{$visDisplay} SM</span>";
+            $html .= "\n                            <span class=\"value\">{$visDisplay}</span>";
             $html .= "\n                        </div>";
         }
         
@@ -228,13 +230,13 @@ function renderFullSingleWidget($data, $options) {
     $flightCategory = $weather['flight_category'] ?? null;
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
-    // Extract weather data
+    // Extract weather data (temperatures in Celsius - internal storage standard)
     $windDirection = $weather['wind_direction'] ?? null;
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
@@ -286,8 +288,8 @@ function renderFullSingleWidget($data, $options) {
         $weatherEmojis = getWeatherEmojis($weather);
     } else {
         // For PWS-only sites, only show emojis for available data
+        // Temperature is in Celsius (internal storage standard)
         $pwsWeather = [
-            'temperature_f' => $temperature,
             'temperature' => $temperature,
             'precip_accum' => $weather['precip_accum'] ?? 0,
             'wind_speed' => $windSpeed,
@@ -464,13 +466,13 @@ function renderFullDualWidget($data, $options) {
     $flightCategory = $weather['flight_category'] ?? null;
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
-    // Extract weather data (same as full-single)
+    // Extract weather data (temperatures in Celsius - internal storage standard)
     $windDirection = $weather['wind_direction'] ?? null;
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
@@ -503,8 +505,8 @@ function renderFullDualWidget($data, $options) {
         $weatherEmojis = getWeatherEmojis($weather);
     } else {
         // For PWS-only sites, only show emojis for available data
+        // Temperature is in Celsius (internal storage standard)
         $pwsWeather = [
-            'temperature_f' => $temperature,
             'temperature' => $temperature,
             'precip_accum' => $weather['precip_accum'] ?? 0,
             'wind_speed' => $windSpeed,
@@ -704,13 +706,13 @@ function renderFullMultiWidget($data, $options) {
     $flightCategory = $weather['flight_category'] ?? null;
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
-    // Extract weather data (same as full-single)
+    // Extract weather data (temperatures in Celsius - internal storage standard)
     $windDirection = $weather['wind_direction'] ?? null;
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
@@ -743,8 +745,8 @@ function renderFullMultiWidget($data, $options) {
         $weatherEmojis = getWeatherEmojis($weather);
     } else {
         // For PWS-only sites, only show emojis for available data
+        // Temperature is in Celsius (internal storage standard)
         $pwsWeather = [
-            'temperature_f' => $temperature,
             'temperature' => $temperature,
             'precip_accum' => $weather['precip_accum'] ?? 0,
             'wind_speed' => $windSpeed,

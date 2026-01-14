@@ -126,6 +126,15 @@ class MetarAdapter {
     /**
      * Parse API response into a WeatherSnapshot
      * 
+     * Units returned:
+     * - Temperature/Dewpoint: Celsius
+     * - Humidity: Percent
+     * - Pressure: inHg (converted from hPa)
+     * - Precipitation: inches
+     * - Wind: knots
+     * - Visibility: statute miles
+     * - Ceiling: feet AGL
+     * 
      * @param string $response Raw API response
      * @param array $airport Airport configuration
      * @return WeatherSnapshot|null
@@ -152,21 +161,11 @@ class MetarAdapter {
         return new WeatherSnapshot(
             source: $source,
             fetchTime: time(),
-            temperature: $parsed['temperature'] !== null 
-                ? WeatherReading::from($parsed['temperature'], $source, $obsTime)
-                : WeatherReading::null($source),
-            dewpoint: $parsed['dewpoint'] !== null
-                ? WeatherReading::from($parsed['dewpoint'], $source, $obsTime)
-                : WeatherReading::null($source),
-            humidity: $parsed['humidity'] !== null
-                ? WeatherReading::from($parsed['humidity'], $source, $obsTime)
-                : WeatherReading::null($source),
-            pressure: $parsed['pressure'] !== null
-                ? WeatherReading::from($parsed['pressure'], $source, $obsTime)
-                : WeatherReading::null($source),
-            precipAccum: $parsed['precip_accum'] !== null
-                ? WeatherReading::from($parsed['precip_accum'], $source, $obsTime)
-                : WeatherReading::null($source),
+            temperature: WeatherReading::celsius($parsed['temperature'], $source, $obsTime),
+            dewpoint: WeatherReading::celsius($parsed['dewpoint'], $source, $obsTime),
+            humidity: WeatherReading::percent($parsed['humidity'], $source, $obsTime),
+            pressure: WeatherReading::inHg($parsed['pressure'], $source, $obsTime),
+            precipAccum: WeatherReading::inches($parsed['precip_accum'], $source, $obsTime),
             wind: $hasCompleteWind
                 ? WindGroup::from(
                     $parsed['wind_speed'],
@@ -176,15 +175,9 @@ class MetarAdapter {
                     $obsTime
                 )
                 : WindGroup::empty(),
-            visibility: $parsed['visibility'] !== null
-                ? WeatherReading::from($parsed['visibility'], $source, $obsTime)
-                : WeatherReading::null($source),
-            ceiling: $parsed['ceiling'] !== null
-                ? WeatherReading::from($parsed['ceiling'], $source, $obsTime)
-                : WeatherReading::null($source),
-            cloudCover: $parsed['cloud_cover'] !== null
-                ? WeatherReading::from($parsed['cloud_cover'], $source, $obsTime)
-                : WeatherReading::null($source),
+            visibility: WeatherReading::statuteMiles($parsed['visibility'], $source, $obsTime),
+            ceiling: WeatherReading::feet($parsed['ceiling'], $source, $obsTime),
+            cloudCover: WeatherReading::text($parsed['cloud_cover'], $source, $obsTime),
             rawMetar: $airport['rawOb'] ?? null,
             isValid: true
         );

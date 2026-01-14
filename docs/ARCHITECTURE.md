@@ -359,7 +359,26 @@ Next request gets fresh image
   - Stale data (beyond max acceptable age) is excluded from aggregation
 - **Benefit**: Best available data from all sources, clear field-level attribution
 
-### 5. Multiple Image Formats
+### 6. Explicit Unit Tracking
+
+- **Why**: Prevent dangerous unit conversion errors in safety-critical aviation data
+- **Implementation**: `WeatherReading` object carries unit explicitly with factory methods
+- **Key Components**:
+  - Factory methods: `celsius()`, `inHg()`, `knots()`, `statuteMiles()`, `feet()`, etc.
+  - `convertTo()` method for safe unit conversion using centralized libraries
+  - PHP library: `lib/units.php` with verified conversion constants
+  - JavaScript library: `public/js/units.js` (identical factors for client-side)
+- **Internal Standard Units**:
+  - Temperature: Celsius (°C)
+  - Pressure: inHg
+  - Wind Speed: Knots (kt)
+  - Visibility: Statute miles (SM)
+  - Altitude: Feet (ft)
+  - Precipitation: Inches (in)
+- **TDD Verification**: 70+ tests in `SafetyCriticalReferenceTest.php` and `unit-conversion.test.js`
+- **Benefit**: Runtime validation, self-documenting code, prevents unit mixups
+
+### 7. Multiple Image Formats
 
 - **Why**: Browser compatibility and performance
 - **Implementation**: Generate JPEG and WebP formats, serve via content negotiation

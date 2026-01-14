@@ -7,6 +7,18 @@
  * 
  * The aggregator combines multiple snapshots into an AggregatedWeather object.
  * 
+ * Internal Standard Units (ICAO):
+ * - Temperature: Celsius (°C)
+ * - Pressure: hectoPascals (hPa)
+ * - Visibility: statute miles (SM) - FAA standard for US aviation
+ * - Precipitation: inches (in) - US standard
+ * - Wind speed: knots (kt)
+ * - Altitude/Ceiling: feet (ft) - ICAO standard
+ * 
+ * Each WeatherReading carries its unit explicitly for safety.
+ * Use WeatherReading factory methods (celsius, hPa, statuteMiles, etc.) 
+ * to ensure correct unit tracking.
+ * 
  * @package AviationWX\Weather\Data
  */
 
@@ -20,31 +32,31 @@ class WeatherSnapshot {
     /** @var int When this snapshot was fetched */
     public readonly int $fetchTime;
     
-    /** @var WeatherReading Temperature (Celsius) */
+    /** @var WeatherReading Temperature in Celsius (unit: 'C') */
     public readonly WeatherReading $temperature;
     
-    /** @var WeatherReading Dewpoint (Celsius) */
+    /** @var WeatherReading Dewpoint in Celsius (unit: 'C') */
     public readonly WeatherReading $dewpoint;
     
-    /** @var WeatherReading Relative humidity (%) */
+    /** @var WeatherReading Relative humidity as percentage (unit: '%') */
     public readonly WeatherReading $humidity;
     
-    /** @var WeatherReading Barometric pressure (inHg) */
+    /** @var WeatherReading Barometric pressure in inHg (unit: 'inHg') */
     public readonly WeatherReading $pressure;
     
-    /** @var WeatherReading Precipitation accumulation (inches) */
+    /** @var WeatherReading Precipitation accumulation in inches (unit: 'in') */
     public readonly WeatherReading $precipAccum;
     
-    /** @var WindGroup Wind measurements (speed, direction, gust) */
+    /** @var WindGroup Wind measurements - speed/gust in knots, direction in degrees */
     public readonly WindGroup $wind;
     
-    /** @var WeatherReading Visibility (statute miles) */
+    /** @var WeatherReading Visibility in statute miles (unit: 'SM') */
     public readonly WeatherReading $visibility;
     
-    /** @var WeatherReading Ceiling (feet AGL) */
+    /** @var WeatherReading Ceiling in feet AGL (unit: 'ft') */
     public readonly WeatherReading $ceiling;
     
-    /** @var WeatherReading Cloud cover (SKC, FEW, SCT, BKN, OVC) */
+    /** @var WeatherReading Cloud cover code (SKC, FEW, SCT, BKN, OVC) (unit: 'text') */
     public readonly WeatherReading $cloudCover;
     
     /** @var string|null Raw METAR string (for METAR source only) */

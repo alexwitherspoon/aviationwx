@@ -100,13 +100,13 @@ function processWebcamWidgetData($data, $options) {
     
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
-    // Weather values
+    // Weather values (temperatures in Celsius - internal storage standard)
     $windDirection = $weather['wind_direction'] ?? null;
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
     $visibility = $weather['visibility'] ?? null;
@@ -158,8 +158,8 @@ function processWebcamWidgetData($data, $options) {
         $weatherEmojis = getWeatherEmojis($weather);
     } else {
         // For PWS-only sites, only show emojis for available data
+        // Temperature is in Celsius (internal storage standard)
         $pwsWeather = [
-            'temperature_f' => $temperature,
             'temperature' => $temperature,
             'precip_accum' => $weather['precip_accum'] ?? 0,
             'wind_speed' => $windSpeed,

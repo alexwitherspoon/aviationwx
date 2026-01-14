@@ -118,6 +118,14 @@ class SynopticDataAdapter {
     /**
      * Parse API response into a WeatherSnapshot
      * 
+     * Units returned:
+     * - Temperature/Dewpoint: Celsius
+     * - Humidity: Percent
+     * - Pressure: inHg (converted from mb/hPa)
+     * - Precipitation: inches (converted from mm)
+     * - Wind: knots (converted from m/s)
+     * - Visibility: statute miles (converted from meters)
+     * 
      * @param string $response Raw API response
      * @param array $config Source configuration
      * @return WeatherSnapshot|null
@@ -137,21 +145,11 @@ class SynopticDataAdapter {
         return new WeatherSnapshot(
             source: $source,
             fetchTime: time(),
-            temperature: $parsed['temperature'] !== null 
-                ? WeatherReading::from($parsed['temperature'], $source, $obsTime)
-                : WeatherReading::null($source),
-            dewpoint: $parsed['dewpoint'] !== null
-                ? WeatherReading::from($parsed['dewpoint'], $source, $obsTime)
-                : WeatherReading::null($source),
-            humidity: $parsed['humidity'] !== null
-                ? WeatherReading::from($parsed['humidity'], $source, $obsTime)
-                : WeatherReading::null($source),
-            pressure: $parsed['pressure'] !== null
-                ? WeatherReading::from($parsed['pressure'], $source, $obsTime)
-                : WeatherReading::null($source),
-            precipAccum: $parsed['precip_accum'] !== null
-                ? WeatherReading::from($parsed['precip_accum'], $source, $obsTime)
-                : WeatherReading::null($source),
+            temperature: WeatherReading::celsius($parsed['temperature'], $source, $obsTime),
+            dewpoint: WeatherReading::celsius($parsed['dewpoint'], $source, $obsTime),
+            humidity: WeatherReading::percent($parsed['humidity'], $source, $obsTime),
+            pressure: WeatherReading::inHg($parsed['pressure'], $source, $obsTime),
+            precipAccum: WeatherReading::inches($parsed['precip_accum'], $source, $obsTime),
             wind: $hasCompleteWind
                 ? WindGroup::from(
                     $parsed['wind_speed'],
@@ -161,9 +159,7 @@ class SynopticDataAdapter {
                     $obsTime
                 )
                 : WindGroup::empty(),
-            visibility: $parsed['visibility'] !== null
-                ? WeatherReading::from($parsed['visibility'], $source, $obsTime)
-                : WeatherReading::null($source),
+            visibility: WeatherReading::statuteMiles($parsed['visibility'], $source, $obsTime),
             ceiling: WeatherReading::null($source), // SynopticData doesn't provide ceiling
             cloudCover: WeatherReading::null($source), // SynopticData doesn't provide cloud cover
             isValid: true

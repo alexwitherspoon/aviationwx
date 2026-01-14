@@ -51,9 +51,9 @@ function processCardWidgetData($data, $options) {
     
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
-    // Weather values (prioritized by pilot feedback)
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    // Weather values (temperatures in Celsius - internal storage standard)
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $visibility = $weather['visibility'] ?? null;
@@ -103,16 +103,17 @@ function processCardWidgetData($data, $options) {
     }
     
     // Dewpoint spread display
+    // Spread is in Celsius. Convert to F if needed (multiply by 9/5, no +32 for differences)
     $spreadDisplay = '---';
     if ($dewpointSpread !== null) {
-        $spreadDisplay = round($dewpointSpread) . '°' . $tempUnit;
+        $spreadValue = ($tempUnit === 'F') ? ($dewpointSpread * 9 / 5) : $dewpointSpread;
+        $spreadDisplay = round($spreadValue) . '°' . $tempUnit;
     }
     
     // Visibility display
     $visDisplay = '---';
     if ($visibility !== null) {
-        $visDisplay = $visibility >= 10 ? '10+' : round($visibility, 1);
-        $visDisplay .= ' SM';
+        $visDisplay = formatEmbedVisibility($visibility, $distUnit);
     }
     
     // Ceiling display (only for METAR)
@@ -161,8 +162,8 @@ function processCardWidgetData($data, $options) {
         $weatherEmojis = getWeatherEmojis($weather);
     } else {
         // For PWS-only sites, only show emojis for available data (no ceiling/visibility)
+        // Temperature is in Celsius (internal storage standard)
         $pwsWeather = [
-            'temperature_f' => $temperature,
             'temperature' => $temperature,
             'precip_accum' => $weather['precip_accum'] ?? 0,
             'wind_speed' => $windSpeed,

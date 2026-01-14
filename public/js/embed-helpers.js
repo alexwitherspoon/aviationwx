@@ -14,15 +14,18 @@
     /**
      * Format temperature with unit conversion
      * Matches: formatEmbedTemp() in shared.php
+     * 
+     * Expects Celsius input (internal storage standard). Converts to Fahrenheit for display if needed.
      */
-    function formatEmbedTemp(tempF, unit) {
-        if (tempF === null || tempF === undefined) return '--';
+    function formatEmbedTemp(tempC, unit) {
+        if (tempC === null || tempC === undefined) return '--';
         
         if (unit === 'C') {
-            const tempC = (tempF - 32) * 5 / 9;
             return Math.round(tempC) + '°C';
         }
         
+        // Convert Celsius to Fahrenheit
+        const tempF = (tempC * 9 / 5) + 32;
         return Math.round(tempF) + '°F';
     }
     
@@ -76,17 +79,44 @@
         
         return pressureInHg.toFixed(2) + '"Hg';
     }
+
+    /**
+     * Format visibility with unit conversion
+     * Matches: formatEmbedVisibility() in shared.php
+     *
+     * Expects statute miles (SM) as input (internal storage standard).
+     * Converts to kilometers when metric units selected using AviationWX.units.
+     */
+    function formatEmbedVisibility(valueSM, distUnit) {
+        if (valueSM === null || valueSM === undefined) return '--';
+
+        if (distUnit === 'm') {
+            // Convert statute miles to kilometers using centralized conversion
+            const valueKm = AviationWX.units.statuteMilesToKilometers(valueSM);
+            if (valueKm >= 16) {
+                return '16+ km';
+            }
+            return valueKm.toFixed(1) + ' km';
+        }
+
+        // Imperial - statute miles
+        if (valueSM >= 10) {
+            return '10+ SM';
+        }
+        return valueSM.toFixed(1) + ' SM';
+    }
     
     /**
      * Get weather emojis based on conditions
      * Matches: getWeatherEmojis() in shared.php
      * 
      * Order: Ceiling/Clouds, Visibility, Precipitation, Wind, Temperature
+     * Uses Celsius for temperature comparisons (internal storage standard)
      */
     function getWeatherEmojis(weather) {
         const emojis = [];
         
-        const tempF = weather.temperature_f ?? weather.temperature ?? null;
+        const tempC = weather.temperature ?? null;
         const precip = weather.precip_accum ?? 0;
         const windSpeed = weather.wind_speed ?? 0;
         const ceiling = weather.ceiling ?? null;
@@ -95,8 +125,8 @@
         
         // Precipitation emoji (always show if present - abnormal condition)
         if (precip > 0.01) {
-            if (tempF !== null && tempF < 32) {
-                emojis.push('❄️'); // Snow
+            if (tempC !== null && tempC < 0) {
+                emojis.push('❄️'); // Snow (below freezing in Celsius)
             } else {
                 emojis.push('🌧️'); // Rain
             }
@@ -138,13 +168,14 @@
         }
         
         // Extreme temperatures (only show if extreme - abnormal condition)
-        if (tempF !== null) {
-            if (tempF > 90) {
-                emojis.push('🥵'); // Extreme heat (>90°F)
-            } else if (tempF < 20) {
-                emojis.push('❄️'); // Extreme cold (<20°F)
+        // Using Celsius thresholds: >32°C (~90°F) for heat, <-7°C (~20°F) for cold
+        if (tempC !== null) {
+            if (tempC > 32) {
+                emojis.push('🥵'); // Extreme heat (>32°C / ~90°F)
+            } else if (tempC < -7) {
+                emojis.push('❄️'); // Extreme cold (<-7°C / ~20°F)
             }
-            // No emoji for 20°F to 90°F (normal temperature range)
+            // No emoji for -7°C to 32°C (normal temperature range)
         }
         
         // Return emojis if any, otherwise empty string (no emojis for normal conditions)
@@ -205,6 +236,7 @@
         formatEmbedDist,
         formatEmbedWindSpeed,
         formatEmbedPressure,
+        formatEmbedVisibility,
         getWeatherEmojis,
         getFlightCategoryData,
         formatLocalTimeEmbed,

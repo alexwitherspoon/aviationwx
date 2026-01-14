@@ -207,6 +207,50 @@ Both primary and METAR sources have independent circuit breakers:
    - Field names standardized
    - Units standardized (Celsius, knots, inHg, etc.)
 
+4. **Unit Tracking via WeatherReading Factory Methods**
+   - Each field is wrapped in a `WeatherReading` object with explicit unit
+   - Factory methods ensure correct unit assignment: `celsius()`, `inHg()`, `knots()`, etc.
+   - Enables runtime validation and safe unit conversions via `convertTo()` method
+   - Example: `WeatherReading::celsius(15.5, 'tempest', $obsTime)` creates a temperature reading with unit 'C'
+
+### Unit Tracking Architecture
+
+**WeatherReading Object**:
+Each weather measurement is stored as a `WeatherReading` object that carries:
+- `value`: The numeric measurement
+- `unit`: The unit of measurement (e.g., 'C', 'inHg', 'kt', 'SM', 'ft', '%')
+- `observationTime`: When the measurement was taken
+- `source`: Which API/adapter provided the data
+- `isValid`: Whether the value passes validation
+
+**Factory Methods** (`lib/weather/data/WeatherReading.php`):
+- `celsius($value, $source, $time)` - Temperature in Celsius
+- `inHg($value, $source, $time)` - Pressure in inches of mercury
+- `hPa($value, $source, $time)` - Pressure in hectoPascals
+- `knots($value, $source, $time)` - Wind speed in knots
+- `statuteMiles($value, $source, $time)` - Visibility in statute miles
+- `feet($value, $source, $time)` - Altitude/ceiling in feet
+- `inches($value, $source, $time)` - Precipitation in inches
+- `percent($value, $source, $time)` - Humidity percentage
+- `degrees($value, $source, $time)` - Wind direction in degrees
+- `text($value, $source, $time)` - Text values (cloud cover codes)
+
+**Unit Conversion** (`WeatherReading::convertTo($targetUnit)`):
+- Converts value to different unit, returns new WeatherReading
+- Uses centralized conversion library (`lib/units.php`)
+- Example: `$temp->convertTo('F')` converts Celsius to Fahrenheit
+
+**Internal Standard Units**:
+| Field | Internal Unit | Notes |
+|-------|--------------|-------|
+| Temperature/Dewpoint | Celsius (°C) | ICAO standard |
+| Pressure | inHg | US aviation standard |
+| Visibility | Statute miles (SM) | FAA standard |
+| Precipitation | Inches (in) | US standard |
+| Wind Speed | Knots (kt) | ICAO standard |
+| Altitude/Ceiling | Feet (ft) | ICAO standard |
+| Humidity | Percent (%) | Universal |
+
 ### Observation Time Handling
 
 **Critical for Safety**: The system tracks when weather was actually observed, not just when it was fetched.
@@ -1197,6 +1241,26 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - **Placeholder Images**: Shown for unavailable webcams
 
 ### Unit Conversions
+
+#### Centralized Conversion Libraries
+
+All unit conversions use centralized libraries with verified conversion factors:
+
+**PHP Library**: `lib/units.php`
+- Contains all conversion constants (ICAO, FAA, BIPM sources)
+- Functions: `celsiusToFahrenheit()`, `hpaToInhg()`, `knotsToMph()`, etc.
+- Used by adapters for API response parsing
+- Used by `WeatherReading::convertTo()` for runtime conversions
+
+**JavaScript Library**: `public/js/units.js`
+- Identical conversion factors as PHP library
+- Used for client-side display conversions
+- Namespace: `AviationWX.units.*`
+- Example: `AviationWX.units.celsiusToFahrenheit(15)`
+
+**TDD Verified**: All conversion factors verified with 70+ tests in:
+- PHP: `tests/Unit/SafetyCriticalReferenceTest.php`
+- JavaScript: `tests/js/unit-conversion.test.js`
 
 #### Server-Side Conversions (API Adapters)
 

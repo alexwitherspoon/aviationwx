@@ -6,6 +6,7 @@
  */
 
 require_once __DIR__ . '/../weather/utils.php';
+require_once __DIR__ . '/../units.php';
 
 /**
  * Get theme CSS class
@@ -72,19 +73,22 @@ function getFlightCategoryData($flightCategory) {
 /**
  * Format temperature with unit conversion
  *
- * @param float|null $tempF Temperature in Fahrenheit
+ * Expects Celsius input (internal storage standard). Converts to Fahrenheit for display if needed.
+ *
+ * @param float|null $tempC Temperature in Celsius
  * @param string $unit Unit ('F' or 'C')
  * @param int $precision Decimal places (0 for integer, 1 for one decimal)
  * @return string Formatted temperature or '--' if null
  */
-function formatEmbedTemp($tempF, $unit, $precision = 0) {
-    if ($tempF === null) return '--';
+function formatEmbedTemp($tempC, $unit, $precision = 0) {
+    if ($tempC === null) return '--';
 
     if ($unit === 'C') {
-        $tempC = ($tempF - 32) * 5 / 9;
         return number_format($tempC, $precision) . '°C';
     }
 
+    // Convert Celsius to Fahrenheit
+    $tempF = ($tempC * 9 / 5) + 32;
     return number_format($tempF, $precision) . '°F';
 }
 
@@ -357,7 +361,7 @@ HTML;
 function getWeatherEmojis($weather) {
     $emojis = [];
     
-    $tempF = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
+    $tempC = $weather['temperature'] ?? null;
     $precip = $weather['precip_accum'] ?? 0;
     $windSpeed = $weather['wind_speed'] ?? 0;
     $ceiling = $weather['ceiling'] ?? null;
@@ -366,8 +370,8 @@ function getWeatherEmojis($weather) {
     
     // Precipitation emoji (always show if present - abnormal condition)
     if ($precip > 0.01) {
-        if ($tempF !== null && $tempF < 32) {
-            $emojis[] = '❄️'; // Snow
+        if ($tempC !== null && $tempC < 0) {
+            $emojis[] = '❄️'; // Snow (below freezing in Celsius)
         } else {
             $emojis[] = '🌧️'; // Rain
         }
@@ -468,6 +472,35 @@ function formatEmbedRainfall($valueIn, $distUnit) {
 }
 
 /**
+ * Format visibility with unit conversion
+ *
+ * Expects statute miles (SM) as input (internal storage standard).
+ * Converts to kilometers when metric units selected using lib/units.php.
+ *
+ * @param float|null $valueSM Visibility in statute miles
+ * @param string $distUnit Distance unit ('ft' for imperial/SM, 'm' for metric/km)
+ * @return string Formatted visibility string (e.g., '10+ SM' or '16+ km')
+ */
+function formatEmbedVisibility($valueSM, $distUnit) {
+    if ($valueSM === null) return '--';
+
+    if ($distUnit === 'm') {
+        // Convert statute miles to kilometers using centralized conversion
+        $valueKm = statuteMilesToKilometers($valueSM);
+        if ($valueKm >= 16) {
+            return '16+ km';
+        }
+        return round($valueKm, 1) . ' km';
+    }
+
+    // Imperial - statute miles
+    if ($valueSM >= 10) {
+        return '10+ SM';
+    }
+    return round($valueSM, 1) . ' SM';
+}
+
+/**
  * Format humidity percentage
  * 
  * @param float|null $value Humidity value (0-100)
@@ -504,9 +537,9 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     $distUnit = $options['distUnit'];
     $baroUnit = $options['baroUnit'];
     
-    // Extract weather values
-    $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;
-    $dewpoint = $weather['dewpoint_f'] ?? $weather['dewpoint'] ?? null;
+    // Extract weather values (temperatures in Celsius - internal storage standard)
+    $temperature = $weather['temperature'] ?? null;
+    $dewpoint = $weather['dewpoint'] ?? null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
     $densityAltitude = $weather['density_altitude'] ?? null;
     $visibility = $weather['visibility'] ?? null;
@@ -552,8 +585,7 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     
     // 4. Visibility (show if available)
     if ($visibility !== null) {
-        $visDisplay = $visibility >= 10 ? '10+' : round($visibility, 1);
-        $visDisplay .= ' SM';
+        $visDisplay = formatEmbedVisibility($visibility, $distUnit);
         $availableMetrics[] = ['label' => 'Vis', 'value' => $visDisplay];
     }
     
@@ -575,8 +607,10 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     }
     
     // 7. Dewpoint Spread (show if available, 1 decimal precision)
+    // Spread is in Celsius. Convert to F if needed (multiply by 9/5, no +32 for differences)
     if ($dewpointSpread !== null) {
-        $spreadDisplay = number_format($dewpointSpread, 1) . '°' . $tempUnit;
+        $spreadValue = ($tempUnit === 'F') ? ($dewpointSpread * 9 / 5) : $dewpointSpread;
+        $spreadDisplay = number_format($spreadValue, 1) . '°' . $tempUnit;
         $availableMetrics[] = ['label' => 'Spread', 'value' => $spreadDisplay];
     }
     
