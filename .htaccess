@@ -157,6 +157,17 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
+# Cache widget.js for 1 hour (production can be longer with versioning)
+<FilesMatch "^public/js/widget\.js$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 hour"
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=3600"
+    </IfModule>
+</FilesMatch>
+
 # Cache webcam images for better performance (nginx handles this in production)
 # <FilesMatch "\.jpg$">
 #     ExpiresActive On

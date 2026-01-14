@@ -216,21 +216,21 @@ class EmbedConfiguratorTest extends TestCase
     public function testSizePresets()
     {
         $sizePresets = [
-            'card' => ['width' => 300, 'height' => 275],
-            'webcam' => ['width' => 400, 'height' => 320],
-            'dual' => ['width' => 600, 'height' => 320],
-            'multi' => ['width' => 600, 'height' => 600],
+            'card' => ['width' => 400, 'height' => 435],
+            'webcam' => ['width' => 450, 'height' => 450],
+            'dual' => ['width' => 600, 'height' => 300],
+            'multi' => ['width' => 600, 'height' => 475],
             'full' => ['width' => 800, 'height' => 700],
         ];
         
-        $this->assertEquals(300, $sizePresets['card']['width']);
-        $this->assertEquals(275, $sizePresets['card']['height']);
+        $this->assertEquals(400, $sizePresets['card']['width']);
+        $this->assertEquals(435, $sizePresets['card']['height']);
         
         $this->assertEquals(600, $sizePresets['dual']['width']);
-        $this->assertEquals(320, $sizePresets['dual']['height']);
+        $this->assertEquals(300, $sizePresets['dual']['height']);
         
         $this->assertEquals(600, $sizePresets['multi']['width']);
-        $this->assertEquals(600, $sizePresets['multi']['height']);
+        $this->assertEquals(475, $sizePresets['multi']['height']);
         
         $this->assertEquals(800, $sizePresets['full']['width']);
         $this->assertEquals(700, $sizePresets['full']['height']);

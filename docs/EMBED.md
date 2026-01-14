@@ -4,6 +4,16 @@ The Embed Generator allows you to create embeddable weather widgets for any Avia
 
 ## Quick Start
 
+### Option 1: Web Component (Recommended for Modern Sites)
+```html
+<!-- Include the widget script once per page -->
+<script src="https://aviationwx.org/public/js/widget.js"></script>
+
+<!-- Add widgets anywhere -->
+<aviation-wx airport="kspb" style="card" theme="auto"></aviation-wx>
+```
+
+### Option 2: iframe Embed (Universal Compatibility)
 1. Visit [embed.aviationwx.org](https://embed.aviationwx.org)
 2. Search and select an airport
 3. Choose a widget style
@@ -13,29 +23,50 @@ The Embed Generator allows you to create embeddable weather widgets for any Avia
 
 ## Widget Styles
 
-### Mini Airport Card (300×275)
+### Weather Card (400×435)
 A compact card showing essential weather data including wind, temperature, altimeter, visibility, and density altitude. Includes a mini wind compass visualization. Best for sidebars or small spaces.
 
-### Single Webcam (400×320)
+**Style Code:** `card`
+
+### Compact Single (400×425)
 Displays a single webcam feed with weather summary bar and wind compass. Useful for highlighting a specific runway view.
 
-### Dual Camera (600×320)
+**Style Code:** `webcam`
+
+### Compact Dual (600×300)
 Shows two webcams side by side with a weather bar including wind compass. Good for airports with two runways or different viewing angles.
 
-### 4 Camera Grid (600×600)
-Displays up to four webcams in a grid layout with comprehensive weather information and wind compass. Ideal for airports with multiple camera positions.
+**Style Code:** `dual`
 
-### Full Widget (800×700)
-The most complete widget featuring a large webcam, wind compass visualization, and full weather metrics organized in columns (Wind, Temperature, Conditions, Altitude). Best for dedicated weather sections.
+### Compact Quad (600×475)
+Displays up to four webcams in a compact grid layout with comprehensive weather information and wind compass. Ideal for airports with multiple camera positions.
+
+**Style Code:** `multi`
+
+### Full Single (800×740)
+Full-featured widget with a large single webcam, detailed wind visualization, and complete weather metrics organized in columns. Best for dedicated weather sections with one primary camera view.
+
+**Style Code:** `full-single`
+
+### Full Dual (800×550)
+Full-featured widget showing two webcams with detailed weather data and wind visualization. Perfect for airports wanting to highlight two specific runway approaches.
+
+**Style Code:** `full-dual`
+
+### Full Quad (800×750)
+The most complete widget featuring up to four webcams in a grid, comprehensive wind compass visualization, and full weather metrics organized in columns (Wind, Temperature, Conditions, Altitude). Best for airports with multiple camera positions requiring maximum detail.
+
+**Style Code:** `full-multi`
 
 ## Customization Options
 
 ### Theme
 - **Light**: White background, optimized for light websites
 - **Dark**: Dark background, optimized for dark websites
+- **Auto**: Automatically adapts to the user's system color scheme preference
 
 ### Webcam Selection
-For multi-camera widgets (Dual Camera, 4 Camera Grid), you can choose which camera appears in each slot. This allows you to prioritize specific runway views or angles.
+For multi-camera widgets (Compact Dual, Compact Quad, Full Dual, Full Quad), you can choose which camera appears in each slot. This allows you to prioritize specific runway views or angles.
 
 ### Units
 Configure measurement units to match your preference:
@@ -52,9 +83,9 @@ Choose whether dashboard links open in a new tab or the same tab.
 ### iframe Embed (Recommended)
 ```html
 <iframe
-  src="https://embed.aviationwx.org/kspb?style=card&theme=light&target=_blank"
+  src="https://embed.aviationwx.org/?render=1&airport=kspb&style=card&theme=light&target=_blank"
   width="300"
-  height="275"
+  height="300"
   frameborder="0"
   loading="lazy"
   title="KSPB Weather - AviationWX">
@@ -67,11 +98,102 @@ Works on most platforms including:
 - Squarespace (use Code block)
 - Any HTML page
 
-### Static Badge
-A server-rendered image that works in restricted environments including email signatures. Clicking the image links to the full dashboard.
+### Web Component
 
-### Web Component (Coming Soon)
-A modern JavaScript-based widget for tighter integration with your website.
+A modern JavaScript custom element for tighter integration with your website. The web component provides:
+
+- **Direct rendering** - No iframe overhead, faster performance
+- **Auto-refresh** - Configurable refresh intervals (default: 5 minutes)
+- **Theme support** - Light, dark, and auto (follows system preference)
+- **Unit conversion** - Temperature, distance, wind speed, barometer units
+- **Style isolation** - Shadow DOM prevents style conflicts
+- **Responsive sizing** - Configurable dimensions with defaults per style
+
+**Usage:**
+
+```html
+<!-- Include the widget script once per page -->
+<script src="https://aviationwx.org/public/js/widget.js"></script>
+
+<!-- Add widgets anywhere on your page -->
+<aviation-wx 
+    airport="kspb" 
+    style="card" 
+    theme="auto"
+    temp="F"
+    wind="kt"
+    refresh="300000">
+</aviation-wx>
+```
+
+**Attributes:**
+
+| Attribute | Values | Description |
+|-----------|--------|-------------|
+| `airport` | Airport ID | **Required** - Airport identifier (e.g., `kspb`) |
+| `style` | `card`, `webcam`, `dual`, `multi`, `full-single`, `full-dual`, `full-multi` | Widget style (default: `card`) |
+| `theme` | `light`, `dark`, `auto` | Color theme (default: `auto`) |
+| `webcam` | `0`, `1`, `2`, ... | Camera index for single-cam styles (default: `0`) |
+| `cams` | `0,1,2,3` | Comma-separated camera indices for multi-cam styles |
+| `temp` | `F`, `C` | Temperature unit (default: `F`) |
+| `dist` | `ft`, `m` | Distance/altitude unit (default: `ft`) |
+| `wind` | `kt`, `mph`, `kmh` | Wind speed unit (default: `kt`) |
+| `baro` | `inHg`, `hPa`, `mmHg` | Barometer unit (default: `inHg`) |
+| `target` | `_blank`, `_self` | Link target (default: `_blank`) |
+| `refresh` | Number (ms) | Auto-refresh interval in milliseconds (default: `300000` = 5 min, minimum: `60000` = 1 min) |
+| `width` | Number (px) | Widget width in pixels (optional, uses style defaults) |
+| `height` | Number (px) | Widget height in pixels (optional, uses style defaults) |
+
+**Default Dimensions by Style:**
+
+| Style | Width | Height |
+|-------|-------|--------|
+| `card` | 300px | 300px |
+| `webcam` | 450px | 450px |
+| `dual` | 600px | 300px |
+| `multi` | 600px | 475px |
+| `full-single` | 800px | 740px |
+| `full-dual` | 800px | 550px |
+| `full-multi` | 800px | 750px |
+
+**Examples:**
+
+```html
+<!-- Metric units with dark theme -->
+<aviation-wx 
+    airport="kspb" 
+    style="card" 
+    theme="dark"
+    temp="C"
+    dist="m"
+    wind="kmh"
+    baro="hPa">
+</aviation-wx>
+
+<!-- Custom dimensions -->
+<aviation-wx 
+    airport="kspb" 
+    style="card" 
+    theme="light"
+    width="400"
+    height="400">
+</aviation-wx>
+
+<!-- Fast refresh (2 minutes) -->
+<aviation-wx 
+    airport="kspb" 
+    style="card" 
+    theme="auto"
+    refresh="120000">
+</aviation-wx>
+```
+
+**Browser Compatibility:**
+
+- Chrome/Edge 67+
+- Firefox 63+
+- Safari 10.1+
+- Native Custom Elements support (no polyfills needed)
 
 ## URL Parameters
 
@@ -79,10 +201,12 @@ When embedding directly, you can customize the widget using URL parameters:
 
 | Parameter | Values | Description |
 |-----------|--------|-------------|
-| `style` | `card`, `webcam`, `dual`, `multi`, `full` | Widget style |
-| `theme` | `light`, `dark` | Color theme |
-| `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam/full) |
-| `cams` | `0,1,2,3` | Camera indices (for dual/multi) |
+| `render` | `1` | **Required** - Triggers widget rendering (vs configurator) |
+| `airport` | Airport ID | **Required** - Airport identifier (e.g., `kspb`) |
+| `style` | `card`, `webcam`, `dual`, `multi`, `full-single`, `full-dual`, `full-multi` | Widget style |
+| `theme` | `light`, `dark`, `auto` | Color theme |
+| `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam styles) |
+| `cams` | `0,1,2,3` | Comma-separated camera indices (for multi-cam styles) |
 | `target` | `_blank`, `_self` | Link target |
 | `temp` | `F`, `C` | Temperature unit |
 | `dist` | `ft`, `m` | Distance unit |
@@ -91,7 +215,7 @@ When embedding directly, you can customize the widget using URL parameters:
 
 Example URL:
 ```
-https://embed.aviationwx.org/kspb?style=dual&theme=light&cams=0,1&target=_blank&temp=F&wind=kt
+https://embed.aviationwx.org/?render=1&airport=kspb&style=dual&theme=light&cams=0,1&target=_blank&temp=F&wind=kt
 ```
 
 ## Local Development
@@ -102,11 +226,14 @@ To test the embed generator locally:
 # Start the local development server
 make up
 
-# Access the configurator
+# Access the iframe configurator
 http://localhost:8080/?embed
 
-# Access an embed directly
-http://localhost:8080/?embed&airport=kspb&style=card&theme=light
+# Access an embed widget directly (iframe)
+http://localhost:8080/?embed&render=1&airport=kspb&style=card&theme=light
+
+# Test the web component
+http://localhost:8080/public/widget-demo.html
 ```
 
 ## Nginx Configuration

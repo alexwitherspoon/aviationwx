@@ -3,7 +3,7 @@
  * Embed Configurator
  * 
  * Allows users to configure and generate embed code for airport weather widgets.
- * Supports iframe, static badge, and web component embed formats.
+ * Supports iframe and web component embed formats.
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -34,7 +34,7 @@ if ($config && isset($config['airports'])) {
 // SEO variables
 $baseDomain = getBaseDomain();
 $pageTitle = 'Embed Generator - AviationWX.org';
-$pageDescription = 'Create embeddable weather widgets for your airport website. Generate iframe, badge, or web component code to display real-time weather and webcams.';
+$pageDescription = 'Create embeddable weather widgets for your airport website. Generate iframe or web component code to display real-time weather and webcams.';
 $canonicalUrl = 'https://embed.' . $baseDomain;
 $baseUrl = getBaseUrl();
 ?>
@@ -991,31 +991,31 @@ $baseUrl = getBaseUrl();
                     <div class="radio-group">
                         <label class="radio-item">
                             <input type="radio" name="style" value="card" checked>
-                            <span>Mini Card (300×300)</span>
+                            <span>Weather Card (400×435)</span>
                         </label>
                         <label class="radio-item" id="style-webcam">
                             <input type="radio" name="style" value="webcam">
-                            <span>Compact Single (400×320)</span>
+                            <span>Compact Single (450×450)</span>
                         </label>
                         <label class="radio-item" id="style-dual">
                             <input type="radio" name="style" value="dual">
-                            <span>Compact Dual (600×320)</span>
+                            <span>Compact Dual (600×300)</span>
                         </label>
                         <label class="radio-item" id="style-multi">
                             <input type="radio" name="style" value="multi">
-                            <span>Compact Quad (600×600)</span>
+                            <span>Compact Quad (600×475)</span>
                         </label>
                         <label class="radio-item" id="style-full-single">
                             <input type="radio" name="style" value="full-single">
-                            <span>Full Single (600×600)</span>
+                            <span>Full Single (800×740)</span>
                         </label>
                         <label class="radio-item" id="style-full-dual">
                             <input type="radio" name="style" value="full-dual">
-                            <span>Full Dual (600×430)</span>
+                            <span>Full Dual (800×550)</span>
                         </label>
                         <label class="radio-item" id="style-full-multi">
                             <input type="radio" name="style" value="full-multi">
-                            <span>Full Quad (600×600)</span>
+                            <span>Full Quad (800×750)</span>
                         </label>
                     </div>
                 </div>
@@ -1193,10 +1193,10 @@ $baseUrl = getBaseUrl();
                 <div class="preview-panel">
                     <div class="preview-header">
                         <h2>Live Preview</h2>
-                        <span class="preview-dimensions" id="preview-dimensions">300 × 300 px</span>
+                        <span class="preview-dimensions" id="preview-dimensions">400 × 435 px</span>
                     </div>
                     <div class="preview-container">
-                        <div class="preview-frame" id="preview-frame" style="width: 300px; height: 300px;">
+                        <div class="preview-frame" id="preview-frame" style="width: 400px; height: 435px;">
                             <div class="preview-placeholder" id="preview-placeholder">
                                 <div class="icon">✈️</div>
                                 <p>Select an airport to see preview</p>
@@ -1209,7 +1209,6 @@ $baseUrl = getBaseUrl();
                 <div class="embed-code-panel">
                     <div class="embed-tabs">
                         <button class="embed-tab active" data-type="iframe">iframe Embed</button>
-                        <button class="embed-tab" data-type="badge">Static Badge</button>
                         <button class="embed-tab" data-type="webcomponent">Web Component</button>
                     </div>
                     
@@ -1260,8 +1259,8 @@ $baseUrl = getBaseUrl();
             theme: 'light',
             webcam: 0,
             cams: [0, 1, 2, 3], // Camera indices for multi-cam widgets
-            width: 300,
-            height: 300,
+            width: 400,
+            height: 435,
             target: '_blank',
             embedType: 'iframe',
             tempUnit: 'F',
@@ -1272,14 +1271,14 @@ $baseUrl = getBaseUrl();
         
         // Size presets for each style
         var SIZE_PRESETS = {
-            card: { width: 300, height: 300 },
-            webcam: { width: 400, height: 320 },
-            dual: { width: 600, height: 320 },
-            multi: { width: 600, height: 600 },
+            card: { width: 400, height: 435 },
+            webcam: { width: 450, height: 450 },
+            dual: { width: 600, height: 300 },
+            multi: { width: 600, height: 475 },
             full: { width: 800, height: 700 },
-            'full-single': { width: 600, height: 600 },
-            'full-dual': { width: 600, height: 430 },
-            'full-multi': { width: 600, height: 600 }
+            'full-single': { width: 800, height: 740 },
+            'full-dual': { width: 800, height: 550 },
+            'full-multi': { width: 800, height: 750 }
         };
         
         // DOM elements
@@ -1384,18 +1383,6 @@ $baseUrl = getBaseUrl();
             return 'https://' + state.airport.id + '.' + BASE_DOMAIN;
         }
         
-        // Generate badge URL (static image)
-        function getBadgeUrl() {
-            if (!state.airport) return null;
-            
-            if (IS_LOCAL_DEV) {
-                var protocol = window.location.protocol;
-                var host = window.location.host;
-                return protocol + '//' + host + '/?embed&airport=' + state.airport.id + '&format=png&style=' + state.style + '&theme=' + state.theme;
-            }
-            return 'https://embed.' + BASE_DOMAIN + '/' + state.airport.id + '/badge.png?style=' + state.style + '&theme=' + state.theme;
-        }
-        
         // Generate embed code based on type
         function generateEmbedCode() {
             if (!state.airport) {
@@ -1407,14 +1394,10 @@ $baseUrl = getBaseUrl();
             
             switch (state.embedType) {
                 case 'iframe':
-                    return '<iframe\n  src="' + embedUrl + '"\n  width="' + state.width + '"\n  height="' + state.height + '"\n  frameborder="0"\n  loading="lazy"\n  title="' + state.airport.identifier + ' Weather - AviationWX">\n</iframe>';
-                
-                case 'badge':
-                    var badgeUrl = getBadgeUrl();
-                    return '<a href="' + dashboardUrl + '" target="' + state.target + '" rel="noopener">\n  <img\n    src="' + badgeUrl + '"\n    alt="' + state.airport.identifier + ' Weather"\n    width="' + state.width + '"\n    height="' + state.height + '">\n</a>';
+                    return '<iframe\n  src="' + embedUrl + '"\n  width="' + state.width + '"\n  height="' + state.height + '"\n  frameborder="0"\n  loading="lazy"\n  title="' + state.airport.identifier + ' Weather - AviationWX.org">\n</iframe>';
                 
                 case 'webcomponent':
-                    return '<!-- Include the AviationWX widget script (once per page) -->\n<script src="https://embed.' + BASE_DOMAIN + '/widget.js"></' + 'script>\n\n<!-- Place the widget where you want it to appear -->\n<aviation-wx\n  airport="' + state.airport.id + '"\n  style="' + state.style + '"\n  theme="' + state.theme + '"' + (state.style === 'webcam' ? '\n  webcam="' + state.webcam + '"' : '') + '>\n</aviation-wx>';
+                    return '<!-- Include the AviationWX.org widget script (once per page) -->\n<script src="https://embed.' + BASE_DOMAIN + '/widget.js"></' + 'script>\n\n<!-- Place the widget where you want it to appear -->\n<aviation-wx\n  airport="' + state.airport.id + '"\n  style="' + state.style + '"\n  theme="' + state.theme + '"' + (state.style === 'webcam' ? '\n  webcam="' + state.webcam + '"' : '') + '>\n</aviation-wx>';
                 
                 default:
                     return '';
@@ -1467,10 +1450,6 @@ $baseUrl = getBaseUrl();
                 case 'iframe':
                     elements.embedTypeLabel.textContent = 'iframe Embed Code';
                     elements.embedInfo.innerHTML = '<strong>iframe Embed:</strong> Works on Google Sites, WordPress, Squarespace, and any HTML page. Simply paste the code where you want the widget to appear.';
-                    break;
-                case 'badge':
-                    elements.embedTypeLabel.textContent = 'Static Badge Code';
-                    elements.embedInfo.innerHTML = '<strong>Static Badge:</strong> A server-rendered image that works everywhere, including email signatures and places that don\'t support iframes. Updates automatically.';
                     break;
                 case 'webcomponent':
                     elements.embedTypeLabel.textContent = 'Web Component Code';
@@ -1896,11 +1875,15 @@ $baseUrl = getBaseUrl();
             var height = params.get('height');
             if (width && !isNaN(parseInt(width))) {
                 state.width = parseInt(width);
-                document.getElementById('width-input').value = state.width;
+                if (elements.widthInput) {
+                    elements.widthInput.value = state.width;
+                }
             }
             if (height && !isNaN(parseInt(height))) {
                 state.height = parseInt(height);
-                document.getElementById('height-input').value = state.height;
+                if (elements.heightInput) {
+                    elements.heightInput.value = state.height;
+                }
             }
             
             // Target

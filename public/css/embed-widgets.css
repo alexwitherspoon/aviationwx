@@ -1,0 +1,1677 @@
+/**
+ * Shared CSS for AviationWX Embed Widgets
+ * 
+ * Used by:
+ * - iframe embeds (pages/embed.php)
+ * - Web components (public/js/widget.js)
+ * 
+ * This ensures visual consistency across all embed methods.
+ */
+
+/* ============================================
+   CSS VARIABLES - THEME COLORS
+   ============================================ */
+
+/* Auto theme: Responds to system preference */
+:root {
+    /* Light mode colors (default) */
+    --bg-color: #ffffff;
+    --card-bg: #f8f9fa;
+    --text-color: #333333;
+    --muted-color: #666666;
+    --border-color: #dddddd;
+    --accent-color: #5eb3ff;
+    --footer-bg: rgba(0,0,0,0.05);
+    --webcam-placeholder-bg: #ddd;
+    --unknown-bg: #888;
+    --no-metar-bg: #666;
+    --peak-item-bg: rgba(255,150,0,0.15);
+    --fog-warning-bg: rgba(255,100,100,0.15);
+    --wind-compass-bg: #f0f0f0;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* Dark mode colors - much darker backgrounds, brighter text */
+        --bg-color: #0a0a0a;
+        --card-bg: #1a1a1a;
+        --text-color: #ffffff;
+        --muted-color: #b8b8b8;
+        --border-color: #2a2a2a;
+        --accent-color: #5eb3ff;
+        --footer-bg: #0a0a0a;
+        --header-bg: #0a0a0a;
+        --webcam-placeholder-bg: #1a1a1a;
+        --unknown-bg: #3a3a3a;
+        --no-metar-bg: #3a3a3a;
+        --peak-item-bg: rgba(255,150,0,0.3);
+        --fog-warning-bg: rgba(255,100,100,0.3);
+        --wind-compass-bg: #141414;
+    }
+}
+
+/* Light theme override - must override even when system preference is dark */
+.theme-light,
+.embed-container.theme-light,
+body.theme-light .embed-container,
+body.theme-light,
+.widget-wrapper.theme-light,
+.widget-wrapper.theme-light .embed-container {
+    --bg-color: #ffffff;
+    --card-bg: #f8f9fa;
+    --text-color: #333333;
+    --muted-color: #666666;
+    --border-color: #dddddd;
+    --accent-color: #5eb3ff;
+    --footer-bg: rgba(0,0,0,0.05);
+    --webcam-placeholder-bg: #ddd;
+    --unknown-bg: #888;
+    --no-metar-bg: #666;
+    --peak-item-bg: rgba(255,150,0,0.15);
+    --fog-warning-bg: rgba(255,100,100,0.15);
+    --wind-compass-bg: #f0f0f0;
+    --header-bg: #f8f9fa;
+}
+
+/* Ensure light theme overrides dark mode media query - MUST come after :root dark mode */
+/* Higher specificity selectors to override :root dark mode variables */
+@media (prefers-color-scheme: dark) {
+    .widget-wrapper.theme-light,
+    .widget-wrapper.theme-light .embed-container,
+    .widget-wrapper.theme-light .embed-container *,
+    .embed-container.theme-light,
+    .embed-container.theme-light *,
+    body.theme-light .embed-container,
+    body.theme-light .embed-container *,
+    .theme-light,
+    .theme-light * {
+        /* Force light mode even when system preference is dark */
+        --bg-color: #ffffff;
+        --card-bg: #f8f9fa;
+        --text-color: #333333;
+        --muted-color: #666666;
+        --border-color: #dddddd;
+        --accent-color: #5eb3ff;
+        --footer-bg: rgba(0,0,0,0.05);
+        --webcam-placeholder-bg: #ddd;
+        --unknown-bg: #888;
+        --no-metar-bg: #666;
+        --peak-item-bg: rgba(255,150,0,0.15);
+        --fog-warning-bg: rgba(255,100,100,0.15);
+        --wind-compass-bg: #f0f0f0;
+        --header-bg: #f8f9fa;
+    }
+}
+
+/* Dark theme override - must override even when system preference is light */
+.theme-dark {
+    --bg-color: #0a0a0a;
+    --card-bg: #1a1a1a;
+    --text-color: #ffffff;
+    --muted-color: #b8b8b8;
+    --border-color: #2a2a2a;
+    --accent-color: #5eb3ff;
+    --footer-bg: #0a0a0a;
+    --header-bg: #0a0a0a;
+    --webcam-placeholder-bg: #1a1a1a;
+    --unknown-bg: #3a3a3a;
+    --no-metar-bg: #3a3a3a;
+    --peak-item-bg: rgba(255,150,0,0.3);
+    --fog-warning-bg: rgba(255,100,100,0.3);
+    --wind-compass-bg: #141414;
+}
+
+/* Ensure dark theme overrides light mode media query */
+@media (prefers-color-scheme: light) {
+    .theme-dark {
+        /* Force dark mode even when system preference is light */
+        --bg-color: #0a0a0a;
+        --card-bg: #1a1a1a;
+        --text-color: #ffffff;
+        --muted-color: #b8b8b8;
+        --border-color: #2a2a2a;
+        --accent-color: #5eb3ff;
+        --footer-bg: #0a0a0a;
+        --header-bg: #0a0a0a;
+        --webcam-placeholder-bg: #1a1a1a;
+        --unknown-bg: #3a3a3a;
+        --no-metar-bg: #3a3a3a;
+        --peak-item-bg: rgba(255,150,0,0.3);
+        --fog-warning-bg: rgba(255,100,100,0.3);
+        --wind-compass-bg: #141414;
+    }
+}
+
+/* Auto theme: inherits from :root, which responds to prefers-color-scheme */
+/* When .theme-auto is applied, it should not override :root variables */
+.theme-auto {
+    /* Explicitly inherit from :root - don't set any variables */
+    /* The @media (prefers-color-scheme: dark) on :root handles dark mode */
+}
+
+/* Ensure auto theme works in shadow DOM by duplicating media query */
+.theme-auto {
+    /* Light mode (default) - same as :root */
+    --bg-color: #ffffff;
+    --card-bg: #f8f9fa;
+    --text-color: #333333;
+    --muted-color: #666666;
+    --border-color: #dddddd;
+    --accent-color: #5eb3ff;
+    --footer-bg: rgba(0,0,0,0.05);
+    --webcam-placeholder-bg: #ddd;
+    --unknown-bg: #888;
+    --no-metar-bg: #666;
+    --peak-item-bg: rgba(255,150,0,0.15);
+    --fog-warning-bg: rgba(255,100,100,0.15);
+    --wind-compass-bg: #f0f0f0;
+    --header-bg: #f8f9fa;
+}
+
+@media (prefers-color-scheme: dark) {
+    .theme-auto {
+        /* Dark mode - same as :root dark mode */
+        --bg-color: #0a0a0a;
+        --card-bg: #1a1a1a;
+        --text-color: #ffffff;
+        --muted-color: #b8b8b8;
+        --border-color: #2a2a2a;
+        --accent-color: #5eb3ff;
+        --footer-bg: #0a0a0a;
+        --header-bg: #0a0a0a;
+        --webcam-placeholder-bg: #1a1a1a;
+        --unknown-bg: #3a3a3a;
+        --no-metar-bg: #3a3a3a;
+        --peak-item-bg: rgba(255,150,0,0.3);
+        --fog-warning-bg: rgba(255,100,100,0.3);
+        --wind-compass-bg: #141414;
+    }
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-color);
+    line-height: 1.4;
+    overflow: hidden;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.embed-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure widget-wrapper passes theme variables to children */
+.widget-wrapper.theme-light,
+.widget-wrapper.theme-dark,
+.widget-wrapper.theme-auto {
+    /* Theme variables will cascade from these classes to .embed-container and its children */
+}
+
+/* ============================================
+   SHARED COMPONENTS
+   ============================================ */
+
+/* Flight category badge */
+.flight-category {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+.flight-category.VFR {
+    background: #28a745;
+    color: #fff;
+}
+
+.flight-category.MVFR {
+    background: #0066cc;
+    color: #fff;
+}
+
+.flight-category.IFR {
+    background: #dc3545;
+    color: #fff;
+}
+
+.flight-category.LIFR {
+    background: #ff00ff;
+    color: #fff;
+}
+
+.flight-category.unknown {
+    background: var(--unknown-bg);
+    color: #fff;
+}
+
+/* Unified footer */
+.embed-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3rem 0.5rem;
+    background: var(--footer-bg);
+    border-top: 2px solid var(--border-color);
+    font-size: 0.7rem;
+    color: var(--muted-color);
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* Light theme override for footer */
+.theme-light .embed-footer {
+    background: var(--card-bg);
+}
+
+.embed-footer .footer-left {
+    flex: 1;
+    text-align: left;
+}
+
+.embed-footer .footer-left .footer-label::after {
+    content: ' ';
+}
+
+.embed-footer .footer-right {
+    flex: 1;
+    text-align: right;
+}
+
+.embed-footer .footer-right .footer-powered::after {
+    content: ' ';
+}
+
+/* Wrap "Last Updated" and "Powered by" on smaller cards only */
+.style-card .embed-footer .footer-left {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+
+.style-card .embed-footer .footer-left .footer-label::after {
+    content: '';
+}
+
+.style-card .embed-footer .footer-right {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+    align-items: flex-end;
+}
+
+.style-card .embed-footer .footer-right .footer-powered::after {
+    content: '';
+}
+
+.embed-footer .footer-center {
+    flex: 1;
+    text-align: center;
+    color: var(--accent-color);
+    font-weight: 500;
+}
+
+.embed-footer .footer-right {
+    flex: 1;
+    text-align: right;
+}
+
+/* No data placeholder */
+.no-data {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--muted-color);
+    text-align: center;
+    padding: 1rem;
+}
+
+.no-data .icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.no-webcam-placeholder {
+    background: var(--webcam-placeholder-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-color);
+    font-size: 0.9rem;
+}
+
+/* ============================================
+   CARD STYLE (350x350)
+   ============================================ */
+
+.style-card {
+    min-height: 350px;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Widget link wrapper */
+.widget-link,
+.embed-container > a {
+    display: block;
+    width: 100%;
+    height: 100%;
+    text-decoration: none;
+    color: inherit;
+}
+
+.style-card .card-header {
+    background: var(--card-bg);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.style-card .airport-info h2 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.1rem;
+}
+
+.style-card .airport-info .airport-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.style-card .airport-info .identifier {
+    font-size: 0.8rem;
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.style-card .airport-info .webcam-count {
+    font-size: 0.7rem;
+    color: var(--muted-color);
+}
+
+.style-card .card-body {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+}
+
+.style-card .weather-row {
+    background: var(--card-bg);
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.style-card .weather-row:last-child {
+    border-bottom: none;
+}
+
+.style-card .weather-row .item {
+    text-align: center;
+}
+
+.style-card .weather-row .label {
+    font-size: 0.65rem;
+    color: var(--muted-color);
+    text-transform: uppercase;
+}
+
+.style-card .weather-row .value {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.style-card .weather-row .wind-mini {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.style-card .weather-row .wind-mini canvas {
+    display: block;
+}
+
+/* Card V2 Layout (350x350) - New prioritized layout */
+.style-card .card-header-v2 {
+    background: var(--header-bg);
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Light theme: Use card-bg for header */
+.theme-light .style-card .card-header-v2 {
+    background: var(--card-bg);
+}
+
+.style-card .card-header-v2 .airport-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.style-card .card-header-v2 .identifier {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    letter-spacing: 0.5px;
+}
+
+.style-card .card-header-v2 .name {
+    font-size: 0.75rem;
+    color: var(--muted-color);
+}
+
+.style-card .flight-category-badge {
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    color: #ffffff;
+    border: none;
+}
+
+/* Flight category colors - matching dashboard */
+.style-card .flight-category-badge.VFR {
+    background: #28a745; /* Green for VFR */
+}
+
+.style-card .flight-category-badge.MVFR {
+    background: #0066cc; /* Blue for MVFR */
+}
+
+.style-card .flight-category-badge.IFR {
+    background: #dc3545; /* Red for IFR */
+}
+
+.style-card .flight-category-badge.LIFR {
+    background: #ff00ff; /* Magenta for LIFR */
+}
+
+.style-card .flight-category-badge.unknown {
+    background: #6c757d; /* Gray for unknown */
+}
+
+.style-card .flight-category-badge.no-category {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.style-card .card-compass-large {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--wind-compass-bg);
+}
+
+.style-card .card-compass-large canvas {
+    display: block;
+}
+
+.style-card .card-compass-large .wind-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* Card Compass Section - Side by Side Layout (Dashboard Style) */
+.style-card .card-compass-section {
+    display: flex;
+    padding: 1rem;
+    gap: 1rem;
+    background: var(--wind-compass-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Compass section has slightly different background to break up visual */
+.theme-dark .style-card .card-compass-section {
+    background: #141414; /* Slightly lighter than main bg (#0a0a0a) */
+}
+
+.style-card .compass-side {
+    flex-shrink: 0;
+}
+
+.style-card .compass-side canvas {
+    display: block;
+}
+
+.style-card .wind-details-side {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.style-card .wind-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.style-card .wind-detail-row .wind-label {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.style-card .wind-detail-row .wind-value {
+    flex-shrink: 0;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.style-card .wind-detail-row:last-child {
+    border-bottom: none;
+}
+
+.style-card .wind-label {
+    font-size: 0.85rem;
+    color: var(--muted-color);
+    font-weight: 400;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.style-card .wind-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.style-card .card-metrics {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-color);
+}
+
+.style-card .metric-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.style-card .metric {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+/* Light theme override for metrics */
+.theme-light .style-card .metric {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.style-card .metric-full {
+    width: 100%;
+}
+
+.style-card .metric-label {
+    font-size: 0.7rem;
+    color: var(--muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.style-card .metric-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* ============================================
+   WEBCAM STYLE (450x450)
+   ============================================ */
+
+.style-webcam {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    /* Don't force height: 100% - let content (especially wide images) determine height */
+    min-height: 0;
+}
+
+.style-webcam .webcam-container {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+    width: 100%;
+    /* Container adapts to image size, always full width */
+    flex-shrink: 0;
+    /* Don't set aspect-ratio on container - let image determine it */
+    min-height: 0;
+}
+
+.style-webcam .webcam-image,
+.style-webcam picture {
+    /* Aspect ratio and sizing set inline from APCu metadata */
+    /* width: 100%; height: auto; aspect-ratio set inline */
+    display: block;
+    width: 100%;
+    /* Image scales responsively while maintaining aspect ratio */
+}
+
+.style-webcam picture img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.style-webcam .overlay-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 1.5rem 0.75rem 0.5rem;
+    color: white;
+}
+
+.style-webcam .overlay-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.style-webcam .overlay-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.style-webcam .overlay-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.style-webcam .overlay-airport {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.style-webcam .overlay-airport .code {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #5eb3ff;
+}
+
+.style-webcam .overlay-airport .name {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.style-webcam .flight-category-badge {
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    color: #ffffff;
+    border: none;
+}
+
+/* Flight category colors - matching card style */
+.style-webcam .flight-category-badge.VFR {
+    background: #28a745; /* Green for VFR */
+}
+
+.style-webcam .flight-category-badge.MVFR {
+    background: #0066cc; /* Blue for MVFR */
+}
+
+.style-webcam .flight-category-badge.IFR {
+    background: #dc3545; /* Red for IFR */
+}
+
+.style-webcam .flight-category-badge.LIFR {
+    background: #ff00ff; /* Magenta for LIFR */
+}
+
+.style-webcam .flight-category-badge.unknown {
+    background: #6c757d; /* Gray for unknown */
+}
+
+.style-webcam .flight-category-badge.no-category {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive content wrapper - adapts to width */
+.style-webcam .webcam-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    /* Content wrapper holds metrics and footer */
+    min-height: 0;
+    flex: 1;
+}
+
+/* Ensure footer is properly positioned in webcam style */
+.style-webcam .embed-footer {
+    flex-shrink: 0;
+}
+
+/* Dense weather metrics grid (similar to Weather Card) */
+.style-webcam .webcam-metrics {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+    flex: 1;
+    min-height: 0;
+}
+
+.style-webcam .webcam-metrics .metric-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* When widget width > 500px, arrange metrics in 3 columns of 2 each */
+@media (min-width: 501px) {
+    .style-webcam .webcam-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, auto);
+        grid-auto-flow: column; /* Fill column by column instead of row by row */
+        gap: 0.5rem;
+    }
+    
+    .style-webcam .webcam-metrics .metric-row {
+        display: contents; /* Remove row wrapper, let metrics flow directly into grid */
+    }
+    
+    .style-webcam .webcam-metrics .metric {
+        /* Each metric becomes a grid item */
+        width: 100%;
+        min-width: 0; /* Allow grid to control sizing */
+    }
+}
+
+.style-webcam .webcam-metrics .metric {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+/* Light theme override for metrics */
+.theme-light .style-webcam .webcam-metrics .metric {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.style-webcam .webcam-metrics .metric-label {
+    font-size: 0.7rem;
+    color: var(--muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.style-webcam .webcam-metrics .metric-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* Always stack webcam vertically above content - no side-by-side layout */
+/* Webcam image scales responsively with its aspect ratio, but layout is always vertical */
+
+/* ============================================
+   DUAL CAMERA STYLE (600x300)
+   ============================================ */
+
+.style-dual {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    min-height: 0;
+}
+
+/* Responsive webcam grid: side-by-side when wide enough, vertical stack when narrow */
+.style-dual .dual-webcam-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--border-color);
+    flex-shrink: 0;
+}
+
+/* When widget is wide enough (>= 500px), show webcams side-by-side */
+@media (min-width: 500px) {
+    .style-dual .dual-webcam-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.style-dual .dual-webcam-cell {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+    width: 100%;
+    flex-shrink: 0;
+    min-height: 0;
+}
+
+.style-dual .dual-webcam-cell .webcam-image,
+.style-dual .dual-webcam-cell picture {
+    /* Aspect ratio and sizing set inline from APCu metadata */
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.style-dual .dual-webcam-cell picture img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.style-dual .dual-webcam-cell .no-webcam-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
+    color: var(--muted-color);
+    font-size: 0.85rem;
+    background: var(--card-bg);
+}
+
+/* Overlay info matching Compact Single */
+.style-dual .dual-webcam-cell .overlay-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 1.5rem 0.75rem 0.5rem;
+    color: white;
+    pointer-events: none;
+}
+
+.style-dual .dual-webcam-cell .overlay-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.style-dual .dual-webcam-cell .overlay-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.style-dual .dual-webcam-cell .overlay-right {
+    flex-shrink: 0;
+}
+
+.style-dual .dual-webcam-cell .overlay-airport {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.style-dual .dual-webcam-cell .overlay-airport .code {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #5eb3ff;
+    line-height: 1.2;
+}
+
+.style-dual .dual-webcam-cell .overlay-airport .name {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Flight category badge matching Compact Single */
+.style-dual .dual-webcam-cell .flight-category-badge {
+    display: inline-block;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.style-dual .dual-webcam-cell .flight-category-badge.VFR {
+    background: #28a745; /* Green for VFR */
+}
+
+.style-dual .dual-webcam-cell .flight-category-badge.MVFR {
+    background: #0066cc; /* Blue for MVFR */
+}
+
+.style-dual .dual-webcam-cell .flight-category-badge.IFR {
+    background: #dc3545; /* Red for IFR */
+}
+
+.style-dual .dual-webcam-cell .flight-category-badge.LIFR {
+    background: #ff00ff; /* Magenta for LIFR */
+}
+
+.style-dual .dual-webcam-cell .flight-category-badge.unknown {
+    background: #6c757d; /* Gray for unknown */
+}
+
+.style-dual .dual-webcam-cell .flight-category-badge.no-category {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Content wrapper matching Compact Single */
+.style-dual .dual-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+/* Ensure footer is properly positioned */
+.style-dual .embed-footer {
+    flex-shrink: 0;
+}
+
+/* Dense weather metrics grid (matching Compact Single) */
+.style-dual .webcam-metrics {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+    flex: 1;
+    min-height: 0;
+}
+
+.style-dual .webcam-metrics .metric-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* When widget width > 500px, arrange metrics in 3 columns of 2 each */
+@media (min-width: 501px) {
+    .style-dual .webcam-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, auto);
+        grid-auto-flow: column; /* Fill column by column instead of row by row */
+        gap: 0.5rem;
+    }
+    
+    .style-dual .webcam-metrics .metric-row {
+        display: contents; /* Remove row wrapper, let metrics flow directly into grid */
+    }
+    
+    .style-dual .webcam-metrics .metric {
+        /* Each metric becomes a grid item */
+        width: 100%;
+        min-width: 0; /* Allow grid to control sizing */
+    }
+}
+
+.style-dual .webcam-metrics .metric {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+/* Light theme override for metrics */
+.theme-light .style-dual .webcam-metrics .metric {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.style-dual .webcam-metrics .metric-label {
+    font-size: 0.7rem;
+    color: var(--muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.style-dual .webcam-metrics .metric-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* ============================================
+   MULTI CAMERA STYLE (600x475)
+   ============================================ */
+
+.style-multi {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    min-height: 0;
+}
+
+/* 2x2 grid for 4 webcams */
+.style-multi .multi-webcam-grid {
+    display: grid;
+    gap: 2px;
+    background: var(--border-color);
+    flex-shrink: 0;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}
+
+/* Responsive: stack vertically when narrow */
+@media (max-width: 500px) {
+    .style-multi .multi-webcam-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+    }
+}
+
+/* Handle fewer than 4 webcams */
+.style-multi .multi-webcam-grid.cams-1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+}
+
+.style-multi .multi-webcam-grid.cams-2 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: 1fr;
+}
+
+.style-multi .multi-webcam-grid.cams-3 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}
+
+.style-multi .multi-webcam-cell {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+    width: 100%;
+    flex-shrink: 0;
+    min-height: 0;
+}
+
+.style-multi .multi-webcam-cell .webcam-image,
+.style-multi .multi-webcam-cell picture {
+    /* Aspect ratio and sizing set inline from APCu metadata */
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.style-multi .multi-webcam-cell picture img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.style-multi .multi-webcam-cell .no-webcam-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
+    color: var(--muted-color);
+    font-size: 0.85rem;
+    background: var(--card-bg);
+}
+
+/* Overlay info matching Compact Single (only on first webcam) */
+.style-multi .multi-webcam-cell .overlay-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 1.5rem 0.75rem 0.5rem;
+    color: white;
+    pointer-events: none;
+}
+
+.style-multi .multi-webcam-cell .overlay-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.style-multi .multi-webcam-cell .overlay-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.style-multi .multi-webcam-cell .overlay-right {
+    flex-shrink: 0;
+}
+
+.style-multi .multi-webcam-cell .overlay-airport {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.style-multi .multi-webcam-cell .overlay-airport .code {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #5eb3ff;
+    line-height: 1.2;
+}
+
+.style-multi .multi-webcam-cell .overlay-airport .name {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Flight category badge matching Compact Single */
+.style-multi .multi-webcam-cell .flight-category-badge {
+    display: inline-block;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.style-multi .multi-webcam-cell .flight-category-badge.VFR {
+    background: #28a745; /* Green for VFR */
+}
+
+.style-multi .multi-webcam-cell .flight-category-badge.MVFR {
+    background: #0066cc; /* Blue for MVFR */
+}
+
+.style-multi .multi-webcam-cell .flight-category-badge.IFR {
+    background: #dc3545; /* Red for IFR */
+}
+
+.style-multi .multi-webcam-cell .flight-category-badge.LIFR {
+    background: #ff00ff; /* Magenta for LIFR */
+}
+
+.style-multi .multi-webcam-cell .flight-category-badge.unknown {
+    background: #6c757d; /* Gray for unknown */
+}
+
+.style-multi .multi-webcam-cell .flight-category-badge.no-category {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Content wrapper matching Compact Single */
+.style-multi .multi-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+/* Ensure footer is properly positioned */
+.style-multi .embed-footer {
+    flex-shrink: 0;
+}
+
+/* Dense weather metrics grid (matching Compact Single) */
+.style-multi .webcam-metrics {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+    flex: 1;
+    min-height: 0;
+}
+
+.style-multi .webcam-metrics .metric-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* When widget width > 500px, arrange metrics in 3 columns of 2 each */
+@media (min-width: 501px) {
+    .style-multi .webcam-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, auto);
+        grid-auto-flow: column; /* Fill column by column instead of row by row */
+        gap: 0.5rem;
+    }
+    
+    .style-multi .webcam-metrics .metric-row {
+        display: contents; /* Remove row wrapper, let metrics flow directly into grid */
+    }
+    
+    .style-multi .webcam-metrics .metric {
+        /* Each metric becomes a grid item */
+        width: 100%;
+        min-width: 0; /* Allow grid to control sizing */
+    }
+}
+
+.style-multi .webcam-metrics .metric {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+/* Light theme override for metrics */
+.theme-light .style-multi .webcam-metrics .metric {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.style-multi .webcam-metrics .metric-label {
+    font-size: 0.7rem;
+    color: var(--muted-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.style-multi .webcam-metrics .metric-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* ============================================
+   FULL WIDGET STYLE (925x800+)
+   ============================================ */
+
+.style-full {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+}
+
+.style-full .full-header {
+    background: var(--header-bg);
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* Light theme override for header */
+.theme-light .style-full .full-header {
+    background: var(--card-bg);
+}
+
+.style-full .airport-title {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex: 1;
+}
+
+.style-full .airport-title .identifier {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    letter-spacing: 0.5px;
+}
+
+.style-full .airport-title .name {
+    font-size: 0.75rem;
+    color: var(--muted-color);
+}
+
+/* Flight category badge (right-aligned, matching compact styles) */
+.style-full .flight-category-badge {
+    display: inline-block;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    white-space: nowrap;
+    line-height: 1.2;
+    flex-shrink: 0;
+}
+
+.style-full .flight-category-badge.VFR {
+    background: #28a745; /* Green for VFR */
+}
+
+.style-full .flight-category-badge.MVFR {
+    background: #0066cc; /* Blue for MVFR */
+}
+
+.style-full .flight-category-badge.IFR {
+    background: #dc3545; /* Red for IFR */
+}
+
+.style-full .flight-category-badge.LIFR {
+    background: #ff00ff; /* Magenta for LIFR */
+}
+
+.style-full .flight-category-badge.unknown {
+    background: #6c757d; /* Gray for unknown */
+}
+
+.style-full .flight-category-badge.no-category {
+    background: rgba(128, 128, 128, 0.2);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.style-full .full-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.style-full .webcam-section {
+    position: relative;
+    background: #000;
+    flex: 1;
+    min-height: 100px;
+}
+
+.style-full .webcam-section img,
+.style-full .webcam-section picture {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.style-full .webcam-section picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.style-full .webcam-section .webcam-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    gap: 2px;
+    background: var(--border-color);
+}
+
+.style-full .webcam-section .webcam-grid.grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.style-full .webcam-section .webcam-grid.grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}
+
+.style-full .webcam-section .webcam-cell {
+    position: relative;
+    background: #000;
+    overflow: hidden;
+}
+
+.style-full .webcam-section .webcam-cell img,
+.style-full .webcam-section .webcam-cell picture {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.style-full .webcam-section .webcam-cell picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.style-full .webcam-section .webcam-cell .cam-label {
+    position: absolute;
+    bottom: 0.25rem;
+    left: 0.25rem;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.65rem;
+    border-radius: 3px;
+}
+
+.style-full .data-row {
+    display: flex;
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.style-full .wind-section {
+    display: flex;
+    background: var(--card-bg);
+    border-right: 1px solid var(--border-color);
+}
+
+.style-full .wind-viz-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0.75rem;
+    min-width: 160px;
+}
+
+.style-full .wind-section .wind-details {
+    padding: 0.4rem 0.5rem;
+    border-left: 1px solid var(--border-color);
+    min-width: 100px;
+}
+
+.style-full .wind-section .wind-details .column-header {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+}
+
+.style-full .wind-section .wind-details .metric-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    padding: 0.15rem 0;
+}
+
+.style-full .wind-section .wind-details .metric-item .label {
+    color: var(--muted-color);
+}
+
+.style-full .wind-section .wind-details .metric-item .value {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.style-full .wind-section .wind-details .peak-item .value {
+    color: #ff9500;
+}
+
+.style-full .wind-section .wind-details .peak-time-item {
+    font-size: 0.65rem;
+    opacity: 0.8;
+    margin-top: -0.1rem;
+}
+
+.style-full .wind-section .wind-details .peak-time-item .value {
+    color: #ff9500;
+    font-weight: 500;
+}
+
+.style-full .wind-viz-container canvas {
+    display: block;
+}
+
+.style-full .wind-summary {
+    text-align: center;
+    margin-top: 0.25rem;
+}
+
+.style-full .wind-summary .wind-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.style-full .metrics-section {
+    flex: 1;
+    background: var(--bg-color);
+    padding: 0.4rem 0.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    overflow: hidden;
+}
+
+.style-full .metrics-columns {
+    display: flex;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.style-full .metric-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    background: var(--card-bg);
+    border-radius: 6px;
+    padding: 0.4rem;
+}
+
+.style-full .column-header {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0.15rem;
+}
+
+.style-full .metric-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.15rem 0;
+}
+
+.style-full .metric-item.fog-warning {
+    background: var(--fog-warning-bg);
+    border-radius: 3px;
+    padding: 0.15rem 0.25rem;
+    margin: 0 -0.25rem;
+}
+
+.style-full .metric-item .label {
+    font-size: 0.6rem;
+    color: var(--muted-color);
+}
+
+.style-full .metric-item .value {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
