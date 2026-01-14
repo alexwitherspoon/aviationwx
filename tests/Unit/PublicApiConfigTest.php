@@ -279,7 +279,7 @@ class PublicApiConfigTest extends TestCase
         
         $attribution = getPublicApiAttributionText();
         
-        $this->assertEquals('Weather data from AviationWX.org', $attribution);
+        $this->assertEquals('Data from AviationWX.org', $attribution);
     }
     
     /**

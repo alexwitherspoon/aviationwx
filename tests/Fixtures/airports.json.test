@@ -30,7 +30,7 @@
       "bulk_max_airports": 10,
       "weather_history_enabled": true,
       "weather_history_retention_hours": 24,
-      "attribution_text": "Weather data from AviationWX.org (Test)",
+      "attribution_text": "Data from AviationWX.org (Test)",
       "partner_keys": {
         "ak_test_key_1234567890": {
           "name": "Test Partner",

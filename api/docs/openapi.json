@@ -491,7 +491,7 @@
           },
           "attribution": {
             "type": "string",
-            "example": "Weather data from AviationWX.org"
+            "example": "Data from AviationWX.org"
           }
         }
       },

@@ -121,7 +121,7 @@ function getPublicApiWeatherHistoryRetentionHours(): int
 function getPublicApiAttributionText(): string
 {
     $config = getPublicApiConfig();
-    return $config['attribution_text'] ?? 'Weather data from AviationWX.org';
+    return $config['attribution_text'] ?? 'Data from AviationWX.org';
 }
 
 /**
