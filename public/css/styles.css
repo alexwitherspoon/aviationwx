@@ -1327,6 +1327,63 @@ h3 {
         padding: 1rem;
     }
     
+    /* Mobile weather conditions: flatten groups and reorder by priority */
+    #weather-data.weather-grid {
+        display: flex !important; /* Override grid display on mobile */
+        flex-direction: column !important;
+        grid-template-columns: none !important; /* Disable grid columns */
+        gap: 0.35rem !important; /* Tighter spacing between cards (~5.6px) */
+    }
+    
+    #weather-data.weather-grid > .weather-group {
+        display: contents !important; /* Make weather items direct children of flex container */
+    }
+    
+    /* Mobile: keep card appearance but stretch full width with minimal vertical spacing */
+    .weather-item {
+        padding: 0.5rem; /* Reduced from 0.75rem for more density (~8px) */
+        background: #f9f9f9; /* Keep card background */
+        border-radius: 4px; /* Keep rounded corners */
+        width: 100%; /* Stretch to full width */
+        box-sizing: border-box; /* Include padding in width calculation */
+    }
+    
+    /* Mobile: compact runway wind display */
+    .wind-visual-container {
+        padding: 0.5rem !important; /* Reduce padding around compass */
+    }
+    
+    #windCanvas {
+        max-width: 240px !important; /* Reduce compass size from 300px */
+        height: auto !important;
+    }
+    
+    #wind-details {
+        font-size: 0.9rem !important; /* Slightly smaller text */
+        gap: 0.35rem !important; /* Tighter spacing between wind details */
+    }
+    
+    #wind-details > div {
+        padding: 0.35rem 0 !important; /* Reduce vertical padding on each detail row */
+    }
+    
+    /* Mobile priority ordering - optimized for in-flight use */
+    .weather-item[data-mobile-priority="1"] { order: 1; }   /* Condition */
+    .weather-item[data-mobile-priority="2"] { order: 2; }   /* Current Temperature */
+    .weather-item[data-mobile-priority="3"] { order: 3; }   /* Density Altitude */
+    .weather-item[data-mobile-priority="4"] { order: 4; }   /* Pressure */
+    .weather-item[data-mobile-priority="5"] { order: 5; }   /* Visibility */
+    .weather-item[data-mobile-priority="6"] { order: 6; }   /* Ceiling */
+    .weather-item[data-mobile-priority="7"] { order: 7; }   /* Dewpoint */
+    .weather-item[data-mobile-priority="8"] { order: 8; }   /* Dewpoint Spread */
+    .weather-item[data-mobile-priority="9"] { order: 9; }   /* Humidity */
+    .weather-item[data-mobile-priority="10"] { order: 10; } /* Sunrise */
+    .weather-item[data-mobile-priority="11"] { order: 11; } /* Sunset */
+    .weather-item[data-mobile-priority="12"] { order: 12; } /* Pressure Altitude */
+    .weather-item[data-mobile-priority="13"] { order: 13; } /* Today's High */
+    .weather-item[data-mobile-priority="14"] { order: 14; } /* Today's Low */
+    .weather-item[data-mobile-priority="15"] { order: 15; } /* Rainfall Today */
+    
     .webcam-grid {
         grid-template-columns: 1fr;
     }
@@ -1411,6 +1468,28 @@ h3 {
         order: 3;
         width: 100%;
         margin-top: 0.5rem;
+    }
+}
+
+/* Mobile Landscape: 2-column layout for better use of horizontal space */
+@media (max-width: 768px) and (orientation: landscape) {
+    #weather-data.weather-grid {
+        display: grid !important; /* Switch to grid for 2 columns */
+        grid-template-columns: 1fr 1fr !important; /* 2 equal columns */
+        gap: 0.35rem !important; /* Keep compact spacing */
+    }
+    
+    #weather-data.weather-grid > .weather-group {
+        display: contents !important; /* Keep items as direct children */
+    }
+    
+    .weather-item {
+        /* Keep existing compact styling */
+    }
+    
+    /* Airport info section: 2 columns in landscape */
+    .info-grid, .freq-grid, .time-grid {
+        grid-template-columns: 1fr 1fr !important; /* 2 columns instead of 1 */
     }
 }
 
