@@ -46,6 +46,14 @@ function getPublicApiVersion(): string
 /**
  * Get rate limits for a specific tier
  * 
+ * Tiers:
+ * - anonymous: Public users without API key (default limits)
+ * - partner: External partners with API key (higher limits)
+ * 
+ * Note: First-party internal requests (embeds, dashboard) forward the original
+ * client IP and use anonymous tier limits. This ensures each end user gets
+ * their fair share of rate limits rather than a special internal tier.
+ * 
  * @param string $tier 'anonymous' or 'partner'
  * @return array Rate limit configuration with requests_per_minute, requests_per_hour, requests_per_day
  */

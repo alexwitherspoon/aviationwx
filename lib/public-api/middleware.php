@@ -43,15 +43,31 @@ function processPublicApiRequest(): array
         exit;
     }
     
-    // Get client IP
+    // Get client IP for rate limiting
     $ip = getPublicApiClientIp();
     
-    // Check for API key
+    // Check for first-party internal requests (embeds, dashboard, scheduler)
+    // First-party requests come from localhost and forward the original client IP
+    $isFirstParty = isFirstPartyRequest();
+    $originalClientIp = null;
+    
+    if ($isFirstParty) {
+        // First-party requests forward the original client IP for rate limiting
+        // We trust this header ONLY because we verified REMOTE_ADDR is localhost
+        $originalClientIp = $_SERVER['HTTP_X_FORWARDED_CLIENT_IP'] ?? null;
+        if ($originalClientIp !== null && filter_var($originalClientIp, FILTER_VALIDATE_IP)) {
+            $ip = $originalClientIp;
+        }
+        // First-party requests use anonymous tier - rate limited per original user
+    }
+    
+    // Determine tier (partner or anonymous)
     $apiKey = getPublicApiKeyFromRequest();
     $partner = null;
     $tier = 'anonymous';
     
     if ($apiKey !== null) {
+        // Check for partner API key
         $partner = validatePublicApiKey($apiKey);
         if ($partner === null) {
             sendPublicApiError(
@@ -64,10 +80,12 @@ function processPublicApiRequest(): array
         $tier = 'partner';
     }
     
-    // Check for internal health check (bypass rate limiting)
+    // Check for internal health check (bypass rate limiting entirely)
     $isHealthCheck = isPublicApiHealthCheckRequest();
     
-    // Check rate limits
+    // Check rate limits using the appropriate identifier
+    // - Partner requests: use API key
+    // - Anonymous/first-party: use client IP (original user's IP for first-party)
     $identifier = $apiKey ?? $ip;
     $rateLimitResult = checkPublicApiRateLimit($identifier, $tier, $isHealthCheck);
     
@@ -94,32 +112,86 @@ function processPublicApiRequest(): array
         'authenticated' => $partner !== null,
         'partner' => $partner,
         'tier' => $tier,
+        'is_first_party' => $isFirstParty,
         'rate_limit' => $rateLimitResult,
         'ip' => $ip,
     ];
 }
 
 /**
- * Get the client IP address
+ * Get the client IP address for rate limiting
  * 
- * Respects X-Forwarded-For header for proxied requests (CDN)
+ * Respects X-Forwarded-For header for proxied requests (CDN).
  * 
- * @return string Client IP address
+ * SECURITY WARNING: This function trusts forwarded headers which CAN BE SPOOFED.
+ * Use this ONLY for rate limiting identification (where spoofing just means
+ * the attacker rate-limits themselves under a fake IP - no security impact).
+ * 
+ * DO NOT use this for security decisions like first-party detection.
+ * For security checks, use $_SERVER['REMOTE_ADDR'] directly.
+ * See isFirstPartyRequest() for the secure implementation.
+ * 
+ * @return string Client IP address (may be from trusted proxy headers)
  */
 function getPublicApiClientIp(): string
 {
-    // Check for CDN CF-Connecting-IP first (CDN-specific header)
+    // Check for CDN CF-Connecting-IP first (Cloudflare-specific header)
+    // This is set by Cloudflare and should be trusted when behind CF
     if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
         return $_SERVER['HTTP_CF_CONNECTING_IP'];
     }
     
-    // Check X-Forwarded-For
+    // Check X-Forwarded-For (standard proxy header)
+    // Takes first IP in chain (original client)
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
         return trim($ips[0]);
     }
     
+    // Direct connection - use actual TCP source
     return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+}
+
+/**
+ * Check if request is from a first-party internal service
+ * 
+ * First-party requests must meet BOTH criteria:
+ * 1. Come from localhost (127.0.0.1 or ::1) - verified via REMOTE_ADDR
+ * 2. Include a valid internal request header
+ * 
+ * SECURITY: Uses REMOTE_ADDR directly, NOT getPublicApiClientIp().
+ * This is critical because X-Forwarded-For can be spoofed by attackers.
+ * REMOTE_ADDR is set by the TCP connection and cannot be spoofed for HTTP.
+ * 
+ * @return bool True if request is verified first-party
+ */
+function isFirstPartyRequest(): bool
+{
+    // SECURITY: Use REMOTE_ADDR directly - NOT getPublicApiClientIp()
+    // getPublicApiClientIp() trusts X-Forwarded-For which can be spoofed.
+    // REMOTE_ADDR is the actual TCP connection source - cannot be spoofed.
+    $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+    
+    // Only allow localhost connections
+    // These are the only IPs that can make internal requests
+    $localhostIps = ['127.0.0.1', '::1'];
+    if (!in_array($remoteAddr, $localhostIps, true)) {
+        return false;
+    }
+    
+    // Check for internal request header
+    $internalHeader = $_SERVER['HTTP_X_INTERNAL_REQUEST'] ?? '';
+    if (empty($internalHeader)) {
+        return false;
+    }
+    
+    // Validate header value (must be a known internal service)
+    $validServices = ['embed-widget', 'dashboard', 'scheduler', 'health-check'];
+    if (!in_array($internalHeader, $validServices, true)) {
+        return false;
+    }
+    
+    return true;
 }
 
 /**

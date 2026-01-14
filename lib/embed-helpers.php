@@ -2,47 +2,86 @@
 /**
  * Embed Widget Helpers
  * 
- * Helper functions for embed widgets to fetch data from the public API.
- * This ensures widgets use the same data source as external API consumers.
+ * READ-ONLY helper functions for embed widgets to fetch data from the public API.
+ * 
+ * ARCHITECTURE PRINCIPLE:
+ * Embed widgets are PURE CONSUMERS of weather data. They should NEVER write to
+ * any cache files or tracking files. All data updates happen through the 
+ * scheduler → fetch-weather → api/weather.php pipeline.
+ * 
+ * Data flow:
+ * 1. Scheduler triggers weather refresh (WRITE PATH)
+ * 2. api/weather.php updates daily tracking + writes cache file
+ * 3. Public API reads cache file (READ PATH)
+ * 4. Embed widgets call Public API (READ ONLY)
+ * 
+ * RATE LIMITING:
+ * Embed requests forward the original client IP via X-Forwarded-Client-IP header.
+ * The public API uses this for rate limiting, so each end user gets their own
+ * rate limit bucket (anonymous tier: 20/min, 200/hr, 2000/day).
  */
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
-require_once __DIR__ . '/weather/daily-tracking.php';
 
-// Load public API middleware functions (but don't execute middleware checks)
-// We only need getPublicApiAirport() function, not the full middleware
+// Load public API functions for airport lookup
 require_once __DIR__ . '/public-api/middleware.php';
 
 /**
- * Fetch latest weather data using the same logic as the public API
+ * Get the original client IP address for forwarding to internal API
  * 
- * Calls the weather API handler function directly to get the most recent data.
- * This ensures we get fresh data that has been processed with daily tracking updates.
+ * Determines the actual end-user's IP address from the incoming embed request.
+ * This is forwarded to the public API so rate limiting applies per end-user.
+ * 
+ * @return string Client IP address
+ */
+function getOriginalClientIp(): string
+{
+    // Check for CDN headers first (Cloudflare)
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        return $_SERVER['HTTP_CF_CONNECTING_IP'];
+    }
+    
+    // Check X-Forwarded-For (behind load balancer/proxy)
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        return trim($ips[0]);
+    }
+    
+    // Direct connection
+    return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+}
+
+/**
+ * Fetch weather data from the PUBLIC API
+ * 
+ * This is a READ-ONLY operation. The cache file already contains all daily
+ * tracking data (temp_high_today, temp_low_today, peak_gust_today) because
+ * api/weather.php writes it during the refresh cycle.
  * 
  * @param string $airportId Airport identifier
- * @param array $airport Airport configuration
  * @return array|null Weather data array or null if unavailable
  */
-function fetchLatestWeatherFromApi(string $airportId, array $airport): ?array {
-    // Trigger weather API refresh to ensure we have the latest data
-    // This uses the stale-while-revalidate pattern - serves cache immediately but refreshes in background
-    // For widgets, we want the absolute latest, so we'll make a request that triggers refresh
+function fetchWeatherFromPublicApi(string $airportId): ?array {
+    // Call the public API endpoint
+    // Use localhost for internal calls (faster, avoids DNS/SSL overhead)
+    $apiUrl = "http://127.0.0.1:8080/api/v1/airports/" . urlencode($airportId) . "/weather";
     
-    // Determine base URL for internal API call
-    // Use localhost directly for internal calls (faster, avoids DNS)
-    $weatherUrl = "http://127.0.0.1:8080/api/weather.php?airport=" . urlencode($airportId);
+    // Get the original client IP to forward for rate limiting
+    // This allows rate limiting per end-user, not per internal service
+    $originalClientIp = getOriginalClientIp();
     
-    // Make internal HTTP request to trigger weather refresh/get latest
     $ch = curl_init();
     curl_setopt_array($ch, [
-        CURLOPT_URL => $weatherUrl,
+        CURLOPT_URL => $apiUrl,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
+        CURLOPT_TIMEOUT => 10,
         CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_HTTPHEADER => [
-            'X-Embed-Widget: 1', // Identify as internal widget request
+            'Accept: application/json',
+            'X-Internal-Request: embed-widget',
+            'X-Forwarded-Client-IP: ' . $originalClientIp, // Forward original user IP for rate limiting
         ],
     ]);
     
@@ -51,80 +90,109 @@ function fetchLatestWeatherFromApi(string $airportId, array $airport): ?array {
     $error = curl_error($ch);
     curl_close($ch);
     
-    // Parse weather API response
+    // Parse public API response
     if ($httpCode === 200 && $response !== false && empty($error)) {
         $data = json_decode($response, true);
-        if (is_array($data) && isset($data['success']) && $data['success'] && isset($data['weather'])) {
-            $weatherData = $data['weather'];
+        if (is_array($data) && isset($data['success']) && $data['success'] && isset($data['data']['weather'])) {
+            $apiWeather = $data['data']['weather'];
             
-            // CRITICAL: Always update daily tracking with the LATEST temperature from the API response
-            // This ensures that when a new day starts, the extremes reflect the current temperature, not an old initialization value
-            // The weather API response contains the most recent temperature, so we use that to update tracking
-            $currentTemp = $weatherData['temperature'] ?? null;
-            
-            if ($currentTemp !== null) {
-                // Update daily tracking with current temperature from API (this is the latest value)
-                // This is especially important when a new day starts - we want extremes to reflect the current temp, not old init values
-                $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
-                updateTempExtremes($airportId, $currentTemp, $airport, $obsTimestamp);
-                
-                // Immediately get the updated extremes after updating
-                // If day just reset, both high and low should now equal currentTemp
-                $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
-                
-                // Override the weather data with the freshly updated extremes
-                // This ensures widgets always show the latest extremes based on current temperature
-                $weatherData['temp_high_today'] = $tempExtremes['high'];
-                $weatherData['temp_low_today'] = $tempExtremes['low'];
-                $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
-                $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
-            } else {
-                // No current temp - still get extremes (might be from earlier today)
-                $tempExtremes = getTempExtremes($airportId, 0, $airport);
-                $weatherData['temp_high_today'] = $tempExtremes['high'];
-                $weatherData['temp_low_today'] = $tempExtremes['low'];
-                $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
-                $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
-            }
-            
-            return $weatherData;
+            // Convert public API format back to internal format for templates
+            // Public API uses 'daily' nested object, templates expect flat fields
+            return convertPublicApiToInternalFormat($apiWeather);
         }
     }
     
-    // Fallback: read from cache file directly if API call fails
-    require_once __DIR__ . '/../api/v1/weather.php';
-    $weatherData = getWeatherFromCache($airportId);
-    
-    if ($weatherData === null) {
-        return null;
-    }
-    
-    // Ensure daily tracking is up to date even from cache
-    $currentTemp = $weatherData['temperature'] ?? null;
-    if ($currentTemp !== null) {
-        $obsTimestamp = $weatherData['obs_time_primary'] ?? $weatherData['last_updated_primary'] ?? time();
-        updateTempExtremes($airportId, $currentTemp, $airport, $obsTimestamp);
-        $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
-        $weatherData['temp_high_today'] = $tempExtremes['high'];
-        $weatherData['temp_low_today'] = $tempExtremes['low'];
-        $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;
-        $weatherData['temp_low_ts'] = $tempExtremes['low_ts'] ?? null;
-    }
-    
-    return $weatherData;
+    // Fallback: read directly from cache file if API call fails
+    // This is still READ-ONLY - we just read the file that api/weather.php wrote
+    return readWeatherCacheFile($airportId);
 }
 
 /**
- * Fetch airport and weather data from public API for embed widgets
+ * Convert public API weather format to internal template format
  * 
- * Uses the same data source as the public API endpoints.
- * This ensures widgets get daily tracking data (temp_high_today, temp_low_today)
- * that's already calculated and stored in the weather cache.
+ * Public API nests daily data under 'daily' key with ISO timestamps.
+ * Templates expect flat fields with Unix timestamps.
+ * 
+ * @param array $apiWeather Weather data from public API
+ * @return array Weather data in internal format
+ */
+function convertPublicApiToInternalFormat(array $apiWeather): array {
+    $weather = $apiWeather;
+    
+    // Flatten daily tracking data from nested 'daily' object
+    if (isset($apiWeather['daily']) && is_array($apiWeather['daily'])) {
+        $daily = $apiWeather['daily'];
+        
+        $weather['temp_high_today'] = $daily['temp_high'] ?? null;
+        $weather['temp_low_today'] = $daily['temp_low'] ?? null;
+        $weather['peak_gust_today'] = $daily['peak_gust'] ?? null;
+        
+        // Convert ISO timestamps back to Unix timestamps
+        $weather['temp_high_ts'] = isset($daily['temp_high_time']) 
+            ? strtotime($daily['temp_high_time']) 
+            : null;
+        $weather['temp_low_ts'] = isset($daily['temp_low_time']) 
+            ? strtotime($daily['temp_low_time']) 
+            : null;
+        $weather['peak_gust_time'] = isset($daily['peak_gust_time']) 
+            ? strtotime($daily['peak_gust_time']) 
+            : null;
+        
+        unset($weather['daily']);
+    }
+    
+    // Convert observation_time and last_updated from ISO to Unix
+    if (isset($apiWeather['observation_time']) && is_string($apiWeather['observation_time'])) {
+        $weather['obs_time_primary'] = strtotime($apiWeather['observation_time']);
+    }
+    if (isset($apiWeather['last_updated']) && is_string($apiWeather['last_updated'])) {
+        $weather['last_updated'] = strtotime($apiWeather['last_updated']);
+        $weather['last_updated_primary'] = $weather['last_updated'];
+    }
+    
+    return $weather;
+}
+
+/**
+ * Read weather data directly from cache file (fallback)
+ * 
+ * This is a READ-ONLY fallback when the HTTP API call fails.
+ * The cache file contains all data including daily tracking.
+ * 
+ * @param string $airportId Airport identifier
+ * @return array|null Weather data or null if unavailable
+ */
+function readWeatherCacheFile(string $airportId): ?array {
+    $cacheFile = getWeatherCachePath($airportId);
+    
+    if (!file_exists($cacheFile)) {
+        return null;
+    }
+    
+    $content = @file_get_contents($cacheFile);
+    if ($content === false) {
+        return null;
+    }
+    
+    $data = json_decode($content, true);
+    if (!is_array($data)) {
+        return null;
+    }
+    
+    return $data;
+}
+
+/**
+ * Fetch airport and weather data for embed widgets
+ * 
+ * READ-ONLY: Calls the public API to get weather data.
+ * All daily tracking data (temp_high_today, temp_low_today) is already
+ * in the cache file, written by api/weather.php during refresh.
  * 
  * @param string $airportId Airport identifier
  * @return array|null {
  *   'airport' => array,  // Airport configuration data
- *   'weather' => array,  // Weather data with daily tracking (temp_high_today, temp_low_today)
+ *   'weather' => array,  // Weather data with daily tracking
  *   'airportId' => string
  * } or null if airport not found
  */
@@ -139,16 +207,15 @@ function fetchEmbedDataFromApi(string $airportId): ?array {
     }
     $normalizedId = strtolower($trimmed);
     
-    // Get airport data (same function used by public API)
-    // getPublicApiAirport() doesn't require API to be enabled - it just gets airport config
+    // Get airport configuration
+    // getPublicApiAirport() is a read-only lookup in the config
     $airport = getPublicApiAirport($normalizedId);
     if ($airport === null) {
         return null;
     }
     
-    // Fetch latest weather data from public API endpoint (ensures fresh data)
-    // This triggers the weather API to fetch/refresh data and return the latest values
-    $weatherData = fetchLatestWeatherFromApi($normalizedId, $airport);
+    // Fetch weather data from public API (READ-ONLY)
+    $weatherData = fetchWeatherFromPublicApi($normalizedId);
     
     if ($weatherData === null) {
         // Weather unavailable - return airport data only
