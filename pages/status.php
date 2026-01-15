@@ -1404,8 +1404,18 @@ function checkAirportHealth(string $airportId, array $airport): array {
         'total_images' => 0,
         'total_size_bytes' => 0,
         'oldest_image_time' => 0,
-        'newest_image_time' => 0
+        'newest_image_time' => 0,
+        'images_accepted' => 0,
+        'images_rejected' => 0
     ];
+    
+    // Aggregate upload metrics from all cameras (24-hour accepted/rejected counts)
+    foreach ($webcamComponents as $comp) {
+        if (isset($comp['upload_metrics'])) {
+            $airportCacheStats['images_accepted'] += $comp['upload_metrics']['accepted'] ?? 0;
+            $airportCacheStats['images_rejected'] += $comp['upload_metrics']['rejected'] ?? 0;
+        }
+    }
     
     if ($totalCams > 0) {
         $airportWebcamDir = CACHE_WEBCAMS_DIR . '/' . $airportId;
@@ -2699,6 +2709,9 @@ if (php_sapi_name() === 'cli') {
                         $cacheStats = $component['cache_stats'];
                         $totalImages = $cacheStats['total_images'];
                         $sizeMB = round($cacheStats['total_size_bytes'] / (1024 * 1024), 1);
+                        $imagesAccepted = $cacheStats['images_accepted'] ?? 0;
+                        $imagesRejected = $cacheStats['images_rejected'] ?? 0;
+                        $hasUploadMetrics = ($imagesAccepted > 0 || $imagesRejected > 0);
                         ?>
                         <li class="component-item">
                             <div class="component-info">
@@ -2720,6 +2733,28 @@ if (php_sapi_name() === 'cli') {
                                         </span>
                                         <?php endif; ?>
                                     </div>
+                                    <?php if ($hasUploadMetrics): ?>
+                                    <div class="metrics-line" style="margin-top: 0.5rem;">
+                                        <span class="metric-group">
+                                            <span class="metric-label">24h Accepted:</span>
+                                            <span class="metric-value" style="color: #22c55e;"><?php echo number_format($imagesAccepted); ?></span>
+                                        </span>
+                                        <span class="metric-group">
+                                            <span class="metric-label">24h Rejected:</span>
+                                            <span class="metric-value" style="color: <?php echo $imagesRejected > 0 ? '#ef4444' : '#6b7280'; ?>;"><?php echo number_format($imagesRejected); ?></span>
+                                        </span>
+                                        <?php if ($imagesAccepted + $imagesRejected > 0): ?>
+                                        <span class="metric-group">
+                                            <span class="metric-label">Acceptance Rate:</span>
+                                            <?php 
+                                            $acceptanceRate = round(($imagesAccepted / ($imagesAccepted + $imagesRejected)) * 100, 1);
+                                            $rateColor = $acceptanceRate >= 90 ? '#22c55e' : ($acceptanceRate >= 70 ? '#eab308' : '#ef4444');
+                                            ?>
+                                            <span class="metric-value" style="color: <?php echo $rateColor; ?>;"><?php echo $acceptanceRate; ?>%</span>
+                                        </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </li>
