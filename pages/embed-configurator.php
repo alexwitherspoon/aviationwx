@@ -37,6 +37,11 @@ $pageTitle = 'Embed Generator - AviationWX.org';
 $pageDescription = 'Create embeddable weather widgets for your airport website. Generate iframe or web component code to display real-time weather and webcams.';
 $canonicalUrl = 'https://embed.' . $baseDomain;
 $baseUrl = getBaseUrl();
+
+// Check if there are query parameters that indicate a specific configuration
+// These URL variations should not be indexed - only the base configurator page should be
+$hasQueryParams = !empty($_SERVER['QUERY_STRING']);
+$shouldNoIndex = $hasQueryParams;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,6 +51,12 @@ $baseUrl = getBaseUrl();
     <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php
+    // Prevent indexing of configurator pages with query parameters
+    // Only the base embed.aviationwx.org page should be indexed
+    if ($shouldNoIndex) {
+        echo '<meta name="robots" content="noindex, nofollow">' . "\n    ";
+    }
+    
     echo generateFaviconTags();
     echo "\n    ";
     echo generateEnhancedMetaTags($pageDescription, 'embed, widget, aviation weather, airport webcam, embed code');

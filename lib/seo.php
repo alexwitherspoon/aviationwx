@@ -11,19 +11,31 @@
  * the subdomain URL format (e.g., https://kspb.aviationwx.org) regardless of how
  * the page was accessed.
  * 
+ * Always uses HTTPS protocol for canonical URLs since all HTTP requests redirect
+ * to HTTPS via nginx. This ensures canonical URLs are consistent regardless of
+ * how the page was initially accessed.
+ * 
  * @param string|null $airportId Optional airport ID to generate subdomain URL
- * @return string Canonical URL (protocol + host + path, query params removed)
+ * @return string Canonical URL (always HTTPS, host + path, query params removed)
  */
 function getCanonicalUrl($airportId = null) {
-    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    // Always use HTTPS for canonical URLs - HTTP redirects to HTTPS via nginx (301)
+    $protocol = 'https';
     
     // If airport ID is provided, use subdomain URL
     if ($airportId) {
         return $protocol . '://' . $airportId . '.aviationwx.org';
     }
     
-    // Otherwise, use current host
+    // Otherwise, use current host (strip www. prefix for consistency)
     $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
+    // Remove www. prefix - www.aviationwx.org redirects to aviationwx.org
+    if (strpos($host, 'www.') === 0) {
+        $host = substr($host, 4);
+    }
+    // Remove port if present (for local dev)
+    $host = preg_replace('/:\d+$/', '', $host);
+    
     $path = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/';
     // Remove query parameters for canonical URL
     $path = strtok($path, '?');
@@ -36,11 +48,20 @@ function getCanonicalUrl($airportId = null) {
  * Returns the base URL for the current request (protocol + host).
  * Used for generating absolute URLs in structured data and meta tags.
  * 
+ * Always uses HTTPS protocol since all HTTP requests redirect to HTTPS via nginx.
+ * 
  * @return string Base URL (e.g., 'https://aviationwx.org')
  */
 function getBaseUrl() {
-    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    // Always use HTTPS - HTTP redirects to HTTPS via nginx (301)
+    $protocol = 'https';
     $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
+    // Remove www. prefix for consistency
+    if (strpos($host, 'www.') === 0) {
+        $host = substr($host, 4);
+    }
+    // Remove port if present (for local dev)
+    $host = preg_replace('/:\d+$/', '', $host);
     return $protocol . '://' . $host;
 }
 

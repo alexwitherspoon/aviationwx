@@ -7,9 +7,17 @@ Allow: /
 Disallow: /weather.php?*
 Disallow: /webcam.php?*
 
+# Disallow embed widget URLs with parameters (embeds are for iframes, not indexing)
+# The configurator at embed.aviationwx.org is indexed, but specific configurations are not
+Disallow: /*?*render=1*
+Disallow: /*?*embed*
+Disallow: /*?*airport=*
+
 # Disallow JavaScript files from indexing (source maps, service workers, etc.)
 Disallow: *.js$
 Disallow: *.js.map$
+Disallow: /sw.js
+Disallow: /public/js/service-worker.js
 
 # Disallow admin/diagnostic endpoints
 Disallow: /admin/

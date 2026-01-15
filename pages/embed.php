@@ -78,6 +78,7 @@ if ($data === null || !isset($data['airport']) || !isset($data['airportId'])) {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="robots" content="noindex, nofollow">
         <title>Airport Not Found</title>
         <link rel="stylesheet" href="/public/css/embed-widgets.css">
     </head>
@@ -96,6 +97,9 @@ if ($data === null || !isset($data['airport']) || !isset($data['airportId'])) {
 $airport = $data['airport'];
 $weather = $data['weather'];
 $airportId = $data['airportId'];
+
+// Embed widgets should never be indexed - they're meant to be embedded in iframes
+$shouldNoIndex = true;
 
 // Build dashboard URL
 $dashboardUrl = 'https://' . $airportId . '.aviationwx.org';
@@ -172,6 +176,7 @@ switch ($style) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
     <title><?= htmlspecialchars(strtoupper($airportId)) ?> Weather Widget</title>
     <link rel="stylesheet" href="/public/css/embed-widgets.css">
     <script src="/public/js/embed-wind-compass.js"></script>
