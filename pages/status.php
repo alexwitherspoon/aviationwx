@@ -2541,9 +2541,9 @@ if (php_sapi_name() === 'cli') {
         <?php if (!empty($airportHealth)): ?>
         <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a1a;">Airport Status</h2>
         <?php foreach ($airportHealth as $airport): ?>
-        <?php 
-        // Determine if airport should be expanded by default (not operational or maintenance = expanded)
-        $isExpanded = ($airport['status'] !== 'operational' && $airport['status'] !== 'maintenance');
+        <?php
+        // All airports start collapsed - users click to expand
+        $isExpanded = false;
         ?>
         <?php 
         // Get multi-period metrics for this airport
