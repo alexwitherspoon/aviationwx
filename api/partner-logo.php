@@ -2,7 +2,8 @@
 /**
  * Partner Logo Server
  * 
- * Serves cached partner logos with appropriate cache headers.
+ * Serves partner logos with appropriate cache headers.
+ * Supports both remote URLs (downloaded and cached) and local paths.
  * Falls back to placeholder if logo unavailable.
  */
 
@@ -24,16 +25,67 @@ if (empty($logoUrl)) {
     exit;
 }
 
-// Validate URL
-if (!filter_var($logoUrl, FILTER_VALIDATE_URL)) {
-    http_response_code(400);
-    header('Content-Type: text/plain');
-    echo 'Invalid URL';
-    exit;
-}
+// Check if this is a local path or remote URL
+$isLocalPath = strpos($logoUrl, '/') === 0;
 
-// Get cached logo path
-$cacheFile = getPartnerLogoCachePath($logoUrl);
+if ($isLocalPath) {
+    // Local path - serve directly from filesystem
+    // Security: Validate path to prevent directory traversal
+    
+    // Validate file extension first (before checking filesystem)
+    $ext = strtolower(pathinfo($logoUrl, PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])) {
+        http_response_code(400);
+        header('Content-Type: text/plain');
+        echo 'Invalid file type';
+        exit;
+    }
+    
+    // Check for directory traversal attempts in the raw path
+    if (strpos($logoUrl, '..') !== false || strpos($logoUrl, "\0") !== false) {
+        http_response_code(400);
+        header('Content-Type: text/plain');
+        echo 'Invalid path';
+        exit;
+    }
+    
+    // Build the full path
+    $realBase = realpath(__DIR__ . '/..');
+    $fullPath = __DIR__ . '/..' . $logoUrl;
+    
+    // Check if file exists
+    if (!file_exists($fullPath)) {
+        http_response_code(404);
+        header('Content-Type: image/png');
+        header('Cache-Control: public, max-age=3600');
+        // 1x1 transparent PNG
+        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        exit;
+    }
+    
+    // Now use realpath on the existing file to validate it's within web root
+    $requestedPath = realpath($fullPath);
+    if ($requestedPath === false || strpos($requestedPath, $realBase) !== 0) {
+        http_response_code(400);
+        header('Content-Type: text/plain');
+        echo 'Invalid path';
+        exit;
+    }
+    
+    // Serve local file directly
+    $cacheFile = $requestedPath;
+} else {
+    // Remote URL - validate and use caching
+    if (!filter_var($logoUrl, FILTER_VALIDATE_URL)) {
+        http_response_code(400);
+        header('Content-Type: text/plain');
+        echo 'Invalid URL';
+        exit;
+    }
+    
+    // Get cached logo path
+    $cacheFile = getPartnerLogoCachePath($logoUrl);
+}
 
 if ($cacheFile === null || !file_exists($cacheFile)) {
     // Serve placeholder or 404
@@ -54,6 +106,8 @@ if ($ext === 'png') {
     $contentType = 'image/gif';
 } elseif ($ext === 'webp') {
     $contentType = 'image/webp';
+} elseif ($ext === 'svg') {
+    $contentType = 'image/svg+xml';
 }
 
 // Check if cache is fresh
