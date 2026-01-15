@@ -23,7 +23,7 @@ if ($config !== null) {
 }
 
 // SEO variables
-$pageTitle = 'AviationWX Public API - Real-time Aviation Weather Data';
+$pageTitle = 'AviationWX.org Public API - Real-time Aviation Weather Data';
 $pageDescription = 'Free public API for real-time aviation weather data, webcam images, and airport information. Access weather conditions, flight categories, and webcam feeds programmatically.';
 $canonicalUrl = 'https://api.aviationwx.org';
 $baseUrl = getBaseUrl();
@@ -401,7 +401,7 @@ $attribution = getPublicApiAttributionText();
     <?php require_once __DIR__ . '/../../lib/navigation.php'; ?>
     <div class="container">
         <header>
-            <h1>AviationWX Public API</h1>
+            <h1>AviationWX.org Public API</h1>
             <p class="tagline">Real-time weather, webcam images, and 24-hour history for all airports - programmatically.</p>
             
             <div class="stats">

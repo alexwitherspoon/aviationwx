@@ -1,11 +1,11 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "AviationWX Public API",
+    "title": "AviationWX.org Public API",
     "description": "Real-time aviation weather data, webcam images, and airport information. Free access with rate limiting. Partner API keys available for higher limits.",
     "version": "1.0.0",
     "contact": {
-      "name": "AviationWX",
+      "name": "AviationWX.org",
       "url": "https://aviationwx.org"
     },
     "license": {
