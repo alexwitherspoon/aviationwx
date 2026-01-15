@@ -32,6 +32,17 @@
         "description": "Returns a list of all enabled airports with basic metadata.",
         "operationId": "listAirports",
         "tags": ["Airports"],
+        "parameters": [
+          {
+            "name": "maintenance",
+            "in": "query",
+            "description": "Filter by maintenance mode. Use 'false' to get only operational airports, 'true' for airports in maintenance.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",

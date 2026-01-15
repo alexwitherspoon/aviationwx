@@ -5,6 +5,9 @@
  * GET /v1/airports
  * 
  * Returns a list of all enabled airports with basic metadata.
+ * 
+ * Query parameters:
+ * - maintenance: Filter by maintenance mode ('true' or 'false')
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -22,10 +25,28 @@ function handleListAirports(array $params, array $context): void
     // Get all enabled airports
     $airports = getPublicApiAirports(true);
     
+    // Parse maintenance filter parameter
+    $maintenanceFilter = null;
+    if (isset($_GET['maintenance'])) {
+        $maintenanceParam = strtolower(trim($_GET['maintenance']));
+        if ($maintenanceParam === 'true' || $maintenanceParam === '1') {
+            $maintenanceFilter = true;
+        } elseif ($maintenanceParam === 'false' || $maintenanceParam === '0') {
+            $maintenanceFilter = false;
+        }
+    }
+    
     // Format airports for response
     $formattedAirports = [];
     foreach ($airports as $airportId => $airport) {
-        $formattedAirports[] = formatAirportSummary($airportId, $airport);
+        $formatted = formatAirportSummary($airportId, $airport);
+        
+        // Apply maintenance filter if specified
+        if ($maintenanceFilter !== null && $formatted['maintenance'] !== $maintenanceFilter) {
+            continue;
+        }
+        
+        $formattedAirports[] = $formatted;
     }
     
     // Sort by airport ID for consistent ordering
