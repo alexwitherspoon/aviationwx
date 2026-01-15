@@ -7,7 +7,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
-require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
+require_once __DIR__ . '/../lib/webcam-image-metrics.php';
 require_once __DIR__ . '/../lib/webcam-rejection-logger.php';
 
 header('Content-Type: text/html; charset=utf-8');
@@ -185,9 +185,9 @@ $config = loadConfig();
                 }
                 
                 $hasData = true;
-                $metrics = getWebcamUploadMetrics($airportId, $camIndex);
-                $totalUploads = $metrics['accepted'] + $metrics['rejected'];
-                $rejectionRate = $totalUploads > 0 ? ($metrics['rejected'] / $totalUploads) * 100 : 0;
+                $metrics = getWebcamImageMetrics($airportId, $camIndex);
+                $totalImages = $metrics['verified'] + $metrics['rejected'];
+                $rejectionRate = $totalImages > 0 ? ($metrics['rejected'] / $totalImages) * 100 : 0;
                 
                 echo '<div class="camera-section">';
                 echo '<h2>' . htmlspecialchars($airport['name'] ?? $airportId) . ' - Camera ' . $camIndex . '</h2>';
@@ -197,13 +197,13 @@ $config = loadConfig();
                 echo '<div class="metrics-grid">';
                 
                 echo '<div class="metric-card">';
-                echo '<div class="metric-label">Accepted (1h)</div>';
-                echo '<div class="metric-value success">' . $metrics['accepted'] . '</div>';
+                echo '<div class="metric-label">Verified (24h)</div>';
+                echo '<div class="metric-value success">' . $metrics['verified'] . '</div>';
                 echo '</div>';
                 
                 $rejectedClass = $metrics['rejected'] > 0 ? 'error' : '';
                 echo '<div class="metric-card">';
-                echo '<div class="metric-label">Rejected (1h)</div>';
+                echo '<div class="metric-label">Rejected (24h)</div>';
                 echo '<div class="metric-value ' . $rejectedClass . '">' . $metrics['rejected'] . '</div>';
                 echo '</div>';
                 
@@ -217,7 +217,7 @@ $config = loadConfig();
                 
                 // Rejection Reasons
                 if (!empty($metrics['rejection_reasons'])) {
-                    echo '<h3>Rejection Reasons (Last Hour)</h3>';
+                    echo '<h3>Rejection Reasons (24h)</h3>';
                     echo '<div class="rejection-reasons">';
                     arsort($metrics['rejection_reasons']);
                     foreach ($metrics['rejection_reasons'] as $reason => $count) {

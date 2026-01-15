@@ -12,7 +12,7 @@ require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/exif-utils.php';
 require_once __DIR__ . '/../lib/webcam-error-detector.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
-require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
+require_once __DIR__ . '/../lib/webcam-image-metrics.php';
 require_once __DIR__ . '/../lib/webcam-rejection-logger.php';
 
 // Verify exiftool is available at startup (required for EXIF validation)
@@ -705,7 +705,7 @@ function findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessedTime 
             ], 'app');
             
             // Track as rejection (unhealthy camera / failed upload)
-            trackWebcamUploadRejected($airportId, $camIndex, 'file_too_old');
+            trackWebcamImageRejected($airportId, $camIndex, 'file_too_old');
             recordStabilityMetrics($airportId, $camIndex, 0, false); // No stability time, rejected
             
             // Attempt to delete the file (cleanup job is defensive backup)
@@ -758,14 +758,14 @@ function findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessedTime 
                 'cam' => $camIndex,
                 'file' => basename($file)
             ], 'app');
-            trackWebcamUploadRejected($airportId, $camIndex, 'no_exif');
+            trackWebcamImageRejected($airportId, $camIndex, 'no_exif');
             recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
             continue; // Try next file
         }
         
         // Validate image (with per-camera limits and airport for phase-aware detection)
+        // Rejection tracking happens inside validateImageFile via saveRejectedWebcam
         if (!validateImageFile($file, $pushConfig, $airport, $airportId, $camIndex)) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'validation_failed');
             recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
             continue; // Try next file
         }
@@ -776,13 +776,13 @@ function findNewestValidImage($uploadDir, $stabilityTimeout, $lastProcessedTime 
         // Rejects images with unreliable timestamps (safety-critical)
         $timezone = $airport['timezone'] ?? 'UTC';
         if (!normalizeExifToUtc($file, $airportId, $camIndex, $timezone)) {
-            trackWebcamUploadRejected($airportId, $camIndex, 'invalid_exif_timestamp');
+            trackWebcamImageRejected($airportId, $camIndex, 'invalid_exif_timestamp');
             recordStabilityMetrics($airportId, $camIndex, $stabilityTime, false);
             continue; // Skip this image, try next
         }
         
         // SUCCESS - file is stable and valid
-        trackWebcamUploadAccepted($airportId, $camIndex);
+        // Verification tracking happens in promoteFormats() when image is committed to cache
         recordStabilityMetrics($airportId, $camIndex, $stabilityTime, true);
         return $file;
     }
@@ -897,10 +897,7 @@ function isFileStable($file, $requiredStableChecks, $stabilityTimeout, &$stabili
  */
 function handleWebcamRejection(string $file, ?string $airportId, ?int $camIndex, string $reason, array $diagnosticData = []) {
     if ($airportId !== null && $camIndex !== null) {
-        // Track metrics in APCu
-        trackWebcamUploadRejected($airportId, $camIndex, $reason);
-        
-        // Save rejected image and diagnostic log
+        // Save rejected image and diagnostic log (also tracks rejection metrics)
         saveRejectedWebcam($file, $airportId, $camIndex, $reason, $diagnosticData);
     }
 }
@@ -1557,8 +1554,7 @@ function processPushCamera($airportId, $camIndex, $cam, $airport) {
         if ($cacheFile) {
             $successCount++;
             
-            // Track successful upload
-            trackWebcamUploadAccepted($airportId, $camIndex);
+            // Verification tracking happens in promoteFormats() inside moveToCache()
             
             // Update last processed time
             updateLastProcessedTime($airportId, $camIndex);

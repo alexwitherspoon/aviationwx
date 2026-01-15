@@ -12,7 +12,7 @@ require_once __DIR__ . '/../lib/process-utils.php';
 require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/weather-health.php';
-require_once __DIR__ . '/../lib/webcam-upload-metrics.php';
+require_once __DIR__ . '/../lib/webcam-image-metrics.php';
 require_once __DIR__ . '/../lib/cloudflare-analytics.php';
 
 // =============================================================================
@@ -1294,7 +1294,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
                     }
                 } elseif ($cacheAge < $warningThreshold) {
                     $camStatus = 'operational';
-                    $camMessage = 'Fresh';
+                    $camMessage = '';  // No status message needed when healthy - green indicator + timestamp suffice
                     $healthyCams++;
                 } elseif ($cacheAge < $errorThreshold) {
                     $camStatus = 'operational';
@@ -1318,24 +1318,41 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 }
             }
             
-            // Build detailed message with variant coverage
-            $detailedMessage = $camMessage;
+            // Get image metrics for this camera
+            $imageMetrics = getWebcamImageMetrics($airportId, $idx);
+            $verified = $imageMetrics['verified'] ?? 0;
+            $rejected = $imageMetrics['rejected'] ?? 0;
+            
+            // Build detailed message: [Status •] Verified/Rejected • Variants
+            $messageParts = [];
+            
+            // Add status message only if there's an issue (not needed when healthy)
+            if (!empty($camMessage)) {
+                $messageParts[] = $camMessage;
+            }
+            
+            // Add verification metrics for all cameras
+            $messageParts[] = "Verified {$verified} / Rejected {$rejected}";
+            
+            // Add variant coverage
             if ($cacheExists && isset($variantCoverage)) {
                 $coveragePercent = round($variantCoverage * 100);
                 if ($variantCoverage >= 0.9) {
-                    $detailedMessage .= " • {$coveragePercent}% variants available";
+                    $messageParts[] = "{$coveragePercent}% variants available";
                 } elseif ($variantCoverage >= 0.5) {
-                    $detailedMessage .= " • {$coveragePercent}% variants (degraded)";
+                    $messageParts[] = "{$coveragePercent}% variants (degraded)";
                     if ($camStatus === 'operational') {
                         $camStatus = 'degraded';
                     }
                 } else {
-                    $detailedMessage .= " • {$coveragePercent}% variants (low coverage)";
+                    $messageParts[] = "{$coveragePercent}% variants (low coverage)";
                     if ($camStatus === 'operational') {
                         $camStatus = 'degraded';
                     }
                 }
             }
+            
+            $detailedMessage = implode(' • ', $messageParts);
             
             // Add per-camera component
             $webcamComponent = [
@@ -1345,14 +1362,9 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 'lastChanged' => $camLastChanged,
                 'variant_coverage' => isset($variantCoverage) ? round($variantCoverage * 100, 1) : null,
                 'available_variants' => isset($availableVariants) ? $availableVariants : null,
-                'total_variants' => isset($totalVariants) ? $totalVariants : null
+                'total_variants' => isset($totalVariants) ? $totalVariants : null,
+                'image_metrics' => $imageMetrics
             ];
-            
-            // Add upload metrics for push cameras
-            if ($isPush) {
-                $uploadMetrics = getWebcamUploadMetrics($airportId, $idx);
-                $webcamComponent['upload_metrics'] = $uploadMetrics;
-            }
             
             $webcamComponents[] = $webcamComponent;
             
@@ -1405,15 +1417,15 @@ function checkAirportHealth(string $airportId, array $airport): array {
         'total_size_bytes' => 0,
         'oldest_image_time' => 0,
         'newest_image_time' => 0,
-        'images_accepted' => 0,
+        'images_verified' => 0,
         'images_rejected' => 0
     ];
     
     // Aggregate upload metrics from all cameras (24-hour accepted/rejected counts)
     foreach ($webcamComponents as $comp) {
-        if (isset($comp['upload_metrics'])) {
-            $airportCacheStats['images_accepted'] += $comp['upload_metrics']['accepted'] ?? 0;
-            $airportCacheStats['images_rejected'] += $comp['upload_metrics']['rejected'] ?? 0;
+        if (isset($comp['image_metrics'])) {
+            $airportCacheStats['images_verified'] += $comp['image_metrics']['verified'] ?? 0;
+            $airportCacheStats['images_rejected'] += $comp['image_metrics']['rejected'] ?? 0;
         }
     }
     
@@ -2632,59 +2644,50 @@ if (php_sapi_name() === 'cli') {
                                 <div class="component-name"><?php echo htmlspecialchars($camera['name']); ?></div>
                                 <div class="component-message">
                                     <?php echo htmlspecialchars($camera['message']); ?>
-                                    <?php if (isset($camera['upload_metrics'])): ?>
-                                        <?php 
-                                        $metrics = $camera['upload_metrics'];
-                                        $accepted = $metrics['accepted'] ?? 0;
-                                        $rejected = $metrics['rejected'] ?? 0;
-                                        $reasons = $metrics['rejection_reasons'] ?? [];
+                                    <?php 
+                                    // Show rejection reason if rejections occurred
+                                    $metrics = $camera['image_metrics'] ?? ['rejection_reasons' => []];
+                                    $rejected = $metrics['rejected'] ?? 0;
+                                    $reasons = $metrics['rejection_reasons'] ?? [];
+                                    
+                                    if ($rejected > 0 && !empty($reasons)) {
+                                        arsort($reasons);
+                                        $topReason = array_key_first($reasons);
+                                        $topCount = $reasons[$topReason];
                                         
-                                        if ($accepted > 0 || $rejected > 0): 
-                                        ?>
-                                        <span style="color: #ccc;"> • </span>
-                                        Images Accepted <?php echo $accepted; ?> / Rejected <?php echo $rejected; ?>
-                                        <?php 
-                                        // Show most common rejection reason if rejections occurred
-                                        if ($rejected > 0 && !empty($reasons)) {
-                                            arsort($reasons); // Sort by count descending
-                                            $topReason = array_key_first($reasons);
-                                            $topCount = $reasons[$topReason];
-                                            
-                                            // Format reason for display
-                                            $reasonLabels = [
-                                                'no_exif' => 'No EXIF',
-                                                'timestamp_future' => 'Clock Ahead',
-                                                'timestamp_too_old' => 'Too Old',
-                                                'timestamp_unreliable' => 'Clock Wrong',
-                                                'exif_rewrite_failed' => 'EXIF Update Failed',
-                                                'invalid_exif_timestamp' => 'Invalid Timestamp',
-                                                'validation_failed' => 'Invalid Image',
-                                                'incomplete_upload' => 'Incomplete Upload',
-                                                'image_corrupt' => 'Corrupt Image',
-                                                'file_read_error' => 'File Error',
-                                                'error_frame' => 'Error Frame',
-                                                'file_not_readable' => 'File Error',
-                                                'size_too_small' => 'Too Small',
-                                                'size_limit_exceeded' => 'Too Large',
-                                                'extension_not_allowed' => 'Wrong Format',
-                                                'invalid_mime_type' => 'Invalid MIME',
-                                                'invalid_format' => 'Invalid Format',
-                                                'exif_invalid' => 'EXIF Invalid',
-                                                'system_error' => 'System Error'
-                                            ];
-                                            $reasonDisplay = $reasonLabels[$topReason] ?? ucwords(str_replace('_', ' ', $topReason));
-                                            
-                                            echo ' <span style="color: #ff6b6b;">(';
-                                            if ($topCount === $rejected) {
-                                                echo $reasonDisplay;
-                                            } else {
-                                                echo $topCount . 'x ' . $reasonDisplay;
-                                            }
-                                            echo ')</span>';
+                                        $reasonLabels = [
+                                            'no_exif' => 'No EXIF',
+                                            'timestamp_future' => 'Clock Ahead',
+                                            'timestamp_too_old' => 'Too Old',
+                                            'timestamp_unreliable' => 'Clock Wrong',
+                                            'exif_rewrite_failed' => 'EXIF Update Failed',
+                                            'invalid_exif_timestamp' => 'Invalid Timestamp',
+                                            'validation_failed' => 'Invalid Image',
+                                            'incomplete_upload' => 'Incomplete Upload',
+                                            'image_corrupt' => 'Corrupt Image',
+                                            'file_read_error' => 'File Error',
+                                            'error_frame' => 'Error Frame',
+                                            'file_not_readable' => 'File Error',
+                                            'size_too_small' => 'Too Small',
+                                            'size_limit_exceeded' => 'Too Large',
+                                            'extension_not_allowed' => 'Wrong Format',
+                                            'invalid_mime_type' => 'Invalid MIME',
+                                            'invalid_format' => 'Invalid Format',
+                                            'exif_invalid' => 'EXIF Invalid',
+                                            'system_error' => 'System Error',
+                                            'file_too_old' => 'File Too Old'
+                                        ];
+                                        $reasonDisplay = $reasonLabels[$topReason] ?? ucwords(str_replace('_', ' ', $topReason));
+                                        
+                                        echo ' <span style="color: #ff6b6b;">(';
+                                        if ($topCount === $rejected) {
+                                            echo $reasonDisplay;
+                                        } else {
+                                            echo $topCount . 'x ' . $reasonDisplay;
                                         }
-                                        ?>
-                                        <?php endif; ?>
-                                    <?php endif; ?>
+                                        echo ')</span>';
+                                    }
+                                    ?>
                                 </div>
                                 <?php if (isset($camera['lastChanged']) && $camera['lastChanged'] > 0): ?>
                                 <div class="component-timestamp">
@@ -2709,9 +2712,8 @@ if (php_sapi_name() === 'cli') {
                         $cacheStats = $component['cache_stats'];
                         $totalImages = $cacheStats['total_images'];
                         $sizeMB = round($cacheStats['total_size_bytes'] / (1024 * 1024), 1);
-                        $imagesAccepted = $cacheStats['images_accepted'] ?? 0;
+                        $imagesVerified = $cacheStats['images_verified'] ?? 0;
                         $imagesRejected = $cacheStats['images_rejected'] ?? 0;
-                        $hasUploadMetrics = ($imagesAccepted > 0 || $imagesRejected > 0);
                         ?>
                         <li class="component-item">
                             <div class="component-info">
@@ -2733,28 +2735,26 @@ if (php_sapi_name() === 'cli') {
                                         </span>
                                         <?php endif; ?>
                                     </div>
-                                    <?php if ($hasUploadMetrics): ?>
                                     <div class="metrics-line" style="margin-top: 0.5rem;">
                                         <span class="metric-group">
-                                            <span class="metric-label">24h Accepted:</span>
-                                            <span class="metric-value" style="color: #22c55e;"><?php echo number_format($imagesAccepted); ?></span>
+                                            <span class="metric-label">24h Verified:</span>
+                                            <span class="metric-value" style="color: #22c55e;"><?php echo number_format($imagesVerified); ?></span>
                                         </span>
                                         <span class="metric-group">
                                             <span class="metric-label">24h Rejected:</span>
                                             <span class="metric-value" style="color: <?php echo $imagesRejected > 0 ? '#ef4444' : '#6b7280'; ?>;"><?php echo number_format($imagesRejected); ?></span>
                                         </span>
-                                        <?php if ($imagesAccepted + $imagesRejected > 0): ?>
+                                        <?php if ($imagesVerified + $imagesRejected > 0): ?>
                                         <span class="metric-group">
-                                            <span class="metric-label">Acceptance Rate:</span>
+                                            <span class="metric-label">Verification Rate:</span>
                                             <?php 
-                                            $acceptanceRate = round(($imagesAccepted / ($imagesAccepted + $imagesRejected)) * 100, 1);
-                                            $rateColor = $acceptanceRate >= 90 ? '#22c55e' : ($acceptanceRate >= 70 ? '#eab308' : '#ef4444');
+                                            $verificationRate = round(($imagesVerified / ($imagesVerified + $imagesRejected)) * 100, 1);
+                                            $rateColor = $verificationRate >= 90 ? '#22c55e' : ($verificationRate >= 70 ? '#eab308' : '#ef4444');
                                             ?>
-                                            <span class="metric-value" style="color: <?php echo $rateColor; ?>;"><?php echo $acceptanceRate; ?>%</span>
+                                            <span class="metric-value" style="color: <?php echo $rateColor; ?>;"><?php echo $verificationRate; ?>%</span>
                                         </span>
                                         <?php endif; ?>
                                     </div>
-                                    <?php endif; ?>
                                 </div>
                             </div>
                         </li>

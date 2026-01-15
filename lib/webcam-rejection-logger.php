@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/constants.php';
+require_once __DIR__ . '/webcam-image-metrics.php';
 
 /**
  * Save rejected webcam image and diagnostic log
@@ -32,6 +33,9 @@ function saveRejectedWebcam(string $imagePath, string $airportId, int $camIndex,
         ], 'app');
         return false;
     }
+    
+    // Track rejection metrics (centralized for all camera types)
+    trackWebcamImageRejected($airportId, $camIndex, $rejectionReason);
     
     // Get cache base directory
     $cacheBase = getCacheDirectory();

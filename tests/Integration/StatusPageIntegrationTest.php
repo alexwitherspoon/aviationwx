@@ -373,10 +373,10 @@ class StatusPageIntegrationTest extends TestCase
         $hasAirportStatus = strpos($body, 'Airport Status') !== false;
         
         if ($hasAirportStatus) {
-            // Upload metrics may or may not be visible depending on:
-            // 1. Whether push cameras are configured
-            // 2. Whether there are recent uploads (last 1 hour)
-            // Just verify the page structure supports them (doesn't break with upload_metrics field)
+            // Image metrics may or may not be visible depending on:
+            // 1. Whether cameras are configured
+            // 2. Whether there are recent images (last 24 hours)
+            // Just verify the page structure supports them (doesn't break with image_metrics field)
             
             // The test passes if the page loads correctly (already verified by http_code == 200)
             // and has valid structure

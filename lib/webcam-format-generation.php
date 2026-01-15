@@ -19,6 +19,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/exif-utils.php';
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/variant-health.php';
+require_once __DIR__ . '/webcam-image-metrics.php';
 
 /**
  * Detect image format from file headers
@@ -1071,6 +1072,9 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
     if (file_exists($sourceStagingFile)) {
         // Rename staging file to timestamp-based file
         if (@rename($sourceStagingFile, $sourceTimestampFile)) {
+            // Track successful image verification (centralized for all camera types)
+            trackWebcamImageVerified($airportId, $camIndex);
+            
             // Create/update symlink
             if (updateCacheSymlink($sourceSymlink, $sourceTimestampFile)) {
                 $promoted[] = $sourceFormat;
