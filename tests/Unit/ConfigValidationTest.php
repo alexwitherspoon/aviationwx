@@ -131,6 +131,32 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid partners array with logo should pass validation');
     }
 
+    public function testPartnersArray_ValidWithLocalPathLogo()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'partners' => [
+                        [
+                            'name' => 'Test Partner',
+                            'url' => 'https://example.com/partner',
+                            'logo' => '/partner-logos/test-logo.jpg',
+                            'description' => 'Test description'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid partners array with local path logo should pass validation');
+    }
+
     public function testPartnersArray_ValidWithoutLogo()
     {
         $config = [

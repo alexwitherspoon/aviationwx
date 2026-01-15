@@ -2695,6 +2695,25 @@ function validateAirportsJsonStructure(array $config): array {
                strpos($url, 'rtsps://') === 0;
     };
     
+    // Helper to validate logo URLs - accepts full URLs or local paths
+    // Local paths must start with / and have a valid image extension
+    $validateLogoUrl = function($url) use ($validateUrl) {
+        if (!is_string($url) || empty($url)) {
+            return false;
+        }
+        // Accept full URLs
+        if ($validateUrl($url)) {
+            return true;
+        }
+        // Accept local paths starting with / (e.g., /partner-logos/logo.jpg)
+        if (strpos($url, '/') === 0) {
+            // Validate it has a reasonable image extension
+            $ext = strtolower(pathinfo($url, PATHINFO_EXTENSION));
+            return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
+        }
+        return false;
+    };
+    
     // Helper to validate METAR station - must be a valid ICAO code
     // Valid formats:
     //   - Standard ICAO: 4 uppercase letters (e.g., KSEA, EGLL, CYYZ)
@@ -3309,8 +3328,8 @@ function validateAirportsJsonStructure(array $config): array {
                         } elseif (!$validateUrl($partner['url'])) {
                             $errors[] = "Airport '{$airportCode}' partner[{$idx}] has invalid url: must be a valid URL";
                         }
-                        if (isset($partner['logo']) && !$validateUrl($partner['logo'])) {
-                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] has invalid logo: must be a valid URL";
+                        if (isset($partner['logo']) && !$validateLogoUrl($partner['logo'])) {
+                            $errors[] = "Airport '{$airportCode}' partner[{$idx}] has invalid logo: must be a valid URL or local path";
                         }
                         if (isset($partner['description']) && !is_string($partner['description'])) {
                             $errors[] = "Airport '{$airportCode}' partner[{$idx}] description must be a string";
