@@ -1,161 +1,216 @@
 <?php
 /**
  * Integration Tests for Sitemap Generation
- * Tests that sitemap.php generates valid XML sitemaps
+ * 
+ * Tests that both XML and HTML sitemaps generate correctly
+ * and use the shared sitemap library.
  */
 
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/sitemap.php';
 require_once __DIR__ . '/../../lib/seo.php';
 
 class SitemapTest extends TestCase
 {
     protected function setUp(): void
     {
-        // Set up test environment
         $_SERVER['HTTPS'] = 'on';
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
     }
 
     protected function tearDown(): void
     {
-        // Clean up
         unset($_SERVER['HTTPS'], $_SERVER['HTTP_HOST']);
     }
 
     /**
-     * Test sitemap generation - Main domain
+     * Test XML sitemap uses shared library
      */
-    public function testSitemapGeneration_MainDomain()
+    public function testXmlSitemap_UsesSharedLibrary(): void
     {
-        $_SERVER['HTTPS'] = 'on';
-        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        $urls = getAllSitemapUrls();
         
-        $config = loadConfig();
-        $this->assertNotNull($config, 'Config should be loaded');
-        $this->assertArrayHasKey('airports', $config, 'Config should have airports');
+        $this->assertNotEmpty($urls, 'Shared library should return URLs');
         
-        // Simulate sitemap generation logic
-        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
-        $baseUrl = $protocol . '://' . $host;
-        $isMainDomain = (strpos($host, 'aviationwx.org') !== false && 
-                         !preg_match('/^[a-z0-9]{3,4}\.aviationwx\.org$/', $host));
-        
-        $this->assertTrue($isMainDomain, 'Should be main domain');
-        
-        // Count URLs that would be in sitemap
-        $urlCount = 0;
-        if ($isMainDomain) {
-            $urlCount++; // Homepage
-            $urlCount++; // Status page
+        // Verify structure matches what XML sitemap needs
+        foreach ($urls as $url) {
+            $this->assertArrayHasKey('loc', $url);
+            $this->assertArrayHasKey('lastmod', $url);
+            $this->assertArrayHasKey('changefreq', $url);
+            $this->assertArrayHasKey('priority', $url);
         }
-        $urlCount += count($config['airports']); // Airport pages
-        
-        $this->assertGreaterThan(0, $urlCount, 'Sitemap should have at least one URL');
     }
 
     /**
-     * Test sitemap generation - Subdomain
+     * Test HTML sitemap uses shared library
      */
-    public function testSitemapGeneration_Subdomain()
+    public function testHtmlSitemap_UsesSharedLibrary(): void
     {
-        $_SERVER['HTTPS'] = 'on';
-        $_SERVER['HTTP_HOST'] = 'kspb.aviationwx.org';
+        $urls = getSitemapUrls();
+        $labels = getSitemapCategoryLabels();
         
-        $config = loadConfig();
-        $this->assertNotNull($config, 'Config should be loaded');
+        $this->assertNotEmpty($urls, 'Shared library should return grouped URLs');
+        $this->assertNotEmpty($labels, 'Shared library should return category labels');
         
-        // Simulate sitemap generation logic
-        $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
-        $isMainDomain = (strpos($host, 'aviationwx.org') !== false && 
-                         !preg_match('/^[a-z0-9]{3,4}\.aviationwx\.org$/', $host));
-        
-        $this->assertFalse($isMainDomain, 'Should not be main domain');
-        
-        // On subdomain, should only include airport pages
-        $urlCount = count($config['airports']);
-        $this->assertGreaterThan(0, $urlCount, 'Sitemap should have airport URLs');
+        // Verify structure matches what HTML sitemap needs
+        foreach ($urls as $category => $categoryUrls) {
+            $this->assertArrayHasKey($category, $labels, "Label missing for category: {$category}");
+            foreach ($categoryUrls as $url) {
+                $this->assertArrayHasKey('loc', $url);
+                $this->assertArrayHasKey('title', $url);
+            }
+        }
     }
 
     /**
-     * Test sitemap includes all airports
+     * Test sitemap includes all enabled airports
      */
-    public function testSitemapIncludesAllAirports()
+    public function testSitemap_IncludesAllEnabledAirports(): void
     {
         $config = loadConfig();
         $this->assertNotNull($config);
-        $this->assertArrayHasKey('airports', $config);
         
-        $airportCount = count($config['airports']);
+        $enabledAirports = getEnabledAirports($config);
+        $urls = getSitemapUrls();
         
-        // Each airport should have a URL in the sitemap
-        foreach ($config['airports'] as $airportId => $airport) {
-            $airportUrl = 'https://' . $airportId . '.aviationwx.org';
-            $this->assertNotEmpty($airportUrl, 'Airport URL should not be empty');
-            $this->assertStringContainsString($airportId, $airportUrl, 'URL should contain airport ID');
+        $airportUrls = array_map(fn($u) => $u['loc'], $urls['airports']);
+        
+        foreach ($enabledAirports as $airportId => $airport) {
+            $expectedUrl = 'https://' . $airportId . '.aviationwx.org/';
+            $this->assertContains(
+                $expectedUrl,
+                $airportUrls,
+                "Airport {$airportId} should be in sitemap"
+            );
         }
-        
-        $this->assertGreaterThan(0, $airportCount, 'Should have at least one airport');
     }
 
     /**
-     * Test sitemap includes homepage on main domain
+     * Test sitemap airport count matches config
      */
-    public function testSitemapIncludesHomepage_MainDomain()
-    {
-        $_SERVER['HTTPS'] = 'on';
-        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
-        
-        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
-        $isMainDomain = (strpos($host, 'aviationwx.org') !== false && 
-                         !preg_match('/^[a-z0-9]{3,4}\.aviationwx\.org$/', $host));
-        
-        $this->assertTrue($isMainDomain, 'Should be main domain');
-        
-        // Homepage should be included
-        $homepageUrl = 'https://aviationwx.org/';
-        $this->assertNotEmpty($homepageUrl);
-    }
-
-    /**
-     * Test sitemap includes status page on main domain
-     */
-    public function testSitemapIncludesStatusPage_MainDomain()
-    {
-        $_SERVER['HTTPS'] = 'on';
-        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
-        
-        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'aviationwx.org';
-        $isMainDomain = (strpos($host, 'aviationwx.org') !== false && 
-                         !preg_match('/^[a-z0-9]{3,4}\.aviationwx\.org$/', $host));
-        
-        $this->assertTrue($isMainDomain, 'Should be main domain');
-        
-        // Status page should be included
-        $statusUrl = 'https://aviationwx.org/status.php';
-        $this->assertNotEmpty($statusUrl);
-    }
-
-    /**
-     * Test sitemap URL format
-     */
-    public function testSitemapUrlFormat()
+    public function testSitemap_AirportCountMatchesConfig(): void
     {
         $config = loadConfig();
-        $this->assertNotNull($config);
-        $this->assertArrayHasKey('airports', $config);
+        $enabledAirports = getEnabledAirports($config);
+        $urls = getSitemapUrls();
         
-        foreach ($config['airports'] as $airportId => $airport) {
-            $airportUrl = 'https://' . $airportId . '.aviationwx.org';
-            
-            // URL should be valid format
-            $this->assertStringStartsWith('https://', $airportUrl);
-            $this->assertStringEndsWith('.aviationwx.org', $airportUrl);
-            $this->assertStringContainsString($airportId, $airportUrl);
+        $this->assertCount(
+            count($enabledAirports),
+            $urls['airports'],
+            'Sitemap airport count should match enabled airports'
+        );
+    }
+
+    /**
+     * Test sitemap includes required pages
+     */
+    public function testSitemap_IncludesRequiredPages(): void
+    {
+        $urls = getAllSitemapUrls();
+        $allLocs = array_map(fn($u) => $u['loc'], $urls);
+        
+        $requiredPages = [
+            'https://aviationwx.org/',
+            'https://airports.aviationwx.org/',
+            'https://status.aviationwx.org/',
+            'https://api.aviationwx.org/',
+            'https://embed.aviationwx.org/',
+            'https://terms.aviationwx.org/',
+            'https://guides.aviationwx.org/',
+            'https://aviationwx.org/sitemap'
+        ];
+        
+        foreach ($requiredPages as $page) {
+            $this->assertContains($page, $allLocs, "Required page missing: {$page}");
         }
+    }
+
+    /**
+     * Test sitemap includes guide pages
+     */
+    public function testSitemap_IncludesGuidePages(): void
+    {
+        $urls = getSitemapUrls();
+        
+        // Should have guides index plus individual guides
+        $this->assertGreaterThan(1, count($urls['guides']), 'Should have multiple guide pages');
+        
+        // Check guides index exists
+        $indexFound = false;
+        foreach ($urls['guides'] as $url) {
+            if ($url['loc'] === 'https://guides.aviationwx.org/') {
+                $indexFound = true;
+                break;
+            }
+        }
+        $this->assertTrue($indexFound, 'Guides index should be in sitemap');
+    }
+
+    /**
+     * Test XML and HTML sitemaps have same URL count
+     */
+    public function testSitemaps_HaveSameUrlCount(): void
+    {
+        $flatUrls = getAllSitemapUrls();
+        $groupedUrls = getSitemapUrls();
+        
+        $groupedCount = 0;
+        foreach ($groupedUrls as $urls) {
+            $groupedCount += count($urls);
+        }
+        
+        $this->assertEquals(
+            count($flatUrls),
+            $groupedCount,
+            'XML and HTML sitemaps should have same URL count'
+        );
+    }
+
+    /**
+     * Test sitemap file exists and is accessible
+     */
+    public function testXmlSitemapFile_Exists(): void
+    {
+        $sitemapFile = __DIR__ . '/../../api/sitemap.php';
+        $this->assertFileExists($sitemapFile, 'XML sitemap file should exist');
+    }
+
+    /**
+     * Test HTML sitemap file exists and is accessible
+     */
+    public function testHtmlSitemapFile_Exists(): void
+    {
+        $sitemapFile = __DIR__ . '/../../pages/sitemap.php';
+        $this->assertFileExists($sitemapFile, 'HTML sitemap file should exist');
+    }
+
+    /**
+     * Test sitemap library file exists
+     */
+    public function testSitemapLibrary_Exists(): void
+    {
+        $libraryFile = __DIR__ . '/../../lib/sitemap.php';
+        $this->assertFileExists($libraryFile, 'Sitemap library should exist');
+    }
+
+    /**
+     * Test HTML sitemap route is configured
+     */
+    public function testHtmlSitemapRoute_IsConfigured(): void
+    {
+        $indexFile = file_get_contents(__DIR__ . '/../../index.php');
+        
+        $this->assertStringContainsString(
+            "requestPath === 'sitemap'",
+            $indexFile,
+            'Index.php should have route for /sitemap'
+        );
+        $this->assertStringContainsString(
+            "pages/sitemap.php",
+            $indexFile,
+            'Index.php should include pages/sitemap.php'
+        );
     }
 }
-

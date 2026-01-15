@@ -182,6 +182,12 @@ if (isset($_GET['terms']) || $requestPath === 'terms') {
     exit;
 }
 
+// Check for sitemap path (HTML sitemap for crawlers)
+if ($requestPath === 'sitemap') {
+    include 'pages/sitemap.php';
+    exit;
+}
+
 // Check for embed query parameter (for local dev/testing)
 if (isset($_GET['embed'])) {
     // Check if render=1 parameter is set - if so, show embed widget
