@@ -200,7 +200,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image.",
+        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Dimension behavior:**\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Height-based variant from pre-generated set (no cropping)\n- Neither: Original image\n\n**Example for FAA weathercam (4:3 @ 1280x960):**\n```\nGET /v1/airports/kspb/webcams/0/image?width=1280&height=960&fmt=jpg\n```",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -223,11 +223,33 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Image size variant (height in pixels or 'original')",
+            "description": "Height-based variant from pre-generated set (no cropping). Use for standard variants like 720, 1080. Mutually exclusive with width/height.",
             "schema": {
               "type": "string",
               "default": "original",
               "example": "720"
+            }
+          },
+          {
+            "name": "width",
+            "in": "query",
+            "description": "Target width in pixels (16-3840). When used with height, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally.",
+            "schema": {
+              "type": "integer",
+              "minimum": 16,
+              "maximum": 3840,
+              "example": 1280
+            }
+          },
+          {
+            "name": "height",
+            "in": "query",
+            "description": "Target height in pixels (16-2160). When used with width, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally.",
+            "schema": {
+              "type": "integer",
+              "minimum": 16,
+              "maximum": 2160,
+              "example": 960
             }
           }
         ],
@@ -238,6 +260,9 @@
               "image/jpeg": {},
               "image/webp": {}
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
