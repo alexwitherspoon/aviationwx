@@ -998,7 +998,7 @@ $ogImage = file_exists($aboutPhotoWebp)
                 </div>
                 <div style="text-align: center;">
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesServed24h) ?></span>
-                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Served (24h)</span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Served Today</span>
                 </div>
                 <div style="text-align: center;">
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($pilotsServedToday) ?></span>
