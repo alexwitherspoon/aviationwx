@@ -53,10 +53,9 @@ aviationwx.org/
 ├── scripts/
 │   ├── scheduler.php         # Combined scheduler daemon (weather, webcam, NOTAM)
 │   ├── scheduler-health-check.php # Scheduler health check (runs via cron)
-│   ├── fetch-webcam.php      # Webcam fetcher (worker mode for scheduler)
+│   ├── unified-webcam-worker.php # Unified webcam worker (handles both pull and push cameras)
 │   ├── fetch-weather.php     # Weather fetcher (worker mode for scheduler)
-│   ├── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
-│   └── process-push-webcams.php # Push webcam processor (runs via cron)
+│   └── fetch-notam.php       # NOTAM fetcher (worker mode for scheduler)
 ├── admin/
 │   ├── diagnostics.php       # System diagnostics endpoint
 │   ├── cache-clear.php       # Cache clearing endpoint
@@ -134,20 +133,25 @@ aviationwx.org/
 - Non-blocking main loop with ProcessPool integration
 - Automatically reloads configuration changes without restart
 
-**`scripts/fetch-webcam.php`**: Fetches and caches webcam images (worker mode)
+**`scripts/unified-webcam-worker.php`**: Unified webcam worker (handles both pull and push cameras)
 - Called by scheduler in `--worker` mode for individual airport/camera updates
-- Can also be run manually for testing
-- Safe memory usage (stops after first frame)
-- Supports: Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), push uploads (SFTP/FTP/FTPS)
-- Generates multiple formats per image (JPEG, WebP)
-- Format generation runs asynchronously (non-blocking)
+- Replaces the previous separate `fetch-webcam.php` (pull) and `process-push-webcams.php` (push) workers
+- **Architecture**: Uses Strategy Pattern with three main components:
+  - `AcquisitionStrategy` interface with `PullAcquisitionStrategy` and `PushAcquisitionStrategy` implementations
+  - `ProcessingPipeline` class for standardized image validation, variant generation, and promotion
+  - `WebcamWorker` class that orchestrates acquisition and processing
+- **Pull cameras**: Supports Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), federated API
+- **Push cameras**: Processes FTP/SFTP uploads with adaptive stability detection
+- Generates multiple formats per image (JPEG, WebP) and variants (original, 1080p, 720p, 360p)
+- Single image load through pipeline (loads GD resource once, passes through all validation steps)
 - Mtime automatically synced to match source image's capture time
-- Can be included by `api/webcam.php` for background refresh functionality
 - **Reliability features**:
-  - File locking for backoff state (prevents race conditions)
-  - Atomic file writes (prevents cache corruption)
+  - Hybrid lock strategy: ProcessPool primary, `flock()` file locks for crash resilience
+  - Orphaned staging file cleanup (removes incomplete files from crashed workers)
   - Circuit breaker with exponential backoff
-  - Comprehensive error handling and logging
+  - Atomic file writes (prevents cache corruption)
+  - Push timestamp drift validation (rejects images from cameras with misconfigured clocks)
+  - State file validation with graceful recovery from corruption
 
 ### Configuration System (`lib/config.php`)
 
@@ -296,17 +300,35 @@ Response (JSON) + Cache
 ### Webcam Data Flow
 
 ```
-Scheduler Daemon (background process) → scripts/fetch-webcam.php (worker mode)
-Cron (every 60s) → scripts/scheduler-health-check.php (monitors scheduler)
+Scheduler Daemon (runs every 1 second)
   ↓
-For each webcam:
+WebcamScheduleQueue (priority queue using min-heap)
   ↓
-Fetch image (HTTP/MJPEG/RTSP)
+Check which cameras are due based on refresh_seconds
   ↓
-Generate formats (JPEG, WebP) - async, non-blocking
+For each due camera → ProcessPool → unified-webcam-worker.php --worker {airport} {cam}
   ↓
-Save to cache/webcams/{airport}/{cam}/
+WebcamWorker orchestrates:
   ↓
+1. Acquire lock (flock for crash resilience)
+  ↓
+2. Check circuit breaker
+  ↓
+3. Clean up orphaned staging files
+  ↓
+4. AcquisitionStrategy.acquire() - Pull or Push based on config
+   - Pull: HTTP/MJPEG/RTSP/Federated API
+   - Push: Scan upload directory, stability checks, validation
+  ↓
+5. ProcessingPipeline.process()
+   - Load image once as GD resource
+   - Error frame detection (uniform color, pixelation, Blue Iris errors)
+   - EXIF validation and normalization to UTC
+   - Variant generation (original, 1080p, 720p, 360p)
+   - Format generation (JPEG, WebP)
+   - Atomic promotion with symlinks
+  ↓
+6. Release lock
 
 User Request → webcam.php
   ↓
@@ -314,11 +336,9 @@ Check cache for requested image
   ↓
 [If fresh] Serve with cache headers (HIT)
   ↓
-[If stale] Serve stale cache immediately + trigger background refresh
+[If stale] Serve stale cache (scheduler handles refresh)
   ↓
-Background: Fetch fresh image + update cache
-  ↓
-Next request gets fresh image
+[If too stale (>3 hours)] Return 503 Service Unavailable (fail-closed safety)
 ```
 
 ## Key Design Decisions

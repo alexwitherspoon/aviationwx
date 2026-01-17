@@ -252,7 +252,9 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
   - Headers: `Retry-After: 5`, `X-Format-Generating: {format}`, `X-Fallback-URL: {url}`, `X-Preferred-Format-URL: {url}`
 - `400`: Format disabled but explicitly requested, or invalid format parameter
 - `404`: Airport or camera not found (returns placeholder image)
-- `503`: Service unavailable (cache directory not accessible)
+- `503`: Service unavailable - two possible causes:
+  - Cache directory not accessible
+  - **Stale image (fail-closed safety)**: Image is older than 3 hours (`DEFAULT_STALE_FAILCLOSED_SECONDS`). Returns JSON error: `{"error": "Image data is stale", "age_hours": X.X, "message": "..."}`
 
 **Format Selection:**
 - Explicit `fmt=` parameter: Highest priority, may return 202 if generating
@@ -287,6 +289,17 @@ Returns JSON with image timestamp, format availability, and variant information.
 ```
 
 **Note:** Only includes formats that are enabled in configuration. Format availability is checked via optimized file I/O (single `stat()` call per format). The `variants` object shows available variant heights and their supported formats.
+
+**Staleness Response (HTTP 503):**
+If the image is older than 3 hours, the `mtime=1` endpoint also returns HTTP 503 with:
+```json
+{
+  "success": false,
+  "error": "Image data is stale",
+  "age_hours": 4.5,
+  "message": "Webcam image has not been updated in over 3 hours. Data cannot be trusted for aviation use."
+}
+```
 
 ---
 

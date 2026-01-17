@@ -13,7 +13,8 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/webcam-format-generation.php';
-require_once __DIR__ . '/../../scripts/fetch-webcam.php';
+require_once __DIR__ . '/../../lib/circuit-breaker.php';
+require_once __DIR__ . '/../../lib/logger.php';
 
 class WebcamFormatGenerationTest extends TestCase
 {

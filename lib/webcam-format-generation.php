@@ -170,38 +170,30 @@ function shouldGenerateVariant(array $variantSize, array $actualPrimary): bool {
 }
 
 /**
- * Get image capture time from source file
+ * Get the source capture timestamp from a file in UTC.
  * 
- * Extracts EXIF DateTimeOriginal if available, otherwise uses filemtime.
- * Used for syncing generated format files' mtime.
+ * Priority order:
+ * 1. GPS DateStamp + TimeStamp (UTC) - added by our pipeline via exiftool
+ * 2. File modification time (fallback)
+ * 
+ * IMPORTANT: DateTimeOriginal is kept in camera's local time for audit purposes.
+ * All application logic MUST use the UTC timestamp from GPS fields.
  * 
  * @param string $filePath Path to source image file
- * @return int Unix timestamp, or 0 if unavailable
+ * @return int Unix timestamp (UTC), or 0 if unavailable
  */
 function getSourceCaptureTime($filePath) {
-    // Try EXIF first (for JPEG)
-    if (function_exists('exif_read_data') && file_exists($filePath)) {
-        $exif = @exif_read_data($filePath, 'EXIF', true);
-        if ($exif !== false) {
-            if (isset($exif['EXIF']['DateTimeOriginal'])) {
-                $dateTime = $exif['EXIF']['DateTimeOriginal'];
-                // Our pipeline writes EXIF in UTC, so parse as UTC
-                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
-                if ($timestamp !== false && $timestamp > 0) {
-                    return (int)$timestamp;
-                }
-            } elseif (isset($exif['DateTimeOriginal'])) {
-                $dateTime = $exif['DateTimeOriginal'];
-                // Our pipeline writes EXIF in UTC, so parse as UTC
-                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
-                if ($timestamp !== false && $timestamp > 0) {
-                    return (int)$timestamp;
-                }
-            }
-        }
+    if (!file_exists($filePath)) {
+        return 0;
     }
     
-    // Fallback to filemtime
+    // Use centralized EXIF timestamp function (reads GPS UTC first, then DateTimeOriginal)
+    $timestamp = getExifTimestamp($filePath);
+    if ($timestamp > 0) {
+        return $timestamp;
+    }
+    
+    // Fallback to filemtime (already in UTC on Unix systems)
     $mtime = @filemtime($filePath);
     return $mtime !== false ? (int)$mtime : 0;
 }

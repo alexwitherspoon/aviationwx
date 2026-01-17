@@ -5,7 +5,12 @@ namespace AviationWX\Tests;
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/constants.php';
-require_once __DIR__ . '/../../scripts/process-push-webcams.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/logger.php';
+require_once __DIR__ . '/../../lib/webcam-image-metrics.php';
+require_once __DIR__ . '/../../lib/push-webcam-validator.php';
+// Note: Push webcam processing is now handled by unified-webcam-worker.php via scheduler
+// The adaptive stability functions are now in webcam-image-metrics.php
 
 class AdaptiveStabilityTest extends TestCase
 {

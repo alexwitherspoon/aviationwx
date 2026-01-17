@@ -8,6 +8,15 @@
 if (!defined('DEFAULT_WEBCAM_REFRESH')) {
     define('DEFAULT_WEBCAM_REFRESH', 60);
 }
+// Webcam refresh rate bounds (used by scheduler for rate limiting)
+// MIN: Prevent excessive resource usage / DoS from misconfiguration
+// MAX: Ensure cameras are refreshed at least occasionally
+if (!defined('MIN_WEBCAM_REFRESH')) {
+    define('MIN_WEBCAM_REFRESH', 10); // 10 seconds minimum (fastest allowed)
+}
+if (!defined('MAX_WEBCAM_REFRESH')) {
+    define('MAX_WEBCAM_REFRESH', 3600); // 1 hour maximum (slowest allowed)
+}
 if (!defined('DEFAULT_WEATHER_REFRESH')) {
     define('DEFAULT_WEATHER_REFRESH', 60);
 }

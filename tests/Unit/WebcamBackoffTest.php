@@ -2,7 +2,9 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/cache-paths.php';
-require_once __DIR__ . '/../../scripts/fetch-webcam.php';
+require_once __DIR__ . '/../../lib/circuit-breaker.php';
+require_once __DIR__ . '/../../lib/constants.php';
+require_once __DIR__ . '/../../lib/logger.php';
 
 class WebcamBackoffTest extends TestCase
 {
@@ -38,7 +40,7 @@ class WebcamBackoffTest extends TestCase
      */
     public function testCheckCircuitBreaker_NoBackoff()
     {
-        $result = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         
         $this->assertFalse($result['skip'], 'Should not skip when no backoff exists');
         $this->assertEquals(0, $result['backoff_remaining']);
@@ -51,10 +53,10 @@ class WebcamBackoffTest extends TestCase
     {
         // Record failures up to threshold (circuit opens after threshold failures)
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
         }
         
-        $result = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         
         $this->assertTrue($result['skip'], 'Should skip after recording threshold failures');
         $this->assertEquals('circuit_open', $result['reason']);
@@ -71,10 +73,10 @@ class WebcamBackoffTest extends TestCase
         // Record failures up to threshold
         // recordFailure signature: (airportId, camIndex, severity, httpCode, failureReason)
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient', null, $failureReason);
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient', null, $failureReason);
         }
         
-        $result = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         
         $this->assertTrue($result['skip'], 'Should skip after recording threshold failures');
         $this->assertEquals('circuit_open', $result['reason']);
@@ -91,12 +93,12 @@ class WebcamBackoffTest extends TestCase
         // Record failures up to threshold
         // Use HTTP code 503 to generate the reason
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient', 503);
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient', 503);
         }
         
         // Check multiple times - reason should persist
-        $result1 = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
-        $result2 = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result1 = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result2 = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         
         $this->assertEquals($failureReason, $result1['last_failure_reason'], 'First check should return failure reason');
         $this->assertEquals($failureReason, $result2['last_failure_reason'], 'Second check should return same failure reason');
@@ -110,16 +112,16 @@ class WebcamBackoffTest extends TestCase
         $failureReason = 'Error frame detected';
         // Record failures up to threshold
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient', null, $failureReason);
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient', null, $failureReason);
         }
         
-        $resultBefore = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $resultBefore = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $this->assertEquals($failureReason, $resultBefore['last_failure_reason'], 'Should have failure reason before success');
         
         // Record success
-        recordSuccess($this->testAirportId, $this->testCamIndex);
+        recordWebcamSuccess($this->testAirportId, $this->testCamIndex);
         
-        $resultAfter = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $resultAfter = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $this->assertNull($resultAfter['last_failure_reason'], 'Failure reason should be cleared after success');
     }
     
@@ -130,10 +132,10 @@ class WebcamBackoffTest extends TestCase
     {
         // Record failures up to threshold
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
         }
         
-        $result = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         
         // Should have a default reason or null
         $this->assertTrue($result['skip'], 'Should skip after recording threshold failures');
@@ -150,8 +152,8 @@ class WebcamBackoffTest extends TestCase
     public function testRecordFailure_ExponentialBackoff()
     {
         // First failure
-        recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
-        $result1 = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
+        $result1 = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $backoff1 = $result1['backoff_remaining'];
         
         // Wait for backoff to expire
@@ -161,8 +163,8 @@ class WebcamBackoffTest extends TestCase
         file_put_contents($this->backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
         
         // Second failure
-        recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
-        $result2 = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
+        $result2 = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $backoff2 = $result2['backoff_remaining'];
         
         // Backoff should increase with more failures
@@ -176,9 +178,9 @@ class WebcamBackoffTest extends TestCase
     {
         // Record failures up to threshold
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'permanent');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'permanent');
         }
-        $result = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $result = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         
         // Permanent errors should have longer backoff (2x multiplier)
         $this->assertTrue($result['skip']);
@@ -192,16 +194,16 @@ class WebcamBackoffTest extends TestCase
     {
         // Record failures up to threshold
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
         }
-        $resultBefore = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $resultBefore = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $this->assertTrue($resultBefore['skip'], 'Should skip after threshold failures');
         
         // Record success
-        recordSuccess($this->testAirportId, $this->testCamIndex);
+        recordWebcamSuccess($this->testAirportId, $this->testCamIndex);
         
         // Should reset backoff
-        $resultAfter = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $resultAfter = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $this->assertFalse($resultAfter['skip'], 'Should not skip after success');
         $this->assertEquals(0, $resultAfter['backoff_remaining']);
     }
@@ -213,15 +215,15 @@ class WebcamBackoffTest extends TestCase
     {
         // Record failures up to threshold for camera 0
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, 0, 'transient');
+            recordWebcamFailure($this->testAirportId, 0, 'transient');
         }
         
         // Camera 0 should be in backoff
-        $cam0Result = checkCircuitBreaker($this->testAirportId, 0);
+        $cam0Result = checkWebcamCircuitBreaker($this->testAirportId, 0);
         $this->assertTrue($cam0Result['skip'], 'Camera 0 should be in backoff');
         
         // Camera 1 should not be in backoff
-        $cam1Result = checkCircuitBreaker($this->testAirportId, 1);
+        $cam1Result = checkWebcamCircuitBreaker($this->testAirportId, 1);
         $this->assertFalse($cam1Result['skip'], 'Camera 1 should not be in backoff');
     }
     
@@ -232,9 +234,9 @@ class WebcamBackoffTest extends TestCase
     {
         // Record failures up to threshold
         for ($i = 0; $i < CIRCUIT_BREAKER_FAILURE_THRESHOLD; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
         }
-        $resultBefore = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $resultBefore = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $this->assertTrue($resultBefore['skip'], 'Should skip after threshold failures');
         
         // Manually expire backoff
@@ -244,7 +246,7 @@ class WebcamBackoffTest extends TestCase
         file_put_contents($this->backoffFile, json_encode($backoffData, JSON_PRETTY_PRINT), LOCK_EX);
         
         // Should not skip after expiration
-        $resultAfter = checkCircuitBreaker($this->testAirportId, $this->testCamIndex);
+        $resultAfter = checkWebcamCircuitBreaker($this->testAirportId, $this->testCamIndex);
         $this->assertFalse($resultAfter['skip'], 'Should not skip after backoff expires');
     }
     
@@ -256,7 +258,7 @@ class WebcamBackoffTest extends TestCase
         // This test verifies that file locking prevents race conditions
         // Record multiple failures rapidly (simulating concurrent requests)
         for ($i = 0; $i < 5; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
             usleep(1000); // Small delay to allow file operations
         }
         
@@ -283,7 +285,7 @@ class WebcamBackoffTest extends TestCase
         $startTime = microtime(true);
         
         for ($i = 0; $i < $iterations; $i++) {
-            recordFailure($this->testAirportId, $this->testCamIndex, 'transient');
+            recordWebcamFailure($this->testAirportId, $this->testCamIndex, 'transient');
             // Minimal delay to allow file operations
             usleep(500);
         }

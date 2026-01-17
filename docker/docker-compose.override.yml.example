@@ -26,11 +26,16 @@ services:
       - ../health:/var/www/html/health:ro
       # Cache directory
       - /tmp/aviationwx-cache:/var/www/html/cache
-      # TODO: Update this path to your airports.json location
-      # Option 1: Use a secrets repository
+      # =================================================================
+      # SECRETS CONFIGURATION - Update paths below for your setup
+      # =================================================================
+      # Option 1: Use the secrets repository (recommended)
       # - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+      # - /path/to/aviationwx.org-secrets/partner-logos:/var/www/html/partner-logos:ro
+      #
       # Option 2: Copy airports.json.example to a local file and customize
       # - /path/to/my-airports.json:/var/www/html/secrets/airports.json:ro
+      # (partner logos will show as placeholders without secrets repo)
     environment:
       # Point CONFIG_PATH to secrets location (must match volume mount above)
       - CONFIG_PATH=/var/www/html/secrets/airports.json

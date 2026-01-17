@@ -1883,6 +1883,27 @@ h3 {
     }
 }
 
+/* Fullscreen API styles */
+.webcam-player:fullscreen,
+.webcam-player:-webkit-full-screen {
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+.webcam-player:fullscreen .webcam-player-image-container,
+.webcam-player:-webkit-full-screen .webcam-player-image-container {
+    width: 100%;
+    height: 100%;
+}
+
+.webcam-player:fullscreen .webcam-player-image,
+.webcam-player:-webkit-full-screen .webcam-player-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 /* ============================================
    Night Vision Mode - Red Dark Theme
    Protects pilot night vision (scotopic vision)

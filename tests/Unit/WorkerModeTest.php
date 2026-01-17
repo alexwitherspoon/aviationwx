@@ -52,14 +52,14 @@ class WorkerModeTest extends TestCase
     }
     
     /**
-     * Test that fetch-webcam.php detects worker mode and exits with error for invalid airport
+     * Test that unified-webcam-worker.php detects worker mode and exits with error for invalid airport
      */
-    public function testFetchWebcamWorkerMode_InvalidAirport()
+    public function testUnifiedWebcamWorkerMode_InvalidAirport()
     {
-        $script = __DIR__ . '/../../scripts/fetch-webcam.php';
+        $script = __DIR__ . '/../../scripts/unified-webcam-worker.php';
         
         if (!file_exists($script)) {
-            $this->markTestSkipped('fetch-webcam.php not found');
+            $this->markTestSkipped('unified-webcam-worker.php not found');
             return;
         }
         
@@ -72,14 +72,14 @@ class WorkerModeTest extends TestCase
     }
     
     /**
-     * Test that fetch-webcam.php worker mode doesn't show process pool output
+     * Test that unified-webcam-worker.php worker mode doesn't show process pool output
      */
-    public function testFetchWebcamWorkerMode_NoProcessPoolOutput()
+    public function testUnifiedWebcamWorkerMode_NoProcessPoolOutput()
     {
-        $script = __DIR__ . '/../../scripts/fetch-webcam.php';
+        $script = __DIR__ . '/../../scripts/unified-webcam-worker.php';
         
         if (!file_exists($script)) {
-            $this->markTestSkipped('fetch-webcam.php not found');
+            $this->markTestSkipped('unified-webcam-worker.php not found');
             return;
         }
         
@@ -92,4 +92,3 @@ class WorkerModeTest extends TestCase
         $this->assertStringNotContainsString('workers', $outputStr, 'Worker mode should not show workers output');
     }
 }
-

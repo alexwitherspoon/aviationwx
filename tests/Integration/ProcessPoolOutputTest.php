@@ -117,27 +117,27 @@ class ProcessPoolOutputTest extends TestCase
     }
     
     /**
-     * Test that webcam script shows process pool output
+     * Test that unified webcam worker requires worker mode
+     * 
+     * Note: The unified-webcam-worker.php is designed to be called by the scheduler
+     * in --worker mode only. It doesn't have a standalone batch mode like fetch-weather.php.
      */
-    public function testWebcamShowsProcessPoolOutput()
+    public function testUnifiedWebcamWorkerRequiresWorkerMode()
     {
-        if (!function_exists('curl_init')) {
-            $this->markTestSkipped('cURL not available');
-        }
-        
-        $script = __DIR__ . '/../../scripts/fetch-webcam.php';
+        $script = __DIR__ . '/../../scripts/unified-webcam-worker.php';
         if (!file_exists($script)) {
-            $this->markTestSkipped('fetch-webcam.php not found');
+            $this->markTestSkipped('unified-webcam-worker.php not found');
             return;
         }
         
+        // Running without --worker should error
         $cmd = sprintf('php %s 2>&1', escapeshellarg($script));
         $output = [];
         exec($cmd, $output, $exitCode);
         $outputStr = implode("\n", $output);
         
-        $this->assertStringContainsString('AviationWX Webcam Fetcher', $outputStr, 'Should show header');
-        $this->assertStringContainsString('Processing', $outputStr, 'Should show processing message');
-        $this->assertStringContainsString('workers', $outputStr, 'Should mention workers');
+        // Should exit with error when not in worker mode
+        $this->assertNotEquals(0, $exitCode, 'Should exit with error without --worker flag');
+        $this->assertStringContainsString('worker mode', $outputStr, 'Should mention worker mode requirement');
     }
 }

@@ -36,25 +36,29 @@ class SeoUtilsTest extends TestCase
     }
 
     /**
-     * Test getBaseUrl() - HTTP
+     * Test getBaseUrl() - Always returns HTTPS regardless of $_SERVER['HTTPS']
+     * 
+     * The site enforces HTTPS via nginx redirect, so getBaseUrl() always returns https://
      */
-    public function testGetBaseUrl_Http()
+    public function testGetBaseUrl_AlwaysHttps_WhenHttpsOff()
     {
         $_SERVER['HTTPS'] = 'off';
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
         $url = getBaseUrl();
-        $this->assertEquals('http://aviationwx.org', $url);
+        // Always HTTPS - HTTP redirects to HTTPS via nginx (301)
+        $this->assertEquals('https://aviationwx.org', $url);
     }
 
     /**
-     * Test getBaseUrl() - Missing HTTPS
+     * Test getBaseUrl() - Always returns HTTPS even when HTTPS not set
      */
-    public function testGetBaseUrl_MissingHttps()
+    public function testGetBaseUrl_AlwaysHttps_WhenHttpsMissing()
     {
         unset($_SERVER['HTTPS']);
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
         $url = getBaseUrl();
-        $this->assertEquals('http://aviationwx.org', $url);
+        // Always HTTPS - HTTP redirects to HTTPS via nginx (301)
+        $this->assertEquals('https://aviationwx.org', $url);
     }
 
     /**
@@ -548,33 +552,41 @@ class SeoUtilsTest extends TestCase
     }
 
     /**
-     * Test generateFaviconTags() - Correct Base URL
+     * Test generateFaviconTags() - Uses Root-Relative URLs
+     * 
+     * Favicons use root-relative paths (not absolute URLs) so they work
+     * in all environments (production, local dev, etc.)
      */
-    public function testGenerateFaviconTags_CorrectBaseUrl()
+    public function testGenerateFaviconTags_UsesRootRelativeUrls()
     {
         $_SERVER['HTTPS'] = 'on';
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
         
         $tags = generateFaviconTags();
         
-        // Should use correct base URL (no subdirectory after favicon update)
-        $this->assertStringContainsString('https://aviationwx.org/public/favicons', $tags);
+        // Should use root-relative path (works in all environments)
+        $this->assertStringContainsString('/public/favicons', $tags);
+        // Should NOT contain absolute URL (would break local dev)
+        $this->assertStringNotContainsString('https://aviationwx.org/public/favicons', $tags);
         $this->assertStringNotContainsString('aviationwx_favicons', $tags);
     }
 
     /**
-     * Test generateFaviconTags() - HTTP Base URL
+     * Test generateFaviconTags() - Works Without Server Variables
+     * 
+     * Root-relative paths don't depend on HTTP_HOST or HTTPS
      */
-    public function testGenerateFaviconTags_HttpBaseUrl()
+    public function testGenerateFaviconTags_WorksWithoutServerVars()
     {
-        $_SERVER['HTTPS'] = 'off';
-        $_SERVER['HTTP_HOST'] = 'aviationwx.org';
+        // Clear server variables
+        unset($_SERVER['HTTPS']);
+        unset($_SERVER['HTTP_HOST']);
         
         $tags = generateFaviconTags();
         
-        // Should use HTTP for base URL (no subdirectory after favicon update)
-        $this->assertStringContainsString('http://aviationwx.org/public/favicons', $tags);
-        $this->assertStringNotContainsString('aviationwx_favicons', $tags);
+        // Should still work with root-relative paths
+        $this->assertStringContainsString('/public/favicons', $tags);
+        $this->assertStringContainsString('favicon.ico', $tags);
     }
 
     /**
@@ -617,17 +629,19 @@ class SeoUtilsTest extends TestCase
     }
 
     /**
-     * Test getLogoUrl() - HTTP Base URL
+     * Test getLogoUrl() - Always uses HTTPS Base URL
+     * 
+     * Site enforces HTTPS via nginx redirect, so all URLs use https://
      */
-    public function testGetLogoUrl_HttpBaseUrl()
+    public function testGetLogoUrl_AlwaysHttpsBaseUrl()
     {
         $_SERVER['HTTPS'] = 'off';
         $_SERVER['HTTP_HOST'] = 'aviationwx.org';
         
         $logoUrl = getLogoUrl();
         
-        // Should use HTTP base URL
-        $this->assertStringStartsWith('http://aviationwx.org', $logoUrl);
+        // Always HTTPS - HTTP redirects to HTTPS via nginx (301)
+        $this->assertStringStartsWith('https://aviationwx.org', $logoUrl);
     }
 
     /**

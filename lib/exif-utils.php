@@ -72,16 +72,93 @@ function requireExiftool(): bool {
 }
 
 /**
- * Get EXIF DateTimeOriginal from image
+ * Get UTC timestamp from image EXIF data
  * 
- * Tries PHP's native exif_read_data first for speed, then falls back to
- * exiftool for images where PHP can't read the EXIF (e.g., MJPEG frames
- * where exiftool added the timestamp after capture).
+ * Priority order:
+ * 1. GPS DateStamp + TimeStamp (always UTC per EXIF spec) - added by our pipeline
+ * 2. DateTimeOriginal (local time) - only if GPS fields not present
+ * 
+ * IMPORTANT: DateTimeOriginal is kept in camera's local time for audit purposes.
+ * This function returns UTC timestamp for all application logic (age calculations,
+ * filename timestamps, etc.).
+ * 
+ * @param string $filePath Path to image
+ * @return int Unix timestamp (UTC), or 0 if not found/invalid
+ */
+function getExifTimestamp(string $filePath): int {
+    if (!file_exists($filePath)) {
+        return 0;
+    }
+    
+    // Priority 1: GPS UTC timestamp (added by our pipeline via normalizeExifToUtc)
+    // GPS fields are always UTC per EXIF spec - this is the authoritative source
+    $gpsTimestamp = getGpsUtcTimestampFromExif($filePath);
+    if ($gpsTimestamp > 0) {
+        return $gpsTimestamp;
+    }
+    
+    // Priority 2: DateTimeOriginal (local time) - fallback for images without GPS fields
+    // WARNING: This may be in camera's local timezone, not UTC
+    // Only used for legacy images before GPS requirement was added
+    return getDateTimeOriginalTimestamp($filePath);
+}
+
+/**
+ * Extract GPS UTC timestamp from EXIF using exiftool
+ * 
+ * GPS DateStamp and TimeStamp are always in UTC per EXIF spec.
+ * Our pipeline adds these via normalizeExifToUtc().
+ * 
+ * @param string $filePath Path to image file
+ * @return int Unix timestamp (UTC), or 0 if not available
+ */
+function getGpsUtcTimestampFromExif(string $filePath): int {
+    if (!file_exists($filePath)) {
+        return 0;
+    }
+    
+    // Use exiftool to get GPS timestamp (more reliable than PHP's exif_read_data for GPS)
+    $cmd = sprintf(
+        'exiftool -GPSDateStamp -GPSTimeStamp -s3 -sep " " %s 2>/dev/null',
+        escapeshellarg($filePath)
+    );
+    
+    $output = [];
+    $return = 0;
+    @exec($cmd, $output, $return);
+    
+    if ($return !== 0 || empty($output)) {
+        return 0;
+    }
+    
+    // Output format: "YYYY:MM:DD" and "HH:MM:SS" on separate lines
+    $combined = implode(' ', array_map('trim', $output));
+    
+    // Parse "YYYY:MM:DD HH:MM:SS" format
+    if (preg_match('/(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/', $combined, $matches)) {
+        $dateStr = sprintf('%s-%s-%s %s:%s:%s UTC',
+            $matches[1], $matches[2], $matches[3],
+            $matches[4], $matches[5], $matches[6]
+        );
+        $timestamp = @strtotime($dateStr);
+        if ($timestamp !== false && $timestamp > 0) {
+            return (int)$timestamp;
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * Get DateTimeOriginal timestamp from EXIF (local time, legacy fallback)
+ * 
+ * WARNING: This returns the camera's local time interpreted as UTC.
+ * Only use this as a fallback when GPS fields are not available.
  * 
  * @param string $filePath Path to image
  * @return int Unix timestamp, or 0 if not found/invalid
  */
-function getExifTimestamp(string $filePath): int {
+function getDateTimeOriginalTimestamp(string $filePath): int {
     if (!file_exists($filePath)) {
         return 0;
     }
@@ -99,7 +176,7 @@ function getExifTimestamp(string $filePath): int {
             if ($dateTime !== null) {
                 // Parse EXIF format: "2024:12:26 15:30:45"
                 // Convert to: "2024-12-26 15:30:45"
-                // Our pipeline writes EXIF in UTC (using gmdate), so parse as UTC
+                // NOTE: This is local time, but we parse as UTC for backwards compatibility
                 $formatted = str_replace(':', '-', substr($dateTime, 0, 10)) . substr($dateTime, 10);
                 $timestamp = @strtotime($formatted . ' UTC');
                 
@@ -111,7 +188,6 @@ function getExifTimestamp(string $filePath): int {
     }
     
     // Fallback to exiftool for images where PHP can't read EXIF
-    // (e.g., MJPEG frames where we added timestamp via exiftool)
     $cmd = sprintf(
         'exiftool -s3 -DateTimeOriginal %s 2>/dev/null',
         escapeshellarg($filePath)
@@ -119,8 +195,6 @@ function getExifTimestamp(string $filePath): int {
     $output = @exec($cmd, $outputLines, $exitCode);
     
     if ($exitCode === 0 && !empty($output)) {
-        // exiftool -s3 returns just the value: "2024:12:26 15:30:45"
-        // Our pipeline writes EXIF in UTC (using gmdate), so parse as UTC
         $formatted = str_replace(':', '-', substr($output, 0, 10)) . substr($output, 10);
         $timestamp = @strtotime($formatted . ' UTC');
         
@@ -1131,7 +1205,8 @@ function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, st
     // Already has valid EXIF with DateTimeOriginal?
     if (hasExifTimestamp($filePath)) {
         // Ensure GPS UTC fields exist (for old images processed before GPS requirement)
-        $timestamp = getTimestampForExif($filePath);
+        // Use existing EXIF timestamp, not mtime, to preserve the original capture time
+        $timestamp = getExifTimestamp($filePath);
         if ($timestamp > 0) {
             // Add GPS fields, preserve original DateTimeOriginal
             addExifTimestamp($filePath, $timestamp, $timezone, true);

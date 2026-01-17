@@ -510,8 +510,8 @@ function generateStructuredDataScript($data) {
  * @return string HTML link and meta tags (newline-separated)
  */
 function generateFaviconTags() {
-    $baseUrl = getBaseUrl();
-    $faviconPath = $baseUrl . '/public/favicons';
+    // Root-relative paths work in all environments (local dev + production)
+    $faviconPath = '/public/favicons';
     
     $tags = [];
     

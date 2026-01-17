@@ -1331,8 +1331,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $messageParts[] = $camMessage;
             }
             
-            // Add verification metrics for all cameras
-            $messageParts[] = "Verified {$verified} / Rejected {$rejected}";
+            // Add verification metrics for all cameras (24h rolling window)
+            $messageParts[] = "Verified {$verified} / Rejected {$rejected} (24h)";
             
             // Add variant coverage
             if ($cacheExists && isset($variantCoverage)) {

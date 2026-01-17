@@ -21,11 +21,10 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Logs to /var/log/aviationwx/ via aviationwx_log() function.
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php >> /var/log/aviationwx/scheduler-health-check.log 2>&1
 
-# Push Webcam Processor - Runs every minute
-# Processes webcam images uploaded via SFTP/FTP/FTPS by push cameras.
-# Moves uploaded images from uploads directory to cache directory for serving.
-# Logs to /var/log/aviationwx/ (logrotate handles rotation: 7 days, 100MB max)
-* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/process-push-webcams.php >> /var/log/aviationwx/cron-push-webcams.log 2>&1
+# NOTE: Push webcam processing is now handled by the unified scheduler daemon.
+# The scheduler uses WebcamScheduleQueue for efficient scheduling of ALL webcams
+# (both push and pull) with per-camera refresh_seconds configuration.
+# This cron job has been removed as part of the unified webcam worker refactor.
 
 # Cache Cleanup - Runs daily at 4 AM
 # Two-layer cleanup strategy (belt and suspenders):

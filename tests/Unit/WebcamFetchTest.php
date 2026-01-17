@@ -2,75 +2,68 @@
 /**
  * Unit Tests for Webcam Fetch Functionality
  * 
- * Tests that webcam fetch functions handle errors correctly,
- * especially curl write errors that occur when stopping early
+ * Tests that webcam acquisition strategies handle data correctly.
+ * Updated for unified webcam worker refactor.
  */
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . '/../../scripts/fetch-webcam.php';
+require_once __DIR__ . '/../../lib/webcam-acquisition.php';
+require_once __DIR__ . '/../../lib/webcam-worker.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/constants.php';
 
 class WebcamFetchTest extends TestCase
 {
     /**
-     * Test that MJPEG fetch handles curl write errors correctly
-     * Bug: Curl reports "Failure writing output" when write function returns 0 to stop,
-     * but this should not cause the fetch to fail if valid data was received
+     * Test that PullAcquisitionStrategy class exists and is instantiable
      */
-    public function testFetchMJPEGStream_HandlesCurlWriteError()
+    public function testPullAcquisitionStrategyExists()
     {
-        // Create a test URL that simulates multipart MJPEG stream
-        // We'll use a simple test - the function should not fail on curl write errors
-        // if valid JPEG data was received
-        
-        $testFile = sys_get_temp_dir() . '/test_webcam_fetch_' . uniqid() . '.jpg';
-        
-        // Note: This test verifies the logic, not actual network fetch
-        // The key is that the function should check for valid data first,
-        // then ignore curl errors if data is valid
-        
-        // Simulate the scenario where curl reports write error but data is valid
-        // We can't easily mock curl in PHP, so we test the logic path
-        
-        // The fix ensures that if httpCode == 200 and data is valid,
-        // the function continues even if curl_error() reports an error
-        
-        // This test documents the expected behavior
         $this->assertTrue(
-            function_exists('fetchMJPEGStream'),
-            'fetchMJPEGStream function should exist'
+            class_exists('PullAcquisitionStrategy'),
+            'PullAcquisitionStrategy class should exist'
         );
+        
+        // Should be instantiable with required parameters
+        $strategy = new PullAcquisitionStrategy('kspb', 0, ['url' => 'http://test.com/cam.mjpg'], ['name' => 'Test']);
+        $this->assertInstanceOf(AcquisitionStrategy::class, $strategy);
     }
     
     /**
-     * Test that MJPEG fetch validates JPEG data before writing
+     * Test that AcquisitionResult properly handles success case
      */
-    public function testFetchMJPEGStream_ValidatesJPEG()
+    public function testAcquisitionResultSuccess()
     {
-        // The function should validate:
-        // 1. HTTP code is 200
-        // 2. Data exists and is > 1000 bytes
-        // 3. JPEG markers (0xFF 0xD8 start, 0xFF 0xD9 end)
-        // 4. JPEG size is reasonable (1KB - 5MB)
-        // 5. JPEG can be parsed (if GD available)
+        $result = AcquisitionResult::success('/tmp/test.jpg', time(), 'mjpeg', ['http_code' => 200]);
         
-        // This test documents expected validation behavior
-        $this->assertTrue(
-            function_exists('fetchMJPEGStream'),
-            'fetchMJPEGStream function should exist'
-        );
+        $this->assertTrue($result->success, 'Success result should be true');
+        $this->assertEquals('/tmp/test.jpg', $result->imagePath, 'Should have image path');
+        $this->assertEquals('mjpeg', $result->sourceType, 'Should have source type');
+        $this->assertEquals(200, $result->metadata['http_code'], 'Should have metadata');
     }
     
     /**
-     * Test that MJPEG fetch handles multipart boundaries correctly
+     * Test that AcquisitionResult properly handles failure case
      */
-    public function testFetchMJPEGStream_HandlesMultipartBoundaries()
+    public function testAcquisitionResultFailure()
     {
-        // The function should extract JPEG from multipart MJPEG streams
-        // that include boundaries like "--==STILLIMAGEBOUNDARY=="
-        // by finding JPEG markers (0xFF 0xD8 and 0xFF 0xD9)
+        $result = AcquisitionResult::failure('fetch_failed', 'mjpeg', ['http_code' => 500]);
         
-        // Test that JPEG extraction works even with multipart headers
+        $this->assertFalse($result->success, 'Failure result should be false');
+        $this->assertNull($result->imagePath, 'Should not have image path');
+        $this->assertEquals('fetch_failed', $result->errorReason, 'Should have error reason');
+        $this->assertEquals('mjpeg', $result->sourceType, 'Should have source type');
+    }
+    
+    /**
+     * Test MJPEG multipart boundary handling logic
+     * This tests the pattern for extracting JPEG from multipart MJPEG streams
+     */
+    public function testMJPEGMultipartBoundaryExtraction()
+    {
+        // The extraction logic should find JPEG markers (0xFF 0xD8 and 0xFF 0xD9)
+        // even with multipart headers
         $multipartData = "--==STILLIMAGEBOUNDARY==\r\n" .
                          "Content-Type: image/jpeg\r\n" .
                          "Content-Length: 42670\r\n\r\n" .
@@ -91,25 +84,56 @@ class WebcamFetchTest extends TestCase
     }
     
     /**
-     * Test that MJPEG fetch validates JPEG size
+     * Test JPEG size validation logic
      */
-    public function testFetchMJPEGStream_ValidatesSize()
+    public function testJPEGSizeValidation()
     {
-        // Test that JPEG size validation works
-        // Minimum: 1KB (1024 bytes)
-        // Maximum: 5MB (5242880 bytes)
+        // Test that JPEG size validation logic works
+        // Minimum: ~1KB (1024 bytes)
+        // Maximum: ~5MB (5242880 bytes)
         
         $minSize = 1024;
         $maxSize = 5242880;
         
-        // Too small
+        // Too small - should be rejected
         $smallJpeg = "\xFF\xD8" . str_repeat("\x00", 100) . "\xFF\xD9";
-        $this->assertLessThan($minSize, strlen($smallJpeg), 'Small JPEG should be rejected');
+        $this->assertLessThan($minSize, strlen($smallJpeg), 'Small JPEG should fail size check');
         
-        // Valid size
+        // Valid size - should pass
         $validJpeg = "\xFF\xD8" . str_repeat("\x00", 50000) . "\xFF\xD9";
         $this->assertGreaterThanOrEqual($minSize, strlen($validJpeg), 'Valid size JPEG should pass');
         $this->assertLessThanOrEqual($maxSize, strlen($validJpeg), 'Valid size JPEG should pass');
     }
-}
+    
+    /**
+     * Test source type detection from URL
+     */
+    public function testSourceTypeDetectionFromUrl()
+    {
+        // MJPEG (default for unknown URLs)
+        $mjpegStrategy = new PullAcquisitionStrategy('kspb', 0, ['url' => 'http://cam.test/video.mjpg'], ['name' => 'Test']);
+        $this->assertEquals('mjpeg', $mjpegStrategy->getSourceType(), 'Should detect MJPEG source');
 
+        // Static JPEG
+        $jpegStrategy = new PullAcquisitionStrategy('kspb', 0, ['url' => 'http://cam.test/image.jpg'], ['name' => 'Test']);
+        $this->assertEquals('static_jpeg', $jpegStrategy->getSourceType(), 'Should detect static JPEG source');
+
+        // RTSP
+        $rtspStrategy = new PullAcquisitionStrategy('kspb', 0, ['url' => 'rtsp://cam.test/stream'], ['name' => 'Test']);
+        $this->assertEquals('rtsp', $rtspStrategy->getSourceType(), 'Should detect RTSP source');
+    }
+    
+    /**
+     * Test that AcquisitionStrategyFactory creates correct strategies
+     */
+    public function testAcquisitionStrategyFactory()
+    {
+        // Pull camera
+        $pullStrategy = AcquisitionStrategyFactory::create('kspb', 0, ['url' => 'http://test.com/cam.mjpg'], ['name' => 'Test']);
+        $this->assertInstanceOf(PullAcquisitionStrategy::class, $pullStrategy, 'Should create pull strategy for URL config');
+
+        // Push camera
+        $pushStrategy = AcquisitionStrategyFactory::create('kczk', 0, ['type' => 'push', 'push_config' => ['username' => 'test']], ['name' => 'Test']);
+        $this->assertInstanceOf(PushAcquisitionStrategy::class, $pushStrategy, 'Should create push strategy for push config');
+    }
+}
