@@ -442,11 +442,14 @@ jobs:
             "lib/rate-limit.php"
             "lib/circuit-breaker.php"
             "lib/constants.php"
-            "scripts/process-push-webcams.php"
             "scripts/sync-push-config.php"
+            "scripts/unified-webcam-worker.php"
             "scripts/create-sftp-user.sh"
             "scripts/service-watchdog.sh"
             "lib/push-webcam-validator.php"
+            "lib/webcam-worker.php"
+            "lib/webcam-acquisition.php"
+            "lib/webcam-pipeline.php"
             "pages/config-generator.php"
             "docker/vsftpd.conf"
             "docker/sshd_config"
@@ -1979,19 +1982,19 @@ jobs:
             echo "✓ APCu extension loaded"
           fi
           
-          # Check push webcam scripts exist
-          if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/scripts/process-push-webcams.php; then
+          # Check unified webcam worker exists
+          if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/scripts/unified-webcam-worker.php; then
             if [ "$(type -t deployment_error)" = "function" ]; then
               deployment_error \
                 "File Verification" \
-                "process-push-webcams.php not found in container" \
+                "unified-webcam-worker.php not found in container" \
                 "1. Verify file was synced via rsync\n2. Check Dockerfile COPY commands\n3. Verify file exists in repository\n4. Check container filesystem: docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/scripts/"
             else
-              echo "❌ process-push-webcams.php not found in container"
+              echo "❌ unified-webcam-worker.php not found in container"
               exit 1
             fi
           fi
-          echo "✓ process-push-webcams.php present"
+          echo "✓ unified-webcam-worker.php present"
           
           if ! docker compose -f docker/docker-compose.prod.yml exec -T web test -f /var/www/html/scripts/sync-push-config.php; then
             if [ "$(type -t deployment_error)" = "function" ]; then
