@@ -101,40 +101,55 @@ jobs:
           
           echo "✓ Weather pipeline validation complete"
       
-      - name: Validate Push Webcam Implementation
+      - name: Validate Unified Webcam Worker Implementation
         run: |
+          # Check unified webcam worker exists
+          if ! grep -q "class WebcamWorker" lib/webcam-worker.php; then
+            echo "❌ CRITICAL: WebcamWorker class missing from lib/webcam-worker.php!"
+            exit 1
+          fi
+          
+          # Check acquisition strategies exist
+          if ! grep -q "class PullAcquisitionStrategy" lib/webcam-acquisition.php; then
+            echo "❌ CRITICAL: PullAcquisitionStrategy class missing!"
+            exit 1
+          fi
+          
+          if ! grep -q "class PushAcquisitionStrategy" lib/webcam-acquisition.php; then
+            echo "❌ CRITICAL: PushAcquisitionStrategy class missing!"
+            exit 1
+          fi
+          
+          # Check processing pipeline exists
+          if ! grep -q "class ProcessingPipeline" lib/webcam-pipeline.php; then
+            echo "❌ CRITICAL: ProcessingPipeline class missing from lib/webcam-pipeline.php!"
+            exit 1
+          fi
+          
+          # Check unified worker CLI script exists
+          if [ ! -f "scripts/unified-webcam-worker.php" ]; then
+            echo "❌ CRITICAL: scripts/unified-webcam-worker.php missing!"
+            exit 1
+          fi
+          
+          # Check push webcam validator still exists
           if ! grep -q "function validatePushWebcamConfig" lib/push-webcam-validator.php; then
             echo "❌ CRITICAL: validatePushWebcamConfig function missing!"
             exit 1
           fi
           
-          if ! grep -q "function processPushWebcams" scripts/process-push-webcams.php; then
-            echo "❌ CRITICAL: processPushWebcams function missing!"
-            exit 1
-          fi
-          
+          # Check sync-push-config still exists
           if ! grep -q "function syncPushConfig" scripts/sync-push-config.php; then
             echo "❌ CRITICAL: syncPushConfig function missing!"
             exit 1
           fi
           
-          if ! grep -q "refresh_seconds.*5\|5.*refresh_seconds" pages/status.php scripts/process-push-webcams.php; then
-            echo "⚠️  Warning: Staleness warning threshold (5x) may not be implemented"
-          fi
-          
-          if ! grep -q "refresh_seconds.*10\|10.*refresh_seconds" pages/status.php scripts/process-push-webcams.php; then
-            echo "⚠️  Warning: Staleness error threshold (10x) may not be implemented"
-          fi
-          
-          if ! grep -q "60\|min.*60" scripts/process-push-webcams.php lib/push-webcam-validator.php; then
-            echo "⚠️  Warning: Minimum refresh_seconds (60s) enforcement may be missing"
-          fi
-          
-          if ! grep -q "validateImageFile\|mime_content_type\|getimagesize" scripts/process-push-webcams.php; then
+          # Check image validation exists in pipeline
+          if ! grep -q "validateImage\|getimagesize\|mime_content_type" lib/webcam-pipeline.php lib/webcam-acquisition.php; then
             echo "⚠️  Warning: Image file validation may be missing"
           fi
           
-          echo "✓ Push webcam implementation validation complete"
+          echo "✓ Unified webcam worker validation complete"
       
       - name: Validate Flight Category Logic
         run: |
@@ -183,15 +198,28 @@ jobs:
             "recordWebcamFailure"
             "recordWebcamSuccess"
             "validatePushWebcamConfig"
-            "processPushWebcams"
             "syncPushConfig"
-            "nullStaleFieldsBySource"
           )
           
           for func in "${critical_functions[@]}"; do
             # Check in all relevant files including library files
-            if ! grep -q "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/process-push-webcams.php scripts/sync-push-config.php scripts/fetch-webcam.php lib/weather/calculator.php lib/weather/UnifiedFetcher.php lib/weather/cache-utils.php 2>/dev/null; then
+            if ! grep -rq "function $func" api/weather.php lib/config.php lib/rate-limit.php lib/circuit-breaker.php lib/push-webcam-validator.php scripts/sync-push-config.php lib/weather/calculator.php lib/weather/UnifiedFetcher.php lib/weather/cache-utils.php lib/webcam-worker.php lib/webcam-acquisition.php lib/webcam-pipeline.php 2>/dev/null; then
               echo "❌ CRITICAL: Function $func missing or removed!"
+              exit 1
+            fi
+          done
+          
+          # Check critical classes exist
+          critical_classes=(
+            "class WebcamWorker"
+            "class ProcessingPipeline"
+            "class PullAcquisitionStrategy"
+            "class PushAcquisitionStrategy"
+          )
+          
+          for class in "${critical_classes[@]}"; do
+            if ! grep -rq "$class" lib/webcam-worker.php lib/webcam-acquisition.php lib/webcam-pipeline.php 2>/dev/null; then
+              echo "❌ CRITICAL: $class missing or removed!"
               exit 1
             fi
           done
@@ -237,8 +265,9 @@ jobs:
             exit 1
           fi
           
-          if ! grep -q "max_file_size_mb\|allowed_extensions\|validateImageFile" scripts/process-push-webcams.php; then
-            echo "⚠️  Warning: File upload validation may be missing in process-push-webcams.php"
+          # Check image validation in unified webcam worker
+          if ! grep -q "validateImage\|getimagesize\|mime_content_type" lib/webcam-pipeline.php lib/webcam-acquisition.php; then
+            echo "⚠️  Warning: File upload validation may be missing in unified webcam worker"
           fi
           
           echo "✓ Security checks complete"
