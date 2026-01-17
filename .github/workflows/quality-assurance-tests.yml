@@ -321,9 +321,12 @@ jobs:
             "lib/rate-limit.php"
             "lib/constants.php"
             "lib/circuit-breaker.php"
-            "scripts/process-push-webcams.php"
             "scripts/sync-push-config.php"
+            "scripts/unified-webcam-worker.php"
             "lib/push-webcam-validator.php"
+            "lib/webcam-worker.php"
+            "lib/webcam-acquisition.php"
+            "lib/webcam-pipeline.php"
             "pages/config-generator.php"
             "pages/status.php"
           )
@@ -512,20 +515,19 @@ jobs:
           echo '✓ Required constants defined' . PHP_EOL;
           "
       
-      - name: Validate push webcam functions
+      - name: Validate webcam worker functions and classes
         run: |
           php -r "
           require_once 'lib/push-webcam-validator.php';
-          require_once 'scripts/process-push-webcams.php';
           require_once 'scripts/sync-push-config.php';
+          require_once 'lib/webcam-worker.php';
+          require_once 'lib/webcam-acquisition.php';
+          require_once 'lib/webcam-pipeline.php';
           
+          // Check required functions
           \$functions = [
             'validatePushWebcamConfig',
-            'processPushWebcams',
             'syncPushConfig',
-            'getCameraRefreshSeconds',
-            'findNewestValidImage',
-            'validateImageFile'
           ];
           
           foreach (\$functions as \$func) {
@@ -535,7 +537,23 @@ jobs:
             }
           }
           
-          echo '✓ Push webcam functions exist' . PHP_EOL;
+          // Check required classes
+          \$classes = [
+            'WebcamWorker',
+            'ProcessingPipeline',
+            'PullAcquisitionStrategy',
+            'PushAcquisitionStrategy',
+            'AcquisitionStrategyFactory',
+          ];
+          
+          foreach (\$classes as \$class) {
+            if (!class_exists(\$class)) {
+              echo 'FAIL: Class ' . \$class . ' not found' . PHP_EOL;
+              exit(1);
+            }
+          }
+          
+          echo '✓ Webcam worker functions and classes exist' . PHP_EOL;
           "
       
       - name: Check Dockerfile

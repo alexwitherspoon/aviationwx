@@ -21,7 +21,9 @@ require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/webcam-metadata.php';
 require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/cache-headers.php';
-require_once __DIR__ . '/../scripts/fetch-webcam.php';
+// Note: Background refresh for webcams is now handled by the scheduler daemon using
+// the unified WebcamWorker (scripts/unified-webcam-worker.php). The API no longer
+// performs background refresh - it only serves cached images.
 
 // Check early if we're being included for testing vs. direct API access
 // Tests include this file to get the helper functions but shouldn't run API logic
@@ -454,10 +456,36 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
             'size' => 0,
             'formatReady' => [],
             'enabledFormats' => getEnabledWebcamFormats(),
-            'variants' => []
+            'variants' => [],
+            'stale' => false,
+            'failclosed' => false
         ]);
         exit;
     }
+    
+    // Calculate staleness status for frontend display
+    $failClosedThreshold = $cam['stale_failclosed_seconds']
+        ?? $airport['stale_failclosed_seconds']
+        ?? $config['stale_failclosed_seconds']
+        ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
+    $failClosedThreshold = max(MIN_STALE_FAILCLOSED_SECONDS, (int)$failClosedThreshold);
+    
+    $staleErrorThreshold = $cam['stale_error_seconds']
+        ?? $airport['stale_error_seconds']
+        ?? $config['stale_error_seconds']
+        ?? DEFAULT_STALE_ERROR_SECONDS;
+    $staleErrorThreshold = max(MIN_STALE_ERROR_SECONDS, (int)$staleErrorThreshold);
+    
+    $staleWarningThreshold = $cam['stale_warning_seconds']
+        ?? $airport['stale_warning_seconds']
+        ?? $config['stale_warning_seconds']
+        ?? DEFAULT_STALE_WARNING_SECONDS;
+    $staleWarningThreshold = max(MIN_STALE_WARNING_SECONDS, (int)$staleWarningThreshold);
+    
+    $imageAge = time() - $timestamp;
+    $isFailClosed = $imageAge > $failClosedThreshold;
+    $isStaleError = !$isFailClosed && $imageAge > $staleErrorThreshold;
+    $isStaleWarning = !$isFailClosed && !$isStaleError && $imageAge > $staleWarningThreshold;
     
     // Get available variants
     $variants = getAvailableVariants($airportId, $camIndex, $timestamp);
@@ -500,15 +528,34 @@ if (isset($_GET['mtime']) && $_GET['mtime'] === '1') {
         }
     }
     
-    echo json_encode([
-        'success' => $timestamp > 0,
+    // Build response with staleness information
+    $response = [
+        'success' => $timestamp > 0 && !$isFailClosed,
         'timestamp' => $timestamp,
         'size' => $size,
         'formatReady' => $formatReady,
         'enabledFormats' => $enabledFormats,
         'variants' => $variants,
-        'variantHeights' => $variantHeights
-    ]);
+        'variantHeights' => $variantHeights,
+        // Staleness indicators for frontend display
+        'age_seconds' => $imageAge,
+        'stale_warning' => $isStaleWarning,
+        'stale_error' => $isStaleError,
+        'failclosed' => $isFailClosed,
+        'thresholds' => [
+            'warning_seconds' => $staleWarningThreshold,
+            'error_seconds' => $staleErrorThreshold,
+            'failclosed_seconds' => $failClosedThreshold
+        ]
+    ];
+    
+    // If fail-closed, add troubleshooting info
+    if ($isFailClosed) {
+        $response['message'] = 'Image too stale to display safely';
+        $response['troubleshooting'] = 'Camera may be offline. Image must be newer than ' . round($failClosedThreshold / 3600, 1) . ' hours.';
+    }
+    
+    echo json_encode($response);
     exit;
 }
 
@@ -1195,6 +1242,51 @@ if ($latestTimestamp === 0) {
     exit;
 }
 
+// =============================================================================
+// SERVER-SIDE STALENESS ENFORCEMENT (Fail-Closed Safety)
+// =============================================================================
+// If the image is too old (exceeds fail-closed threshold), return 503 Service Unavailable
+// This prevents display of dangerously outdated data to aviation users.
+// The fail-closed threshold is configurable: camera > airport > global > default (3 hours)
+$failClosedThreshold = $cam['stale_failclosed_seconds']
+    ?? $airport['stale_failclosed_seconds']
+    ?? $config['stale_failclosed_seconds']
+    ?? DEFAULT_STALE_FAILCLOSED_SECONDS;
+
+// Enforce minimum fail-closed threshold
+$failClosedThreshold = max(MIN_STALE_FAILCLOSED_SECONDS, (int)$failClosedThreshold);
+
+$imageAge = time() - $latestTimestamp;
+if ($imageAge > $failClosedThreshold) {
+    // Image is too stale - fail closed for safety
+    aviationwx_log('warning', 'webcam image exceeds fail-closed threshold, returning 503', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'image_timestamp' => $latestTimestamp,
+        'image_age_seconds' => $imageAge,
+        'failclosed_threshold' => $failClosedThreshold,
+        'image_age_human' => sprintf('%dh %dm', floor($imageAge / 3600), floor(($imageAge % 3600) / 60))
+    ], 'app');
+    
+    // Return 503 Service Unavailable with informative response
+    http_response_code(503);
+    header('Content-Type: application/json');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    header('Retry-After: ' . min(3600, $refreshInterval * 2)); // Suggest retry after 2x refresh interval, max 1 hour
+    
+    echo json_encode([
+        'error' => 'image_too_stale',
+        'message' => 'Webcam image is too old to safely display. The camera may be offline or experiencing issues.',
+        'airport' => $airportId,
+        'camera_index' => $camIndex,
+        'last_image_timestamp' => $latestTimestamp,
+        'last_image_age_seconds' => $imageAge,
+        'failclosed_threshold_seconds' => $failClosedThreshold,
+        'troubleshooting' => 'Check camera connectivity and scheduler status. Image must be newer than ' . round($failClosedThreshold / 3600, 1) . ' hours.'
+    ]);
+    exit;
+}
+
 // Handle timestamp-based URL request (immutable cache busting)
 if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
     // Determine requested format
@@ -1442,252 +1534,67 @@ exit;
  * @param string $reqId Request ID for logging
  * @return void
  */
-function triggerWebcamBackgroundRefresh($airportId, $camIndex, $cam, $cacheDir, $cacheJpg, $cacheWebp, $refreshInterval, $mtime, $reqId) {// Check circuit breaker early before starting background refresh
-    $circuit = checkCircuitBreaker($airportId, $camIndex);
+/**
+ * Trigger webcam background refresh
+ * 
+ * NOTE: As of the unified webcam worker refactor, background refresh is now
+ * handled entirely by the scheduler daemon using WebcamScheduleQueue for
+ * efficient scheduling. This function is retained for backward compatibility
+ * but is now a no-op that logs when stale cache is detected.
+ * 
+ * The scheduler ensures all webcams (both push and pull) are refreshed
+ * according to their configured refresh_seconds interval.
+ * 
+ * @param string $airportId Airport ID
+ * @param int $camIndex Camera index
+ * @param array $cam Camera configuration (unused)
+ * @param string $cacheDir Cache directory (unused)
+ * @param string $cacheJpg JPEG cache file path (unused)
+ * @param string $cacheWebp WEBP cache file path (unused)
+ * @param int $refreshInterval Refresh interval in seconds
+ * @param int $mtime Current cache file mtime
+ * @param string $reqId Request ID for logging (unused)
+ * @return void
+ */
+function triggerWebcamBackgroundRefresh($airportId, $camIndex, $cam, $cacheDir, $cacheJpg, $cacheWebp, $refreshInterval, $mtime, $reqId) {
+    // Background refresh is now handled by the scheduler daemon.
+    // Log stale cache detection for observability, but don't attempt inline refresh.
     $cacheAge = time() - $mtime;
     
-    // If cache is very stale (>= 3 hours), bypass circuit breaker to attempt refresh
-    // This ensures we periodically try to refresh even if previous attempts failed
-    $veryStaleThreshold = 3 * 3600; // 3 hours
-    $bypassCircuitBreaker = ($cacheAge >= $veryStaleThreshold);
-    $shouldRefresh = !$circuit['skip'] || $bypassCircuitBreaker;if (!$shouldRefresh) {
-        aviationwx_log('info', 'webcam background refresh skipped - circuit breaker open', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'failures' => $circuit['failures'] ?? 0,
-            'backoff_remaining' => $circuit['backoff_remaining']
-        ], 'app');
-        return; // Skip refresh if circuit breaker is open and cache is not very stale
-    }
-    
-    if ($bypassCircuitBreaker) {
-        aviationwx_log('info', 'webcam background refresh - bypassing circuit breaker for very stale cache', [
+    if ($cacheAge > $refreshInterval) {
+        aviationwx_log('debug', 'webcam stale cache detected (scheduler will handle refresh)', [
             'airport' => $airportId,
             'cam' => $camIndex,
             'cache_age' => $cacheAge,
-            'failures' => $circuit['failures'] ?? 0
+            'refresh_interval' => $refreshInterval
         ], 'app');
     }
     
-    // Use file-based locking to prevent concurrent refreshes
-    $lockFile = $cacheDir . '/refresh_' . $airportId . '_' . $camIndex . '.lock';
-    
-    // Clean up stale locks (older than 5 minutes) - use atomic check-and-delete
-    if (file_exists($lockFile)) {
-        $lockMtime = @filemtime($lockFile);
-        if ($lockMtime !== false && (time() - $lockMtime) > FILE_LOCK_STALE_SECONDS) {
-            // Try to delete only if still old (race condition protection)
-            $currentMtime = @filemtime($lockFile);
-            if ($currentMtime !== false && (time() - $currentMtime) > FILE_LOCK_STALE_SECONDS) {
-                @unlink($lockFile);
-            }
-        }
-    }
-    
-    $lockFp = @fopen($lockFile, 'c+');
-    $lockAcquired = false;
-    $lockCleanedUp = false;
-    
-    if ($lockFp !== false) {
-        // Try to acquire exclusive lock (non-blocking)
-        if (@flock($lockFp, LOCK_EX | LOCK_NB)) {
-            $lockAcquired = true;
-            // Write PID and timestamp to lock file for debugging
-            @fwrite($lockFp, json_encode([
-                'pid' => getmypid(),
-                'started' => time(),
-                'request_id' => $reqId
-            ]));
-            @fflush($lockFp);
-            
-            // Register shutdown function to clean up lock on script exit
-            register_shutdown_function(function() use ($lockFp, $lockFile, &$lockCleanedUp) {
-                if ($lockCleanedUp) {
-                    return;
-                }
-                if (is_resource($lockFp)) {
-                    @flock($lockFp, LOCK_UN);
-                    @fclose($lockFp);
-                }
-                if (file_exists($lockFile)) {
-                    @unlink($lockFile);
-                }
-                $lockCleanedUp = true;
-            });
-        } else {
-            // Another refresh is already in progress
-            @fclose($lockFp);
-            aviationwx_log('info', 'webcam background refresh skipped - already in progress', [
-                'airport' => $airportId,
-                'cam' => $camIndex
-            ], 'app');
-            return; // Skip - another process is handling the refresh
-        }
-    } else {
-        // Couldn't create lock file, but continue anyway (non-critical)
-        aviationwx_log('warning', 'webcam background refresh lock file creation failed', [
-            'airport' => $airportId,
-            'cam' => $camIndex
-        ], 'app');
-    }
-    
-    // Flush output to client immediately, then refresh in background
-    // Ensure output is flushed before background refresh
-    if (ob_get_level() > 0) {
-        @ob_end_flush();
-    }
-    @flush();
-    
-    if (function_exists('fastcgi_finish_request')) {
-        // FastCGI - finish request but keep script running
-        fastcgi_finish_request();
-    }
-    
-    // Set time limit for background refresh
-    set_time_limit(45);
-    $cacheAge = time() - $mtime;
-    
-    aviationwx_log('info', 'webcam background refresh started', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
-        'cache_age' => $cacheAge,
-        'refresh_interval' => $refreshInterval
-    ], 'app');
-    
-    try {
-        // Check connection status periodically during background refresh
-        $refreshStartTime = time();
-        $maxRefreshTime = BACKGROUND_REFRESH_MAX_TIME;
-        
-        // Fetch fresh image
-        $freshCacheFile = $cacheJpg; // Always fetch JPG first
-        $success = fetchWebcamImageBackground($airportId, $camIndex, $cam, $freshCacheFile, $cacheWebp);// Check if we're running out of time
-        if ((time() - $refreshStartTime) > $maxRefreshTime) {
-            aviationwx_log('warning', 'webcam background refresh approaching timeout, stopping', [
-                'airport' => $airportId,
-                'cam' => $camIndex,
-                'elapsed' => time() - $refreshStartTime
-            ], 'app');
-            // Lock will be cleaned up by shutdown function
-            return;
-        }
-        
-        if ($success) {
-            aviationwx_log('info', 'webcam background refresh completed successfully', [
-                'airport' => $airportId,
-                'cam' => $camIndex
-            ], 'app');} else {
-            aviationwx_log('warning', 'webcam background refresh failed', [
-                'airport' => $airportId,
-                'cam' => $camIndex
-            ], 'app');}
-    } finally {
-        // Always release lock
-        if ($lockAcquired && $lockFp !== false && !$lockCleanedUp) {
-            @flock($lockFp, LOCK_UN);
-            @fclose($lockFp);
-            if (file_exists($lockFile)) {
-                @unlink($lockFile);
-            }
-            $lockCleanedUp = true;
-        }
-    }
+    // No inline refresh - scheduler handles all webcam refresh operations
+    return;
 }
 
 /**
- * Fetch a single webcam image in background (for background refresh)
+ * Fetch a single webcam image in background (DEPRECATED)
  * 
- * Fetches a webcam image and updates cache files. Supports RTSP, MJPEG, and static images.
- * Generates WEBP version in background. Updates circuit breaker on success/failure.
+ * NOTE: This function is deprecated. Background refresh is now handled by
+ * the scheduler daemon using the unified WebcamWorker.
  * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
- * @param array $cam Camera configuration array
- * @param string $cacheFile Target JPG cache file path
- * @param string $cacheWebp Target WEBP cache file path
- * @return bool True on success, false on failure or skip (circuit breaker open)
+ * This stub is retained for backward compatibility with any code that
+ * might still call this function.
+ * 
+ * @param string $airportId Airport ID (unused)
+ * @param int $camIndex Camera index (unused)
+ * @param array $cam Camera configuration array (unused)
+ * @param string $cacheFile Target JPG cache file path (unused)
+ * @param string $cacheWebp Target WEBP cache file path (unused)
+ * @return bool Always returns false (refresh handled by scheduler)
+ * @deprecated Background refresh is handled by scheduler daemon
  */
 function fetchWebcamImageBackground($airportId, $camIndex, $cam, $cacheFile, $cacheWebp) {
-    $url = $cam['url'];
-    $transport = isset($cam['rtsp_transport']) ? strtolower($cam['rtsp_transport']) : 'tcp';
-    
-    // Circuit breaker check handled by caller
-    // This allows bypassing circuit breaker for very stale cache
-    
-    // Determine source type
-    $sourceType = isset($cam['type']) ? strtolower(trim($cam['type'])) : detectWebcamSourceType($url);
-    
-    $fetchStartTime = microtime(true);
-    $success = false;
-    
-    switch ($sourceType) {
-        case 'rtsp':
-            $fetchTimeout = isset($cam['rtsp_fetch_timeout']) ? intval($cam['rtsp_fetch_timeout']) : intval(getenv('RTSP_TIMEOUT') ?: RTSP_DEFAULT_TIMEOUT);
-            $maxRuntime = isset($cam['rtsp_max_runtime']) ? intval($cam['rtsp_max_runtime']) : 6;
-            $success = fetchRTSPFrame($url, $cacheFile, $transport, $fetchTimeout, 2, $maxRuntime);
-            break;
-            
-        case 'static_jpeg':
-        case 'static_png':
-            $success = fetchStaticImage($url, $cacheFile);
-            break;
-            
-        case 'mjpeg':
-        default:
-            $success = fetchMJPEGStream($url, $cacheFile);
-            break;
-    }
-    
-    $fetchDuration = round((microtime(true) - $fetchStartTime) * 1000, 2);
-    
-    if ($success && file_exists($cacheFile) && filesize($cacheFile) > 0) {
-        // Success: reset circuit breaker
-        recordSuccess($airportId, $camIndex);
-        $size = filesize($cacheFile);
-        
-        aviationwx_log('info', 'webcam background refresh success', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'type' => $sourceType,
-            'bytes' => $size,
-            'fetch_duration_ms' => $fetchDuration
-        ], 'app');
-        
-        // Generate all enabled formats synchronously in parallel
-        require_once __DIR__ . '/../lib/webcam-format-generation.php';
-        
-        // Get timestamp from source file
-        $timestamp = getImageCaptureTime($cacheFile);
-        if ($timestamp <= 0) {
-            $timestamp = $mtime;
-        }
-        
-        // Generate all enabled formats in parallel (synchronous wait)
-        $formatResults = generateFormatsSync($cacheFile, $airportId, $camIndex, 'jpg');
-        
-        // Promote all successful formats to timestamp-based files with symlinks
-        $promotedFormats = promoteFormats($airportId, $camIndex, $formatResults, 'jpg', $timestamp);
-        
-        return true;
-    } else {
-        // Failure: record and update backoff
-        $lastErr = @json_decode(@file_get_contents($cacheFile . '.error.json'), true);
-        $sev = mapErrorSeverity($lastErr['code'] ?? 'unknown');
-        $failureReason = $lastErr['reason'] ?? ($lastErr['code'] ?? 'unknown');
-        $httpCode = isset($lastErr['http_code']) ? (int)$lastErr['http_code'] : null;
-        recordFailure($airportId, $camIndex, $sev, $httpCode, $failureReason);
-        
-        aviationwx_log('error', 'webcam background refresh failure', [
-            'airport' => $airportId,
-            'cam' => $camIndex,
-            'type' => $sourceType,
-            'severity' => $sev,
-            'fetch_duration_ms' => $fetchDuration,
-            'error_code' => $lastErr['code'] ?? null
-        ], 'app');
-        
-        return false;
-    }
+    // Background refresh is now handled by the scheduler daemon.
+    // This function is retained for backward compatibility but does nothing.
+    return false;
 }
 
 // Cache expired - serve stale cache (we already validated it's a valid image above)

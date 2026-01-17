@@ -832,9 +832,46 @@ When new data is fetched but some fields are missing:
 
 ### Overview
 
-Webcam images are fetched from various source types and cached as JPEG files. The system supports multiple protocols and formats.
+Webcam images are fetched from various source types and cached as JPEG files. The system uses a **unified webcam worker** that handles both pull-type (fetched) and push-type (uploaded) cameras through a common architecture.
 
-### Source Types
+### Unified Webcam Worker Architecture
+
+The webcam processing pipeline uses three main components:
+
+1. **AcquisitionStrategy Interface** (`lib/webcam-acquisition.php`)
+   - `PullAcquisitionStrategy`: Fetches images from remote sources (MJPEG, RTSP, static URLs, federated API)
+   - `PushAcquisitionStrategy`: Processes images uploaded via FTP/SFTP
+   - Returns `AcquisitionResult` with image path, timestamp, source type, and metadata
+
+2. **ProcessingPipeline** (`lib/webcam-pipeline.php`)
+   - Standardized validation, variant generation, and promotion
+   - Single image load through pipeline (GD resource loaded once, passed through all steps)
+   - Returns `PipelineResult` with final image path and metadata
+
+3. **WebcamWorker** (`lib/webcam-worker.php`)
+   - Orchestrates acquisition strategy and processing pipeline
+   - Handles locking, circuit breaker, and cleanup
+   - Returns `WorkerResult` with status and metadata
+
+### Scheduling Architecture
+
+**WebcamScheduleQueue** (`lib/webcam-schedule-queue.php`)
+- Uses `SplMinHeap` for O(log N) scheduling instead of O(N) scan
+- Cameras ordered by `next_due_time` 
+- Scheduler runs every 1 second, extracts ready cameras from queue
+- Re-inserts cameras with calculated next due time after processing
+
+**Refresh Rate Configuration Hierarchy**:
+1. Camera-specific `refresh_seconds` (highest priority)
+2. Airport-level `webcam_refresh_seconds`
+3. Global `webcam_refresh_seconds`
+4. Default: 60 seconds
+
+**Rate Bounds** (enforced):
+- Minimum: 10 seconds (`MIN_WEBCAM_REFRESH`)
+- Maximum: 3600 seconds (`MAX_WEBCAM_REFRESH`)
+
+### Source Types (Pull Cameras)
 
 #### 1. MJPEG Stream (Default)
 - **Protocol**: HTTP MJPEG stream
@@ -871,7 +908,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
 - **Fetch Method**: 
   - Simple HTTP download
   - Validates JPEG format
-  - Saves directly to cache
+  - Saves directly to staging
 
 #### 4. Static PNG
 - **Detection**: URL ends with `.png`
@@ -879,11 +916,19 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
   - Downloads PNG image
   - Converts to JPEG using GD library
   - Quality: 85%
-  - Saves to cache
+  - Saves to staging
 
-#### 5. Push Type (Not Fetched)
+#### 5. Federated API
+- **Detection**: URL contains `/api/v1/webcams/` and `aviationwx.org` or `localhost`
+- **Fetch Method**:
+  - Fetches latest image from another AviationWX instance
+  - Supports API key authentication
+  - Validates image data before saving
+
+### Source Types (Push Cameras)
+
 - **Type**: `type: 'push'` or has `push_config`
-- **Behavior**: Skipped by fetch script (images pushed by external system)
+- **Behavior**: Images uploaded by cameras via SFTP/FTP/FTPS
 - **Upload Sources**:
   - **Direct camera uploads**: Cameras upload via SFTP/FTP/FTPS with local time EXIF
   - **Bridge uploads**: AviationWX-Bridge uploads with UTC EXIF and marker in UserComment
@@ -901,6 +946,7 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
   - Bridge uploads: EXIF `DateTimeOriginal` interpreted as UTC
   - Direct uploads: EXIF `DateTimeOriginal` interpreted as local time
   - Detection via "AviationWX-Bridge" marker in EXIF UserComment
+  - **Timestamp Drift Validation**: Rejects images where EXIF timestamp differs from upload time by > 2 hours (indicates misconfigured camera clock)
 - **Upload Stability Detection** (Adaptive):
   - Files must achieve stability (size + mtime unchanged) before processing
   - **Adaptive checking**: Starts conservative (20 consecutive stable checks), optimizes based on camera history
@@ -915,82 +961,77 @@ Webcam images are fetched from various source types and cached as JPEG files. Th
   - Files older than max age are considered abandoned/stuck and automatically deleted
   - Prevents worker from repeatedly checking files that will never complete
   - Tracks as rejection for metrics (unhealthy camera indicator)
-- **Worker Protection**:
-  - **Stability timeout**: 15 seconds default (configurable 10-30s per camera)
-  - If file not stable within timeout, worker returns and retries next run
-  - Prevents blocking worker pool on slow uploads
-  - File continues uploading in background
+- **State File Validation**:
+  - Graceful recovery from corrupted `state.json` files
+  - Logs warning and resets to current time (fail-closed: won't reprocess old uploads)
 
 ### Source Type Detection
 
 **Order**:
-1. Check `type` field in camera config (if present)
-2. Check URL protocol (RTSP/RTSPS)
-3. Check file extension (.jpg, .jpeg, .png)
-4. Default to MJPEG
+1. Check `type` field in camera config (if `push`, use `PushAcquisitionStrategy`)
+2. Check for `push_config` in camera config (implies push type)
+3. For pull cameras, detect from URL:
+   - Check URL protocol (RTSP/RTSPS)
+   - Check for federated API pattern
+   - Check file extension (.jpg, .jpeg, .png)
+   - Default to MJPEG
 
-### Fetch Process Flow
+### Worker Process Flow
 
-1. **Lock Acquisition**
-   - File-based lock prevents concurrent fetches of same camera
-   - Lock file: `/tmp/webcam_lock_{airport_id}_{cam_index}.lock`
-   - Timeout: 5 seconds
-   - Stale locks (> worker timeout + 10s) automatically cleaned
+1. **Worker Initialization**
+   - `WebcamWorker` created with airport/camera config
+   - `AcquisitionStrategyFactory` selects appropriate strategy
+   - `ProcessingPipeline` initialized
 
-2. **Cache Age Check**
-   - Check if cached image exists and age
-   - If cache age < refresh interval, skip fetch
-   - Refresh interval: Per-camera `refresh_seconds`, or airport default, or global default
+2. **Lock Acquisition** (Hybrid Strategy)
+   - Primary: ProcessPool prevents duplicate jobs
+   - Secondary: `flock()` file lock for crash resilience
+   - Lock file: `cache/webcams/{airport}/{cam}/worker.lock`
+   - Non-blocking attempt, skip if lock held
 
 3. **Circuit Breaker Check**
    - Checks if camera is in backoff period
-   - Skips fetch if circuit breaker open
+   - Skips processing if circuit breaker open
    - Error severity affects backoff duration
 
-4. **Source-Specific Fetch**
-   - Calls appropriate fetch function based on source type
-   - Handles errors and retries
-   - Records success/failure for circuit breaker
+4. **Orphaned Staging Cleanup**
+   - Removes incomplete staging files from crashed workers
+   - Files older than `FILE_LOCK_STALE_SECONDS` are cleaned up
 
-5. **Image Validation**
-   - Verifies file exists and has content
-   - Checks file size > 0
-   - Validates JPEG format (if GD available)
-   - **Uniform Color Detection**: Rejects solid color images (lens cap, dead camera, corruption)
-   - **Pixelation Detection**: Rejects severely pixelated images using Laplacian variance
-     - Uses phase-aware thresholds (day/twilight/night)
-     - Night images use more lenient thresholds (naturally softer)
-   - **Blue Iris Error Detection**: Rejects error frames with grey borders and white text
-   - **EXIF Timestamp Validation**: Rejects images with invalid/missing timestamps
-     - Server-generated images (RTSP/MJPEG) have EXIF added immediately after capture
-     - Push camera images must have camera-provided EXIF
+5. **Image Acquisition**
+   - `AcquisitionStrategy.acquire()` called
+   - Strategy handles source-specific fetch/scan logic
+   - Returns `AcquisitionResult` with staging file path
 
-6. **Format Generation** (if successful)
-   - Generates WebP format for modern browsers
-   - Uses ffmpeg with quality settings
-   - Runs asynchronously (non-blocking) using `exec() &`
-   - Automatically syncs mtime to match source image's capture time
-   - All formats cached: `.jpg` and `.webp`
+6. **Processing Pipeline**
+   - **Single Image Load**: GD resource loaded once from staging file
+   - **Error Frame Detection**: Uniform color, pixelation, Blue Iris errors
+   - **EXIF Validation**: Ensures valid timestamp, adds if missing
+   - **EXIF Normalization**: Converts to UTC, adds GPS timestamp fields
+   - **Variant Generation**: Creates 1080p, 720p, 360p variants
+   - **Format Generation**: Creates JPEG and WebP formats
+   - **Atomic Promotion**: Moves to final location, updates symlinks
+   - **History Cleanup**: Removes old timestamped files
 
 7. **Lock Release**
-   - Releases file lock
-   - Cleans up lock file
+   - `flock()` released via `releaseLock()` (also registered as shutdown function)
+   - Lock file removed
 
 ### Error Handling
 
 **Failure Recording**:
 - Records failure with severity (transient/permanent)
 - Updates circuit breaker state
-- Logs error details
+- Logs error details with context
 
-**Error Classification** (RTSP only):
-- Timeout, connection, DNS → transient
-- Authentication, TLS → permanent
+**Error Classification**:
+- Timeout, connection, DNS → transient (normal backoff)
+- Authentication, TLS, permanent config errors → permanent (2x backoff)
 
 **Fallback Behavior**:
-- Failed fetch: Serves stale cache if available
+- Failed acquisition: Stale cache served by API
 - No cache: Serves placeholder image
-- Placeholder: 1x1 transparent PNG or placeholder.jpg if available
+- **Server-Side Staleness Enforcement**: API returns 503 for images older than 3 hours (fail-closed safety)
 
 ---
 

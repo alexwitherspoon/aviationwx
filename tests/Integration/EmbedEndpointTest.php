@@ -65,35 +65,35 @@ class EmbedEndpointTest extends TestCase
             return;
         }
         
-        // Check for widget style options
+        // Check for widget style options (actual labels from embed-configurator.php)
         $this->assertStringContainsString(
-            'Mini Airport Card',
+            'Weather Card',
             $response['body'],
-            "Should have Mini Airport Card style option"
+            "Should have Weather Card style option"
         );
         
         $this->assertStringContainsString(
-            'Single Webcam',
+            'Compact Single',
             $response['body'],
-            "Should have Single Webcam style option"
+            "Should have Compact Single style option"
         );
         
         $this->assertStringContainsString(
-            'Dual Camera',
+            'Compact Dual',
             $response['body'],
-            "Should have Dual Camera style option"
+            "Should have Compact Dual style option"
         );
         
         $this->assertStringContainsString(
-            '4 Camera Grid',
+            'Compact Quad',
             $response['body'],
-            "Should have 4 Camera Grid style option"
+            "Should have Compact Quad style option"
         );
         
         $this->assertStringContainsString(
-            'Full Widget',
+            'Full Single',
             $response['body'],
-            "Should have Full Widget style option"
+            "Should have Full Single style option"
         );
         
         // Check for theme options

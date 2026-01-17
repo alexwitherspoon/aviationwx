@@ -139,11 +139,17 @@ docker compose -f docker/docker-compose.prod.yml down && docker compose -f docke
 # Check scheduler and cron
 docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep -E "(scheduler|cron)"
 
-# Manually fetch single webcam
-docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php --worker kspb 0
+# Manually run unified webcam worker for single camera
+docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/unified-webcam-worker.php --worker kspb 0
 
 # Check cache directory
 docker compose -f docker/docker-compose.prod.yml exec web ls -la /var/www/html/cache/webcams/kspb/0/
+
+# Check for orphaned staging files (indicates crashed workers)
+docker compose -f docker/docker-compose.prod.yml exec web find /var/www/html/cache/webcams -name "staging_*.tmp" -ls
+
+# Check worker lock files
+docker compose -f docker/docker-compose.prod.yml exec web find /var/www/html/cache/webcams -name "worker.lock" -ls
 ```
 
 ### Stale Weather Data

@@ -25,7 +25,11 @@ $configFile = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath :
 $totalAirports = 0;
 $totalWebcams = 0;
 $totalWeatherStations = 0;
-$imagesProcessedToday = 0;
+
+// Get rolling 24-hour metrics from the metrics system
+require_once __DIR__ . '/../lib/metrics.php';
+$rolling24h = metrics_get_rolling(1);
+$imagesServed24h = $rolling24h['global']['webcam_serves'] ?? 0;
 
 // Fetch Cloudflare Analytics
 $cfAnalytics = getCloudflareAnalytics();
@@ -44,21 +48,6 @@ if (file_exists($configFile)) {
         foreach ($enabledAirports as $airportId => $airport) {
             if (isset($airport['webcams'])) {
                 $totalWebcams += count($airport['webcams']);
-                
-                // Count images processed today for each webcam
-                foreach ($airport['webcams'] as $camIndex => $webcam) {
-                    $webcamDir = getWebcamCameraDir($airportId, $camIndex);
-                    if (is_dir($webcamDir)) {
-                        // Count files created today
-                        $today = date('Y-m-d');
-                        $files = glob($webcamDir . '/*.{jpg,jpeg,webp}', GLOB_BRACE);
-                        foreach ($files as $file) {
-                            if (date('Y-m-d', filemtime($file)) === $today) {
-                                $imagesProcessedToday++;
-                            }
-                        }
-                    }
-                }
             }
             
             // Count primary weather sources (non-METAR types with unique identifiers)
@@ -1008,8 +997,8 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Weather Stations</span>
                 </div>
                 <div style="text-align: center;">
-                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesProcessedToday) ?></span>
-                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Today</span>
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesServed24h) ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Served Today</span>
                 </div>
                 <div style="text-align: center;">
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($pilotsServedToday) ?></span>

@@ -22,7 +22,9 @@ require_once __DIR__ . '/../../lib/webcam-history.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/constants.php';
 require_once __DIR__ . '/../../lib/logger.php';
-require_once __DIR__ . '/../../scripts/process-push-webcams.php';
+require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/exif-utils.php';
+// Note: Push webcam processing is now handled by unified-webcam-worker.php via scheduler
 
 class WebcamHistoryTest extends TestCase
 {

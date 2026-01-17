@@ -1263,6 +1263,9 @@ $breadcrumbs = generateBreadcrumbSchema([
                         radarAvailable = true;
                         console.log('Radar layer added with timestamp:', radarTimestamp);
                         
+                        // Start periodic refresh to prevent stale timestamp 403s
+                        startRadarRefreshInterval();
+                        
                         // Log tile errors
                         radarLayer.on('tileerror', function(error) {
                             console.error('Radar tile error:', error);
@@ -1280,6 +1283,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         function disableRadarControls() {
             radarAvailable = false;
+            stopRadarRefreshInterval();
             var radarBtn = document.getElementById('radar-btn');
             var radarOpacitySlider = document.getElementById('radar-opacity');
             
@@ -1299,9 +1303,58 @@ $breadcrumbs = generateBreadcrumbSchema([
         }
         
         function removeRadarLayer() {
+            stopRadarRefreshInterval();
             if (radarLayer) {
                 map.removeLayer(radarLayer);
                 radarLayer = null;
+            }
+        }
+        
+        // Radar timestamp refresh interval (prevents 403s from stale timestamps)
+        var radarRefreshInterval = null;
+        
+        function refreshRadarTimestamp() {
+            if (!radarLayer || !radarAvailable) {
+                return;
+            }
+            
+            fetch('https://api.rainviewer.com/public/weather-maps.json')
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Radar API response not OK');
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (data.radar && data.radar.past && data.radar.past.length > 0) {
+                        var newTimestamp = data.radar.past[data.radar.past.length - 1].time;
+                        
+                        // Avoid unnecessary tile reloads when timestamp unchanged
+                        if (newTimestamp !== radarTimestamp) {
+                            console.log('Radar timestamp updated:', radarTimestamp, '->', newTimestamp);
+                            radarTimestamp = newTimestamp;
+                            
+                            var newUrl = '/api/map-tiles.php?layer=rainviewer&timestamp=' + radarTimestamp + '&z={z}&x={x}&y={y}';
+                            radarLayer.setUrl(newUrl);
+                        }
+                    }
+                })
+                .catch(function(err) {
+                    console.warn('Failed to refresh radar timestamp:', err);
+                });
+        }
+        
+        function startRadarRefreshInterval() {
+            stopRadarRefreshInterval();
+            
+            // RainViewer updates every 10 minutes; match that frequency
+            radarRefreshInterval = setInterval(refreshRadarTimestamp, 10 * 60 * 1000);
+        }
+        
+        function stopRadarRefreshInterval() {
+            if (radarRefreshInterval) {
+                clearInterval(radarRefreshInterval);
+                radarRefreshInterval = null;
             }
         }
         

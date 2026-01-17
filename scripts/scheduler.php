@@ -10,6 +10,10 @@
  * - Config reload check (configurable interval, default 60s)
  * - METAR refresh at global 60s interval
  * - Only scheduler errors affect health (worker errors separate)
+ * - Unified webcam worker handles BOTH push and pull cameras
+ * - WebcamScheduleQueue (min-heap) for O(log N) scheduling efficiency
+ * - Per-camera refresh_seconds with config hierarchy: camera > airport > global > default
+ * - Rate bounds: MIN_WEBCAM_REFRESH (10s) to MAX_WEBCAM_REFRESH (1hr)
  * 
  * Usage:
  *   Start: nohup php scheduler.php > /dev/null 2>&1 &
@@ -23,6 +27,7 @@ require_once __DIR__ . '/../lib/webcam-format-generation.php';
 require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
+require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 // Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
 
 // Lock file location
@@ -182,6 +187,7 @@ register_shutdown_function(function() use ($lockFp, $lockFile, &$loopCount, $sta
 $weatherPool = null;
 $webcamPool = null;
 $notamPool = null;
+$webcamScheduleQueue = null; // Priority queue for efficient webcam scheduling
 $invocationId = aviationwx_get_invocation_id();
 
 // Main scheduler loop
@@ -251,10 +257,11 @@ while ($running) {
                     $invocationId
                 );
                 
+                // Unified webcam worker handles both push and pull webcams
                 $webcamPool = new ProcessPool(
                     $webcamPoolSize,
                     $workerTimeout,
-                    'fetch-webcam.php',
+                    'unified-webcam-worker.php',
                     $invocationId
                 );
                 
@@ -265,8 +272,14 @@ while ($running) {
                     $invocationId
                 );
                 
+                // Reinitialize webcam schedule queue with new config
+                // This uses a priority queue (min-heap) for O(log N) scheduling
+                $webcamScheduleQueue = new WebcamScheduleQueue();
+                $webcamScheduleQueue->initialize($config['airports'] ?? [], $config);
+                
                 aviationwx_log('info', 'scheduler: config reloaded', [
-                    'airports_count' => count($config['airports'] ?? [])
+                    'airports_count' => count($config['airports'] ?? []),
+                    'webcam_count' => $webcamScheduleQueue->count()
                 ], 'app');
             }
         }
@@ -302,10 +315,11 @@ while ($running) {
                 $invocationId
             );
             
+            // Unified webcam worker handles both push and pull webcams
             $webcamPool = new ProcessPool(
                 $webcamPoolSize,
                 $workerTimeout,
-                'fetch-webcam.php',
+                'unified-webcam-worker.php',
                 $invocationId
             );
             
@@ -315,6 +329,15 @@ while ($running) {
                 'fetch-notam.php',
                 $invocationId
             );
+            
+            // Initialize webcam schedule queue with config
+            // This uses a priority queue (min-heap) for O(log N) scheduling
+            $webcamScheduleQueue = new WebcamScheduleQueue();
+            $webcamScheduleQueue->initialize($config['airports'] ?? [], $config);
+            
+            aviationwx_log('info', 'scheduler: initialized webcam schedule queue', [
+                'webcam_count' => $webcamScheduleQueue->count()
+            ], 'app');
         }
         
         // Process weather updates (non-blocking)
@@ -347,43 +370,18 @@ while ($running) {
             }
         }
         
-        // Process webcam updates (non-blocking)
-        if ($webcamPool !== null && isset($config['airports'])) {
-            foreach ($config['airports'] as $airportId => $airport) {
-                if (!isAirportEnabled($airport)) {
-                    continue;
-                }
-                
-                if (!isset($airport['webcams']) || !is_array($airport['webcams'])) {
-                    continue;
-                }
-                
-                // Get refresh interval (per-airport, then global default, then function default)
-                $refreshInterval = isset($airport['webcam_refresh_seconds'])
-                    ? intval($airport['webcam_refresh_seconds'])
-                    : getDefaultWebcamRefresh();
-                
-                // Enforce minimum (configurable)
-                $minRefresh = getMinimumRefreshInterval();
-                $refreshInterval = max($minRefresh, $refreshInterval);
-                
-                foreach ($airport['webcams'] as $index => $cam) {
-                    // Skip push webcams (handled by process-push-webcams.php)
-                    $isPush = (isset($cam['type']) && $cam['type'] === 'push') || isset($cam['push_config']);
-                    if ($isPush) {
-                        continue;
-                    }
-                    
-                    // Check cache age (stateless - use filemtime)
-                    $cacheFile = getCacheFile($airportId, $index, 'jpg', 'original');
-                    $cacheAge = file_exists($cacheFile) ? ($now - filemtime($cacheFile)) : PHP_INT_MAX;
-                    
-                    // Check if update needed
-                    if ($cacheAge >= $refreshInterval) {
-                        // Non-blocking: add to pool (ProcessPool handles duplicates)
-                        $webcamPool->addJob([$airportId, $index]);
-                    }
-                }
+        // Process webcam updates using priority queue (non-blocking)
+        // The WebcamScheduleQueue uses a min-heap for O(log N) scheduling efficiency
+        // It handles BOTH push and pull webcams with per-camera refresh_seconds
+        if ($webcamPool !== null && $webcamScheduleQueue !== null) {
+            // Get all cameras that are due for processing (O(k log N) where k is ready cameras)
+            $readyCameras = $webcamScheduleQueue->getReadyCameras();
+            
+            foreach ($readyCameras as $entry) {
+                // Non-blocking: add to pool (ProcessPool handles duplicates)
+                // Unified worker handles both push and pull webcams
+                // ScheduleEntry has airportId and camIndex properties
+                $webcamPool->addJob([$entry->airportId, $entry->camIndex]);
             }
         }
         

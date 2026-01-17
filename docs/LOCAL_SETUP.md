@@ -25,13 +25,28 @@ cd aviationwx
 
 # 2. Copy and configure the override file
 cp docker/docker-compose.override.yml.example docker/docker-compose.override.yml
-# Edit docker-compose.override.yml to point to your secrets path
+```
 
+Edit `docker-compose.override.yml` to mount your secrets:
+
+```yaml
+services:
+  web:
+    volumes:
+      # ... (keep existing source mounts) ...
+      # Add secrets mounts:
+      - /path/to/aviationwx.org-secrets/airports.json:/var/www/html/secrets/airports.json:ro
+      - /path/to/aviationwx.org-secrets/partner-logos:/var/www/html/partner-logos:ro
+    environment:
+      - CONFIG_PATH=/var/www/html/secrets/airports.json
+```
+
+```bash
 # 3. Start development server
 make dev
 ```
 
-This setup uses real API keys and real webcam sources.
+This setup uses real API keys, real webcam sources, and partner logos.
 
 ### Option B: With Mock Data (Contributors)
 

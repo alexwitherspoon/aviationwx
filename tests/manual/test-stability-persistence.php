@@ -7,8 +7,10 @@
  */
 
 require_once __DIR__ . '/../../lib/constants.php';
-require_once __DIR__ . '/../../scripts/process-push-webcams.php';
+require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/logger.php';
+require_once __DIR__ . '/../../lib/webcam-image-metrics.php';
+// Note: Stability metrics functions are now in webcam-image-metrics.php
 
 echo "Testing Stability Metrics Persistence\n";
 echo "======================================\n\n";

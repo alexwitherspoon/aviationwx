@@ -170,13 +170,17 @@ class AirportsDirectoryTest extends TestCase
     }
     
     /**
-     * Test "Jump to Map" button is present
+     * Test search integration triggers map navigation
+     * 
+     * Note: "Jump to Map" button was removed. Map navigation is handled
+     * via the search integration and marker selection via 'airportsearchselect' event.
      */
-    public function testJumpToMapButton_IsPresent()
+    public function testSearchIntegration_TriggersMapNavigation()
     {
         $output = $this->getAirportsPageContent();
         
-        $this->assertStringContainsString('jump-to-map', strtolower($output), 'Should have jump to map button');
+        // Search integration should listen for airport selection events
+        $this->assertStringContainsString('airportsearchselect', strtolower($output), 'Should have search integration event listener');
     }
     
     /**

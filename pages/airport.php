@@ -5042,17 +5042,48 @@ const WebcamPlayer = {
         }
     },
 
-    // Toggle hide UI mode and update button state
     toggleHideUI() {
         this.hideUIMode = !this.hideUIMode;
         this.updateHideUIButton();
         
         if (this.hideUIMode) {
             this.hideControls();
+            this.requestMobileLandscape();
         } else {
             this.showControls();
+            this.exitMobileLandscape();
         }
         this.updateURL();
+    },
+
+    requestMobileLandscape() {
+        if (window.innerWidth >= 768) return;
+        
+        const player = document.getElementById('webcam-player');
+        if (!player) return;
+        
+        // Fullscreen required before orientation lock works on most browsers
+        const requestFullscreen = player.requestFullscreen || player.webkitRequestFullscreen || player.mozRequestFullScreen || player.msRequestFullscreen;
+        if (requestFullscreen) {
+            requestFullscreen.call(player).then(() => {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape').catch(() => {});
+                }
+            }).catch(() => {});
+        }
+    },
+
+    exitMobileLandscape() {
+        if (screen.orientation && screen.orientation.unlock) {
+            try { screen.orientation.unlock(); } catch (e) {}
+        }
+        
+        if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+            const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            if (exitFullscreen) {
+                exitFullscreen.call(document).catch(() => {});
+            }
+        }
     },
 
     // Update hide UI button visual state
@@ -5795,6 +5826,24 @@ window.addEventListener('popstate', () => {
     } else if (camParam === null && WebcamPlayer.active) {
         // URL no longer has cam param - close the player
         WebcamPlayer.close();
+    }
+});
+
+// Sync hideUI state when user exits fullscreen via browser UI (Escape key or native button)
+document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && WebcamPlayer.active && WebcamPlayer.hideUIMode) {
+        WebcamPlayer.hideUIMode = false;
+        WebcamPlayer.updateHideUIButton();
+        WebcamPlayer.showControls();
+        WebcamPlayer.updateURL();
+    }
+});
+document.addEventListener('webkitfullscreenchange', () => {
+    if (!document.webkitFullscreenElement && WebcamPlayer.active && WebcamPlayer.hideUIMode) {
+        WebcamPlayer.hideUIMode = false;
+        WebcamPlayer.updateHideUIButton();
+        WebcamPlayer.showControls();
+        WebcamPlayer.updateURL();
     }
 });
 
