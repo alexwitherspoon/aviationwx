@@ -254,7 +254,6 @@ When providing feedback:
 - `CODE_STYLE.md` - Full coding standards
 - `docs/ARCHITECTURE.md` - System design
 - `lib/constants.php` - Application constants
-- `.cursorrules` - Development environment rules
 
 ### Key Constants
 - `MAX_STALE_HOURS = 3` - Maximum data age before nulling
