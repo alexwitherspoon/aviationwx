@@ -25,7 +25,11 @@ All configuration lives in a single `airports.json` file with two sections:
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
 | `webcam_generate_webp` | `false` | Generate WebP globally |
-| `webcam_history_max_frames` | `12` | Max history frames per camera (1 = disabled, 2+ = enabled) |
+| **Webcam History Settings** |||
+| `webcam_history_retention_hours` | `24` | Hours of history to retain (preferred) |
+| `webcam_history_default_hours` | `3` | Default period shown in UI |
+| `webcam_history_preset_hours` | `[1, 3, 6, 24]` | Period options in UI |
+| `webcam_history_max_frames` | — | *Deprecated* - use retention_hours |
 | `default_preferences` | — | Default unit toggle settings (see below) |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
@@ -75,7 +79,9 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |
 | **Feature Overrides** |||
-| `webcam_history_max_frames` | global default | Max history frames (1 = disabled, 2+ = enabled) |
+| `webcam_history_retention_hours` | global default | Hours of history to retain |
+| `webcam_history_default_hours` | global default | Default period shown in UI |
+| `webcam_history_preset_hours` | global default | Period options in UI |
 | `default_preferences` | global default | Override unit toggle defaults for this airport |
 | **Data Sources** |||
 | `weather_source` | — | Primary weather source config |
@@ -615,51 +621,78 @@ Stores recent frames for time-lapse playback. All webcam images (current and his
 - **Unified Storage**: All webcam images stored directly in the camera cache directory
 - **No Separate History Folder**: Timestamped files serve as both current and historical images
 - **Symlinks**: `current.jpg`, `current.webp` point to the latest timestamped image
-- **Retention**: Controlled by `webcam_history_max_frames` config
+- **Retention**: Controlled by `webcam_history_retention_hours` config
 
 ### Configuration
 
-The `webcam_history_max_frames` setting controls both:
-1. How many historical frames are retained
-2. Whether the history player is enabled (requires `max_frames >= 2`)
+History retention is now time-based using `webcam_history_retention_hours`:
 
-| `max_frames` | Behavior |
-|--------------|----------|
-| `1` | Only latest image kept, history player disabled |
-| `2+` | History player enabled with N frames available |
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `webcam_history_retention_hours` | `24` | Hours of history to retain |
+| `webcam_history_default_hours` | `3` | Default period shown in player UI |
+| `webcam_history_preset_hours` | `[1, 3, 6, 24]` | Period selection buttons in UI |
+
+The history player is enabled when `retention_hours > 0` and at least 2 frames exist.
 
 ### Set Globally
 
 ```json
 {
   "config": {
-    "webcam_history_max_frames": 12
+    "webcam_history_retention_hours": 24,
+    "webcam_history_default_hours": 3,
+    "webcam_history_preset_hours": [1, 3, 6, 24]
   }
 }
 ```
 
 ### Override Per-Airport
 
-Use per-airport overrides to compensate for different camera refresh rates:
+Use per-airport overrides for airports with different retention needs:
 
 ```json
 {
   "airports": {
     "kspb": {
-      "webcam_history_max_frames": 24
+      "webcam_history_retention_hours": 48,
+      "webcam_history_default_hours": 6
     }
   }
 }
 ```
 
-**Example**: An airport with 30-second refresh uploading to 24 frames = 12 minutes of history.
-An airport with 60-second refresh uploading to 24 frames = 24 minutes of history.
+### Cleanup Safety Net
+
+Cleanup uses a 2x safety multiplier to prevent data loss:
+- Expected frames = `retention_hours × (3600 / refresh_seconds)`
+- Max frames = `expected_frames × 2.0`
+
+This ensures frames aren't deleted prematurely if timestamps don't align perfectly.
+
+### Player UI Period Selection
+
+The history player shows period preset buttons (e.g., "1h", "3h", "6h", "All") allowing users to select how much history to view:
+
+- Only presets with sufficient data (≥90% coverage) are shown
+- The default period is configurable
+- Users can select "All" to view the entire retention period
+- Lazy loading: frames are only downloaded when played or scrubbed to
+
+### Legacy Configuration
+
+The old `webcam_history_max_frames` setting is deprecated but still supported:
+- If only `max_frames` is set, it's converted to hours automatically
+- If both are set, `retention_hours` takes precedence
+- A deprecation warning is logged when legacy config is detected
 
 ### Player URLs
 
 - `https://kspb.aviationwx.org/?cam=0` — Opens player
 - `https://kspb.aviationwx.org/?cam=0&autoplay` — Auto-plays
 - `https://kspb.aviationwx.org/?cam=0&autoplay&hideui` — Kiosk mode
+- `https://kspb.aviationwx.org/?cam=0&period=3h` — Opens with 3-hour period selected
+- `https://kspb.aviationwx.org/?cam=0&period=all` — Opens with all history
 
 ### Keyboard Shortcuts
 

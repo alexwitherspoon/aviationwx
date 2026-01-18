@@ -472,29 +472,45 @@ function cleanupStagingFiles(string $airportId, int $camIndex): int {
 /**
  * Cleanup old timestamp-based cache files
  * 
- * Keeps only the most recent N timestamp files based on webcam_history_max_frames config.
- * This unified retention controls both the live view and history player.
- * Old timestamp files are removed, but symlinks are preserved (they'll point to latest).
+ * Uses time-based retention with a frame count safety limit.
+ * Primary cleanup: Delete frames older than retention period.
+ * Safety cleanup: If still over frame limit, delete oldest until under limit.
+ * 
+ * Symlinks are preserved (they'll point to latest).
  * Only removes files that are not targets of active symlinks.
  * 
  * Retention behavior:
- * - max_frames = 1: Only latest image kept, history player disabled
- * - max_frames >= 2: History player enabled with N frames available
+ * - retention_hours = 0: Only latest image kept, history player disabled
+ * - retention_hours > 0: History player enabled with frames within retention period
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
- * @param int|null $keepCount Override for max frames (null = use config)
+ * @param int|null $keepCount Legacy override for max frames (null = use time-based config)
  * @return int Number of files cleaned up
  */
 function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCount = null): int {
-    // Use config-based retention if not explicitly overridden
-    if ($keepCount === null) {
-        $keepCount = getWebcamHistoryMaxFrames($airportId);
+    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
+    
+    // Get retention configuration
+    $retentionHours = getWebcamHistoryRetentionHours($airportId);
+    
+    // Get refresh rate for this camera (for safety limit calculation)
+    $config = loadConfig();
+    $refreshSeconds = 60; // default
+    if ($config !== null) {
+        $airport = $config['airports'][$airportId] ?? [];
+        $webcams = $airport['webcams'] ?? [];
+        if (isset($webcams[$camIndex]['refresh_seconds'])) {
+            $refreshSeconds = (int)$webcams[$camIndex]['refresh_seconds'];
+        }
     }
     
+    // Calculate cutoff timestamp and safety limit
+    $cutoffTimestamp = time() - (int)($retentionHours * 3600);
+    $maxFrames = $keepCount ?? calculateImplicitMaxFrames($retentionHours, $refreshSeconds);
+    
     // Ensure at least 1 frame is kept (the current image)
-    $keepCount = max(1, $keepCount);
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
+    $maxFrames = max(1, $maxFrames);
     
     // Get all timestamp-based files (format: {timestamp}_{variant}.{format})
     // Exclude symlinks and staging files
@@ -512,7 +528,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         }
         
         $basename = basename($file);
-        // Match timestamp-based filename: "1703700000_original.jpg" or "1703700000.jpg"
+        // Match timestamp-based filename: "1703700000_original.jpg" or "1703700000_720.jpg"
         if (preg_match('/^(\d+)(?:_[^_]+)?\.(jpg|webp)$/', $basename, $matches)) {
             $timestamp = (int)$matches[1];
             if (!isset($timestampFiles[$timestamp])) {
@@ -522,8 +538,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         }
     }
     
-    // If we have fewer timestamps than keepCount, nothing to clean
-    if (count($timestampFiles) <= $keepCount) {
+    if (empty($timestampFiles)) {
         return 0;
     }
     
@@ -546,25 +561,63 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         }
     }
     
-    // Sort timestamps descending
-    krsort($timestampFiles);
-    
-    // Get timestamps to keep (most recent N)
-    $timestampsToKeep = array_slice(array_keys($timestampFiles), 0, $keepCount);
-    $timestampsToRemove = array_diff(array_keys($timestampFiles), $timestampsToKeep);
-    
     $cleaned = 0;
-    foreach ($timestampsToRemove as $timestamp) {
+    $initialCount = count($timestampFiles);
+    
+    // Step 1: Time-based cleanup (primary)
+    // Delete frames older than retention period
+    $timestampsToRemoveByTime = [];
+    foreach ($timestampFiles as $timestamp => $files) {
+        if ($timestamp < $cutoffTimestamp) {
+            $timestampsToRemoveByTime[] = $timestamp;
+        }
+    }
+    
+    foreach ($timestampsToRemoveByTime as $timestamp) {
         foreach ($timestampFiles[$timestamp] as $file) {
-            // Don't remove if it's the target of a symlink
             $basename = basename($file);
             if (isset($symlinkTargets[$basename])) {
                 continue;
             }
-            
             if (@unlink($file)) {
                 $cleaned++;
             }
+        }
+        unset($timestampFiles[$timestamp]);
+    }
+    
+    // Step 2: Frame count safety check
+    // If still over max frames, delete oldest until under limit
+    if (count($timestampFiles) > $maxFrames) {
+        // Sort timestamps ascending (oldest first)
+        ksort($timestampFiles);
+        
+        $excess = count($timestampFiles) - $maxFrames;
+        $timestampsToRemoveBySafety = array_slice(array_keys($timestampFiles), 0, $excess);
+        
+        foreach ($timestampsToRemoveBySafety as $timestamp) {
+            foreach ($timestampFiles[$timestamp] as $file) {
+                $basename = basename($file);
+                if (isset($symlinkTargets[$basename])) {
+                    continue;
+                }
+                if (@unlink($file)) {
+                    $cleaned++;
+                }
+            }
+            unset($timestampFiles[$timestamp]);
+        }
+        
+        // Log warning when safety limit is triggered
+        if (!empty($timestampsToRemoveBySafety)) {
+            aviationwx_log('warning', 'History frame safety limit triggered', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'frames_before' => $initialCount,
+                'frames_after' => count($timestampFiles),
+                'max_frames' => $maxFrames,
+                'retention_hours' => $retentionHours
+            ]);
         }
     }
     

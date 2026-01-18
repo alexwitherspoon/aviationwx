@@ -838,21 +838,197 @@ function getImageVariants(): array {
     return array_map('intval', $variants);
 }
 
+// =============================================================================
+// WEBCAM HISTORY CONFIGURATION
+// =============================================================================
+
+/** Default retention period in hours */
+const WEBCAM_HISTORY_RETENTION_HOURS_DEFAULT = 24;
+
+/** Default period to show in UI (hours) */
+const WEBCAM_HISTORY_DEFAULT_HOURS_DEFAULT = 3;
+
+/** Default period presets for UI */
+const WEBCAM_HISTORY_PRESET_HOURS_DEFAULT = [1, 3, 6, 24];
+
+/** Safety multiplier for implicit max frames calculation */
+const WEBCAM_HISTORY_FRAME_SAFETY_MULTIPLIER = 2.0;
+
 /**
  * Check if webcam history is enabled for an airport
  * 
- * History is considered enabled when webcam_history_max_frames >= 2.
- * With max_frames = 1, only the latest image is kept (history disabled).
+ * History is considered enabled when retention > 0 and would result in >= 2 frames.
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @return bool True if webcam history enabled for this airport
  */
 function isWebcamHistoryEnabledForAirport(string $airportId): bool {
-    return getWebcamHistoryMaxFrames($airportId) >= 2;
+    $retentionHours = getWebcamHistoryRetentionHours($airportId);
+    return $retentionHours > 0;
+}
+
+/**
+ * Get webcam history retention period in hours
+ * 
+ * Checks airport-specific setting first, falls back to global default.
+ * Supports both new time-based config and legacy frame-based config.
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return float Retention period in hours
+ */
+function getWebcamHistoryRetentionHours(string $airportId): float {
+    $config = loadConfig();
+    if ($config === null) {
+        return WEBCAM_HISTORY_RETENTION_HOURS_DEFAULT;
+    }
+    
+    $airport = $config['airports'][$airportId] ?? [];
+    
+    // New config: webcam_history_retention_hours (takes precedence)
+    if (isset($airport['webcam_history_retention_hours'])) {
+        return (float)$airport['webcam_history_retention_hours'];
+    }
+    
+    // Check global new config
+    if (isset($config['webcam_history_retention_hours'])) {
+        return (float)$config['webcam_history_retention_hours'];
+    }
+    
+    // Legacy config: webcam_history_max_frames (convert to hours)
+    // Assume 60-second refresh for conversion if not specified
+    if (isset($airport['webcam_history_max_frames'])) {
+        aviationwx_log('warning', 'Deprecated config: webcam_history_max_frames - use webcam_history_retention_hours instead', [
+            'airport' => $airportId
+        ]);
+        $maxFrames = (int)$airport['webcam_history_max_frames'];
+        $refreshSeconds = getWebcamRefreshSecondsForAirport($airportId);
+        return ($maxFrames * $refreshSeconds) / 3600;
+    }
+    
+    // Check global legacy config
+    if (isset($config['webcam_history_max_frames'])) {
+        aviationwx_log('warning', 'Deprecated config: webcam_history_max_frames - use webcam_history_retention_hours instead');
+        $maxFrames = (int)$config['webcam_history_max_frames'];
+        $refreshSeconds = getWebcamRefreshSecondsForAirport($airportId);
+        return ($maxFrames * $refreshSeconds) / 3600;
+    }
+    
+    return WEBCAM_HISTORY_RETENTION_HOURS_DEFAULT;
+}
+
+/**
+ * Get default period to show in history player UI (hours)
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return int Default period in hours
+ */
+function getWebcamHistoryDefaultHours(string $airportId): int {
+    $config = loadConfig();
+    if ($config === null) {
+        return WEBCAM_HISTORY_DEFAULT_HOURS_DEFAULT;
+    }
+    
+    $airport = $config['airports'][$airportId] ?? [];
+    
+    // Airport-specific
+    if (isset($airport['webcam_history_default_hours'])) {
+        return (int)$airport['webcam_history_default_hours'];
+    }
+    
+    // Global
+    if (isset($config['webcam_history_default_hours'])) {
+        return (int)$config['webcam_history_default_hours'];
+    }
+    
+    return WEBCAM_HISTORY_DEFAULT_HOURS_DEFAULT;
+}
+
+/**
+ * Get preset periods for history player UI (hours)
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return array Array of preset hours [1, 3, 6, 24]
+ */
+function getWebcamHistoryPresetHours(string $airportId): array {
+    $config = loadConfig();
+    if ($config === null) {
+        return WEBCAM_HISTORY_PRESET_HOURS_DEFAULT;
+    }
+    
+    $airport = $config['airports'][$airportId] ?? [];
+    
+    // Airport-specific
+    if (isset($airport['webcam_history_preset_hours']) && is_array($airport['webcam_history_preset_hours'])) {
+        $presets = array_map('intval', $airport['webcam_history_preset_hours']);
+        sort($presets);
+        return $presets;
+    }
+    
+    // Global
+    if (isset($config['webcam_history_preset_hours']) && is_array($config['webcam_history_preset_hours'])) {
+        $presets = array_map('intval', $config['webcam_history_preset_hours']);
+        sort($presets);
+        return $presets;
+    }
+    
+    return WEBCAM_HISTORY_PRESET_HOURS_DEFAULT;
+}
+
+/**
+ * Get full history UI configuration for an airport
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @return array Configuration array with preset_hours and default_hours
+ */
+function getWebcamHistoryUIConfig(string $airportId): array {
+    return [
+        'preset_hours' => getWebcamHistoryPresetHours($airportId),
+        'default_hours' => getWebcamHistoryDefaultHours($airportId)
+    ];
+}
+
+/**
+ * Get typical refresh rate for an airport's webcams (for legacy conversion)
+ * 
+ * @param string $airportId Airport ID
+ * @return int Refresh seconds (default 60)
+ */
+function getWebcamRefreshSecondsForAirport(string $airportId): int {
+    $config = loadConfig();
+    if ($config === null) {
+        return 60;
+    }
+    
+    $airport = $config['airports'][$airportId] ?? [];
+    $webcams = $airport['webcams'] ?? [];
+    
+    // Use first webcam's refresh rate, or default
+    if (!empty($webcams) && isset($webcams[0]['refresh_seconds'])) {
+        return (int)$webcams[0]['refresh_seconds'];
+    }
+    
+    return 60;
+}
+
+/**
+ * Calculate implicit max frames for a camera (safety limit)
+ * 
+ * Uses retention hours and refresh rate to calculate expected frames,
+ * then applies 2x safety multiplier.
+ * 
+ * @param float $retentionHours Retention period in hours
+ * @param int $refreshSeconds Refresh interval in seconds
+ * @return int Maximum frames to keep (safety limit)
+ */
+function calculateImplicitMaxFrames(float $retentionHours, int $refreshSeconds): int {
+    $expectedFrames = $retentionHours * (3600 / max(1, $refreshSeconds));
+    return (int)ceil($expectedFrames * WEBCAM_HISTORY_FRAME_SAFETY_MULTIPLIER);
 }
 
 /**
  * Get max history frames for an airport
+ * 
+ * @deprecated Use getWebcamHistoryRetentionHours() instead
  * 
  * Checks airport-specific setting first, falls back to global default.
  * 
@@ -860,18 +1036,12 @@ function isWebcamHistoryEnabledForAirport(string $airportId): bool {
  * @return int Max frames to retain per camera
  */
 function getWebcamHistoryMaxFrames(string $airportId): int {
-    $config = loadConfig();
-    if ($config === null) {
-        return 12;
-    }
+    // For backward compatibility, calculate from retention hours
+    $retentionHours = getWebcamHistoryRetentionHours($airportId);
+    $refreshSeconds = getWebcamRefreshSecondsForAirport($airportId);
     
-    // Check airport-specific setting first
-    if (isset($config['airports'][$airportId]['webcam_history_max_frames'])) {
-        return (int)$config['airports'][$airportId]['webcam_history_max_frames'];
-    }
-    
-    // Fall back to global default
-    return (int)getGlobalConfig('webcam_history_max_frames', 12);
+    // Return expected frames (not safety limit) for compatibility
+    return (int)ceil($retentionHours * (3600 / max(1, $refreshSeconds)));
 }
 
 /**
@@ -2507,7 +2677,33 @@ function validateAirportsJsonStructure(array $config): array {
             }
             
             // Validate webcam history settings
-            // Note: webcam_history_enabled is deprecated - max_frames >= 2 enables history
+            // New time-based settings (preferred)
+            if (isset($cfg['webcam_history_retention_hours'])) {
+                if (!is_numeric($cfg['webcam_history_retention_hours']) || $cfg['webcam_history_retention_hours'] < 0) {
+                    $errors[] = "config.webcam_history_retention_hours must be a non-negative number";
+                }
+            }
+            
+            if (isset($cfg['webcam_history_default_hours'])) {
+                if (!is_int($cfg['webcam_history_default_hours']) || $cfg['webcam_history_default_hours'] < 1) {
+                    $errors[] = "config.webcam_history_default_hours must be a positive integer";
+                }
+            }
+            
+            if (isset($cfg['webcam_history_preset_hours'])) {
+                if (!is_array($cfg['webcam_history_preset_hours'])) {
+                    $errors[] = "config.webcam_history_preset_hours must be an array";
+                } else {
+                    foreach ($cfg['webcam_history_preset_hours'] as $preset) {
+                        if (!is_int($preset) || $preset < 1) {
+                            $errors[] = "config.webcam_history_preset_hours must contain only positive integers";
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Legacy setting (deprecated but still supported)
             if (isset($cfg['webcam_history_max_frames'])) {
                 if (!is_int($cfg['webcam_history_max_frames']) || $cfg['webcam_history_max_frames'] < 1) {
                     $errors[] = "config.webcam_history_max_frames must be a positive integer";
@@ -2922,7 +3118,33 @@ function validateAirportsJsonStructure(array $config): array {
         }
         
         // Validate webcam history settings (per-airport overrides)
-        // Note: webcam_history_enabled is deprecated - max_frames >= 2 enables history
+        // New time-based settings (preferred)
+        if (isset($airport['webcam_history_retention_hours'])) {
+            if (!is_numeric($airport['webcam_history_retention_hours']) || $airport['webcam_history_retention_hours'] < 0) {
+                $errors[] = "Airport '{$airportCode}' has invalid webcam_history_retention_hours: must be a non-negative number";
+            }
+        }
+        
+        if (isset($airport['webcam_history_default_hours'])) {
+            if (!is_int($airport['webcam_history_default_hours']) || $airport['webcam_history_default_hours'] < 1) {
+                $errors[] = "Airport '{$airportCode}' has invalid webcam_history_default_hours: must be a positive integer";
+            }
+        }
+        
+        if (isset($airport['webcam_history_preset_hours'])) {
+            if (!is_array($airport['webcam_history_preset_hours'])) {
+                $errors[] = "Airport '{$airportCode}' has invalid webcam_history_preset_hours: must be an array";
+            } else {
+                foreach ($airport['webcam_history_preset_hours'] as $preset) {
+                    if (!is_int($preset) || $preset < 1) {
+                        $errors[] = "Airport '{$airportCode}' has invalid webcam_history_preset_hours: must contain only positive integers";
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Legacy setting (deprecated but still supported)
         if (isset($airport['webcam_history_max_frames'])) {
             if (!is_int($airport['webcam_history_max_frames']) || $airport['webcam_history_max_frames'] < 1) {
                 $errors[] = "Airport '{$airportCode}' has invalid webcam_history_max_frames: must be a positive integer";

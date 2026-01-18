@@ -4917,11 +4917,13 @@ function openLiveStream(url) { window.open(url, '_blank'); }
 // Webcam History Player
 const WebcamPlayer = {
     active: false,
-    frames: [],
+    frames: [],           // Full manifest frames
+    periodFrames: [],     // Frames within selected period
     currentIndex: 0,
     playing: false,
     playInterval: null,
     preloadedImages: {},
+    loadingFrames: new Set(),  // Timestamps currently being loaded
     timezone: 'UTC',
     // State for URL sync and UI control
     airportId: null,
@@ -4933,12 +4935,19 @@ const WebcamPlayer = {
     enabledFormats: ['jpg'],  // Server-enabled formats
     preferredFormat: 'jpg',   // Browser's preferred format (detected once)
     preferredVariant: 1080,  // Preferred size variant for viewport (height in pixels)
-        variantHeights: [],  // Variant heights for selection (from API)
+    variantHeights: [],  // Variant heights for selection (from API)
     // Rolling window refresh
     refreshInterval: 60,  // Refresh interval in seconds (from API)
     refreshTimer: null,  // Interval timer for refreshing frames
     isRefreshing: false,  // Guard against overlapping refresh calls
     savedScrollY: 0,  // Store scroll position when opening player (for mobile viewport fix)
+    // Period selection for history UI
+    configuredPresets: [1, 3, 6, 24],  // From API history_ui config
+    configuredDefault: 3,              // From API history_ui config
+    availablePresets: [],              // Filtered based on actual data
+    selectedPeriod: null,              // Currently selected period in hours (null = all)
+    actualSpanHours: 0,                // Actual time span of available frames
+    PRELOAD_RADIUS: 10,                // Frames to preload around current position
 
     // Update URL to reflect current state (for sharing)
     updateURL() {
@@ -4957,10 +4966,17 @@ const WebcamPlayer = {
             } else {
                 params.delete('hideui');
             }
+            // Period parameter
+            if (this.selectedPeriod === null) {
+                params.set('period', 'all');
+            } else {
+                params.set('period', `${this.selectedPeriod}h`);
+            }
         } else {
             params.delete('cam');
             params.delete('autoplay');
             params.delete('hideui');
+            params.delete('period');
         }
         
         // Build clean URL (convert autoplay=1 to just autoplay, etc.)
@@ -5202,7 +5218,6 @@ const WebcamPlayer = {
                 // Full history player mode
                 this.frames = data.frames;
                 this.timezone = data.timezone || 'UTC';
-                this.currentIndex = data.current_index || 0;
                 this.refreshInterval = data.refresh_interval || 60;
                 
                 // Store enabled formats and detect browser's preferred format once
@@ -5216,17 +5231,37 @@ const WebcamPlayer = {
                 const variantStr = this.preferredVariant === 'original' ? 'original' : String(this.preferredVariant);
                 console.log(`[Webcam Player ${camIndex}] Browser selected format: ${this.preferredFormat}, variant: ${variantStr}`);
                 
+                // Handle history UI period configuration
+                const historyUI = data.history_ui || {};
+                this.configuredPresets = historyUI.preset_hours || [1, 3, 6, 24];
+                this.configuredDefault = historyUI.default_hours || 3;
+                
+                // Calculate actual time span and available presets
+                this.calculateAvailablePresets();
+                
+                // Determine initial period from URL or default
+                this.selectedPeriod = this.getInitialPeriod(options.period);
+                
+                // Filter frames to selected period
+                this.updatePeriodFrames();
+                
+                // Initialize period selector UI
+                this.initPeriodSelector();
+                
+                // Set current index to end of period (most recent)
+                this.currentIndex = this.periodFrames.length > 0 ? this.periodFrames.length - 1 : 0;
+                
                 this.initTimeline();
                 // Display the current frame immediately so navigation works right away
                 this.goToFrame(this.currentIndex);
-                this.preloadFrames();
+                // Don't preload all frames - lazy load on play/scrub
                 document.querySelector('.webcam-player-controls').style.display = '';
                 
                 // Start periodic refresh for rolling window
                 this.startRefreshTimer();
                 
-                // Auto-play if requested
-                if (options.autoplay && this.frames.length > 1) {
+                // Auto-play if requested (this will trigger preloading)
+                if (options.autoplay && this.periodFrames.length > 1) {
                     this.play();
                 }
             } else if (data.enabled && !data.available) {
@@ -5279,19 +5314,171 @@ const WebcamPlayer = {
 
         // Clean up
         this.preloadedImages = {};
+        this.loadingFrames.clear();
         this.frames = [];
+        this.periodFrames = [];
         this.airportId = null;
         this.camIndex = null;
         this.camName = null;
+        this.selectedPeriod = null;
+        this.availablePresets = [];
 
         // Reset UI for next time
         document.querySelector('.webcam-player-controls').style.display = '';
         document.getElementById('webcam-player-timestamp').textContent = '--';
+        document.getElementById('webcam-player-period-selector-mobile').classList.remove('visible');
+        document.getElementById('webcam-player-period-selector-desktop').classList.remove('visible');
         this.updateHideUIButton();
         this.updateAutoplayButton();
         
         // Update URL to remove player params
         this.updateURL();
+    },
+
+    // Calculate available presets based on actual frame data
+    calculateAvailablePresets() {
+        if (this.frames.length < 2) {
+            this.availablePresets = [];
+            this.actualSpanHours = 0;
+            return;
+        }
+        
+        const oldestTimestamp = this.frames[0].timestamp;
+        const newestTimestamp = this.frames[this.frames.length - 1].timestamp;
+        this.actualSpanHours = (newestTimestamp - oldestTimestamp) / 3600;
+        
+        // Filter presets to those with actual data coverage (90% threshold)
+        this.availablePresets = this.configuredPresets.filter(hours => 
+            this.actualSpanHours >= hours * 0.9
+        );
+        
+        console.log(`[Webcam Player] Actual span: ${this.actualSpanHours.toFixed(1)}h, Available presets: ${this.availablePresets.join(', ')}h`);
+    },
+
+    // Get initial period from URL param or default
+    getInitialPeriod(urlPeriod) {
+        // Parse URL period param if provided (format: '3h', '6h', 'all')
+        if (urlPeriod) {
+            if (urlPeriod === 'all') return null;
+            // Remove 'h' suffix if present
+            const hoursStr = urlPeriod.replace(/h$/i, '');
+            const hours = parseInt(hoursStr);
+            if (!isNaN(hours) && this.availablePresets.includes(hours)) {
+                return hours;
+            }
+        }
+        
+        // Use configured default if available
+        if (this.availablePresets.includes(this.configuredDefault)) {
+            return this.configuredDefault;
+        }
+        
+        // Fall back to largest available preset, or all
+        if (this.availablePresets.length > 0) {
+            return Math.max(...this.availablePresets);
+        }
+        
+        return null; // All
+    },
+
+    // Update periodFrames based on selected period
+    updatePeriodFrames() {
+        if (this.selectedPeriod === null || this.frames.length === 0) {
+            // "All" selected - use full manifest
+            this.periodFrames = [...this.frames];
+            return;
+        }
+        
+        const newestTimestamp = this.frames[this.frames.length - 1].timestamp;
+        const cutoff = newestTimestamp - (this.selectedPeriod * 3600);
+        
+        this.periodFrames = this.frames.filter(f => f.timestamp >= cutoff);
+        
+        console.log(`[Webcam Player] Period ${this.selectedPeriod}h: ${this.periodFrames.length} frames (of ${this.frames.length} total)`);
+    },
+
+    // Initialize period selector UI (both mobile and desktop versions)
+    initPeriodSelector() {
+        const mobileSelector = document.getElementById('webcam-player-period-selector-mobile');
+        const desktopSelector = document.getElementById('webcam-player-period-selector-desktop');
+        const mobileButtons = document.getElementById('webcam-player-period-buttons-mobile');
+        const desktopButtons = document.getElementById('webcam-player-period-buttons-desktop');
+        
+        // Hide if not enough data for any presets
+        if (this.availablePresets.length === 0 && this.frames.length < 2) {
+            mobileSelector.classList.remove('visible');
+            desktopSelector.classList.remove('visible');
+            return;
+        }
+        
+        // Build buttons HTML
+        let buttonsHTML = '';
+        
+        // Add available preset buttons
+        for (const hours of this.availablePresets) {
+            const isActive = this.selectedPeriod === hours ? 'active' : '';
+            buttonsHTML += `<button class="period-btn ${isActive}" data-hours="${hours}" onclick="WebcamPlayer.selectPeriod(${hours})">${hours}h</button>`;
+        }
+        
+        // Add "All" button - just show "All" to keep it concise
+        const allActive = this.selectedPeriod === null ? 'active' : '';
+        buttonsHTML += `<button class="period-btn ${allActive}" data-hours="all" onclick="WebcamPlayer.selectPeriod(null)">All</button>`;
+        
+        // Update both mobile and desktop button containers
+        mobileButtons.innerHTML = buttonsHTML;
+        desktopButtons.innerHTML = buttonsHTML;
+        
+        // Show both (CSS will hide the inappropriate one based on viewport)
+        mobileSelector.classList.add('visible');
+        desktopSelector.classList.add('visible');
+    },
+
+    // Format duration for display
+    formatDuration(hours) {
+        if (hours >= 24) {
+            const days = Math.floor(hours / 24);
+            const remainingHours = Math.round(hours % 24);
+            if (remainingHours === 0) return `${days}d`;
+            return `${days}d ${remainingHours}h`;
+        }
+        if (hours >= 1) {
+            return `${Math.round(hours)}h`;
+        }
+        return `${Math.round(hours * 60)}m`;
+    },
+
+    // User selects a different period
+    selectPeriod(hours) {
+        if (this.selectedPeriod === hours) return; // No change
+        
+        const wasPlaying = this.playing;
+        if (wasPlaying) this.stop();
+        
+        this.selectedPeriod = hours;
+        this.updatePeriodFrames();
+        
+        // Update button states (both mobile and desktop)
+        const allButtons = document.querySelectorAll('.webcam-player-period-selector .period-btn');
+        allButtons.forEach(btn => {
+            const btnHours = btn.dataset.hours === 'all' ? null : parseInt(btn.dataset.hours);
+            btn.classList.toggle('active', btnHours === hours);
+        });
+        
+        // Reset to end of new period (most recent)
+        this.currentIndex = this.periodFrames.length > 0 ? this.periodFrames.length - 1 : 0;
+        
+        // Clear preloaded images (will reload on play/scrub)
+        this.preloadedImages = {};
+        this.loadingFrames.clear();
+        
+        // Reinitialize timeline with new period
+        this.initTimeline();
+        this.goToFrame(this.currentIndex);
+        
+        // Update URL
+        this.updateURL();
+        
+        console.log(`[Webcam Player] Selected period: ${hours === null ? 'All' : hours + 'h'}`);
     },
 
     initTimeline() {
@@ -5302,17 +5489,20 @@ const WebcamPlayer = {
         const prevBtn = document.getElementById('webcam-player-prev-btn');
         const nextBtn = document.getElementById('webcam-player-next-btn');
 
+        // Use periodFrames for timeline (selected period)
+        const frames = this.periodFrames;
+        
         timeline.min = 0;
-        timeline.max = this.frames.length - 1;
+        timeline.max = frames.length - 1;
         timeline.value = this.currentIndex;
 
-        if (this.frames.length > 0) {
-            startEl.textContent = this.formatTime(this.frames[0].timestamp);
-            endEl.textContent = this.formatTime(this.frames[this.frames.length - 1].timestamp);
+        if (frames.length > 0) {
+            startEl.textContent = this.formatTime(frames[0].timestamp);
+            endEl.textContent = this.formatTime(frames[frames.length - 1].timestamp);
         }
 
         // Disable controls if only 1 frame (nothing to play/navigate)
-        const hasMultipleFrames = this.frames.length > 1;
+        const hasMultipleFrames = frames.length > 1;
         playBtn.disabled = !hasMultipleFrames;
         prevBtn.disabled = !hasMultipleFrames;
         nextBtn.disabled = !hasMultipleFrames;
@@ -5356,8 +5546,9 @@ const WebcamPlayer = {
 
     updateTimestampDisplay() {
         const el = document.getElementById('webcam-player-timestamp');
-        if (this.frames.length > 0 && this.frames[this.currentIndex]) {
-            const ts = this.frames[this.currentIndex].timestamp;
+        const frames = this.periodFrames;
+        if (frames.length > 0 && frames[this.currentIndex]) {
+            const ts = frames[this.currentIndex].timestamp;
             const date = new Date(ts * 1000);
             try {
                 el.textContent = date.toLocaleString('en-US', {
@@ -5379,18 +5570,21 @@ const WebcamPlayer = {
     },
 
     goToFrame(index) {
+        // Use periodFrames for navigation
+        const frames = this.periodFrames;
+        
         // If no frames available, return early
-        if (this.frames.length === 0) return;
+        if (frames.length === 0) return;
         
         // Handle out of bounds - clamp to valid range
         if (index < 0) {
             index = 0;
-        } else if (index >= this.frames.length) {
-            index = this.frames.length - 1;
+        } else if (index >= frames.length) {
+            index = frames.length - 1;
         }
 
         this.currentIndex = index;
-        const frame = this.frames[index];
+        const frame = frames[index];
         const img = document.getElementById('webcam-player-image');
         const timeline = document.getElementById('webcam-player-timeline');
 
@@ -5409,7 +5603,7 @@ const WebcamPlayer = {
             const timeStr = new Date(frame.timestamp * 1000).toLocaleTimeString();
             console.log(`[Webcam Player ${this.camIndex}] Displaying cached image at ${timeStr} (format: ${format}, variant: ${variant})`);
         } else {
-            // Fallback: load directly using preferred format
+            // Load directly using preferred format
             img.classList.add('loading');
             const imageUrl = this.buildImageUrl(frame);
             
@@ -5437,13 +5631,52 @@ const WebcamPlayer = {
         }
 
         this.updateTimestampDisplay();
+        
+        // Lazy preload nearby frames in background
+        this.preloadNearbyFrames(index);
+    },
+    
+    // Preload frames around current position (lazy loading)
+    preloadNearbyFrames(centerIndex) {
+        const frames = this.periodFrames;
+        const start = Math.max(0, centerIndex - this.PRELOAD_RADIUS);
+        const end = Math.min(frames.length - 1, centerIndex + this.PRELOAD_RADIUS);
+        
+        for (let i = start; i <= end; i++) {
+            const frame = frames[i];
+            const cacheKey = frame.timestamp;
+            
+            // Skip if already loaded or currently loading
+            if (this.preloadedImages[cacheKey] || this.loadingFrames.has(cacheKey)) {
+                continue;
+            }
+            
+            // Mark as loading
+            this.loadingFrames.add(cacheKey);
+            
+            const imageUrl = this.buildImageUrl(frame);
+            const preloadImg = new Image();
+            preloadImg.src = imageUrl;
+            
+            preloadImg.onload = () => {
+                this.preloadedImages[cacheKey] = imageUrl;
+                this.loadingFrames.delete(cacheKey);
+            };
+            preloadImg.onerror = () => {
+                this.loadingFrames.delete(cacheKey);
+            };
+        }
     },
 
-    async preloadFrames() {
+    // Preload all frames in the selected period (called on play)
+    async preloadPeriodFrames() {
         const bar = document.getElementById('webcam-player-loading-bar');
+        const frames = this.periodFrames;
         let loaded = 0;
 
-        for (const frame of this.frames) {
+        console.log(`[Webcam Player ${this.camIndex}] Preloading ${frames.length} frames in period`);
+
+        for (const frame of frames) {
             if (!this.active) break;
 
             const cacheKey = frame.timestamp;
@@ -5451,7 +5684,7 @@ const WebcamPlayer = {
             // Skip if already preloaded
             if (this.preloadedImages[cacheKey]) {
                 loaded++;
-                bar.style.width = `${(loaded / this.frames.length) * 100}%`;
+                bar.style.width = `${(loaded / frames.length) * 100}%`;
                 continue;
             }
 
@@ -5464,7 +5697,7 @@ const WebcamPlayer = {
                 const sizeMatch = imageUrl.match(/[&?]size=([^&]+)/);
                 const format = urlMatch ? urlMatch[1] : 'unknown';
                 const variant = sizeMatch ? sizeMatch[1] : 'unknown';
-                console.log(`[Webcam Player ${this.camIndex}] Preloading frame ${loaded + 1}/${this.frames.length} - format: ${format}, variant: ${variant}`);
+                console.log(`[Webcam Player ${this.camIndex}] Preloading frame ${loaded + 1}/${frames.length} - format: ${format}, variant: ${variant}`);
             }
             
             const img = new Image();
@@ -5474,18 +5707,23 @@ const WebcamPlayer = {
                 img.onload = () => {
                     this.preloadedImages[cacheKey] = imageUrl;
                     loaded++;
-                    bar.style.width = `${(loaded / this.frames.length) * 100}%`;
+                    bar.style.width = `${(loaded / frames.length) * 100}%`;
                     resolve();
                 };
                 img.onerror = () => {
                     loaded++;
-                    bar.style.width = `${(loaded / this.frames.length) * 100}%`;
+                    bar.style.width = `${(loaded / frames.length) * 100}%`;
                     resolve();
                 };
             });
         }
 
         setTimeout(() => { bar.style.width = '0%'; }, 500);
+    },
+    
+    // Legacy alias for backward compatibility
+    async preloadFrames() {
+        return this.preloadPeriodFrames();
     },
 
     togglePlay() {
@@ -5496,20 +5734,28 @@ const WebcamPlayer = {
         }
     },
 
-    play() {
-        if (this.frames.length < 2) return;
+    async play() {
+        const frames = this.periodFrames;
+        if (frames.length < 2) return;
+
+        // Preload period frames before starting playback
+        await this.preloadPeriodFrames();
+        
+        // Check if we're still active after preload
+        if (!this.active) return;
 
         this.playing = true;
         document.getElementById('webcam-player-play-btn').textContent = '⏸';
         this.updateAutoplayButton();
 
         this.playInterval = setInterval(() => {
-            if (this.currentIndex >= this.frames.length - 1) {
+            const currentFrames = this.periodFrames;
+            if (this.currentIndex >= currentFrames.length - 1) {
                 this.currentIndex = 0;
             } else {
                 this.currentIndex++;
             }
-            const frame = this.frames[this.currentIndex];
+            const frame = currentFrames[this.currentIndex];
             const timeStr = new Date(frame.timestamp * 1000).toLocaleTimeString();
             console.log(`[Webcam Player ${this.camIndex}] Updating - new frame at ${timeStr}`);
             this.goToFrame(this.currentIndex);
@@ -5608,11 +5854,15 @@ const WebcamPlayer = {
             if (hasChanges) {
                 // Update frames to rolling window
                 this.frames = framesToKeep;
+                
+                // Recalculate available presets and update period frames
+                this.calculateAvailablePresets();
+                this.updatePeriodFrames();
 
-                // Update current index based on current frame position
+                // Update current index based on current frame position (in periodFrames)
                 if (currentTimestamp !== null) {
                     // Find the frame with the same timestamp, or next available if removed
-                    let newIndex = this.frames.findIndex(f => f.timestamp === currentTimestamp);
+                    let newIndex = this.periodFrames.findIndex(f => f.timestamp === currentTimestamp);
                     
                     if (newIndex >= 0) {
                         // Current frame still exists - keep position
@@ -5620,7 +5870,7 @@ const WebcamPlayer = {
                     } else {
                         // Current frame was removed - find next available frame
                         // Look for the first frame at or after the current timestamp
-                        newIndex = this.frames.findIndex(f => f.timestamp >= currentTimestamp);
+                        newIndex = this.periodFrames.findIndex(f => f.timestamp >= currentTimestamp);
                         
                         if (newIndex >= 0) {
                             // Found a frame at or after current timestamp
@@ -5628,20 +5878,20 @@ const WebcamPlayer = {
                         } else {
                             // All frames are older than current (shouldn't happen with rolling window)
                             // Jump to newest frame
-                            this.currentIndex = Math.max(0, this.frames.length - 1);
+                            this.currentIndex = Math.max(0, this.periodFrames.length - 1);
                         }
                     }
                 } else {
                     // No current frame, go to newest
-                    this.currentIndex = Math.max(0, this.frames.length - 1);
+                    this.currentIndex = Math.max(0, this.periodFrames.length - 1);
                 }
 
                 // Special handling for playback at end when new frames arrive
-                if (wasAtEnd && wasPlaying && this.frames.length > oldFramesLength) {
+                if (wasAtEnd && wasPlaying && this.periodFrames.length > oldFramesLength) {
                     // We were at the end and playing, new frames were added
                     // Stay at the old end position so playback continues naturally into new frames
                     const oldEndIndex = Math.max(0, oldFramesLength - 1);
-                    if (oldEndIndex < this.frames.length - 1) {
+                    if (oldEndIndex < this.periodFrames.length - 1) {
                         // Only adjust if we're not already at the new end
                         this.currentIndex = oldEndIndex;
                     }
@@ -5650,12 +5900,12 @@ const WebcamPlayer = {
                 // Update timeline
                 this.initTimeline();
                 
-                // Preload new frames in background (non-blocking)
-                this.preloadFrames();
+                // Preload nearby frames in background (lazy loading)
+                this.preloadNearbyFrames(this.currentIndex);
                 
                 // Update display if current frame changed or user is paused/scrubbing
                 const frameChanged = currentTimestamp === null || 
-                                    this.frames[this.currentIndex]?.timestamp !== currentTimestamp;
+                                    this.periodFrames[this.currentIndex]?.timestamp !== currentTimestamp;
                 
                 if (frameChanged || !wasPlaying) {
                     // Current frame was removed/changed or user is scrubbing/paused
@@ -5673,15 +5923,15 @@ const WebcamPlayer = {
     },
 
     prev() {
-        if (this.frames.length === 0) return;
+        if (this.periodFrames.length === 0) return;
         this.stop();
         this.goToFrame(Math.max(0, this.currentIndex - 1));
     },
 
     next() {
-        if (this.frames.length === 0) return;
+        if (this.periodFrames.length === 0) return;
         this.stop();
-        this.goToFrame(Math.min(this.frames.length - 1, this.currentIndex + 1));
+        this.goToFrame(Math.min(this.periodFrames.length - 1, this.currentIndex + 1));
     },
 
     setupGestures() {
@@ -5903,10 +6153,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const imgEl = document.getElementById(`webcam-${camIndex}`);
             const currentSrc = imgEl ? imgEl.src : '';
             
-            // Check for autoplay and hideui params (handle both ?autoplay and ?autoplay=1)
+            // Check for autoplay, hideui, and period params
             const options = {
                 autoplay: params.has('autoplay') || params.get('autoplay') === '1',
-                hideui: params.has('hideui') || params.get('hideui') === '1'
+                hideui: params.has('hideui') || params.get('hideui') === '1',
+                period: params.get('period') || null  // e.g., '3h', '6h', 'all'
             };
             
             // Small delay to ensure page is fully loaded
@@ -8156,6 +8407,13 @@ window.addEventListener('beforeunload', () => {
     <div class="webcam-player-timestamp" id="webcam-player-timestamp" aria-live="polite">--</div>
     
     <div class="webcam-player-controls">
+        <!-- Period selector: shown above timeline on mobile portrait -->
+        <div class="webcam-player-period-selector webcam-player-period-mobile" id="webcam-player-period-selector-mobile">
+            <span class="period-label">History:</span>
+            <div class="period-buttons" id="webcam-player-period-buttons-mobile" role="group" aria-label="History period selection">
+                <!-- Period buttons dynamically inserted by JavaScript -->
+            </div>
+        </div>
         <label for="webcam-player-timeline" class="visually-hidden">Timeline scrubber</label>
         <input type="range" 
                id="webcam-player-timeline" 
@@ -8164,12 +8422,19 @@ window.addEventListener('beforeunload', () => {
                max="0" 
                value="0"
                aria-label="Timeline - drag to navigate through history"
-               title="Drag to scrub through 24-hour history">
+               title="Drag to scrub through history">
         <div class="webcam-player-time-range" aria-hidden="true">
             <span id="webcam-player-time-start">--</span>
             <span id="webcam-player-time-end">--</span>
         </div>
         <div class="webcam-player-buttons" role="group" aria-label="Playback controls">
+            <!-- Period selector: shown in button row on desktop/landscape -->
+            <div class="webcam-player-period-selector webcam-player-period-desktop" id="webcam-player-period-selector-desktop">
+                <span class="period-label">History:</span>
+                <div class="period-buttons" id="webcam-player-period-buttons-desktop" role="group" aria-label="History period selection">
+                    <!-- Period buttons dynamically inserted by JavaScript -->
+                </div>
+            </div>
             <button class="webcam-player-btn" id="webcam-player-prev-btn" onclick="webcamPlayerPrev()" aria-label="Previous frame" title="Previous frame (← arrow key)">⏮</button>
             <button class="webcam-player-btn play" id="webcam-player-play-btn" onclick="webcamPlayerTogglePlay()" aria-label="Play or pause" title="Play/pause time-lapse (Space bar)">▶</button>
             <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame" title="Next frame (→ arrow key)">⏭</button>

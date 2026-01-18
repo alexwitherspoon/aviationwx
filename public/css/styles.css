@@ -1696,6 +1696,164 @@ h3 {
     flex-shrink: 0;
 }
 
+/* Period selector for history player - base styles */
+.webcam-player-period-selector {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+}
+
+.webcam-player-period-selector.visible {
+    display: flex;
+}
+
+.webcam-player-period-selector .period-label {
+    display: none; /* Hidden - buttons are self-explanatory */
+}
+
+.webcam-player-period-selector .period-buttons {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: nowrap;
+}
+
+.webcam-player-period-selector .period-btn {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    font-size: 0.7rem;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.webcam-player-period-selector .period-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.webcam-player-period-selector .period-btn.active {
+    background: rgba(59, 130, 246, 0.8);
+    border-color: rgba(59, 130, 246, 1);
+    color: white;
+}
+
+.webcam-player-period-selector .period-btn:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+/* Desktop/landscape (≥600px): Period selector in button row, left aligned */
+.webcam-player-period-desktop {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Make buttons container relative for absolute positioning */
+.webcam-player-buttons {
+    position: relative;
+}
+
+/* Mobile selector - above timeline, centered */
+.webcam-player-period-mobile {
+    margin-bottom: 0.5rem;
+    justify-content: center;
+}
+
+/* Desktop/landscape: Show desktop, hide mobile */
+@media (min-width: 600px) {
+    .webcam-player-period-mobile.visible {
+        display: none;
+    }
+    
+    .webcam-player-period-desktop.visible {
+        display: flex;
+    }
+}
+
+/* Portrait mobile (<600px): Show mobile, hide desktop */
+@media (max-width: 599px) {
+    .webcam-player-period-mobile.visible {
+        display: flex;
+    }
+    
+    .webcam-player-period-desktop.visible {
+        display: none;
+    }
+    
+    .webcam-player-period-selector .period-label {
+        font-size: 0.75rem;
+    }
+    
+    .webcam-player-period-selector .period-btn {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+    }
+    
+    /* Ensure buttons don't get pushed off screen */
+    .webcam-player-controls {
+        padding: 12px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    }
+    
+    .webcam-player-buttons {
+        margin-top: 8px;
+        gap: 10px;
+    }
+    
+    .webcam-player-btn {
+        width: 42px;
+        height: 42px;
+        font-size: 14px;
+    }
+    
+    .webcam-player-btn.play {
+        width: 48px;
+        height: 48px;
+        font-size: 16px;
+    }
+}
+
+/* Dark mode period selector */
+body.dark-mode .webcam-player-period-selector .period-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+body.dark-mode .webcam-player-period-selector .period-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .webcam-player-period-selector .period-btn.active {
+    background: rgba(74, 158, 255, 0.6);
+    border-color: rgba(74, 158, 255, 0.8);
+}
+
+/* Night mode period selector */
+body.night-mode .webcam-player-period-selector .period-label {
+    color: var(--night-text-secondary);
+}
+
+body.night-mode .webcam-player-period-selector .period-btn {
+    background: rgba(100, 0, 0, 0.2);
+    border-color: rgba(150, 0, 0, 0.4);
+    color: var(--night-text-primary);
+}
+
+body.night-mode .webcam-player-period-selector .period-btn:hover {
+    background: rgba(150, 0, 0, 0.3);
+}
+
+body.night-mode .webcam-player-period-selector .period-btn.active {
+    background: rgba(180, 0, 0, 0.6);
+    border-color: rgba(200, 0, 0, 0.8);
+}
+
 .webcam-player-timeline {
     width: 100%;
     height: 44px;

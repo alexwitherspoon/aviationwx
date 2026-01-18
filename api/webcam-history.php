@@ -221,6 +221,9 @@ $refreshInterval = max(60, $perCamRefresh); // Enforce minimum 60 seconds
 require_once __DIR__ . '/../lib/webcam-metadata.php';
 $variantHeights = getVariantHeights($airportId, $camIndex);
 
+// Get history UI configuration
+$historyUIConfig = getWebcamHistoryUIConfig($airportId);
+
 // Build response with status information
 $response = [
     'enabled' => true,
@@ -234,7 +237,8 @@ $response = [
     'max_frames' => $historyStatus['max_frames'],
     'enabledFormats' => getEnabledWebcamFormats(),
     'variantHeights' => $variantHeights,
-    'refresh_interval' => $refreshInterval
+    'refresh_interval' => $refreshInterval,
+    'history_ui' => $historyUIConfig
 ];
 
 // Add message if history enabled but not yet available (insufficient frames)

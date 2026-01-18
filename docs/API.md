@@ -225,9 +225,10 @@ Returns webcam history data. When `ts` is omitted, returns a JSON manifest of av
 - `404 Not Found`: Airport not found or frame not found
 
 **Notes:**
-- History is enabled when `webcam_history_max_frames >= 2`
+- History is enabled when `webcam_history_retention_hours > 0`
 - History is available when at least 2 frames have been captured
 - Historical frames are stored directly in the camera cache directory (unified storage)
+- The API returns `history_ui` config with `preset_hours` and `default_hours` for UI period selection
 - See [Configuration Guide](CONFIGURATION.md#webcam-history-time-lapse) for setup details
 
 ---
