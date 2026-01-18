@@ -1653,15 +1653,21 @@ h3 {
     overflow: hidden;
     position: relative;
     background: #000;
+    min-height: 0;
+    /* Force proper layer compositing to prevent render artifacts */
+    isolation: isolate;
+    contain: paint;
 }
 
 .webcam-player-image {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
-    transition: opacity 0.15s ease-out;
     cursor: pointer;
     pointer-events: auto;
+    /* Force GPU compositing to prevent duplicate rendering */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 .webcam-player-image.loading {
