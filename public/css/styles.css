@@ -2689,7 +2689,7 @@ body.dark-mode .partner-link:hover .partner-logo {
 }
 
 body.dark-mode .partner-name {
-    color: var(--dark-text-primary) !important;
+    color: var(--dark-text-bright) !important;
 }
 
 body.dark-mode .data-sources-content {
