@@ -29,7 +29,8 @@ $totalWeatherStations = 0;
 // Get rolling 24-hour metrics from the metrics system
 require_once __DIR__ . '/../lib/metrics.php';
 $rolling24h = metrics_get_rolling(1);
-$imagesServed24h = $rolling24h['global']['webcam_serves'] ?? 0;
+// Images processed = variants generated (includes all format/size combinations created)
+$imagesProcessed24h = $rolling24h['global']['variants_generated'] ?? 0;
 
 // Fetch Cloudflare Analytics
 $cfAnalytics = getCloudflareAnalytics();
@@ -997,8 +998,8 @@ $ogImage = file_exists($aboutPhotoWebp)
                     <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Weather Stations</span>
                 </div>
                 <div style="text-align: center;">
-                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesServed24h) ?></span>
-                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Served Today</span>
+                    <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($imagesProcessed24h) ?></span>
+                    <span style="display: block; font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem;">Images Processed Today</span>
                 </div>
                 <div style="text-align: center;">
                     <span style="font-size: 1.5rem; font-weight: bold; color: white;"><?= formatMetricNumber($pilotsServedToday) ?></span>

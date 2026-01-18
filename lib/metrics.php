@@ -339,6 +339,7 @@ function metrics_flush(): bool {
                 'webcam_uploads_rejected' => 0,
                 'webcam_images_verified' => 0,
                 'webcam_images_rejected' => 0,
+                'variants_generated' => 0,
                 'tiles_served' => 0,
                 'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
                 'format_served' => ['jpg' => 0, 'webp' => 0],
@@ -454,6 +455,11 @@ function metrics_flush(): bool {
             $hourData['global']['webcam_requests'] += $value;
         } elseif ($key === 'global_webcam_serves') {
             $hourData['global']['webcam_serves'] += $value;
+        } elseif ($key === 'global_variants_generated') {
+            if (!isset($hourData['global']['variants_generated'])) {
+                $hourData['global']['variants_generated'] = 0;
+            }
+            $hourData['global']['variants_generated'] += $value;
         } elseif ($key === 'global_tiles_served') {
             $hourData['global']['tiles_served'] += $value;
         } elseif (preg_match('/^tiles_(openweathermap|rainviewer)_served$/', $key, $m)) {
@@ -894,6 +900,7 @@ function metrics_get_rolling(int $days = 7): array {
             'page_views' => 0,
             'weather_requests' => 0,
             'webcam_serves' => 0,
+            'variants_generated' => 0,
             'tiles_served' => 0,
             'tiles_by_source' => ['openweathermap' => 0, 'rainviewer' => 0],
             'format_served' => ['jpg' => 0, 'webp' => 0],
@@ -960,6 +967,7 @@ function metrics_get_rolling(int $days = 7): array {
         $result['global']['page_views'] += $global['page_views'] ?? 0;
         $result['global']['weather_requests'] += $global['weather_requests'] ?? 0;
         $result['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
+        $result['global']['variants_generated'] += $global['variants_generated'] ?? 0;
         $result['global']['tiles_served'] += $global['tiles_served'] ?? 0;
         
         foreach ($global['tiles_by_source'] ?? [] as $source => $count) {
@@ -1042,6 +1050,7 @@ function metrics_get_rolling(int $days = 7): array {
         $result['global']['page_views'] += $global['page_views'] ?? 0;
         $result['global']['weather_requests'] += $global['weather_requests'] ?? 0;
         $result['global']['webcam_serves'] += $global['webcam_serves'] ?? 0;
+        $result['global']['variants_generated'] += $global['variants_generated'] ?? 0;
         $result['global']['tiles_served'] += $global['tiles_served'] ?? 0;
         
         foreach ($global['tiles_by_source'] ?? [] as $source => $count) {

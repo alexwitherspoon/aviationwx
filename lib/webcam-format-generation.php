@@ -1465,6 +1465,12 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
     variant_health_track_generation($airportId, $camIndex, $successCount, $totalAttempted);
     variant_health_track_promotion($airportId, $camIndex, $promotedCount > 0, $promotedCount, $successCount);
     
+    // Track variant generation in main metrics system for homepage hero metric
+    if ($successCount > 0) {
+        require_once __DIR__ . '/metrics.php';
+        metrics_increment('global_variants_generated', $successCount);
+    }
+    
     return [
         'original' => $originalPath,
         'variants' => $promoted,
