@@ -524,16 +524,26 @@ if (file_exists($configFilePath)) {
     <p><strong>Exit code 8 from ffmpeg</strong> typically indicates network/connection issues. Try these steps:</p>
     <ol>
         <li><strong>Test connectivity from the server:</strong>
-            <pre>docker compose -f docker-compose.prod.yml exec web bash -c "timeout 5 nc -zv 76.9.251.18 7447"</pre>
-            If this fails, the server may not be able to reach the camera (firewall, network routing).
+            <pre>docker compose -f docker-compose.prod.yml exec web bash -c "timeout 5 nc -zv CAMERA_IP PORT"</pre>
+            Replace CAMERA_IP and PORT with your camera's IP and RTSP port. If this fails, the server may not be able to reach the camera (firewall, network routing).
         </li>
         <li><strong>Test ffmpeg command manually:</strong>
-            <pre>docker compose -f docker-compose.prod.yml exec web ffmpeg -rtsp_transport tcp -i "rtsps://76.9.251.18:7447/STREAM_ID?enableSrtp" -frames:v 1 -f null - 2>&1</pre>
-            Replace STREAM_ID with your actual stream ID. Check the output for specific error messages.
+            <pre># For UniFi local RTSP (port 7447, unencrypted):
+docker compose -f docker-compose.prod.yml exec web ffmpeg -rtsp_transport tcp -i "rtsp://CAMERA_IP:7447/STREAM_ID" -frames:v 1 -f null - 2>&1
+
+# For UniFi shared RTSPS (port 7441, encrypted):
+docker compose -f docker-compose.prod.yml exec web ffmpeg -rtsp_transport tcp -i "rtsps://CAMERA_IP:7441/STREAM_ID?enableSrtp" -frames:v 1 -f null - 2>&1</pre>
+            Replace CAMERA_IP and STREAM_ID with your actual values. Check the output for specific error messages.
         </li>
         <li><strong>Check camera authentication:</strong> Ensure credentials are correct if the stream requires authentication.</li>
-        <li><strong>Check firewall rules:</strong> Ensure the DigitalOcean droplet can reach the camera IP on port 7447 (TCP).</li>
-        <li><strong>Verify RTSPS URL format:</strong> Some cameras require specific URL parameters or paths.</li>
+        <li><strong>Check firewall rules:</strong> Ensure the server can reach the camera IP on the RTSP port (TCP). UniFi uses port 7447 for local RTSP or port 7441 for shared RTSPS.</li>
+        <li><strong>Verify RTSP URL format:</strong>
+            <ul>
+                <li>UniFi local RTSP: <code>rtsp://ip:7447/STREAM_ID</code></li>
+                <li>UniFi shared RTSPS: <code>rtsps://ip:7441/STREAM_ID?enableSrtp</code></li>
+                <li>Generic RTSP: <code>rtsp://ip:554/stream</code></li>
+            </ul>
+        </li>
         <li><strong>Check camera logs:</strong> The camera server may be rejecting connections or have rate limiting enabled.</li>
     </ol>
     <?php endif; ?>

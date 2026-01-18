@@ -200,15 +200,15 @@
           "refresh_seconds": 60
         },
         {
-          "name": "Secure Camera (RTSPS Basic)",
-          "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+          "name": "UniFi Protect Camera (Local RTSP)",
+          "url": "rtsp://192.168.1.1:7447/FKEFbCxO0CiAF3TH",
           "type": "rtsp",
           "rtsp_transport": "tcp",
           "refresh_seconds": 60
         },
         {
-          "name": "Secure Tower Camera (RTSPS Advanced)",
-          "url": "rtsps://camera.example.com:7447/stream?enableSrtp",
+          "name": "UniFi Protect Camera (Shared RTSPS)",
+          "url": "rtsps://192.168.1.1:7441/FKEFbCxO0CiAF3TH?enableSrtp",
           "type": "rtsp",
           "rtsp_transport": "tcp",
           "rtsp_fetch_timeout": 10,

@@ -492,6 +492,39 @@ Override with explicit `type` field.
 
 For secure RTSP (RTSPS), use `rtsps://` URL with `"type": "rtsp"`.
 
+#### UniFi Protect RTSP URLs
+
+UniFi Protect cameras use specific ports for RTSP streams:
+
+| Type | URL Pattern | Port |
+|------|-------------|------|
+| Local RTSP (unencrypted) | `rtsp://nvr-ip:7447/STREAM_ID` | 7447 |
+| Shared RTSPS (encrypted) | `rtsps://nvr-ip:7441/STREAM_ID?enableSrtp` | 7441 |
+
+**Local RTSP example (recommended for local AviationWX Bridge):**
+```json
+{
+  "name": "UniFi Camera",
+  "url": "rtsp://192.168.1.1:7447/FKEFbCxO0CiAF3TH",
+  "type": "rtsp",
+  "rtsp_transport": "tcp",
+  "refresh_seconds": 60
+}
+```
+
+**Shared RTSPS example (for remote access with encryption):**
+```json
+{
+  "name": "UniFi Camera (Secure)",
+  "url": "rtsps://192.168.1.1:7441/FKEFbCxO0CiAF3TH?enableSrtp",
+  "type": "rtsp",
+  "rtsp_transport": "tcp",
+  "refresh_seconds": 60
+}
+```
+
+The `STREAM_ID` is unique to each camera and must be copied from the UniFi Protect interface (Settings → Advanced → RTSP).
+
 ### Push Webcam (SFTP/FTP/FTPS)
 
 For cameras that upload images to the server:
