@@ -61,6 +61,8 @@ All configuration lives in a single `airports.json` file with two sections:
 
 ### Airport Options (`airports.{id}` section)
 
+**Airport IDs must be lowercase** (e.g., `kspb`, not `KSPB`). This prevents case sensitivity issues with file paths and cache directories.
+
 | Option | Default | Description |
 |--------|---------|-------------|
 | **Required** |||

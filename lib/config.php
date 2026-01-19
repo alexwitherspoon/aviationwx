@@ -1552,7 +1552,10 @@ function loadConfig(bool $useCache = true): ?array {
         }
         
         foreach ($config['airports'] as $aid => $ap) {
-            if (!validateAirportId($aid)) {
+            // Reject uppercase letters to prevent case sensitivity bugs in file paths
+            if (preg_match('/[A-Z]/', $aid)) {
+                $errors[] = "Airport key '{$aid}' contains uppercase letters (must be lowercase)";
+            } elseif (!validateAirportId($aid)) {
                 $errors[] = "Airport key '{$aid}' is invalid (must be 3-50 lowercase alphanumeric characters, hyphens allowed)";
             }
             
@@ -3119,6 +3122,11 @@ function validateAirportsJsonStructure(array $config): array {
         if (!is_array($airport)) {
             $errors[] = "Airport '{$airportCode}' must be an object";
             continue;
+        }
+        
+        // Reject uppercase letters to prevent case sensitivity bugs in file paths
+        if (preg_match('/[A-Z]/', $airportCode)) {
+            $errors[] = "Airport key '{$airportCode}' contains uppercase letters (must be lowercase)";
         }
         
         // Required fields

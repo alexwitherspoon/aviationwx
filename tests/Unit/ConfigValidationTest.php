@@ -812,6 +812,62 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString("missing required field: 'tower_status'", implode(' ', $result['errors']));
     }
 
+    public function testAirportStructure_UppercaseKeyRejected()
+    {
+        $config = [
+            'airports' => [
+                'KSPB' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport key with uppercase letters should fail validation');
+        $this->assertStringContainsString("contains uppercase letters", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_MixedCaseKeyRejected()
+    {
+        $config = [
+            'airports' => [
+                'Kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport key with mixed case should fail validation');
+        $this->assertStringContainsString("contains uppercase letters", implode(' ', $result['errors']));
+    }
+
+    public function testAirportStructure_LowercaseKeyAccepted()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport key with lowercase letters should pass validation');
+    }
+
     public function testAirportStructure_InvalidAccessType()
     {
         $config = [
