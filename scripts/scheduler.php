@@ -414,15 +414,15 @@ while ($running) {
         
         // Cleanup finished workers (non-blocking)
         if ($weatherPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
             $weatherPool->cleanupFinished($dummyStats);
         }
         if ($webcamPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
             $webcamPool->cleanupFinished($dummyStats);
         }
         if ($notamPool !== null) {
-            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0];
+            $dummyStats = ['completed' => 0, 'timed_out' => 0, 'failed' => 0, 'skipped' => 0];
             $notamPool->cleanupFinished($dummyStats);
         }
         
