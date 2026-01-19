@@ -280,17 +280,17 @@ Good for existing Ambient Weather stations or budget-conscious installs.
 
 > **Note**: Ambient requires both keys for API access. The `api_key` is tied to your account, and the `application_key` is for rate limiting.
 
+### How to Find Your MAC Address
+
+The MAC address identifies which weather station to pull data from. To find it:
+
+1. **Log into your Ambient Weather account** at [ambientweather.net](https://ambientweather.net)
+2. **Go to My Devices**: Click your profile → "My Devices"
+3. **Find the MAC address**: It's displayed below your device name (format: `AA:BB:CC:DD:EE:FF`)
+
+Alternatively, the MAC address is printed on a label on your weather station's base unit or console.
+
 ### Configuration Example
-
-```json
-"weather_source": {
-  "type": "ambient",
-  "api_key": "your-api-key-here",
-  "application_key": "your-application-key-here"
-}
-```
-
-With specific device (if you have multiple):
 
 ```json
 "weather_source": {
