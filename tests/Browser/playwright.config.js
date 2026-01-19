@@ -4,7 +4,19 @@ const { defineConfig, devices } = require('@playwright/test');
 /**
  * Playwright Configuration for Browser Compatibility Tests
  * Tests across Chrome, Firefox, Safari/WebKit, and Edge
+ * 
+ * Default port is 9080 for the isolated test environment.
+ * Use TEST_API_URL or TEST_BASE_URL to override.
  */
+
+// Determine the base URL for tests
+// Priority: TEST_API_URL > TEST_BASE_URL > default (port 9080 for test environment)
+const getBaseURL = () => {
+  if (process.env.TEST_API_URL) return process.env.TEST_API_URL;
+  if (process.env.TEST_BASE_URL) return process.env.TEST_BASE_URL;
+  return 'http://localhost:9080'; // Default to isolated test environment
+};
+
 module.exports = defineConfig({
   testDir: './tests',
   
@@ -37,7 +49,7 @@ module.exports = defineConfig({
   
   // Shared settings for all projects
   use: {
-    baseURL: process.env.TEST_BASE_URL || 'http://localhost:8080',
+    baseURL: getBaseURL(),
     trace: 'off', // Disable trace for speed
     screenshot: 'only-on-failure',
     video: 'off', // Disable video for speed

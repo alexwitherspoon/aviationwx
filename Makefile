@@ -8,7 +8,7 @@
 #
 # See docs/LOCAL_SETUP.md and docs/TESTING.md for complete documentation.
 
-.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet
+.PHONY: help init build build-force up down down-prod restart logs shell test test-unit test-integration test-browser test-local test-error-detector metrics-test smoke clean config config-check dev update-leaflet test-up test-down test-shell test-logs test-e2e test-clean smoke-test
 
 help: ## Show this help message
 	@echo ''
@@ -19,7 +19,10 @@ help: ## Show this help message
 	@grep -E '^(dev|up|down|down-prod|restart|logs|shell):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mTesting:\033[0m'
-	@grep -E '^(test|test-unit|test-integration|test-browser|test-local|metrics-test|smoke):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(test|test-ci|test-unit|test-integration|test-e2e|test-browser|test-local|metrics-test|smoke|smoke-test):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ''
+	@echo '\033[1;33mTest Environment (Isolated):\033[0m'
+	@grep -E '^(test-up|test-down|test-shell|test-logs|test-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mConfiguration:\033[0m'
 	@grep -E '^(init|config|config-check|config-example):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -166,20 +169,19 @@ test-integration: ## Run integration tests only
 	@echo "Running integration tests..."
 	@APP_ENV=testing vendor/bin/phpunit --testsuite Integration --testdox
 
-test-browser: up ## Run Playwright browser tests (requires Docker)
-	@echo "Running browser tests..."
-	@cd tests/Browser && npm install && npx playwright test
+test-browser: test-up ## Run Playwright browser tests (uses isolated test container)
+	@echo "Running browser tests against isolated test environment (port 9080)..."
+	@cd tests/Browser && npm install && TEST_API_URL=http://localhost:9080 npx playwright test
+	@$(MAKE) test-down
 
-test-local: build-force up ## Rebuild containers and run PHPUnit tests locally
+test-local: test-up ## Run PHPUnit tests against isolated test container
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "Rebuilding Docker containers and running local tests"
+	@echo "Running tests against isolated test environment (port 9080)"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "Waiting for containers to be ready..."
-	@sleep 5
 	@echo ""
 	@echo "Running PHPUnit tests..."
-	@TEST_API_URL=http://localhost:8080 vendor/bin/phpunit --testdox || (echo ""; echo "⚠️  Some tests failed. Check output above."; exit 1)
+	@TEST_API_URL=http://localhost:9080 APP_ENV=testing vendor/bin/phpunit --testdox || (echo ""; echo "⚠️  Some tests failed. Check output above."; $(MAKE) test-down; exit 1)
+	@$(MAKE) test-down
 
 test-error-detector: ## Test webcam error frame detector (requires running containers)
 	@echo "Testing webcam error frame detector..."
@@ -247,4 +249,70 @@ update-leaflet: ## Update Leaflet library (install npm package and copy to publi
 	@npm install
 	@npm run build:leaflet
 	@echo "✓ Leaflet updated successfully"
+
+# =============================================================================
+# ISOLATED TEST ENVIRONMENT
+# =============================================================================
+# These targets manage a separate Docker environment for testing that:
+# - Uses port 9080 (not 8080)
+# - Has its own cache volume (/tmp/aviationwx-cache-test)
+# - Uses test fixtures (tests/Fixtures/airports.json.test)
+# - Runs with APP_ENV=testing (full mock mode)
+#
+# This allows tests to run without disrupting development using production data.
+
+test-up: ## Start isolated test container (port 9080, test fixtures)
+	@echo "Starting isolated test environment..."
+	@echo "Cleaning test cache for fresh state..."
+	@rm -rf /tmp/aviationwx-cache-test
+	@mkdir -p /tmp/aviationwx-cache-test
+	@docker compose -f docker/docker-compose.test.yml build
+	@docker compose -f docker/docker-compose.test.yml up -d
+	@echo "Waiting for test container to be healthy..."
+	@timeout=60; while [ $$timeout -gt 0 ]; do \
+		if docker compose -f docker/docker-compose.test.yml exec -T web curl -sf http://localhost/ >/dev/null 2>&1; then \
+			echo "✓ Test environment ready at http://localhost:9080"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+		timeout=$$((timeout - 1)); \
+	done; \
+	echo "❌ Test container failed to become healthy"; \
+	docker compose -f docker/docker-compose.test.yml logs; \
+	exit 1
+
+test-down: ## Stop isolated test container
+	@echo "Stopping isolated test environment..."
+	@docker compose -f docker/docker-compose.test.yml down
+	@echo "✓ Test environment stopped"
+
+test-shell: ## Open shell in test container
+	@docker compose -f docker/docker-compose.test.yml exec web bash
+
+test-logs: ## View test container logs
+	@docker compose -f docker/docker-compose.test.yml logs -f
+
+test-clean: ## Remove test containers, volumes, and cache
+	@echo "Cleaning up test environment..."
+	@docker compose -f docker/docker-compose.test.yml down -v
+	@rm -rf /tmp/aviationwx-cache-test
+	@echo "✓ Test environment cleaned"
+
+test-e2e: ## Run E2E tests with ephemeral test container (starts, tests, stops)
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "Running E2E tests with isolated test environment"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(MAKE) test-up
+	@echo ""
+	@echo "Running E2E test suite..."
+	@TEST_API_URL=http://localhost:9080 APP_ENV=testing vendor/bin/phpunit --testsuite E2E --testdox || (echo ""; echo "⚠️  E2E tests failed."; $(MAKE) test-down; exit 1)
+	@$(MAKE) test-down
+	@echo ""
+	@echo "✅ E2E tests completed successfully"
+
+smoke-test: ## Smoke test against isolated test environment (port 9080)
+	@echo "Smoke testing isolated test environment..."
+	@echo "- Homepage" && curl -sf http://127.0.0.1:9080 >/dev/null && echo " ✓"
+	@echo "- Weather (kspb)" && curl -sf "http://127.0.0.1:9080/api/weather.php?airport=kspb" | grep -q '"success":true' && echo " ✓" || echo " ✗"
+	@echo "- Config check" && docker compose -f docker/docker-compose.test.yml exec -T web php -r "require '/var/www/html/lib/config.php'; echo 'APP_ENV: ' . getenv('APP_ENV') . PHP_EOL; echo 'Mock mode: ' . (shouldMockExternalServices() ? 'YES' : 'NO') . PHP_EOL;" && echo " ✓"
 

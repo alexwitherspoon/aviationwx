@@ -1,0 +1,68 @@
+# Isolated Test Environment Docker Compose Configuration
+#
+# This file provides a completely isolated test environment that runs
+# separately from the development environment. It uses:
+# - Port 9080 (instead of 8080)
+# - Separate cache volume (/tmp/aviationwx-cache-test)
+# - Test fixtures (tests/Fixtures/airports.json.test)
+# - APP_ENV=testing for full mock mode
+#
+# Usage:
+#   make test-up      # Start test container
+#   make test-down    # Stop test container
+#   make test-e2e     # Run E2E tests (ephemeral - starts, tests, stops)
+#
+# This allows tests to run without disrupting development using production data.
+
+name: aviationwx-test
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aviationwx-test
+    container_name: aviationwx-web-test
+    restart: "no"
+    ports:
+      - "9080:80"
+    volumes:
+      # Mount source code for live reloading (same as dev, for consistency)
+      - ../lib:/var/www/html/lib:ro
+      - ../pages:/var/www/html/pages:ro
+      - ../api:/var/www/html/api:ro
+      - ../admin:/var/www/html/admin:ro
+      - ../scripts:/var/www/html/scripts:ro
+      - ../public:/var/www/html/public:ro
+      - ../config:/var/www/html/config:ro
+      - ../tests:/var/www/html/tests:ro
+      - ../dev:/var/www/html/dev:ro
+      - ../guides:/var/www/html/guides:ro
+      - ../health:/var/www/html/health:ro
+      # ISOLATED test cache directory (separate from dev)
+      - /tmp/aviationwx-cache-test:/var/www/html/cache
+      # Mount test fixtures as the config file
+      - ../tests/Fixtures/airports.json.test:/var/www/html/secrets/airports.json:ro
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html
+      - DOMAIN=localhost
+      - APP_ENV=testing
+      - CONFIG_PATH=/var/www/html/secrets/airports.json
+      - WEATHER_REFRESH_URL=http://localhost
+      - GIT_SHA=${GIT_SHA:-test}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+        tag: "{{.Name}}/{{.ID}}"

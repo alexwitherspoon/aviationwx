@@ -6,13 +6,13 @@ This guide covers testing strategies, environment configuration, and how to run 
 
 AviationWX uses a unified testing strategy based on `APP_ENV`:
 
-| Environment | `APP_ENV` | Config Source | External Services |
-|-------------|-----------|---------------|-------------------|
-| Production | `production` | secrets/airports.json | Real APIs |
-| Local Dev (maintainers) | `development` | secrets/airports.json | Real APIs |
-| Local Dev (contributors) | `development` | config/airports.json | Auto-mocked |
-| Testing | `testing` | tests/Fixtures/airports.json.test | Fully mocked |
-| CI | `testing` | tests/Fixtures/airports.json.test | Fully mocked |
+| Environment | `APP_ENV` | Config Source | External Services | Port |
+|-------------|-----------|---------------|-------------------|------|
+| Production | `production` | secrets/airports.json | Real APIs | 80/443 |
+| Local Dev (maintainers) | `development` | secrets/airports.json | Real APIs | 8080 |
+| Local Dev (contributors) | `development` | config/airports.json | Auto-mocked | 8080 |
+| Testing (Isolated Docker) | `testing` | tests/Fixtures/airports.json.test | Fully mocked | 9080 |
+| CI | `testing` | tests/Fixtures/airports.json.test | Fully mocked | 9080 |
 
 ## Quick Start
 
@@ -37,6 +37,70 @@ make test-ci
 
 **Real Example**: A syntax error (unmatched brace) in `process-push-webcams.php` passed `make test` locally because no tests load that script, but failed in GitHub CI which runs syntax validation on all files.
 
+## Isolated Test Environment
+
+The test environment runs in a separate Docker container that is completely isolated from development:
+
+| Aspect | Development | Test |
+|--------|-------------|------|
+| Port | 8080 | 9080 |
+| Cache | `/tmp/aviationwx-cache` | `/tmp/aviationwx-cache-test` |
+| Config | Production secrets | Test fixtures |
+| Container | `aviationwx-web-local` | `aviationwx-web-test` |
+
+This allows you to run tests without disrupting your development environment or vice versa.
+
+### Test Environment Commands
+
+```bash
+# Start isolated test container (automatically cleans cache for fresh state)
+make test-up
+
+# Stop test container
+make test-down
+
+# View test container logs
+make test-logs
+
+# Open shell in test container
+make test-shell
+
+# Clean up test environment (removes volumes and cache)
+make test-clean
+```
+
+**Note:** `make test-up` automatically clears `/tmp/aviationwx-cache-test` before starting, ensuring each test run begins with a clean cache. This guarantees reproducible tests without leftover state from previous runs.
+
+### Running Tests with Isolation
+
+All test commands that use the isolated environment automatically clean the cache before starting, ensuring deterministic test results.
+
+```bash
+# E2E tests - cleans cache, starts container, runs tests, stops container
+make test-e2e
+
+# Browser tests - uses isolated test environment on port 9080
+make test-browser
+
+# Local tests - uses isolated test environment
+make test-local
+
+# Smoke test the isolated environment
+make smoke-test
+```
+
+### Running Both Environments Simultaneously
+
+You can run both development and test environments at the same time:
+
+```bash
+# Terminal 1: Start development (port 8080)
+make dev
+
+# Terminal 2: Run tests in isolated environment (port 9080)
+make test-e2e
+```
+
 ### Run All Tests
 
 ```bash
@@ -49,7 +113,7 @@ make test-unit
 # Run only integration tests
 make test-integration
 
-# Run browser tests (requires Docker)
+# Run browser tests (uses isolated test container on port 9080)
 make test-browser
 ```
 
@@ -98,12 +162,19 @@ vendor/bin/phpunit --testsuite Integration
 
 ### Browser Tests (`tests/Browser/`)
 
-Playwright-based tests for frontend functionality.
+Playwright-based tests for frontend functionality. These run against the isolated test environment (port 9080).
 
 ```bash
-cd tests/Browser
-npm install
-npx playwright test
+# Recommended: Use make target (handles container lifecycle)
+make test-browser
+
+# Manual: Run with test container already started
+make test-up
+cd tests/Browser && npm install && npx playwright test
+make test-down
+
+# Override URL (e.g., to test against dev environment)
+TEST_API_URL=http://localhost:8080 npx playwright test
 ```
 
 **What they test:**
@@ -114,11 +185,16 @@ npx playwright test
 
 ### E2E Tests
 
-Full end-to-end tests requiring running Docker containers.
+Full end-to-end tests run against the isolated test Docker container (port 9080).
 
 ```bash
-make up
-vendor/bin/phpunit --testsuite E2E
+# Recommended: Ephemeral test run (starts container, tests, stops)
+make test-e2e
+
+# Manual: Start test container separately
+make test-up
+TEST_API_URL=http://localhost:9080 vendor/bin/phpunit --testsuite E2E
+make test-down
 ```
 
 ## Configuration System
@@ -176,7 +252,8 @@ See `lib/config.php:shouldMockExternalServices()` for implementation.
 | `APP_ENV` | `production`, `development`, `testing` | `production` | Controls environment behavior |
 | `CONFIG_PATH` | file path | auto-detected | Explicit config file override |
 | `LOCAL_DEV_MOCK` | `1`, `0`, `auto` | `auto` | Force mock mode on/off |
-| `TEST_API_URL` | URL | `http://localhost:8080` | Base URL for E2E tests |
+| `TEST_API_URL` | URL | `http://localhost:9080` | Base URL for E2E/browser tests (isolated test environment) |
+| `TEST_BASE_URL` | URL | `http://localhost:9080` | Alias for TEST_API_URL (Playwright compatibility) |
 
 ### Setting Environment for Tests
 
@@ -338,16 +415,32 @@ Test results are uploaded as artifacts:
 
 1. **Install dependencies**: `cd tests/Browser && npm install`
 2. **Install browsers**: `npx playwright install chromium`
-3. **Check Docker**: Ensure containers are running for E2E tests
+3. **Check test container**: Ensure test container is running (`make test-up`)
+4. **Check port**: Tests default to port 9080 (isolated test environment)
+
+### Test vs Dev Environment Conflicts
+
+If tests are hitting your dev environment or vice versa:
+
+1. **Check port**: Dev uses 8080, tests use 9080
+2. **Check containers**: `docker ps` should show separate containers
+3. **Check cache**: Dev uses `/tmp/aviationwx-cache`, tests use `/tmp/aviationwx-cache-test`
+4. **Clean start**: `make test-clean` removes test volumes and cache
 
 ### Cache Conflicts
 
 ```bash
-# Clean test cache
+# Clean test cache (PHPUnit tests on host)
 php -r "require 'tests/bootstrap.php'; cleanTestCache();"
 
-# Or manually
+# Clean isolated test environment cache
+make test-clean
+
+# Or manually for host cache
 rm -rf cache/weather_*.json cache/webcams/ cache/backoff.json
+
+# Manually for Docker test cache
+rm -rf /tmp/aviationwx-cache-test
 ```
 
 ## Best Practices
