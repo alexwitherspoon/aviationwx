@@ -4951,7 +4951,7 @@ const WebcamPlayer = {
     savedScrollY: 0,  // Store scroll position when opening player (for mobile viewport fix)
     // Period selection for history UI
     configuredPresets: [1, 3, 6, 24],  // From API history_ui config
-    configuredDefault: 3,              // From API history_ui config
+    configuredDefault: 1,              // From API history_ui config
     availablePresets: [],              // Filtered based on actual data
     selectedPeriod: null,              // Currently selected period in hours (null = all)
     actualSpanHours: 0,                // Actual time span of available frames
@@ -5242,7 +5242,7 @@ const WebcamPlayer = {
                 // Handle history UI period configuration
                 const historyUI = data.history_ui || {};
                 this.configuredPresets = historyUI.preset_hours || [1, 3, 6, 24];
-                this.configuredDefault = historyUI.default_hours || 3;
+                this.configuredDefault = historyUI.default_hours || 1;
                 
                 // Calculate actual time span and available presets
                 this.calculateAvailablePresets();

@@ -936,7 +936,7 @@ function getImageVariants(): array {
 const WEBCAM_HISTORY_RETENTION_HOURS_DEFAULT = 24;
 
 /** Default period to show in UI (hours) */
-const WEBCAM_HISTORY_DEFAULT_HOURS_DEFAULT = 3;
+const WEBCAM_HISTORY_DEFAULT_HOURS_DEFAULT = 1;
 
 /** Default period presets for UI */
 const WEBCAM_HISTORY_PRESET_HOURS_DEFAULT = [1, 3, 6, 24];

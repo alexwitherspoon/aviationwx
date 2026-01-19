@@ -157,9 +157,16 @@ if ($timestamp !== null) {
     $variant = ($servedSize === 'original') ? 'original' : (int)$servedSize;
     $filename = $timestamp . '_' . $variant . '.' . $servedFormat;
     
+    // Cache images for the retention period (when they'll be deleted anyway)
+    // This prevents accumulating unused images in browser/CDN caches
+    // Minimum 24 hours (86400s), maximum 30 days (2592000s)
+    $retentionHours = getWebcamHistoryRetentionHours($airportId);
+    $retentionSeconds = $retentionHours * 3600;
+    $cacheMaxAge = max(86400, min(2592000, $retentionSeconds));
+    
     header('Content-Type: ' . $supportedFormats[$servedFormat]);
     header('Content-Disposition: inline; filename="' . $filename . '"');
-    header('Cache-Control: public, max-age=31536000, immutable');
+    header("Cache-Control: public, max-age={$cacheMaxAge}, immutable");
     header('Content-Length: ' . filesize($imageFile));
     header('X-Content-Type-Options: nosniff');
     
@@ -173,13 +180,14 @@ if ($timestamp !== null) {
 
 // Return JSON manifest
 header('Content-Type: application/json');
-header('Cache-Control: no-cache, max-age=0');
 
 // Get history status (enabled, available, frame count)
 $historyStatus = getHistoryStatus($airportId, $camIndex);
 
 // History disabled by config (max_frames < 2)
 if (!$historyStatus['enabled']) {
+    // Config-based response - cache for longer (1 hour) since it rarely changes
+    header('Cache-Control: public, max-age=3600, s-maxage=3600, stale-while-revalidate=3600');
     echo json_encode([
         'enabled' => false,
         'available' => false,
@@ -216,6 +224,13 @@ $perCamRefresh = isset($cam['refresh_seconds'])
     ? intval($cam['refresh_seconds']) 
     : $airportWebcamRefresh;
 $refreshInterval = max(60, $perCamRefresh); // Enforce minimum 60 seconds
+
+// Set cache headers based on refresh interval
+// Frame data changes every refresh_interval, so cache for that duration
+// - max-age: browser cache duration
+// - s-maxage: CDN/proxy cache duration  
+// - stale-while-revalidate: serve stale content while fetching fresh in background
+header("Cache-Control: public, max-age={$refreshInterval}, s-maxage={$refreshInterval}, stale-while-revalidate={$refreshInterval}");
 
 // Get variant heights from config (for reference)
 require_once __DIR__ . '/../lib/webcam-metadata.php';
