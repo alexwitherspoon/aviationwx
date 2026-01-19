@@ -286,12 +286,29 @@ function isVsftpdDatabaseCorrupted() {
     $vsftpdDbFile = '/etc/vsftpd/virtual_users.db';
     $vsftpdUserFile = '/etc/vsftpd/virtual_users.txt';
     
-    // Missing database with non-empty users file indicates corruption
-    if (!file_exists($vsftpdDbFile) && file_exists($vsftpdUserFile)) {
+    // Check if users file exists and has content
+    $usersFileExists = file_exists($vsftpdUserFile);
+    $usersFileHasContent = false;
+    if ($usersFileExists) {
         $content = @file_get_contents($vsftpdUserFile);
-        if ($content && trim($content) !== '') {
-            return true;
+        $usersFileHasContent = ($content && trim($content) !== '');
+    }
+    
+    // If no users are configured, there's no corruption - just a clean/initial state
+    // Delete any stale database from a previous run and return false
+    if (!$usersFileHasContent) {
+        if (file_exists($vsftpdDbFile)) {
+            aviationwx_log('debug', 'sync-push-config: removing stale vsftpd database (no users configured)', [
+                'db_file' => $vsftpdDbFile
+            ], 'app');
+            @unlink($vsftpdDbFile);
         }
+        return false;
+    }
+    
+    // Missing database with non-empty users file indicates corruption
+    if (!file_exists($vsftpdDbFile)) {
+        return true;
     }
     
     if (file_exists($vsftpdDbFile)) {
@@ -803,7 +820,8 @@ function rebuildVsftpdDatabase() {
     
     $userContent = @file_get_contents($vsftpdUserFile);
     if (!$userContent || trim($userContent) === '') {
-        aviationwx_log('warning', 'sync-push-config: Cannot rebuild database, users file is empty', [
+        // Empty users file is normal during startup before sync completes
+        aviationwx_log('debug', 'sync-push-config: No users to rebuild database from (users file empty)', [
             'user_file' => $vsftpdUserFile
         ], 'app');
         if (file_exists($vsftpdDbFile)) {
