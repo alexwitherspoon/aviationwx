@@ -22,8 +22,9 @@ if (isSingleAirportMode()) {
 $navConfig = loadConfig();
 $navAirports = [];
 if ($navConfig && isset($navConfig['airports'])) {
-    $enabledAirports = getEnabledAirports($navConfig);
-    foreach ($enabledAirports as $airportId => $airport) {
+    // Only show listed airports in navigation search (excludes unlisted)
+    $listedAirports = getListedAirports($navConfig);
+    foreach ($listedAirports as $airportId => $airport) {
         $navAirports[] = [
             'id' => $airportId,
             'name' => $airport['name'] ?? '',

@@ -57,9 +57,9 @@ function getSitemapUrls(): array
         'priority' => '0.8'
     ];
     
-    // Airport pages
-    $enabledAirports = getEnabledAirports($config);
-    foreach ($enabledAirports as $airportId => $airport) {
+    // Airport pages (only listed airports - excludes unlisted from SEO)
+    $listedAirports = getListedAirports($config);
+    foreach ($listedAirports as $airportId => $airport) {
         $airportUrl = 'https://' . $airportId . '.aviationwx.org/';
         
         $weatherCacheFile = getWeatherCachePath($airportId);

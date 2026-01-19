@@ -9,9 +9,9 @@ require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 
-// Load configuration and get enabled airports
+// Load configuration and get listed airports (excludes unlisted airports from discovery)
 $config = loadConfig();
-$airports = getEnabledAirports($config);
+$airports = getListedAirports($config);
 
 // Sort airports alphabetically by name
 uasort($airports, function($a, $b) {

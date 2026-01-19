@@ -4,10 +4,12 @@
  * 
  * GET /v1/airports
  * 
- * Returns a list of all enabled airports with basic metadata.
+ * Returns a list of all listed (publicly discoverable) airports with basic metadata.
+ * Unlisted airports (test sites, airports being commissioned) are excluded by default.
  * 
  * Query parameters:
  * - maintenance: Filter by maintenance mode ('true' or 'false')
+ * - include_unlisted: Include unlisted airports ('true' or 'false', default: false)
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -22,8 +24,15 @@ require_once __DIR__ . '/../../lib/config.php';
  */
 function handleListAirports(array $params, array $context): void
 {
-    // Get all enabled airports
-    $airports = getPublicApiAirports(true);
+    // Parse include_unlisted filter parameter (default: false)
+    $includeUnlisted = false;
+    if (isset($_GET['include_unlisted'])) {
+        $unlistedParam = strtolower(trim($_GET['include_unlisted']));
+        $includeUnlisted = ($unlistedParam === 'true' || $unlistedParam === '1');
+    }
+    
+    // Get airports (listed by default, optionally including unlisted)
+    $airports = getPublicApiAirports(true, $includeUnlisted);
     
     // Parse maintenance filter parameter
     $maintenanceFilter = null;
@@ -89,6 +98,7 @@ function formatAirportSummary(string $airportId, array $airport): array
         'elevation_ft' => $airport['elevation_ft'] ?? null,
         'timezone' => $airport['timezone'] ?? 'UTC',
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,
+        'unlisted' => isset($airport['unlisted']) && $airport['unlisted'] === true,
         'has_weather' => $hasWeather,
         'has_webcams' => $hasWebcams,
         'webcam_count' => $webcamCount,

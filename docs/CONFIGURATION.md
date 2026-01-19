@@ -75,6 +75,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `timezone` | global default | Timezone (e.g., `America/Los_Angeles`) |
 | **Status** |||
 | `maintenance` | `false` | Show maintenance banner |
+| `unlisted` | `false` | Hide from discovery (map, search, sitemap) |
 | **Refresh Overrides** |||
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |
@@ -221,6 +222,7 @@ The `config` section is optional—sensible defaults apply if omitted.
       "name": "Scappoose Industrial Airpark",
       "enabled": true,
       "maintenance": false,
+      "unlisted": false,
       
       "icao": "KSPB",
       "iata": "SPB",
@@ -309,6 +311,24 @@ All identifiers are case-insensitive. Non-primary identifiers 301 redirect to pr
 - Shows warning banner: "⚠️ This airport is currently under maintenance"
 - Status page shows orange indicator
 - APIs continue to function normally
+
+**`unlisted`** (default: `false`)
+- Hides airport from discovery channels while keeping it fully operational
+- When `true`:
+  - Data fetching continues normally (weather, webcams, NOTAMs)
+  - Accessible via direct URL (e.g., `test.aviationwx.org`)
+  - Hidden from: airport map, navigation search, sitemaps (XML/HTML), public API
+  - Page includes `<meta name="robots" content="noindex, nofollow">` to prevent search indexing
+- Use cases: test sites, new airports being commissioned, private beta testing
+- To include unlisted airports in API: `GET /v1/airports?include_unlisted=true`
+
+**State Matrix:**
+
+| `enabled` | `unlisted` | Result |
+|-----------|------------|--------|
+| `false` | any | Disabled (404, no data fetching) |
+| `true` | `false` | Fully public (default behavior) |
+| `true` | `true` | Operational but hidden from discovery |
 
 ### Timezone
 

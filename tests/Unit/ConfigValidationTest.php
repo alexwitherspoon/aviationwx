@@ -945,6 +945,66 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid private airport without permission required should pass validation');
     }
 
+    public function testAirportStructure_ValidUnlistedAirport()
+    {
+        $config = [
+            'airports' => [
+                'test' => [
+                    'name' => 'Unlisted Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true,
+                    'unlisted' => true
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport with unlisted: true should pass validation');
+    }
+
+    public function testAirportStructure_ValidListedAirport()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Listed Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true,
+                    'unlisted' => false
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport with unlisted: false should pass validation');
+    }
+
+    public function testAirportStructure_ValidAirportWithoutUnlistedField()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Airport Without Unlisted Field',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true
+                    // Note: 'unlisted' field is intentionally omitted (defaults to false)
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport without unlisted field should pass validation (defaults to false)');
+    }
+
     public function testAirportStructure_InvalidLatitude()
     {
         $config = [

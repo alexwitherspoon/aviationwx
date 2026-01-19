@@ -193,6 +193,26 @@
       "weather_source": {
         "type": "metar"
       }
+    },
+    "test": {
+      "name": "Test Unlisted Airport",
+      "enabled": true,
+      "maintenance": false,
+      "unlisted": true,
+      "icao": "KTEST",
+      "iata": null,
+      "faa": "TEST",
+      "address": "Test Location",
+      "lat": 45.0,
+      "lon": -122.0,
+      "elevation_ft": 100,
+      "timezone": "America/Los_Angeles",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "weather_source": {
+        "type": "metar"
+      },
+      "metar_station": "KTEST"
     }
   }
 }

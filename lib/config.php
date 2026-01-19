@@ -1776,6 +1776,26 @@ function isAirportInMaintenance(array $airport): bool {
 }
 
 /**
+ * Check if an airport is unlisted (hidden from discovery)
+ * 
+ * Returns true only if `unlisted` is explicitly set to true.
+ * Unlisted airports are enabled and process data, but are hidden from:
+ * - Airport directory/map
+ * - Navigation search
+ * - Sitemaps (XML and HTML)
+ * - Public API listings
+ * 
+ * Unlisted airports remain accessible via direct URL.
+ * Useful for test sites and new airports being commissioned.
+ * 
+ * @param array $airport Airport configuration array
+ * @return bool True if airport is unlisted, false otherwise
+ */
+function isAirportUnlisted(array $airport): bool {
+    return isset($airport['unlisted']) && $airport['unlisted'] === true;
+}
+
+/**
  * Get only enabled airports from configuration
  * 
  * Filters the airports array to return only airports with `enabled: true`.
@@ -1797,6 +1817,29 @@ function getEnabledAirports(array $config): array {
     }
     
     return $enabledAirports;
+}
+
+/**
+ * Get only listed (publicly discoverable) airports from configuration
+ * 
+ * Filters the airports array to return only airports that are:
+ * - enabled (enabled: true)
+ * - NOT unlisted (unlisted: false or missing)
+ * 
+ * Use this for public discovery channels: airport directory, map, search,
+ * sitemaps, and public API listings.
+ * 
+ * For data processing or direct URL access, use getEnabledAirports() instead.
+ * 
+ * @param array $config Configuration array with 'airports' key
+ * @return array Filtered airports array containing only listed airports
+ */
+function getListedAirports(array $config): array {
+    $enabledAirports = getEnabledAirports($config);
+    
+    return array_filter($enabledAirports, function ($airport) {
+        return !isAirportUnlisted($airport);
+    });
 }
 
 /**

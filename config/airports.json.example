@@ -94,10 +94,12 @@
     }
   },
   "airports": {
+    "_comment_airport_states": "enabled: true/false controls if airport is active. maintenance: true shows banner but accessible. unlisted: true hides from discovery (map, search, sitemap, API) but accessible via direct link - useful for test sites and new airports being commissioned.",
     "kspb": {
       "name": "Scappoose Industrial Airpark",
       "enabled": true,
       "maintenance": false,
+      "unlisted": false,
       "icao": "KSPB",
       "iata": "SPB",
       "faa": "SPB",

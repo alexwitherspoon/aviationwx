@@ -1264,8 +1264,8 @@ Best regards,
             $envConfigPath = getenv('CONFIG_PATH');
             $configFileForList = ($envConfigPath && file_exists($envConfigPath)) ? $envConfigPath : (__DIR__ . '/../config/airports.json');
             $config = json_decode(file_get_contents($configFileForList), true);
-            // Only show enabled airports
-            $airports = getEnabledAirports($config ?? []);
+            // Only show listed airports (excludes unlisted airports from display)
+            $airports = getListedAirports($config ?? []);
             $airportsPerPage = 9;
             $currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
             $totalPages = max(1, ceil(count($airports) / $airportsPerPage));

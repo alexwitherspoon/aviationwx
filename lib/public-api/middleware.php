@@ -317,19 +317,22 @@ function getPublicApiAirport(string $airportId, bool $allowMaintenance = true): 
  * @param bool $includeMaintenance Include airports in maintenance mode
  * @return array Associative array of airport ID => airport config
  */
-function getPublicApiAirports(bool $includeMaintenance = true): array
+function getPublicApiAirports(bool $includeMaintenance = true, bool $includeUnlisted = false): array
 {
     require_once __DIR__ . '/../config.php';
     
     $config = loadConfig();
-    $enabledAirports = getEnabledAirports($config);
+    
+    // By default, only return listed airports (excludes unlisted from public API)
+    // Use getEnabledAirports() if explicitly including unlisted
+    $airports = $includeUnlisted ? getEnabledAirports($config) : getListedAirports($config);
     
     if (!$includeMaintenance) {
-        $enabledAirports = array_filter($enabledAirports, function ($airport) {
+        $airports = array_filter($airports, function ($airport) {
             return !isset($airport['maintenance']) || $airport['maintenance'] !== true;
         });
     }
     
-    return $enabledAirports;
+    return $airports;
 }
 

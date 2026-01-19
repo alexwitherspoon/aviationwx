@@ -173,5 +173,174 @@ class AirportStatusTest extends TestCase
         $this->assertEquals('KSPB', $enabled['kspb']['icao']);
         $this->assertEquals(45.7710278, $enabled['kspb']['lat']);
     }
+    
+    // =========================================================================
+    // Tests for isAirportUnlisted()
+    // =========================================================================
+    
+    /**
+     * Test isAirportUnlisted - unlisted: true
+     */
+    public function testIsAirportUnlisted_UnlistedTrue_ReturnsTrue(): void
+    {
+        $airport = ['unlisted' => true];
+        $this->assertTrue(isAirportUnlisted($airport), 'Airport with unlisted: true should return true');
+    }
+    
+    /**
+     * Test isAirportUnlisted - unlisted: false
+     */
+    public function testIsAirportUnlisted_UnlistedFalse_ReturnsFalse(): void
+    {
+        $airport = ['unlisted' => false];
+        $this->assertFalse(isAirportUnlisted($airport), 'Airport with unlisted: false should return false');
+    }
+    
+    /**
+     * Test isAirportUnlisted - unlisted missing
+     */
+    public function testIsAirportUnlisted_UnlistedMissing_ReturnsFalse(): void
+    {
+        $airport = ['name' => 'Test Airport'];
+        $this->assertFalse(isAirportUnlisted($airport), 'Airport without unlisted field should return false');
+    }
+    
+    /**
+     * Test isAirportUnlisted - unlisted: "true" (string)
+     */
+    public function testIsAirportUnlisted_UnlistedStringTrue_ReturnsFalse(): void
+    {
+        $airport = ['unlisted' => 'true'];
+        $this->assertFalse(isAirportUnlisted($airport), 'Airport with unlisted: "true" (string) should return false (strict check)');
+    }
+    
+    /**
+     * Test isAirportUnlisted - unlisted: 1 (integer)
+     */
+    public function testIsAirportUnlisted_UnlistedIntegerOne_ReturnsFalse(): void
+    {
+        $airport = ['unlisted' => 1];
+        $this->assertFalse(isAirportUnlisted($airport), 'Airport with unlisted: 1 (integer) should return false (strict check)');
+    }
+    
+    // =========================================================================
+    // Tests for getListedAirports()
+    // =========================================================================
+    
+    /**
+     * Test getListedAirports - filters correctly
+     */
+    public function testGetListedAirports_FiltersCorrectly_ExcludesUnlisted(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Scappoose Airport',
+                    'enabled' => true
+                    // unlisted missing = listed
+                ],
+                'test' => [
+                    'name' => 'Test Site Airport',
+                    'enabled' => true,
+                    'unlisted' => true
+                ],
+                'pdx' => [
+                    'name' => 'Portland Airport',
+                    'enabled' => true,
+                    'unlisted' => false
+                ]
+            ]
+        ];
+        
+        $listed = getListedAirports($config);
+        
+        $this->assertCount(2, $listed, 'Should return 2 listed airports');
+        $this->assertArrayHasKey('kspb', $listed, 'Should include kspb (no unlisted field)');
+        $this->assertArrayHasKey('pdx', $listed, 'Should include pdx (unlisted: false)');
+        $this->assertArrayNotHasKey('test', $listed, 'Should not include test (unlisted: true)');
+    }
+    
+    /**
+     * Test getListedAirports - also excludes disabled airports
+     */
+    public function testGetListedAirports_ExcludesDisabledAndUnlisted(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Scappoose Airport',
+                    'enabled' => true
+                ],
+                'ksea' => [
+                    'name' => 'Seattle Airport',
+                    'enabled' => false
+                ],
+                'test' => [
+                    'name' => 'Test Site',
+                    'enabled' => true,
+                    'unlisted' => true
+                ]
+            ]
+        ];
+        
+        $listed = getListedAirports($config);
+        
+        $this->assertCount(1, $listed, 'Should return only 1 listed airport');
+        $this->assertArrayHasKey('kspb', $listed, 'Should include kspb');
+        $this->assertArrayNotHasKey('ksea', $listed, 'Should not include disabled airport');
+        $this->assertArrayNotHasKey('test', $listed, 'Should not include unlisted airport');
+    }
+    
+    /**
+     * Test getListedAirports - includes maintenance airports (they're still listed)
+     */
+    public function testGetListedAirports_IncludesMaintenanceAirports(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Scappoose Airport',
+                    'enabled' => true,
+                    'maintenance' => true
+                ]
+            ]
+        ];
+        
+        $listed = getListedAirports($config);
+        
+        $this->assertCount(1, $listed, 'Maintenance airports should still be listed');
+        $this->assertArrayHasKey('kspb', $listed, 'Should include maintenance airport');
+    }
+    
+    /**
+     * Test difference between getEnabledAirports and getListedAirports
+     */
+    public function testEnabledVsListedAirports_UnlistedIsEnabledButNotListed(): void
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Public Airport',
+                    'enabled' => true
+                ],
+                'test' => [
+                    'name' => 'Test Site',
+                    'enabled' => true,
+                    'unlisted' => true
+                ]
+            ]
+        ];
+        
+        $enabled = getEnabledAirports($config);
+        $listed = getListedAirports($config);
+        
+        // Unlisted airports are enabled (process data, accessible via direct URL)
+        $this->assertCount(2, $enabled, 'Both airports should be enabled');
+        $this->assertArrayHasKey('test', $enabled, 'Unlisted airport should be in enabled list');
+        
+        // But not listed (hidden from discovery)
+        $this->assertCount(1, $listed, 'Only public airport should be listed');
+        $this->assertArrayNotHasKey('test', $listed, 'Unlisted airport should not be in listed');
+    }
 }
 

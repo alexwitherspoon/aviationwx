@@ -652,6 +652,13 @@ if ($themeCookie === 'dark') {
     echo generateEnhancedMetaTags($pageDescription, $pageKeywords);
     echo "\n    ";
     
+    // For unlisted airports, add noindex/nofollow to prevent search engine indexing
+    // This provides defense-in-depth if URLs are shared
+    if (isAirportUnlisted($airport)) {
+        echo '<meta name="robots" content="noindex, nofollow">';
+        echo "\n    ";
+    }
+    
     // Canonical URL
     echo generateCanonicalTag($airportUrl);
     echo "\n    ";
