@@ -581,11 +581,10 @@ function removeDirectoryRecursive($uploadDir, $airportId, $camIndex) {
 }
 
 /**
- * Get existing push cameras from username mapping and filesystem
+ * Get existing push cameras from username mapping
  * 
- * Returns cameras that have been configured by checking:
- * 1. Username mapping file (tracks username -> camera relationship)
- * 2. Legacy directory pattern (airportId_camIndex) for migration cleanup
+ * Returns cameras that have been configured by reading the username mapping file
+ * which tracks the username -> camera relationship.
  * 
  * @return array Array of camera arrays with 'airport' and 'cam' keys
  */
@@ -593,11 +592,9 @@ function getExistingPushCameras() {
     $cameras = [];
     $seen = [];
     
-    // Primary: get cameras from username mapping (current method)
     $usernameMapping = loadUsernameMapping();
     foreach ($usernameMapping as $username => $info) {
         if (isset($info['airport']) && isset($info['cam'])) {
-            // Normalize to lowercase - handles legacy mappings with mixed case
             $airport = strtolower($info['airport']);
             $key = $airport . '_' . $info['cam'];
             if (!isset($seen[$key])) {
@@ -606,26 +603,6 @@ function getExistingPushCameras() {
                     'cam' => intval($info['cam'])
                 ];
                 $seen[$key] = true;
-            }
-        }
-    }
-    
-    // Secondary: scan for legacy directories (airportId_camIndex pattern)
-    $uploadBaseDir = CACHE_UPLOADS_DIR;
-    if (is_dir($uploadBaseDir)) {
-        $dirs = glob($uploadBaseDir . '/*', GLOB_ONLYDIR);
-        foreach ($dirs as $dir) {
-            $basename = basename($dir);
-            // Legacy directory format: airportId_camIndex (e.g., kczk_0)
-            if (preg_match('/^([a-z0-9]{3,4})_(\d+)$/', $basename, $matches)) {
-                $key = $matches[1] . '_' . $matches[2];
-                if (!isset($seen[$key])) {
-                    $cameras[] = [
-                        'airport' => $matches[1],
-                        'cam' => intval($matches[2])
-                    ];
-                    $seen[$key] = true;
-                }
             }
         }
     }

@@ -418,12 +418,16 @@ class WebcamWorkerFactory
     /**
      * Validate airport ID format
      * 
+     * Delegates to the global validateAirportId() function to ensure
+     * consistent validation rules across the application.
+     * 
      * @param string $airportId Airport ID to validate
      * @return bool True if valid
      */
     public static function validateAirportId(string $airportId): bool
     {
-        // Airport IDs should be alphanumeric, lowercase
-        return preg_match('/^[a-z0-9]{3,4}$/i', $airportId) === 1;
+        // Use global validation function for consistency
+        // Supports 3-50 character IDs with alphanumeric + hyphens
+        return validateAirportId($airportId);
     }
 }
