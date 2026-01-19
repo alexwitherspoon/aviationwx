@@ -5,6 +5,12 @@
     "default_timezone": "UTC",
     "base_domain": "localhost",
     
+    "_comment_network": "Network configuration. public_ip: explicit IPv4 for FTP passive mode (recommended for production). upload_hostname: hostname for FTP/SFTP (defaults to upload.{base_domain}). dynamic_dns_refresh_seconds: re-resolve DNS periodically for DDNS users (0=disabled, min 60s when enabled). If public_ip is set, dynamic_dns is disabled.",
+    "public_ip": "",
+    "public_ipv6": "",
+    "upload_hostname": "",
+    "dynamic_dns_refresh_seconds": 0,
+    
     "_comment_version": "Client version management. dead_man_switch_days=0 disables. force_cleanup triggers immediate cleanup for all clients.",
     "dead_man_switch_days": 7,
     "force_cleanup": false,

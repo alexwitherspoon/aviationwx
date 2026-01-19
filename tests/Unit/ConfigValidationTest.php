@@ -2667,6 +2667,267 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('base_domain must be a valid domain string', implode(' ', $result['errors']));
     }
 
+    public function testGlobalConfig_ValidPublicIP()
+    {
+        $config = [
+            'config' => [
+                'public_ip' => '178.128.130.116'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with valid public_ip should pass validation');
+    }
+
+    public function testGlobalConfig_InvalidPublicIP()
+    {
+        $config = [
+            'config' => [
+                'public_ip' => 'not-an-ip-address'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with invalid public_ip should fail validation');
+        $this->assertStringContainsString('public_ip must be a valid IPv4 address', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_ValidPublicIPv6()
+    {
+        $config = [
+            'config' => [
+                'public_ipv6' => '2604:a880:2:d1::e88b:3001'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with valid public_ipv6 should pass validation');
+    }
+
+    public function testGlobalConfig_InvalidPublicIPv6()
+    {
+        $config = [
+            'config' => [
+                'public_ipv6' => 'not-an-ipv6'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with invalid public_ipv6 should fail validation');
+        $this->assertStringContainsString('public_ipv6 must be a valid IPv6 address', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_ValidUploadHostname()
+    {
+        $config = [
+            'config' => [
+                'upload_hostname' => 'upload.aviationwx.org'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with valid upload_hostname should pass validation');
+    }
+
+    public function testGlobalConfig_InvalidUploadHostname()
+    {
+        $config = [
+            'config' => [
+                'upload_hostname' => ''
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with empty upload_hostname should fail validation');
+        $this->assertStringContainsString('upload_hostname must be a non-empty string', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_CompleteNetworkConfig()
+    {
+        $config = [
+            'config' => [
+                'base_domain' => 'aviationwx.org',
+                'public_ip' => '178.128.130.116',
+                'public_ipv6' => '2604:a880:2:d1::e88b:3001',
+                'upload_hostname' => 'upload.aviationwx.org'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with complete network configuration should pass');
+    }
+
+    public function testGlobalConfig_ValidDynamicDnsRefreshSeconds()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_refresh_seconds' => 300
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with valid dynamic_dns_refresh_seconds should pass');
+    }
+
+    public function testGlobalConfig_DynamicDnsRefreshSecondsDisabled()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_refresh_seconds' => 0
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Global config with dynamic_dns_refresh_seconds=0 (disabled) should pass');
+    }
+
+    public function testGlobalConfig_InvalidDynamicDnsRefreshSecondsTooLow()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_refresh_seconds' => 30
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with dynamic_dns_refresh_seconds < 60 should fail');
+        $this->assertStringContainsString('dynamic_dns_refresh_seconds must be >= 60', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_InvalidDynamicDnsRefreshSecondsNegative()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_refresh_seconds' => -1
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with negative dynamic_dns_refresh_seconds should fail');
+        $this->assertStringContainsString('dynamic_dns_refresh_seconds must be >= 0', implode(' ', $result['errors']));
+    }
+
+    public function testGlobalConfig_InvalidDynamicDnsRefreshSecondsType()
+    {
+        $config = [
+            'config' => [
+                'dynamic_dns_refresh_seconds' => 'not-an-integer'
+            ],
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Global config with non-integer dynamic_dns_refresh_seconds should fail');
+        $this->assertStringContainsString('dynamic_dns_refresh_seconds must be an integer', implode(' ', $result['errors']));
+    }
+
     public function testGlobalConfig_InvalidWebcamRefreshDefault()
     {
         $config = [

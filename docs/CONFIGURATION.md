@@ -14,6 +14,10 @@ All configuration lives in a single `airports.json` file with two sections:
 |--------|---------|-------------|
 | `default_timezone` | `UTC` | Fallback timezone for airports |
 | `base_domain` | `aviationwx.org` | Base domain for subdomains |
+| `public_ip` | — | Explicit public IPv4 (for FTP passive mode) |
+| `public_ipv6` | — | Explicit public IPv6 |
+| `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads |
+| `dynamic_dns_refresh_seconds` | `0` | Re-resolve DNS periodically for DDNS (0=disabled, min 60) |
 | `webcam_refresh_default` | `60` | Default webcam refresh (seconds) |
 | `weather_refresh_default` | `60` | Default weather refresh (seconds) |
 | `metar_refresh_seconds` | `60` | METAR refresh interval (min: 60) |
@@ -153,6 +157,9 @@ Unit toggle defaults resolve in this order (first match wins):
   "config": {
     "default_timezone": "UTC",
     "base_domain": "aviationwx.org",
+    "public_ip": "178.128.130.116",
+    "public_ipv6": "2604:a880:2:d1::e88b:3001",
+    "upload_hostname": "upload.aviationwx.org",
     
     "dead_man_switch_days": 7,
     "force_cleanup": false,
@@ -191,6 +198,73 @@ Unit toggle defaults resolve in this order (first match wins):
 ```
 
 The `config` section is optional—sensible defaults apply if omitted.
+
+### Network Configuration
+
+Configure the server's public network identity for FTP/SFTP services and URL generation.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `base_domain` | string | Base domain for URL generation (e.g., `aviationwx.org`) |
+| `public_ip` | string | Public IPv4 address for FTP passive mode |
+| `public_ipv6` | string | Public IPv6 address (optional) |
+| `upload_hostname` | string | Hostname for FTP/SFTP uploads |
+| `dynamic_dns_refresh_seconds` | integer | Re-resolve DNS periodically (0=disabled, min 60 when enabled) |
+
+**FTP Passive Mode Resolution Priority:**
+
+1. **`public_ip`** (explicit) — Use directly, no DNS lookup needed
+2. **`upload_hostname`** — Resolve via DNS if `public_ip` not set
+3. **`upload.{base_domain}`** — Default fallback if neither is set
+4. **`upload.aviationwx.org`** — Final fallback
+
+**Production Recommendation (Static IP):**
+
+For production servers with static IPs, set `public_ip` explicitly to eliminate DNS resolution as a startup dependency:
+
+```json
+{
+  "config": {
+    "base_domain": "aviationwx.org",
+    "public_ip": "178.128.130.116",
+    "upload_hostname": "upload.aviationwx.org"
+  }
+}
+```
+
+**Dynamic DNS (DDNS) Support:**
+
+For self-hosted instances with dynamic IPs (e.g., home internet with DDNS), enable periodic DNS refresh:
+
+```json
+{
+  "config": {
+    "base_domain": "weather.myairport.org",
+    "upload_hostname": "upload.weather.myairport.org",
+    "dynamic_dns_refresh_seconds": 300
+  }
+}
+```
+
+When `dynamic_dns_refresh_seconds` is enabled:
+- The scheduler periodically re-resolves the upload hostname
+- If the IP has changed, vsftpd's `pasv_address` is updated automatically
+- vsftpd is restarted to apply the new IP (brief interruption to active FTP sessions)
+- If `public_ip` is set, dynamic DNS refresh is automatically disabled (not needed)
+
+**Self-Hosted/Federation:**
+
+For self-hosted instances with static IPs, configure your own domain:
+
+```json
+{
+  "config": {
+    "base_domain": "weather.myairport.org",
+    "public_ip": "203.0.113.50",
+    "upload_hostname": "upload.weather.myairport.org"
+  }
+}
+```
 
 ---
 

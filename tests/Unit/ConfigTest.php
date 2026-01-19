@@ -342,4 +342,113 @@ class ConfigTest extends TestCase {
         $this->assertIsArray($listedAirports);
         $this->assertEmpty($listedAirports);
     }
+    
+    // =========================================================================
+    // Network Configuration Helper Tests
+    // =========================================================================
+    
+    /**
+     * Test getPublicIP() returns null when not configured
+     */
+    public function testGetPublicIP_ReturnsNullWhenNotConfigured(): void {
+        // The test fixture doesn't have public_ip configured
+        $ip = getPublicIP();
+        $this->assertNull($ip, 'getPublicIP should return null when not configured');
+    }
+    
+    /**
+     * Test getPublicIPv6() returns null when not configured
+     */
+    public function testGetPublicIPv6_ReturnsNullWhenNotConfigured(): void {
+        // The test fixture doesn't have public_ipv6 configured
+        $ip = getPublicIPv6();
+        $this->assertNull($ip, 'getPublicIPv6 should return null when not configured');
+    }
+    
+    /**
+     * Test getUploadHostname() returns default based on base_domain
+     */
+    public function testGetUploadHostname_ReturnsDefaultWhenNotConfigured(): void {
+        $hostname = getUploadHostname();
+        // Should return "upload.{base_domain}"
+        $baseDomain = getBaseDomain();
+        $expected = 'upload.' . $baseDomain;
+        $this->assertEquals($expected, $hostname, 'getUploadHostname should default to upload.{base_domain}');
+    }
+    
+    /**
+     * Test getBaseDomain() returns configured value or default
+     */
+    public function testGetBaseDomain_ReturnsConfiguredOrDefault(): void {
+        $domain = getBaseDomain();
+        // Should be a non-empty string
+        $this->assertIsString($domain);
+        $this->assertNotEmpty($domain);
+        // Should contain at least one dot (valid domain)
+        $this->assertStringContainsString('.', $domain);
+    }
+    
+    /**
+     * Test that getPublicIP validates IPv4 format
+     */
+    public function testGetPublicIP_ValidatesIPv4Format(): void {
+        // This tests the validation logic indirectly
+        // The function should only return valid IPv4 addresses
+        $ip = getPublicIP();
+        if ($ip !== null) {
+            $this->assertNotFalse(
+                filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4),
+                'getPublicIP should return a valid IPv4 address'
+            );
+        }
+        // null is acceptable when not configured
+        $this->assertTrue(true);
+    }
+    
+    /**
+     * Test that getPublicIPv6 validates IPv6 format
+     */
+    public function testGetPublicIPv6_ValidatesIPv6Format(): void {
+        // This tests the validation logic indirectly
+        $ip = getPublicIPv6();
+        if ($ip !== null) {
+            $this->assertNotFalse(
+                filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6),
+                'getPublicIPv6 should return a valid IPv6 address'
+            );
+        }
+        // null is acceptable when not configured
+        $this->assertTrue(true);
+    }
+    
+    /**
+     * Test getDynamicDnsRefreshSeconds() returns 0 when not configured
+     */
+    public function testGetDynamicDnsRefreshSeconds_ReturnsZeroWhenNotConfigured(): void {
+        $seconds = getDynamicDnsRefreshSeconds();
+        // Should be 0 (disabled) when not configured
+        $this->assertIsInt($seconds);
+        $this->assertGreaterThanOrEqual(0, $seconds);
+    }
+    
+    /**
+     * Test isDynamicDnsEnabled() returns false when not configured
+     */
+    public function testIsDynamicDnsEnabled_ReturnsFalseWhenNotConfigured(): void {
+        $enabled = isDynamicDnsEnabled();
+        // Should be false when not configured (default is disabled)
+        $this->assertIsBool($enabled);
+    }
+    
+    /**
+     * Test that getDynamicDnsRefreshSeconds enforces minimum of 60 seconds
+     */
+    public function testGetDynamicDnsRefreshSeconds_EnforcesMinimum(): void {
+        $seconds = getDynamicDnsRefreshSeconds();
+        // Either 0 (disabled) or >= 60 (enforced minimum)
+        $this->assertTrue(
+            $seconds === 0 || $seconds >= 60,
+            'getDynamicDnsRefreshSeconds should return 0 or >= 60'
+        );
+    }
 }

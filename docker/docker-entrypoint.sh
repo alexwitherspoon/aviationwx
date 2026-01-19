@@ -218,24 +218,68 @@ chmod 755 "${UPLOADS_DIR}" 2>/dev/null || true
 
 echo "✓ Uploads directory initialized"
 
-# Configure vsftpd pasv_address from DNS resolution
+# Configure vsftpd pasv_address
+# Priority: 1) config.public_ip (explicit), 2) config.upload_hostname (DNS), 3) default DNS fallback
 # Using single dual-stack instance (listen_ipv6=YES handles both IPv4 and IPv6)
-echo "Resolving pasv_address from DNS..."
+echo "Configuring pasv_address..."
 VSFTPD_PID=""
 PASV_ADDRESS=""
 
-if [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
-    # Resolve IPv4 address for pasv_address (most compatible for FTP clients)
+# Step 1: Try to read public_ip from airports.json config (explicit configuration)
+if [ -f "$CONFIG_FILE" ]; then
+    CONFIG_PUBLIC_IP=$(php -r "
+        \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
+        if (\$config && isset(\$config['config']['public_ip'])) {
+            \$ip = \$config['config']['public_ip'];
+            if (filter_var(\$ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                echo \$ip;
+            }
+        }
+    " 2>/dev/null || true)
+    
+    if [ -n "$CONFIG_PUBLIC_IP" ]; then
+        PASV_ADDRESS="$CONFIG_PUBLIC_IP"
+        echo "✓ Using explicit public_ip from config: $PASV_ADDRESS"
+    fi
+fi
+
+# Step 2: If no explicit IP, try upload_hostname from config (DNS resolution)
+if [ -z "$PASV_ADDRESS" ] && [ -f "$CONFIG_FILE" ]; then
+    CONFIG_UPLOAD_HOSTNAME=$(php -r "
+        \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
+        if (\$config && isset(\$config['config']['upload_hostname']) && !empty(\$config['config']['upload_hostname'])) {
+            echo \$config['config']['upload_hostname'];
+        } elseif (\$config && isset(\$config['config']['base_domain']) && !empty(\$config['config']['base_domain'])) {
+            echo 'upload.' . \$config['config']['base_domain'];
+        }
+    " 2>/dev/null || true)
+    
+    if [ -n "$CONFIG_UPLOAD_HOSTNAME" ] && [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
+        RESOLVED_IP=$(/usr/local/bin/resolve-upload-ip.sh "$CONFIG_UPLOAD_HOSTNAME" "ipv4" 2>&1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+        if [ -n "$RESOLVED_IP" ]; then
+            PASV_ADDRESS="$RESOLVED_IP"
+            echo "✓ Resolved upload_hostname ($CONFIG_UPLOAD_HOSTNAME) to: $PASV_ADDRESS"
+        else
+            echo "⚠️  Warning: Failed to resolve upload_hostname: $CONFIG_UPLOAD_HOSTNAME"
+        fi
+    fi
+fi
+
+# Step 3: Fallback to default DNS resolution (upload.aviationwx.org)
+if [ -z "$PASV_ADDRESS" ] && [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
+    echo "Falling back to DNS resolution for upload.aviationwx.org..."
     RESOLVED_IP=$(/usr/local/bin/resolve-upload-ip.sh "upload.aviationwx.org" "ipv4" 2>&1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
     
     if [ -n "$RESOLVED_IP" ]; then
         PASV_ADDRESS="$RESOLVED_IP"
-        echo "✓ Resolved pasv_address to: $PASV_ADDRESS"
+        echo "✓ Resolved pasv_address via fallback DNS: $PASV_ADDRESS"
     else
         echo "⚠️  Warning: Failed to resolve IPv4 address for pasv_address"
     fi
-else
-    echo "⚠️  Warning: resolve-upload-ip.sh not found"
+fi
+
+if [ -z "$PASV_ADDRESS" ]; then
+    echo "⚠️  Warning: Could not determine pasv_address - FTP passive mode may not work correctly"
 fi
 
 # Update vsftpd.conf with pasv_address

@@ -44,6 +44,7 @@ $lastDailyAggregation = '';
 $lastWeeklyAggregation = '';
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
+$lastDynamicDnsCheck = 0;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -494,6 +495,37 @@ while ($running) {
                 }
             }
             $lastStuckWorkerCleanup = $now;
+        }
+        
+        // 7. Dynamic DNS check for FTP passive mode (configurable interval)
+        // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
+        $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
+        if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {
+            $updateScript = __DIR__ . '/update-pasv-address.sh';
+            if (file_exists($updateScript) && is_executable($updateScript)) {
+                $output = [];
+                $exitCode = 0;
+                exec("$updateScript 2>&1", $output, $exitCode);
+                
+                if ($exitCode === 0) {
+                    // Success or no change needed
+                    $outputStr = implode("\n", $output);
+                    if (strpos($outputStr, 'change detected') !== false) {
+                        aviationwx_log('info', 'scheduler: dynamic DNS updated pasv_address', [
+                            'output' => $outputStr
+                        ], 'app');
+                    }
+                } elseif ($exitCode === 2) {
+                    // vsftpd not running - not an error
+                    aviationwx_log('debug', 'scheduler: dynamic DNS check skipped (vsftpd not running)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: dynamic DNS check failed', [
+                        'exit_code' => $exitCode,
+                        'output' => implode("\n", $output)
+                    ], 'app');
+                }
+            }
+            $lastDynamicDnsCheck = $now;
         }
         
         // Update health status (only scheduler errors affect this)

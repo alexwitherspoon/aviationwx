@@ -374,6 +374,96 @@ function getBaseDomain(): string {
     return getGlobalConfig('base_domain', 'aviationwx.org');
 }
 
+/**
+ * Get public IPv4 address from global config
+ * 
+ * Used for FTP passive mode (pasv_address) and other services that need
+ * to advertise the server's public IP address.
+ * 
+ * @return string|null Public IPv4 address, or null if not configured
+ */
+function getPublicIP(): ?string {
+    $ip = getGlobalConfig('public_ip');
+    if ($ip === null || !is_string($ip)) {
+        return null;
+    }
+    // Validate IPv4 format
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        return null;
+    }
+    return $ip;
+}
+
+/**
+ * Get public IPv6 address from global config
+ * 
+ * @return string|null Public IPv6 address, or null if not configured
+ */
+function getPublicIPv6(): ?string {
+    $ip = getGlobalConfig('public_ipv6');
+    if ($ip === null || !is_string($ip)) {
+        return null;
+    }
+    // Validate IPv6 format
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        return null;
+    }
+    return $ip;
+}
+
+/**
+ * Get upload hostname from global config
+ * 
+ * Used for FTP/SFTP upload services. Falls back to "upload.{base_domain}"
+ * if not explicitly configured.
+ * 
+ * @return string Upload hostname (e.g., "upload.aviationwx.org")
+ */
+function getUploadHostname(): string {
+    $hostname = getGlobalConfig('upload_hostname');
+    if ($hostname !== null && is_string($hostname) && !empty($hostname)) {
+        return $hostname;
+    }
+    // Default to upload.{base_domain}
+    return 'upload.' . getBaseDomain();
+}
+
+/**
+ * Get dynamic DNS refresh interval from global config
+ * 
+ * When set to a positive value, the system will periodically re-resolve
+ * the upload hostname and update vsftpd's pasv_address if it changes.
+ * Useful for sites with dynamic DNS (DDNS) where the public IP may change.
+ * 
+ * When public_ip is explicitly set, this setting has no effect (static IP
+ * doesn't need DNS refresh).
+ * 
+ * @return int Refresh interval in seconds (0 = disabled, minimum 60 when enabled)
+ */
+function getDynamicDnsRefreshSeconds(): int {
+    // If public_ip is explicitly set, dynamic DNS refresh is not needed
+    if (getPublicIP() !== null) {
+        return 0;
+    }
+    
+    $seconds = getGlobalConfig('dynamic_dns_refresh_seconds');
+    if ($seconds === null || !is_int($seconds) || $seconds <= 0) {
+        return 0; // Disabled by default
+    }
+    
+    // Enforce minimum of 60 seconds to prevent excessive DNS lookups
+    return max(60, $seconds);
+}
+
+/**
+ * Check if dynamic DNS refresh is enabled
+ * 
+ * @return bool True if dynamic DNS refresh is enabled and applicable
+ */
+function isDynamicDnsEnabled(): bool {
+    return getDynamicDnsRefreshSeconds() > 0;
+}
+
 // =============================================================================
 // STALENESS THRESHOLD HELPERS (3-Tier Model)
 // =============================================================================
@@ -2650,6 +2740,39 @@ function validateAirportsJsonStructure(array $config): array {
             if (isset($cfg['base_domain'])) {
                 if (!is_string($cfg['base_domain']) || strpos($cfg['base_domain'], '.') === false) {
                     $errors[] = "config.base_domain must be a valid domain string";
+                }
+            }
+            
+            // Validate public IP addresses
+            if (isset($cfg['public_ip'])) {
+                if (!is_string($cfg['public_ip']) || !filter_var($cfg['public_ip'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $errors[] = "config.public_ip must be a valid IPv4 address";
+                }
+            }
+            
+            if (isset($cfg['public_ipv6'])) {
+                if (!is_string($cfg['public_ipv6']) || !filter_var($cfg['public_ipv6'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                    $errors[] = "config.public_ipv6 must be a valid IPv6 address";
+                }
+            }
+            
+            // Validate upload hostname
+            if (isset($cfg['upload_hostname'])) {
+                if (!is_string($cfg['upload_hostname']) || empty($cfg['upload_hostname'])) {
+                    $errors[] = "config.upload_hostname must be a non-empty string";
+                } elseif (!preg_match('/^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$/', $cfg['upload_hostname'])) {
+                    $errors[] = "config.upload_hostname must be a valid hostname";
+                }
+            }
+            
+            // Validate dynamic DNS refresh interval
+            if (isset($cfg['dynamic_dns_refresh_seconds'])) {
+                if (!is_int($cfg['dynamic_dns_refresh_seconds'])) {
+                    $errors[] = "config.dynamic_dns_refresh_seconds must be an integer";
+                } elseif ($cfg['dynamic_dns_refresh_seconds'] < 0) {
+                    $errors[] = "config.dynamic_dns_refresh_seconds must be >= 0 (0 = disabled)";
+                } elseif ($cfg['dynamic_dns_refresh_seconds'] > 0 && $cfg['dynamic_dns_refresh_seconds'] < 60) {
+                    $errors[] = "config.dynamic_dns_refresh_seconds must be >= 60 seconds when enabled (or 0 to disable)";
                 }
             }
             
