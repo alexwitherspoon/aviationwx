@@ -267,7 +267,7 @@ Good for existing Ambient Weather stations or budget-conscious installs.
 |-------|-------------|------------------|
 | `api_key` | Your API key | Ambient Weather dashboard |
 | `application_key` | Application-specific key | Ambient Weather dashboard |
-| `mac_address` (optional) | Device MAC address | Use if you have multiple stations |
+| `mac_address` | Device MAC address | Which station to pull weather from |
 
 ### How to Get Your API Keys
 
@@ -609,7 +609,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 | Source | Required Fields |
 |--------|-----------------|
 | **Tempest** | `station_id`, `api_key` |
-| **Ambient** | `api_key`, `application_key`, (optional: `mac_address`) |
+| **Ambient** | `api_key`, `application_key`,  `mac_address` |
 | **Davis WeatherLink** | `station_id`, `api_key`, `api_secret` |
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
 | **SynopticData** | `station_id` + permission (we have a central API key) |
