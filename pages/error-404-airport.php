@@ -932,10 +932,10 @@ Best regards,
     </div>
 
     <?php
-    // Prepare all airports for search
+    // Prepare all airports for search (exclude unlisted airports)
     $searchAirports = [];
-    $enabledAirports = $config ? getEnabledAirports($config) : [];
-    foreach ($enabledAirports as $searchAirportId => $searchAirport) {
+    $listedAirports = $config ? getListedAirports($config) : [];
+    foreach ($listedAirports as $searchAirportId => $searchAirport) {
         $searchPrimaryIdentifier = getPrimaryIdentifier($searchAirportId, $searchAirport);
         $searchAirports[] = [
             'id' => $searchAirportId,

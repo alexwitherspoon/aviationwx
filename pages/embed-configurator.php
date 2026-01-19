@@ -13,8 +13,9 @@ require_once __DIR__ . '/../lib/seo.php';
 $config = loadConfig();
 $airports = [];
 if ($config && isset($config['airports'])) {
-    $enabledAirports = getEnabledAirports($config);
-    foreach ($enabledAirports as $id => $airport) {
+    // Use getListedAirports() to exclude unlisted airports from embed configurator
+    $listedAirports = getListedAirports($config);
+    foreach ($listedAirports as $id => $airport) {
         $airports[] = [
             'id' => $id,
             'name' => $airport['name'] ?? '',

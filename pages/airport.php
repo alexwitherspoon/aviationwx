@@ -1207,9 +1207,10 @@ if ($themeCookie === 'dark') {
         
         <?php
         // Check if we should show the airport navigation menu (only if multiple airports configured)
+        // Use getListedAirports() to exclude unlisted airports from search/nearby
         $config = loadConfig();
-        $enabledAirports = $config ? getEnabledAirports($config) : [];
-        $showMenu = count($enabledAirports) > 1;
+        $listedAirports = $config ? getListedAirports($config) : [];
+        $showMenu = count($listedAirports) > 1;
         
         if ($showMenu && isset($airport['lat']) && isset($airport['lon'])):
             // Calculate nearby airports (within 200 miles)
@@ -1217,7 +1218,7 @@ if ($themeCookie === 'dark') {
             $currentLon = (float)$airport['lon'];
             $nearbyAirports = [];
             
-            foreach ($enabledAirports as $otherAirportId => $otherAirport) {
+            foreach ($listedAirports as $otherAirportId => $otherAirport) {
                 // Skip current airport
                 if ($otherAirportId === $airportId) {
                     continue;
@@ -1261,7 +1262,7 @@ if ($themeCookie === 'dark') {
             
             // Prepare all airports for search (for autocomplete)
             $allAirportsForSearch = [];
-            foreach ($enabledAirports as $searchAirportId => $searchAirport) {
+            foreach ($listedAirports as $searchAirportId => $searchAirport) {
                 if ($searchAirportId === $airportId) {
                     continue; // Skip current airport
                 }
