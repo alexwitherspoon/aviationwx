@@ -583,6 +583,9 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
                 $cleaned++;
             }
         }
+        // Also delete the manifest file for this timestamp
+        $manifestFile = $cacheDir . '/' . $timestamp . '_manifest.json';
+        @unlink($manifestFile);
         unset($timestampFiles[$timestamp]);
     }
     
@@ -605,6 +608,9 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
                     $cleaned++;
                 }
             }
+            // Also delete the manifest file for this timestamp
+            $manifestFile = $cacheDir . '/' . $timestamp . '_manifest.json';
+            @unlink($manifestFile);
             unset($timestampFiles[$timestamp]);
         }
         
