@@ -437,6 +437,8 @@ function ensureWebcamsBaseDirectory() {
 function createCameraDirectory($airportId, $camIndex, $protocol = null, $username = null) {
     $webcamsBaseDir = ensureWebcamsBaseDirectory();
     $protocol = strtolower($protocol ?? 'sftp');
+    // Normalize to lowercase - must match getWebcamUploadDir() path generation
+    $airportId = strtolower($airportId);
     
     if (!$username) {
         aviationwx_log('warning', 'createCameraDirectory: no username provided', [
@@ -496,6 +498,8 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null, $usernam
  * @return void
  */
 function removeCameraDirectory($airportId, $camIndex, $username = null) {
+    // Normalize to lowercase - must match directory paths created by createCameraDirectory()
+    $airportId = strtolower($airportId);
     $baseDir = CACHE_UPLOADS_DIR . '/';
     
     // Remove all possible directory locations (current + legacy)
@@ -593,10 +597,12 @@ function getExistingPushCameras() {
     $usernameMapping = loadUsernameMapping();
     foreach ($usernameMapping as $username => $info) {
         if (isset($info['airport']) && isset($info['cam'])) {
-            $key = $info['airport'] . '_' . $info['cam'];
+            // Normalize to lowercase - handles legacy mappings with mixed case
+            $airport = strtolower($info['airport']);
+            $key = $airport . '_' . $info['cam'];
             if (!isset($seen[$key])) {
                 $cameras[] = [
-                    'airport' => $info['airport'],
+                    'airport' => $airport,
                     'cam' => intval($info['cam'])
                 ];
                 $seen[$key] = true;
@@ -1086,9 +1092,21 @@ function removeSftpUser($username) {
 }
 
 /**
- * Sync camera user
+ * Sync camera user credentials and create system account
+ * 
+ * Creates or updates FTP/SFTP user account and updates username mapping.
+ * Airport ID is normalized to lowercase internally.
+ * 
+ * @param string $airportId Airport identifier (will be normalized to lowercase)
+ * @param int $camIndex Camera index (0-based)
+ * @param array $pushConfig Push config with 'username', 'password', 'protocol' keys
+ * @param array &$usernameMapping Reference to username mapping array to update
+ * @return bool True if user sync succeeded, false on failure
  */
 function syncCameraUser($airportId, $camIndex, $pushConfig, &$usernameMapping) {
+    // Normalize to lowercase - mapping must match webcam worker expectations
+    $airportId = strtolower($airportId);
+    
     $username = $pushConfig['username'] ?? null;
     $password = $pushConfig['password'] ?? null;
     $protocol = strtolower($pushConfig['protocol'] ?? 'sftp');
@@ -1186,7 +1204,14 @@ function removeCameraUser($username, $protocol) {
 }
 
 /**
- * Sync all push cameras
+ * Sync all push cameras from configuration
+ * 
+ * Processes all airports and webcams, creating/updating user accounts and
+ * directories for push cameras. Cleans up removed cameras.
+ * Airport IDs are normalized to lowercase internally.
+ * 
+ * @param array $config Full configuration array with 'airports' key
+ * @return void
  */
 function syncAllPushCameras($config) {
     $existing = getExistingPushCameras();
@@ -1195,6 +1220,9 @@ function syncAllPushCameras($config) {
     $newUsernameMapping = [];
     
     foreach ($config['airports'] ?? [] as $airportId => $airport) {
+        // Normalize to lowercase - webcam worker validates against lowercase config keys
+        $airportId = strtolower($airportId);
+        
         if (!isset($airport['webcams']) || !is_array($airport['webcams'])) {
             continue;
         }

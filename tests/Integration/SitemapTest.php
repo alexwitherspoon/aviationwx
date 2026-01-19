@@ -67,17 +67,18 @@ class SitemapTest extends TestCase
     /**
      * Test sitemap includes all enabled airports
      */
-    public function testSitemap_IncludesAllEnabledAirports(): void
+    public function testSitemap_IncludesAllListedAirports(): void
     {
         $config = loadConfig();
         $this->assertNotNull($config);
         
-        $enabledAirports = getEnabledAirports($config);
+        // Sitemap only includes listed airports (enabled AND not unlisted)
+        $listedAirports = getListedAirports($config);
         $urls = getSitemapUrls();
         
         $airportUrls = array_map(fn($u) => $u['loc'], $urls['airports']);
         
-        foreach ($enabledAirports as $airportId => $airport) {
+        foreach ($listedAirports as $airportId => $airport) {
             $expectedUrl = 'https://' . $airportId . '.aviationwx.org/';
             $this->assertContains(
                 $expectedUrl,
@@ -88,19 +89,43 @@ class SitemapTest extends TestCase
     }
 
     /**
-     * Test sitemap airport count matches config
+     * Test sitemap airport count matches listed airports (excludes unlisted)
      */
-    public function testSitemap_AirportCountMatchesConfig(): void
+    public function testSitemap_AirportCountMatchesListedAirports(): void
+    {
+        $config = loadConfig();
+        // Sitemap only includes listed airports (enabled AND not unlisted)
+        $listedAirports = getListedAirports($config);
+        $urls = getSitemapUrls();
+        
+        $this->assertCount(
+            count($listedAirports),
+            $urls['airports'],
+            'Sitemap airport count should match listed airports'
+        );
+    }
+
+    /**
+     * Test sitemap excludes unlisted airports (SEO protection)
+     */
+    public function testSitemap_ExcludesUnlistedAirports(): void
     {
         $config = loadConfig();
         $enabledAirports = getEnabledAirports($config);
         $urls = getSitemapUrls();
         
-        $this->assertCount(
-            count($enabledAirports),
-            $urls['airports'],
-            'Sitemap airport count should match enabled airports'
-        );
+        $airportUrls = array_map(fn($u) => $u['loc'], $urls['airports']);
+        
+        foreach ($enabledAirports as $airportId => $airport) {
+            if (isAirportUnlisted($airport)) {
+                $unlistedUrl = 'https://' . $airportId . '.aviationwx.org/';
+                $this->assertNotContains(
+                    $unlistedUrl,
+                    $airportUrls,
+                    "Unlisted airport {$airportId} should NOT be in sitemap"
+                );
+            }
+        }
     }
 
     /**
