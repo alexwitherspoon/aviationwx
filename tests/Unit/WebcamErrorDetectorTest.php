@@ -366,7 +366,7 @@ class WebcamErrorDetectorTest extends TestCase
             // Create gradient pattern with good variance
             $r = min(255, ($x * 2) % 256);
             $g = min(255, ($y * 2) % 256);
-            $b = min(255, (($x + $y) * 1.5) % 256);
+            $b = min(255, (int)(($x + $y) * 1.5) % 256);
             
             // Add some structure (edges)
             if (($x % 20) < 10 && ($y % 20) < 10) {

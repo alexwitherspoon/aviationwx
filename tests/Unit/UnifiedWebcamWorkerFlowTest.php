@@ -264,9 +264,14 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         $testFile = $this->createTestJpeg('test_normalize.jpg');
 
         // Simulate: Camera wrote local time, file mtime is UTC
-        // Local time: 15:00 (PST)
-        // File mtime: 23:00 (UTC) - 8 hour difference
-        $localTime = '2026:01:16 15:00:00';
+        // Use relative timestamps to avoid test failures as time passes
+        // UTC time is "now" minus a small buffer to account for test execution time
+        $utcTimestamp = time() - 60; // 1 minute ago (well within retention window)
+        
+        // Local time is 8 hours behind UTC (PST = UTC-8)
+        $localTimestamp = $utcTimestamp - (8 * 3600);
+        $localTime = gmdate('Y:m:d H:i:s', $localTimestamp);
+        
         $cmd = sprintf(
             'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
             escapeshellarg($localTime),
@@ -274,8 +279,7 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         );
         exec($cmd);
 
-        // Set file mtime to UTC time (8 hours ahead)
-        $utcTimestamp = strtotime('2026-01-16 23:00:00 UTC');
+        // Set file mtime to UTC time
         touch($testFile, $utcTimestamp);
 
         // ACT: Normalize EXIF
@@ -301,7 +305,11 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
 
         $testFile = $this->createTestJpeg('test_preserve_local.jpg');
 
-        $localTime = '2026:01:16 15:00:00';
+        // Use relative timestamps to avoid test failures as time passes
+        $utcTimestamp = time() - 60; // 1 minute ago
+        $localTimestamp = $utcTimestamp - (8 * 3600); // PST = UTC-8
+        $localTime = gmdate('Y:m:d H:i:s', $localTimestamp);
+        
         $cmd = sprintf(
             'exiftool -overwrite_original -DateTimeOriginal=%s %s 2>&1',
             escapeshellarg($localTime),
@@ -309,7 +317,6 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         );
         exec($cmd);
 
-        $utcTimestamp = strtotime('2026-01-16 23:00:00 UTC');
         touch($testFile, $utcTimestamp);
 
         // ACT
