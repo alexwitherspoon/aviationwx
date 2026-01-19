@@ -7,7 +7,7 @@
  * - Page render time (full request-response cycle)
  * 
  * Metrics are stored in both APCu (for speed) and file cache (for CLI/web sharing).
- * This ensures metrics tracked in CLI scripts (e.g., process-push-webcams.php)
+ * This ensures metrics tracked in CLI scripts (e.g., unified-webcam-worker.php)
  * are visible on web pages (e.g., status.php).
  */
 

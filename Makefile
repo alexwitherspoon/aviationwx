@@ -140,7 +140,7 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	@php scripts/validate-javascript.php
 	@echo ""
 	@echo "6️⃣  Checking for required files..."
-	@bash -c 'required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php" "lib/constants.php" "lib/circuit-breaker.php" "scripts/process-push-webcams.php" "lib/push-webcam-validator.php" "pages/config-generator.php" "pages/status.php"); \
+	@bash -c 'required_files=("index.php" "api/weather.php" "api/webcam.php" "lib/config.php" "lib/rate-limit.php" "lib/constants.php" "lib/circuit-breaker.php" "scripts/unified-webcam-worker.php" "lib/push-webcam-validator.php" "pages/config-generator.php" "pages/status.php"); \
 	for file in "$${required_files[@]}"; do if [ ! -f "$$file" ]; then echo "❌ Required file missing: $$file"; exit 1; fi; done; \
 	echo "✓ All required files present"'
 	@echo ""
