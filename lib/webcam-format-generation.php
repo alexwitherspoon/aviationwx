@@ -622,11 +622,12 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
     }
     
     if ($cleaned > 0) {
+        $timestampsRemoved = count($timestampsToRemoveByTime) + count($timestampsToRemoveBySafety ?? []);
         aviationwx_log('debug', 'webcam timestamp cleanup', [
             'airport' => $airportId,
             'cam' => $camIndex,
             'files_removed' => $cleaned,
-            'timestamps_removed' => count($timestampsToRemove),
+            'timestamps_removed' => $timestampsRemoved,
             'keep_count' => $keepCount
         ], 'app');
     }

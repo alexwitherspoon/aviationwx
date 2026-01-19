@@ -580,7 +580,8 @@ function generateMockWeatherData($airportId, $airport) {
     // Always retrieve today's extremes from cache (even if current temp is null)
     // This prevents the merge function from preserving yesterday's values
     $currentTemp = $weatherData['temperature'] ?? null;
-    $tempExtremes = getTempExtremes($airportId, $currentTemp ?? 0, $airport);
+    // Pass null instead of 0 when no temperature - getTempExtremes handles null properly
+    $tempExtremes = getTempExtremes($airportId, $currentTemp, $airport);
     $weatherData['temp_high_today'] = $tempExtremes['high'];
     $weatherData['temp_low_today'] = $tempExtremes['low'];
     $weatherData['temp_high_ts'] = $tempExtremes['high_ts'] ?? null;

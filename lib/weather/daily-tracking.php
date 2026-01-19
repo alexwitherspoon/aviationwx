@@ -678,28 +678,45 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     // Fallback to UTC if airport not provided (backward compatibility)
         $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
     
-    // Ensure currentTemp is cast to float for consistency
-    $currentTempFloat = is_numeric($currentTemp) ? (float)$currentTemp : 0;
+    // Handle null/invalid currentTemp - return null values if no stored data
+    // This prevents 0°C (32°F) from being shown during outages
+    $hasValidCurrentTemp = is_numeric($currentTemp);
+    $currentTempFloat = $hasValidCurrentTemp ? (float)$currentTemp : null;
+    
+    // Default return for when no data is available
+    $noDataReturn = [
+        'high' => null, 
+        'low' => null,
+        'high_ts' => null,
+        'low_ts' => null
+    ];
     
     if (!file_exists($file)) {
-        $now = time();
-        return [
-            'high' => $currentTempFloat, 
-            'low' => $currentTempFloat,
-            'high_ts' => $now,
-            'low_ts' => $now
-        ];
+        // No cache file - return current temp if available, otherwise null
+        if ($hasValidCurrentTemp) {
+            $now = time();
+            return [
+                'high' => $currentTempFloat, 
+                'low' => $currentTempFloat,
+                'high_ts' => $now,
+                'low_ts' => $now
+            ];
+        }
+        return $noDataReturn;
     }
     
     $content = file_get_contents($file);
     if ($content === false) {
-        $now = time();
-        return [
-            'high' => $currentTempFloat, 
-            'low' => $currentTempFloat,
-            'high_ts' => $now,
-            'low_ts' => $now
-        ];
+        if ($hasValidCurrentTemp) {
+            $now = time();
+            return [
+                'high' => $currentTempFloat, 
+                'low' => $currentTempFloat,
+                'high_ts' => $now,
+                'low_ts' => $now
+            ];
+        }
+        return $noDataReturn;
     }
     
     $decoded = json_decode($content, true);
@@ -714,14 +731,17 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
         ], 'app');
         // Delete corrupted file
         @unlink($file);
-        // Return current temp as today's value
-        $now = time();
-        return [
-            'high' => $currentTempFloat, 
-            'low' => $currentTempFloat,
-            'high_ts' => $now,
-            'low_ts' => $now
-        ];
+        // Return current temp as today's value if available
+        if ($hasValidCurrentTemp) {
+            $now = time();
+            return [
+                'high' => $currentTempFloat, 
+                'low' => $currentTempFloat,
+                'high_ts' => $now,
+                'low_ts' => $now
+            ];
+        }
+        return $noDataReturn;
     }
     
     $tempExtremes = $decoded;
@@ -730,20 +750,22 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     if (isset($tempExtremes[$dateKey][$airportId])) {
         $stored = $tempExtremes[$dateKey][$airportId];
         
-        // Return stored values, ensuring they are cast to float for consistency
-        // This is a getter function, but we normalize types to prevent downstream issues
+        // Return stored values if valid, otherwise fall back to current temp or null
         $storedHigh = isset($stored['high']) && is_numeric($stored['high']) ? (float)$stored['high'] : $currentTempFloat;
         $storedLow = isset($stored['low']) && is_numeric($stored['low']) ? (float)$stored['low'] : $currentTempFloat;
         
         return [
             'high' => $storedHigh,
             'low' => $storedLow,
-            'high_ts' => $stored['high_ts'] ?? time(),
-            'low_ts' => $stored['low_ts'] ?? time()
+            'high_ts' => $stored['high_ts'] ?? ($hasValidCurrentTemp ? time() : null),
+            'low_ts' => $stored['low_ts'] ?? ($hasValidCurrentTemp ? time() : null)
         ];
     }
     
-    // No entry for today - return current temp as today's value
+    // No entry for today - return current temp as today's value if available, otherwise null
+    if (!$hasValidCurrentTemp) {
+        return $noDataReturn;
+    }
     $now = time();
     return [
         'high' => $currentTempFloat, 
