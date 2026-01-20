@@ -115,12 +115,28 @@ class MetarAdapter {
     
     /**
      * Build the API URL for fetching data
+     * 
+     * @param array|string $config Source configuration array with station_id, or station ID string (legacy)
+     * @return string|null URL or null if invalid
      */
-    public static function buildUrl(string $stationId): ?string {
+    public static function buildUrl(array|string $config): ?string {
+        // Support both array config and legacy string station ID
+        $stationId = is_array($config) ? ($config['station_id'] ?? '') : $config;
+        
         if (empty($stationId)) {
             return null;
         }
         return "https://aviationweather.gov/api/data/metar?ids={$stationId}&format=json&taf=false&hours=0";
+    }
+    
+    /**
+     * Get nearby stations from config for fallback
+     * 
+     * @param array $config Source configuration
+     * @return array List of nearby station IDs
+     */
+    public static function getNearbyStations(array $config): array {
+        return $config['nearby_stations'] ?? [];
     }
     
     /**
@@ -526,21 +542,29 @@ function fetchMETARFromStation($stationId, $airport): ?array {if (!is_string($st
  * @param array $airport Airport configuration
  * @return array|null Parsed METAR data or null on failure
  */
-function fetchMETAR($airport): ?array {if (!is_array($airport)) {
+function fetchMETAR($airport): ?array {
+    if (!is_array($airport)) {
         return null;
     }
     require_once __DIR__ . '/../utils.php';
     
-    // METAR enabled if metar_station is configured
-    if (!isMetarEnabled($airport)) {aviationwx_log('info', 'METAR not configured - skipping METAR fetch', [
+    // METAR enabled if there's a METAR source in the sources array
+    if (!isMetarEnabled($airport)) {
+        aviationwx_log('info', 'METAR not configured - skipping METAR fetch', [
             'airport' => $airport['icao'] ?? 'unknown'
         ], 'app');
         return null;
     }
     
-    // Station is guaranteed to exist and be non-empty after isMetarEnabled() check
-    $stationId = $airport['metar_station'];
-    $result = fetchMETARFromStation($stationId, $airport);// If primary station failed and nearby stations are configured, try fallback
+    // Get station ID from sources array
+    $stationId = getMetarStationId($airport);
+    if ($stationId === null) {
+        return null;
+    }
+    
+    $result = fetchMETARFromStation($stationId, $airport);
+    
+    // If primary station failed and nearby stations are configured, try fallback
     if ($result === null) {
         $fallbackResult = fetchMETARFromNearbyStations($airport, $stationId);
         if ($fallbackResult !== null) {
@@ -554,7 +578,7 @@ function fetchMETAR($airport): ?array {if (!is_array($airport)) {
 /**
  * Fetch METAR data from nearby stations as fallback
  * 
- * Attempts to fetch METAR data from nearby_metar_stations if primary station fails.
+ * Attempts to fetch METAR data from nearby_stations if primary station fails.
  * Used as a fallback mechanism when primary METAR station is unavailable.
  * 
  * @param array $airport Airport configuration array
@@ -562,13 +586,22 @@ function fetchMETAR($airport): ?array {if (!is_array($airport)) {
  * @return array|null Parsed METAR data from first successful nearby station, or null if all fail
  */
 function fetchMETARFromNearbyStations(array $airport, string $primaryStationId): ?array {
-    if (!isset($airport['nearby_metar_stations']) || 
-        !is_array($airport['nearby_metar_stations']) || 
-        empty($airport['nearby_metar_stations'])) {
+    // Get nearby stations from METAR source in weather_sources array
+    $nearbyStations = [];
+    if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+        foreach ($airport['weather_sources'] as $source) {
+            if (($source['type'] ?? '') === 'metar' && isset($source['nearby_stations'])) {
+                $nearbyStations = $source['nearby_stations'];
+                break;
+            }
+        }
+    }
+    
+    if (empty($nearbyStations)) {
         return null;
     }
     
-    foreach ($airport['nearby_metar_stations'] as $nearbyStation) {
+    foreach ($nearbyStations as $nearbyStation) {
         // Skip empty, non-string, or whitespace-only stations
         if (!is_string($nearbyStation) || empty(trim($nearbyStation))) {
             continue;

@@ -9,8 +9,8 @@ require_once __DIR__ . '/../lib/weather/outage-detection.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 
-// Normalize weather source for METAR-only airports (sets weather_source if metar_station is configured)
-normalizeWeatherSource($airport);
+// Check if airport has any weather sources configured
+$hasWeatherSources = hasWeatherSources($airport);
 
 // =============================================================================
 // Version Cookie & Emergency Cleanup Detection
@@ -614,8 +614,8 @@ if ($themeCookie === 'dark') {
     
     <!-- Resource hints for external APIs (conditional based on weather source) -->
     <?php
-    // Only preconnect to APIs that are actually used by this airport's weather source
-    $weatherSourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
+    // Only preconnect to APIs that are actually used by this airport's weather sources
+    $weatherSourceType = getPrimaryWeatherSourceType($airport);
     $needsMetar = isMetarEnabled($airport);
     
     switch ($weatherSourceType) {
@@ -1535,24 +1535,15 @@ if ($themeCookie === 'dark') {
             }
         };
         
-        // Check primary PWS source (non-METAR)
-        $primaryType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
-        if ($primaryType !== null && $primaryType !== 'metar') {
-            if (is_array($weatherData) && isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
-                $primaryAge = time() - $weatherData['last_updated_primary'];
-                if ($primaryAge < $staleThreshold) {
-                    $addSource($primaryType);
-                }
-            }
-        }
-        
-        // Check backup source
-        $backupType = isset($airport['weather_source_backup']['type']) ? $airport['weather_source_backup']['type'] : null;
-        if ($backupType !== null) {
-            if (is_array($weatherData) && isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
-                $backupAge = time() - $weatherData['last_updated_backup'];
-                if ($backupAge < $staleThreshold) {
-                    $addSource($backupType);
+        // Check all configured sources from unified weather_sources array
+        if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+            // Use field source map from weather data if available to identify which sources contributed
+            $fieldSourceMap = is_array($weatherData) ? ($weatherData['_field_source_map'] ?? []) : [];
+            $contributingSources = array_unique(array_values($fieldSourceMap));
+            
+            foreach ($contributingSources as $sourceType) {
+                if ($sourceType !== 'metar') {
+                    $addSource($sourceType);
                 }
             }
         }
@@ -1569,11 +1560,9 @@ if ($themeCookie === 'dark') {
         ?>
 
         <?php 
-        // Show runway wind section if weather_source is configured OR if metar_station is configured
+        // Show runway wind section if any weather sources are configured
         // This matches the JavaScript condition that determines whether to fetch weather
-        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-        $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
-        if ($hasWeatherSource || $hasMetarStation): ?>
+        if (hasWeatherSources($airport)): ?>
         <!-- Runway Wind Visual -->
         <section class="wind-visual-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -1610,11 +1599,9 @@ if ($themeCookie === 'dark') {
         <?php endif; ?>
 
         <?php 
-        // Show weather section if weather_source is configured OR if metar_station is configured
+        // Show weather section if any weather sources are configured
         // This matches the JavaScript condition that determines whether to fetch weather
-        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-        $hasMetarStation = isset($airport['metar_station']) && !empty($airport['metar_station']);
-        if ($hasWeatherSource || $hasMetarStation): ?>
+        if (hasWeatherSources($airport)): ?>
         <!-- Weather Data -->
         <section class="weather-section">
             <div class="weather-header-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -2081,7 +2068,16 @@ const INITIAL_WEATHER_DATA = <?php
             $failclosedSecondsMetar = getMetarStaleFailclosedSeconds();
             
             // Null out stale fields before embedding (using failclosed threshold)
-            $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
+            // isMetarOnly = all configured sources are METAR type
+            $isMetarOnly = true;
+            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+                foreach ($airport['weather_sources'] as $source) {
+                    if (!empty($source['type']) && $source['type'] !== 'metar') {
+                        $isMetarOnly = false;
+                        break;
+                    }
+                }
+            }
             nullStaleFieldsBySource($cachedWeather, $failclosedSeconds, $failclosedSecondsMetar, $isMetarOnly);
             
             $initialWeatherData = $cachedWeather;
@@ -3692,10 +3688,9 @@ function updateWeatherTimestamp() {
     const now = new Date();
     const diffSeconds = Math.floor((now - weatherLastUpdated) / 1000);
     
-    // Determine if using METAR-only source
-    const isMetarOnly = AIRPORT_DATA && 
-                        AIRPORT_DATA.weather_source && 
-                        AIRPORT_DATA.weather_source.type === 'metar';
+    // Determine if using METAR-only source (all sources are METAR type)
+    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_sources && 
+                        AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
     
     // Get weather refresh interval (default to 60 seconds if not configured)
     // Ensure minimum value to prevent invalid thresholds
@@ -3857,10 +3852,10 @@ function checkAndUpdateOutageBanner() {
     const sources = [];
     let newestTimestamp = 0;
     
-    // Check primary weather source (if configured and not METAR-only)
-    // METAR-only airports are handled separately below
-    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && AIRPORT_DATA.weather_source.type === 'metar';
-    const hasPrimarySource = AIRPORT_DATA && AIRPORT_DATA.weather_source && !isMetarOnly;
+    // Check if any weather sources are configured
+    const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+    const isMetarOnly = hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+    const hasPrimarySource = hasSources && !isMetarOnly;
     
     if (hasPrimarySource) {
         if (weatherLastUpdated) {
@@ -3889,9 +3884,8 @@ function checkAndUpdateOutageBanner() {
         }
     }
     
-    // Check METAR source (if configured)
-    // METAR is configured if metar_station exists OR weather_source.type === 'metar'
-    const hasMetar = (AIRPORT_DATA && AIRPORT_DATA.metar_station) || isMetarOnly;
+    // Check METAR source (if configured in sources array)
+    const hasMetar = hasSources && AIRPORT_DATA.weather_sources.some(s => s.type === 'metar');
     
     if (hasMetar) {
         // METAR timestamp comes from weather data
@@ -4261,8 +4255,8 @@ function shouldPreserveExistingWeatherData(reason) {
     
     // Determine failclosed threshold based on source type
     // METAR-only sources use METAR threshold, others use general threshold
-    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && 
-                        AIRPORT_DATA.weather_source.type === 'metar';
+    const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+    const isMetarOnly = hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
     const failclosedThreshold = isMetarOnly ? METAR_STALE_FAILCLOSED_SECONDS : STALE_FAILCLOSED_SECONDS;
     
     if (ageSeconds < failclosedThreshold) {
@@ -4337,8 +4331,9 @@ function shouldShowDensityAltitude(weather) {
 function sanitizeWeatherDataForDisplay(weather, refreshIntervalSeconds) {
     const sanitized = { ...weather };
     
-    // Determine if this is a METAR-only source
-    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && AIRPORT_DATA.weather_source.type === 'metar';
+    // Determine if this is a METAR-only source (all configured sources are METAR)
+    const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+    const isMetarOnly = hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
     
     // METAR fields (use hour-based threshold)
     const metarFields = ['visibility', 'ceiling', 'cloud_cover'];
@@ -4452,7 +4447,7 @@ function displayWeather(weather) {
     
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
-        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `<div class="weather-group">
+        ${(AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.some(s => s.type === 'metar')) ? `<div class="weather-group">
             ${(() => {
                 // Check if METAR data is actually available (has METAR timestamp)
                 const hasMetarData = (sanitizedWeather.obs_time_metar && sanitizedWeather.obs_time_metar > 0) || (sanitizedWeather.last_updated_metar && sanitizedWeather.last_updated_metar > 0);
@@ -4527,7 +4522,7 @@ function displayEmptyWeather() {
     // Display all weather fields as empty ("--") to match the structure of displayWeather()
     container.innerHTML = `
         <!-- Aviation Conditions (METAR-required data) -->
-        ${(AIRPORT_DATA && AIRPORT_DATA.metar_station) ? `<div class="weather-group">
+        ${(AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.some(s => s.type === 'metar')) ? `<div class="weather-group">
             <div class="weather-item" data-mobile-priority="1"><span class="label">Condition</span><span class="weather-value">--</span></div>
             <div class="weather-item" data-mobile-priority="5"><span class="label">Visibility</span><span class="weather-value">--</span></div>
             <div class="weather-item" data-mobile-priority="6"><span class="label">Ceiling</span><span class="weather-value">--</span></div>
@@ -4780,7 +4775,8 @@ function updateWindVisual(weather) {
     const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds 
         : 60;
-    const isMetarOnly = AIRPORT_DATA && AIRPORT_DATA.weather_source && AIRPORT_DATA.weather_source.type === 'metar';
+    const sourcesConfigured = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+    const isMetarOnly = sourcesConfigured && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
     const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly) ||
                       isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
     
@@ -6878,10 +6874,9 @@ setTimeout(() => {
 <?php endif; ?>
 
 // Fetch weather data using airport's configured refresh interval
-// Fetch if weather_source is configured OR if metar_station is configured
-const hasWeatherSource = AIRPORT_DATA && AIRPORT_DATA.weather_source && Object.keys(AIRPORT_DATA.weather_source).length > 0;
-const hasMetarStation = AIRPORT_DATA && AIRPORT_DATA.metar_station;
-if (hasWeatherSource || hasMetarStation) {
+// Fetch if any sources are configured in the sources array
+const hasWeatherSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+if (hasWeatherSources) {
     // Calculate weather refresh interval from airport config
     const weatherRefreshMs = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds * 1000 
@@ -6922,6 +6917,33 @@ if (hasWeatherSource || hasMetarStation) {
 
 // Track which images have already been handled to prevent infinite loops
 const webcamErrorHandled = new Set();
+
+/**
+ * Set webcam placeholder image, properly clearing picture sources
+ * 
+ * When an img is inside a <picture> element, we need to clear all <source>
+ * srcsets to ensure the browser uses the img's src instead.
+ * 
+ * @param {HTMLImageElement} img - The webcam image element
+ * @param {number} camIndex - Camera index (for logging)
+ */
+function setWebcamPlaceholder(img, camIndex) {
+    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+    const host = window.location.host;
+    const placeholderUrl = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+    
+    // Clear srcset to prevent browser from using cached/stale sources
+    img.srcset = '';
+    img.src = placeholderUrl;
+    
+    // Also clear <source> elements in parent <picture> if present
+    const picture = img.closest('picture');
+    if (picture) {
+        picture.querySelectorAll('source').forEach(source => {
+            source.srcset = '';
+        });
+    }
+}
 
 /**
  * Check if a webcam image is stale and should show placeholder
@@ -7354,9 +7376,7 @@ async function handleJpegGenerating(camIndex, hasExisting, data, expectedTimesta
                     // Show placeholder via webcam.php endpoint
                     const img = document.getElementById(`webcam-${camIndex}`);
                     if (img) {
-                        const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-                        const host = window.location.host;
-                        img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                        setWebcamPlaceholder(img, camIndex);
                     }
                 }
                 return;
@@ -7380,9 +7400,7 @@ async function handleJpegGenerating(camIndex, hasExisting, data, expectedTimesta
                         // Verification failed but we got a 200 - show placeholder
                         const img = document.getElementById(`webcam-${camIndex}`);
                         if (img) {
-                            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-                            const host = window.location.host;
-                            img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                            setWebcamPlaceholder(img, camIndex);
                         }
                     }
                     return;
@@ -7397,9 +7415,7 @@ async function handleJpegGenerating(camIndex, hasExisting, data, expectedTimesta
                         // Show placeholder
                         const img = document.getElementById(`webcam-${camIndex}`);
                         if (img) {
-                            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-                            const host = window.location.host;
-                            img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                            setWebcamPlaceholder(img, camIndex);
                         }
                     }
                     return;
@@ -7413,9 +7429,7 @@ async function handleJpegGenerating(camIndex, hasExisting, data, expectedTimesta
                     // Show placeholder after all attempts failed
                     const img = document.getElementById(`webcam-${camIndex}`);
                     if (img) {
-                        const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-                        const host = window.location.host;
-                        img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+                        setWebcamPlaceholder(img, camIndex);
                     }
                 }
             }
@@ -7778,9 +7792,7 @@ function handleRequestError(error, camIndex, hasExisting) {
         // Initial load failed - show placeholder via webcam.php endpoint
         const img = document.getElementById(`webcam-${camIndex}`);
         if (img) {
-            const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-            const host = window.location.host;
-            img.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
+            setWebcamPlaceholder(img, camIndex);
         }
     }
     // If has existing image, keep it (silent failure)
@@ -7826,7 +7838,21 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                 return;
             }
             
-            // Only update if timestamp is newer (strictly greater) OR if force refresh is requested
+            // Update CAM_TS with new timestamp for staleness check
+            CAM_TS[camIndex] = newTs;
+            
+            // Check staleness FIRST - even if timestamp unchanged, we need to show placeholder if stale
+            if (isWebcamStale(camIndex)) {
+                // Webcam is stale - show placeholder instead of loading stale image
+                if (imgEl) {
+                    setWebcamPlaceholder(imgEl, camIndex);
+                }
+                CAM_LAST_FETCH[camIndex] = Date.now();
+                console.warn('[Webcam ' + camIndex + '] Stale image detected - showing placeholder');
+                return; // Don't load stale image
+            }
+            
+            // Only update image if timestamp is newer (strictly greater) OR if force refresh is requested
             // Force refresh is used when returning from background to verify image is displaying correctly
             if (newTs <= currentTs && !forceRefresh) {
                 // Timestamp hasn't changed - backend hasn't updated yet, will retry on next interval
@@ -7834,21 +7860,6 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
                 CAM_LAST_FETCH[camIndex] = Date.now();
                 console.log('[Webcam ' + camIndex + '] No update - timestamp unchanged (' + new Date(newTs * 1000).toLocaleTimeString() + ')');
                 return;
-            }
-
-            // Check if webcam is stale AFTER getting new timestamp
-            // This ensures we check staleness on the actual current image, not the old cached timestamp
-            // Update CAM_TS with new timestamp before checking staleness
-            CAM_TS[camIndex] = newTs;
-            
-            if (isWebcamStale(camIndex)) {
-                // Webcam is stale - show placeholder instead of loading stale image
-                if (imgEl) {
-                    imgEl.src = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=999`;
-                }
-                CAM_LAST_FETCH[camIndex] = Date.now();
-                console.warn('[Webcam ' + camIndex + '] Stale image detected - showing placeholder');
-                return; // Don't load stale image
             }
 
             const ready = json.formatReady || {};

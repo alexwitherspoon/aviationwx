@@ -91,10 +91,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_history_preset_hours` | global default | Period options in UI |
 | `default_preferences` | global default | Override unit toggle defaults for this airport |
 | **Data Sources** |||
-| `weather_source` | — | Primary weather source config |
-| `weather_source_backup` | — | Backup weather source config |
-| `metar_station` | — | Primary METAR station ID |
-| `nearby_metar_stations` | `[]` | Fallback METAR stations |
+| `weather_sources` | `[]` | Array of weather source configurations (see Weather Sources section) |
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
@@ -283,7 +280,9 @@ For self-hosted instances with static IPs, configure your own domain:
       "lat": 45.7710278,
       "lon": -122.8618333,
       "timezone": "America/Los_Angeles",
-      "metar_station": "KSPB"
+      "weather_sources": [
+        { "type": "metar", "station_id": "KSPB" }
+      ]
     }
   }
 }
@@ -314,18 +313,22 @@ For self-hosted instances with static IPs, configure your own domain:
       "weather_refresh_seconds": 60,
       "webcam_history_max_frames": 24,
       
-      "weather_source": {
-        "type": "tempest",
-        "station_id": "149918",
-        "api_key": "your-key"
-      },
-      "weather_source_backup": {
-        "type": "ambient",
-        "api_key": "backup-key",
-        "application_key": "backup-app-key"
-      },
-      "metar_station": "KSPB",
-      "nearby_metar_stations": ["KVUO", "KHIO"],
+      "weather_sources": [
+        {
+          "type": "tempest",
+          "station_id": "149918",
+          "api_key": "your-key"
+        },
+        {
+          "type": "nws",
+          "station_id": "KSPB"
+        },
+        {
+          "type": "metar",
+          "station_id": "KSPB",
+          "nearby_stations": ["KVUO", "KHIO"]
+        }
+      ],
       
       "webcams": [
         {
@@ -416,25 +419,44 @@ Affects daily statistics reset (midnight), sunrise/sunset display. Use PHP timez
 
 ## Weather Sources
 
+All weather sources are configured in a unified `weather_sources` array. Sources are fetched in parallel and aggregated—the freshest data from any source wins for each field. METAR typically provides ceiling and cloud_cover (other sources do not provide these fields).
+
+### Source Types
+
+| Type | Description | Update Frequency |
+|------|-------------|------------------|
+| `tempest` | Tempest Weather Station | ~1 minute |
+| `ambient` | Ambient Weather Network | ~1 minute |
+| `weatherlink_v2` | Davis WeatherLink (newer devices) | ~5 minutes |
+| `weatherlink_v1` | Davis WeatherLink (legacy devices) | ~5 minutes |
+| `pwsweather` | PWSWeather/AerisWeather | Variable |
+| `synopticdata` | SynopticData API | Variable |
+| `nws` | NWS ASOS API (api.weather.gov) | ~5 minutes |
+| `metar` | Aviation Weather METAR | ~60 minutes |
+
 ### Tempest Weather
 
 ```json
-"weather_source": {
-  "type": "tempest",
-  "station_id": "149918",
-  "api_key": "your-api-key"
-}
+"weather_sources": [
+  {
+    "type": "tempest",
+    "station_id": "149918",
+    "api_key": "your-api-key"
+  }
+]
 ```
 
 ### Ambient Weather
 
 ```json
-"weather_source": {
-  "type": "ambient",
-  "api_key": "your-api-key",
-  "application_key": "your-app-key",
-  "mac_address": "AA:BB:CC:DD:EE:FF"
-}
+"weather_sources": [
+  {
+    "type": "ambient",
+    "api_key": "your-api-key",
+    "application_key": "your-app-key",
+    "mac_address": "AA:BB:CC:DD:EE:FF"
+  }
+]
 ```
 
 `mac_address` is optional—uses first device if omitted.
@@ -444,12 +466,14 @@ Affects daily statistics reset (midnight), sunrise/sunset display. Use PHP timez
 For WeatherLink Live, WeatherLink Console, and EnviroMonitor systems.
 
 ```json
-"weather_source": {
-  "type": "weatherlink_v2",
-  "api_key": "your-api-key",
-  "api_secret": "your-api-secret",
-  "station_id": "123456"
-}
+"weather_sources": [
+  {
+    "type": "weatherlink_v2",
+    "api_key": "your-api-key",
+    "api_secret": "your-api-secret",
+    "station_id": "123456"
+  }
+]
 ```
 
 **Getting v2 Credentials:**
@@ -470,11 +494,13 @@ See the [Weather Station Guide](../guides/09-weather-station-configuration.md) f
 For older devices: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial loggers.
 
 ```json
-"weather_source": {
-  "type": "weatherlink_v1",
-  "device_id": "001D0A12345678",
-  "api_token": "your-api-token"
-}
+"weather_sources": [
+  {
+    "type": "weatherlink_v1",
+    "device_id": "001D0A12345678",
+    "api_token": "your-api-token"
+  }
+]
 ```
 
 **Getting v1 Credentials:**
@@ -489,61 +515,107 @@ See the [Weather Station Guide](../guides/09-weather-station-configuration.md) f
 ### PWSWeather (AerisWeather)
 
 ```json
-"weather_source": {
-  "type": "pwsweather",
-  "station_id": "KMAHANOV10",
-  "client_id": "your-aeris-client-id",
-  "client_secret": "your-aeris-client-secret"
-}
+"weather_sources": [
+  {
+    "type": "pwsweather",
+    "station_id": "KMAHANOV10",
+    "client_id": "your-aeris-client-id",
+    "client_secret": "your-aeris-client-secret"
+  }
+]
 ```
 
 ### SynopticData
 
 ```json
-"weather_source": {
-  "type": "synopticdata",
-  "station_id": "YOUR_STATION_ID",
-  "api_token": "your-api-token"
-}
+"weather_sources": [
+  {
+    "type": "synopticdata",
+    "station_id": "YOUR_STATION_ID",
+    "api_token": "your-api-token"
+  }
+]
 ```
 
-### METAR Only
+### NWS ASOS (National Weather Service)
 
-No API key required. Two configuration options:
+High-frequency (~5 minute) observations from ASOS stations via the NWS API. Requires explicit `station_id` configuration.
 
 ```json
-"weather_source": { "type": "metar" },
-"metar_station": "KSPB"
+"weather_sources": [
+  {
+    "type": "nws",
+    "station_id": "KSPB"
+  }
+]
 ```
 
-Or simply (auto-detects METAR as primary):
+The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only airport stations are accepted.
+
+### METAR
+
+METAR provides aviation-specific observations including visibility, ceiling, and cloud cover. No API key required.
 
 ```json
-"metar_station": "KSPB"
+"weather_sources": [
+  {
+    "type": "metar",
+    "station_id": "KSPB",
+    "nearby_stations": ["KVUO", "KHIO"]
+  }
+]
 ```
 
-### Backup Weather Source
+`nearby_stations` provides fallback stations if the primary METAR station is unavailable.
 
-Activates automatically when primary exceeds 5× refresh interval:
+### Backup Sources
+
+Mark a source as backup by adding `"backup": true`. Backup sources are only used when primary sources fail or are stale:
 
 ```json
-"weather_source_backup": {
-  "type": "ambient",
-  "api_key": "backup-key",
-  "application_key": "backup-app-key"
-}
+"weather_sources": [
+  {
+    "type": "tempest",
+    "station_id": "149918",
+    "api_key": "your-key"
+  },
+  {
+    "type": "ambient",
+    "api_key": "backup-key",
+    "application_key": "backup-app-key",
+    "backup": true
+  },
+  {
+    "type": "metar",
+    "station_id": "KSPB"
+  }
+]
 ```
 
-Supports all source types. Field-level merging uses best available data from any source.
+### Multiple Sources Example
 
-### METAR Fallback
+Combine multiple sources for redundancy and data quality. All sources are fetched in parallel:
 
 ```json
-"metar_station": "KSPB",
-"nearby_metar_stations": ["KVUO", "KHIO"]
+"weather_sources": [
+  {
+    "type": "tempest",
+    "station_id": "149918",
+    "api_key": "your-key"
+  },
+  {
+    "type": "nws",
+    "station_id": "KSPB"
+  },
+  {
+    "type": "metar",
+    "station_id": "KSPB",
+    "nearby_stations": ["KVUO", "KHIO"]
+  }
+]
 ```
 
-System tries primary first, then each fallback in order until one succeeds.
+The aggregator uses the freshest data for each field. METAR typically provides ceiling and cloud_cover (other sources do not provide these fields).
 
 ---
 

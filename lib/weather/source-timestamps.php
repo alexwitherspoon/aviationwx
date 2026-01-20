@@ -68,8 +68,29 @@ function getSourceTimestamps(string $airportId, array $airport): array {
         ]
     ];
     
-    // Check primary weather source (if configured)
-    if (isset($airport['weather_source']) && !empty($airport['weather_source'])) {
+    // Determine source availability from unified weather_sources array
+    $hasPrimary = false;
+    $hasBackup = false;
+    $hasMetar = false;
+    
+    if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+        foreach ($airport['weather_sources'] as $source) {
+            if (empty($source['type'])) {
+                continue;
+            }
+            
+            if ($source['type'] === 'metar') {
+                $hasMetar = true;
+            } elseif (!empty($source['backup'])) {
+                $hasBackup = true;
+            } else {
+                $hasPrimary = true;
+            }
+        }
+    }
+    
+    // Check primary weather source (if any non-backup sources configured)
+    if ($hasPrimary) {
         $result['primary']['available'] = true;
         $weatherCacheFile = getWeatherCachePath($airportId);
         
@@ -84,6 +105,9 @@ function getSourceTimestamps(string $airportId, array $airport): array {
                     $primaryTimestamp = (int)$weatherData['obs_time_primary'];
                 } elseif (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
                     $primaryTimestamp = (int)$weatherData['last_updated_primary'];
+                } elseif (isset($weatherData['last_updated']) && $weatherData['last_updated'] > 0) {
+                    // Fallback to general last_updated for unified sources
+                    $primaryTimestamp = (int)$weatherData['last_updated'];
                 }
                 
                 if ($primaryTimestamp > 0) {
@@ -94,8 +118,8 @@ function getSourceTimestamps(string $airportId, array $airport): array {
         }
     }
     
-    // Check backup weather source (if configured)
-    if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup'])) {
+    // Check backup weather source (if any backup sources configured)
+    if ($hasBackup) {
         $result['backup']['available'] = true;
         $weatherCacheFile = getWeatherCachePath($airportId);
         
@@ -120,15 +144,7 @@ function getSourceTimestamps(string $airportId, array $airport): array {
         }
     }
     
-    // Check METAR source (if configured)
-    // METAR is configured if metar_station exists OR weather_source.type === 'metar'
-    $hasMetar = false;
-    if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-        $hasMetar = true;
-    } elseif (isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar') {
-        $hasMetar = true;
-    }
-    
+    // Check METAR source (if configured in sources array)
     if ($hasMetar) {
         $result['metar']['available'] = true;
         $weatherCacheFile = getWeatherCachePath($airportId);

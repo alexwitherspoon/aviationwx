@@ -109,10 +109,10 @@ aviationwx.org/
 3. Build source list (primary + backup + METAR)
 4. Fetch all sources in parallel via `curl_multi`
 5. Parse responses into `WeatherSnapshot` objects
-6. Aggregate using `WeatherAggregator` with defined policies:
+6. Aggregate using `WeatherAggregator` with freshness-based selection:
    - Wind fields must come from single source (complete group)
-   - METAR preferred for visibility/ceiling/cloud_cover
-   - Freshest valid data wins for other fields
+   - Freshest valid data wins for each field
+   - METAR typically provides ceiling and cloud_cover (other sources do not)
 7. Add calculated fields (flight category, altitudes, dewpoint spread)
 8. Daily tracking (temp extremes, peak gust)
 9. Cache and serve response
@@ -371,13 +371,13 @@ Check cache for requested image
 ### 5. Multi-Source Aggregation (Unified Fetcher)
 
 - **Why**: Combine data from multiple sources for best coverage and accuracy
-- **Implementation**: `WeatherAggregator` applies `AggregationPolicy` rules
+- **Implementation**: `WeatherAggregator` applies freshness-based selection
 - **Key Rules**:
   - Wind fields (speed, direction, gust) must come from single source as a group
-  - METAR is preferred for visibility, ceiling, and cloud cover
-  - For other fields, freshest valid data wins among configured sources
+  - Freshest valid data wins for each field
+  - METAR typically provides ceiling and cloud_cover (other sources do not)
   - Stale data (beyond max acceptable age) is excluded from aggregation
-- **Benefit**: Best available data from all sources, clear field-level attribution
+- **Benefit**: Most current data from all sources, clear field-level attribution
 
 ### 6. Explicit Unit Tracking
 

@@ -15,13 +15,18 @@ function createTestAirport($overrides = []) {
         'lon' => -122.0,
         'elevation_ft' => 100,
         'timezone' => 'America/Los_Angeles',
-        'weather_source' => [
-            'type' => 'tempest',
-            'station_id' => '12345',
-            'api_key' => 'test_key'
+        'weather_sources' => [
+            [
+                'type' => 'tempest',
+                'station_id' => '12345',
+                'api_key' => 'test_key'
+            ],
+            [
+                'type' => 'metar',
+                'station_id' => 'KSPB'
+            ]
         ],
-        'webcams' => [],
-        'metar_station' => 'KSPB'
+        'webcams' => []
     ], $overrides);
 }
 

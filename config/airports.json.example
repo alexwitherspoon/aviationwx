@@ -141,16 +141,28 @@
         "fuel": "100LL, Jet-A",
         "repairs_available": true
       },
-      "weather_source": {
-        "type": "tempest",
-        "station_id": "demo_149918",
-        "api_key": "test_tempest_api_key_demo"
-      },
-      "weather_source_backup": {
-        "type": "ambient",
-        "api_key": "test_ambient_api_key_demo",
-        "application_key": "test_ambient_app_key_demo"
-      },
+      "weather_sources": [
+        {
+          "type": "tempest",
+          "station_id": "demo_149918",
+          "api_key": "test_tempest_api_key_demo"
+        },
+        {
+          "type": "nws",
+          "station_id": "KSPB"
+        },
+        {
+          "type": "metar",
+          "station_id": "KSPB",
+          "nearby_stations": ["KABC", "KDEF"]
+        },
+        {
+          "type": "ambient",
+          "api_key": "test_ambient_api_key_demo",
+          "application_key": "test_ambient_app_key_demo",
+          "backup": true
+        }
+      ],
       "webcams": [
         {
           "name": "North Runway Camera (MJPEG)",
@@ -304,11 +316,6 @@
         }
       ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
-      "metar_station": "KSPB",
-      "nearby_metar_stations": [
-        "KABC",
-        "KDEF"
-      ],
       "links": [
         {
           "label": "Airport Website",
@@ -370,13 +377,18 @@
       },
       "webcams": [],
       "partners": [],
-      "metar_station": "KPFC",
-      "nearby_metar_stations": ["KTMK"],
-      "weather_source": {
-        "type": "synopticdata",
-        "station_id": "demo_AT297",
-        "api_token": "test_synoptic_api_token_demo"
-      }
+      "weather_sources": [
+        {
+          "type": "synopticdata",
+          "station_id": "demo_AT297",
+          "api_token": "test_synoptic_api_token_demo"
+        },
+        {
+          "type": "metar",
+          "station_id": "KPFC",
+          "nearby_stations": ["KTMK"]
+        }
+      ]
     },
     "cust": {
       "name": "Custom Airport Without Standard Identifiers",

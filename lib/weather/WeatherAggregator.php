@@ -2,14 +2,17 @@
 /**
  * Weather Aggregator - Combines weather data from multiple sources
  * 
- * Takes snapshots from multiple sources (Tempest, Ambient, METAR, etc.)
+ * Takes snapshots from multiple sources (Tempest, Ambient, METAR, NWS, etc.)
  * and produces a single aggregated weather observation.
  * 
  * Key principles:
- * - Wind group must come from a single source (complete or nothing)
- * - METAR is preferred for visibility/ceiling when available
- * - Other fields: freshest valid value wins (in source priority order)
+ * - Freshest data wins: For each field, select the most recent non-stale observation
+ * - Wind group must come from a single source (speed + direction together)
+ * - All fields use freshness-based selection (no source priority)
  * - Pure function: no side effects, no cache reading
+ * 
+ * This approach allows multiple sources to contribute their freshest data,
+ * resulting in the most up-to-date composite weather picture.
  * 
  * @package AviationWX\Weather
  */
@@ -67,7 +70,8 @@ class WeatherAggregator {
         $fieldSourceMap = array_merge($fieldSourceMap, $windResult['sources']);
         
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 2: Select METAR-preferred fields (visibility, ceiling, cloud_cover)
+        // STEP 2: Select aviation fields (visibility, ceiling, cloud_cover)
+        // Uses freshness-based selection. METAR typically provides these fields.
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::METAR_PREFERRED_FIELDS as $fieldName) {
@@ -82,7 +86,8 @@ class WeatherAggregator {
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 3: Select independent fields (temperature, humidity, etc.)
+        // STEP 3: Select other fields (temperature, humidity, pressure, etc.)
+        // All use freshness-based selection - freshest non-stale value wins.
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::INDEPENDENT_FIELDS as $fieldName) {
@@ -125,16 +130,21 @@ class WeatherAggregator {
     }
     
     /**
-     * Select wind group from the first source that has complete data
+     * Select wind group from the source with the freshest complete data
      * 
      * Wind must come as a complete group (speed + direction) from a single source.
      * We don't mix wind speed from one source with direction from another.
+     * Selects the source with the most recent observation time.
      * 
      * @param array<WeatherSnapshot> $snapshots
      * @param array<string, int>|null $maxAges Optional per-source max age overrides
      * @return array{fields: array, obs_times: array, sources: array}
      */
     private function selectWindGroup(array $snapshots, ?array $maxAges = null): array {
+        $bestWind = null;
+        $bestObsTime = 0;
+        $bestSource = null;
+        
         foreach ($snapshots as $snapshot) {
             if (!$snapshot->hasCompleteWind()) {
                 continue;
@@ -147,42 +157,55 @@ class WeatherAggregator {
                 continue;
             }
             
-            // Found a complete, fresh wind group
-            $windData = $snapshot->wind->toArray();
-            $obsTimeMap = $snapshot->wind->getObservationTimeMap();
+            // Get observation time for this wind group
+            $obsTime = $snapshot->wind->speed->observationTime ?? 0;
             
-            $sourceMap = [];
-            foreach (array_keys($windData) as $field) {
-                if ($windData[$field] !== null) {
-                    $sourceMap[$field] = $snapshot->source;
-                }
+            // Select freshest wind group
+            if ($obsTime > $bestObsTime) {
+                $bestObsTime = $obsTime;
+                $bestWind = $snapshot->wind;
+                $bestSource = $snapshot->source;
             }
-            
-            return [
-                'fields' => $windData,
-                'obs_times' => $obsTimeMap,
-                'sources' => $sourceMap,
-            ];
         }
         
         // No complete wind group found - return nulls
+        if ($bestWind === null) {
+            return [
+                'fields' => [
+                    'wind_speed' => null,
+                    'wind_direction' => null,
+                    'gust_speed' => null,
+                    'gust_factor' => null,
+                ],
+                'obs_times' => [],
+                'sources' => [],
+            ];
+        }
+        
+        // Build result from freshest wind group
+        $windData = $bestWind->toArray();
+        $obsTimeMap = $bestWind->getObservationTimeMap();
+        
+        $sourceMap = [];
+        foreach (array_keys($windData) as $field) {
+            if ($windData[$field] !== null) {
+                $sourceMap[$field] = $bestSource;
+            }
+        }
+        
         return [
-            'fields' => [
-                'wind_speed' => null,
-                'wind_direction' => null,
-                'gust_speed' => null,
-                'gust_factor' => null,
-            ],
-            'obs_times' => [],
-            'sources' => [],
+            'fields' => $windData,
+            'obs_times' => $obsTimeMap,
+            'sources' => $sourceMap,
         ];
     }
     
     /**
-     * Select a METAR-preferred field
+     * Select a field typically provided by METAR (visibility, ceiling, cloud_cover)
      * 
-     * If METAR has this field and it's not stale, use METAR.
-     * Otherwise, fall back to regular field selection.
+     * Uses freshness-based selection. METAR is often the only source for 
+     * ceiling and cloud_cover, so it wins by default for those fields.
+     * For visibility, the freshest source is selected.
      * 
      * @param string $fieldName
      * @param array<WeatherSnapshot> $snapshots
@@ -190,35 +213,14 @@ class WeatherAggregator {
      * @return WeatherReading
      */
     private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null): WeatherReading {
-        // First, look for METAR source
-        foreach ($snapshots as $snapshot) {
-            if ($snapshot->source !== 'metar') {
-                continue;
-            }
-            
-            $reading = $snapshot->getField($fieldName);
-            if ($reading === null || !$reading->hasValue()) {
-                break; // METAR doesn't have this field, fall back
-            }
-            
-            // Determine max age for METAR
-            $maxAge = $this->getMaxAgeForSource('metar', $maxAges);
-            
-            if (!$reading->isStale($maxAge, $this->now)) {
-                return $reading->withSource('metar');
-            }
-            
-            break; // METAR is stale, fall back
-        }
-        
-        // Fall back to regular selection
+        // Use same freshness-based selection as all other fields
         return $this->selectBestField($fieldName, $snapshots, $maxAges);
     }
     
     /**
-     * Select the best value for an independent field
+     * Select the best value for a field based on freshness
      * 
-     * Returns the first valid, non-stale value from sources in priority order.
+     * Returns the freshest valid, non-stale value from any source.
      * 
      * @param string $fieldName
      * @param array<WeatherSnapshot> $snapshots
@@ -226,6 +228,9 @@ class WeatherAggregator {
      * @return WeatherReading
      */
     private function selectBestField(string $fieldName, array $snapshots, ?array $maxAges = null): WeatherReading {
+        $bestReading = null;
+        $bestObsTime = 0;
+        
         foreach ($snapshots as $snapshot) {
             $reading = $snapshot->getField($fieldName);
             if ($reading === null || !$reading->hasValue()) {
@@ -235,13 +240,19 @@ class WeatherAggregator {
             // Determine max age for this source
             $maxAge = $this->getMaxAgeForSource($snapshot->source, $maxAges);
             
-            if (!$reading->isStale($maxAge, $this->now)) {
-                return $reading->withSource($snapshot->source);
+            if ($reading->isStale($maxAge, $this->now)) {
+                continue;
+            }
+            
+            // Select freshest reading
+            $obsTime = $reading->observationTime ?? 0;
+            if ($obsTime > $bestObsTime) {
+                $bestObsTime = $obsTime;
+                $bestReading = $reading->withSource($snapshot->source);
             }
         }
         
-        // No valid value found
-        return WeatherReading::null();
+        return $bestReading ?? WeatherReading::null();
     }
     
     /**

@@ -959,16 +959,20 @@ function checkAirportHealth(string $airportId, array $airport): array {
         return null;
     };
     
-    // Check primary weather source
-    $sourceType = isset($airport['weather_source']['type']) ? $airport['weather_source']['type'] : null;
-    if ($sourceType && $sourceTimestamps['primary']['available']) {
+    // Check primary weather source (first non-backup source from sources array)
+    $sourceType = getPrimaryWeatherSourceType($airport);
+    $primaryIsMetar = $sourceType === 'metar';
+    
+    // Handle primary source - either METAR (using metar timestamps) or other source (using primary timestamps)
+    $primaryTimestamps = $primaryIsMetar ? $sourceTimestamps['metar'] : $sourceTimestamps['primary'];
+    if ($sourceType && $primaryTimestamps['available']) {
         $sourceName = getWeatherSourceDisplayName($sourceType);
         $primaryStatus = 'down';
         $primaryMessage = 'No data available';
-        $primaryLastChanged = $sourceTimestamps['primary']['timestamp'];
+        $primaryLastChanged = $primaryTimestamps['timestamp'];
         
         if ($primaryLastChanged > 0) {
-            $primaryAge = $sourceTimestamps['primary']['age'];
+            $primaryAge = $primaryTimestamps['age'];
             
             // Apply 3-tier staleness model: operational (fresh/warning) -> degraded (error) -> down (failclosed)
             if ($sourceType === 'metar') {
@@ -1028,7 +1032,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
     }
     
     $isMetarEnabled = isMetarEnabled($airport);
-    $isMetarPrimary = ($sourceType === 'metar');
+    $isMetarPrimary = $primaryIsMetar;
     
     // METAR shown separately if primary or configured as supplement
     if ($isMetarPrimary) {
@@ -1081,7 +1085,16 @@ function checkAirportHealth(string $airportId, array $airport): array {
         ];
     }
     
-    $backupSourceType = isset($airport['weather_source_backup']['type']) ? $airport['weather_source_backup']['type'] : null;
+    // Check for backup sources (sources with backup: true)
+    $backupSourceType = null;
+    if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+        foreach ($airport['weather_sources'] as $source) {
+            if (!empty($source['backup']) && !empty($source['type'])) {
+                $backupSourceType = $source['type'];
+                break;
+            }
+        }
+    }
     if ($backupSourceType && $sourceTimestamps['backup']['available']) {
         $backupSourceName = getWeatherSourceDisplayName($backupSourceType) . ' (Backup)';
         $backupStatus = 'standby';

@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
+require_once __DIR__ . '/../../lib/weather/utils.php';
 
 /**
  * Handle GET /v1/airports/{id}/weather request
@@ -43,7 +44,7 @@ function handleGetWeather(array $params, array $context): void
     }
     
     // Check if airport has weather data
-    if (!isset($airport['weather_source']) && !isset($airport['metar_station'])) {
+    if (!hasWeatherSources($airport)) {
         sendPublicApiError(
             PUBLIC_API_ERROR_INVALID_REQUEST,
             'Airport does not have weather data configured',

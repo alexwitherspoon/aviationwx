@@ -165,9 +165,9 @@ function generateMockWeatherData($airportId, $airport) {
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
         ];
         $debugInfo['config'] = [
-            'weather_source_type' => $airport['weather_source']['type'] ?? null,
-            'weather_source_backup_type' => $airport['weather_source_backup']['type'] ?? null,
-            'metar_station' => $airport['metar_station'] ?? null,
+            'sources_count' => isset($airport['weather_sources']) ? count($airport['weather_sources']) : 0,
+            'primary_source_type' => getPrimaryWeatherSourceType($airport),
+            'has_metar' => isMetarEnabled($airport),
             'refresh_interval' => $airport['weather_refresh_seconds'] ?? getDefaultWeatherRefresh(),
         ];
     }
@@ -284,7 +284,16 @@ function generateMockWeatherData($airportId, $airport) {
         $cached = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($cached)) {
             // Safety check: Apply failclosed staleness (hide data too old to display)
-            $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
+            // isMetarOnly = all configured sources are METAR type
+            $isMetarOnly = true;
+            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+                foreach ($airport['weather_sources'] as $src) {
+                    if (!empty($src['type']) && $src['type'] !== 'metar') {
+                        $isMetarOnly = false;
+                        break;
+                    }
+                }
+            }
             applyFailclosedStaleness($cached, $airport, $isMetarOnly);
             
             // Set cache headers for cached responses
@@ -339,8 +348,17 @@ function generateMockWeatherData($airportId, $airport) {
         $staleData = json_decode(file_get_contents($weatherCacheFile), true);
         if (is_array($staleData)) {
             // Safety check: Apply failclosed staleness (hide data too old to display)
-            $isMetarOnly = isset($airport['weather_source']['type']) && $airport['weather_source']['type'] === 'metar';
-            applyFailclosedStaleness($staleData, $airport, $isMetarOnly);
+            // isMetarOnly = all configured sources are METAR type
+            $isMetarOnlyStale = true;
+            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+                foreach ($airport['weather_sources'] as $src) {
+                    if (!empty($src['type']) && $src['type'] !== 'metar') {
+                        $isMetarOnlyStale = false;
+                        break;
+                    }
+                }
+            }
+            applyFailclosedStaleness($staleData, $airport, $isMetarOnlyStale);
             
             $hasStaleCache = true;
             
@@ -483,8 +501,8 @@ function generateMockWeatherData($airportId, $airport) {
     // If forceRefresh is true or no cache file exists, continue to fetch fresh weather
     }
     
-    // Normalize weather source configuration (handle airports with metar_station but no weather_source)
-    if (!normalizeWeatherSource($airport)) {
+    // Check if airport has any weather sources configured
+    if (!hasWeatherSources($airport)) {
         http_response_code(HTTP_STATUS_SERVICE_UNAVAILABLE);
         aviationwx_log('error', 'no weather source configured', ['airport' => $airportId], 'app');
         ob_clean();
@@ -630,8 +648,8 @@ function generateMockWeatherData($airportId, $airport) {
     $historySourceMap = $fieldSourceMap;
     
     // Remove internal fields before caching and sending response
-    // Strip internal fields before API response
-    unset($weatherData['_field_source_map']);
+    // Keep _field_source_map for frontend attribution display
+    // Strip other internal fields before API response
     // Keep _field_obs_time_map for frontend fail-closed staleness validation
     // Frontend uses per-field observation times to hide stale data when offline
     // Ensure _field_obs_time_map is always present (even if empty) for frontend validation

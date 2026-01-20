@@ -51,27 +51,26 @@ if (file_exists($configFile)) {
                 $totalWebcams += count($airport['webcams']);
             }
             
-            // Count primary weather sources (non-METAR types with unique identifiers)
-            if (isset($airport['weather_source']) && is_array($airport['weather_source'])) {
-                $source = $airport['weather_source'];
-                $type = $source['type'] ?? '';
-                
-                // Build unique identifier based on source type
-                if ($type === 'tempest' && isset($source['station_id'])) {
-                    $uniqueWeatherStations['tempest_' . $source['station_id']] = true;
-                } elseif ($type === 'ambient' && isset($source['mac_address'])) {
-                    $uniqueWeatherStations['ambient_' . $source['mac_address']] = true;
-                } elseif ($type === 'weatherlink' && isset($source['station_id'])) {
-                    $uniqueWeatherStations['weatherlink_' . $source['station_id']] = true;
-                } elseif ($type === 'pwsweather' && isset($source['station_id'])) {
-                    $uniqueWeatherStations['pwsweather_' . $source['station_id']] = true;
+            // Count weather sources from unified weather_sources array
+            if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+                foreach ($airport['weather_sources'] as $source) {
+                    $type = $source['type'] ?? '';
+                    
+                    // Build unique identifier based on source type
+                    if ($type === 'tempest' && isset($source['station_id'])) {
+                        $uniqueWeatherStations['tempest_' . $source['station_id']] = true;
+                    } elseif ($type === 'ambient' && isset($source['mac_address'])) {
+                        $uniqueWeatherStations['ambient_' . $source['mac_address']] = true;
+                    } elseif ($type === 'weatherlink_v2' && isset($source['station_id'])) {
+                        $uniqueWeatherStations['weatherlink_' . $source['station_id']] = true;
+                    } elseif ($type === 'pwsweather' && isset($source['station_id'])) {
+                        $uniqueWeatherStations['pwsweather_' . $source['station_id']] = true;
+                    } elseif ($type === 'metar' && isset($source['station_id'])) {
+                        $uniqueWeatherStations['metar_' . $source['station_id']] = true;
+                    } elseif ($type === 'nws' && isset($source['station_id'])) {
+                        $uniqueWeatherStations['nws_' . $source['station_id']] = true;
+                    }
                 }
-                // Note: type 'metar' uses metar_station field, counted below
-            }
-            
-            // Count unique METAR stations
-            if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-                $uniqueWeatherStations['metar_' . $airport['metar_station']] = true;
             }
         }
         
@@ -1346,9 +1345,8 @@ Best regards,
                     <?php foreach ($airportsOnPage as $airportId => $airport): 
                         $url = 'https://' . $airportId . '.aviationwx.org';
                         $hasMetar = isMetarEnabled($airport);
-                        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-                        // Fetch weather if airport has either a primary weather source OR METAR
-                        $hasAnyWeather = $hasWeatherSource || $hasMetar;
+                        // Fetch weather if airport has any weather sources configured
+                        $hasAnyWeather = hasWeatherSources($airport);
                         $weather = $hasAnyWeather ? getAirportWeather($airportId) : [];
                         $flightCategory = $weather['flight_category'] ?? null;
                         $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;

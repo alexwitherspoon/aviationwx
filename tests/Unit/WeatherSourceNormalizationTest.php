@@ -1,9 +1,9 @@
 <?php
 /**
- * Unit Tests for Weather Source Normalization
+ * Unit Tests for Weather Source Utility Functions
  * 
- * Tests that weather_source configuration is properly normalized,
- * including handling airports with metar_station but no weather_source.
+ * Tests the unified sources array configuration handling including
+ * hasWeatherSources(), getPrimaryWeatherSourceType(), and related functions.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -14,128 +14,209 @@ require_once __DIR__ . '/../Helpers/TestHelper.php';
 class WeatherSourceNormalizationTest extends TestCase
 {
     /**
-     * Test normalizeWeatherSource - Returns true when weather_source is already configured
+     * Test hasWeatherSources - Returns true when sources array is configured
      */
-    public function testNormalizeWeatherSource_AlreadyConfigured_ReturnsTrue()
+    public function testHasWeatherSources_Configured_ReturnsTrue()
     {
         $airport = createTestAirport([
             'icao' => 'KSPB',
-            'weather_source' => ['type' => 'tempest', 'station_id' => '123', 'api_key' => 'key']
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '123', 'api_key' => 'key']
+            ]
         ]);
         
-        $result = normalizeWeatherSource($airport);
+        $result = hasWeatherSources($airport);
         
-        $this->assertTrue($result, 'Should return true when weather_source is already configured');
-        $this->assertEquals('tempest', $airport['weather_source']['type'], 'Should preserve existing weather_source type');
+        $this->assertTrue($result, 'Should return true when sources is configured');
     }
     
     /**
-     * Test normalizeWeatherSource - Defaults to METAR when metar_station is configured but weather_source is missing
+     * Test hasWeatherSources - Returns false when no sources array
      */
-    public function testNormalizeWeatherSource_MetarStationOnly_DefaultsToMetar()
-    {
-        $airport = createTestAirport([
-            'icao' => 'KPFC',
-            'metar_station' => 'KPFC'
-        ]);
-        // Explicitly remove weather_source to simulate the bug scenario
-        unset($airport['weather_source']);
-        
-        $result = normalizeWeatherSource($airport);
-        
-        $this->assertTrue($result, 'Should return true when metar_station is configured');
-        $this->assertArrayHasKey('weather_source', $airport, 'Should add weather_source to airport config');
-        $this->assertEquals('metar', $airport['weather_source']['type'], 'Should default to METAR type');
-    }
-    
-    /**
-     * Test normalizeWeatherSource - Returns false when neither weather_source nor metar_station is configured
-     */
-    public function testNormalizeWeatherSource_NoSourceConfigured_ReturnsFalse()
+    public function testHasWeatherSources_NoSources_ReturnsFalse()
     {
         $airport = createTestAirport([
             'icao' => 'KABC'
         ]);
-        // Explicitly remove both weather_source and metar_station
-        unset($airport['weather_source']);
-        unset($airport['metar_station']);
+        unset($airport['weather_sources']);
         
-        $result = normalizeWeatherSource($airport);
+        $result = hasWeatherSources($airport);
         
-        $this->assertFalse($result, 'Should return false when no weather source is configured');
-        $this->assertArrayNotHasKey('weather_source', $airport, 'Should not add weather_source when no source available');
+        $this->assertFalse($result, 'Should return false when no sources array');
     }
     
     /**
-     * Test normalizeWeatherSource - Handles weather_source without type field
+     * Test hasWeatherSources - Returns false when sources array is empty
      */
-    public function testNormalizeWeatherSource_MissingType_DefaultsToMetarIfMetarStationExists()
-    {
-        $airport = createTestAirport([
-            'icao' => 'KPFC',
-            'metar_station' => 'KPFC',
-            'weather_source' => [] // Empty array, missing type
-        ]);
-        
-        $result = normalizeWeatherSource($airport);
-        
-        $this->assertTrue($result, 'Should return true when metar_station is configured');
-        $this->assertEquals('metar', $airport['weather_source']['type'], 'Should default to METAR type');
-    }
-    
-    /**
-     * Test normalizeWeatherSource - Handles empty metar_station string
-     */
-    public function testNormalizeWeatherSource_EmptyMetarStation_ReturnsFalse()
+    public function testHasWeatherSources_EmptySources_ReturnsFalse()
     {
         $airport = createTestAirport([
             'icao' => 'KABC',
-            'metar_station' => '' // Empty string
+            'weather_sources' => []
         ]);
-        unset($airport['weather_source']);
         
-        $result = normalizeWeatherSource($airport);
+        $result = hasWeatherSources($airport);
         
-        $this->assertFalse($result, 'Should return false when metar_station is empty');
+        $this->assertFalse($result, 'Should return false when sources array is empty');
     }
     
     /**
-     * Test normalizeWeatherSource - Preserves existing weather_source when both are configured
+     * Test hasWeatherSources - Returns false when sources have no type
      */
-    public function testNormalizeWeatherSource_BothConfigured_PreservesWeatherSource()
+    public function testHasWeatherSources_SourcesWithoutType_ReturnsFalse()
+    {
+        $airport = createTestAirport([
+            'icao' => 'KABC',
+            'weather_sources' => [
+                ['station_id' => '123']
+            ]
+        ]);
+        
+        $result = hasWeatherSources($airport);
+        
+        $this->assertFalse($result, 'Should return false when sources have no type');
+    }
+    
+    /**
+     * Test getPrimaryWeatherSourceType - Returns first non-backup source type
+     */
+    public function testGetPrimaryWeatherSourceType_ReturnsFirstNonBackup()
     {
         $airport = createTestAirport([
             'icao' => 'KSPB',
-            'metar_station' => 'KSPB',
-            'weather_source' => ['type' => 'ambient', 'api_key' => 'key', 'application_key' => 'appkey']
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '123'],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
         ]);
         
-        $result = normalizeWeatherSource($airport);
+        $result = getPrimaryWeatherSourceType($airport);
         
-        $this->assertTrue($result, 'Should return true');
-        $this->assertEquals('ambient', $airport['weather_source']['type'], 'Should preserve existing weather_source type');
+        $this->assertEquals('tempest', $result, 'Should return first non-backup source type');
     }
     
     /**
-     * Test normalizeWeatherSource - Works with all weather source types
+     * Test getPrimaryWeatherSourceType - Skips backup sources
      */
-    public function testNormalizeWeatherSource_AllSourceTypes_Preserved()
+    public function testGetPrimaryWeatherSourceType_SkipsBackupSources()
     {
-        $sourceTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'metar'];
+        $airport = createTestAirport([
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'ambient', 'backup' => true],
+                ['type' => 'tempest', 'station_id' => '123']
+            ]
+        ]);
+        
+        $result = getPrimaryWeatherSourceType($airport);
+        
+        $this->assertEquals('tempest', $result, 'Should skip backup sources');
+    }
+    
+    /**
+     * Test getPrimaryWeatherSourceType - Returns null when no sources
+     */
+    public function testGetPrimaryWeatherSourceType_NoSources_ReturnsNull()
+    {
+        $airport = createTestAirport([
+            'icao' => 'KABC'
+        ]);
+        unset($airport['weather_sources']);
+        
+        $result = getPrimaryWeatherSourceType($airport);
+        
+        $this->assertNull($result, 'Should return null when no sources');
+    }
+    
+    /**
+     * Test hasWeatherSources - Works with all weather source types
+     */
+    public function testHasWeatherSources_AllSourceTypes_ReturnsTrue()
+    {
+        $sourceTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'metar', 'nws', 'synopticdata'];
         
         foreach ($sourceTypes as $type) {
             $airport = createTestAirport([
                 'icao' => 'KSPB',
-                'weather_source' => ['type' => $type]
+                'weather_sources' => [
+                    ['type' => $type, 'station_id' => 'TEST']
+                ]
             ]);
             
-            $result = normalizeWeatherSource($airport);
+            $result = hasWeatherSources($airport);
             
             $this->assertTrue($result, "Should return true for {$type} source type");
-            $this->assertEquals($type, $airport['weather_source']['type'], "Should preserve {$type} type");
         }
     }
+    
+    /**
+     * Test isMetarEnabled - Returns true when METAR source exists
+     */
+    public function testIsMetarEnabled_WithMetarSource_ReturnsTrue()
+    {
+        $airport = createTestAirport([
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '123'],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
+        ]);
+        
+        $result = isMetarEnabled($airport);
+        
+        $this->assertTrue($result, 'Should return true when METAR source exists');
+    }
+    
+    /**
+     * Test isMetarEnabled - Returns false when no METAR source
+     */
+    public function testIsMetarEnabled_NoMetarSource_ReturnsFalse()
+    {
+        $airport = createTestAirport([
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '123']
+            ]
+        ]);
+        
+        $result = isMetarEnabled($airport);
+        
+        $this->assertFalse($result, 'Should return false when no METAR source');
+    }
+    
+    /**
+     * Test getMetarStationId - Returns station ID from METAR source
+     */
+    public function testGetMetarStationId_ReturnsStationId()
+    {
+        $airport = createTestAirport([
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
+        ]);
+        
+        $result = getMetarStationId($airport);
+        
+        $this->assertEquals('KSPB', $result, 'Should return METAR station ID');
+    }
+    
+    /**
+     * Test multiple sources with backup flag
+     */
+    public function testMultipleSources_WithBackupFlag_HandledCorrectly()
+    {
+        $airport = createTestAirport([
+            'icao' => 'KSPB',
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '123'],
+                ['type' => 'ambient', 'backup' => true],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
+        ]);
+        
+        $this->assertTrue(hasWeatherSources($airport), 'Should have weather sources');
+        $this->assertEquals('tempest', getPrimaryWeatherSourceType($airport), 'Primary should be tempest');
+        $this->assertTrue(isMetarEnabled($airport), 'METAR should be enabled');
+    }
 }
-
-
-

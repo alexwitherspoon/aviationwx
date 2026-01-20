@@ -56,7 +56,7 @@ class SourceTimestampsTest extends TestCase
     public function testGetSourceTimestamps_PrimarySource_ExtractsTimestamp(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         // Create weather cache file with primary timestamp
@@ -65,6 +65,7 @@ class SourceTimestampsTest extends TestCase
         $weatherData = [
             'obs_time_primary' => $timestamp,
             'last_updated_primary' => $timestamp,
+            'last_updated' => $timestamp,
             'temperature' => 15.0
         ];
         file_put_contents($weatherCacheFile, json_encode($weatherData));
@@ -83,7 +84,7 @@ class SourceTimestampsTest extends TestCase
     public function testGetSourceTimestamps_PrimarySource_UsesLastUpdatedFallback(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
@@ -106,7 +107,7 @@ class SourceTimestampsTest extends TestCase
     public function testGetSourceTimestamps_PrimarySource_MissingCache_ReturnsZero(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $result = getSourceTimestamps($this->testAirportId, $airport);
@@ -122,7 +123,7 @@ class SourceTimestampsTest extends TestCase
     public function testGetSourceTimestamps_MetarSource_ExtractsTimestamp(): void
     {
         $airport = [
-            'metar_station' => 'KSPB'
+            'weather_sources' => [['type' => 'metar', 'station_id' => 'KSPB']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
@@ -143,12 +144,12 @@ class SourceTimestampsTest extends TestCase
     }
     
     /**
-     * Test that METAR is detected when weather_source.type is 'metar'
+     * Test that METAR is detected when it's the only source
      */
     public function testGetSourceTimestamps_MetarAsPrimary_DetectsMetar(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'metar']
+            'weather_sources' => [['type' => 'metar', 'station_id' => 'KSPB']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
@@ -233,7 +234,7 @@ class SourceTimestampsTest extends TestCase
     public function testGetSourceTimestamps_CorruptedCache_HandlesGracefully(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
@@ -278,4 +279,3 @@ class SourceTimestampsTest extends TestCase
         $this->assertLessThan(5, abs($result['webcams']['newest_timestamp'] - $newerTimestamp));
     }
 }
-

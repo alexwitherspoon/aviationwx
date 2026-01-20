@@ -152,32 +152,101 @@ function addCacheBustingParameter($url, $timestamp = null) {
 /**
  * Check if METAR is enabled for a specific airport
  * 
- * METAR is enabled if metar_station is configured (exists and is not empty).
- * Per-airport: each airport independently enables METAR by configuring metar_station.
+ * METAR is enabled if there's a METAR source in the weather_sources array with a station_id.
  * 
  * @param array $airport Single airport configuration array
- * @return bool True if metar_station is configured, false otherwise
+ * @return bool True if METAR source is configured, false otherwise
  */
 function isMetarEnabled(array $airport): bool {
-    return isset($airport['metar_station']) && 
-           !empty(trim($airport['metar_station'] ?? ''));
+    if (!isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
+        return false;
+    }
+    
+    foreach ($airport['weather_sources'] as $source) {
+        if (($source['type'] ?? '') === 'metar' && !empty($source['station_id'])) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 /**
- * Normalize weather source configuration
+ * Get METAR station ID for an airport
  * 
- * Ensures weather_source is properly configured. If weather_source is missing
- * but metar_station is configured, defaults to METAR-only source.
+ * Returns the station_id from the first METAR source in the weather_sources array.
  * 
- * @param array $airport Airport configuration array (modified in place)
- * @return bool True if weather source is now configured, false if no source available
+ * @param array $airport Single airport configuration array
+ * @return string|null METAR station ID or null if not configured
  */
-function normalizeWeatherSource(array &$airport): bool {if (isset($airport['weather_source']) && isset($airport['weather_source']['type'])) {return true;
+function getMetarStationId(array $airport): ?string {
+    if (!isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
+        return null;
     }
     
-    if (isMetarEnabled($airport)) {
-        $airport['weather_source'] = ['type' => 'metar'];return true;
-    }return false;
+    foreach ($airport['weather_sources'] as $source) {
+        if (($source['type'] ?? '') === 'metar' && !empty($source['station_id'])) {
+            return $source['station_id'];
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Check if airport has any weather sources configured
+ * 
+ * Returns true if the airport has at least one source in the weather_sources array.
+ * 
+ * @param array $airport Airport configuration array
+ * @return bool True if at least one weather source is configured
+ */
+function hasWeatherSources(array $airport): bool {
+    if (!isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
+        return false;
+    }
+    
+    foreach ($airport['weather_sources'] as $source) {
+        if (!empty($source['type'])) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Get primary weather source type for an airport
+ * 
+ * Returns the type of the first non-backup source, or the first source if all are backups.
+ * Used for display purposes (e.g., showing weather source attribution).
+ * 
+ * @param array $airport Airport configuration array
+ * @return string|null Primary source type or null if no sources configured
+ */
+function getPrimaryWeatherSourceType(array $airport): ?string {
+    if (!isset($airport['weather_sources']) || !is_array($airport['weather_sources'])) {
+        return null;
+    }
+    
+    $firstSource = null;
+    foreach ($airport['weather_sources'] as $source) {
+        if (empty($source['type'])) {
+            continue;
+        }
+        
+        // Remember first source as fallback
+        if ($firstSource === null) {
+            $firstSource = $source['type'];
+        }
+        
+        // Return first non-backup source
+        if (empty($source['backup'])) {
+            return $source['type'];
+        }
+    }
+    
+    return $firstSource;
 }
 
 /**
@@ -221,6 +290,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
             return [
                 'name' => 'Aviation Weather',
                 'url' => 'https://aviationweather.gov'
+            ];
+        case 'nws':
+            return [
+                'name' => 'NWS ASOS',
+                'url' => 'https://www.weather.gov'
             ];
         case 'aviationwx_api':
             return [

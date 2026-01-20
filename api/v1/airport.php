@@ -11,6 +11,7 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/weather/utils.php';
 
 /**
  * Handle GET /v1/airports/{id} request
@@ -106,7 +107,7 @@ function formatAirportDetails(string $airportId, array $airport): array
     }
     
     // Add availability flags
-    $formatted['has_weather'] = isset($airport['weather_source']) || isset($airport['metar_station']);
+    $formatted['has_weather'] = hasWeatherSources($airport);
     $formatted['has_webcams'] = isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0;
     $formatted['webcam_count'] = $formatted['has_webcams'] ? count($airport['webcams']) : 0;
     

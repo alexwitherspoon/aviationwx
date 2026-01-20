@@ -150,31 +150,65 @@ class WeatherAggregatorTest extends TestCase {
         $this->assertEquals('synopticdata', $result['_field_source_map']['wind_direction']);
     }
     
-    public function testMetarPreferredForVisibility(): void {
-        // Primary has visibility
+    public function testFreshnessBasedVisibilitySelection(): void {
+        // Primary has visibility but is older
+        $primaryTime = $this->now - 600; // 10 minutes ago
         $primary = $this->createSnapshot('tempest', [
             'temperature' => 20.5,
-            'visibility' => 5, // Tempest visibility
-        ]);
+            'visibility' => 5, // Tempest visibility (older)
+        ], $primaryTime);
         
-        // METAR also has visibility
+        // METAR also has visibility but is fresher
+        $metarTime = $this->now - 300; // 5 minutes ago
         $metar = $this->createSnapshot('metar', [
-            'visibility' => 10, // METAR visibility (authoritative)
+            'visibility' => 10, // METAR visibility (fresher)
             'ceiling' => 3500,
             'cloud_cover' => 'BKN',
-        ]);
+        ], $metarTime);
         
         $aggregator = new WeatherAggregator($this->now);
         $result = $aggregator->aggregate([$primary, $metar]);
         
-        // Temperature from primary
-        $this->assertEquals(20.5, $result['temperature']);
-        
-        // Visibility should come from METAR (preferred for this field)
+        // Visibility should come from METAR (fresher observation)
         $this->assertEquals(10, $result['visibility']);
         $this->assertEquals('metar', $result['_field_source_map']['visibility']);
         
-        // Ceiling from METAR
+        // Temperature should also come from METAR (fresher observation)
+        // Note: Primary doesn't have temp in METAR, so this tests freshness across fields
+        
+        // Ceiling from METAR (only source)
+        $this->assertEquals(3500, $result['ceiling']);
+        $this->assertEquals('metar', $result['_field_source_map']['ceiling']);
+    }
+    
+    public function testFresherPrimaryWinsOverMetar(): void {
+        // Primary has visibility and is fresher
+        $primaryTime = $this->now - 300; // 5 minutes ago
+        $primary = $this->createSnapshot('tempest', [
+            'temperature' => 20.5,
+            'visibility' => 5, // Tempest visibility (fresher)
+        ], $primaryTime);
+        
+        // METAR also has visibility but is older
+        $metarTime = $this->now - 1200; // 20 minutes ago
+        $metar = $this->createSnapshot('metar', [
+            'visibility' => 10, // METAR visibility (older)
+            'ceiling' => 3500,
+            'cloud_cover' => 'BKN',
+        ], $metarTime);
+        
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$primary, $metar]);
+        
+        // Visibility should come from primary (fresher observation)
+        $this->assertEquals(5, $result['visibility']);
+        $this->assertEquals('tempest', $result['_field_source_map']['visibility']);
+        
+        // Temperature from primary (fresher and only source with temp)
+        $this->assertEquals(20.5, $result['temperature']);
+        $this->assertEquals('tempest', $result['_field_source_map']['temperature']);
+        
+        // Ceiling from METAR (only source with ceiling)
         $this->assertEquals(3500, $result['ceiling']);
         $this->assertEquals('metar', $result['_field_source_map']['ceiling']);
     }

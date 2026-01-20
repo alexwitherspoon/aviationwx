@@ -55,19 +55,28 @@
       "timezone": "America/Los_Angeles",
       "access_type": "public",
       "tower_status": "non_towered",
-      "weather_source": {
-        "type": "tempest",
-        "station_id": "12345",
-        "api_key": "test_api_key_12345"
-      },
+      "weather_sources": [
+        {
+          "type": "tempest",
+          "station_id": "12345",
+          "api_key": "test_api_key_12345"
+        },
+        {
+          "type": "nws",
+          "station_id": "KSPB"
+        },
+        {
+          "type": "metar",
+          "station_id": "KSPB",
+          "nearby_stations": ["KVUO", "KHIO"]
+        }
+      ],
       "webcams": [
         {
           "name": "Test Camera 1",
           "url": "https://example.com/cam1.jpg"
         }
       ],
-      "metar_station": "KSPB",
-      "nearby_metar_stations": ["KVUO", "KHIO"],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
       "services": {
         "fuel": "100LL, Jet-A",
@@ -110,10 +119,12 @@
       "timezone": "America/Los_Angeles",
       "access_type": "public",
       "tower_status": "towered",
-      "weather_source": {
-        "type": "metar"
-      },
-      "metar_station": "KPDX",
+      "weather_sources": [
+        {
+          "type": "metar",
+          "station_id": "KPDX"
+        }
+      ],
       "webcams": [
         {
           "name": "Test Camera PDX",
@@ -135,13 +146,18 @@
       "timezone": "America/Los_Angeles",
       "access_type": "public",
       "tower_status": "towered",
-      "weather_source": {
-        "type": "ambient",
-        "api_key": "test_ambient_api_key",
-        "application_key": "test_ambient_app_key",
-        "mac_address": "AA:BB:CC:DD:EE:FF"
-      },
-      "metar_station": "KSEA",
+      "weather_sources": [
+        {
+          "type": "ambient",
+          "api_key": "test_ambient_api_key",
+          "application_key": "test_ambient_app_key",
+          "mac_address": "AA:BB:CC:DD:EE:FF"
+        },
+        {
+          "type": "metar",
+          "station_id": "KSEA"
+        }
+      ],
       "webcams": [
         {
           "name": "Test Camera SEA",
@@ -161,13 +177,18 @@
       "timezone": "America/Denver",
       "access_type": "public",
       "tower_status": "towered",
-      "weather_source": {
-        "type": "weatherlink_v2",
-        "api_key": "test_weatherlink_api_key",
-        "api_secret": "test_weatherlink_api_secret",
-        "station_id": "123456"
-      },
-      "metar_station": "KDEN",
+      "weather_sources": [
+        {
+          "type": "weatherlink_v2",
+          "api_key": "test_weatherlink_api_key",
+          "api_secret": "test_weatherlink_api_secret",
+          "station_id": "123456"
+        },
+        {
+          "type": "metar",
+          "station_id": "KDEN"
+        }
+      ],
       "webcams": [
         {
           "name": "Test Camera DEN",
@@ -190,9 +211,12 @@
       "access_type": "private",
       "permission_required": false,
       "tower_status": "non_towered",
-      "weather_source": {
-        "type": "metar"
-      }
+      "weather_sources": [
+        {
+          "type": "metar",
+          "station_id": "03S"
+        }
+      ]
     },
     "test": {
       "name": "Test Unlisted Airport",
@@ -209,11 +233,12 @@
       "timezone": "America/Los_Angeles",
       "access_type": "public",
       "tower_status": "non_towered",
-      "weather_source": {
-        "type": "metar"
-      },
-      "metar_station": "KTEST"
+      "weather_sources": [
+        {
+          "type": "metar",
+          "station_id": "KTEST"
+        }
+      ]
     }
   }
 }
-

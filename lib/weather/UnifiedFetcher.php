@@ -3,10 +3,12 @@
  * Unified Weather Fetcher
  * 
  * Clean, simple weather data fetching that:
- * 1. Fetches from all configured sources (primary + sources + METAR) in parallel
+ * 1. Fetches from all configured sources in the `weather_sources` array in parallel
  * 2. Parses responses into WeatherSnapshots
- * 3. Aggregates using the WeatherAggregator
+ * 3. Aggregates using the WeatherAggregator (freshest data wins)
  * 4. Returns the aggregated result
+ * 
+ * Sources with `backup: true` are only used when other sources fail or are stale.
  * 
  * No side effects. No cache reading. Pure data fetching and aggregation.
  * 
@@ -25,6 +27,7 @@ require_once __DIR__ . '/adapter/weatherlink-v2-api.php';
 require_once __DIR__ . '/adapter/weatherlink-v1-api.php';
 require_once __DIR__ . '/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
+require_once __DIR__ . '/adapter/nws-api-v1.php';
 require_once __DIR__ . '/adapter/aviationwx-api-v1.php';
 require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
@@ -109,10 +112,8 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
 /**
  * Build list of sources to fetch
  * 
- * Returns sources in priority order:
- * 1. Primary weather source (weather_source)
- * 2. Additional sources (sources array, if configured)
- * 3. METAR (if metar_station configured)
+ * All sources are configured in a unified `weather_sources` array.
+ * Sources with `backup: true` are only used when other sources fail or are stale.
  * 
  * @param array $airport Airport configuration
  * @return array Source configurations keyed by identifier
@@ -120,31 +121,15 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
 function buildSourceList(array $airport): array {
     $sources = [];
     
-    // Primary source
-    if (isset($airport['weather_source']) && !empty($airport['weather_source']['type'])) {
-        $sources['primary'] = $airport['weather_source'];
-    }
-    
-    // Additional sources (new unified config)
-    if (isset($airport['sources']) && is_array($airport['sources'])) {
-        foreach ($airport['sources'] as $index => $source) {
+    if (isset($airport['weather_sources']) && is_array($airport['weather_sources'])) {
+        foreach ($airport['weather_sources'] as $index => $source) {
             if (!empty($source['type'])) {
-                $sources["source_{$index}"] = $source;
+                // Use backup_ prefix for backup sources, source_ for regular sources
+                $isBackup = !empty($source['backup']);
+                $key = $isBackup ? "backup_{$index}" : "source_{$index}";
+                $sources[$key] = $source;
             }
         }
-    }
-    
-    // Legacy backup source
-    if (isset($airport['weather_source_backup']) && !empty($airport['weather_source_backup']['type'])) {
-        $sources['backup'] = $airport['weather_source_backup'];
-    }
-    
-    // METAR
-    if (isset($airport['metar_station']) && !empty($airport['metar_station'])) {
-        $sources['metar'] = [
-            'type' => 'metar',
-            'station_id' => $airport['metar_station'],
-        ];
     }
     
     return $sources;
@@ -261,7 +246,8 @@ function buildSourceUrl(array $source): ?string {
         'weatherlink_v2' => WeatherLinkV2Adapter::buildUrl($source),
         'weatherlink_v1' => WeatherLinkV1Adapter::buildUrl($source),
         'pwsweather' => buildPWSWeatherUrl($source),
-        'metar' => MetarAdapter::buildUrl($source['station_id'] ?? ''),
+        'metar' => MetarAdapter::buildUrl($source),
+        'nws' => NwsApiAdapter::buildUrl($source),
         'aviationwx_api' => AviationWXAPIAdapter::buildUrl($source),
         default => null,
     };
@@ -279,6 +265,7 @@ function buildSourceHeaders(array $source): array {
     return match($type) {
         'weatherlink_v2' => WeatherLinkV2Adapter::getHeaders($source),
         'weatherlink_v1' => WeatherLinkV1Adapter::getHeaders($source),
+        'nws' => NwsApiAdapter::getHeaders(),
         default => ['Accept: application/json'],
     };
 }
@@ -312,6 +299,7 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'weatherlink_v1' => WeatherLinkV1Adapter::parseToSnapshot($response, $source),
         'pwsweather' => PWSWeatherAdapter::parseToSnapshot($response, $source),
         'metar' => MetarAdapter::parseToSnapshot($response, $airport),
+        'nws' => NwsApiAdapter::parseToSnapshot($response, $source),
         'aviationwx_api' => AviationWXAPIAdapter::parseResponse($response, $source),
         default => null,
     };

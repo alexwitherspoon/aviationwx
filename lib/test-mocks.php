@@ -54,6 +54,12 @@ function getMockHttpResponse(string $url): ?string {
         return getMockPWSWeatherResponse();
     }
     
+    if (strpos($url, 'api.weather.gov') !== false && strpos($url, '/stations/') !== false) {
+        // NWS API (api.weather.gov)
+        require_once __DIR__ . '/../tests/mock-weather-responses.php';
+        return getMockNwsApiResponse();
+    }
+    
     // Webcam URLs - return placeholder image
     if (strpos($url, 'example.com') !== false || 
         strpos($url, 'test') !== false ||

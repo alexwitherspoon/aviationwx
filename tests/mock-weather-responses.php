@@ -193,6 +193,109 @@ function getMockPWSWeatherResponse() {
 }
 
 /**
+ * Get a mock NWS API (api.weather.gov) response
+ * Based on actual API structure from api.weather.gov stations observations endpoint
+ * NWS API uses: { "properties": { "temperature": { "value": ..., "unitCode": "wmoUnit:degC" }, ... } }
+ * 
+ * Units: Temperature (degC), Wind Speed (km/h), Pressure (Pa), Visibility (m)
+ * Note: All mock APIs use consistent values for cross-source testing
+ * Wind: 9.26 km/h = ~5 knots (consistent with other mocks)
+ * Pressure: 101920 Pa = ~30.08 inHg (consistent with other mocks)
+ */
+function getMockNwsApiResponse() {
+    $timestamp = date('c', time());
+    
+    return json_encode([
+        'id' => 'https://api.weather.gov/stations/KSPB/observations/' . $timestamp,
+        'type' => 'Feature',
+        'geometry' => [
+            'type' => 'Point',
+            'coordinates' => [-122.86, 45.77]
+        ],
+        'properties' => [
+            '@id' => 'https://api.weather.gov/stations/KSPB/observations/' . $timestamp,
+            '@type' => 'wx:ObservationStation',
+            'elevation' => [
+                'unitCode' => 'wmoUnit:m',
+                'value' => 17
+            ],
+            'station' => 'https://api.weather.gov/stations/KSPB',
+            'stationId' => 'KSPB',
+            'stationName' => 'Scappoose Industrial Airpark',
+            'timestamp' => $timestamp,
+            'rawMessage' => '',
+            'textDescription' => 'Cloudy',
+            'icon' => 'https://api.weather.gov/icons/land/day/ovc?size=medium',
+            'presentWeather' => [],
+            'temperature' => [
+                'unitCode' => 'wmoUnit:degC',
+                'value' => 5.6,  // Celsius - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'dewpoint' => [
+                'unitCode' => 'wmoUnit:degC',
+                'value' => 4.6,  // Celsius - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'windDirection' => [
+                'unitCode' => 'wmoUnit:degree_(angle)',
+                'value' => 89,  // Degrees - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'windSpeed' => [
+                'unitCode' => 'wmoUnit:km_h-1',
+                'value' => 9.26,  // km/h (converts to ~5 knots) - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'windGust' => [
+                'unitCode' => 'wmoUnit:km_h-1',
+                'value' => 12.96,  // km/h (converts to ~7 knots) - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'barometricPressure' => [
+                'unitCode' => 'wmoUnit:Pa',
+                'value' => 101920,  // Pa (converts to ~30.08 inHg) - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'seaLevelPressure' => [
+                'unitCode' => 'wmoUnit:Pa',
+                'value' => null,
+                'qualityControl' => 'Z'
+            ],
+            'visibility' => [
+                'unitCode' => 'wmoUnit:m',
+                'value' => 16093.44,  // meters (converts to 10 SM) - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'relativeHumidity' => [
+                'unitCode' => 'wmoUnit:percent',
+                'value' => 93,  // Percentage - consistent with other mocks
+                'qualityControl' => 'V'
+            ],
+            'windChill' => [
+                'unitCode' => 'wmoUnit:degC',
+                'value' => 3.5,
+                'qualityControl' => 'V'
+            ],
+            'heatIndex' => [
+                'unitCode' => 'wmoUnit:degC',
+                'value' => null,
+                'qualityControl' => 'V'
+            ],
+            'cloudLayers' => [
+                [
+                    'base' => [
+                        'unitCode' => 'wmoUnit:m',
+                        'value' => 1524
+                    ],
+                    'amount' => 'OVC'
+                ]
+            ]
+        ]
+    ]);
+}
+
+/**
  * Get a mock SynopticData API response
  * Based on actual API structure from documentation and sample responses
  * SynopticData uses: { "SUMMARY": { "RESPONSE_CODE": 1 }, "STATION": [ { "OBSERVATIONS": { "field_value_1": { "value": ..., "date_time": ... } } } ] }

@@ -15,6 +15,7 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/weather/utils.php';
 
 /**
  * Handle GET /v1/airports request
@@ -83,7 +84,7 @@ function handleListAirports(array $params, array $context): void
 function formatAirportSummary(string $airportId, array $airport): array
 {
     // Check what data is available
-    $hasWeather = isset($airport['weather_source']) || isset($airport['metar_station']);
+    $hasWeather = hasWeatherSources($airport);
     $hasWebcams = isset($airport['webcams']) && is_array($airport['webcams']) && count($airport['webcams']) > 0;
     $webcamCount = $hasWebcams ? count($airport['webcams']) : 0;
     

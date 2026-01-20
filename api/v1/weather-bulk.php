@@ -86,7 +86,7 @@ function handleGetWeatherBulk(array $params, array $context): void
         }
         
         // Check if airport has weather data
-        if (!isset($airport['weather_source']) && !isset($airport['metar_station'])) {
+        if (!hasWeatherSources($airport)) {
             $errors[$rawId] = 'No weather data configured';
             continue;
         }

@@ -93,8 +93,7 @@ foreach ($airports as $airportId => $airport) {
     if (isset($airport['lat']) && isset($airport['lon'])) {
         // Get weather data for flight category
         $hasMetar = isMetarEnabled($airport);
-        $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-        $hasAnyWeather = $hasWeatherSource || $hasMetar;
+        $hasAnyWeather = hasWeatherSources($airport);
         $weather = $hasAnyWeather ? getAirportWeatherForDirectory($airportId) : [];
         $flightCategory = $hasMetar ? ($weather['flight_category'] ?? null) : null;
         
@@ -1043,8 +1042,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 <?php foreach ($airports as $airportId => $airport): 
                     $url = 'https://' . $airportId . '.aviationwx.org';
                     $hasMetar = isMetarEnabled($airport);
-                    $hasWeatherSource = isset($airport['weather_source']) && !empty($airport['weather_source']);
-                    $hasAnyWeather = $hasWeatherSource || $hasMetar;
+                    $hasAnyWeather = hasWeatherSources($airport);
                     $weather = $hasAnyWeather ? getAirportWeatherForDirectory($airportId) : [];
                     $flightCategory = $weather['flight_category'] ?? null;
                     $temperature = $weather['temperature_f'] ?? $weather['temperature'] ?? null;

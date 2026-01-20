@@ -63,7 +63,7 @@ class OutageDetectionTest extends TestCase
     {
         $airport = [
             'maintenance' => true,
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $result = checkDataOutageStatus($this->testAirportId, $airport);
@@ -77,7 +77,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_AllSourcesStale_ReturnsOutageStatus(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         // Create stale weather cache (4 hours old - exceeds failclosed threshold of 3 hours)
@@ -106,7 +106,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_FirstDetection_CreatesOutageFile(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
@@ -140,7 +140,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_OngoingOutage_PreservesOriginalStartTime(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
@@ -179,7 +179,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_RecoveryWithinGracePeriod_KeepsFile(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $outageStateFile = getOutageCachePath($this->testAirportId);
@@ -221,7 +221,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_RecoveryAfterGracePeriod_DeletesFile(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $outageStateFile = getOutageCachePath($this->testAirportId);
@@ -295,7 +295,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_InvalidOutageFile_DeletesFile(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest']
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $outageStateFile = getOutageCachePath($this->testAirportId);
@@ -325,7 +325,7 @@ class OutageDetectionTest extends TestCase
     public function testCheckDataOutageStatus_SomeSourcesFresh_ReturnsNull(): void
     {
         $airport = [
-            'weather_source' => ['type' => 'tempest'],
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']],
             'webcams' => [
                 ['name' => 'Test Cam', 'url' => 'http://example.com']
             ]

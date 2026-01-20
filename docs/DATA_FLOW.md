@@ -28,16 +28,13 @@ Weather data is fetched from multiple sources and combined to provide a complete
 The system uses **parallel fetching** for all configured sources:
 
 - **Unified Fetcher**: Fetches all sources simultaneously using `curl_multi`
-- **Sources Fetched**: Primary source, additional sources (if configured), backup source (if configured), and METAR
+- **Sources Fetched**: All sources configured in the `weather_sources` array
 - **Circuit Breaker**: Each source has independent circuit breaker protection (skips sources in backoff)
 - **Parallel Execution**: All sources are fetched concurrently for maximum speed
-- **Source Priority**: Handled during aggregation, not during fetching
+- **Freshness Selection**: Handled during aggregation (freshest data wins for each field)
 
 **Source Configuration**:
-1. **Primary Source** (`weather_source`): Main weather data provider
-2. **Additional Sources** (`sources` array): Multiple additional sources can be configured
-3. **Backup Source** (`weather_source_backup`): Legacy backup source (treated as another source in aggregation)
-4. **METAR** (`metar_station`): Aviation weather supplement
+All weather sources are configured in a unified `weather_sources` array. Each source includes a `type` and source-specific configuration (station_id, api_key, etc.). Sources marked with `backup: true` are only used when primary sources fail.
 
 ### Backup Weather Source
 
@@ -56,9 +53,9 @@ The system uses **parallel fetching** for all configured sources:
 - Used for display purposes (showing which sources are providing data)
 
 **Field-Level Aggregation**:
-- Each weather field uses the best available data from all sources
-- Aggregator selects best value based on freshness, validity, and source priority
-- Backup data is used automatically when it's fresher or primary is unavailable
+- Each weather field uses the freshest available data from all sources
+- Aggregator selects the value with the most recent observation time
+- Backup data is used automatically when primary sources fail or are stale
 - No manual switching logic - aggregation handles it automatically
 
 ### Primary Weather Sources
@@ -272,44 +269,59 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
 
 1. **Source Configuration**:
    - All sources (primary, additional sources array, backup, METAR) are fetched in parallel
-   - Sources are identified by type (tempest, ambient, weatherlink, pwsweather, synopticdata, metar, backup)
+   - Sources are identified by type (tempest, ambient, weatherlink, pwsweather, synopticdata, nws, metar, backup)
    - Circuit breaker protection applies to each source independently
 
-2. **Source Priority** (for field selection, highest to lowest):
-   - Tempest
-   - Ambient
-   - WeatherLink
-   - PWSWeather
-   - SynopticData
-   - METAR
-   - Backup (lowest priority, used when primary is unavailable)
+2. **Freshness-Based Selection** (Core Principle):
+   - **Freshest data wins**: For each field, the source with the most recent observation time is selected
+   - No source priority ordering - all sources compete equally based on data freshness
+   - This ensures pilots always see the most current data available from any source
+   - Each field is evaluated independently, allowing mixed sources in the final result
 
-3. **Field-Specific Rules**:
-   - **Wind Group** (speed, direction, gust): Must come from single source as a complete unit
-   - **Visibility, Ceiling, Cloud Cover**: METAR is always preferred when available
-   - **Other Fields**: Freshest valid data wins among all configured sources
+3. **Field Selection Rules**:
+   - **Wind Group** (speed, direction, gust): Must come from single source as a complete unit; selects the source with the freshest complete wind data
+   - **All Other Fields** (temperature, dewpoint, humidity, pressure, visibility, ceiling, cloud_cover, precip_accum): Selects the freshest non-stale observation from any source
+   - METAR typically provides ceiling and cloud_cover (other sources do not provide these fields)
 
 4. **Aggregation Process**:
    1. Fetch all configured sources in parallel using `curl_multi`
    2. Parse each response into `WeatherSnapshot` with per-field observation times
-   3. For each field, select best value based on:
-      - Is field from preferred source type?
-      - Is data within max acceptable age for this source?
-      - Is observation time newer than other sources?
-   4. Build aggregated result with `_field_source_map` and `_field_obs_time_map`
-   5. Validate all fields against climate bounds (catches unit errors, sensor malfunctions)
-   6. Fix pressure unit issues automatically (values > 100 inHg divided by 100)
+   3. For wind group: Find the source with the freshest complete wind data (speed + direction)
+   4. For each other field: Compare observation times across all sources, select the freshest non-stale value
+   5. Build aggregated result with `_field_source_map` (which source provided each field) and `_field_obs_time_map` (observation time for each field)
+   6. Validate all fields against climate bounds (catches unit errors, sensor malfunctions)
+   7. Fix pressure unit issues automatically (values > 100 inHg divided by 100)
 
-5. **Data Classes**:
+5. **Example: NWS + METAR Aggregation**:
+   
+   When NWS is fresher:
+   
+   | Field | NWS (5 min old) | METAR (25 min old) | Selected |
+   |-------|-----------------|---------------------|----------|
+   | wind_speed | 4 kts | 6 kts | **NWS** (fresher) |
+   | temperature | -2°C | -3°C | **NWS** (fresher) |
+   | visibility | 10 SM | 10 SM | **NWS** (fresher) |
+   | ceiling | null | 1100 ft | **METAR** (only source) |
+   | cloud_cover | null | OVC | **METAR** (only source) |
+   
+   When METAR is fresher:
+   
+   | Field | NWS (25 min old) | METAR (5 min old) | Selected |
+   |-------|------------------|-------------------|----------|
+   | wind_speed | 6 kts | 3 kts | **METAR** (fresher) |
+   | temperature | -2°C | -2°C | **METAR** (fresher) |
+
+6. **Data Classes**:
    - `WeatherSnapshot`: Complete weather state from one source
    - `WeatherReading`: Single field value with source and observation time
    - `WindGroup`: Grouped wind fields ensuring consistency
 
-6. **Max Acceptable Ages** (per source type, used for staleness checks):
+7. **Max Acceptable Ages** (per source type, used for staleness checks):
    - Tempest: 300 seconds (5 minutes)
    - Ambient/WeatherLink: 300 seconds (5 minutes)
    - PWSWeather: 600 seconds (10 minutes)
    - SynopticData: 900 seconds (15 minutes)
+   - NWS: 10800 seconds (3 hours) - same as failclosed threshold
    - METAR: 7200 seconds (2 hours)
    - Backup: Uses same thresholds as its source type
 

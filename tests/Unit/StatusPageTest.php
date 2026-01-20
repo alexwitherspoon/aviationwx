@@ -125,13 +125,13 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_MetarStatus_OperationalUntil2Hours(): void
     {
-        // Create mock airport config
+        // Create mock airport config with unified sources
         $airportId = 'test';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
-            ],
-            'metar_station' => 'KSPB'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
         ];
         
         // Create temporary weather cache file with METAR data
@@ -175,13 +175,13 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_MetarStatus_DegradedBetween2And3Hours(): void
     {
-        // Create mock airport config
+        // Create mock airport config with unified sources
         $airportId = 'test2';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
-            ],
-            'metar_station' => 'KSPB'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
         ];
         
         // Create temporary weather cache file with METAR data
@@ -225,13 +225,13 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_MetarStatus_DownAfter3Hours(): void
     {
-        // Create mock airport config
+        // Create mock airport config with unified sources
         $airportId = 'test3';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
-            ],
-            'metar_station' => 'KSPB'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
         ];
         
         // Create temporary weather cache file with METAR data
@@ -275,11 +275,11 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_PrimaryWeather_OperationalWithinWarningThreshold(): void
     {
-        // Create mock airport config with Tempest source
+        // Create mock airport config with unified sources
         $airportId = 'test_primary_operational';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345']
             ],
             'weather_refresh_seconds' => 60 // 60-second refresh
         ];
@@ -318,11 +318,11 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_PrimaryWeather_DegradedWithinErrorThreshold(): void
     {
-        // Create mock airport config with Tempest source
+        // Create mock airport config with unified sources
         $airportId = 'test_primary_degraded';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345']
             ],
             'weather_refresh_seconds' => 60 // 60-second refresh
         ];
@@ -362,11 +362,11 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_PrimaryWeather_DownAfterErrorThreshold(): void
     {
-        // Create mock airport config with Tempest source
+        // Create mock airport config with unified sources
         $airportId = 'test_primary_down';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345']
             ],
             'weather_refresh_seconds' => 60 // 60-second refresh
         ];
@@ -401,11 +401,11 @@ class StatusPageTest extends TestCase
     
     public function testCheckAirportHealth_PrimaryWeather_RespectsMaxStaleSeconds(): void
     {
-        // Create mock airport config with very long refresh interval
+        // Create mock airport config with unified sources
         $airportId = 'test_primary_maxstale';
         $airport = [
-            'weather_source' => [
-                'type' => 'tempest'
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345']
             ],
             'weather_refresh_seconds' => 1800 // 30-minute refresh (error threshold would be 5 hours, but maxStaleSeconds is 3 hours)
         ];
@@ -439,8 +439,8 @@ class StatusPageTest extends TestCase
         // Create mock airport config with METAR as primary source
         $airportId = 'test_metar_primary';
         $airport = [
-            'weather_source' => [
-                'type' => 'metar'
+            'weather_sources' => [
+                ['type' => 'metar', 'station_id' => 'KSPB']
             ],
             'weather_refresh_seconds' => 60
         ];
@@ -451,7 +451,8 @@ class StatusPageTest extends TestCase
         
         // Test: METAR data 1 hour old should be operational (uses METAR thresholds, not multipliers)
         $weatherData = [
-            'obs_time_primary' => time() - 3600, // 1 hour ago
+            'obs_time_metar' => time() - 3600, // 1 hour ago
+            'last_updated_metar' => time() - 3600,
             'temperature' => 15.0,
             'visibility' => 10.0
         ];
@@ -470,7 +471,3 @@ class StatusPageTest extends TestCase
         }
     }
 }
-
-
-
-
