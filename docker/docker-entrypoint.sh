@@ -388,14 +388,9 @@ if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
                 echo "ssl_sslv3=NO" >> "$config_file"
             fi
             
-            # SSL/TLS settings
-            # Disable SSL session reuse requirement for Go client compatibility
-            # Go's FTP libraries don't properly implement TLS session reuse, causing
-            # data connection failures when vsftpd enforces require_ssl_reuse=YES
+            # SSL/TLS settings - require_ssl_reuse=NO for broad client compatibility
             sed -i 's/^# require_ssl_reuse=NO/require_ssl_reuse=NO/' "$config_file"
             sed -i 's/^require_ssl_reuse=YES/require_ssl_reuse=NO/' "$config_file"
-            
-            # Ensure require_ssl_reuse=NO is set (critical for Go/Bridge FTPS clients)
             if ! grep -q "^require_ssl_reuse=" "$config_file" 2>/dev/null; then
                 echo "require_ssl_reuse=NO" >> "$config_file"
             fi

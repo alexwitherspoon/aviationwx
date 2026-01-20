@@ -71,16 +71,10 @@ class VsftpdConfigTest extends TestCase
     }
     
     /**
-     * Test that commented SSL settings don't have inline comments
+     * Test that commented settings don't have inline text after the value
      * 
-     * vsftpd doesn't support inline comments. When the entrypoint script
-     * uncomments settings like "# require_ssl_reuse=NO", any text after
-     * the value becomes part of the value and breaks vsftpd.
-     * 
-     * This test catches bugs like:
-     *   # require_ssl_reuse=NO - some comment here
-     * Which would become invalid when uncommented:
-     *   require_ssl_reuse=NO - some comment here
+     * vsftpd doesn't support inline comments - text after a value becomes
+     * part of the value and breaks vsftpd when the entrypoint uncomments it.
      */
     public function testVsftpdConfig_NoInlineCommentsOnSettings()
     {
@@ -96,18 +90,12 @@ class VsftpdConfigTest extends TestCase
         
         $errors = [];
         foreach ($lines as $lineNum => $line) {
-            // Skip pure comment lines (starting with #) that don't look like settings
-            // We're looking for lines like "# setting=value extra stuff" or "setting=value extra stuff"
-            
-            // Match lines that have a setting pattern (with or without leading #)
-            // Pattern: optional #, optional whitespace, word chars, =, then value
+            // Match setting lines (with or without leading #)
             if (preg_match('/^#?\s*(\w+)=(.+)$/', $line, $matches)) {
                 $setting = $matches[1];
                 $value = $matches[2];
                 
-                // Check if value contains what looks like inline comment or extra text
-                // Valid values: YES, NO, numbers, paths, IP addresses, hostnames
-                // Invalid: "NO - some comment" or "YES # this is a comment"
+                // Check if YES/NO value has extra text after it
                 if (preg_match('/^(YES|NO)\s+[^#]/', $value) || 
                     preg_match('/^(YES|NO)\s*-\s*\w/', $value)) {
                     $errors[] = sprintf(
@@ -131,15 +119,10 @@ class VsftpdConfigTest extends TestCase
     }
     
     /**
-     * Test that SSL settings will be valid after entrypoint uncomments them
+     * Test that SSL settings are valid after entrypoint uncomments them
      * 
-     * Simulates what the entrypoint script does when enabling SSL:
-     * - Uncomments "# ssl_enable=NO" to "ssl_enable=YES"
-     * - Uncomments "# require_ssl_reuse=NO" to "require_ssl_reuse=NO"
-     * - etc.
-     * 
-     * This catches issues where the base config would produce invalid
-     * settings when processed by the entrypoint.
+     * Simulates the entrypoint's sed commands to ensure the resulting
+     * config has valid YES/NO values for SSL boolean settings.
      */
     public function testVsftpdConfig_SSLSettingsValidAfterUncomment()
     {
@@ -152,16 +135,13 @@ class VsftpdConfigTest extends TestCase
         
         $configContent = file_get_contents($configPath);
         
-        // Simulate what entrypoint does: uncomment SSL settings
-        // These are the sed commands from docker-entrypoint.sh
+        // Simulate entrypoint sed commands
         $transformed = $configContent;
         $transformed = preg_replace('/^# require_ssl_reuse=NO$/m', 'require_ssl_reuse=NO', $transformed);
         $transformed = preg_replace('/^# ssl_enable=NO$/m', 'ssl_enable=YES', $transformed);
         $transformed = preg_replace('/^# ssl_ciphers=HIGH$/m', 'ssl_ciphers=HIGH', $transformed);
         
-        // Check specifically that SSL-related settings have valid YES/NO values
-        // This catches the bug where "# require_ssl_reuse=NO - comment" becomes
-        // "require_ssl_reuse=NO - comment" which is invalid
+        // SSL boolean settings must have exactly YES or NO as values
         $sslBooleanSettings = [
             'ssl_enable',
             'require_ssl_reuse', 
