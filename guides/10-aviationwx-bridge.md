@@ -133,17 +133,71 @@ The AviationWX Bridge runs on your local network, close to the cameras. It:
 
 ## Hardware requirements
 
-The Bridge is designed to run on minimal hardware:
+The Bridge is designed to run on minimal hardware. We recommend Raspberry Pi for most installations.
 
-| Hardware | Capacity |
-|----------|----------|
-| **Raspberry Pi Zero 2 W** (minimum) | Up to 4 cameras at 30-second intervals, 4K resolution |
-| **Raspberry Pi 4** (2GB+ RAM) | More cameras, faster intervals, headroom for reliability |
-| **Any Docker-capable device** | IT-managed environments can run it anywhere |
+### Recommended: Raspberry Pi 5 (2GB+ RAM)
 
-**Storage:** The Bridge uses RAM for queuing, so SD card wear is minimal. An 8GB card is sufficient; 16GB+ recommended.
+The **Raspberry Pi 5 with 2GB or more RAM** is the recommended choice for most Bridge deployments:
 
-**Network:** The device needs network access to your cameras (usually on the same LAN or VLAN) and internet access to upload.
+- Handles multiple cameras with headroom for reliability
+- Faster image processing and upload handling
+- Better thermal performance than earlier models
+- Wide accessory ecosystem (cases, HATs, power supplies)
+
+### Minimum: Raspberry Pi Zero 2 W
+
+The **Raspberry Pi Zero 2 W** is the minimum viable hardware:
+
+- Supports up to 4 cameras at 30-second intervals, 4K resolution
+- Very low power consumption (good for solar/battery setups)
+- Compact form factor for tight installations
+- Limited headroom - works but may struggle under heavy load
+
+### Alternative: Any Docker-capable device
+
+IT-managed environments can run the Bridge on any Docker-capable hardware (NAS, server, VM, etc.).
+
+### Hardware comparison
+
+| Hardware | Best for | Notes |
+|----------|----------|-------|
+| **Raspberry Pi 5 (2GB+)** | Most installations (recommended) | Best balance of performance, reliability, and cost |
+| **Raspberry Pi 5 (4GB/8GB)** | Heavy workloads, many cameras | Extra RAM rarely needed for Bridge alone |
+| **Raspberry Pi Zero 2 W** | Budget or solar/remote sites | Works but limited headroom |
+| **Raspberry Pi 4 (2GB+)** | If you already have one | Still works well, but Pi 5 preferred for new purchases |
+| **Docker host / VM** | IT-managed environments | Use existing infrastructure |
+
+### Optional accessories (recommended for reliability)
+
+**NVMe HAT + SSD (recommended for long-term reliability)**
+
+SD cards can wear out over time, especially in always-on deployments. An NVMe HAT with a small SSD (32GB+ is plenty) significantly improves long-term reliability:
+
+- Faster boot and more consistent performance
+- Much longer lifespan than SD cards
+- Worth the ~$40-60 investment for production deployments
+
+**PoE HAT (useful in some environments)**
+
+A PoE (Power over Ethernet) HAT lets you power the Pi through the Ethernet cable:
+
+- Simplifies cabling - one cable for power and network
+- Cleaner installations, especially in equipment closets
+- Requires a PoE switch or injector on the other end
+- Good fit when the Bridge is co-located with PoE cameras
+
+### Storage
+
+The Bridge uses RAM for image queuing, so storage wear is minimal. However:
+
+- **With NVMe SSD:** 32GB+ SSD is plenty; best long-term reliability
+- **With SD card:** 16GB+ high-endurance card recommended; 8GB minimum
+
+### Network
+
+The device needs:
+- Network access to your cameras (usually on the same LAN or VLAN)
+- Internet access to upload to AviationWX (FTPS outbound)
 
 ---
 
@@ -354,7 +408,9 @@ For detailed troubleshooting, see the [Bridge documentation](https://github.com/
 Before setting up a Bridge, confirm:
 
 - ☐ **Why you need it:** Camera(s) don't support direct FTP uploads, or you want higher reliability
-- ☐ **Hardware choice:** Raspberry Pi Zero 2 W (minimal), Pi 4 (recommended), or Docker host
+- ☐ **Hardware choice:** Raspberry Pi 5 2GB+ (recommended), Pi Zero 2 W (minimum), or Docker host
+- ☐ **Storage choice:** NVMe HAT + SSD (recommended) or high-endurance SD card (minimum)
+- ☐ **Power/network:** Standard power supply, or PoE HAT if simplifying cabling
 - ☐ **Camera compatibility:** You know the camera URLs/protocols (HTTP, RTSP, ONVIF)
 - ☐ **Network access:** Bridge device can reach cameras on local network
 - ☐ **Internet access:** Bridge device can reach `upload.aviationwx.org`
