@@ -365,6 +365,16 @@ cleanupEmptyDirectories($cacheDir . '/rate_limits', $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/map_tiles', $stats, $dryRun, $verbose);
 
 // ============================================================================
+// LAYER 5: Ensure push webcam upload directories exist (safety net)
+// ============================================================================
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+echo "LAYER 5: Ensure Push Webcam Directories Exist\n";
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+
+ensurePushWebcamDirectories($stats, $dryRun, $verbose);
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 
@@ -1178,5 +1188,111 @@ function deleteDirectory(string $dir): bool {
     }
     
     return @rmdir($dir);
+}
+
+/**
+ * Ensure upload directories exist for all configured push webcams
+ * 
+ * This is a safety net that runs after cleanup to ensure push webcam
+ * upload directories exist. These directories are created by sync-push-config.php
+ * on container startup, but this ensures they're recreated if something
+ * accidentally deletes them.
+ * 
+ * Runs as www-data, so can only create directories where www-data has write access.
+ * The parent airport directories should already be www-data owned from initial setup.
+ * 
+ * @param array &$stats Statistics array
+ * @param bool $dryRun If true, don't actually create
+ * @param bool $verbose If true, print detailed output
+ */
+function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose): void {
+    $config = loadConfig(false); // Don't use cache to get fresh data
+    if ($config === null || !isset($config['airports']) || !is_array($config['airports'])) {
+        if ($verbose) {
+            echo "  ⚠️  No airports configured, skipping push webcam directory check\n";
+        }
+        return;
+    }
+    
+    $created = 0;
+    $errors = 0;
+    
+    foreach ($config['airports'] as $airportId => $airport) {
+        if (!is_array($airport)) {
+            continue;
+        }
+        
+        $webcams = $airport['webcams'] ?? [];
+        if (!is_array($webcams)) {
+            continue;
+        }
+        
+        foreach ($webcams as $camIndex => $webcam) {
+            if (!is_array($webcam)) {
+                continue;
+            }
+            
+            // Only process push webcams
+            if (($webcam['type'] ?? '') !== 'push') {
+                continue;
+            }
+            
+            $pushConfig = $webcam['push_config'] ?? [];
+            $username = $pushConfig['username'] ?? null;
+            
+            if (!$username) {
+                continue;
+            }
+            
+            // Build expected upload directory path
+            // Must match getWebcamUploadDir() in cache-paths.php
+            $uploadDir = CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
+            
+            if (!is_dir($uploadDir)) {
+                if ($verbose) {
+                    echo "  📁 Missing upload directory: " . strtolower($airportId) . "/{$username}\n";
+                }
+                
+                if (!$dryRun) {
+                    // Create with setgid bit (02775) so uploaded files inherit www-data group
+                    if (@mkdir($uploadDir, 02775, true)) {
+                        $created++;
+                        if ($verbose) {
+                            echo "     ✅ Created successfully\n";
+                        }
+                    } else {
+                        $errors++;
+                        $stats['errors']++;
+                        echo "  ❌ Failed to create: {$uploadDir}\n";
+                        aviationwx_log('error', 'failed to create push webcam upload directory', [
+                            'airport' => $airportId,
+                            'cam' => $camIndex,
+                            'username' => $username,
+                            'path' => $uploadDir,
+                            'error' => error_get_last()['message'] ?? 'unknown'
+                        ], 'app');
+                    }
+                } else {
+                    $created++;
+                }
+            } elseif ($verbose) {
+                echo "  ✅ Upload directory exists: " . strtolower($airportId) . "/{$username}\n";
+            }
+        }
+    }
+    
+    if ($created > 0) {
+        $action = $dryRun ? 'Would create' : 'Created';
+        echo "  Push webcam directories: {$action} {$created} missing directories\n";
+        
+        if (!$dryRun) {
+            aviationwx_log('warning', 'recreated missing push webcam upload directories', [
+                'count' => $created,
+                'errors' => $errors
+            ], 'app');
+        }
+    } elseif ($verbose) {
+        echo "  Push webcam directories: All directories exist\n";
+    }
 }
 
