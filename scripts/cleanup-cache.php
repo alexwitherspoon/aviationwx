@@ -354,7 +354,10 @@ echo "LAYER 4: Empty Directory Cleanup\n";
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
 cleanupEmptyDirectories(CACHE_WEBCAMS_DIR, $stats, $dryRun, $verbose);
-cleanupEmptyDirectories(CACHE_UPLOADS_DIR, $stats, $dryRun, $verbose);
+// Note: We intentionally do NOT clean up empty directories in CACHE_UPLOADS_DIR
+// Push webcam upload directories must exist even when empty (waiting for FTP uploads)
+// The vsftpd per-user config points to these directories, so deleting them breaks uploads
+cleanupEmptyDirectoriesExcludingUploads(CACHE_UPLOADS_DIR, $configuredAirports, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories(CACHE_WEATHER_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories(CACHE_WEATHER_HISTORY_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/notam', $stats, $dryRun, $verbose);
@@ -995,6 +998,105 @@ function cleanupEmptyDirectories(
     if ($isRoot && $removed > 0) {
         $action = $dryRun ? 'Would remove' : 'Removed';
         echo "  Empty directories in " . basename($path) . ": {$action} {$removed}\n";
+    }
+}
+
+/**
+ * Cleanup empty directories in uploads, but preserve push webcam directories
+ * 
+ * Push webcam upload directories (e.g., /cache/uploads/keul/keulcam1/) must exist
+ * even when empty because vsftpd per-user configs point to them. Deleting them
+ * breaks FTP uploads until the directory is recreated.
+ * 
+ * This function only removes directories for airports NOT in the configuration,
+ * preserving all directories for configured airports (which may have push webcams).
+ */
+function cleanupEmptyDirectoriesExcludingUploads(
+    string $path,
+    array $configuredAirports,
+    array &$stats,
+    bool $dryRun,
+    bool $verbose
+): void {
+    if (!is_dir($path)) {
+        return;
+    }
+    
+    $removed = 0;
+    $configuredLower = array_map('strtolower', $configuredAirports);
+    
+    // Get airport-level directories (e.g., /cache/uploads/keul/)
+    $airportDirs = glob($path . '/*', GLOB_ONLYDIR);
+    if ($airportDirs === false) {
+        return;
+    }
+    
+    foreach ($airportDirs as $airportDir) {
+        $airportId = strtolower(basename($airportDir));
+        
+        // Skip directories for configured airports - these may have push webcams
+        if (in_array($airportId, $configuredLower)) {
+            if ($verbose) {
+                echo "  ℹ️  Preserving upload dir for configured airport: {$airportId}\n";
+            }
+            continue;
+        }
+        
+        // For unconfigured airports, remove if empty (orphan cleanup)
+        $files = @scandir($airportDir);
+        if ($files === false) {
+            continue;
+        }
+        $files = array_diff($files, ['.', '..']);
+        
+        if (empty($files)) {
+            if ($verbose) {
+                echo "  🗑️  Empty orphan upload directory: {$airportId}\n";
+            }
+            
+            if (!$dryRun) {
+                if (@rmdir($airportDir)) {
+                    $removed++;
+                } else {
+                    $stats['errors']++;
+                }
+            } else {
+                $removed++;
+            }
+        } else {
+            // Recurse into camera subdirectories for unconfigured airports
+            $camDirs = glob($airportDir . '/*', GLOB_ONLYDIR);
+            if ($camDirs !== false) {
+                foreach ($camDirs as $camDir) {
+                    $camFiles = @scandir($camDir);
+                    if ($camFiles === false) {
+                        continue;
+                    }
+                    $camFiles = array_diff($camFiles, ['.', '..']);
+                    
+                    if (empty($camFiles)) {
+                        if ($verbose) {
+                            echo "  🗑️  Empty orphan upload cam directory: {$airportId}/" . basename($camDir) . "\n";
+                        }
+                        
+                        if (!$dryRun) {
+                            if (@rmdir($camDir)) {
+                                $removed++;
+                            } else {
+                                $stats['errors']++;
+                            }
+                        } else {
+                            $removed++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if ($removed > 0 || $verbose) {
+        $action = $dryRun ? 'Would remove' : 'Removed';
+        echo "  Empty orphan upload directories: {$action} {$removed}\n";
     }
 }
 
