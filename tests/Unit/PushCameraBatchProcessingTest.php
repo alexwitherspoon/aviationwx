@@ -278,6 +278,43 @@ class PushCameraBatchProcessingTest extends TestCase
         $this->assertEquals('file_missing', $result->getSkipReason(), 'Reason should be file_missing');
     }
 
+    /**
+     * Test acquireFile checks file age immediately (fail fast)
+     */
+    public function testAcquireFile_ChecksFileAgeFirst()
+    {
+        $strategy = $this->createStrategyWithUploadDir($this->testDir);
+        
+        $now = time();
+        
+        // Create a file that's too old (> 30 min)
+        $tooOldPath = $this->createTestFile('too_old.jpg', $now - 2000);
+        
+        $result = $strategy->acquireFile($tooOldPath);
+        
+        $this->assertFalse($result->success, 'Should not succeed for old file');
+        $this->assertTrue($result->isSkip(), 'Should be a skip');
+        $this->assertEquals('file_too_old', $result->getSkipReason(), 'Reason should be file_too_old');
+        $this->assertFileDoesNotExist($tooOldPath, 'Old file should be deleted');
+    }
+
+    /**
+     * Test acquireFile skips files that are too new
+     */
+    public function testAcquireFile_SkipsFilesTooNew()
+    {
+        $strategy = $this->createStrategyWithUploadDir($this->testDir);
+        
+        // Create a file that's too new (< 3 seconds)
+        $tooNewPath = $this->createTestFile('too_new.jpg', time());
+        
+        $result = $strategy->acquireFile($tooNewPath);
+        
+        $this->assertFalse($result->success, 'Should not succeed for new file');
+        $this->assertTrue($result->isSkip(), 'Should be a skip');
+        $this->assertEquals('file_too_new', $result->getSkipReason(), 'Reason should be file_too_new');
+    }
+
     // ========================================
     // Helper Methods
     // ========================================

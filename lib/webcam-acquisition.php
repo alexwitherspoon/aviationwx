@@ -1488,6 +1488,33 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::skip('file_missing', 'push');
         }
 
+        // Check file age FIRST (fail fast before expensive operations)
+        $mtime = @filemtime($filePath);
+        if ($mtime === false) {
+            return AcquisitionResult::skip('file_stat_failed', 'push');
+        }
+
+        $fileAge = time() - $mtime;
+        $maxFileAge = $this->getUploadFileMaxAge();
+
+        // Too new - still being written
+        if ($fileAge < 3) {
+            return AcquisitionResult::skip('file_too_new', 'push', ['age' => $fileAge]);
+        }
+
+        // Too old - abandoned upload, delete it
+        if ($fileAge > $maxFileAge) {
+            aviationwx_log('warning', 'Push upload too old, deleting', [
+                'file' => basename($filePath),
+                'age' => $fileAge,
+                'max_age' => $maxFileAge,
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex
+            ], 'app');
+            @unlink($filePath);
+            return AcquisitionResult::skip('file_too_old', 'push', ['age' => $fileAge, 'max_age' => $maxFileAge]);
+        }
+
         // Stability check - ensure file is not still being written
         $stabilityTime = 0.0;
         $stabilityTimeout = $this->getStabilityCheckTimeout();
@@ -1497,21 +1524,21 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::skip('file_unstable', 'push', ['stability_time' => $stabilityTime]);
         }
 
-        // Validate image content
-        $validationResult = $this->validateUploadedImage($filePath);
-        if (!$validationResult['valid']) {
-            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
-            return AcquisitionResult::failure($validationResult['reason'], 'push', $validationResult);
-        }
-
-        // Ensure EXIF exists (adds from filename timestamp if missing)
-        // Must be called before normalizeExifToUtc for cameras that don't embed EXIF
+        // Ensure EXIF exists BEFORE validation (adds from filename timestamp if missing)
+        // Must happen before validateUploadedImage() which checks EXIF timestamp
         $timezone = $this->getTimezone();
         if (!ensureImageHasExif($filePath, null, $timezone)) {
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
-            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            $this->recordStabilityMetrics($stabilityTime, false);
             return AcquisitionResult::failure('no_exif_timestamp', 'push');
+        }
+
+        // Validate image content (including EXIF timestamp)
+        $validationResult = $this->validateUploadedImage($filePath);
+        if (!$validationResult['valid']) {
+            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            return AcquisitionResult::failure($validationResult['reason'], 'push', $validationResult);
         }
 
         // Normalize EXIF timestamp to UTC
