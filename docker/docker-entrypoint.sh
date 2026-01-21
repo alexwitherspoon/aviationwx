@@ -49,8 +49,8 @@ if [ ! -f "${CONFIG_FILE}" ]; then
     
     # Verify file was created
     if [ -f "${CONFIG_FILE}" ]; then
-        chmod 644 "${CONFIG_FILE}" 2>/dev/null || true
-        chown www-data:www-data "${CONFIG_FILE}" 2>/dev/null || true
+        chmod 640 "${CONFIG_FILE}" 2>/dev/null || true
+        chown root:www-data "${CONFIG_FILE}" 2>/dev/null || true
         echo "✓ Created airports.json from fallback source"
     else
         echo "⚠️  Warning: airports.json not found and could not create from fallback sources"
@@ -61,6 +61,23 @@ if [ ! -f "${CONFIG_FILE}" ]; then
         echo "  Container will continue, but application may fail without valid config"
     fi
 fi
+
+# Secure airports.json permissions (prevents SFTP users from reading sensitive config)
+# airports.json contains API keys, passwords, and other secrets
+# Permissions: 640 (root read/write, www-data read, others none)
+echo "Securing config file permissions..."
+SECURE_CONFIG_FILES=(
+    "/var/www/html/config/airports.json"
+    "/var/www/html/secrets/airports.json"
+    "/home/aviationwx/airports.json"
+)
+for config_file in "${SECURE_CONFIG_FILES[@]}"; do
+    if [ -f "$config_file" ]; then
+        chmod 640 "$config_file" 2>/dev/null || true
+        chown root:www-data "$config_file" 2>/dev/null || true
+    fi
+done
+echo "✓ Config files secured (640 root:www-data)"
 
 # Start cron daemon in background
 echo "Starting cron daemon..."
