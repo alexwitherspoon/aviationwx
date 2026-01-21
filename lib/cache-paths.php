@@ -17,8 +17,7 @@
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── uploads/
- * │   └── {airport}/{username}/    # Push webcam chroot (root:root 755)
- * │       └── files/               # Actual uploads (ftp:www-data 2775)
+ * │   └── {airport}/{username}/    # Push webcam uploads (ftp:www-data 2775)
  * ├── notam/
  * │   └── {airport}.json           # NOTAM cache
  * ├── partners/
@@ -240,7 +239,7 @@ function getWebcamStagingPath(string $airportId, int $camIndex, string $format =
 }
 
 // =============================================================================
-// PUSH WEBCAM UPLOAD PATHS (FTP/SFTP chroot)
+// PUSH WEBCAM UPLOAD PATHS (FTP/SFTP)
 // =============================================================================
 
 if (!defined('CACHE_UPLOADS_DIR')) {
@@ -248,37 +247,23 @@ if (!defined('CACHE_UPLOADS_DIR')) {
 }
 
 /**
- * Get chroot directory for a push webcam (root-owned, not writable)
+ * Get upload directory for a push webcam
  * 
- * This is the directory that FTP/SFTP users are chrooted to.
- * It must be owned by root for SFTP chroot security requirements.
- * Users upload to the files/ subdirectory inside this chroot.
+ * This is the directory where FTP/SFTP cameras upload files.
+ * Both protocols use the same directory with shared permissions:
+ * - FTP: vsftpd local_root points here
+ * - SFTP: User home directory (no chroot for simpler camera configuration)
  * 
- * Directory structure:
- *   /uploads/{airport}/{username}/       <- chroot (root:root 755)
- *   /uploads/{airport}/{username}/files/ <- upload dir (ftp:www-data 2775)
- * 
- * @param string $airportId Airport identifier
- * @param string $username FTP/SFTP username
- * @return string Full path to chroot directory
- */
-function getWebcamChrootDir(string $airportId, string $username): string {
-    return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
-}
-
-/**
- * Get upload directory for a push webcam (where files are actually uploaded)
- * 
- * This is the writable subdirectory inside the chroot where cameras upload files.
- * Owned by ftp:www-data with setgid (2775) so both FTP and SFTP users can write,
- * and uploaded files inherit www-data group for processor access.
+ * Directory owned by ftp:www-data with setgid (2775) so both FTP virtual users
+ * and SFTP system users (in www-data group) can write. Uploaded files inherit
+ * www-data group for processor access.
  * 
  * @param string $airportId Airport identifier
  * @param string $username FTP/SFTP username
  * @return string Full path to upload directory
  */
 function getWebcamUploadDir(string $airportId, string $username): string {
-    return getWebcamChrootDir($airportId, $username) . '/files';
+    return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
 }
 
 /**
