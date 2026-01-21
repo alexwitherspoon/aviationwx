@@ -121,7 +121,6 @@ All configuration lives in a single `airports.json` file with two sections:
 | `rtsp_fetch_timeout` | `10` | Frame capture timeout (seconds) |
 | `rtsp_max_runtime` | `6` | Max ffmpeg runtime (seconds) |
 | **Push Options** |||
-| `push_config.protocol` | — | `sftp`, `ftp`, or `ftps` |
 | `push_config.username` | — | 14 alphanumeric chars |
 | `push_config.password` | — | 14 alphanumeric chars |
 | `push_config.max_file_size_mb` | `100` | Max upload size (1-100 MB) |
@@ -709,7 +708,6 @@ For cameras that upload images to the server:
   "type": "push",
   "refresh_seconds": 60,
   "push_config": {
-    "protocol": "sftp",
     "username": "kspbCam0Push01",
     "password": "SecurePass1234",
     "max_file_size_mb": 10,

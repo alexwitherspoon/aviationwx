@@ -249,51 +249,35 @@
           "refresh_seconds": 60
         },
         {
-          "name": "Push Camera (SFTP Basic)",
+          "name": "Push Camera (Basic)",
           "type": "push",
           "refresh_seconds": 60,
           "push_config": {
-            "protocol": "sftp",
             "username": "kspbCam0Push01",
-            "password": "SecurePass1234"
-          }
-        },
-        {
-          "name": "Push Camera (SFTP Full)",
-          "type": "push",
-          "refresh_seconds": 60,
-          "push_config": {
-            "protocol": "sftp",
-            "username": "kspbCam1Push02",
-            "password": "AnotherPass5678",
-            "port": 2222,
+            "password": "SecurePass1234",
             "max_file_size_mb": 10,
             "allowed_extensions": ["jpg", "jpeg"]
           }
         },
         {
-          "name": "Secure Push Camera (FTPS)",
-          "type": "push",
-          "refresh_seconds": 120,
-          "push_config": {
-            "protocol": "ftps",
-            "username": "kspbCam2Push03",
-            "password": "SecurePass9012",
-            "port": 2121,
-            "max_file_size_mb": 20,
-            "allowed_extensions": ["jpg", "jpeg", "png"]
-          }
-        },
-        {
-          "name": "Legacy Push Camera (FTP)",
+          "name": "Push Camera (Full Config)",
           "type": "push",
           "refresh_seconds": 60,
           "push_config": {
-            "protocol": "ftp",
-            "username": "kspbCam3Push04",
-            "password": "LegacyPass3456",
-            "port": 2121,
-            "max_file_size_mb": 100,
+            "username": "kspbCam1Push02",
+            "password": "AnotherPass5678",
+            "max_file_size_mb": 10,
+            "allowed_extensions": ["jpg", "jpeg"]
+          }
+        },
+        {
+          "name": "Push Camera (Large Files)",
+          "type": "push",
+          "refresh_seconds": 120,
+          "push_config": {
+            "username": "kspbCam2Push03",
+            "password": "SecurePass9012",
+            "max_file_size_mb": 50,
             "allowed_extensions": ["jpg", "jpeg", "png"]
           }
         }
