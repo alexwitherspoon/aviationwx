@@ -303,8 +303,6 @@ jobs:
             'push_config' => [
               'username' => 'aB3xK9mP2qR7vN',
               'password' => 'mK8pL3nQ6rT9vW',
-              'protocol' => 'sftp',
-              'port' => 2222,
               'max_file_size_mb' => 10,
               'allowed_extensions' => ['jpg', 'jpeg']
             ],
