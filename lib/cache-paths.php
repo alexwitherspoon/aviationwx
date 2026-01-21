@@ -17,7 +17,8 @@
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── uploads/
- * │   └── {airport}/{username}/    # Push webcam FTP uploads
+ * │   └── {airport}/{username}/    # Push webcam chroot (root:root 755)
+ * │       └── files/               # Actual uploads (ftp:www-data 2775)
  * ├── notam/
  * │   └── {airport}.json           # NOTAM cache
  * ├── partners/
@@ -247,14 +248,37 @@ if (!defined('CACHE_UPLOADS_DIR')) {
 }
 
 /**
- * Get FTP upload directory for a push webcam
+ * Get chroot directory for a push webcam (root-owned, not writable)
+ * 
+ * This is the directory that FTP/SFTP users are chrooted to.
+ * It must be owned by root for SFTP chroot security requirements.
+ * Users upload to the files/ subdirectory inside this chroot.
+ * 
+ * Directory structure:
+ *   /uploads/{airport}/{username}/       <- chroot (root:root 755)
+ *   /uploads/{airport}/{username}/files/ <- upload dir (ftp:www-data 2775)
  * 
  * @param string $airportId Airport identifier
- * @param string $username FTP username
+ * @param string $username FTP/SFTP username
+ * @return string Full path to chroot directory
+ */
+function getWebcamChrootDir(string $airportId, string $username): string {
+    return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
+}
+
+/**
+ * Get upload directory for a push webcam (where files are actually uploaded)
+ * 
+ * This is the writable subdirectory inside the chroot where cameras upload files.
+ * Owned by ftp:www-data with setgid (2775) so both FTP and SFTP users can write,
+ * and uploaded files inherit www-data group for processor access.
+ * 
+ * @param string $airportId Airport identifier
+ * @param string $username FTP/SFTP username
  * @return string Full path to upload directory
  */
 function getWebcamUploadDir(string $airportId, string $username): string {
-    return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
+    return getWebcamChrootDir($airportId, $username) . '/files';
 }
 
 /**

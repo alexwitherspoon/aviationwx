@@ -725,8 +725,15 @@ For cameras that upload images to the server:
 **Connection details:**
 - SFTP: Port 2222, Host: `upload.aviationwx.org`
 - FTP/FTPS: Port 2121, Host: `upload.aviationwx.org`
+- **Both protocols enabled**: Each push camera gets both FTP and SFTP access with the same credentials
 
-Cameras upload directly to `/` (chroot root). Files are processed automatically.
+Cameras upload to the `files/` directory within their chroot. The directory structure is:
+```
+/uploads/{airport}/{username}/       <- chroot (root-owned, for security)
+/uploads/{airport}/{username}/files/ <- upload here (writable)
+```
+
+**Note**: FTP users land directly in `files/` (vsftpd local_root), while SFTP users chroot to the parent and see `files/` as a subdirectory. Files are processed automatically from the `files/` directory.
 
 **Subfolder support:** Cameras that create date-based folder structures (e.g., `2026/01/06/image.jpg`) are fully supported. The system recursively searches up to 10 levels deep and automatically cleans up empty folders after processing.
 
@@ -1346,6 +1353,7 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
 | `cache/webcams/{airport}/{cam}/{ts}_original.{ext}` | Original timestamped webcam images |
 | `cache/webcams/{airport}/{cam}/{ts}_{height}.{ext}` | Variant timestamped webcam images (height in pixels) |
-| `cache/uploads/{airport}/{username}/` | FTP/SFTP push uploads |
+| `cache/uploads/{airport}/{username}/` | Push webcam chroot (root-owned) |
+| `cache/uploads/{airport}/{username}/files/` | FTP/SFTP push uploads (writable) |
 | `cache/peak_gusts.json` | Daily peak gust tracking |
 | `cache/temp_extremes.json` | Daily temperature extremes |
