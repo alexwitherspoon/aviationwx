@@ -974,6 +974,10 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
     /**
      * Find the newest valid image in the upload directory
+     * 
+     * Note: No time-based filtering - files are moved after processing,
+     * so they won't appear again. Time filtering was removed to fix a bug
+     * where backlog files could be orphaned.
      */
     private function findNewestValidImage(): ?string
     {
@@ -982,23 +986,9 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return null;
         }
 
-        $lastProcessed = $this->getLastProcessedTime();
-        $pushConfig = $this->camConfig['push_config'] ?? [];
         $maxFileAge = $this->getUploadFileMaxAge();
         $stabilityTimeout = $this->getStabilityCheckTimeout();
         $requiredStableChecks = $this->getRequiredStableChecks();
-
-        // Filter to files newer than last processed
-        if ($lastProcessed > 0) {
-            $files = array_filter($files, function ($file) use ($lastProcessed) {
-                $mtime = @filemtime($file);
-                return $mtime !== false && $mtime > $lastProcessed;
-            });
-        }
-
-        if (empty($files)) {
-            return null;
-        }
 
         // Sort by mtime (newest first)
         usort($files, function ($a, $b) {
@@ -1243,7 +1233,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     /**
      * Update last processed time in state file
      */
-    private function updateLastProcessedTime(): void
+    public function updateLastProcessedTime(): void
     {
         $stateFile = getWebcamStatePath($this->airportId, $this->camIndex);
         $stateDir = dirname($stateFile);
@@ -1402,6 +1392,165 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         if (@file_put_contents($tmpFile, json_encode($metrics, JSON_PRETTY_PRINT)) !== false) {
             @rename($tmpFile, $file);
         }
+    }
+
+    /**
+     * Get files ordered for batch processing
+     * 
+     * Returns newest file first (for pilot safety - current conditions),
+     * then oldest-to-newest (to clear backlog before files age out).
+     * 
+     * @param int $limit Maximum files to return
+     * @return array{files: string[], total_pending: int}
+     */
+    public function getOrderedFiles(int $limit = PUSH_BATCH_LIMIT): array
+    {
+        if (!$this->uploadDir || !is_dir($this->uploadDir)) {
+            return ['files' => [], 'total_pending' => 0];
+        }
+
+        $files = $this->recursiveGlobImages($this->uploadDir);
+        if (empty($files)) {
+            return ['files' => [], 'total_pending' => 0];
+        }
+
+        $maxFileAge = $this->getUploadFileMaxAge();
+        $now = time();
+
+        // Filter and annotate with mtime, delete abandoned files
+        $validFiles = [];
+        foreach ($files as $file) {
+            $mtime = @filemtime($file);
+            if ($mtime === false) {
+                continue;
+            }
+
+            $fileAge = $now - $mtime;
+
+            // Too new (still being written) - skip for now
+            if ($fileAge < 3) {
+                continue;
+            }
+
+            // Too old - delete as abandoned upload
+            if ($fileAge > $maxFileAge) {
+                aviationwx_log('warning', 'Push upload too old, deleting', [
+                    'file' => basename($file),
+                    'age' => $fileAge,
+                    'max_age' => $maxFileAge,
+                    'airport' => $this->airportId,
+                    'cam' => $this->camIndex
+                ], 'app');
+                @unlink($file);
+                continue;
+            }
+
+            $validFiles[] = ['path' => $file, 'mtime' => $mtime];
+        }
+
+        $totalPending = count($validFiles);
+
+        if ($totalPending === 0) {
+            return ['files' => [], 'total_pending' => 0];
+        }
+
+        // Sort by mtime ascending (oldest first)
+        usort($validFiles, fn($a, $b) => $a['mtime'] <=> $b['mtime']);
+
+        // Extract newest (last element after ascending sort)
+        $newest = array_pop($validFiles);
+
+        // Build result: newest first, then oldest-to-newest
+        $result = [$newest['path']];
+
+        foreach ($validFiles as $file) {
+            if (count($result) >= $limit) {
+                break;
+            }
+            $result[] = $file['path'];
+        }
+
+        return ['files' => $result, 'total_pending' => $totalPending];
+    }
+
+    /**
+     * Acquire and validate a specific file
+     * 
+     * Used for batch processing where files are pre-selected by getOrderedFiles().
+     * Performs stability check, validation, EXIF normalization, and moves to staging.
+     * 
+     * @param string $filePath Path to file to process
+     * @return AcquisitionResult
+     */
+    public function acquireFile(string $filePath): AcquisitionResult
+    {
+        if (!file_exists($filePath)) {
+            return AcquisitionResult::skip('file_missing', 'push');
+        }
+
+        // Stability check - ensure file is not still being written
+        $stabilityTime = 0.0;
+        $stabilityTimeout = $this->getStabilityCheckTimeout();
+        $requiredStableChecks = $this->getRequiredStableChecks();
+
+        if (!$this->isFileStable($filePath, $requiredStableChecks, $stabilityTimeout, $stabilityTime)) {
+            return AcquisitionResult::skip('file_unstable', 'push', ['stability_time' => $stabilityTime]);
+        }
+
+        // Validate image content
+        $validationResult = $this->validateUploadedImage($filePath);
+        if (!$validationResult['valid']) {
+            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            return AcquisitionResult::failure($validationResult['reason'], 'push', $validationResult);
+        }
+
+        // Normalize EXIF timestamp to UTC
+        $timezone = $this->getTimezone();
+        if (!normalizeExifToUtc($filePath, $this->airportId, $this->camIndex, $timezone)) {
+            require_once __DIR__ . '/webcam-image-metrics.php';
+            trackWebcamImageRejected($this->airportId, $this->camIndex, 'invalid_exif_timestamp');
+            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            return AcquisitionResult::failure('invalid_exif_timestamp', 'push');
+        }
+
+        // Get timestamp from EXIF
+        $timestamp = getSourceCaptureTime($filePath);
+        if ($timestamp <= 0) {
+            $timestamp = time();
+        }
+
+        // Cross-validate EXIF against upload mtime (timestamp drift check)
+        $uploadMtime = @filemtime($filePath);
+        if ($uploadMtime !== false) {
+            $drift = abs($uploadMtime - $timestamp);
+            if ($drift > 7200) { // > 2 hours drift
+                require_once __DIR__ . '/webcam-rejection-logger.php';
+                logWebcamRejection($this->airportId, $this->camIndex, 'timestamp_drift',
+                    sprintf('EXIF differs from upload time by %d seconds', $drift));
+                $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+                return AcquisitionResult::failure('timestamp_drift', 'push', ['drift_seconds' => $drift]);
+            }
+        }
+
+        // Move to staging
+        $stagingPath = $this->getStagingPath();
+        if (!@rename($filePath, $stagingPath)) {
+            // Try copy + delete as fallback (cross-filesystem)
+            if (!@copy($filePath, $stagingPath)) {
+                $this->recordFailure('move_failed', 'transient');
+                return AcquisitionResult::failure('move_failed', 'push');
+            }
+            @unlink($filePath);
+        }
+
+        // Record success metrics
+        $this->recordStabilityMetrics($stabilityTime, true);
+        $this->recordSuccess();
+
+        return AcquisitionResult::success($stagingPath, $timestamp, 'push', [
+            'original_file' => basename($filePath),
+            'stability_time' => $stabilityTime
+        ]);
     }
 }
 

@@ -976,6 +976,13 @@ The webcam processing pipeline uses three main components:
 - **State File Validation**:
   - Graceful recovery from corrupted `state.json` files
   - Logs warning and resets to current time (fail-closed: won't reprocess old uploads)
+- **Batch Processing** (Backlog Handling):
+  - Push cameras process **multiple files per worker run** to efficiently clear backlogs
+  - **Processing order**: Newest file first (pilot safety), then oldest-to-newest (prevent aging out)
+  - **Batch limit**: Up to 30 files per worker run (`PUSH_BATCH_LIMIT`)
+  - **Extended timeout**: When ≥10 files pending, worker timeout extends to 5 minutes (`PUSH_EXTENDED_TIMEOUT_SECONDS`)
+  - **Example**: 60-file backlog clears in ~2 worker runs instead of 60 runs
+  - Files are moved (not copied) after processing, so they won't be re-processed
 
 ### Source Type Detection
 

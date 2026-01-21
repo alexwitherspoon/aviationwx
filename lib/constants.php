@@ -428,6 +428,18 @@ if (!defined('MIN_SAMPLES_FOR_OPTIMIZATION')) {
     define('MIN_SAMPLES_FOR_OPTIMIZATION', 20); // Need 20 samples before optimizing
 }
 
+// Push webcam batch processing
+// Process multiple files per worker run to clear backlogs efficiently
+if (!defined('PUSH_BATCH_LIMIT')) {
+    define('PUSH_BATCH_LIMIT', 30); // Max files per worker run
+}
+if (!defined('PUSH_EXTENDED_TIMEOUT_THRESHOLD')) {
+    define('PUSH_EXTENDED_TIMEOUT_THRESHOLD', 10); // Files before extending timeout
+}
+if (!defined('PUSH_EXTENDED_TIMEOUT_SECONDS')) {
+    define('PUSH_EXTENDED_TIMEOUT_SECONDS', 300); // 5 minutes for larger batches
+}
+
 // Webcam error frame detection thresholds
 if (!defined('WEBCAM_ERROR_MIN_WIDTH')) {
     define('WEBCAM_ERROR_MIN_WIDTH', 100); // Minimum image width to be considered valid

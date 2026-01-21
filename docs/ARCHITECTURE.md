@@ -141,7 +141,10 @@ aviationwx.org/
   - `ProcessingPipeline` class for standardized image validation, variant generation, and promotion
   - `WebcamWorker` class that orchestrates acquisition and processing
 - **Pull cameras**: Supports Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), federated API
-- **Push cameras**: Processes FTP/SFTP uploads with adaptive stability detection
+- **Push cameras**: Processes FTP/SFTP uploads with adaptive stability detection and batch processing
+  - Batch processing: Processes up to 30 files per run to clear backlogs efficiently
+  - Processing order: Newest first (pilot safety), then oldest-to-newest (prevent aging out)
+  - Extended timeout: 5 minutes when ≥10 files pending
 - Generates multiple formats per image (JPEG, WebP) and variants (original, 1080p, 720p, 360p)
 - Single image load through pipeline (loads GD resource once, passes through all validation steps)
 - Mtime automatically synced to match source image's capture time

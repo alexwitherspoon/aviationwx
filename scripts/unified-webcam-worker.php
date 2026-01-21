@@ -33,6 +33,7 @@ if (php_sapi_name() !== 'cli') {
 
 // Load dependencies
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
@@ -156,6 +157,67 @@ HELP;
 }
 
 /**
+ * Determine worker timeout based on pending file count for push cameras
+ * 
+ * Extends timeout when many files are pending to allow batch processing.
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
+ * @return int|null Timeout in seconds, or null for default
+ */
+function determineWorkerTimeout(string $airportId, int $camIndex): ?int
+{
+    try {
+        $config = loadConfig(false);
+        if ($config === null || !isset($config['airports'][$airportId])) {
+            return null;
+        }
+
+        $camConfig = $config['airports'][$airportId]['webcams'][$camIndex] ?? [];
+        
+        // Only extend timeout for push cameras
+        $isPush = (isset($camConfig['type']) && $camConfig['type'] === 'push')
+            || isset($camConfig['push_config']);
+
+        if (!$isPush) {
+            return null;
+        }
+
+        $username = $camConfig['push_config']['username'] ?? null;
+        if (!$username) {
+            return null;
+        }
+
+        $uploadDir = getWebcamUploadDir($airportId, $username);
+        if (!is_dir($uploadDir)) {
+            return null;
+        }
+
+        // Quick count of image files
+        $count = 0;
+        $files = glob($uploadDir . '/*.{jpg,jpeg,png,webp}', GLOB_BRACE);
+        if ($files !== false) {
+            $count = count($files);
+        }
+
+        if ($count >= PUSH_EXTENDED_TIMEOUT_THRESHOLD) {
+            aviationwx_log('debug', 'Extended timeout for push camera backlog', [
+                'airport' => $airportId,
+                'cam' => $camIndex,
+                'pending_files' => $count,
+                'timeout' => PUSH_EXTENDED_TIMEOUT_SECONDS
+            ], 'app');
+            return PUSH_EXTENDED_TIMEOUT_SECONDS;
+        }
+
+    } catch (Exception $e) {
+        // Ignore errors, use default timeout
+    }
+
+    return null;
+}
+
+/**
  * Run worker mode (called by ProcessPool)
  * 
  * @param string $airportId Airport identifier
@@ -164,8 +226,9 @@ HELP;
  */
 function runWorkerMode(string $airportId, int $camIndex): int
 {
-    // Initialize self-timeout to prevent zombie workers
-    initWorkerTimeout(null, "webcam_{$airportId}_{$camIndex}");
+    // Determine appropriate timeout (extended for push camera backlogs)
+    $timeout = determineWorkerTimeout($airportId, $camIndex);
+    initWorkerTimeout($timeout, "webcam_{$airportId}_{$camIndex}");
 
     // Validate airport ID
     if (!WebcamWorkerFactory::validateAirportId($airportId)) {

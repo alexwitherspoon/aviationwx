@@ -137,7 +137,8 @@ class WebcamWorker
     /**
      * Run the worker
      * 
-     * Acquires image, processes through pipeline, returns result.
+     * Acquires image(s), processes through pipeline, returns result.
+     * Push cameras process multiple files per run for efficient backlog handling.
      * 
      * @return WorkerResult Processing result with exit code
      */
@@ -157,100 +158,13 @@ class WebcamWorker
                 ]);
             }
 
-            // Check if should skip (circuit breaker, not due, etc.)
-            $skipCheck = $this->strategy->shouldSkip();
-            if ($skipCheck['skip']) {
-                aviationwx_log('info', 'Webcam worker skipped', [
-                    'airport' => $this->airportId,
-                    'cam' => $this->camIndex,
-                    'reason' => $skipCheck['reason'],
-                    'details' => $skipCheck['details'] ?? []
-                ], 'app');
-                
-                return WorkerResult::skip($skipCheck['reason'], $skipCheck['details'] ?? []);
+            // Push cameras use batch processing for efficient backlog handling
+            if ($this->isPushCamera()) {
+                return $this->runPushCamera($startTime);
             }
 
-            // Acquire image
-            $acquisitionResult = $this->strategy->acquire();
-            
-            if (!$acquisitionResult->success) {
-                if ($acquisitionResult->isSkip()) {
-                    aviationwx_log('info', 'Webcam acquisition skipped', [
-                        'airport' => $this->airportId,
-                        'cam' => $this->camIndex,
-                        'reason' => $acquisitionResult->getSkipReason(),
-                        'source' => $acquisitionResult->sourceType
-                    ], 'app');
-                    
-                    return WorkerResult::skip(
-                        $acquisitionResult->getSkipReason() ?? 'unknown',
-                        ['source' => $acquisitionResult->sourceType]
-                    );
-                }
-                
-                aviationwx_log('error', 'Webcam acquisition failed', [
-                    'airport' => $this->airportId,
-                    'cam' => $this->camIndex,
-                    'reason' => $acquisitionResult->errorReason,
-                    'source' => $acquisitionResult->sourceType,
-                    'metadata' => $acquisitionResult->metadata
-                ], 'app');
-                
-                return WorkerResult::failure(
-                    $acquisitionResult->errorReason ?? 'acquisition_failed',
-                    [
-                        'source' => $acquisitionResult->sourceType,
-                        'metadata' => $acquisitionResult->metadata
-                    ]
-                );
-            }
-
-            // Process through pipeline
-            $pipelineResult = $this->pipeline->process(
-                $acquisitionResult->imagePath,
-                $acquisitionResult->timestamp,
-                $acquisitionResult->sourceType
-            );
-
-            if (!$pipelineResult->success) {
-                aviationwx_log('error', 'Webcam pipeline failed', [
-                    'airport' => $this->airportId,
-                    'cam' => $this->camIndex,
-                    'reason' => $pipelineResult->errorReason,
-                    'source' => $acquisitionResult->sourceType
-                ], 'app');
-                
-                // Cleanup staging file on pipeline failure
-                if ($acquisitionResult->imagePath && file_exists($acquisitionResult->imagePath)) {
-                    @unlink($acquisitionResult->imagePath);
-                }
-                
-                return WorkerResult::failure(
-                    $pipelineResult->errorReason ?? 'pipeline_failed',
-                    $pipelineResult->metadata
-                );
-            }
-
-            $elapsed = round((microtime(true) - $startTime) * 1000, 2);
-
-            aviationwx_log('info', 'Webcam worker completed', [
-                'airport' => $this->airportId,
-                'cam' => $this->camIndex,
-                'source' => $acquisitionResult->sourceType,
-                'timestamp' => $pipelineResult->timestamp,
-                'variants' => $pipelineResult->getVariantCount(),
-                'formats' => $pipelineResult->getPromotedFormats(),
-                'duration_ms' => $elapsed
-            ], 'app');
-
-            return WorkerResult::success([
-                'source' => $acquisitionResult->sourceType,
-                'timestamp' => $pipelineResult->timestamp,
-                'variants' => $pipelineResult->getVariantCount(),
-                'formats' => $pipelineResult->getPromotedFormats(),
-                'duration_ms' => $elapsed,
-                'original_path' => $pipelineResult->originalPath
-            ]);
+            // Pull cameras: single acquisition per run
+            return $this->runPullCamera($startTime);
 
         } catch (Exception $e) {
             aviationwx_log('error', 'Webcam worker exception', [
@@ -264,6 +178,231 @@ class WebcamWorker
                 'message' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Run pull camera processing (single image per run)
+     * 
+     * @param float $startTime Processing start time
+     * @return WorkerResult
+     */
+    private function runPullCamera(float $startTime): WorkerResult
+    {
+        // Check if should skip (circuit breaker, not due, etc.)
+        $skipCheck = $this->strategy->shouldSkip();
+        if ($skipCheck['skip']) {
+            aviationwx_log('info', 'Webcam worker skipped', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+                'reason' => $skipCheck['reason'],
+                'details' => $skipCheck['details'] ?? []
+            ], 'app');
+            
+            return WorkerResult::skip($skipCheck['reason'], $skipCheck['details'] ?? []);
+        }
+
+        // Acquire image
+        $acquisitionResult = $this->strategy->acquire();
+        
+        if (!$acquisitionResult->success) {
+            if ($acquisitionResult->isSkip()) {
+                aviationwx_log('info', 'Webcam acquisition skipped', [
+                    'airport' => $this->airportId,
+                    'cam' => $this->camIndex,
+                    'reason' => $acquisitionResult->getSkipReason(),
+                    'source' => $acquisitionResult->sourceType
+                ], 'app');
+                
+                return WorkerResult::skip(
+                    $acquisitionResult->getSkipReason() ?? 'unknown',
+                    ['source' => $acquisitionResult->sourceType]
+                );
+            }
+            
+            aviationwx_log('error', 'Webcam acquisition failed', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+                'reason' => $acquisitionResult->errorReason,
+                'source' => $acquisitionResult->sourceType,
+                'metadata' => $acquisitionResult->metadata
+            ], 'app');
+            
+            return WorkerResult::failure(
+                $acquisitionResult->errorReason ?? 'acquisition_failed',
+                [
+                    'source' => $acquisitionResult->sourceType,
+                    'metadata' => $acquisitionResult->metadata
+                ]
+            );
+        }
+
+        // Process through pipeline
+        $pipelineResult = $this->pipeline->process(
+            $acquisitionResult->imagePath,
+            $acquisitionResult->timestamp,
+            $acquisitionResult->sourceType
+        );
+
+        if (!$pipelineResult->success) {
+            aviationwx_log('error', 'Webcam pipeline failed', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+                'reason' => $pipelineResult->errorReason,
+                'source' => $acquisitionResult->sourceType
+            ], 'app');
+            
+            // Cleanup staging file on pipeline failure
+            if ($acquisitionResult->imagePath && file_exists($acquisitionResult->imagePath)) {
+                @unlink($acquisitionResult->imagePath);
+            }
+            
+            return WorkerResult::failure(
+                $pipelineResult->errorReason ?? 'pipeline_failed',
+                $pipelineResult->metadata
+            );
+        }
+
+        $elapsed = round((microtime(true) - $startTime) * 1000, 2);
+
+        aviationwx_log('info', 'Webcam worker completed', [
+            'airport' => $this->airportId,
+            'cam' => $this->camIndex,
+            'source' => $acquisitionResult->sourceType,
+            'timestamp' => $pipelineResult->timestamp,
+            'variants' => $pipelineResult->getVariantCount(),
+            'formats' => $pipelineResult->getPromotedFormats(),
+            'duration_ms' => $elapsed
+        ], 'app');
+
+        return WorkerResult::success([
+            'source' => $acquisitionResult->sourceType,
+            'timestamp' => $pipelineResult->timestamp,
+            'variants' => $pipelineResult->getVariantCount(),
+            'formats' => $pipelineResult->getPromotedFormats(),
+            'duration_ms' => $elapsed,
+            'original_path' => $pipelineResult->originalPath
+        ]);
+    }
+
+    /**
+     * Run push camera processing (multiple images per run)
+     * 
+     * Processes files in optimal order: newest first (pilot safety), then
+     * oldest-to-newest (clear backlog before files age out).
+     * 
+     * @param float $startTime Processing start time
+     * @return WorkerResult
+     */
+    private function runPushCamera(float $startTime): WorkerResult
+    {
+        // Check circuit breaker only (skip timing check for batch processing)
+        $skipCheck = $this->strategy->shouldSkip();
+        if ($skipCheck['skip'] && $skipCheck['reason'] === 'circuit_breaker') {
+            aviationwx_log('info', 'Push camera skipped due to circuit breaker', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+                'details' => $skipCheck['details'] ?? []
+            ], 'app');
+            return WorkerResult::skip($skipCheck['reason'], $skipCheck['details'] ?? []);
+        }
+
+        // Get files in optimal order: newest first, then oldest-to-newest
+        /** @var PushAcquisitionStrategy $strategy */
+        $strategy = $this->strategy;
+        $fileData = $strategy->getOrderedFiles(PUSH_BATCH_LIMIT);
+        $files = $fileData['files'];
+        $totalPending = $fileData['total_pending'];
+
+        if (empty($files)) {
+            return WorkerResult::skip('no_new_files', ['total_pending' => 0]);
+        }
+
+        aviationwx_log('info', 'Processing push camera files', [
+            'airport' => $this->airportId,
+            'cam' => $this->camIndex,
+            'files_to_process' => count($files),
+            'total_pending' => $totalPending
+        ], 'app');
+
+        $processed = 0;
+        $failed = 0;
+        $skipped = 0;
+
+        foreach ($files as $filePath) {
+            // Acquire and validate file
+            $acquisitionResult = $strategy->acquireFile($filePath);
+
+            if (!$acquisitionResult->success) {
+                if ($acquisitionResult->isSkip()) {
+                    $skipped++;
+                    continue;
+                }
+                $failed++;
+                aviationwx_log('warning', 'Push file acquisition failed', [
+                    'airport' => $this->airportId,
+                    'cam' => $this->camIndex,
+                    'file' => basename($filePath),
+                    'reason' => $acquisitionResult->errorReason
+                ], 'app');
+                continue;
+            }
+
+            // Process through pipeline
+            $pipelineResult = $this->pipeline->process(
+                $acquisitionResult->imagePath,
+                $acquisitionResult->timestamp,
+                $acquisitionResult->sourceType
+            );
+
+            if (!$pipelineResult->success) {
+                $failed++;
+                if ($acquisitionResult->imagePath && file_exists($acquisitionResult->imagePath)) {
+                    @unlink($acquisitionResult->imagePath);
+                }
+                aviationwx_log('warning', 'Push file pipeline failed', [
+                    'airport' => $this->airportId,
+                    'cam' => $this->camIndex,
+                    'file' => basename($filePath),
+                    'reason' => $pipelineResult->errorReason
+                ], 'app');
+                continue;
+            }
+
+            $processed++;
+        }
+
+        $elapsed = round((microtime(true) - $startTime) * 1000, 2);
+
+        // Update last processed time for rate limiting between worker runs
+        if ($processed > 0) {
+            $strategy->updateLastProcessedTime();
+        }
+
+        aviationwx_log('info', 'Push camera processing complete', [
+            'airport' => $this->airportId,
+            'cam' => $this->camIndex,
+            'processed' => $processed,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'remaining' => max(0, $totalPending - count($files)),
+            'duration_ms' => $elapsed
+        ], 'app');
+
+        if ($processed === 0 && $failed === 0) {
+            return WorkerResult::skip('no_valid_files', ['skipped' => $skipped]);
+        }
+
+        if ($processed === 0) {
+            return WorkerResult::failure('all_failed', ['failed' => $failed]);
+        }
+
+        return WorkerResult::success([
+            'source' => 'push',
+            'processed' => $processed,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'duration_ms' => $elapsed
+        ]);
     }
 
     /**
