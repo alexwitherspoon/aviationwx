@@ -425,6 +425,10 @@ class ProcessingPipeline
 
     /**
      * Cleanup orphaned staging files from crashed workers
+     * 
+     * Staging files are named staging_<PID>_<random>.<ext>
+     * Only cleans up files from OTHER processes that are > 5 minutes old.
+     * Files from the current process are never cleaned (still being processed).
      */
     private function cleanupOrphanedStagingFiles(): void
     {
@@ -438,9 +442,20 @@ class ProcessingPipeline
 
         $cleanedCount = 0;
         $now = time();
-        $maxAge = 300; // 5 minutes = orphaned
+        $maxAge = 3600; // 1 hour = orphaned (conservative to handle old uploads and slow processing)
+        $currentPid = getmypid();
 
         foreach ($stagingFiles as $stagingFile) {
+            // Extract PID from filename (staging_<PID>_<random>.<ext>)
+            $basename = basename($stagingFile);
+            if (preg_match('/^staging_(\d+)_/', $basename, $matches)) {
+                $filePid = (int)$matches[1];
+                // Never clean up files from current process
+                if ($filePid === $currentPid) {
+                    continue;
+                }
+            }
+
             $mtime = @filemtime($stagingFile);
             if ($mtime === false) {
                 continue;
