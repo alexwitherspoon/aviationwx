@@ -26,9 +26,8 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
     $pushConfig = $cam['push_config'];
     
     // Define allowed push_config fields (strict validation)
-    // Note: 'protocol' and 'port' are deprecated (both FTP and SFTP always enabled)
-    // but still allowed for backward compatibility
-    $allowedPushConfigFields = ['protocol', 'username', 'password', 'port', 'max_file_size_mb', 'allowed_extensions'];
+    // Note: 'port' is informational only (fixed ports: SFTP=2222, FTP=2121)
+    $allowedPushConfigFields = ['username', 'password', 'port', 'max_file_size_mb', 'allowed_extensions'];
     
     // Check for unknown fields in push_config
     foreach ($pushConfig as $key => $value) {
@@ -68,17 +67,7 @@ function validatePushWebcamConfig($cam, $airportId, $camIndex) {
         }
     }
     
-    // Protocol is deprecated - both FTP and SFTP are always enabled
-    // Still validate if provided for backward compatibility
-    if (isset($pushConfig['protocol']) && !empty($pushConfig['protocol'])) {
-        $protocol = strtolower($pushConfig['protocol']);
-        $validProtocols = ['ftp', 'ftps', 'sftp'];
-        if (!in_array($protocol, $validProtocols)) {
-            $errors[] = "Airport '{$airportId}' webcam index {$camIndex}: protocol must be one of: " . implode(', ', $validProtocols);
-        }
-    }
-    
-    // Port is deprecated - not used by server, only for client reference
+    // Port is informational only - not used by server
     // Ports are fixed: SFTP=2222, FTP/FTPS=2121
     
     // Validate max_file_size_mb

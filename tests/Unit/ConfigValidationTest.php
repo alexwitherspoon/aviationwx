@@ -1208,7 +1208,6 @@ class ConfigValidationTest extends TestCase
                             'type' => 'push',
                             'refresh_seconds' => 60,
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'max_file_size_mb' => 25,
@@ -1422,7 +1421,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'max_file_size_mb' => 25,
@@ -1992,7 +1990,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'max_file_size_mb' => 25,
@@ -2023,7 +2020,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'ftps',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'port' => 2121,
@@ -2120,7 +2116,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']
@@ -2151,7 +2146,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'port' => 70000,
@@ -2184,7 +2178,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'max_file_size_mb' => 0,
@@ -2216,7 +2209,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'username' => 'kspbCam0Push01',
                                 'password' => 'SecurePass1234',
                                 'max_file_size_mb' => 25,

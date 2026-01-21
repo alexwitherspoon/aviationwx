@@ -417,15 +417,14 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         $this->assertInstanceOf(PullAcquisitionStrategy::class, $strategy);
         $this->assertEquals('mjpeg', $strategy->getSourceType());
 
-        // Push camera (FTPS upload)
+        // Push camera (FTP/SFTP upload)
         $pushConfig = [
             'name' => 'Tower Cam',
             'type' => 'push',
             'refresh_seconds' => 60,
             'push_config' => [
-                'protocol' => 'ftps',
                 'username' => 'towercam',
-                'password' => 'secret',
+                'password' => 'secret12345678',
                 'max_file_size_mb' => 25,
                 'allowed_extensions' => ['jpg', 'jpeg']
             ]

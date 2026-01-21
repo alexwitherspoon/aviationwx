@@ -28,28 +28,6 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertEmpty($result['errors']);
     }
     
-    public function testValidPushWebcamConfigWithLegacyProtocol()
-    {
-        // Protocol is deprecated but still allowed for backward compatibility
-        $cam = [
-            'name' => 'Test Camera',
-            'type' => 'push',
-            'push_config' => [
-                'username' => 'aB3xK9mP2qR7vN',  // 14 chars
-                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'sftp',  // Deprecated but allowed
-                'port' => 2222,
-                'max_file_size_mb' => 10,
-                'allowed_extensions' => ['jpg', 'jpeg', 'png']
-            ],
-            'refresh_seconds' => 300
-        ];
-        
-        $result = validatePushWebcamConfig($cam, 'kspb', 0);
-        
-        $this->assertTrue($result['valid']);
-        $this->assertEmpty($result['errors']);
-    }
     
     public function testMissingPushConfig()
     {
@@ -99,16 +77,16 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertStringContainsString('password must be exactly 14 characters', $result['errors'][0]);
     }
     
-    public function testInvalidProtocolWhenProvided()
+    public function testProtocolFieldNotAllowed()
     {
-        // Protocol is optional, but if provided must be valid
+        // Protocol field has been removed - should fail validation
         $cam = [
             'name' => 'Test Camera',
             'type' => 'push',
             'push_config' => [
                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
                 'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'invalid'
+                'protocol' => 'sftp'  // No longer allowed
             ]
         ];
         
@@ -116,28 +94,7 @@ class PushWebcamValidatorTest extends TestCase
         
         $this->assertFalse($result['valid']);
         $errorMessages = implode(' ', $result['errors']);
-        $this->assertStringContainsString('protocol must be one of', $errorMessages);
-    }
-    
-    public function testValidProtocolsWhenProvided()
-    {
-        // Protocol is deprecated but still validated if provided
-        $validProtocols = ['ftp', 'ftps', 'sftp'];
-        
-        foreach ($validProtocols as $protocol) {
-            $cam = [
-                'name' => 'Test Camera',
-                'type' => 'push',
-                'push_config' => [
-                    'username' => 'aB3xK9mP2qR7vN',  // 14 chars
-                    'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                    'protocol' => $protocol
-                ]
-            ];
-            
-            $result = validatePushWebcamConfig($cam, 'kspb', 0);
-            $this->assertTrue($result['valid'], "Protocol {$protocol} should be valid");
-        }
+        $this->assertStringContainsString("unknown field 'protocol'", $errorMessages);
     }
     
     public function testInvalidRefreshSeconds()

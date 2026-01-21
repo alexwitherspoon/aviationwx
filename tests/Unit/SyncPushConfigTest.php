@@ -49,19 +49,19 @@ class SyncPushConfigTest extends TestCase
                 'camera' => 'TESTAIRPORT_0',  // Uppercase (bug case)
                 'airport' => 'TESTAIRPORT',   // Uppercase (bug case)
                 'cam' => 0,
-                'protocol' => 'ftps'
+                'protocols' => ['ftp', 'sftp']
             ],
             'testcam2' => [
                 'camera' => 'kspb_0',         // Lowercase (correct)
                 'airport' => 'kspb',          // Lowercase (correct)
                 'cam' => 0,
-                'protocol' => 'sftp'
+                'protocols' => ['ftp', 'sftp']
             ],
             'testcam3' => [
                 'camera' => 'MixedCase_1',    // Mixed case
                 'airport' => 'MixedCase',     // Mixed case
                 'cam' => 1,
-                'protocol' => 'ftp'
+                'protocols' => ['ftp', 'sftp']
             ]
         ];
         

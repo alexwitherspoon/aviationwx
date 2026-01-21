@@ -1096,7 +1096,7 @@ function removeSftpUser($username) {
  * Creates or updates BOTH FTP and SFTP user accounts for unified access.
  * Both protocols share the same username/password and upload to the same directory.
  * 
- * The 'protocol' field in push_config is now optional/ignored - both protocols
+ * The 'protocol' field has been removed from push_config - both protocols
  * are always enabled for maximum flexibility.
  * 
  * @param string $airportId Airport identifier (will be normalized to lowercase)
