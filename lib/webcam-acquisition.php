@@ -1504,8 +1504,17 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure($validationResult['reason'], 'push', $validationResult);
         }
 
-        // Normalize EXIF timestamp to UTC
+        // Ensure EXIF exists (adds from filename timestamp if missing)
+        // Must be called before normalizeExifToUtc for cameras that don't embed EXIF
         $timezone = $this->getTimezone();
+        if (!ensureImageHasExif($filePath, null, $timezone)) {
+            require_once __DIR__ . '/webcam-image-metrics.php';
+            trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
+            $this->recordStabilityMetrics($validationResult['stability_time'] ?? 0, false);
+            return AcquisitionResult::failure('no_exif_timestamp', 'push');
+        }
+
+        // Normalize EXIF timestamp to UTC
         if (!normalizeExifToUtc($filePath, $this->airportId, $this->camIndex, $timezone)) {
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'invalid_exif_timestamp');
