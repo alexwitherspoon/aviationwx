@@ -2041,10 +2041,12 @@ class ConfigValidationTest extends TestCase
     }
 
     /**
-     * Test push config validation - Invalid configurations
+     * Test push config validation - Protocol is now optional (deprecated)
      */
-    public function testPushConfig_MissingProtocol()
+    public function testPushConfig_ProtocolIsOptional()
     {
+        // Protocol is deprecated - both FTP and SFTP are always enabled
+        // Config without protocol should be valid
         $config = [
             'airports' => [
                 'kspb' => [
@@ -2070,8 +2072,7 @@ class ConfigValidationTest extends TestCase
         ];
         
         $result = validateAirportsJsonStructure($config);
-        $this->assertFalse($result['valid'], 'Push config missing protocol should fail validation');
-        $this->assertStringContainsString("missing 'protocol'", implode(' ', $result['errors']));
+        $this->assertTrue($result['valid'], 'Push config without protocol should pass validation (protocol is deprecated)');
     }
 
     public function testPushConfig_MissingUsername()
@@ -2089,7 +2090,6 @@ class ConfigValidationTest extends TestCase
                             'name' => 'Push Camera',
                             'type' => 'push',
                             'push_config' => [
-                                'protocol' => 'sftp',
                                 'password' => 'SecurePass1234',
                                 'max_file_size_mb' => 25,
                                 'allowed_extensions' => ['jpg', 'jpeg']

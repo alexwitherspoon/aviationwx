@@ -16,7 +16,28 @@ class PushWebcamValidatorTest extends TestCase
             'push_config' => [
                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
                 'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'sftp',
+                'max_file_size_mb' => 10,
+                'allowed_extensions' => ['jpg', 'jpeg', 'png']
+            ],
+            'refresh_seconds' => 300
+        ];
+        
+        $result = validatePushWebcamConfig($cam, 'kspb', 0);
+        
+        $this->assertTrue($result['valid']);
+        $this->assertEmpty($result['errors']);
+    }
+    
+    public function testValidPushWebcamConfigWithLegacyProtocol()
+    {
+        // Protocol is deprecated but still allowed for backward compatibility
+        $cam = [
+            'name' => 'Test Camera',
+            'type' => 'push',
+            'push_config' => [
+                'username' => 'aB3xK9mP2qR7vN',  // 14 chars
+                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
+                'protocol' => 'sftp',  // Deprecated but allowed
                 'port' => 2222,
                 'max_file_size_mb' => 10,
                 'allowed_extensions' => ['jpg', 'jpeg', 'png']
@@ -51,8 +72,7 @@ class PushWebcamValidatorTest extends TestCase
             'type' => 'push',
             'push_config' => [
                 'username' => 'thisusernameistoolong', // Too long (> 14 chars)
-                'password' => 'mK8pL3nQ6rT9v', // Exactly 14 chars (valid)
-                'protocol' => 'sftp'
+                'password' => 'mK8pL3nQ6rT9v' // Exactly 14 chars (valid)
             ]
         ];
         
@@ -69,8 +89,7 @@ class PushWebcamValidatorTest extends TestCase
             'type' => 'push',
             'push_config' => [
                 'username' => 'aB3xK9mP2qR7vN',
-                'password' => 'short',
-                'protocol' => 'sftp'
+                'password' => 'short'
             ]
         ];
         
@@ -80,8 +99,9 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertStringContainsString('password must be exactly 14 characters', $result['errors'][0]);
     }
     
-    public function testInvalidProtocol()
+    public function testInvalidProtocolWhenProvided()
     {
+        // Protocol is optional, but if provided must be valid
         $cam = [
             'name' => 'Test Camera',
             'type' => 'push',
@@ -99,8 +119,9 @@ class PushWebcamValidatorTest extends TestCase
         $this->assertStringContainsString('protocol must be one of', $errorMessages);
     }
     
-    public function testValidProtocols()
+    public function testValidProtocolsWhenProvided()
     {
+        // Protocol is deprecated but still validated if provided
         $validProtocols = ['ftp', 'ftps', 'sftp'];
         
         foreach ($validProtocols as $protocol) {
@@ -126,8 +147,7 @@ class PushWebcamValidatorTest extends TestCase
             'type' => 'push',
             'push_config' => [
                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
-                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'sftp'
+                'password' => 'mK8pL3nQ6rT9vW'   // 14 chars
             ],
             'refresh_seconds' => 30
         ];
@@ -147,7 +167,6 @@ class PushWebcamValidatorTest extends TestCase
             'push_config' => [
                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
                 'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'sftp',
                 'max_file_size_mb' => 200
             ]
         ];
@@ -167,7 +186,6 @@ class PushWebcamValidatorTest extends TestCase
             'push_config' => [
                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
                 'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                'protocol' => 'sftp',
                 'allowed_extensions' => ['jpg', 'exe']
             ]
         ];
@@ -189,16 +207,14 @@ class PushWebcamValidatorTest extends TestCase
                             'type' => 'push',
                             'push_config' => [
                                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
-                                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                                'protocol' => 'sftp'
+                                'password' => 'mK8pL3nQ6rT9vW'   // 14 chars
                             ]
                         ],
                         [
                             'type' => 'push',
                             'push_config' => [
                                 'username' => 'aB3xK9mP2qR7vN', // Duplicate
-                                'password' => 'xY9zA2bC4dE6fG',  // 14 chars
-                                'protocol' => 'ftp'
+                                'password' => 'xY9zA2bC4dE6fG'   // 14 chars
                             ]
                         ]
                     ]
@@ -222,16 +238,14 @@ class PushWebcamValidatorTest extends TestCase
                             'type' => 'push',
                             'push_config' => [
                                 'username' => 'aB3xK9mP2qR7vN',  // 14 chars
-                                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                                'protocol' => 'sftp'
+                                'password' => 'mK8pL3nQ6rT9vW'   // 14 chars
                             ]
                         ],
                         [
                             'type' => 'push',
                             'push_config' => [
                                 'username' => 'xY9zA2bC4dE6fG', // Different, 14 chars
-                                'password' => 'mK8pL3nQ6rT9vW',  // 14 chars
-                                'protocol' => 'ftp'
+                                'password' => 'mK8pL3nQ6rT9vW'   // 14 chars
                             ]
                         ]
                     ]

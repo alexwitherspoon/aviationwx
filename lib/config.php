@@ -3621,7 +3621,8 @@ function validateAirportsJsonStructure(array $config): array {
                                 if (!is_array($pushConfig)) {
                                     $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config must be an object";
                                 } else {
-                                    $requiredPushFields = ['protocol', 'username', 'password', 'max_file_size_mb', 'allowed_extensions'];
+                                    // Note: 'protocol' is deprecated (both FTP and SFTP always enabled)
+                                    $requiredPushFields = ['username', 'password', 'max_file_size_mb', 'allowed_extensions'];
                                     foreach ($requiredPushFields as $field) {
                                         if (!isset($pushConfig[$field])) {
                                             $errors[] = "Airport '{$airportCode}' webcam[{$idx}] push_config missing '{$field}'";
