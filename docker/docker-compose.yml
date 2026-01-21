@@ -18,6 +18,9 @@ services:
       - ../config/airports.json:/var/www/html/config/airports.json:ro
       # Mount cache directory from /tmp (ephemeral, cleared on reboot)
       - /tmp/aviationwx-cache:/var/www/html/cache
+      # SFTP chroot directory - must be at /var/sftp/ inside container
+      # because SSH chroot requires ALL parent directories to be root-owned
+      - /tmp/aviationwx-sftp:/var/sftp
     cap_add:
       - NET_ADMIN
       - NET_RAW

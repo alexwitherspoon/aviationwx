@@ -18,9 +18,11 @@
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── uploads/
  * │   └── {airport}/{username}/    # FTP uploads (ftp:www-data 2775)
- * ├── sftp/
- * │   └── {username}/              # SFTP chroot (root:root 755)
- * │       └── files/               # SFTP uploads (ftp:www-data 2775)
+ * 
+ * SFTP uploads are stored separately in /var/sftp/ (not under cache/)
+ * because SSH chroot requires ALL parent directories to be root-owned.
+ * /var/sftp/{username}/            # SFTP chroot (root:root 755)
+ * /var/sftp/{username}/files/      # SFTP uploads (ftp:www-data 2775)
  * ├── notam/
  * │   └── {airport}.json           # NOTAM cache
  * ├── partners/
@@ -250,9 +252,11 @@ if (!defined('CACHE_UPLOADS_DIR')) {
     define('CACHE_UPLOADS_DIR', CACHE_BASE_DIR . '/uploads');
 }
 
-// SFTP uploads - dedicated chroot structure (all parent dirs must be root-owned)
+// SFTP uploads - dedicated chroot structure outside of cache/
+// Must be in a path where ALL parent directories are root-owned (SSH chroot requirement)
+// /var/sftp/ works because /var/ is root-owned
 if (!defined('CACHE_SFTP_DIR')) {
-    define('CACHE_SFTP_DIR', CACHE_BASE_DIR . '/sftp');
+    define('CACHE_SFTP_DIR', '/var/sftp');
 }
 
 /**

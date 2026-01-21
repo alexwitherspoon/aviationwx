@@ -233,10 +233,11 @@ chmod 755 "${UPLOADS_DIR}" 2>/dev/null || true
 
 echo "✓ FTP uploads directory initialized"
 
-# Initialize SFTP directory (separate hierarchy for SSH chroot)
-# All parent directories from / to chroot must be root-owned for SSH chroot to work
+# Initialize SFTP directory (completely separate from cache for SSH chroot)
+# SSH ChrootDirectory requires ALL parent directories to be root-owned
+# /var/sftp/ works because /var/ is already root:root
 echo "Initializing SFTP directory..."
-SFTP_DIR="${CACHE_DIR}/sftp"
+SFTP_DIR="/var/sftp"
 
 # Create SFTP directory if it doesn't exist
 if [ ! -d "${SFTP_DIR}" ]; then
@@ -249,7 +250,7 @@ fi
 chown root:root "${SFTP_DIR}" 2>/dev/null || true
 chmod 755 "${SFTP_DIR}" 2>/dev/null || true
 
-echo "✓ SFTP directory initialized"
+echo "✓ SFTP directory initialized at ${SFTP_DIR}"
 
 # Configure vsftpd pasv_address
 # Priority: 1) config.public_ip (explicit), 2) config.upload_hostname (DNS), 3) default DNS fallback

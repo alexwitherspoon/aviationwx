@@ -16,7 +16,8 @@ USERNAME="$1"
 PASSWORD="$2"
 
 # Base SFTP directory (must match CACHE_SFTP_DIR in cache-paths.php)
-SFTP_BASE_DIR="/var/www/html/cache/sftp"
+# Located outside /var/www/html/ so ALL parent dirs are root-owned (SSH chroot requirement)
+SFTP_BASE_DIR="/var/sftp"
 
 if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
     echo "Usage: $0 <username> <password>" >&2

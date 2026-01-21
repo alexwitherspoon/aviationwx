@@ -943,13 +943,14 @@ The webcam processing pipeline uses three main components:
 - **Behavior**: Images uploaded by cameras via SFTP/FTP/FTPS
 - **Protocol Support**: Both FTP and SFTP are enabled for each push camera with the same credentials
 - **Directory Structure** (separate hierarchies for FTP and SFTP):
-  - FTP: `/uploads/{airport}/{username}/` (ftp:www-data 2775)
-  - SFTP Chroot: `/sftp/{username}/` (root:root 755)
-  - SFTP Upload: `/sftp/{username}/files/` (ftp:www-data 2775)
+  - FTP: `/cache/uploads/{airport}/{username}/` (ftp:www-data 2775)
+  - SFTP Chroot: `/var/sftp/{username}/` (root:root 755)
+  - SFTP Upload: `/var/sftp/{username}/files/` (ftp:www-data 2775)
 - **Upload Paths**:
   - FTP: Upload to `/` (lands in FTP directory)
   - SFTP: Upload to `/files/` (chrooted, must use subdirectory)
 - **Processing**: Webcam processor checks both FTP and SFTP directories for each camera
+- **Note**: SFTP uses `/var/sftp/` (outside cache) because SSH chroot requires ALL parent directories to be root-owned
 - **Upload Sources**:
   - **Direct camera uploads**: Cameras upload via SFTP/FTP/FTPS with local time EXIF
   - **Bridge uploads**: AviationWX-Bridge uploads with UTC EXIF and marker in UserComment

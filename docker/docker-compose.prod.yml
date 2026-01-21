@@ -26,8 +26,11 @@ services:
       # These logos are kept private in the secrets repo and deployed alongside airports.json
       - /home/aviationwx/partner-logos:/var/www/html/partner-logos:ro
       - /tmp/aviationwx-cache:/var/www/html/cache
-      # Note: /var/www/html/uploads is ephemeral (inside container only)
-      # Files are uploaded via SFTP/FTP/FTPS, then processed and moved to cache
+      # SFTP chroot directory - must be at /var/sftp/ inside container
+      # because SSH chroot requires ALL parent directories to be root-owned
+      # /var/www/html/ is www-data owned, so we use /var/sftp/ instead
+      - /tmp/aviationwx-sftp:/var/sftp
+      # Note: FTP uploads go to /var/www/html/cache/uploads/ (inside cache mount)
       - /etc/letsencrypt:/etc/letsencrypt:rw  # Let's Encrypt certificates (rw needed for certbot to write)
     cap_add:
       - NET_ADMIN

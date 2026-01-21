@@ -29,6 +29,8 @@ services:
     volumes:
       # Cache directory (ephemeral)
       - /tmp/aviationwx-cache:/var/www/html/cache
+      # SFTP chroot directory (SSH chroot requires root-owned parent dirs)
+      - /tmp/aviationwx-sftp:/var/sftp
     cap_add:
       - NET_ADMIN
       - NET_RAW
