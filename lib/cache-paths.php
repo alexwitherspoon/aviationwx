@@ -17,8 +17,10 @@
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── uploads/
- * │   └── {airport}/{username}/    # Push webcam chroot (root:root 755)
- * │       └── files/               # Actual uploads (ftp:www-data 2775)
+ * │   └── {airport}/{username}/    # FTP uploads (ftp:www-data 2775)
+ * ├── sftp/
+ * │   └── {username}/              # SFTP chroot (root:root 755)
+ * │       └── files/               # SFTP uploads (ftp:www-data 2775)
  * ├── notam/
  * │   └── {airport}.json           # NOTAM cache
  * ├── partners/
@@ -240,47 +242,112 @@ function getWebcamStagingPath(string $airportId, int $camIndex, string $format =
 }
 
 // =============================================================================
-// PUSH WEBCAM UPLOAD PATHS (FTP/SFTP with chroot)
+// PUSH WEBCAM UPLOAD PATHS (FTP and SFTP - separate directories)
 // =============================================================================
 
+// FTP uploads - simple directory structure (no chroot needed for vsftpd)
 if (!defined('CACHE_UPLOADS_DIR')) {
     define('CACHE_UPLOADS_DIR', CACHE_BASE_DIR . '/uploads');
 }
 
+// SFTP uploads - dedicated chroot structure (all parent dirs must be root-owned)
+if (!defined('CACHE_SFTP_DIR')) {
+    define('CACHE_SFTP_DIR', CACHE_BASE_DIR . '/sftp');
+}
+
 /**
- * Get chroot directory for a push webcam
+ * Get FTP upload directory for a push webcam
  * 
- * This is the SFTP chroot directory (root-owned, not writable).
- * SFTP users are jailed to this directory and upload to the files/ subdirectory.
+ * This is where FTP/FTPS cameras upload files.
+ * vsftpd local_root points here, users upload to /
  * 
- * Directory structure:
- *   {chroot}/       ← root:root 755 (SFTP chroot, not writable)
- *   {chroot}/files/ ← ftp:www-data 2775 (actual upload directory)
+ * Directory owned by ftp:www-data with setgid (2775).
  * 
  * @param string $airportId Airport identifier
- * @param string $username FTP/SFTP username
- * @return string Full path to chroot directory
+ * @param string $username FTP username
+ * @return string Full path to FTP upload directory
  */
-function getWebcamChrootDir(string $airportId, string $username): string {
+function getWebcamFtpUploadDir(string $airportId, string $username): string {
     return CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
 }
 
 /**
- * Get upload directory for a push webcam
+ * Get SFTP chroot directory for a push webcam
  * 
- * This is the writable subdirectory where cameras actually upload files.
- * - FTP: vsftpd local_root points here, users upload to /
- * - SFTP: Users chroot to parent and upload to /files/
+ * This is the SFTP chroot directory (root-owned, not writable).
+ * SFTP users are jailed here and upload to the files/ subdirectory.
  * 
- * Directory owned by ftp:www-data with setgid (2775) so both FTP virtual users
- * and SFTP system users can write. Uploaded files inherit www-data group.
+ * The entire path from / to this directory must be root-owned,
+ * which is why SFTP uses a separate /cache/sftp/ hierarchy.
+ * 
+ * Directory structure:
+ *   /cache/sftp/{username}/       ← root:root 755 (SFTP chroot)
+ *   /cache/sftp/{username}/files/ ← ftp:www-data 2775 (uploads)
+ * 
+ * @param string $username SFTP username
+ * @return string Full path to SFTP chroot directory
+ */
+function getWebcamSftpChrootDir(string $username): string {
+    return CACHE_SFTP_DIR . '/' . $username;
+}
+
+/**
+ * Get SFTP upload directory for a push webcam
+ * 
+ * This is the writable subdirectory where SFTP cameras upload files.
+ * Users chroot to parent and must upload to /files/
+ * 
+ * Directory owned by ftp:www-data with setgid (2775).
+ * 
+ * @param string $username SFTP username
+ * @return string Full path to SFTP upload directory
+ */
+function getWebcamSftpUploadDir(string $username): string {
+    return getWebcamSftpChrootDir($username) . '/files';
+}
+
+/**
+ * Get all upload directories for a push webcam
+ * 
+ * Returns both FTP and SFTP upload paths for the processor to check.
+ * 
+ * @param string $airportId Airport identifier
+ * @param string $username Push webcam username
+ * @return array Array of paths to check for uploaded files
+ */
+function getWebcamAllUploadDirs(string $airportId, string $username): array {
+    return [
+        'ftp' => getWebcamFtpUploadDir($airportId, $username),
+        'sftp' => getWebcamSftpUploadDir($username),
+    ];
+}
+
+/**
+ * Get upload directory for a push webcam (legacy compatibility)
+ * 
+ * @deprecated Use getWebcamFtpUploadDir() or getWebcamSftpUploadDir() instead
+ * 
+ * Returns FTP directory for backward compatibility.
  * 
  * @param string $airportId Airport identifier
  * @param string $username FTP/SFTP username
- * @return string Full path to upload directory
+ * @return string Full path to FTP upload directory
  */
 function getWebcamUploadDir(string $airportId, string $username): string {
-    return getWebcamChrootDir($airportId, $username) . '/files';
+    return getWebcamFtpUploadDir($airportId, $username);
+}
+
+/**
+ * Get chroot directory for a push webcam (legacy compatibility)
+ * 
+ * @deprecated Use getWebcamSftpChrootDir() instead
+ * 
+ * @param string $airportId Airport identifier (ignored for SFTP)
+ * @param string $username SFTP username
+ * @return string Full path to SFTP chroot directory
+ */
+function getWebcamChrootDir(string $airportId, string $username): string {
+    return getWebcamSftpChrootDir($username);
 }
 
 /**
@@ -544,6 +611,7 @@ function ensureAllCacheDirs(): array {
         CACHE_WEATHER_HISTORY_DIR,
         CACHE_WEBCAMS_DIR,
         CACHE_UPLOADS_DIR,
+        CACHE_SFTP_DIR,
         CACHE_NOTAM_DIR,
         CACHE_PARTNERS_DIR,
         CACHE_RATE_LIMITS_DIR,
@@ -573,7 +641,8 @@ function getAirportCachePaths(string $airportId): array {
         'weather' => getWeatherCachePath($airportId),
         'weather_history' => getWeatherHistoryCachePath($airportId),
         'webcams_dir' => getWebcamAirportDir($airportId),
-        'uploads_dir' => CACHE_UPLOADS_DIR . '/' . $airportId,
+        'ftp_uploads_dir' => CACHE_UPLOADS_DIR . '/' . $airportId,
+        'sftp_dir' => CACHE_SFTP_DIR,  // SFTP uses flat structure by username
         'notam' => getNotamCachePath($airportId),
         'outage' => getOutageStatePath($airportId),
     ];

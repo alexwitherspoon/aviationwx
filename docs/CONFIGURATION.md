@@ -726,16 +726,17 @@ For cameras that upload images to the server:
 - **Both protocols enabled**: Each push camera gets both FTP and SFTP access with the same credentials
 
 **Upload paths:**
-- **FTP**: Upload to `/` (lands in files/ directory)
-- **SFTP**: Upload to `/files/` (chroot security requires subdirectory)
+- **FTP**: Upload to `/` (vsftpd lands in FTP directory)
+- **SFTP**: Upload to `/files/` (chroot requires subdirectory)
 
-Directory structure:
+Directory structure (separate hierarchies for FTP and SFTP):
 ```
-/uploads/{airport}/{username}/       <- SFTP chroot (root:root 755)
-/uploads/{airport}/{username}/files/ <- upload here (ftp:www-data 2775)
+/uploads/{airport}/{username}/   <- FTP uploads (ftp:www-data 2775)
+/sftp/{username}/                <- SFTP chroot (root:root 755)
+/sftp/{username}/files/          <- SFTP uploads (ftp:www-data 2775)
 ```
 
-Files are processed automatically from the files/ directory.
+The processor checks both FTP and SFTP directories automatically.
 
 **Subfolder support:** Cameras that create date-based folder structures (e.g., `2026/01/06/image.jpg`) are fully supported. The system recursively searches up to 10 levels deep and automatically cleans up empty folders after processing.
 
@@ -1355,7 +1356,8 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
 | `cache/webcams/{airport}/{cam}/{ts}_original.{ext}` | Original timestamped webcam images |
 | `cache/webcams/{airport}/{cam}/{ts}_{height}.{ext}` | Variant timestamped webcam images (height in pixels) |
-| `cache/uploads/{airport}/{username}/` | SFTP chroot (root:root 755) |
-| `cache/uploads/{airport}/{username}/files/` | FTP/SFTP push uploads (ftp:www-data 2775) |
+| `cache/uploads/{airport}/{username}/` | FTP push uploads (ftp:www-data 2775) |
+| `cache/sftp/{username}/` | SFTP chroot (root:root 755) |
+| `cache/sftp/{username}/files/` | SFTP push uploads (ftp:www-data 2775) |
 | `cache/peak_gusts.json` | Daily peak gust tracking |
 | `cache/temp_extremes.json` | Daily temperature extremes |

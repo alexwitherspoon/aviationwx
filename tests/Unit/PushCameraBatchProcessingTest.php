@@ -333,11 +333,11 @@ class PushCameraBatchProcessingTest extends TestCase
             ['name' => 'Test Airport', 'timezone' => 'UTC']
         );
         
-        // Use reflection to set the upload directory
+        // Use reflection to set the upload directories array
         $reflection = new ReflectionClass($strategy);
-        $property = $reflection->getProperty('uploadDir');
+        $property = $reflection->getProperty('uploadDirs');
         $property->setAccessible(true);
-        $property->setValue($strategy, $uploadDir);
+        $property->setValue($strategy, ['ftp' => $uploadDir]);
         
         return $strategy;
     }

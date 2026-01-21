@@ -217,23 +217,39 @@ else
     echo "⚠️  Warning: Log directory does not exist and could not be created"
 fi
 
-# Initialize uploads directory (under cache/ for push webcam FTP/SFTP uploads)
-# Parent directories must be owned by root for SFTP chroot to work
-echo "Initializing uploads directory..."
+# Initialize FTP uploads directory (for vsftpd virtual users)
+echo "Initializing FTP uploads directory..."
 UPLOADS_DIR="${CACHE_DIR}/uploads"
 
 # Create uploads directory if it doesn't exist
 if [ ! -d "${UPLOADS_DIR}" ]; then
-    echo "Creating uploads directory: ${UPLOADS_DIR}"
+    echo "Creating FTP uploads directory: ${UPLOADS_DIR}"
     mkdir -p "${UPLOADS_DIR}"
 fi
 
-# Set ownership to root:root for chroot requirements
-# All parent directories must be root-owned for SSH chroot to work
+# FTP uploads use simple directory structure (no chroot needed for vsftpd)
 chown root:root "${UPLOADS_DIR}" 2>/dev/null || true
 chmod 755 "${UPLOADS_DIR}" 2>/dev/null || true
 
-echo "✓ Uploads directory initialized"
+echo "✓ FTP uploads directory initialized"
+
+# Initialize SFTP directory (separate hierarchy for SSH chroot)
+# All parent directories from / to chroot must be root-owned for SSH chroot to work
+echo "Initializing SFTP directory..."
+SFTP_DIR="${CACHE_DIR}/sftp"
+
+# Create SFTP directory if it doesn't exist
+if [ ! -d "${SFTP_DIR}" ]; then
+    echo "Creating SFTP directory: ${SFTP_DIR}"
+    mkdir -p "${SFTP_DIR}"
+fi
+
+# Set strict ownership for SFTP chroot requirements
+# CRITICAL: Must be root:root 755 for SSH ChrootDirectory to work
+chown root:root "${SFTP_DIR}" 2>/dev/null || true
+chmod 755 "${SFTP_DIR}" 2>/dev/null || true
+
+echo "✓ SFTP directory initialized"
 
 # Configure vsftpd pasv_address
 # Priority: 1) config.public_ip (explicit), 2) config.upload_hostname (DNS), 3) default DNS fallback

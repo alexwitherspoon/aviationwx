@@ -831,10 +831,12 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
  * Push acquisition strategy for processing uploaded images
  * 
  * Handles images uploaded via FTP/SFTP to the server.
+ * Checks both FTP and SFTP upload directories for files.
  */
 class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 {
-    private ?string $uploadDir;
+    /** @var array Upload directories to check (ftp and sftp) */
+    private array $uploadDirs = [];
 
     public function __construct(
         string $airportId,
@@ -843,7 +845,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         array $airportConfig
     ) {
         parent::__construct($airportId, $camIndex, $camConfig, $airportConfig);
-        $this->uploadDir = $this->getUploadDirectory();
+        $this->uploadDirs = $this->getUploadDirectories();
     }
 
     public function getSourceType(): string
@@ -852,15 +854,46 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     }
 
     /**
-     * Get upload directory for this camera
+     * Get all upload directories for this camera (FTP and SFTP)
+     * 
+     * @return array Array of directory paths that exist
      */
-    private function getUploadDirectory(): ?string
+    private function getUploadDirectories(): array
     {
         $username = $this->camConfig['push_config']['username'] ?? null;
         if (!$username) {
-            return null;
+            return [];
         }
-        return getWebcamUploadDir($this->airportId, $username);
+        
+        $dirs = [];
+        
+        // FTP upload directory
+        $ftpDir = getWebcamFtpUploadDir($this->airportId, $username);
+        if (is_dir($ftpDir)) {
+            $dirs['ftp'] = $ftpDir;
+        }
+        
+        // SFTP upload directory
+        $sftpDir = getWebcamSftpUploadDir($username);
+        if (is_dir($sftpDir)) {
+            $dirs['sftp'] = $sftpDir;
+        }
+        
+        return $dirs;
+    }
+    
+    /**
+     * Get primary upload directory (for backward compatibility)
+     * Returns FTP directory if available, otherwise SFTP
+     * 
+     * @deprecated Use getUploadDirectories() instead
+     */
+    private function getUploadDirectory(): ?string
+    {
+        if (!empty($this->uploadDirs)) {
+            return reset($this->uploadDirs);
+        }
+        return null;
     }
 
     /**
@@ -874,8 +907,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             return $parentCheck;
         }
 
-        // Check if upload directory exists
-        if (!$this->uploadDir || !is_dir($this->uploadDir)) {
+        // Check if any upload directory exists
+        if (empty($this->uploadDirs)) {
             return ['skip' => true, 'reason' => 'no_upload_dir'];
         }
 
@@ -901,11 +934,12 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
     public function acquire(): AcquisitionResult
     {
-        if (!$this->uploadDir) {
+        $username = $this->camConfig['push_config']['username'] ?? null;
+        if (!$username) {
             return AcquisitionResult::failure('no_username_configured', 'push');
         }
 
-        if (!is_dir($this->uploadDir)) {
+        if (empty($this->uploadDirs)) {
             return AcquisitionResult::skip('no_upload_dir', 'push');
         }
 
@@ -973,7 +1007,7 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
     }
 
     /**
-     * Find the newest valid image in the upload directory
+     * Find the newest valid image in all upload directories (FTP and SFTP)
      * 
      * Note: No time-based filtering - files are moved after processing,
      * so they won't appear again. Time filtering was removed to fix a bug
@@ -981,7 +1015,13 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
      */
     private function findNewestValidImage(): ?string
     {
-        $files = $this->recursiveGlobImages($this->uploadDir);
+        // Collect files from all upload directories (FTP and SFTP)
+        $files = [];
+        foreach ($this->uploadDirs as $protocol => $dir) {
+            $dirFiles = $this->recursiveGlobImages($dir);
+            $files = array_merge($files, $dirFiles);
+        }
+        
         if (empty($files)) {
             return null;
         }
@@ -1405,11 +1445,19 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
      */
     public function getOrderedFiles(int $limit = PUSH_BATCH_LIMIT): array
     {
-        if (!$this->uploadDir || !is_dir($this->uploadDir)) {
+        if (empty($this->uploadDirs)) {
             return ['files' => [], 'total_pending' => 0];
         }
 
-        $files = $this->recursiveGlobImages($this->uploadDir);
+        // Collect files from all upload directories (FTP and SFTP)
+        $files = [];
+        foreach ($this->uploadDirs as $protocol => $dir) {
+            if (is_dir($dir)) {
+                $dirFiles = $this->recursiveGlobImages($dir);
+                $files = array_merge($files, $dirFiles);
+            }
+        }
+        
         if (empty($files)) {
             return ['files' => [], 'total_pending' => 0];
         }

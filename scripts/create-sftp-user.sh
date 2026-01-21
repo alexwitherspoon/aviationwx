@@ -1,23 +1,25 @@
 #!/bin/bash
 # SFTP User Creation Helper
 # Creates or updates an SFTP user for push webcam uploads with chroot
-# Usage: create-sftp-user.sh <username> <password> <chroot_dir>
+# Usage: create-sftp-user.sh <username> <password>
 #
-# Directory structure:
-#   {chroot_dir}/       ← root:root 755 (SFTP chroot, not writable)
-#   {chroot_dir}/files/ ← ftp:www-data 2775 (upload here)
+# Directory structure (using dedicated /cache/sftp/ hierarchy):
+#   /cache/sftp/{username}/       ← root:root 755 (SFTP chroot)
+#   /cache/sftp/{username}/files/ ← ftp:www-data 2775 (upload here)
 #
-# SFTP users are chrooted to {chroot_dir} and must upload to /files/
-# FTP users land directly in files/ via vsftpd local_root
+# SFTP users are chrooted to /cache/sftp/{username}/ and must upload to /files/
+# The entire path from / to chroot must be root-owned for SSH chroot to work.
 
 set -e
 
 USERNAME="$1"
 PASSWORD="$2"
-CHROOT_DIR="$3"
 
-if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ -z "$CHROOT_DIR" ]; then
-    echo "Usage: $0 <username> <password> <chroot_dir>" >&2
+# Base SFTP directory (must match CACHE_SFTP_DIR in cache-paths.php)
+SFTP_BASE_DIR="/var/www/html/cache/sftp"
+
+if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+    echo "Usage: $0 <username> <password>" >&2
     exit 1
 fi
 
@@ -37,6 +39,16 @@ fi
 FTP_UID=$(id -u ftp 2>/dev/null || echo "101")
 WWW_DATA_GID=$(getent group www-data | cut -d: -f3 || echo "33")
 
+# Chroot directory: /cache/sftp/{username}/
+CHROOT_DIR="$SFTP_BASE_DIR/$USERNAME"
+
+# Ensure base SFTP directory exists (root-owned)
+if [ ! -d "$SFTP_BASE_DIR" ]; then
+    mkdir -p "$SFTP_BASE_DIR"
+fi
+chown root:root "$SFTP_BASE_DIR"
+chmod 755 "$SFTP_BASE_DIR"
+
 # Create chroot directory (root-owned, not writable - required for SSH chroot)
 if [ ! -d "$CHROOT_DIR" ]; then
     mkdir -p "$CHROOT_DIR"
@@ -51,9 +63,9 @@ if [ ! -d "$FILES_DIR" ]; then
 fi
 
 # files/ directory: ftp:www-data with setgid (2775)
-# - ftp owner: allows vsftpd virtual users to write
-# - www-data group: allows SFTP users (in www-data group) to write
-# - setgid: ensures new files inherit www-data group for processor access
+# - ftp owner: consistent with FTP uploads
+# - www-data group: allows processor to read files
+# - setgid: ensures new files inherit www-data group
 chown "$FTP_UID":"$WWW_DATA_GID" "$FILES_DIR"
 chmod 2775 "$FILES_DIR"
 
@@ -88,6 +100,8 @@ else
 fi
 
 # Ensure permissions are correct after any modifications
+chown root:root "$SFTP_BASE_DIR"
+chmod 755 "$SFTP_BASE_DIR"
 chown root:root "$CHROOT_DIR"
 chmod 755 "$CHROOT_DIR"
 chown "$FTP_UID":"$WWW_DATA_GID" "$FILES_DIR"
@@ -97,4 +111,3 @@ echo "SFTP user setup complete: $USERNAME"
 echo "  Chroot: $CHROOT_DIR (root:root 755)"
 echo "  Upload: $FILES_DIR (ftp:www-data 2775)"
 echo "  SFTP path: /files/"
-

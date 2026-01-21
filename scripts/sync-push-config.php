@@ -435,28 +435,25 @@ function ensureWebcamsBaseDirectory() {
 }
 
 /**
- * Create upload directory for camera with chroot structure
+ * Create FTP upload directory for camera
  * 
- * Creates airport-scoped upload directory with SFTP chroot support:
- *   /uploads/{airport}/{username}/       ← chroot (root:root 755)
- *   /uploads/{airport}/{username}/files/ ← upload dir (ftp:www-data 2775)
+ * Creates airport-scoped FTP upload directory:
+ *   /uploads/{airport}/{username}/    ← FTP upload dir (ftp:www-data 2775)
  * 
- * - FTP: vsftpd local_root points to files/, users upload to /
- * - SFTP: Users chroot to parent, upload to /files/
- * - Setgid ensures uploaded files inherit www-data group for processor access
+ * FTP uses a simple flat structure - no chroot needed for vsftpd virtual users.
+ * vsftpd local_root points here, users upload to /
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param string|null $username Username (required)
- * @return string|null Path to upload directory (files/), or null on error
+ * @return string|null Path to FTP upload directory, or null on error
  */
-function createCameraDirectory($airportId, $camIndex, $username = null) {
+function createFtpDirectory($airportId, $camIndex, $username = null) {
     $webcamsBaseDir = ensureWebcamsBaseDirectory();
-    // Normalize to lowercase - must match getWebcamUploadDir() path generation
     $airportId = strtolower($airportId);
     
     if (!$username) {
-        aviationwx_log('warning', 'createCameraDirectory: no username provided', [
+        aviationwx_log('warning', 'createFtpDirectory: no username provided', [
             'airport' => $airportId,
             'cam' => $camIndex
         ], 'app');
@@ -475,19 +472,71 @@ function createCameraDirectory($airportId, $camIndex, $username = null) {
         @mkdir($airportDir, 0755, true);
     }
     
-    // Chroot directory: /uploads/{airport}/{username}/
-    // Must be root-owned for SFTP chroot security
-    $chrootDir = $airportDir . '/' . $username;
+    // FTP upload directory: /uploads/{airport}/{username}/
+    // ftp:www-data with setgid
+    $ftpDir = getWebcamFtpUploadDir($airportId, $username);
+    if (!is_dir($ftpDir)) {
+        @mkdir($ftpDir, 02775, true);
+    }
+    @chown($ftpDir, $ftpUid);
+    @chgrp($ftpDir, $wwwDataGid);
+    @chmod($ftpDir, 02775);
+    
+    aviationwx_log('debug', 'createFtpDirectory: FTP directory created', [
+        'airport' => $airportId,
+        'cam' => $camIndex,
+        'ftp_dir' => $ftpDir
+    ], 'app');
+    
+    return $ftpDir;
+}
+
+/**
+ * Create SFTP chroot directory structure for camera
+ * 
+ * Creates dedicated SFTP chroot structure:
+ *   /sftp/{username}/       ← SFTP chroot (root:root 755)
+ *   /sftp/{username}/files/ ← SFTP upload dir (ftp:www-data 2775)
+ * 
+ * SFTP uses a separate /cache/sftp/ hierarchy where ALL parent directories
+ * are root-owned (required for SSH ChrootDirectory to work).
+ * 
+ * @param string $username Username (required)
+ * @return string|null Path to SFTP upload directory (files/), or null on error
+ */
+function createSftpDirectory($username) {
+    if (!$username) {
+        aviationwx_log('warning', 'createSftpDirectory: no username provided', [], 'app');
+        return null;
+    }
+    
+    // Get user/group info
+    $ftpInfo = @posix_getpwnam('ftp');
+    $ftpUid = $ftpInfo ? $ftpInfo['uid'] : 101;
+    $wwwDataInfo = @posix_getpwnam('www-data');
+    $wwwDataGid = $wwwDataInfo ? $wwwDataInfo['gid'] : 33;
+    
+    // Ensure base SFTP directory exists (root-owned)
+    if (!is_dir(CACHE_SFTP_DIR)) {
+        @mkdir(CACHE_SFTP_DIR, 0755, true);
+    }
+    @chown(CACHE_SFTP_DIR, 0);
+    @chgrp(CACHE_SFTP_DIR, 0);
+    @chmod(CACHE_SFTP_DIR, 0755);
+    
+    // Chroot directory: /sftp/{username}/
+    // Must be root-owned for SSH chroot
+    $chrootDir = getWebcamSftpChrootDir($username);
     if (!is_dir($chrootDir)) {
         @mkdir($chrootDir, 0755, true);
     }
-    @chown($chrootDir, 0);  // root
-    @chgrp($chrootDir, 0);  // root
+    @chown($chrootDir, 0);
+    @chgrp($chrootDir, 0);
     @chmod($chrootDir, 0755);
     
-    // Upload directory: /uploads/{airport}/{username}/files/
-    // ftp:www-data with setgid so both FTP and SFTP users can write
-    $filesDir = $chrootDir . '/files';
+    // Upload directory: /sftp/{username}/files/
+    // ftp:www-data with setgid
+    $filesDir = getWebcamSftpUploadDir($username);
     if (!is_dir($filesDir)) {
         @mkdir($filesDir, 02775, true);
     }
@@ -495,9 +544,8 @@ function createCameraDirectory($airportId, $camIndex, $username = null) {
     @chgrp($filesDir, $wwwDataGid);
     @chmod($filesDir, 02775);
     
-    aviationwx_log('debug', 'createCameraDirectory: directory structure created', [
-        'airport' => $airportId,
-        'cam' => $camIndex,
+    aviationwx_log('debug', 'createSftpDirectory: SFTP chroot structure created', [
+        'username' => $username,
         'chroot' => $chrootDir,
         'upload_dir' => $filesDir
     ], 'app');
@@ -506,14 +554,45 @@ function createCameraDirectory($airportId, $camIndex, $username = null) {
 }
 
 /**
+ * Create all upload directories for a camera (FTP and SFTP)
+ * 
+ * @param string $airportId Airport ID (e.g., 'kspb')
+ * @param int $camIndex Camera index (0-based)
+ * @param string|null $username Username (required)
+ * @return array|null Array with 'ftp' and 'sftp' paths, or null on error
+ */
+function createCameraDirectory($airportId, $camIndex, $username = null) {
+    if (!$username) {
+        aviationwx_log('warning', 'createCameraDirectory: no username provided', [
+            'airport' => $airportId,
+            'cam' => $camIndex
+        ], 'app');
+        return null;
+    }
+    
+    $ftpDir = createFtpDirectory($airportId, $camIndex, $username);
+    $sftpDir = createSftpDirectory($username);
+    
+    if (!$ftpDir || !$sftpDir) {
+        return null;
+    }
+    
+    return [
+        'ftp' => $ftpDir,
+        'sftp' => $sftpDir
+    ];
+}
+
+/**
  * Remove camera directory
  * 
- * Recursively removes upload directory for a camera when it's no longer configured.
- * Handles current chroot structure and legacy directory structures.
+ * Recursively removes upload directories for a camera when it's no longer configured.
+ * Handles current FTP/SFTP structure and legacy directory structures.
  * 
  * Current structure:
- *   /uploads/{airport}/{username}/       ← chroot (removed)
- *   /uploads/{airport}/{username}/files/ ← upload dir (removed)
+ *   /uploads/{airport}/{username}/  ← FTP uploads
+ *   /sftp/{username}/               ← SFTP chroot
+ *   /sftp/{username}/files/         ← SFTP uploads
  * 
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
@@ -523,16 +602,24 @@ function createCameraDirectory($airportId, $camIndex, $username = null) {
 function removeCameraDirectory($airportId, $camIndex, $username = null) {
     // Normalize to lowercase - must match directory paths created by createCameraDirectory()
     $airportId = strtolower($airportId);
-    $baseDir = CACHE_UPLOADS_DIR . '/';
+    $uploadsBaseDir = CACHE_UPLOADS_DIR . '/';
+    $sftpBaseDir = CACHE_SFTP_DIR . '/';
     
     // Remove all possible directory locations (current + legacy)
     $dirsToRemove = [
-        $baseDir . $airportId . '_' . $camIndex,  // Legacy: airportId_camIndex
+        $uploadsBaseDir . $airportId . '_' . $camIndex,  // Legacy: airportId_camIndex
     ];
     if ($username) {
-        $dirsToRemove[] = $baseDir . $username;                               // Legacy: username only
-        $dirsToRemove[] = $baseDir . $airportId . '/' . $username . '/files'; // Current: files subdir
-        $dirsToRemove[] = $baseDir . $airportId . '/' . $username;            // Current: chroot dir
+        // Current FTP structure
+        $dirsToRemove[] = $uploadsBaseDir . $airportId . '/' . $username;
+        
+        // Current SFTP structure
+        $dirsToRemove[] = $sftpBaseDir . $username . '/files';
+        $dirsToRemove[] = $sftpBaseDir . $username;
+        
+        // Legacy structures
+        $dirsToRemove[] = $uploadsBaseDir . $username;
+        $dirsToRemove[] = $uploadsBaseDir . $airportId . '/' . $username . '/files';
     }
     
     foreach ($dirsToRemove as $uploadDir) {
@@ -759,33 +846,28 @@ function userExists($username) {
  * Creates a new SFTP user account with chroot directory restriction.
  * Calls external create-sftp-user.sh script to handle user creation.
  * 
+ * Uses dedicated /cache/sftp/ hierarchy where all parent directories
+ * are root-owned (required for SSH ChrootDirectory to work).
+ * 
  * Directory structure:
- *   {chroot}/       ← root:root 755 (SFTP chroot)
- *   {chroot}/files/ ← ftp:www-data 2775 (upload directory)
+ *   /sftp/{username}/       ← root:root 755 (SFTP chroot)
+ *   /sftp/{username}/files/ ← ftp:www-data 2775 (upload directory)
  * 
  * SFTP users are chrooted and must upload to /files/
  * 
- * @param string $airportId Airport ID (e.g., 'kspb')
- * @param int $camIndex Camera index (0-based)
+ * @param string $airportId Airport ID (e.g., 'kspb') - for logging only
+ * @param int $camIndex Camera index (0-based) - for logging only
  * @param string $username Username (up to 14 alphanumeric characters)
  * @param string $password Password (14 alphanumeric characters)
  * @return bool True on success, false on failure
  */
 function createSftpUser($airportId, $camIndex, $username, $password) {
-    // Get chroot directory (parent of files/)
-    $chrootDir = getWebcamChrootDir($airportId, $username);
-    
-    // Ensure parent directories exist
-    $airportDir = dirname($chrootDir);
-    if (!is_dir($airportDir)) {
-        @mkdir($airportDir, 0755, true);
-    }
-    
+    // create-sftp-user.sh now only takes username and password
+    // It creates the directory structure in /cache/sftp/{username}/
     $cmd = sprintf(
-        '/usr/local/bin/create-sftp-user.sh %s %s %s 2>&1',
+        '/usr/local/bin/create-sftp-user.sh %s %s 2>&1',
         escapeshellarg($username),
-        escapeshellarg($password),
-        escapeshellarg($chrootDir)
+        escapeshellarg($password)
     );
     
     $output = [];
@@ -802,6 +884,7 @@ function createSftpUser($airportId, $camIndex, $username, $password) {
         return false;
     }
     
+    $chrootDir = getWebcamSftpChrootDir($username);
     aviationwx_log('info', 'sync-push-config: SFTP user created/updated', [
         'username' => $username,
         'airport' => $airportId,
@@ -956,9 +1039,8 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         return false;
     }
     
-    // Get directories
-    $chrootDir = getWebcamChrootDir($airportId, $username);
-    $filesDir = getWebcamUploadDir($airportId, $username);  // Returns {chroot}/files
+    // Get FTP upload directory (simple flat structure, no chroot)
+    $ftpDir = getWebcamFtpUploadDir($airportId, $username);
     
     // Get user/group info
     $ftpInfo = @posix_getpwnam('ftp');
@@ -969,29 +1051,27 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
     // Ensure directory structure exists
     ensureWebcamsBaseDirectory();
     
-    // Chroot directory (root-owned)
-    if (!is_dir($chrootDir)) {
-        @mkdir($chrootDir, 0755, true);
+    // Airport directory
+    $airportDir = CACHE_UPLOADS_DIR . '/' . strtolower($airportId);
+    if (!is_dir($airportDir)) {
+        @mkdir($airportDir, 0755, true);
     }
-    @chown($chrootDir, 0);
-    @chgrp($chrootDir, 0);
-    @chmod($chrootDir, 0755);
     
-    // Files directory (ftp:www-data with setgid)
-    if (!is_dir($filesDir)) {
-        @mkdir($filesDir, 02775, true);
+    // FTP upload directory (ftp:www-data with setgid)
+    if (!is_dir($ftpDir)) {
+        @mkdir($ftpDir, 02775, true);
     }
-    @chown($filesDir, $ftpUid);
-    @chgrp($filesDir, $wwwDataGid);
-    @chmod($filesDir, 02775);
+    @chown($ftpDir, $ftpUid);
+    @chgrp($ftpDir, $wwwDataGid);
+    @chmod($ftpDir, 02775);
     
-    // Create per-user vsftpd config - local_root points to files/
+    // Create per-user vsftpd config - local_root points to FTP directory
     $userConfigDir = '/etc/vsftpd/users';
     if (!is_dir($userConfigDir)) {
         @mkdir($userConfigDir, 0755, true);
     }
     $userConfigFile = $userConfigDir . '/' . $username;
-    $userConfig = "local_root={$filesDir}\n";
+    $userConfig = "local_root={$ftpDir}\n";
     
     if (@file_put_contents($userConfigFile, $userConfig) === false) {
         aviationwx_log('error', 'sync-push-config: Cannot write user config file', [
@@ -1272,23 +1352,38 @@ function syncAllPushCameras($config) {
                 // Create both FTP and SFTP users
                 if ($username && isset($cam['push_config']['password'])) {
                     if (syncCameraUser($airportId, $camIndex, $cam['push_config'], $newUsernameMapping)) {
-                        // Verify files/ directory permissions
-                        $filesDir = getWebcamUploadDir($airportId, $username);
-                        if (is_dir($filesDir)) {
-                            $ftpInfo = @posix_getpwnam('ftp');
-                            $wwwDataInfo = @posix_getpwnam('www-data');
-                            if ($ftpInfo !== false && $wwwDataInfo !== false) {
-                                $verification = verifyDirectoryPermissions(
-                                    $filesDir,
-                                    $ftpInfo['uid'],
-                                    'www-data',
-                                    02775
-                                );
-                                if (!$verification['success']) {
-                                    @chown($filesDir, $ftpInfo['uid']);
-                                    @chgrp($filesDir, $wwwDataInfo['gid']);
-                                    @chmod($filesDir, 02775);
-                                }
+                        $ftpInfo = @posix_getpwnam('ftp');
+                        $wwwDataInfo = @posix_getpwnam('www-data');
+                        
+                        // Verify FTP directory permissions
+                        $ftpDir = getWebcamFtpUploadDir($airportId, $username);
+                        if (is_dir($ftpDir) && $ftpInfo !== false && $wwwDataInfo !== false) {
+                            $verification = verifyDirectoryPermissions(
+                                $ftpDir,
+                                $ftpInfo['uid'],
+                                'www-data',
+                                02775
+                            );
+                            if (!$verification['success']) {
+                                @chown($ftpDir, $ftpInfo['uid']);
+                                @chgrp($ftpDir, $wwwDataInfo['gid']);
+                                @chmod($ftpDir, 02775);
+                            }
+                        }
+                        
+                        // Verify SFTP directory permissions
+                        $sftpDir = getWebcamSftpUploadDir($username);
+                        if (is_dir($sftpDir) && $ftpInfo !== false && $wwwDataInfo !== false) {
+                            $verification = verifyDirectoryPermissions(
+                                $sftpDir,
+                                $ftpInfo['uid'],
+                                'www-data',
+                                02775
+                            );
+                            if (!$verification['success']) {
+                                @chown($sftpDir, $ftpInfo['uid']);
+                                @chgrp($sftpDir, $wwwDataInfo['gid']);
+                                @chmod($sftpDir, 02775);
                             }
                         }
                     }
