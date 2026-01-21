@@ -486,15 +486,19 @@ function createCameraDirectory($airportId, $camIndex, $protocol = null, $usernam
     }
     
     if (in_array($protocol, ['ftp', 'ftps'])) {
-        // FTP/FTPS: owned by www-data:www-data with setgid
-        // - www-data can read/write for processing and EXIF updates
-        // - ftp is in www-data group (set in Dockerfile), so ftp can write uploads
-        // - Setgid ensures uploaded files inherit www-data group
+        // FTP/FTPS directory permissions:
+        // - Airport dir: www-data:www-data (processor access)
+        // - User dir: ftp:www-data (vsftpd requires ftp ownership for mkdir in chroot)
+        // - Setgid ensures uploaded files inherit www-data group for processing
+        $ftpInfo = @posix_getpwnam('ftp');
+        $ftpUid = $ftpInfo ? $ftpInfo['uid'] : 101;
+        
         @chown($airportDir, $wwwDataUid);
         @chgrp($airportDir, $wwwDataGid);
         @chmod($airportDir, 02775);
         
-        @chown($userDir, $wwwDataUid);
+        // User directory must be owned by ftp for vsftpd mkdir operations
+        @chown($userDir, $ftpUid);
         @chgrp($userDir, $wwwDataGid);
         @chmod($userDir, 02775);
     }
@@ -966,17 +970,20 @@ function createFtpUser($airportId, $camIndex, $username, $password) {
         @mkdir($chrootDir, 0775, true);
     }
     
-    // Set ownership to www-data:www-data with setgid bit
-    // - www-data (owner) can read/write for processing and EXIF updates
-    // - ftp is in www-data group, so ftp can write uploads
+    // Set ownership: ftp:www-data with setgid bit
+    // - ftp (owner) required for vsftpd mkdir operations in chroot
+    // - www-data (group) allows processor to read/write for EXIF updates
     // - Setgid ensures uploaded files inherit www-data group
-    @chown($chrootDir, $wwwDataUid);
+    $ftpInfo = @posix_getpwnam('ftp');
+    $ftpUid = $ftpInfo ? $ftpInfo['uid'] : 101;
+    
+    @chown($chrootDir, $ftpUid);
     @chgrp($chrootDir, $wwwDataGid);
     @chmod($chrootDir, 02775);
     
     aviationwx_log('debug', 'sync-push-config: FTP directory permissions set', [
         'directory' => $chrootDir,
-        'owner' => 'www-data',
+        'owner' => 'ftp',
         'group' => 'www-data',
         'mode' => '2775 (setgid)'
     ], 'app');
@@ -1248,19 +1255,20 @@ function syncAllPushCameras($config) {
                             // Airport-scoped directory: /uploads/{airport}/{username}/
                             $chrootDir = getWebcamUploadDir($airportId, $username);
                             if (is_dir($chrootDir)) {
-                                // Verify www-data ownership with setgid (2775)
-                                // ftp is in www-data group, so ftp can write
-                                // www-data can process files and add EXIF
+                                // Verify ftp:www-data ownership with setgid (2775)
+                                // - ftp (owner) required for vsftpd mkdir in chroot
+                                // - www-data (group) allows processor to read/write
+                                $ftpInfo = @posix_getpwnam('ftp');
                                 $wwwDataInfo = @posix_getpwnam('www-data');
-                                if ($wwwDataInfo !== false) {
+                                if ($ftpInfo !== false && $wwwDataInfo !== false) {
                                     $verification = verifyDirectoryPermissions(
                                         $chrootDir,
-                                        $wwwDataInfo['uid'],
+                                        $ftpInfo['uid'],
                                         'www-data',
                                         02775
                                     );
                                     if (!$verification['success']) {
-                                        @chown($chrootDir, $wwwDataInfo['uid']);
+                                        @chown($chrootDir, $ftpInfo['uid']);
                                         @chgrp($chrootDir, $wwwDataInfo['gid']);
                                         @chmod($chrootDir, 02775);
                                     }
