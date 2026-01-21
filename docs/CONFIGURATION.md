@@ -731,9 +731,9 @@ For cameras that upload images to the server:
 
 Directory structure (separate hierarchies for FTP and SFTP):
 ```
-/cache/uploads/{airport}/{username}/  <- FTP uploads (ftp:www-data 2775)
-/var/sftp/{username}/                 <- SFTP chroot (root:root 755)
-/var/sftp/{username}/files/           <- SFTP uploads (ftp:www-data 2775)
+/cache/ftp/{airport}/{username}/   <- FTP uploads (ftp:www-data 2775)
+/var/sftp/{username}/              <- SFTP chroot (root:root 755)
+/var/sftp/{username}/files/        <- SFTP uploads (ftp:www-data 2775)
 ```
 
 Note: SFTP uses `/var/sftp/` (outside cache) because SSH chroot requires
@@ -1359,7 +1359,7 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
 | `cache/webcams/{airport}/{cam}/{ts}_original.{ext}` | Original timestamped webcam images |
 | `cache/webcams/{airport}/{cam}/{ts}_{height}.{ext}` | Variant timestamped webcam images (height in pixels) |
-| `cache/uploads/{airport}/{username}/` | FTP push uploads (ftp:www-data 2775) |
+| `cache/ftp/{airport}/{username}/` | FTP push uploads (ftp:www-data 2775) |
 | `/var/sftp/{username}/` | SFTP chroot (root:root 755) - outside cache |
 | `/var/sftp/{username}/files/` | SFTP push uploads (ftp:www-data 2775) |
 | `cache/peak_gusts.json` | Daily peak gust tracking |

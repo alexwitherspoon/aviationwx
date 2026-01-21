@@ -30,7 +30,7 @@ services:
       # Cache directory (ephemeral)
       - /tmp/aviationwx-cache:/var/www/html/cache
       # SFTP chroot directory (SSH chroot requires root-owned parent dirs)
-      - /tmp/aviationwx-sftp:/var/sftp
+      - /tmp/aviationwx-cache/sftp:/var/sftp
     cap_add:
       - NET_ADMIN
       - NET_RAW

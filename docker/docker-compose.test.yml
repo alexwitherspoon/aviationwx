@@ -42,7 +42,7 @@ services:
       # ISOLATED test cache directory (separate from dev)
       - /tmp/aviationwx-cache-test:/var/www/html/cache
       # SFTP chroot directory (SSH chroot requires root-owned parent dirs)
-      - /tmp/aviationwx-sftp-test:/var/sftp
+      - /tmp/aviationwx-cache-test/sftp:/var/sftp
       # Mount test fixtures as the config file
       - ../tests/Fixtures/airports.json.test:/var/www/html/secrets/airports.json:ro
     cap_add:

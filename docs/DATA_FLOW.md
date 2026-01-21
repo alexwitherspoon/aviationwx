@@ -943,7 +943,7 @@ The webcam processing pipeline uses three main components:
 - **Behavior**: Images uploaded by cameras via SFTP/FTP/FTPS
 - **Protocol Support**: Both FTP and SFTP are enabled for each push camera with the same credentials
 - **Directory Structure** (separate hierarchies for FTP and SFTP):
-  - FTP: `/cache/uploads/{airport}/{username}/` (ftp:www-data 2775)
+  - FTP: `/cache/ftp/{airport}/{username}/` (ftp:www-data 2775)
   - SFTP Chroot: `/var/sftp/{username}/` (root:root 755)
   - SFTP Upload: `/var/sftp/{username}/files/` (ftp:www-data 2775)
 - **Upload Paths**:

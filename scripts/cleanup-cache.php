@@ -354,10 +354,11 @@ echo "LAYER 4: Empty Directory Cleanup\n";
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
 cleanupEmptyDirectories(CACHE_WEBCAMS_DIR, $stats, $dryRun, $verbose);
-// Note: We intentionally do NOT clean up empty directories in CACHE_UPLOADS_DIR
-// Push webcam upload directories must exist even when empty (waiting for FTP uploads)
-// The vsftpd per-user config points to these directories, so deleting them breaks uploads
+// Note: We intentionally do NOT clean up empty directories in CACHE_UPLOADS_DIR or CACHE_SFTP_DIR
+// Push webcam upload directories must exist even when empty (waiting for FTP/SFTP uploads)
+// The vsftpd per-user config points to FTP directories, and SFTP users are chrooted to SFTP directories
 cleanupEmptyDirectoriesExcludingUploads(CACHE_UPLOADS_DIR, $configuredAirports, $stats, $dryRun, $verbose);
+cleanupEmptyDirectoriesExcludingSftp(CACHE_SFTP_DIR, $configuredAirports, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories(CACHE_WEATHER_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories(CACHE_WEATHER_HISTORY_DIR, $stats, $dryRun, $verbose);
 cleanupEmptyDirectories($cacheDir . '/notam', $stats, $dryRun, $verbose);
@@ -1014,7 +1015,7 @@ function cleanupEmptyDirectories(
 /**
  * Cleanup empty directories in uploads, but preserve push webcam directories
  * 
- * Push webcam upload directories (e.g., /cache/uploads/keul/keulcam1/) must exist
+ * Push webcam upload directories (e.g., /cache/ftp/keul/keulcam1/) must exist
  * even when empty because vsftpd per-user configs point to them. Deleting them
  * breaks FTP uploads until the directory is recreated.
  * 
@@ -1035,7 +1036,7 @@ function cleanupEmptyDirectoriesExcludingUploads(
     $removed = 0;
     $configuredLower = array_map('strtolower', $configuredAirports);
     
-    // Get airport-level directories (e.g., /cache/uploads/keul/)
+    // Get airport-level directories (e.g., /cache/ftp/keul/)
     $airportDirs = glob($path . '/*', GLOB_ONLYDIR);
     if ($airportDirs === false) {
         return;
@@ -1107,6 +1108,100 @@ function cleanupEmptyDirectoriesExcludingUploads(
     if ($removed > 0 || $verbose) {
         $action = $dryRun ? 'Would remove' : 'Removed';
         echo "  Empty orphan upload directories: {$action} {$removed}\n";
+    }
+}
+
+/**
+ * Cleanup empty directories in SFTP, but preserve push webcam directories
+ * 
+ * SFTP directories are at /var/sftp/{username}/ and must exist for chroot to work.
+ * Only remove directories for usernames not associated with any configured push webcam.
+ */
+function cleanupEmptyDirectoriesExcludingSftp(
+    string $path,
+    array $configuredAirports,
+    array &$stats,
+    bool $dryRun,
+    bool $verbose
+): void {
+    if (!is_dir($path)) {
+        return;
+    }
+    
+    $removed = 0;
+    
+    // Build list of configured push webcam usernames
+    $configuredUsernames = [];
+    $config = loadConfig(false);
+    if ($config !== null && isset($config['airports']) && is_array($config['airports'])) {
+        foreach ($config['airports'] as $airportId => $airport) {
+            if (!is_array($airport)) continue;
+            $webcams = $airport['webcams'] ?? [];
+            if (!is_array($webcams)) continue;
+            foreach ($webcams as $webcam) {
+                if (!is_array($webcam)) continue;
+                if (($webcam['type'] ?? '') === 'push') {
+                    $username = $webcam['push_config']['username'] ?? null;
+                    if ($username) {
+                        $configuredUsernames[] = strtolower($username);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Get user-level directories (e.g., /var/sftp/kspbcam1/)
+    $userDirs = glob($path . '/*', GLOB_ONLYDIR);
+    if ($userDirs === false) {
+        return;
+    }
+    
+    foreach ($userDirs as $userDir) {
+        $username = strtolower(basename($userDir));
+        
+        // Skip directories for configured push webcam usernames
+        if (in_array($username, $configuredUsernames)) {
+            if ($verbose) {
+                echo "  ℹ️  Preserving SFTP dir for configured user: {$username}\n";
+            }
+            continue;
+        }
+        
+        // For unconfigured users, check if entirely empty (including files/ subdir)
+        $filesDir = $userDir . '/files';
+        $filesEmpty = true;
+        if (is_dir($filesDir)) {
+            $files = @scandir($filesDir);
+            if ($files !== false) {
+                $files = array_diff($files, ['.', '..']);
+                $filesEmpty = empty($files);
+            }
+        }
+        
+        if ($filesEmpty) {
+            if ($verbose) {
+                echo "  🗑️  Empty orphan SFTP directory: {$username}\n";
+            }
+            
+            if (!$dryRun) {
+                // Remove files/ first, then the user dir
+                if (is_dir($filesDir)) {
+                    @rmdir($filesDir);
+                }
+                if (@rmdir($userDir)) {
+                    $removed++;
+                } else {
+                    $stats['errors']++;
+                }
+            } else {
+                $removed++;
+            }
+        }
+    }
+    
+    if ($removed > 0 || $verbose) {
+        $action = $dryRun ? 'Would remove' : 'Removed';
+        echo "  Empty orphan SFTP directories: {$action} {$removed}\n";
     }
 }
 
@@ -1198,8 +1293,11 @@ function deleteDirectory(string $dir): bool {
  * on container startup, but this ensures they're recreated if something
  * accidentally deletes them.
  * 
+ * Handles both FTP directories (/cache/ftp/{airport}/{username}/)
+ * and SFTP directories (/var/sftp/{username}/files/).
+ * 
  * Runs as www-data, so can only create directories where www-data has write access.
- * The parent airport directories should already be www-data owned from initial setup.
+ * SFTP directories require root to create (done by sync-push-config.php).
  * 
  * @param array &$stats Statistics array
  * @param bool $dryRun If true, don't actually create
@@ -1214,7 +1312,8 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
         return;
     }
     
-    $created = 0;
+    $ftpCreated = 0;
+    $sftpMissing = 0;
     $errors = 0;
     
     foreach ($config['airports'] as $airportId => $airport) {
@@ -1244,55 +1343,74 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
                 continue;
             }
             
-            // Build expected upload directory path
-            // Must match getWebcamUploadDir() in cache-paths.php
-            $uploadDir = CACHE_UPLOADS_DIR . '/' . strtolower($airportId) . '/' . $username;
-            
-            if (!is_dir($uploadDir)) {
+            // Check FTP upload directory
+            $ftpDir = getWebcamFtpUploadDir($airportId, $username);
+            if (!is_dir($ftpDir)) {
                 if ($verbose) {
-                    echo "  📁 Missing upload directory: " . strtolower($airportId) . "/{$username}\n";
+                    echo "  📁 Missing FTP directory: " . strtolower($airportId) . "/{$username}\n";
                 }
                 
                 if (!$dryRun) {
                     // Create with setgid bit (02775) so uploaded files inherit www-data group
-                    if (@mkdir($uploadDir, 02775, true)) {
-                        $created++;
+                    if (@mkdir($ftpDir, 02775, true)) {
+                        $ftpCreated++;
                         if ($verbose) {
                             echo "     ✅ Created successfully\n";
                         }
                     } else {
                         $errors++;
                         $stats['errors']++;
-                        echo "  ❌ Failed to create: {$uploadDir}\n";
-                        aviationwx_log('error', 'failed to create push webcam upload directory', [
+                        echo "  ❌ Failed to create FTP dir: {$ftpDir}\n";
+                        aviationwx_log('error', 'failed to create push webcam FTP directory', [
                             'airport' => $airportId,
                             'cam' => $camIndex,
                             'username' => $username,
-                            'path' => $uploadDir,
+                            'path' => $ftpDir,
                             'error' => error_get_last()['message'] ?? 'unknown'
                         ], 'app');
                     }
                 } else {
-                    $created++;
+                    $ftpCreated++;
                 }
             } elseif ($verbose) {
-                echo "  ✅ Upload directory exists: " . strtolower($airportId) . "/{$username}\n";
+                echo "  ✅ FTP directory exists: " . strtolower($airportId) . "/{$username}\n";
+            }
+            
+            // Check SFTP upload directory (can't create - requires root)
+            $sftpDir = getWebcamSftpUploadDir($username);
+            if (!is_dir($sftpDir)) {
+                $sftpMissing++;
+                if ($verbose) {
+                    echo "  ⚠️  Missing SFTP directory: {$username}/files/ (requires sync-push-config.php)\n";
+                }
+            } elseif ($verbose) {
+                echo "  ✅ SFTP directory exists: {$username}/files/\n";
             }
         }
     }
     
-    if ($created > 0) {
+    if ($ftpCreated > 0) {
         $action = $dryRun ? 'Would create' : 'Created';
-        echo "  Push webcam directories: {$action} {$created} missing directories\n";
+        echo "  FTP directories: {$action} {$ftpCreated} missing directories\n";
         
         if (!$dryRun) {
-            aviationwx_log('warning', 'recreated missing push webcam upload directories', [
-                'count' => $created,
+            aviationwx_log('warning', 'recreated missing push webcam FTP directories', [
+                'count' => $ftpCreated,
                 'errors' => $errors
             ], 'app');
         }
     } elseif ($verbose) {
-        echo "  Push webcam directories: All directories exist\n";
+        echo "  FTP directories: All directories exist\n";
+    }
+    
+    if ($sftpMissing > 0) {
+        echo "  ⚠️  SFTP directories: {$sftpMissing} missing (run sync-push-config.php as root to create)\n";
+        aviationwx_log('warning', 'missing SFTP directories detected', [
+            'count' => $sftpMissing,
+            'action' => 'run sync-push-config.php as root'
+        ], 'app');
+    } elseif ($verbose) {
+        echo "  SFTP directories: All directories exist\n";
     }
 }
 

@@ -16,7 +16,7 @@
  * │       ├── {timestamp}_{variant}.{format}  # Timestamped images (current & historical)
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       └── state.json           # Push webcam state (last_processed)
- * ├── uploads/
+ * ├── ftp/
  * │   └── {airport}/{username}/    # FTP uploads (ftp:www-data 2775)
  * 
  * SFTP uploads are stored separately in /var/sftp/ (not under cache/)
@@ -249,7 +249,7 @@ function getWebcamStagingPath(string $airportId, int $camIndex, string $format =
 
 // FTP uploads - simple directory structure (no chroot needed for vsftpd)
 if (!defined('CACHE_UPLOADS_DIR')) {
-    define('CACHE_UPLOADS_DIR', CACHE_BASE_DIR . '/uploads');
+    define('CACHE_UPLOADS_DIR', CACHE_BASE_DIR . '/ftp');
 }
 
 // SFTP uploads - dedicated chroot structure outside of cache/

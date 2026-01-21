@@ -219,19 +219,19 @@ fi
 
 # Initialize FTP uploads directory (for vsftpd virtual users)
 echo "Initializing FTP uploads directory..."
-UPLOADS_DIR="${CACHE_DIR}/uploads"
+FTP_DIR="${CACHE_DIR}/ftp"
 
-# Create uploads directory if it doesn't exist
-if [ ! -d "${UPLOADS_DIR}" ]; then
-    echo "Creating FTP uploads directory: ${UPLOADS_DIR}"
-    mkdir -p "${UPLOADS_DIR}"
+# Create FTP directory if it doesn't exist
+if [ ! -d "${FTP_DIR}" ]; then
+    echo "Creating FTP uploads directory: ${FTP_DIR}"
+    mkdir -p "${FTP_DIR}"
 fi
 
 # FTP uploads use simple directory structure (no chroot needed for vsftpd)
-chown root:root "${UPLOADS_DIR}" 2>/dev/null || true
-chmod 755 "${UPLOADS_DIR}" 2>/dev/null || true
+chown root:root "${FTP_DIR}" 2>/dev/null || true
+chmod 755 "${FTP_DIR}" 2>/dev/null || true
 
-echo "✓ FTP uploads directory initialized"
+echo "✓ FTP uploads directory initialized at ${FTP_DIR}"
 
 # Initialize SFTP directory (completely separate from cache for SSH chroot)
 # SSH ChrootDirectory requires ALL parent directories to be root-owned

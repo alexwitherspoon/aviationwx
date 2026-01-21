@@ -438,7 +438,7 @@ function ensureWebcamsBaseDirectory() {
  * Create FTP upload directory for camera
  * 
  * Creates airport-scoped FTP upload directory:
- *   /uploads/{airport}/{username}/    ← FTP upload dir (ftp:www-data 2775)
+ *   /ftp/{airport}/{username}/    ← FTP upload dir (ftp:www-data 2775)
  * 
  * FTP uses a simple flat structure - no chroot needed for vsftpd virtual users.
  * vsftpd local_root points here, users upload to /
@@ -466,13 +466,13 @@ function createFtpDirectory($airportId, $camIndex, $username = null) {
     $wwwDataInfo = @posix_getpwnam('www-data');
     $wwwDataGid = $wwwDataInfo ? $wwwDataInfo['gid'] : 33;
     
-    // Airport directory: /uploads/{airport}/
+    // Airport directory: /ftp/{airport}/
     $airportDir = $webcamsBaseDir . '/' . $airportId;
     if (!is_dir($airportDir)) {
         @mkdir($airportDir, 0755, true);
     }
     
-    // FTP upload directory: /uploads/{airport}/{username}/
+    // FTP upload directory: /ftp/{airport}/{username}/
     // ftp:www-data with setgid
     $ftpDir = getWebcamFtpUploadDir($airportId, $username);
     if (!is_dir($ftpDir)) {
@@ -590,7 +590,7 @@ function createCameraDirectory($airportId, $camIndex, $username = null) {
  * Handles current FTP/SFTP structure and legacy directory structures.
  * 
  * Current structure:
- *   /uploads/{airport}/{username}/  ← FTP uploads
+ *   /ftp/{airport}/{username}/  ← FTP uploads
  *   /sftp/{username}/               ← SFTP chroot
  *   /sftp/{username}/files/         ← SFTP uploads
  * 
