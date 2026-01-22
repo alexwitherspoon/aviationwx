@@ -852,7 +852,7 @@ Override margins for specific cameras with unusual timestamp positions:
 **Config Hierarchy:**
 1. Per-webcam `crop_margins` (highest priority)
 2. Global `faa_crop_margins`
-3. Built-in defaults: `{ top: 5, bottom: 4, left: 0, right: 4 }`
+3. Built-in defaults: `{ top: 7, bottom: 4, left: 0, right: 4 }`
 
 **Percentage Scaling Examples:**
 

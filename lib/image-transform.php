@@ -468,7 +468,7 @@ if (!defined('FAA_MINIMUM_HEIGHT')) {
 
 // Default FAA crop margins (percentages) - built-in fallback
 if (!defined('FAA_DEFAULT_MARGIN_TOP')) {
-    define('FAA_DEFAULT_MARGIN_TOP', 5);
+    define('FAA_DEFAULT_MARGIN_TOP', 7);
 }
 if (!defined('FAA_DEFAULT_MARGIN_BOTTOM')) {
     define('FAA_DEFAULT_MARGIN_BOTTOM', 4);

@@ -1145,7 +1145,7 @@ GET /v1/airports/{id}/webcams/{cam}/image?profile=faa
 **Configuration** (see `CONFIGURATION.md#faa-profile-crop-margins`):
 - Global default: `config.faa_crop_margins` (percentage-based margins)
 - Per-webcam override: `webcams[].crop_margins`
-- Built-in fallback: `{ top: 5, bottom: 4, left: 0, right: 4 }`
+- Built-in fallback: `{ top: 7, bottom: 4, left: 0, right: 4 }`
 
 **Margin Calculation**:
 - Percentages scale with source resolution (handles 720p to 4K sources)

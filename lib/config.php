@@ -893,7 +893,7 @@ function getWebcamJpegQuality(): int {
 function getFaaCropMargins(?array $webcam = null): array {
     // Built-in defaults
     $defaults = [
-        'top' => 5,
+        'top' => 7,
         'bottom' => 4,
         'left' => 0,
         'right' => 4,
