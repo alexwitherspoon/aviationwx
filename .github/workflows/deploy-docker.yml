@@ -968,6 +968,52 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           fi
           
+          # Check/bootstrap upload.aviationwx.org certificate (used for FTPS uploads)
+          # This is a separate certificate from the wildcard, using DNS-01 authentication
+          echo ""
+          echo "Checking upload.aviationwx.org certificate..."
+          if sudo test -f /etc/letsencrypt/live/upload.aviationwx.org/fullchain.pem; then
+            echo "✓ upload.aviationwx.org certificate exists"
+            
+            # Check if it's using DNS-01 authenticator (not webroot)
+            if sudo grep -q "authenticator = dns-cloudflare" /etc/letsencrypt/renewal/upload.aviationwx.org.conf 2>/dev/null; then
+              echo "✓ upload.aviationwx.org using DNS-01 authentication"
+            else
+              echo "⚠️  upload.aviationwx.org not using DNS-01 - reconfiguring..."
+              # Reconfigure to use DNS-01 instead of webroot
+              if sudo certbot certonly \
+                --dns-cloudflare \
+                --dns-cloudflare-credentials "$CREDENTIALS_FILE" \
+                -d upload.aviationwx.org \
+                --cert-name upload.aviationwx.org \
+                --non-interactive \
+                --agree-tos \
+                --email "$LETSENCRYPT_EMAIL" \
+                --no-eff-email \
+                --force-renewal; then
+                echo "✓ upload.aviationwx.org reconfigured to DNS-01"
+              else
+                echo "⚠️  Failed to reconfigure upload.aviationwx.org - will retry on next deployment"
+              fi
+            fi
+          else
+            echo "upload.aviationwx.org certificate not found - bootstrapping..."
+            if sudo certbot certonly \
+              --dns-cloudflare \
+              --dns-cloudflare-credentials "$CREDENTIALS_FILE" \
+              -d upload.aviationwx.org \
+              --cert-name upload.aviationwx.org \
+              --non-interactive \
+              --agree-tos \
+              --email "$LETSENCRYPT_EMAIL" \
+              --no-eff-email; then
+              echo "✓ upload.aviationwx.org certificate generated"
+            else
+              echo "⚠️  Failed to generate upload.aviationwx.org certificate"
+              echo "   This is non-critical - FTPS can use the wildcard cert"
+            fi
+          fi
+          
           # Note: We intentionally leave the credentials file in place (~/.secrets/cloudflare.ini)
           # because the host's systemd certbot.timer needs it for automatic renewals
           echo "✓ Cloudflare credentials available for automatic renewals at ~/.secrets/cloudflare.ini"
