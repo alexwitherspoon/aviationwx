@@ -292,12 +292,15 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     // -P: Preserve file modification time
     $cmd = 'exiftool -overwrite_original -q -P';
     
-    // Add DateTimeOriginal and OffsetTimeOriginal only if not preserving existing
-    // Uses LOCAL time per EXIF standard, with timezone offset for proper interpretation
+    // Add DateTimeOriginal only if not preserving existing
+    // Uses LOCAL time per EXIF standard
     if (!$preserveOriginalDateTime) {
         $cmd .= ' ' . escapeshellarg('-DateTimeOriginal=' . $localDateTime);
-        $cmd .= ' ' . escapeshellarg('-OffsetTimeOriginal=' . $offsetTime);
     }
+    
+    // Always add OffsetTimeOriginal - tells readers what timezone DateTimeOriginal is in
+    // This is needed even when preserving existing DateTimeOriginal
+    $cmd .= ' ' . escapeshellarg('-OffsetTimeOriginal=' . $offsetTime);
     
     // Always add GPS fields (UTC per EXIF standard)
     $cmd .= ' ' . escapeshellarg('-GPSDateStamp=' . $gpsDate);
