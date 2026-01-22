@@ -795,7 +795,9 @@ Variants are configured via `webcam_variant_heights` at three levels (priority: 
 
 ### FAA Profile (Crop Margins)
 
-The FAA WCPO (Weather Camera Program Office) requires specific image formats without third-party timestamps or watermarks. The `profile=faa` API parameter produces compliant images by applying configurable crop margins.
+AviationWX participates in the **FAA Weather Camera Program (WCPO)**, publishing webcam imagery to the FAA's official aviation weather camera network. The FAA WCPO requires specific image formats without third-party timestamps or watermarks.
+
+The `profile=faa` API parameter produces WCPO-compliant images by applying configurable crop margins to exclude camera OSD timestamps and watermarks.
 
 **API Usage:**
 ```

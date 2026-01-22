@@ -13,6 +13,27 @@ Enable single-airport installations of AviationWX to become **federated data sou
 - Main platform can optionally fetch from federated sources
 - Creates resilient, distributed architecture
 
+## Upstream Data Partners
+
+AviationWX publishes data to official aviation weather networks:
+
+### FAA Weather Camera Program (WCPO)
+
+AviationWX participates in the **FAA Weather Camera Program**, publishing webcam imagery to the FAA's official aviation weather camera network. This provides:
+
+- **Wider Reach**: Camera images available through FAA weather resources
+- **Official Integration**: Contributing to FAA safety infrastructure
+- **Standardized Output**: API provides FAA-compliant image format via `?profile=faa` parameter
+- **Automatic Compliance**: Images are cropped, formatted, and timestamped per FAA requirements
+
+**Technical Details:**
+- Images served at 4:3 aspect ratio (1280x960 or 640x480)
+- Configurable crop margins to exclude camera OSD timestamps
+- EXIF metadata includes UTC timestamps (GPS fields) and local time (DateTimeOriginal)
+- Attribution metadata preserved for data provenance
+
+See [Configuration Guide](CONFIGURATION.md#faa-profile-crop-margins) for FAA profile setup.
+
 ## Architecture
 
 ### Data Flow

@@ -9,6 +9,28 @@ Make it easy for a normal, non-technical airport volunteer to send AviationWX th
 
 **Send everything to:** `contact@aviationwx.org`
 
+---
+
+## Why Join AviationWX?
+
+### Benefits for Your Airport
+
+- **Free Dashboard**: Professional weather and webcam display at no cost
+- **Pilot Safety**: Help pilots make better go/no-go decisions with real-time conditions
+- **Zero Maintenance**: AviationWX handles all the software, hosting, and updates
+- **Embed Widgets**: Get embeddable weather widgets for your airport's website
+
+### FAA Weather Camera Program
+
+AviationWX participates in the **FAA Weather Camera Program (WCPO)**, which means your webcam images can be published to the FAA's official aviation weather camera network. This provides:
+
+- **Wider Visibility**: Your cameras appear on FAA weather resources used by pilots nationwide
+- **Official Recognition**: Contribution to FAA safety infrastructure
+- **Standardized Format**: Images are automatically formatted to meet FAA requirements (4:3 aspect ratio, proper metadata)
+- **No Extra Work**: If your camera meets our standard requirements, FAA compatibility is automatic
+
+> **Note**: FAA participation is optional and requires your camera to meet quality and reliability standards. We'll let you know if your setup qualifies during the validation process.
+
 ## Need help?
 If you're not sure how to find your weather station API details or camera connection information, **reach out anyway**.
 I'm happy to help you gather the required details and pick the simplest working setup for your airport.

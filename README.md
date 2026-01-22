@@ -189,6 +189,18 @@ AviationWX supports multiple weather data sources. See the [Configuration Guide]
 
 MIT License - See [LICENSE](LICENSE) file
 
+## Data Partners
+
+### FAA Weather Camera Program
+
+AviationWX participates in the **FAA Weather Camera Program (WCPO)**, publishing webcam imagery to the FAA's official aviation weather camera network. Participating cameras are automatically formatted to meet FAA requirements and made available through FAA weather resources.
+
+- **For Airport Operators**: Your cameras can reach pilots through official FAA channels at no additional cost
+- **For Developers**: Use `?profile=faa` parameter to get FAA-compliant image formats
+- **Requirements**: Cameras must meet reliability and quality standards
+
+See [Configuration Guide](docs/CONFIGURATION.md#faa-profile-crop-margins) for technical details.
+
 ## Data Sources
 
 AviationWX uses the following external data sources:
