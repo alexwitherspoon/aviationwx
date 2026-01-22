@@ -877,6 +877,49 @@ function getWebcamJpegQuality(): int {
 }
 
 /**
+ * Get FAA crop margins for a webcam
+ * 
+ * Resolves crop margins using the config hierarchy:
+ * 1. Per-webcam crop_margins (highest priority)
+ * 2. Global faa_crop_margins
+ * 3. Built-in defaults
+ * 
+ * Margins are percentages (0-50) applied to source image edges
+ * to exclude timestamps and watermarks before FAA 4:3 cropping.
+ * 
+ * @param array|null $webcam Webcam configuration array (optional)
+ * @return array{top: float, bottom: float, left: float, right: float} Margin percentages
+ */
+function getFaaCropMargins(?array $webcam = null): array {
+    // Built-in defaults
+    $defaults = [
+        'top' => 5,
+        'bottom' => 4,
+        'left' => 0,
+        'right' => 4,
+    ];
+    
+    // Get global config (overrides built-in defaults)
+    $globalMargins = getGlobalConfig('faa_crop_margins', []);
+    if (is_array($globalMargins)) {
+        $defaults = array_merge($defaults, $globalMargins);
+    }
+    
+    // Get per-webcam config (overrides global)
+    if ($webcam !== null && isset($webcam['crop_margins']) && is_array($webcam['crop_margins'])) {
+        $defaults = array_merge($defaults, $webcam['crop_margins']);
+    }
+    
+    // Ensure all values are numeric and within valid range
+    return [
+        'top' => max(0, min(50, (float)($defaults['top'] ?? 0))),
+        'bottom' => max(0, min(50, (float)($defaults['bottom'] ?? 0))),
+        'left' => max(0, min(50, (float)($defaults['left'] ?? 0))),
+        'right' => max(0, min(50, (float)($defaults['right'] ?? 0))),
+    ];
+}
+
+/**
  * Get image primary size from config
  * 
  * Returns the configured primary image size, defaulting to 1920x1080.
@@ -1189,6 +1232,46 @@ function validateDefaultPreferences(mixed $preferences, string $context): array 
         $validValues = VALID_PREFERENCE_VALUES[$key];
         if (!in_array($value, $validValues, true)) {
             $errors[] = "{$context}.default_preferences.{$key} has invalid value '{$value}'. Allowed: " . implode(', ', $validValues);
+        }
+    }
+    
+    return $errors;
+}
+
+/**
+ * Validate crop_margins structure
+ * 
+ * Validates that crop_margins is an object with valid percentage values
+ * for top, bottom, left, and right edges.
+ * 
+ * @param mixed $margins The crop_margins value to validate
+ * @param string $context Context for error messages (e.g., "config.faa_crop_margins")
+ * @return array Array of error messages (empty if valid)
+ */
+function validateCropMargins(mixed $margins, string $context): array {
+    $errors = [];
+    
+    if (!is_array($margins)) {
+        $errors[] = "{$context} must be an object";
+        return $errors;
+    }
+    
+    $allowedKeys = ['top', 'bottom', 'left', 'right'];
+    
+    foreach ($margins as $key => $value) {
+        if (!in_array($key, $allowedKeys, true)) {
+            $errors[] = "{$context} has unknown field '{$key}'. Allowed: " . implode(', ', $allowedKeys);
+            continue;
+        }
+        
+        if (!is_numeric($value)) {
+            $errors[] = "{$context}.{$key} must be a number (percentage)";
+            continue;
+        }
+        
+        $numValue = (float)$value;
+        if ($numValue < 0 || $numValue > 50) {
+            $errors[] = "{$context}.{$key} must be between 0 and 50 (percentage), got: {$numValue}";
         }
     }
     
@@ -2894,6 +2977,12 @@ function validateAirportsJsonStructure(array $config): array {
                 }
             }
             
+            // Validate faa_crop_margins (global default for FAA profile)
+            if (isset($cfg['faa_crop_margins'])) {
+                $marginErrors = validateCropMargins($cfg['faa_crop_margins'], 'config.faa_crop_margins');
+                $errors = array_merge($errors, $marginErrors);
+            }
+            
             // Validate default_preferences
             if (isset($cfg['default_preferences'])) {
                 $prefErrors = validateDefaultPreferences($cfg['default_preferences'], 'config');
@@ -3605,7 +3694,7 @@ function validateAirportsJsonStructure(array $config): array {
                         
                         if ($webcamType === 'push') {
                             // Define allowed fields for push cameras
-                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds', 'variant_heights'];
+                            $allowedPushWebcamFields = ['name', 'type', 'push_config', 'refresh_seconds', 'variant_heights', 'crop_margins'];
                             
                             // Check for unknown fields in push webcam
                             foreach ($webcam as $key => $value) {
@@ -3647,7 +3736,7 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                         } elseif ($webcamType === 'rtsp') {
                             // Define allowed fields for RTSP cameras
-                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout', 'variant_heights'];
+                            $allowedRtspWebcamFields = ['name', 'type', 'url', 'rtsp_transport', 'refresh_seconds', 'rtsp_fetch_timeout', 'rtsp_max_runtime', 'transcode_timeout', 'variant_heights', 'crop_margins'];
                             
                             // Check for unknown fields in RTSP webcam
                             foreach ($webcam as $key => $value) {
@@ -3664,7 +3753,7 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                         } else {
                             // Define allowed fields for pull cameras (http/mjpeg/static_jpeg/static_png)
-                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds', 'variant_heights'];
+                            $allowedPullWebcamFields = ['name', 'type', 'url', 'refresh_seconds', 'variant_heights', 'crop_margins'];
                             
                             // Check for unknown fields in pull webcam
                             foreach ($webcam as $key => $value) {
@@ -3702,6 +3791,15 @@ function validateAirportsJsonStructure(array $config): array {
                                     }
                                 }
                             }
+                        }
+                        
+                        // Validate crop_margins (per-webcam override for FAA profile)
+                        if (isset($webcam['crop_margins'])) {
+                            $marginErrors = validateCropMargins(
+                                $webcam['crop_margins'],
+                                "Airport '{$airportCode}' webcam[{$idx}] crop_margins"
+                            );
+                            $errors = array_merge($errors, $marginErrors);
                         }
                     }
                 }

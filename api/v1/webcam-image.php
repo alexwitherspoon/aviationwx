@@ -7,20 +7,26 @@
  * Returns the current webcam image with optional transformations.
  * 
  * Query parameters:
+ * - profile: Output profile ('faa') - applies FAA-compliant settings
  * - fmt: Image format ('jpg', 'webp') - default is jpg
  * - size: Height-based variant (e.g., '720', '1080') or 'original' - preserves aspect ratio
  * - width: Target width in pixels (16-3840) - used with height for exact dimensions
  * - height: Target height in pixels (16-2160) - used with width for exact dimensions
  * 
  * Dimension behavior:
+ * - profile=faa: FAA WCPO compliant (4:3, crop margins, quality-capped, JPG)
  * - width + height: Center-crop to target aspect ratio, then scale to exact dimensions
  * - width only: Scale to width, preserve original aspect ratio
  * - height only: Scale to height, preserve original aspect ratio (same as size=)
  * - size=: Height-based variant from pre-generated set (no cropping)
  * - Neither: Original image
  * 
- * Example for FAA weathercam (4:3 @ 1280x960):
- *   GET /v1/airports/kspb/webcams/0/image?width=1280&height=960&fmt=jpg
+ * FAA Profile (profile=faa):
+ *   - Applies per-camera crop_margins to exclude timestamps/watermarks
+ *   - Forces 4:3 aspect ratio
+ *   - Forces JPG format
+ *   - Quality-capped: 1280x960 if source supports, else 640x480 (no upscaling)
+ *   GET /v1/airports/kspb/webcams/0/image?profile=faa
  */
 
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
@@ -78,6 +84,17 @@ function handleGetWebcamImage(array $params, array $context): void
             'Webcam not found: index ' . $camIndex,
             404
         );
+        return;
+    }
+    
+    $webcam = $webcams[$camIndex];
+    
+    // Check for profile parameter
+    $profile = $_GET['profile'] ?? null;
+    
+    // Handle FAA profile
+    if ($profile === 'faa') {
+        handleFaaProfileRequest($airportId, $camIndex, $airport, $webcam);
         return;
     }
     
@@ -175,6 +192,73 @@ function handleGetWebcamImage(array $params, array $context): void
     
     // Send the image response
     sendImageResponse($cacheFile, $timestamp, $variant, $format, $airport, $webcams[$camIndex]);
+}
+
+/**
+ * Handle FAA profile request
+ * 
+ * Applies FAA WCPO-compliant transformations:
+ * - Crop margins to exclude timestamps/watermarks
+ * - 4:3 aspect ratio
+ * - Quality-capped: 1280x960 or 640x480 (no upscaling)
+ * - JPG format only
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
+ * @param array $airport Airport configuration
+ * @param array $webcam Webcam configuration
+ */
+function handleFaaProfileRequest(
+    string $airportId,
+    int $camIndex,
+    array $airport,
+    array $webcam
+): void {
+    // Get latest timestamp
+    $timestamp = getLatestImageTimestamp($airportId, $camIndex);
+    
+    if ($timestamp === 0) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+            'Webcam image temporarily unavailable',
+            503
+        );
+        return;
+    }
+    
+    // Get FAA crop margins (resolves config hierarchy)
+    $margins = getFaaCropMargins($webcam);
+    
+    // Get or create FAA-transformed image
+    $result = getFaaTransformedImagePath($airportId, $camIndex, $timestamp, $margins);
+    
+    if ($result === null) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+            'Unable to process FAA image',
+            503
+        );
+        return;
+    }
+    
+    $cacheFile = $result['path'];
+    $outputWidth = $result['width'];
+    $outputHeight = $result['height'];
+    
+    if (!file_exists($cacheFile)) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+            'FAA image temporarily unavailable',
+            503
+        );
+        return;
+    }
+    
+    // Build variant name for filename
+    $variant = 'faa_' . $outputWidth . 'x' . $outputHeight;
+    
+    // Send the image response (always JPG for FAA)
+    sendImageResponse($cacheFile, $timestamp, $variant, 'jpg', $airport, $webcam);
 }
 
 /**

@@ -447,3 +447,301 @@ function calculateScaledDimensions(
     // Neither specified - return source dimensions
     return ['width' => $sourceWidth, 'height' => $sourceHeight];
 }
+
+// ============================================================================
+// FAA Profile Transform Functions
+// ============================================================================
+
+// FAA WCPO preferred dimensions
+if (!defined('FAA_PREFERRED_WIDTH')) {
+    define('FAA_PREFERRED_WIDTH', 1280);
+}
+if (!defined('FAA_PREFERRED_HEIGHT')) {
+    define('FAA_PREFERRED_HEIGHT', 960);
+}
+if (!defined('FAA_MINIMUM_WIDTH')) {
+    define('FAA_MINIMUM_WIDTH', 640);
+}
+if (!defined('FAA_MINIMUM_HEIGHT')) {
+    define('FAA_MINIMUM_HEIGHT', 480);
+}
+
+// Default FAA crop margins (percentages) - built-in fallback
+if (!defined('FAA_DEFAULT_MARGIN_TOP')) {
+    define('FAA_DEFAULT_MARGIN_TOP', 5);
+}
+if (!defined('FAA_DEFAULT_MARGIN_BOTTOM')) {
+    define('FAA_DEFAULT_MARGIN_BOTTOM', 4);
+}
+if (!defined('FAA_DEFAULT_MARGIN_LEFT')) {
+    define('FAA_DEFAULT_MARGIN_LEFT', 0);
+}
+if (!defined('FAA_DEFAULT_MARGIN_RIGHT')) {
+    define('FAA_DEFAULT_MARGIN_RIGHT', 4);
+}
+
+/**
+ * Calculate FAA crop margins in pixels from percentage values
+ * 
+ * @param int $sourceWidth Source image width
+ * @param int $sourceHeight Source image height
+ * @param array $margins Margin percentages (top, bottom, left, right)
+ * @return array{top: int, bottom: int, left: int, right: int} Margins in pixels
+ */
+function calculateFaaMargins(int $sourceWidth, int $sourceHeight, array $margins): array
+{
+    return [
+        'top' => (int) round($sourceHeight * (($margins['top'] ?? 0) / 100)),
+        'bottom' => (int) round($sourceHeight * (($margins['bottom'] ?? 0) / 100)),
+        'left' => (int) round($sourceWidth * (($margins['left'] ?? 0) / 100)),
+        'right' => (int) round($sourceWidth * (($margins['right'] ?? 0) / 100)),
+    ];
+}
+
+/**
+ * Determine FAA output size based on safe zone dimensions (quality-capping)
+ * 
+ * Returns 1280x960 if the safe zone can support it without upscaling,
+ * otherwise returns 640x480 (FAA minimum).
+ * 
+ * @param int $safeWidth Safe zone width after margins applied
+ * @param int $safeHeight Safe zone height after margins applied
+ * @return array{width: int, height: int} Output dimensions
+ */
+function determineFaaOutputSize(int $safeWidth, int $safeHeight): array
+{
+    // Calculate what the 4:3 crop dimensions would be from the safe zone
+    $targetAspect = 4 / 3;
+    $safeAspect = $safeWidth / $safeHeight;
+    
+    if ($safeAspect > $targetAspect) {
+        // Safe zone is wider than 4:3 - will crop sides
+        $cropWidth = (int) round($safeHeight * $targetAspect);
+        $cropHeight = $safeHeight;
+    } else {
+        // Safe zone is taller than 4:3 - will crop top/bottom
+        $cropWidth = $safeWidth;
+        $cropHeight = (int) round($safeWidth / $targetAspect);
+    }
+    
+    // Can we get 1280x960 without upscaling?
+    if ($cropWidth >= FAA_PREFERRED_WIDTH && $cropHeight >= FAA_PREFERRED_HEIGHT) {
+        return ['width' => FAA_PREFERRED_WIDTH, 'height' => FAA_PREFERRED_HEIGHT];
+    }
+    
+    // Fall back to FAA minimum size
+    return ['width' => FAA_MINIMUM_WIDTH, 'height' => FAA_MINIMUM_HEIGHT];
+}
+
+/**
+ * Transform an image for FAA profile with margins and quality-capping
+ * 
+ * Applies crop margins to exclude timestamps/watermarks, then center-crops
+ * to 4:3 aspect ratio, and scales to appropriate FAA dimensions.
+ * 
+ * @param string $sourcePath Path to source image
+ * @param array $margins Margin percentages (top, bottom, left, right)
+ * @return string|null Binary JPEG image data or null on failure
+ */
+function transformImageFaa(string $sourcePath, array $margins): ?string
+{
+    if (!file_exists($sourcePath)) {
+        aviationwx_log('warning', 'FAA transform source not found', [
+            'source' => $sourcePath,
+        ], 'api');
+        return null;
+    }
+    
+    // Load source image
+    $sourceImage = loadSourceImage($sourcePath);
+    if ($sourceImage === null) {
+        return null;
+    }
+    
+    $sourceWidth = imagesx($sourceImage);
+    $sourceHeight = imagesy($sourceImage);
+    
+    // Calculate margins in pixels
+    $marginPx = calculateFaaMargins($sourceWidth, $sourceHeight, $margins);
+    
+    // Calculate safe zone dimensions after margins
+    $safeWidth = $sourceWidth - $marginPx['left'] - $marginPx['right'];
+    $safeHeight = $sourceHeight - $marginPx['top'] - $marginPx['bottom'];
+    
+    // Validate safe zone is large enough
+    if ($safeWidth < FAA_MINIMUM_WIDTH || $safeHeight < FAA_MINIMUM_HEIGHT) {
+        imagedestroy($sourceImage);
+        aviationwx_log('warning', 'FAA transform safe zone too small', [
+            'source_width' => $sourceWidth,
+            'source_height' => $sourceHeight,
+            'safe_width' => $safeWidth,
+            'safe_height' => $safeHeight,
+            'margins' => $margins,
+        ], 'api');
+        return null;
+    }
+    
+    // Determine output size (quality-capped)
+    $outputSize = determineFaaOutputSize($safeWidth, $safeHeight);
+    $targetWidth = $outputSize['width'];
+    $targetHeight = $outputSize['height'];
+    
+    // Calculate center-crop region within the safe zone for 4:3 aspect ratio
+    $targetAspect = $targetWidth / $targetHeight;
+    $safeAspect = $safeWidth / $safeHeight;
+    
+    if ($safeAspect > $targetAspect) {
+        // Safe zone is wider than target - crop sides from safe zone
+        $cropHeight = $safeHeight;
+        $cropWidth = (int) round($safeHeight * $targetAspect);
+        $cropX = $marginPx['left'] + (int) round(($safeWidth - $cropWidth) / 2);
+        $cropY = $marginPx['top'];
+    } else {
+        // Safe zone is taller than target - crop top/bottom from safe zone
+        $cropWidth = $safeWidth;
+        $cropHeight = (int) round($safeWidth / $targetAspect);
+        $cropX = $marginPx['left'];
+        $cropY = $marginPx['top'] + (int) round(($safeHeight - $cropHeight) / 2);
+    }
+    
+    // Create output image
+    $outputImage = imagecreatetruecolor($targetWidth, $targetHeight);
+    if ($outputImage === false) {
+        imagedestroy($sourceImage);
+        aviationwx_log('error', 'FAA transform failed to create output', [], 'api');
+        return null;
+    }
+    
+    // Resample: crop from safe zone and scale in one operation
+    $result = imagecopyresampled(
+        $outputImage,
+        $sourceImage,
+        0, 0,                           // Destination X, Y
+        $cropX, $cropY,                 // Source X, Y (includes margin offset)
+        $targetWidth, $targetHeight,    // Destination width, height
+        $cropWidth, $cropHeight         // Source width, height (crop size)
+    );
+    
+    imagedestroy($sourceImage);
+    
+    if (!$result) {
+        imagedestroy($outputImage);
+        aviationwx_log('error', 'FAA transform resample failed', [], 'api');
+        return null;
+    }
+    
+    // Output to JPEG (FAA requires JPG)
+    ob_start();
+    $outputResult = imagejpeg($outputImage, null, IMAGE_TRANSFORM_JPEG_QUALITY);
+    $imageData = ob_get_clean();
+    imagedestroy($outputImage);
+    
+    if (!$outputResult || $imageData === false || strlen($imageData) === 0) {
+        aviationwx_log('error', 'FAA transform output failed', [], 'api');
+        return null;
+    }
+    
+    return $imageData;
+}
+
+/**
+ * Get or create an FAA-profile transformed image
+ * 
+ * Returns cached version if available, otherwise transforms the source
+ * image with FAA margins and caches the result.
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
+ * @param int $timestamp Image timestamp
+ * @param array $margins Margin percentages
+ * @return array{path: string, width: int, height: int}|null Path and dimensions, or null on failure
+ */
+function getFaaTransformedImagePath(
+    string $airportId,
+    int $camIndex,
+    int $timestamp,
+    array $margins
+): ?array {
+    // Build cache path for FAA transformed image
+    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+    $cachePath = $cacheDir . '/' . $timestamp . '_faa.jpg';
+    
+    // Check if cached version exists and get its dimensions
+    if (file_exists($cachePath) && filesize($cachePath) > 0) {
+        $info = @getimagesize($cachePath);
+        if ($info !== false) {
+            return [
+                'path' => $cachePath,
+                'width' => $info[0],
+                'height' => $info[1],
+            ];
+        }
+    }
+    
+    // Find source image (prefer original JPG)
+    $sourcePath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'jpg');
+    
+    if (!file_exists($sourcePath)) {
+        // Try WebP source
+        $sourcePath = getWebcamOriginalTimestampedPath($airportId, $camIndex, $timestamp, 'webp');
+    }
+    
+    if (!file_exists($sourcePath)) {
+        aviationwx_log('warning', 'FAA transform no source found', [
+            'airport' => $airportId,
+            'cam' => $camIndex,
+            'timestamp' => $timestamp,
+        ], 'api');
+        return null;
+    }
+    
+    // Transform the image
+    $imageData = transformImageFaa($sourcePath, $margins);
+    
+    if ($imageData === null) {
+        return null;
+    }
+    
+    // Ensure cache directory exists
+    if (!is_dir($cacheDir)) {
+        if (!@mkdir($cacheDir, 0755, true)) {
+            aviationwx_log('error', 'FAA transform cache dir creation failed', [
+                'dir' => $cacheDir,
+            ], 'api');
+            return null;
+        }
+    }
+    
+    // Write atomically via temp file
+    $tempPath = $cachePath . '.tmp.' . getmypid();
+    $bytesWritten = @file_put_contents($tempPath, $imageData);
+    
+    if ($bytesWritten === false || $bytesWritten === 0) {
+        @unlink($tempPath);
+        aviationwx_log('error', 'FAA transform cache write failed', [
+            'path' => $cachePath,
+        ], 'api');
+        return null;
+    }
+    
+    // Atomic rename
+    if (!@rename($tempPath, $cachePath)) {
+        @unlink($tempPath);
+        aviationwx_log('error', 'FAA transform cache rename failed', [
+            'path' => $cachePath,
+        ], 'api');
+        return null;
+    }
+    
+    // Get dimensions from the created file
+    $info = @getimagesize($cachePath);
+    if ($info === false) {
+        return null;
+    }
+    
+    return [
+        'path' => $cachePath,
+        'width' => $info[0],
+        'height' => $info[1],
+    ];
+}

@@ -1127,6 +1127,44 @@ The webcam processing pipeline uses three main components:
 - Format priority: WebP → JPEG (based on browser support and availability)
 - Variants reduce bandwidth for mobile/small displays
 
+### FAA Profile Transformation (On-Demand)
+
+**Purpose**: Generate FAA WCPO (Weather Camera Program Office) compliant images for third-party integration.
+
+**API Endpoint**:
+```
+GET /v1/airports/{id}/webcams/{cam}/image?profile=faa
+```
+
+**Behavior**:
+1. Applies configurable crop margins (percentages) to exclude edge content (timestamps, watermarks)
+2. Center-crops the safe zone to 4:3 aspect ratio
+3. Quality-caps output: 1280x960 if source supports it, otherwise 640x480 (no upscaling)
+4. Always outputs JPEG format
+
+**Configuration** (see `CONFIGURATION.md#faa-profile-crop-margins`):
+- Global default: `config.faa_crop_margins` (percentage-based margins)
+- Per-webcam override: `webcams[].crop_margins`
+- Built-in fallback: `{ top: 5, bottom: 4, left: 0, right: 4 }`
+
+**Margin Calculation**:
+- Percentages scale with source resolution (handles 720p to 4K sources)
+- Example: 5% top margin = 54px on 1080p, 108px on 4K
+
+**Caching**:
+- FAA-transformed images cached as `{timestamp}_faa.jpg`
+- Cached per-camera, invalidated when source image changes
+
+**Quality-Capping Logic**:
+```
+Source (1920x1080) → Margins (5% top) → Safe Zone (1920x1026)
+Safe Zone → Center-crop to 4:3 → 1368x1026
+1368x1026 >= 1280x960? YES → Output 1280x960
+Otherwise → Output 640x480 (FAA minimum)
+```
+
+**Implementation**: `lib/image-transform.php` - `transformImageFaa()`, `getFaaTransformedImagePath()`
+
 ### Webcam Metadata Caching
 
 **Purpose**: Store and serve webcam metadata (timestamp, name, formats) efficiently.

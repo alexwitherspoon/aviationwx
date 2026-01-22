@@ -29,6 +29,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `notam_worker_pool_size` | `1` | Concurrent NOTAM workers |
 | `worker_timeout_seconds` | `90` | Worker process timeout |
 | `webcam_generate_webp` | `false` | Generate WebP globally |
+| `faa_crop_margins` | see below | Default crop margins for FAA profile (percentages) |
 | **Webcam History Settings** |||
 | `webcam_history_retention_hours` | `24` | Hours of history to retain (preferred) |
 | `webcam_history_default_hours` | `3` | Default period shown in UI |
@@ -116,6 +117,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | **Optional** |||
 | `type` | auto-detect | `rtsp`, `mjpeg`, `static_jpeg`, `static_png`, `push` |
 | `refresh_seconds` | airport default | Override refresh for this camera |
+| `crop_margins` | global default | FAA profile crop margins override (percentages) |
 | **RTSP Options** |||
 | `rtsp_transport` | `tcp` | `tcp` or `udp` |
 | `rtsp_fetch_timeout` | `10` | Frame capture timeout (seconds) |
@@ -790,6 +792,75 @@ Variants are configured via `webcam_variant_heights` at three levels (priority: 
 - Request specific variant: `/webcam.php?id=kspb&cam=0&size=720`
 - Request original: `/webcam.php?id=kspb&cam=0&size=original` (default)
 - History player automatically selects appropriate variant based on display size
+
+### FAA Profile (Crop Margins)
+
+The FAA WCPO (Weather Camera Program Office) requires specific image formats without third-party timestamps or watermarks. The `profile=faa` API parameter produces compliant images by applying configurable crop margins.
+
+**API Usage:**
+```
+GET /v1/airports/kspb/webcams/0/image?profile=faa
+```
+
+**FAA Profile Behavior:**
+- Applies crop margins to exclude edge content (timestamps, watermarks)
+- Forces 4:3 aspect ratio
+- Forces JPG format
+- Quality-capped: 1280x960 if source supports it, otherwise 640x480 (no upscaling)
+
+**Global Default Margins:**
+
+Configure default crop margins (percentages) in the global config:
+
+```json
+{
+  "config": {
+    "faa_crop_margins": {
+      "top": 5,
+      "bottom": 4,
+      "left": 0,
+      "right": 4
+    }
+  }
+}
+```
+
+**Per-Webcam Override:**
+
+Override margins for specific cameras with unusual timestamp positions:
+
+```json
+{
+  "webcams": [
+    {
+      "name": "Runway Camera",
+      "url": "rtsp://...",
+      "crop_margins": {
+        "top": 8
+      }
+    }
+  ]
+}
+```
+
+**Margin Values:**
+- All values are **percentages** (0-50) of source image dimensions
+- Top/bottom: percentage of source height
+- Left/right: percentage of source width
+- Only specified edges are overridden; others use global defaults
+
+**Config Hierarchy:**
+1. Per-webcam `crop_margins` (highest priority)
+2. Global `faa_crop_margins`
+3. Built-in defaults: `{ top: 5, bottom: 4, left: 0, right: 4 }`
+
+**Percentage Scaling Examples:**
+
+| Margin | 720p (1280x720) | 1080p (1920x1080) | 4K (3840x2160) |
+|--------|-----------------|-------------------|----------------|
+| 5% top | 36px | 54px | 108px |
+| 4% bottom | 29px | 43px | 86px |
+| 4% right | 51px | 77px | 154px |
 
 ---
 

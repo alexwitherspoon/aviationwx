@@ -211,7 +211,7 @@
     "/airports/{id}/webcams/{cam}/image": {
       "get": {
         "summary": "Get webcam image",
-        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Dimension behavior:**\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Height-based variant from pre-generated set (no cropping)\n- Neither: Original image\n\n**Example for FAA weathercam (4:3 @ 1280x960):**\n```\nGET /v1/airports/kspb/webcams/0/image?width=1280&height=960&fmt=jpg\n```",
+        "description": "Returns the current webcam image with optional dimension transformations.\n\n**Profiles:**\n- `profile=faa`: FAA WCPO compliant output (4:3, margins applied, quality-capped, JPG)\n\n**Dimension behavior:**\n- `profile=faa`: Applies crop margins, 4:3 aspect, 1280x960 or 640x480 (no upscaling)\n- `width` + `height`: Center-crop to target aspect ratio, then scale to exact dimensions\n- `width` only: Scale to width, preserve original aspect ratio\n- `height` only: Scale to height, preserve original aspect ratio\n- `size`: Height-based variant from pre-generated set (no cropping)\n- Neither: Original image\n\n**FAA Profile Example:**\n```\nGET /v1/airports/kspb/webcams/0/image?profile=faa\n```",
         "operationId": "getWebcamImage",
         "tags": ["Webcams"],
         "parameters": [
@@ -222,9 +222,18 @@
             "$ref": "#/components/parameters/CamIndex"
           },
           {
+            "name": "profile",
+            "in": "query",
+            "description": "Output profile. 'faa' applies FAA WCPO-compliant settings: crop margins to exclude timestamps, 4:3 aspect ratio, quality-capped dimensions (1280x960 or 640x480), JPG format. Other parameters are ignored when profile is set.",
+            "schema": {
+              "type": "string",
+              "enum": ["faa"]
+            }
+          },
+          {
             "name": "fmt",
             "in": "query",
-            "description": "Image format",
+            "description": "Image format (ignored when profile=faa)",
             "schema": {
               "type": "string",
               "enum": ["jpg", "webp"],
@@ -234,7 +243,7 @@
           {
             "name": "size",
             "in": "query",
-            "description": "Height-based variant from pre-generated set (no cropping). Use for standard variants like 720, 1080. Mutually exclusive with width/height.",
+            "description": "Height-based variant from pre-generated set (no cropping). Use for standard variants like 720, 1080. Mutually exclusive with width/height. Ignored when profile is set.",
             "schema": {
               "type": "string",
               "default": "original",
@@ -244,7 +253,7 @@
           {
             "name": "width",
             "in": "query",
-            "description": "Target width in pixels (16-3840). When used with height, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally.",
+            "description": "Target width in pixels (16-3840). When used with height, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally. Ignored when profile is set.",
             "schema": {
               "type": "integer",
               "minimum": 16,
@@ -255,7 +264,7 @@
           {
             "name": "height",
             "in": "query",
-            "description": "Target height in pixels (16-2160). When used with width, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally.",
+            "description": "Target height in pixels (16-2160). When used with width, image is center-cropped to target aspect ratio then scaled. When used alone, scales proportionally. Ignored when profile is set.",
             "schema": {
               "type": "integer",
               "minimum": 16,
