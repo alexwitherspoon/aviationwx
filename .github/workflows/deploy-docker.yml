@@ -748,8 +748,24 @@ jobs:
             exit 1
           fi
           
-          # Pass Cloudflare token via stdin and email as command argument
-          printf '%s\n' "${{ secrets.CLOUDFLARE_API_TOKEN }}" | \
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "❌ ERROR: CLOUDFLARE_API_TOKEN secret is required"
+            echo "   Add CLOUDFLARE_API_TOKEN to GitHub repository secrets"
+            echo "   See DEPLOYMENT.md for detailed setup instructions"
+            exit 1
+          fi
+          
+          # Step 1: Write Cloudflare credentials file via separate SSH command
+          # This avoids the pipe+heredoc conflict that was causing the token to not be passed correctly
+          # The credentials file is needed by both CI (for bootstrap) and the host's systemd certbot.timer (for renewals)
+          echo "Writing Cloudflare credentials to server..."
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} "mkdir -p ~/.secrets && chmod 700 ~/.secrets"
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} "cat > ~/.secrets/cloudflare.ini && chmod 600 ~/.secrets/cloudflare.ini" << CREDS_EOF
+          dns_cloudflare_api_token = ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CREDS_EOF
+          echo "✓ Cloudflare credentials written"
+          
+          # Step 2: Run the main certificate setup script
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} 'bash -s' -- "${{ secrets.LETSENCRYPT_EMAIL }}" << 'CERT_SCRIPT'
           set -eo pipefail
           cd ~/aviationwx
@@ -757,23 +773,11 @@ jobs:
           CURRENT_USER=$(whoami)
           echo "Running as user: $CURRENT_USER"
           
-          # Read Cloudflare token from stdin (passed via SSH pipe) and email from command argument
-          # These are needed for bootstrap certificate generation
-          read -r CLOUDFLARE_TOKEN
-          # Capture email argument before enabling -u flag to avoid unbound variable errors
+          # Capture email argument
           LETSENCRYPT_EMAIL="${1:-}"
           
-          # Re-enable strict mode now that we've captured arguments
+          # Re-enable strict mode
           set -euo pipefail
-          
-          # Validate Cloudflare token is provided
-          if [ -z "${CLOUDFLARE_TOKEN:-}" ] || [ "$CLOUDFLARE_TOKEN" = "" ]; then
-            echo "❌ ERROR: Cloudflare API token not provided"
-            echo "   Add CLOUDFLARE_API_TOKEN to GitHub repository secrets"
-            echo "   See: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            echo "   See DEPLOYMENT.md for detailed setup instructions"
-            exit 1
-          fi
           
           # Validate email is provided and is a valid email format
           if [ -z "${LETSENCRYPT_EMAIL:-}" ] || [ "$LETSENCRYPT_EMAIL" = "" ]; then
@@ -791,6 +795,21 @@ jobs:
             exit 1
           fi
           
+          # Verify Cloudflare credentials file exists and has valid content
+          CREDENTIALS_FILE="$HOME/.secrets/cloudflare.ini"
+          if [ ! -f "$CREDENTIALS_FILE" ]; then
+            echo "❌ ERROR: Cloudflare credentials file not found at $CREDENTIALS_FILE"
+            exit 1
+          fi
+          
+          # Verify the credentials file has actual token content (not garbage)
+          if ! grep -qE '^dns_cloudflare_api_token = [A-Za-z0-9_-]+' "$CREDENTIALS_FILE"; then
+            echo "❌ ERROR: Cloudflare credentials file appears invalid"
+            echo "   File content does not match expected format"
+            exit 1
+          fi
+          echo "✓ Cloudflare credentials verified"
+          
           # Create SSL directory if it doesn't exist
           mkdir -p ssl
           
@@ -800,14 +819,6 @@ jobs:
             sudo apt update -qq
             sudo apt install -y certbot python3-certbot-dns-cloudflare
           fi
-          
-          # Create secrets directory and Cloudflare credentials file
-          # This is needed for bootstrap generation and is also used by the host's
-          # systemd certbot.timer for automatic renewals
-          mkdir -p ~/.secrets
-          CREDENTIALS_FILE="$HOME/.secrets/cloudflare.ini"
-          printf 'dns_cloudflare_api_token = %s\n' "$CLOUDFLARE_TOKEN" > "$CREDENTIALS_FILE"
-          chmod 600 "$CREDENTIALS_FILE"
           
           # Install certbot deploy hook for automatic certificate deployment after renewal
           # The host's systemd certbot.timer handles renewal; this hook deploys the renewed cert
