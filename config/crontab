@@ -34,9 +34,7 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Logs to /var/log/aviationwx/ via aviationwx_log() function.
 0 4 * * * www-data cd /var/www/html && /usr/local/bin/php scripts/cleanup-cache.php >> /var/log/aviationwx/cleanup-cache.log 2>&1
 
-# Let's Encrypt Certificate Renewal - Runs weekly (Sunday at 3 AM)
-# Renews wildcard SSL certificates (aviationwx.org, *.aviationwx.org) if they're expiring soon.
-# After renewal, enables SSL/TLS in vsftpd if certificates are available.
-# Note: This is a fallback mechanism. Primary renewal should be via systemd timer on host.
-# Errors are logged but don't fail the container (|| true).
-0 3 * * 0 root certbot renew --quiet --no-self-upgrade --cert-name aviationwx.org && /usr/local/bin/enable-vsftpd-ssl.sh || true
+# NOTE: Certificate renewal is handled by the HOST's systemd certbot.timer (runs twice daily)
+# The deploy hook at /etc/letsencrypt/renewal-hooks/deploy/aviationwx-deploy-hook.sh
+# automatically copies renewed certificates and reloads services.
+# See scripts/certbot-deploy-hook.sh for the hook implementation.

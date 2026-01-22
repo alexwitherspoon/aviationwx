@@ -758,7 +758,7 @@ jobs:
           echo "Running as user: $CURRENT_USER"
           
           # Read Cloudflare token from stdin (passed via SSH pipe) and email from command argument
-          # These are needed for both renewal and generation
+          # These are needed for bootstrap certificate generation
           read -r CLOUDFLARE_TOKEN
           # Capture email argument before enabling -u flag to avoid unbound variable errors
           LETSENCRYPT_EMAIL="${1:-}"
@@ -794,84 +794,64 @@ jobs:
           # Create SSL directory if it doesn't exist
           mkdir -p ssl
           
-          # Install certbot if not installed (needed for both renewal and generation)
+          # Install certbot if not installed (needed for bootstrap generation)
           if ! command -v certbot >/dev/null 2>&1; then
             echo "Installing certbot and Cloudflare DNS plugin..."
             sudo apt update -qq
             sudo apt install -y certbot python3-certbot-dns-cloudflare
           fi
           
-          # Create secrets directory
+          # Create secrets directory and Cloudflare credentials file
+          # This is needed for bootstrap generation and is also used by the host's
+          # systemd certbot.timer for automatic renewals
           mkdir -p ~/.secrets
-          
-          # Create Cloudflare credentials file (used for both renewal and generation)
           CREDENTIALS_FILE="$HOME/.secrets/cloudflare.ini"
           printf 'dns_cloudflare_api_token = %s\n' "$CLOUDFLARE_TOKEN" > "$CREDENTIALS_FILE"
           chmod 600 "$CREDENTIALS_FILE"
           
-          # Copy SSL certificates from Let's Encrypt if they exist
-          # This ensures certificates are available for Nginx container
-          # All operations run as aviationwx user, using sudo for protected operations
-          # Use sudo test to check if files exist (directory permissions are root-only)
+          # Install certbot deploy hook for automatic certificate deployment after renewal
+          # The host's systemd certbot.timer handles renewal; this hook deploys the renewed cert
+          DEPLOY_HOOK_SRC="scripts/certbot-deploy-hook.sh"
+          DEPLOY_HOOK_DST="/etc/letsencrypt/renewal-hooks/deploy/aviationwx-deploy-hook.sh"
+          if [ -f "$DEPLOY_HOOK_SRC" ]; then
+            echo "Installing certbot deploy hook..."
+            sudo cp "$DEPLOY_HOOK_SRC" "$DEPLOY_HOOK_DST"
+            sudo chmod +x "$DEPLOY_HOOK_DST"
+            echo "✓ Deploy hook installed at $DEPLOY_HOOK_DST"
+          else
+            echo "⚠️  Deploy hook script not found at $DEPLOY_HOOK_SRC"
+          fi
+          
+          # Check if SSL certificates exist in Let's Encrypt directory
+          # Note: Certificate RENEWAL is handled by the host's systemd certbot.timer (runs twice daily)
+          # This CI step only handles: validation, copying to deployment dir, and bootstrap generation
           if sudo test -f /etc/letsencrypt/live/aviationwx.org/fullchain.pem && sudo test -f /etc/letsencrypt/live/aviationwx.org/privkey.pem; then
             echo "SSL certificates found - checking expiration..."
             
-            # Check certificate expiration
+            # Check certificate expiration (informational only - renewal is handled by systemd timer)
             CERT_EXPIRY=$(sudo openssl x509 -in /etc/letsencrypt/live/aviationwx.org/fullchain.pem -noout -enddate 2>/dev/null | cut -d= -f2)
-            DAYS_UNTIL_EXPIRY=""
             if [ -n "$CERT_EXPIRY" ]; then
-              # Calculate days until expiration
               EXPIRY_EPOCH=$(date -d "$CERT_EXPIRY" +%s 2>/dev/null || echo "")
-              
               if [ -n "$EXPIRY_EPOCH" ]; then
                 CURRENT_EPOCH=$(date +%s)
                 DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $CURRENT_EPOCH) / 86400 ))
                 
                 if [ $DAYS_UNTIL_EXPIRY -lt 0 ]; then
-                  echo "⚠️  Certificate expired $((-$DAYS_UNTIL_EXPIRY)) days ago"
-                  echo "   Attempting renewal before deployment..."
-                  CERT_NEEDS_RENEWAL=true
+                  echo "❌ ERROR: Certificate expired $((-$DAYS_UNTIL_EXPIRY)) days ago"
+                  echo "   The host's systemd certbot.timer should have renewed this automatically."
+                  echo "   Please check: sudo systemctl status certbot.timer"
+                  echo "   And logs: sudo journalctl -u certbot.service"
+                  rm -f "$CREDENTIALS_FILE"
+                  exit 1
                 elif [ $DAYS_UNTIL_EXPIRY -lt 7 ]; then
                   echo "⚠️  Certificate expires in $DAYS_UNTIL_EXPIRY days"
-                  echo "   Attempting renewal before deployment..."
-                  CERT_NEEDS_RENEWAL=true
+                  echo "   The host's systemd certbot.timer will renew automatically (threshold: 30 days)"
+                  echo "   If concerned, check: sudo systemctl status certbot.timer"
                 else
                   echo "✓ Certificate valid for $DAYS_UNTIL_EXPIRY more days"
-                  CERT_NEEDS_RENEWAL=false
                 fi
               else
                 echo "⚠️  Could not parse certificate expiration date"
-                echo "   Proceeding with existing certificate..."
-                CERT_NEEDS_RENEWAL=false
-              fi
-            else
-              echo "⚠️  Could not read certificate expiration"
-              echo "   Proceeding with existing certificate..."
-              CERT_NEEDS_RENEWAL=false
-            fi
-            
-            # Attempt renewal if needed
-            if [ "${CERT_NEEDS_RENEWAL:-false}" = "true" ]; then
-              echo "Attempting certificate renewal..."
-              if sudo certbot renew \
-                --dns-cloudflare \
-                --dns-cloudflare-credentials "$CREDENTIALS_FILE" \
-                --cert-name aviationwx.org \
-                --non-interactive \
-                --quiet; then
-                echo "✓ Certificate renewed successfully"
-              else
-                echo "❌ ERROR: Certificate renewal failed"
-                if [ -n "${DAYS_UNTIL_EXPIRY:-}" ] && [ "${DAYS_UNTIL_EXPIRY:-0}" -lt 0 ]; then
-                  echo "   Certificate is expired and renewal failed"
-                  echo "   Deployment cannot proceed with expired certificate"
-                  rm -f "$CREDENTIALS_FILE"
-                  exit 1
-                else
-                  echo "   Certificate expires in ${DAYS_UNTIL_EXPIRY:-unknown} days and renewal failed"
-                  echo "   Deployment will proceed with existing certificate"
-                  echo "   Manual renewal recommended before expiration"
-                fi
               fi
             fi
             
@@ -902,11 +882,11 @@ jobs:
             sudo chmod 600 ssl/privkey.pem || true
           else
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "⚠️  Wildcard certificate not found - attempting automatic generation"
+            echo "⚠️  Wildcard certificate not found - bootstrapping with automatic generation"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
             
-            # Generate wildcard certificate
+            # Generate wildcard certificate (bootstrap only - renewals handled by systemd timer)
             echo "Generating wildcard certificate for aviationwx.org and *.aviationwx.org..."
             echo "Using DNS-01 challenge with Cloudflare API..."
             echo ""
@@ -931,6 +911,9 @@ jobs:
               chmod 600 ssl/privkey.pem
               
               echo "✓ Certificate copied to deployment directory"
+              echo ""
+              echo "Note: Future renewals will be handled automatically by the host's"
+              echo "      systemd certbot.timer (runs twice daily, renews at 30 days before expiry)"
               
               # Show certificate details
               echo ""
@@ -970,14 +953,13 @@ jobs:
               exit 1
             fi
             
-              # Clean up credentials file
-              rm -f "$CREDENTIALS_FILE"
-              echo ""
-              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           fi
           
-          # Clean up credentials file (if still exists)
-          rm -f "$CREDENTIALS_FILE"
+          # Note: We intentionally leave the credentials file in place (~/.secrets/cloudflare.ini)
+          # because the host's systemd certbot.timer needs it for automatic renewals
+          echo "✓ Cloudflare credentials available for automatic renewals at ~/.secrets/cloudflare.ini"
           CERT_SCRIPT
 
       - name: Configure firewall ports
@@ -1290,6 +1272,7 @@ jobs:
             "docker/docker-compose.prod.yml"
             "scripts/service-watchdog.sh"
             "scripts/setup-letsencrypt.sh"
+            "scripts/certbot-deploy-hook.sh"
             "scripts/enable-vsftpd-ssl.sh"
             "scripts/create-sftp-user.sh"
             "config/crontab"

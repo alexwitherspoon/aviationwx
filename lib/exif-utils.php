@@ -426,14 +426,17 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
     // Case C: EXIF ≈ mtime (already UTC, within acceptable drift)
     // This handles: camera already writes UTC, upload delays, clock drift
     if ($absDiff <= EXIF_ACCEPTABLE_TIME_DRIFT_SECONDS) {
-        aviationwx_log('debug', 'Push camera EXIF already UTC', [
+        aviationwx_log('debug', 'Push camera EXIF already UTC, converting to local time', [
             'file' => basename($filePath),
             'airport' => $airportId,
             'cam' => $camIndex,
-            'exif' => gmdate('Y-m-d H:i:s', $exifTimestamp) . ' UTC',
+            'exif_utc' => gmdate('Y-m-d H:i:s', $exifTimestamp) . ' UTC',
+            'timezone' => $timezone,
             'diff_seconds' => $diff
         ]);
-        // EXIF is correct, no rewrite needed
+        // Camera writes UTC - convert DateTimeOriginal to local time and set correct offset
+        // Pass preserveOriginalDateTime=false to rewrite DateTimeOriginal to local time
+        addExifTimestamp($filePath, $exifTimestamp, $timezone, false);
         return true;
     }
     
