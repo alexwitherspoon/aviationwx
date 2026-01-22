@@ -264,11 +264,14 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     // - GPS fields: UTC (Zulu time) for aviation use
     
     // DateTimeOriginal: Local time in the specified timezone
+    // OffsetTimeOriginal: Timezone offset from UTC (e.g., "-08:00")
     $localDateTime = null;
+    $offsetTime = '+00:00'; // Default to UTC
     try {
         $dt = new DateTime('@' . $timestamp); // Create from UTC timestamp
         $dt->setTimezone(new DateTimeZone($timezone)); // Convert to local timezone
         $localDateTime = $dt->format('Y:m:d H:i:s'); // EXIF format with local time
+        $offsetTime = $dt->format('P'); // Timezone offset (e.g., "-08:00")
     } catch (Exception $e) {
         // Invalid timezone, fall back to UTC
         aviationwx_log('warning', 'addExifTimestamp: invalid timezone, using UTC', [
@@ -276,6 +279,7 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
             'file' => basename($filePath)
         ], 'app');
         $localDateTime = gmdate('Y:m:d H:i:s', $timestamp);
+        $offsetTime = '+00:00';
     }
     
     // GPS timestamp components (always UTC for aviation standard)
@@ -288,10 +292,11 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     // -P: Preserve file modification time
     $cmd = 'exiftool -overwrite_original -q -P';
     
-    // Add DateTimeOriginal only if not preserving existing
-    // Uses LOCAL time per EXIF standard
+    // Add DateTimeOriginal and OffsetTimeOriginal only if not preserving existing
+    // Uses LOCAL time per EXIF standard, with timezone offset for proper interpretation
     if (!$preserveOriginalDateTime) {
         $cmd .= ' ' . escapeshellarg('-DateTimeOriginal=' . $localDateTime);
+        $cmd .= ' ' . escapeshellarg('-OffsetTimeOriginal=' . $offsetTime);
     }
     
     // Always add GPS fields (UTC per EXIF standard)
