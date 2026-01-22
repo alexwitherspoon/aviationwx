@@ -820,18 +820,7 @@ jobs:
             sudo apt install -y certbot python3-certbot-dns-cloudflare
           fi
           
-          # Install certbot deploy hook for automatic certificate deployment after renewal
-          # The host's systemd certbot.timer handles renewal; this hook deploys the renewed cert
-          DEPLOY_HOOK_SRC="scripts/certbot-deploy-hook.sh"
-          DEPLOY_HOOK_DST="/etc/letsencrypt/renewal-hooks/deploy/aviationwx-deploy-hook.sh"
-          if [ -f "$DEPLOY_HOOK_SRC" ]; then
-            echo "Installing certbot deploy hook..."
-            sudo cp "$DEPLOY_HOOK_SRC" "$DEPLOY_HOOK_DST"
-            sudo chmod +x "$DEPLOY_HOOK_DST"
-            echo "✓ Deploy hook installed at $DEPLOY_HOOK_DST"
-          else
-            echo "⚠️  Deploy hook script not found at $DEPLOY_HOOK_SRC"
-          fi
+          # Note: Deploy hook installation moved to post-rsync step to ensure latest code is used
           
           # Check if SSL certificates exist in Let's Encrypt directory
           # Note: Certificate RENEWAL is handled by the host's systemd certbot.timer (runs twice daily)
@@ -1182,6 +1171,19 @@ jobs:
                 exit 1
               fi
             fi
+          fi
+          
+          # Install/update certbot deploy hook (runs AFTER rsync to get latest version)
+          # This hook is called by the host's systemd certbot.timer after successful renewal
+          DEPLOY_HOOK_SRC="scripts/certbot-deploy-hook.sh"
+          DEPLOY_HOOK_DST="/etc/letsencrypt/renewal-hooks/deploy/aviationwx-deploy-hook.sh"
+          if [ -f "$DEPLOY_HOOK_SRC" ]; then
+            echo "Installing certbot deploy hook from synced code..."
+            sudo cp "$DEPLOY_HOOK_SRC" "$DEPLOY_HOOK_DST"
+            sudo chmod +x "$DEPLOY_HOOK_DST"
+            echo "✓ Certbot deploy hook installed/updated"
+          else
+            echo "⚠️  Deploy hook script not found at $DEPLOY_HOOK_SRC"
           fi
           EOF
 
