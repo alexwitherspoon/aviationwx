@@ -14,6 +14,7 @@
 
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/exif-utils.php';
 
 // Maximum dimensions to prevent abuse
 if (!defined('IMAGE_TRANSFORM_MAX_WIDTH')) {
@@ -188,6 +189,10 @@ function transformAndCacheImage(
         ], 'api');
         return false;
     }
+    
+    // Copy EXIF metadata from source to transformed image
+    // GD library strips all EXIF, so we must restore it from source
+    copyExifMetadata($sourcePath, $cachePath);
     
     return true;
 }
@@ -732,6 +737,10 @@ function getFaaTransformedImagePath(
         ], 'api');
         return null;
     }
+    
+    // Copy EXIF metadata from source to FAA-transformed image
+    // GD library strips all EXIF, so we must restore it from source
+    copyExifMetadata($sourcePath, $cachePath);
     
     // Get dimensions from the created file
     $info = @getimagesize($cachePath);
