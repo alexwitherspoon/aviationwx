@@ -836,14 +836,14 @@ jobs:
                 CURRENT_EPOCH=$(date +%s)
                 DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $CURRENT_EPOCH) / 86400 ))
                 
-                if [ $DAYS_UNTIL_EXPIRY -lt 0 ]; then
-                  echo "❌ ERROR: Certificate expired $((-$DAYS_UNTIL_EXPIRY)) days ago"
+                if [ "$DAYS_UNTIL_EXPIRY" -lt 0 ]; then
+                  echo "❌ ERROR: Certificate expired $((-DAYS_UNTIL_EXPIRY)) days ago"
                   echo "   The host's systemd certbot.timer should have renewed this automatically."
                   echo "   Please check: sudo systemctl status certbot.timer"
                   echo "   And logs: sudo journalctl -u certbot.service"
                   rm -f "$CREDENTIALS_FILE"
                   exit 1
-                elif [ $DAYS_UNTIL_EXPIRY -lt 7 ]; then
+                elif [ "$DAYS_UNTIL_EXPIRY" -lt 7 ]; then
                   echo "⚠️  Certificate expires in $DAYS_UNTIL_EXPIRY days"
                   echo "   The host's systemd certbot.timer will renew automatically (threshold: 30 days)"
                   echo "   If concerned, check: sudo systemctl status certbot.timer"
@@ -1350,6 +1350,7 @@ jobs:
               "docker/docker-compose.prod.yml"
               "scripts/service-watchdog.sh"
               "scripts/setup-letsencrypt.sh"
+              "scripts/certbot-deploy-hook.sh"
               "scripts/enable-vsftpd-ssl.sh"
               "scripts/create-sftp-user.sh"
               "config/crontab"
