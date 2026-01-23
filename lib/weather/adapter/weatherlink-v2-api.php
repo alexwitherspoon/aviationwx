@@ -3,11 +3,12 @@
  * WeatherLink v2 API Adapter
  * 
  * Handles fetching and parsing weather data from WeatherLink v2 API.
- * Supports: WeatherLink Live, WeatherLink Console, EnviroMonitor, and newer Davis devices.
+ * Supports: WeatherLink Live, WeatherLink Console, EnviroMonitor, WeatherLinkIP,
+ *           Vantage Connect, and other Davis devices using data_structure_type 1 or 2.
  * 
  * API documentation: https://weatherlink.github.io/v2-api/
  * 
- * Authentication: API Key (query param) + API Secret (header)
+ * Authentication: API Key (query param) + API Secret (HMAC signature)
  * Required config: api_key, api_secret, station_id
  */
 
@@ -27,7 +28,10 @@ use AviationWX\Weather\Data\WeatherSnapshot;
  * 
  * Davis Instruments WeatherLink stations provide real-time weather data.
  * The v2 API supports all modern Davis devices connected to WeatherLink.com.
- * Updates every ~60 seconds depending on model/configuration.
+ * 
+ * Supports two data structure types:
+ * - Type 1: WeatherLink Live, Console (fields like temp, hum, wind_speed_last)
+ * - Type 2: WeatherLinkIP, Vantage Connect (fields like temp_out, hum_out, wind_speed)
  */
 class WeatherLinkV2Adapter {
     
@@ -91,6 +95,7 @@ class WeatherLinkV2Adapter {
      * Build the API URL for fetching data
      * 
      * WeatherLink v2 API uses HMAC-SHA256 signature for authentication.
+     * Signature is computed over: api-key{key}station-id{id}t{timestamp}
      * 
      * @param array $config Source configuration (api_key, api_secret, station_id)
      * @return string|null API URL or null if config is invalid
@@ -100,8 +105,13 @@ class WeatherLinkV2Adapter {
             return null;
         }
         $timestamp = time();
-        $signature = hash_hmac('sha256', $config['api_key'] . $timestamp, $config['api_secret']);
-        return "https://api.weatherlink.com/v2/current/{$config['station_id']}?api-key={$config['api_key']}&t={$timestamp}&api-signature={$signature}";
+        $stationId = $config['station_id'];
+        
+        // Signature string must include station-id for /current endpoint
+        $signatureString = "api-key{$config['api_key']}station-id{$stationId}t{$timestamp}";
+        $signature = hash_hmac('sha256', $signatureString, $config['api_secret']);
+        
+        return "https://api.weatherlink.com/v2/current/{$stationId}?api-key={$config['api_key']}&t={$timestamp}&api-signature={$signature}";
     }
     
     /**
@@ -112,7 +122,6 @@ class WeatherLinkV2Adapter {
      */
     public static function getHeaders(array $config): array {
         return [
-            'x-api-secret: ' . ($config['api_secret'] ?? ''),
             'Accept: application/json',
         ];
     }
@@ -165,12 +174,9 @@ class WeatherLinkV2Adapter {
     /**
      * Parse WeatherLink v2 API response
      * 
-     * Parses JSON response from WeatherLink v2 API and converts to standard format.
-     * WeatherLink uses a sensor-based structure with sensors array containing lsid and data arrays.
-     * Handles unit conversions (Fahrenheit to Celsius, mph to knots).
-     * 
-     * Response structure: { "station_id": ..., "sensors": [ { "lsid": ..., "data": [ { "ts": ..., "data": { ... } } ] } ] }
-     * Field units: Temperature (F), Wind Speed (mph), Pressure (inHg), Rainfall (inches)
+     * Handles two data structure types:
+     * - Type 1 (WeatherLink Live/Console): Nested data object, fields like temp, hum, wind_speed_last
+     * - Type 2 (WeatherLinkIP/Vantage Connect): Flat structure, fields like temp_out, hum_out, wind_speed
      * 
      * @param string|null $response JSON response from WeatherLink v2 API
      * @return array|null Weather data array with standard keys, or null on parse error
@@ -185,12 +191,10 @@ class WeatherLinkV2Adapter {
             return null;
         }
         
-        // WeatherLink response structure: sensors array with lsid and data arrays
         if (!isset($data['sensors']) || !is_array($data['sensors'])) {
             return null;
         }
         
-        // Initialize result array
         $result = [
             'temperature' => null,
             'humidity' => null,
@@ -208,25 +212,21 @@ class WeatherLinkV2Adapter {
             'obs_time' => null,
         ];
         
-        // Find the most recent observation time across all sensors
         $latestTimestamp = null;
         
-        // Iterate through sensors to find weather data
         foreach ($data['sensors'] as $sensor) {
             if (!isset($sensor['data']) || !is_array($sensor['data']) || empty($sensor['data'])) {
                 continue;
             }
             
-            // Get the most recent data entry (first in array is typically most recent)
             $sensorData = $sensor['data'][0];
             
-            // WeatherLink structure: each data entry has 'ts' (timestamp) and 'data' (fields object)
-            // Some responses may have fields directly in sensorData, others nested in sensorData['data']
+            // Type 1 has nested 'data' object, Type 2 has fields directly in sensorData
             $dataFields = isset($sensorData['data']) && is_array($sensorData['data']) 
                 ? $sensorData['data'] 
                 : $sensorData;
             
-            // Extract timestamp if available
+            // Extract timestamp
             if (isset($sensorData['ts']) && is_numeric($sensorData['ts'])) {
                 $timestamp = (int)$sensorData['ts'];
                 if ($latestTimestamp === null || $timestamp > $latestTimestamp) {
@@ -234,81 +234,113 @@ class WeatherLinkV2Adapter {
                 }
             }
             
-            // Temperature - Davis stations use Fahrenheit
-            if (isset($dataFields['temp']) && is_numeric($dataFields['temp'])) {
-                $result['temperature'] = ((float)$dataFields['temp'] - 32) / 1.8;
-            } elseif (isset($dataFields['temp_out']) && is_numeric($dataFields['temp_out'])) {
-                $result['temperature'] = ((float)$dataFields['temp_out'] - 32) / 1.8;
-            } elseif (isset($dataFields['wind_chill']) && is_numeric($dataFields['wind_chill'])) {
-                $result['temperature'] = ((float)$dataFields['wind_chill'] - 32) / 1.8;
+            // Temperature (Fahrenheit → Celsius)
+            // Type 1: temp, Type 2: temp_out
+            $tempF = self::getFirstNumeric($dataFields, ['temp', 'temp_out']);
+            if ($tempF !== null) {
+                $result['temperature'] = ($tempF - 32) / 1.8;
             }
             
-            // Humidity - percentage
-            if (isset($dataFields['hum']) && is_numeric($dataFields['hum'])) {
-                $result['humidity'] = (float)$dataFields['hum'];
+            // Humidity (percentage)
+            // Type 1: hum, Type 2: hum_out
+            $humidity = self::getFirstNumeric($dataFields, ['hum', 'hum_out']);
+            if ($humidity !== null) {
+                $result['humidity'] = $humidity;
             }
             
-            // Dewpoint - Fahrenheit, convert to Celsius
-            if (isset($dataFields['dew_point']) && is_numeric($dataFields['dew_point'])) {
-                $result['dewpoint'] = ((float)$dataFields['dew_point'] - 32) / 1.8;
+            // Dewpoint (Fahrenheit → Celsius)
+            $dewpointF = self::getFirstNumeric($dataFields, ['dew_point', 'dewpoint']);
+            if ($dewpointF !== null) {
+                $result['dewpoint'] = ($dewpointF - 32) / 1.8;
             }
             
-            // Pressure - WeatherLink provides in inHg
-            if (isset($dataFields['bar_sea_level']) && is_numeric($dataFields['bar_sea_level'])) {
-                $result['pressure'] = (float)$dataFields['bar_sea_level'];
-            } elseif (isset($dataFields['bar']) && is_numeric($dataFields['bar'])) {
-                $result['pressure'] = (float)$dataFields['bar'];
+            // Pressure (inHg)
+            $pressure = self::getFirstNumeric($dataFields, ['bar_sea_level', 'bar']);
+            if ($pressure !== null) {
+                $result['pressure'] = $pressure;
             }
             
-            // Wind speed - WeatherLink uses mph, convert to knots
-            if (isset($dataFields['wind_speed_last']) && is_numeric($dataFields['wind_speed_last'])) {
-                $result['wind_speed'] = (int)round((float)$dataFields['wind_speed_last'] * 0.868976);
-            } elseif (isset($dataFields['wind_speed_avg_last_1_min']) && is_numeric($dataFields['wind_speed_avg_last_1_min'])) {
-                $result['wind_speed'] = (int)round((float)$dataFields['wind_speed_avg_last_1_min'] * 0.868976);
-            } elseif (isset($dataFields['wind_speed_avg_last_10_min']) && is_numeric($dataFields['wind_speed_avg_last_10_min'])) {
-                $result['wind_speed'] = (int)round((float)$dataFields['wind_speed_avg_last_10_min'] * 0.868976);
+            // Wind speed (mph → knots)
+            // Type 1: wind_speed_last, wind_speed_avg_last_1_min, wind_speed_avg_last_10_min
+            // Type 2: wind_speed, wind_speed_10_min_avg
+            $windMph = self::getFirstNumeric($dataFields, [
+                'wind_speed_last',
+                'wind_speed_avg_last_1_min', 
+                'wind_speed_avg_last_10_min',
+                'wind_speed',
+                'wind_speed_10_min_avg'
+            ]);
+            if ($windMph !== null) {
+                $result['wind_speed'] = (int)round($windMph * 0.868976);
             }
             
-            // Wind direction - degrees (0-359)
-            if (isset($dataFields['wind_dir_last']) && is_numeric($dataFields['wind_dir_last'])) {
-                $result['wind_direction'] = (int)round((float)$dataFields['wind_dir_last']);
-            } elseif (isset($dataFields['wind_dir_scalar_avg_last_1_min']) && is_numeric($dataFields['wind_dir_scalar_avg_last_1_min'])) {
-                $result['wind_direction'] = (int)round((float)$dataFields['wind_dir_scalar_avg_last_1_min']);
-            } elseif (isset($dataFields['wind_dir_scalar_avg_last_10_min']) && is_numeric($dataFields['wind_dir_scalar_avg_last_10_min'])) {
-                $result['wind_direction'] = (int)round((float)$dataFields['wind_dir_scalar_avg_last_10_min']);
+            // Wind direction (degrees)
+            // Type 1: wind_dir_last, wind_dir_scalar_avg_last_1_min, wind_dir_scalar_avg_last_10_min
+            // Type 2: wind_dir
+            $windDir = self::getFirstNumeric($dataFields, [
+                'wind_dir_last',
+                'wind_dir_scalar_avg_last_1_min',
+                'wind_dir_scalar_avg_last_10_min',
+                'wind_dir'
+            ]);
+            if ($windDir !== null) {
+                $result['wind_direction'] = (int)round($windDir);
             }
             
-            // Gust speed - WeatherLink uses mph, convert to knots
-            if (isset($dataFields['wind_speed_hi_last_2_min']) && is_numeric($dataFields['wind_speed_hi_last_2_min'])) {
-                $gustSpeed = (int)round((float)$dataFields['wind_speed_hi_last_2_min'] * 0.868976);
-                $result['gust_speed'] = $gustSpeed;
-                $result['peak_gust'] = $gustSpeed;
-            } elseif (isset($dataFields['wind_speed_hi_last_10_min']) && is_numeric($dataFields['wind_speed_hi_last_10_min'])) {
-                $gustSpeed = (int)round((float)$dataFields['wind_speed_hi_last_10_min'] * 0.868976);
-                $result['gust_speed'] = $gustSpeed;
-                $result['peak_gust'] = $gustSpeed;
+            // Wind gust (mph → knots)
+            // Type 1: wind_speed_hi_last_2_min, wind_speed_hi_last_10_min
+            // Type 2: wind_gust_10_min
+            $gustMph = self::getFirstNumeric($dataFields, [
+                'wind_speed_hi_last_2_min',
+                'wind_speed_hi_last_10_min',
+                'wind_gust_10_min'
+            ]);
+            if ($gustMph !== null) {
+                $gustKts = (int)round($gustMph * 0.868976);
+                $result['gust_speed'] = $gustKts;
+                $result['peak_gust'] = $gustKts;
             }
             
-            // Precipitation - normalize to 0 for no precipitation
-            if (isset($dataFields['rainfall_daily_in']) && is_numeric($dataFields['rainfall_daily_in'])) {
-                $result['precip_accum'] = (float)$dataFields['rainfall_daily_in'];
-            } elseif (isset($dataFields['rainfall_daily_mm']) && is_numeric($dataFields['rainfall_daily_mm'])) {
-                $result['precip_accum'] = (float)$dataFields['rainfall_daily_mm'] * 0.0393701;
-            } elseif (isset($dataFields['rainfall_last_60_min_in']) && is_numeric($dataFields['rainfall_last_60_min_in'])) {
-                $result['precip_accum'] = (float)$dataFields['rainfall_last_60_min_in'];
-            } elseif (isset($dataFields['rainfall_last_60_min_mm']) && is_numeric($dataFields['rainfall_last_60_min_mm'])) {
-                $result['precip_accum'] = (float)$dataFields['rainfall_last_60_min_mm'] * 0.0393701;
+            // Precipitation (inches)
+            // Type 1: rainfall_daily_in, rainfall_daily_mm (convert)
+            // Type 2: rain_day_in, rain_day_mm (convert)
+            $precipIn = self::getFirstNumeric($dataFields, ['rainfall_daily_in', 'rain_day_in']);
+            if ($precipIn !== null) {
+                $result['precip_accum'] = $precipIn;
             } else {
-                $result['precip_accum'] = 0;
+                $precipMm = self::getFirstNumeric($dataFields, ['rainfall_daily_mm', 'rain_day_mm']);
+                if ($precipMm !== null) {
+                    $result['precip_accum'] = $precipMm * 0.0393701;
+                }
             }
         }
         
-        // Set observation time
         if ($latestTimestamp !== null) {
             $result['obs_time'] = $latestTimestamp;
         }
         
+        // Default precip to 0 if sensor didn't report (0 = no precip, null = sensor failure)
+        if ($result['precip_accum'] === null) {
+            $result['precip_accum'] = 0;
+        }
+        
         return $result;
+    }
+    
+    /**
+     * Get first numeric value from dataFields matching any of the given keys
+     * 
+     * @param array $dataFields Data fields from API response
+     * @param array $keys Field names to check in priority order
+     * @return float|null First found numeric value, or null if none found
+     */
+    private static function getFirstNumeric(array $dataFields, array $keys): ?float {
+        foreach ($keys as $key) {
+            if (isset($dataFields[$key]) && is_numeric($dataFields[$key])) {
+                return (float)$dataFields[$key];
+            }
+        }
+        return null;
     }
 }
 
@@ -316,7 +348,6 @@ class WeatherLinkV2Adapter {
 // LEGACY FUNCTION ALIASES (for backward compatibility)
 // =============================================================================
 
-// Alias the old class name for backward compatibility
 if (!class_exists('WeatherLinkAdapter')) {
     class_alias('WeatherLinkV2Adapter', 'WeatherLinkAdapter');
 }
