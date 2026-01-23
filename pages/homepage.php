@@ -26,9 +26,9 @@ $totalAirports = 0;
 $totalWebcams = 0;
 $totalWeatherStations = 0;
 
-// Get rolling 24-hour metrics from the metrics system
+// Get true rolling 24-hour metrics from the metrics system
 require_once __DIR__ . '/../lib/metrics.php';
-$rolling24h = metrics_get_rolling(1);
+$rolling24h = metrics_get_rolling_hours(24);
 // Images processed = variants generated (includes all format/size combinations created)
 $imagesProcessed24h = $rolling24h['global']['variants_generated'] ?? 0;
 
