@@ -181,6 +181,22 @@ $ogImage = $baseUrl . '/public/favicons/android-chrome-192x192.png';
     
     // Breadcrumb structured data
     echo generateStructuredDataScript(generateGuideBreadcrumbs($guideDisplayTitle));
+    
+    // Article structured data for individual guide pages (not index)
+    if (!$isIndex && $guideDisplayTitle) {
+        echo "\n    ";
+        // Use file mtime for dates - we don't track original publish date separately
+        $dateModified = date('c', $fileMtime);
+        $datePublished = $dateModified;
+        echo generateStructuredDataScript(generateArticleSchema(
+            $guideDisplayTitle,
+            $pageDescription,
+            $canonicalUrl,
+            $datePublished,
+            $dateModified,
+            $ogImage
+        ));
+    }
     ?>
     
     <link rel="stylesheet" href="/public/css/styles.css">

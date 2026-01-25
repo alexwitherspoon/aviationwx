@@ -307,6 +307,58 @@ function generateGuideBreadcrumbs($guideTitle = null) {
 }
 
 /**
+ * Generate Article structured data (JSON-LD) for guide pages
+ * 
+ * Creates Schema.org Article structured data for individual guide pages.
+ * Helps search engines understand the content type and can enable rich
+ * results like article snippets in search results.
+ * 
+ * @param string $title Article headline/title
+ * @param string $description Article description/summary
+ * @param string $url Canonical URL of the article
+ * @param string $datePublished ISO 8601 date when article was first published
+ * @param string $dateModified ISO 8601 date when article was last modified
+ * @param string|null $image Optional image URL for the article
+ * @return array Schema.org Article JSON-LD structure
+ */
+function generateArticleSchema(string $title, string $description, string $url, string $datePublished, string $dateModified, ?string $image = null): array {
+    $schema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Article',
+        'headline' => $title,
+        'description' => $description,
+        'url' => $url,
+        'datePublished' => $datePublished,
+        'dateModified' => $dateModified,
+        'author' => [
+            '@type' => 'Organization',
+            'name' => 'AviationWX.org',
+            'url' => 'https://aviationwx.org'
+        ],
+        'publisher' => [
+            '@type' => 'Organization',
+            'name' => 'AviationWX.org',
+            'url' => 'https://aviationwx.org',
+            'logo' => [
+                '@type' => 'ImageObject',
+                'url' => getLogoUrl()
+            ]
+        ],
+        'mainEntityOfPage' => [
+            '@type' => 'WebPage',
+            '@id' => $url
+        ]
+    ];
+    
+    // Add image if provided
+    if ($image) {
+        $schema['image'] = $image;
+    }
+    
+    return $schema;
+}
+
+/**
  * Extract a meta description from markdown content
  * 
  * Automatically extracts the first paragraph after the H1 heading

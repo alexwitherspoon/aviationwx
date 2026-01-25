@@ -11,7 +11,8 @@ Disallow: /webcam.php?*
 # The configurator at embed.aviationwx.org is indexed, but specific configurations are not
 Disallow: /*?*render=1*
 Disallow: /*?*embed*
-Disallow: /*?*airport=*
+# Note: ?airport= query params are NOT blocked - they 301 redirect to subdomains,
+# and blocking would prevent Google from following the redirect
 
 # Disallow JavaScript files from indexing (source maps, service workers, etc.)
 Disallow: *.js$
