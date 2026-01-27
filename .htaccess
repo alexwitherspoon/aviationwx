@@ -37,6 +37,11 @@ Options -Indexes
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^api/v1/(.*)$ api/v1/router.php [QSA,L]
 
+    # Route widget.js to public/js/widget.js for embed convenience
+    # Allows users to use https://embed.aviationwx.org/widget.js
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^widget\.js$ public/js/widget.js [L]
+
     # Route admin endpoints to admin/ directory
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^diagnostics\.php$ admin/diagnostics.php [L]
