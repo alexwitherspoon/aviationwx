@@ -16,9 +16,15 @@
  * - RainViewer: /api/map-tiles.php?layer=rainviewer&z=5&x=10&y=12&timestamp=1234567890
  * 
  * Rate Limiting:
- * - Permissive limit: 300 requests/minute per IP (prevents abuse only)
+ * - Our proxy: 300 requests/minute per client IP (prevents abuse)
  * - OpenWeatherMap free tier: 60 calls/min, 1M/month
- * - RainViewer: No API key required, CDN-backed
+ * - RainViewer (as of Jan 2026): 100 requests/min per server IP, zoom ≤7 only
+ * 
+ * RainViewer API Changes (January 2026):
+ * - Tiled API limited to zoom level 7 maximum
+ * - Rate limit reduced to 100 requests/IP/minute
+ * - Server-side caching (15min TTL) makes this limit manageable
+ * - At zoom 7, there are ~16,384 possible tiles globally, so cache hits are high
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -115,11 +121,15 @@ if ($isRainViewer) {
     exit;
 }
 
-// Validate zoom level (0-19)
-if ($z < 0 || $z > 19) {
+// Validate zoom level
+// RainViewer: Limited to zoom 0-7 as of January 2026
+// OpenWeatherMap: Supports zoom 0-19
+$maxZoom = $isRainViewer ? 7 : 19;
+if ($z < 0 || $z > $maxZoom) {
     http_response_code(400);
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'Invalid zoom level (0-19)']);
+    $hint = $isRainViewer ? ' (RainViewer API limited to zoom 7 as of Jan 2026)' : '';
+    echo json_encode(['error' => "Invalid zoom level (0-{$maxZoom}){$hint}"]);
     exit;
 }
 

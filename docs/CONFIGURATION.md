@@ -1035,8 +1035,11 @@ Both services are proxied through `/api/map-tiles.php` for server-side caching a
 - **Update frequency**: Every 10 minutes
 - **Cache TTL**: 15 minutes (server-side)
 - **API key**: Not required
+- **Max zoom**: 7 (tiles scale up at higher zoom levels)
 
 The precipitation radar layer is always enabled and accessible through the map controls (☔).
+
+**Note (January 2026 API Changes)**: RainViewer's API now limits tile requests to zoom level 7 and 100 requests/IP/minute. The map automatically handles this by fetching tiles at zoom 7 and scaling them up when zoomed in further. Server-side caching ensures the rate limit is rarely a concern.
 
 ---
 

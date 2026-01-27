@@ -1246,11 +1246,14 @@ $breadcrumbs = generateBreadcrumbSchema([
                         // This allows server-side caching and usage metrics
                         var radarUrl = '/api/map-tiles.php?layer=rainviewer&timestamp=' + radarTimestamp + '&z={z}&x={x}&y={y}';
                         
+                        // RainViewer API limits tiles to zoom 7 as of Jan 2026
+                        // Use maxNativeZoom to fetch at z7 and scale up for higher zooms
                         radarLayer = L.tileLayer(radarUrl, {
                             opacity: 0.7,
                             attribution: 'Radar © <a href="https://www.rainviewer.com">RainViewer</a>',
                             zIndex: 500,
                             maxZoom: 19,
+                            maxNativeZoom: 7,
                             minZoom: 3,
                             updateWhenIdle: true,
                             updateWhenZooming: false,
