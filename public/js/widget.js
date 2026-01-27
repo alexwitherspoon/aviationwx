@@ -27,24 +27,35 @@
     'use strict';
 
     // Determine the base URL for API calls
-    // When embedded on external sites, we need absolute URLs pointing to aviationwx.org
+    // When embedded on external sites, we need absolute URLs pointing back to the widget's origin
+    // The base_domain is configured in airports.json, but since this is client-side JS,
+    // we detect the origin from the script's own src attribute
     const getBaseUrl = () => {
         // Try to find this script's src to determine the origin
+        // This works for any domain, not just aviationwx.org (supports custom deployments)
         const scripts = document.querySelectorAll('script[src*="widget.js"]');
         for (const script of scripts) {
             const src = script.src;
-            if (src.includes('aviationwx.org')) {
-                // Extract origin from script URL
-                const url = new URL(src);
-                return url.origin;
+            // Only process absolute URLs (http/https), skip relative paths
+            if (src.startsWith('http')) {
+                try {
+                    const url = new URL(src);
+                    // For embed subdomain (embed.example.com), use main domain (example.com)
+                    // This ensures API calls go to the main site
+                    const hostname = url.hostname;
+                    if (hostname.startsWith('embed.')) {
+                        const mainDomain = hostname.substring(6); // Remove 'embed.' prefix
+                        return `${url.protocol}//${mainDomain}`;
+                    }
+                    return url.origin;
+                } catch (e) {
+                    // Invalid URL, continue checking other scripts
+                }
             }
         }
-        // Fallback to current origin (works when hosted on aviationwx.org)
-        if (window.location.hostname.includes('aviationwx.org')) {
-            return window.location.origin;
-        }
-        // Default to production URL for external embeds
-        return 'https://aviationwx.org';
+        // Fallback to current origin if we're on the same domain as the widget
+        // (works when page is hosted on the same domain as the widget)
+        return window.location.origin;
     };
     
     const BASE_URL = getBaseUrl();
