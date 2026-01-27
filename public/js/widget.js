@@ -26,6 +26,29 @@
 (function() {
     'use strict';
 
+    // Determine the base URL for API calls
+    // When embedded on external sites, we need absolute URLs pointing to aviationwx.org
+    const getBaseUrl = () => {
+        // Try to find this script's src to determine the origin
+        const scripts = document.querySelectorAll('script[src*="widget.js"]');
+        for (const script of scripts) {
+            const src = script.src;
+            if (src.includes('aviationwx.org')) {
+                // Extract origin from script URL
+                const url = new URL(src);
+                return url.origin;
+            }
+        }
+        // Fallback to current origin (works when hosted on aviationwx.org)
+        if (window.location.hostname.includes('aviationwx.org')) {
+            return window.location.origin;
+        }
+        // Default to production URL for external embeds
+        return 'https://aviationwx.org';
+    };
+    
+    const BASE_URL = getBaseUrl();
+
     // Widget size presets (default dimensions for each style)
     const SIZE_PRESETS = {
         'card': { width: 300, height: 300 },
@@ -171,7 +194,7 @@
             }
 
             try {
-                const response = await fetch(`/api/weather.php?airport=${encodeURIComponent(airport)}`);
+                const response = await fetch(`${BASE_URL}/api/weather.php?airport=${encodeURIComponent(airport)}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -503,7 +526,7 @@
                 params.set('cams', attrs.cams.join(','));
             }
             
-            const response = await fetch(`/api/embed-widget.php?${params.toString()}`);
+            const response = await fetch(`${BASE_URL}/api/embed-widget.php?${params.toString()}`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch widget: ${response.status}`);
             }
@@ -559,7 +582,7 @@
             // The weather API doesn't include airport metadata
             // Use the REST API endpoint: /api/v1/airports/{id}
             try {
-                const airportResponse = await fetch(`/api/v1/airports/${encodeURIComponent(attrs.airport)}`);
+                const airportResponse = await fetch(`${BASE_URL}/api/v1/airports/${encodeURIComponent(attrs.airport)}`);
                 if (airportResponse.ok) {
                     const airportData = await airportResponse.json();
                     if (airportData.success && airportData.airport) {
@@ -644,8 +667,8 @@
             }
             
             const scripts = [
-                '/public/js/embed-wind-compass.js',
-                '/public/js/embed-helpers.js'
+                `${BASE_URL}/public/js/embed-wind-compass.js`,
+                `${BASE_URL}/public/js/embed-helpers.js`
             ];
             
             const loadPromises = scripts.map(src => {
@@ -674,7 +697,7 @@
          */
         getStyles(attrs) {
             // Load shared CSS file to match iframe embeds exactly
-            const cssUrl = '/public/css/embed-widgets.css';
+            const cssUrl = `${BASE_URL}/public/css/embed-widgets.css`;
             
             return `
                 <link rel="stylesheet" href="${cssUrl}">
