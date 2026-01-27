@@ -39,23 +39,38 @@ function getAirportIdentifiers(array $airport): array {
 }
 
 /**
- * Check if NOTAM is an aerodrome closure
+ * Check if NOTAM is a runway or aerodrome closure/hazard
+ * 
+ * Only matches runway-level and above issues (not taxiway/apron closures):
+ * - QMR* = Runway (closed, hazardous, etc.)
+ * - QFA* = Aerodrome/airport (closed, services unavailable, etc.)
+ * 
+ * Excludes less critical closures:
+ * - QMX* = Taxiway closures
+ * - QMA* = Apron/ramp closures
+ * - QMP* = Parking area closures
  * 
  * @param array $notam Parsed NOTAM data
  * @param array $airport Airport configuration
- * @return bool True if aerodrome closure
+ * @return bool True if runway/aerodrome closure or hazard
  */
 function isAerodromeClosure(array $notam, array $airport): bool {
     $code = strtoupper($notam['code'] ?? '');
     $text = strtoupper($notam['text'] ?? '');
     
-    // Q-code filter (primary) - must start with QM
-    if (strpos($code, 'QM') !== 0) {
+    // Q-code filter - only runway (QMR) or aerodrome (QFA) level issues
+    $isRunway = strpos($code, 'QMR') === 0;
+    $isAerodrome = strpos($code, 'QFA') === 0;
+    
+    if (!$isRunway && !$isAerodrome) {
         return false;
     }
     
-    // Text validation - must contain CLSD or CLOSED
-    if (stripos($text, 'CLSD') === false && stripos($text, 'CLOSED') === false) {
+    // Text validation - must contain closure or hazard indicators
+    $hasClosure = stripos($text, 'CLSD') !== false || stripos($text, 'CLOSED') !== false;
+    $hasHazard = stripos($text, 'HAZARD') !== false || stripos($text, 'UNSAFE') !== false;
+    
+    if (!$hasClosure && !$hasHazard) {
         return false;
     }
     

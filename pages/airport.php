@@ -6734,6 +6734,56 @@ function updateNotamBanner(notams) {
 }
 
 /**
+ * Format NOTAM time range for display
+ * 
+ * @param {Object} notam NOTAM object
+ * @param {boolean} isActive Whether the NOTAM is currently active
+ * @return {string} Formatted time string
+ */
+function formatNotamTimeRange(notam, isActive) {
+    const startTime = formatNotamTime(notam.start_time_utc, notam.start_time_local);
+    const endTime = notam.end_time_utc 
+        ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
+        : null;
+    
+    if (isActive) {
+        // Active: show "until X" or "until further notice"
+        return endTime ? `until ${endTime}` : 'until further notice';
+    } else {
+        // Upcoming: show "effective X to Y" or "effective X until further notice"
+        if (endTime) {
+            return `effective ${startTime} to ${endTime}`;
+        } else {
+            return `effective ${startTime} until further notice`;
+        }
+    }
+}
+
+/**
+ * Create a single NOTAM line element
+ * 
+ * @param {Object} notam NOTAM object
+ * @param {boolean} isActive Whether the NOTAM is currently active
+ * @return {string} HTML string for the NOTAM line
+ */
+function createNotamLine(notam, isActive) {
+    const icon = isActive ? '🚨' : '⚠️';
+    const statusText = isActive ? 'ACTIVE NOTAM' : 'UPCOMING NOTAM';
+    const notamId = notam.id ? `[${escapeHtml(notam.id)}]` : '';
+    const timeRange = formatNotamTimeRange(notam, isActive);
+    
+    return `
+        <div class="notam-line">
+            <span class="notam-icon">${icon}</span>
+            <span class="notam-status">${statusText}</span>
+            <span class="notam-id">${notamId}</span>
+            <span class="notam-message">${escapeHtml(notam.message)}</span>
+            <span class="notam-time-range">${timeRange}</span>
+        </div>
+    `;
+}
+
+/**
  * Create NOTAM banner element
  * 
  * @param {string} type 'active' or 'upcoming'
@@ -6745,81 +6795,13 @@ function createNotamBanner(type, notams) {
     banner.className = `notam-banner-${type}`;
     
     const isActive = type === 'active';
-    const icon = isActive ? '🚨' : '⚠️';
-    const statusText = isActive ? 'ACTIVE NOTAM' : 'NOTAM EFFECTIVE TODAY';
-    const statusTextPlural = isActive ? 'ACTIVE NOTAMs' : 'NOTAMs EFFECTIVE TODAY';
     
-    if (notams.length === 1) {
-        const notam = notams[0];
-        const startTime = formatNotamTime(notam.start_time_utc, notam.start_time_local);
-        const endTime = notam.end_time_utc 
-            ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
-            : 'until further notice';
-        
-        const timeRange = isActive 
-            ? `from ${startTime} to ${endTime}`
-            : `starting at ${startTime}`;
-        
-        banner.innerHTML = `
-            <span class="notam-icon">${icon}</span>
-            <span class="notam-status">${statusText}:</span>
-            <span class="notam-message">${escapeHtml(notam.message)}</span>
-            <span class="notam-time-range">${timeRange}</span>
-            ${notam.official_link ? `<a href="${escapeHtml(notam.official_link)}" class="notam-link" target="_blank" rel="noopener noreferrer">View Full NOTAM</a>` : ''}
-        `;
-    } else {
-        // Multiple NOTAMs - show summary with expandable details
-        const summary = notams.map(n => {
-            const shortMsg = n.message.length > 50 ? n.message.substring(0, 50) + '...' : n.message;
-            return shortMsg;
-        }).join(', ');
-        
-        banner.innerHTML = `
-            <span class="notam-icon">${icon}</span>
-            <span class="notam-status">${statusTextPlural}:</span>
-            <span class="notam-message">${escapeHtml(summary)}</span>
-            <button class="notam-expand" onclick="toggleNotamDetails(this)">View Details (${notams.length} NOTAMs)</button>
-            <div class="notam-details" style="display: none;">
-                ${notams.map((notam, idx) => {
-                    const startTime = formatNotamTime(notam.start_time_utc, notam.start_time_local);
-                    const endTime = notam.end_time_utc 
-                        ? formatNotamTime(notam.end_time_utc, notam.end_time_local)
-                        : 'until further notice';
-                    const timeRange = isActive 
-                        ? `from ${startTime} to ${endTime}`
-                        : `starting at ${startTime}`;
-                    const typeLabel = notam.type === 'aerodrome_closure' ? 'Aerodrome Closure' : 'TFR';
-                    return `
-                        <div class="notam-item">
-                            <strong>${typeLabel}:</strong> ${escapeHtml(notam.message)} ${timeRange}
-                            ${notam.official_link ? `<a href="${escapeHtml(notam.official_link)}" target="_blank" rel="noopener noreferrer">View NOTAM</a>` : ''}
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
-    }
+    // Create a line for each NOTAM - no expand/collapse, just show all
+    const notamLines = notams.map(notam => createNotamLine(notam, isActive)).join('');
+    
+    banner.innerHTML = notamLines;
     
     return banner;
-}
-
-/**
- * Toggle NOTAM details expansion
- * 
- * @param {HTMLElement} button Expand/collapse button
- */
-function toggleNotamDetails(button) {
-    const banner = button.closest('.notam-banner-active, .notam-banner-upcoming');
-    if (!banner) return;
-    
-    const details = banner.querySelector('.notam-details');
-    if (!details) return;
-    
-    const isExpanded = details.style.display !== 'none';
-    details.style.display = isExpanded ? 'none' : 'block';
-    button.textContent = isExpanded 
-        ? `View Details (${details.querySelectorAll('.notam-item').length} NOTAMs)`
-        : 'Hide Details';
 }
 
 /**
