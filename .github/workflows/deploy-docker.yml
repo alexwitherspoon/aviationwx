@@ -1,5 +1,5 @@
 name: Deploy to Production
-run-name: "Deploy ${{ github.event.workflow_run.head_sha && format('{0}', github.event.workflow_run.head_sha) || github.sha }} to Production"
+run-name: "Deploy ${{ github.event.workflow_run.head_sha || github.sha }} to Production"
 
 on:
   workflow_run:
