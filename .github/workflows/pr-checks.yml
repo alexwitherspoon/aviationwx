@@ -1,4 +1,5 @@
 name: PR Quality Gates
+run-name: "PR #${{ github.event.pull_request.number }} Quality Gates (${{ github.event.pull_request.head.sha }})"
 
 on:
   pull_request:

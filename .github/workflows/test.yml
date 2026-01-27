@@ -1,4 +1,5 @@
 name: Test and Lint
+run-name: "Test and Lint (${{ github.event.pull_request.head.sha || github.sha }})"
 
 on:
   pull_request:

@@ -1,4 +1,5 @@
 name: Quality Assurance Tests
+run-name: "QA Tests (${{ github.event.pull_request.head.sha || github.sha }})"
 
 on:
   pull_request:
