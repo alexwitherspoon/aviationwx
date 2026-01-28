@@ -1,31 +1,24 @@
 <?php
 /**
- * PWSWeather.com API Adapter v1 (via AerisWeather API)
+ * PWSWeather.com API Adapter v1 (via AerisWeather/XWeather API)
  * 
- * Handles fetching and parsing weather data from PWSWeather.com stations
- * through the AerisWeather API.
+ * Handles fetching and parsing weather data from PWSWeather.com stations.
+ * API documentation: https://www.xweather.com/docs/weather-api/endpoints/observations
  * 
- * PWSWeather.com stations upload data to pwsweather.com, and station owners
- * receive access to AerisWeather API to retrieve their station's observations.
+ * SETUP: Obtaining XWeather API Credentials
+ * -----------------------------------------
+ * 1. Create account at https://www.xweather.com/ (free tier available)
+ * 2. Go to Apps > New Application to generate client_id and client_secret
+ * 3. Find your PWS station ID at https://dashboard.pwsweather.com/
+ * 4. Configure in airports.json:
+ *    "weather_sources": [{
+ *      "type": "pwsweather",
+ *      "station_id": "YOURSTATIONID",    // From PWS dashboard (no PWS_ prefix needed)
+ *      "client_id": "your_client_id",     // From XWeather app
+ *      "client_secret": "your_secret"     // From XWeather app
+ *    }]
  * 
- * API Documentation: https://www.xweather.com/docs/weather-api/endpoints/observations
- * 
- * Configuration Requirements:
- * - station_id: PWSWeather.com station identifier
- * - client_id: AerisWeather API client ID
- * - client_secret: AerisWeather API client secret
- * 
- * Rate Limits:
- * - AerisWeather API has rate limits based on subscription tier
- * - Free tier: Limited requests per day
- * - Paid tiers: Higher rate limits
- * - Circuit breaker logic in fetcher.php handles rate limit errors
- * 
- * Error Handling:
- * - Invalid API responses return null
- * - Missing required fields return null
- * - API errors (success: false) return null
- * - Network timeouts handled by CURL_TIMEOUT constant
+ * Note: The adapter auto-prepends "PWS_" to station_id for the API request.
  */
 
 require_once __DIR__ . '/../../constants.php';
@@ -39,10 +32,9 @@ use AviationWX\Weather\Data\WindGroup;
 use AviationWX\Weather\Data\WeatherSnapshot;
 
 /**
- * PWSWeather Adapter Class (implements new interface pattern)
+ * PWSWeather Adapter Class
  * 
- * PWSWeather stations upload data through AerisWeather API.
- * Updates vary by station configuration.
+ * Provides self-describing adapter for PWSWeather stations via AerisWeather API.
  */
 class PWSWeatherAdapter {
     
@@ -56,7 +48,7 @@ class PWSWeatherAdapter {
         'wind_direction',
         'gust_speed',
         'precip_accum',
-        'visibility', // May be available
+        'visibility',
     ];
     
     /** Typical update frequency in seconds */
@@ -101,6 +93,27 @@ class PWSWeatherAdapter {
      */
     public static function providesField(string $fieldName): bool {
         return in_array($fieldName, self::FIELDS_PROVIDED, true);
+    }
+    
+    /**
+     * Build the API URL for fetching data
+     * 
+     * @param array $config Source configuration (station_id, client_id, client_secret)
+     * @return string|null API URL or null if config is invalid
+     */
+    public static function buildUrl(array $config): ?string {
+        if (!isset($config['station_id']) || !isset($config['client_id']) || !isset($config['client_secret'])) {
+            return null;
+        }
+        
+        $stationId = $config['station_id'];
+        if (strpos($stationId, 'PWS_') !== 0) {
+            $stationId = 'PWS_' . $stationId;
+        }
+        
+        return "https://api.aerisapi.com/observations/{$stationId}?client_id=" 
+            . urlencode($config['client_id']) 
+            . "&client_secret=" . urlencode($config['client_secret']);
     }
     
     /**
@@ -150,35 +163,16 @@ class PWSWeatherAdapter {
     }
 }
 
-// =============================================================================
-// LEGACY FUNCTIONS (kept for backward compatibility during migration)
-// =============================================================================
-
 /**
  * Parse AerisWeather API response
  * 
- * Parses JSON response from AerisWeather API and converts to standard format.
- * Handles unit conversions where needed (visibility already in statute miles).
- * Observation time is provided as Unix timestamp in seconds.
- * 
- * Field Mappings:
- * - tempC -> temperature (Celsius, no conversion)
- * - humidity -> humidity (percentage, no conversion)
- * - pressureIN -> pressure (inHg, no conversion)
- * - windSpeedKTS/windKTS -> wind_speed (knots, no conversion)
- * - windGustKTS -> gust_speed (knots, no conversion)
- * - windDirDEG -> wind_direction (degrees, no conversion)
- * - precipIN -> precip_accum (inches, no conversion)
- * - dewpointC -> dewpoint (Celsius, no conversion)
- * - visibilityMI -> visibility (statute miles, no conversion)
- * - timestamp -> obs_time (Unix seconds, no conversion)
+ * API returns: { "success": true, "response": { "id": "...", "ob": { ... } } }
  * 
  * @param string|null $response JSON response from AerisWeather API
- * @return array|null Weather data array with standard keys, or null on parse error
- *                    Returns null on any parse error (invalid JSON, missing fields, API errors)
+ * @return array|null Weather data array or null on parse error
  */
 function parsePWSWeatherResponse(?string $response): ?array {
-    if ($response === null || $response === '' || !is_string($response)) {
+    if ($response === null || $response === '') {
         return null;
     }
     
@@ -187,7 +181,6 @@ function parsePWSWeatherResponse(?string $response): ?array {
         return null;
     }
     
-    // Check for API errors
     if (isset($data['success']) && $data['success'] === false) {
         return null;
     }
@@ -198,39 +191,17 @@ function parsePWSWeatherResponse(?string $response): ?array {
     
     $responseData = $data['response'];
     
-    // Get observation data from periods array
-    if (!isset($responseData['periods']) || !is_array($responseData['periods']) || empty($responseData['periods'])) {
+    // API returns observation data directly in response.ob
+    if (!isset($responseData['ob']) || !is_array($responseData['ob'])) {
         return null;
     }
     
-    $period = $responseData['periods'][0];
-    if (!isset($period['ob']) || !is_array($period['ob'])) {
-        return null;
-    }
+    $obs = $responseData['ob'];
     
-    $obs = $period['ob'];
-    
-    // Validate that we have at least some basic weather data
-    // At minimum, we need a timestamp to consider this a valid observation
     if (!isset($obs['timestamp']) || !is_numeric($obs['timestamp'])) {
         return null;
     }
     
-    // Parse observation time (when the weather was actually measured)
-    // AerisWeather provides timestamp as Unix timestamp in seconds
-    // Timestamp already validated above, so safe to cast
-    $obsTime = (int)$obs['timestamp'];
-    
-    // Temperature - already in Celsius
-    $temperature = isset($obs['tempC']) && is_numeric($obs['tempC']) ? (float)$obs['tempC'] : null;
-    
-    // Humidity - percentage
-    $humidity = isset($obs['humidity']) && is_numeric($obs['humidity']) ? (float)$obs['humidity'] : null;
-    
-    // Pressure - already in inHg
-    $pressure = isset($obs['pressureIN']) && is_numeric($obs['pressureIN']) ? (float)$obs['pressureIN'] : null;
-    
-    // Wind speed - already in knots
     $windSpeedKts = null;
     if (isset($obs['windSpeedKTS']) && is_numeric($obs['windSpeedKTS'])) {
         $windSpeedKts = (int)round((float)$obs['windSpeedKTS']);
@@ -238,121 +209,62 @@ function parsePWSWeatherResponse(?string $response): ?array {
         $windSpeedKts = (int)round((float)$obs['windKTS']);
     }
     
-    // Wind direction - degrees
-    $windDirection = null;
-    if (isset($obs['windDirDEG']) && is_numeric($obs['windDirDEG'])) {
-        $windDirection = (int)round((float)$obs['windDirDEG']);
-    }
-    
-    // Gust speed - already in knots
-    // AerisWeather API provides windGustKTS field for gust data
     $gustSpeedKts = null;
     if (isset($obs['windGustKTS']) && is_numeric($obs['windGustKTS'])) {
         $gustSpeedKts = (int)round((float)$obs['windGustKTS']);
     }
     
-    // Note: AerisWeather/PWSWeather API does not provide daily peak gust fields in the current observations endpoint.
-    // Daily peak gust tracking is handled by the application using current gust values.
-    $peakGustHistorical = null;
-    $peakGustHistoricalObsTime = null;
-    
-    // Precipitation - already in inches
-    $precip = isset($obs['precipIN']) && is_numeric($obs['precipIN']) ? (float)$obs['precipIN'] : 0;
-    
-    // Dewpoint - already in Celsius
-    $dewpoint = isset($obs['dewpointC']) && is_numeric($obs['dewpointC']) ? (float)$obs['dewpointC'] : null;
-    
-    // Visibility - already in statute miles (matches METAR format)
-    $visibility = null;
-    if (isset($obs['visibilityMI']) && is_numeric($obs['visibilityMI'])) {
-        $visibility = (float)$obs['visibilityMI']; // Already in statute miles
-    }
-    
-    // Ceiling - sky cover interpretation
-    // AerisWeather provides 'sky' field (0-8 scale) which we can interpret
-    // 0 = clear, 1-2 = few, 3-4 = scattered, 5-6 = broken, 7-8 = overcast
-    // For now, we'll leave ceiling as null since we don't have base height
-    $ceiling = null;
-    
-    // Extract quality metadata (API-specific quality indicators)
-    $qualityMetadata = [];
-    
-    // Extract QCcode from observation data (quality code)
-    // QCcode: 10 = data quality issues (sensor problems)
-    if (isset($obs['QCcode']) && is_numeric($obs['QCcode'])) {
-        $qualityMetadata['qc_code'] = (int)$obs['QCcode'];
-        // QCcode: 10 indicates known sensor problems
-        $qualityMetadata['has_quality_issues'] = ($obs['QCcode'] == 10);
-    }
-    
-    $result = [
-        'temperature' => $temperature,
-        'humidity' => $humidity,
-        'pressure' => $pressure,
+    return [
+        'temperature' => isset($obs['tempC']) && is_numeric($obs['tempC']) ? (float)$obs['tempC'] : null,
+        'humidity' => isset($obs['humidity']) && is_numeric($obs['humidity']) ? (float)$obs['humidity'] : null,
+        'pressure' => isset($obs['pressureIN']) && is_numeric($obs['pressureIN']) ? (float)$obs['pressureIN'] : null,
         'wind_speed' => $windSpeedKts,
-        'wind_direction' => $windDirection,
+        'wind_direction' => isset($obs['windDirDEG']) && is_numeric($obs['windDirDEG']) ? (int)round((float)$obs['windDirDEG']) : null,
         'gust_speed' => $gustSpeedKts,
-        'precip_accum' => $precip,
-        'dewpoint' => $dewpoint,
-        'visibility' => $visibility,
-        'ceiling' => $ceiling,
-        'temp_high' => null, // Not available from current observations endpoint
-        'temp_low' => null,  // Not available from current observations endpoint
+        'precip_accum' => isset($obs['precipIN']) && is_numeric($obs['precipIN']) ? (float)$obs['precipIN'] : 0,
+        'dewpoint' => isset($obs['dewpointC']) && is_numeric($obs['dewpointC']) ? (float)$obs['dewpointC'] : null,
+        'visibility' => isset($obs['visibilityMI']) && is_numeric($obs['visibilityMI']) ? (float)$obs['visibilityMI'] : null,
+        'ceiling' => null,
+        'temp_high' => null,
+        'temp_low' => null,
         'peak_gust' => $gustSpeedKts,
-        'peak_gust_historical' => $peakGustHistorical, // Daily peak gust from API if available
-        'peak_gust_historical_obs_time' => $peakGustHistoricalObsTime,
-        'obs_time' => $obsTime,
+        'peak_gust_historical' => null,
+        'peak_gust_historical_obs_time' => null,
+        'obs_time' => (int)$obs['timestamp'],
     ];
-    
-    
-    // Add quality metadata if present (internal only)
-    if (!empty($qualityMetadata)) {
-        $result['_quality_metadata'] = $qualityMetadata;
-    }
-    
-    return $result;
 }
 
 /**
- * Fetch weather from AerisWeather API (synchronous, for fallback)
+ * Fetch weather from AerisWeather API
  * 
- * Makes HTTP request to AerisWeather API to fetch current weather observations
- * for a PWSWeather.com station. Requires client_id, client_secret, and station_id.
- * Used as fallback when async fetch fails.
- * 
- * @param array $source Weather source configuration (must contain 'station_id', 'client_id', and 'client_secret')
- * @return array|null Weather data array with standard keys, or null on failure
+ * @param array $source Weather source configuration
+ * @return array|null Weather data array or null on failure
  */
 function fetchPWSWeather($source): ?array {
     if (!is_array($source) || !isset($source['station_id']) || !isset($source['client_id']) || !isset($source['client_secret'])) {
         return null;
     }
     
-    $stationId = $source['station_id'];
-    $clientId = $source['client_id'];
-    $clientSecret = $source['client_secret'];
+    $url = PWSWeatherAdapter::buildUrl($source);
+    if ($url === null) {
+        return null;
+    }
     
-    // Fetch current observation from AerisWeather API
-    $url = "https://api.aerisapi.com/observations/{$stationId}?client_id=" . urlencode($clientId) . "&client_secret=" . urlencode($clientSecret);
-    
-    // Check for mock response in test mode
     $mockResponse = getMockHttpResponse($url);
     if ($mockResponse !== null) {
-        $response = $mockResponse;
-    } else {
-        // Create context with explicit timeout
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => CURL_TIMEOUT,
-                'ignore_errors' => true,
-            ],
-        ]);
-        
-        $response = @file_get_contents($url, false, $context);
-        
-        if ($response === false) {
-            return null;
-        }
+        return parsePWSWeatherResponse($mockResponse);
+    }
+    
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => CURL_TIMEOUT,
+            'ignore_errors' => true,
+        ],
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
+    if ($response === false) {
+        return null;
     }
     
     return parsePWSWeatherResponse($response);

@@ -245,7 +245,7 @@ function buildSourceUrl(array $source): ?string {
         'synopticdata' => SynopticDataAdapter::buildUrl($source),
         'weatherlink_v2' => WeatherLinkV2Adapter::buildUrl($source),
         'weatherlink_v1' => WeatherLinkV1Adapter::buildUrl($source),
-        'pwsweather' => buildPWSWeatherUrl($source),
+        'pwsweather' => PWSWeatherAdapter::buildUrl($source),
         'metar' => MetarAdapter::buildUrl($source),
         'nws' => NwsApiAdapter::buildUrl($source),
         'aviationwx_api' => AviationWXAPIAdapter::buildUrl($source),
@@ -268,16 +268,6 @@ function buildSourceHeaders(array $source): array {
         'nws' => NwsApiAdapter::getHeaders(),
         default => ['Accept: application/json'],
     };
-}
-
-/**
- * Build PWSWeather URL
- */
-function buildPWSWeatherUrl(array $source): ?string {
-    if (!isset($source['client_id']) || !isset($source['client_secret']) || !isset($source['station_id'])) {
-        return null;
-    }
-    return "https://api.aerisapi.com/observations/{$source['station_id']}?client_id={$source['client_id']}&client_secret={$source['client_secret']}";
 }
 
 /**

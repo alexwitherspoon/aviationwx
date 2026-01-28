@@ -895,16 +895,15 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'humidity' => 70.0,
                         'pressureIN' => 30.0,
                         // Missing wind, precip fields
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -917,16 +916,16 @@ class ApiParsingTest extends TestCase
     }
     
     /**
-     * Test parsePWSWeatherResponse - Empty periods array
+     * Test parsePWSWeatherResponse - Missing ob key
      */
-    public function testParsePWSWeatherResponse_EmptyPeriodsArray()
+    public function testParsePWSWeatherResponse_MissingObKey()
     {
         $response = json_encode([
             'success' => true,
             'error' => null,
             'response' => [
-                'id' => 'KMAHANOV10',
-                'periods' => []
+                'id' => 'PWS_TESTSTATION'
+                // Missing 'ob' key
             ]
         ]);
         
@@ -964,15 +963,14 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'windSpeedKTS' => 5,  // Wind speed
                         'windGustKTS' => 7,   // Gust speed (different from wind speed)
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -996,15 +994,14 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'windSpeedKTS' => 5,  // Wind speed present
                         // windGustKTS missing
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -1040,8 +1037,7 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'humidity' => 70.0,
@@ -1051,8 +1047,8 @@ class ApiParsingTest extends TestCase
                         'visibilityMI' => 10.0, // 10 statute miles
                         'precipIN' => 0
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -1072,8 +1068,7 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'humidity' => 70.0,
@@ -1082,8 +1077,8 @@ class ApiParsingTest extends TestCase
                         'windDirDEG' => 180,
                         'precipIN' => 0
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -1103,8 +1098,7 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'humidity' => 70.0,
@@ -1113,8 +1107,8 @@ class ApiParsingTest extends TestCase
                         'windDirDEG' => 180,
                         'precipIN' => 0
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -1134,8 +1128,7 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'humidity' => 70.0,
@@ -1144,8 +1137,8 @@ class ApiParsingTest extends TestCase
                         'windDirDEG' => 180,
                         'precipIN' => 0.5 // 0.5 inches
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -1165,8 +1158,7 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 0.0, // Freezing point in Celsius
                         'humidity' => 70.0,
@@ -1175,8 +1167,8 @@ class ApiParsingTest extends TestCase
                         'windDirDEG' => 180,
                         'precipIN' => 0
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
@@ -1196,8 +1188,7 @@ class ApiParsingTest extends TestCase
             'error' => null,
             'response' => [
                 'id' => 'KMAHANOV10',
-                'periods' => [[
-                    'ob' => [
+                'ob' => [
                         'timestamp' => $timestamp,
                         'tempC' => 15.0,
                         'humidity' => 70.0,
@@ -1206,8 +1197,8 @@ class ApiParsingTest extends TestCase
                         'windDirDEG' => 180,
                         'precipIN' => 0
                     ]
-                ]]
-            ]
+                ]
+            
         ]);
         
         $result = parsePWSWeatherResponse($response);
