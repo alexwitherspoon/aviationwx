@@ -270,9 +270,9 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                 
                 <div class="highlight-box info">
                     <p><strong>This project is operated without commercial interest.</strong> There are no fees, 
-                    subscriptions, or advertisements. All revenue (if any) is reinvested into hosting and 
-                    operational costs. The project is entirely open source and operated by volunteers with 
-                    no intention of generating profit.</p>
+                    subscriptions, or advertisements. All revenue (if any) is reinvested into hosting, 
+                    operational costs, and sponsoring equipment for airports in need. The project is entirely 
+                    open source and operated by volunteers with no intention of generating profit.</p>
                 </div>
                 
                 <h2>2. Acceptance of Terms</h2>
