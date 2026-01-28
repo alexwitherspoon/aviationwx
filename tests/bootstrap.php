@@ -313,11 +313,85 @@ function cleanTestTempFiles(): void {
     }
 }
 
+/**
+ * Seed mock webcam data for integration tests
+ * 
+ * Creates mock webcam images in the cache directory so integration tests
+ * that hit a live server have data to work with. Essential for:
+ * - Push webcam airports (no automatic image fetching)
+ * - Test environments without external webcam access
+ * 
+ * Creates the full file structure expected by getWebcamMetadata():
+ * - {timestamp}_original.jpg (original image)
+ * - {timestamp}_480.jpg (variant)
+ * - original.jpg symlink -> {timestamp}_original.jpg
+ * - current.jpg symlink -> {timestamp}_480.jpg
+ * - state.json (push webcam state)
+ * 
+ * @param array $airports List of airport IDs to seed (default: ['kspb'])
+ * @param int $webcamsPerAirport Number of webcams to seed per airport
+ */
+function seedMockWebcamData(array $airports = ['kspb'], int $webcamsPerAirport = 2): void {
+    require_once __DIR__ . '/../lib/mock-webcam.php';
+    require_once __DIR__ . '/../lib/cache-paths.php';
+    
+    $timestamp = time();
+    
+    foreach ($airports as $airportId) {
+        for ($camIndex = 0; $camIndex < $webcamsPerAirport; $camIndex++) {
+            $camDir = getWebcamCameraDir($airportId, $camIndex);
+            
+            // Ensure camera directory exists
+            if (!is_dir($camDir)) {
+                @mkdir($camDir, 0755, true);
+            }
+            
+            // Generate mock image (640x480)
+            $imageData = generateMockWebcamImage($airportId, $camIndex, 640, 480);
+            
+            // Save timestamped original image (required by getWebcamMetadata)
+            $originalPath = $camDir . '/' . $timestamp . '_original.jpg';
+            @file_put_contents($originalPath, $imageData);
+            
+            // Save timestamped variant (480p)
+            $variantPath = $camDir . '/' . $timestamp . '_480.jpg';
+            @file_put_contents($variantPath, $imageData);
+            
+            // Create original.jpg symlink (required by getWebcamOriginalPath)
+            $originalSymlink = $camDir . '/original.jpg';
+            if (is_link($originalSymlink)) {
+                @unlink($originalSymlink);
+            }
+            @symlink($timestamp . '_original.jpg', $originalSymlink);
+            
+            // Create current.jpg symlink
+            $currentPath = $camDir . '/current.jpg';
+            if (is_link($currentPath)) {
+                @unlink($currentPath);
+            }
+            @symlink($timestamp . '_480.jpg', $currentPath);
+            
+            // Save state.json with timestamp (for push webcam tests)
+            $statePath = $camDir . '/state.json';
+            $stateData = json_encode([
+                'last_processed' => $timestamp,
+                'last_filename' => $timestamp . '_original.jpg',
+                'source' => 'mock_test_data'
+            ], JSON_PRETTY_PRINT);
+            @file_put_contents($statePath, $stateData);
+        }
+    }
+}
+
 // Clean before tests start (ensures clean, repeatable test state)
 if (getenv('APP_ENV') === 'testing') {
     cleanTestCache();
     cleanTestResultFiles();
     cleanTestTempFiles();
+    
+    // Seed mock webcam data for integration tests
+    // This ensures push webcam airports have data available
+    seedMockWebcamData(['kspb'], 2);
 }
 
 // Register cleanup after tests (allows normal operation to resume)
