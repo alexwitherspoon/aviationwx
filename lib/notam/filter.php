@@ -259,12 +259,15 @@ function isAerodromeClosure(array $notam, array $airport): bool {
     $notamLocation = strtoupper($notam['location'] ?? '');
     
     if (!in_array($notamLocation, $identifiers)) {
-        // Also check airport name matching for geospatial queries
+        // Also check airport name matching for geospatial queries (word boundary match)
         $airportName = strtoupper($airport['name'] ?? '');
         $notamAirportName = strtoupper($notam['airport_name'] ?? '');
         
-        if (empty($airportName) || empty($notamAirportName) || 
-            strpos($notamAirportName, $airportName) === false) {
+        if (empty($airportName) || empty($notamAirportName)) {
+            return false;
+        }
+        // Use word boundary matching to avoid "FIELD" matching "SPRINGFIELD"
+        if (!isWordMatch($notamAirportName, $airportName) && !isWordMatch($airportName, $notamAirportName)) {
             return false;
         }
     }
@@ -395,12 +398,17 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
  */
 function determineNotamStatus(array $notam, ?array $airport = null): string {
     $now = time();
-    $startTime = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : 0;
-    $endTime = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : null;
     
-    if ($startTime === 0) {
+    // Parse start time - strtotime returns false on failure
+    $startTimeRaw = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : false;
+    if ($startTimeRaw === false || $startTimeRaw === 0) {
         return 'unknown';
     }
+    $startTime = $startTimeRaw;
+    
+    // Parse end time (null for permanent NOTAMs)
+    $endTimeRaw = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : false;
+    $endTime = ($endTimeRaw !== false && $endTimeRaw > 0) ? $endTimeRaw : null;
     
     // Expired
     if ($endTime !== null && $now > $endTime) {
@@ -448,17 +456,17 @@ function filterRelevantNotams(array $notams, array $airport): array {
     $relevant = [];
     
     foreach ($notams as $notam) {
-        $isClosure = isAerodromeClosure($notam, $airport);
-        $isTfr = isTfr($notam);
+        $isClosureNotam = isAerodromeClosure($notam, $airport);
+        $isTfrNotam = isTfr($notam);
         
-        if ($isClosure) {
+        if ($isClosureNotam) {
             $status = determineNotamStatus($notam, $airport);
             if ($status === 'active' || $status === 'upcoming_today') {
                 $notam['notam_type'] = 'aerodrome_closure';
                 $notam['status'] = $status;
                 $relevant[] = $notam;
             }
-        } elseif ($isTfr) {
+        } elseif ($isTfrNotam) {
             if (isTfrRelevantToAirport($notam, $airport)) {
                 $status = determineNotamStatus($notam, $airport);
                 if ($status === 'active' || $status === 'upcoming_today') {
