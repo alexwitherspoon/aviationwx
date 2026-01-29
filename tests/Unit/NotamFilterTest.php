@@ -50,6 +50,81 @@ class NotamFilterTest extends TestCase {
         $this->assertTrue(isTfr($notam));
     }
     
+    // ==========================================================================
+    // NOTAM Cancellation Detection Tests
+    // ==========================================================================
+    
+    public function testIsNotamCancellation_TypeC() {
+        $notam = [
+            'type' => 'C',
+            'text' => 'BOI RWY 10R/28L CLSD'
+        ];
+        
+        $this->assertTrue(isNotamCancellation($notam));
+    }
+    
+    public function testIsNotamCancellation_NotamcInText() {
+        $notam = [
+            'type' => 'N',
+            'text' => 'A0261/26 NOTAMC A0248/26 BOI RWY 10R/28L CLSD CANCELED'
+        ];
+        
+        $this->assertTrue(isNotamCancellation($notam));
+    }
+    
+    public function testIsNotamCancellation_CanceledAtEnd() {
+        $notam = [
+            'type' => 'N',
+            'text' => 'BOI RWY 10R/28L CLSD CANCELED'
+        ];
+        
+        $this->assertTrue(isNotamCancellation($notam));
+    }
+    
+    public function testIsNotamCancellation_CancelledSpelling() {
+        $notam = [
+            'type' => 'N',
+            'text' => 'BOI RWY 10L/28R CLSD CANCELLED'
+        ];
+        
+        $this->assertTrue(isNotamCancellation($notam));
+    }
+    
+    public function testIsNotamCancellation_NotACancellation() {
+        $notam = [
+            'type' => 'N',
+            'text' => 'BOI RWY 10R/28L CLSD'
+        ];
+        
+        $this->assertFalse(isNotamCancellation($notam));
+    }
+    
+    public function testIsAerodromeClosure_ExcludesCancellation() {
+        // Actual NOTAM from the bug - this is a cancellation and should NOT be shown
+        $airport = [
+            'icao' => 'KBOI',
+            'name' => 'Boise Air Terminal'
+        ];
+        
+        $notam = [
+            'type' => 'C',
+            'code' => 'QMRXX',
+            'text' => 'A0261/26 NOTAMC A0248/26 BOI RWY 10R/28L CLSD CANCELED',
+            'location' => 'KBOI'
+        ];
+        
+        $this->assertFalse(isAerodromeClosure($notam, $airport));
+    }
+    
+    public function testIsTfr_ExcludesCancellation() {
+        $notam = [
+            'type' => 'C',
+            'text' => 'TEMPORARY FLIGHT RESTRICTIONS CANCELED'
+        ];
+        
+        $this->assertFalse(isTfr($notam));
+    }
+    
     public function testDetermineNotamStatusActive() {
         $notam = [
             'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() - 3600), // 1 hour ago

@@ -178,22 +178,63 @@ function isWordMatch(string $haystack, string $needle): bool {
 }
 
 /**
+ * Check if NOTAM is a cancellation (type C)
+ * 
+ * NOTAM types:
+ * - N = New
+ * - R = Replace
+ * - C = Cancel (cancels a previous NOTAM)
+ * 
+ * Cancel NOTAMs indicate a restriction has been lifted and should not be
+ * displayed as warnings (they're "good news" - e.g., "runway closure CANCELED").
+ * 
+ * @param array $notam Parsed NOTAM data with 'type' and 'text' fields
+ * @return bool True if this is a cancellation NOTAM
+ */
+function isNotamCancellation(array $notam): bool {
+    // Check type field from parser (N=New, R=Replace, C=Cancel)
+    $type = strtoupper($notam['type'] ?? '');
+    if ($type === 'C') {
+        return true;
+    }
+    
+    // Also check for NOTAMC in text (backup detection)
+    $text = strtoupper($notam['text'] ?? '');
+    if (strpos($text, 'NOTAMC') !== false) {
+        return true;
+    }
+    
+    // Check for "CANCELED" or "CANCELLED" at end of text (indicates cancellation)
+    if (preg_match('/\bCANCEL+ED\s*$/', $text)) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
  * Check if NOTAM is a runway or aerodrome closure/hazard
  * 
  * Only matches runway-level and above issues (not taxiway/apron closures):
  * - QMR* = Runway (closed, hazardous, etc.)
  * - QFA* = Aerodrome/airport (closed, services unavailable, etc.)
  * 
- * Excludes less critical closures:
- * - QMX* = Taxiway closures
- * - QMA* = Apron/ramp closures
- * - QMP* = Parking area closures
+ * Excludes:
+ * - QMX* = Taxiway closures (less critical)
+ * - QMA* = Apron/ramp closures (less critical)
+ * - QMP* = Parking area closures (less critical)
+ * - Type C (Cancel) NOTAMs (restriction lifted, not a warning)
  * 
  * @param array $notam Parsed NOTAM data
  * @param array $airport Airport configuration
- * @return bool True if runway/aerodrome closure or hazard
+ * @return bool True if runway/aerodrome closure or hazard (and not a cancellation)
  */
 function isAerodromeClosure(array $notam, array $airport): bool {
+    // Exclude cancellation NOTAMs - they indicate restriction is lifted
+    if (isNotamCancellation($notam)) {
+        return false;
+    }
+    
     $code = strtoupper($notam['code'] ?? '');
     $text = strtoupper($notam['text'] ?? '');
     
@@ -206,8 +247,8 @@ function isAerodromeClosure(array $notam, array $airport): bool {
     }
     
     // Text validation - must contain closure or hazard indicators
-    $hasClosure = stripos($text, 'CLSD') !== false || stripos($text, 'CLOSED') !== false;
-    $hasHazard = stripos($text, 'HAZARD') !== false || stripos($text, 'UNSAFE') !== false;
+    $hasClosure = strpos($text, 'CLSD') !== false || strpos($text, 'CLOSED') !== false;
+    $hasHazard = strpos($text, 'HAZARD') !== false || strpos($text, 'UNSAFE') !== false;
     
     if (!$hasClosure && !$hasHazard) {
         return false;
@@ -223,7 +264,7 @@ function isAerodromeClosure(array $notam, array $airport): bool {
         $notamAirportName = strtoupper($notam['airport_name'] ?? '');
         
         if (empty($airportName) || empty($notamAirportName) || 
-            stripos($notamAirportName, $airportName) === false) {
+            strpos($notamAirportName, $airportName) === false) {
             return false;
         }
     }
@@ -234,10 +275,17 @@ function isAerodromeClosure(array $notam, array $airport): bool {
 /**
  * Check if NOTAM is a TFR (Temporary Flight Restriction)
  * 
- * @param array $notam Parsed NOTAM data with 'text' field
- * @return bool True if TFR indicators found in text
+ * Excludes cancellation NOTAMs (type C) since they indicate the TFR is lifted.
+ * 
+ * @param array $notam Parsed NOTAM data with 'text' and 'type' fields
+ * @return bool True if TFR indicators found and not a cancellation
  */
 function isTfr(array $notam): bool {
+    // Exclude cancellation NOTAMs - they indicate restriction is lifted
+    if (isNotamCancellation($notam)) {
+        return false;
+    }
+    
     $text = strtoupper($notam['text'] ?? '');
     
     // Primary indicators (text already uppercase, use strpos for efficiency)
