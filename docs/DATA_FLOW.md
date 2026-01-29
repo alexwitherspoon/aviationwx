@@ -1417,8 +1417,9 @@ Filtered NOTAMs are cached per airport:
 1. **Expiration check**: If `end_time_utc` has passed, NOTAM is filtered out
 2. **Status update**: If a NOTAM has become active since caching, status is updated
 3. **Filter expired**: Only `active` and `upcoming_today` NOTAMs are returned
+4. **Timezone alignment**: Uses airport's local timezone to determine "today" boundary
 
-This ensures pilots never see expired NOTAMs, even if the cache hasn't refreshed yet.
+This ensures pilots never see expired NOTAMs, even if the cache hasn't refreshed yet. The airport timezone alignment ensures consistent behavior with the initial status determination.
 
 ### Failclosed Behavior
 

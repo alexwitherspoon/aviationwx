@@ -114,8 +114,8 @@ $formattedNotams = [];
 $timezone = getAirportTimezone($airportId, $airport);
 
 foreach ($notams as $notam) {
-    // Re-validate status at serve time (safety-critical)
-    $currentStatus = revalidateNotamStatus($notam);
+    // Re-validate status at serve time using airport timezone (safety-critical)
+    $currentStatus = revalidateNotamStatus($notam, $timezone);
     
     // Filter out expired and future NOTAMs - only show active and upcoming_today
     if ($currentStatus !== 'active' && $currentStatus !== 'upcoming_today') {

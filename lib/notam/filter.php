@@ -391,12 +391,14 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
  * 
  * NOTAMs may expire between cache time and serve time. This function
  * re-checks the status against current time to ensure expired NOTAMs
- * are not displayed to pilots. Uses server time (UTC-aware) for simplicity.
+ * are not displayed to pilots. Uses airport local timezone for "today"
+ * calculation to maintain consistency with determineNotamStatus().
  * 
  * @param array $notam NOTAM data with 'start_time_utc', 'end_time_utc', and 'status'
+ * @param string $timezone Airport timezone (e.g., 'America/Denver'), defaults to UTC
  * @return string Updated status: 'active', 'upcoming_today', 'upcoming_future', 'expired', or original
  */
-function revalidateNotamStatus(array $notam): string {
+function revalidateNotamStatus(array $notam, string $timezone = 'UTC'): string {
     $now = time();
     
     // Parse times - strtotime returns false on failure
@@ -416,11 +418,24 @@ function revalidateNotamStatus(array $notam): string {
         return 'active';
     }
     
-    // Check if upcoming today (starts before end of today)
+    // Check if upcoming today (starts before end of today in airport's local timezone)
     if ($startTime !== null) {
-        $todayEnd = strtotime('tomorrow') - 1;
-        if ($startTime <= $todayEnd) {
-            return 'upcoming_today';
+        try {
+            $tz = new DateTimeZone($timezone);
+            $nowLocal = new DateTime('now', $tz);
+            $todayEndLocal = new DateTime('tomorrow', $tz);
+            $todayEndLocal->modify('-1 second');
+            $todayEndTimestamp = $todayEndLocal->getTimestamp();
+            
+            if ($startTime <= $todayEndTimestamp) {
+                return 'upcoming_today';
+            }
+        } catch (Exception $e) {
+            // Invalid timezone - fall back to server time
+            $todayEnd = strtotime('tomorrow') - 1;
+            if ($startTime <= $todayEnd) {
+                return 'upcoming_today';
+            }
         }
         return 'upcoming_future';
     }

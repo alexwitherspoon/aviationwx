@@ -26,7 +26,7 @@ class NotamApiTest extends TestCase {
             'status' => 'active'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('active', $status);
     }
     
@@ -40,7 +40,7 @@ class NotamApiTest extends TestCase {
             'status' => 'active' // Was active when cached
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('expired', $status);
     }
     
@@ -54,7 +54,7 @@ class NotamApiTest extends TestCase {
             'status' => 'active' // Was active when cached
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('expired', $status);
     }
     
@@ -68,7 +68,7 @@ class NotamApiTest extends TestCase {
             'status' => 'upcoming_today'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('upcoming_today', $status);
     }
     
@@ -82,7 +82,7 @@ class NotamApiTest extends TestCase {
             'status' => 'upcoming_today' // Was upcoming when cached
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('active', $status);
     }
     
@@ -96,7 +96,7 @@ class NotamApiTest extends TestCase {
             'status' => 'active'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('active', $status);
     }
     
@@ -110,7 +110,7 @@ class NotamApiTest extends TestCase {
             'status' => 'active'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('active', $status);
     }
     
@@ -124,7 +124,7 @@ class NotamApiTest extends TestCase {
             'status' => 'active'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('active', $status);
     }
     
@@ -138,7 +138,7 @@ class NotamApiTest extends TestCase {
             'status' => 'unknown'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('unknown', $status);
     }
     
@@ -152,8 +152,38 @@ class NotamApiTest extends TestCase {
             'status' => 'upcoming_future'
         ];
         
-        $status = revalidateNotamStatus($notam);
+        $status = revalidateNotamStatus($notam, 'America/Denver');
         $this->assertEquals('upcoming_future', $status);
+    }
+    
+    /**
+     * Test with invalid timezone falls back gracefully
+     */
+    public function testRevalidateNotamStatus_InvalidTimezone() {
+        $notam = [
+            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600), // 1 hour from now
+            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 7200),
+            'status' => 'upcoming_today'
+        ];
+        
+        // Invalid timezone should fall back to server time gracefully
+        $status = revalidateNotamStatus($notam, 'Invalid/Timezone');
+        $this->assertEquals('upcoming_today', $status);
+    }
+    
+    /**
+     * Test default timezone (UTC) when not specified
+     */
+    public function testRevalidateNotamStatus_DefaultTimezone() {
+        $notam = [
+            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() - 3600),
+            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600),
+            'status' => 'active'
+        ];
+        
+        // Should work with default UTC timezone
+        $status = revalidateNotamStatus($notam);
+        $this->assertEquals('active', $status);
     }
     
     // ==========================================================================
