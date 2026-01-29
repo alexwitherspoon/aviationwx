@@ -61,6 +61,22 @@ const MPH_PER_KNOT = 1.15078;
  */
 const METERS_PER_FOOT = 0.3048;
 
+/**
+ * Nautical mile conversion factor
+ * 1 nautical mile = 1.15078 statute miles (NOAA standard)
+ * 1 nautical mile = 1852 meters (exact, international definition)
+ */
+const STATUTE_MILES_PER_NAUTICAL_MILE = 1.15078;
+const METERS_PER_NAUTICAL_MILE = 1852;
+
+/**
+ * Earth radius constants for haversine distance calculations
+ * Mean Earth radius values (WGS84 ellipsoid mean)
+ */
+const EARTH_RADIUS_STATUTE_MILES = 3958.8;
+const EARTH_RADIUS_NAUTICAL_MILES = 3440.065;
+const EARTH_RADIUS_KILOMETERS = 6371.0;
+
 
 // ============================================================================
 // PRESSURE CONVERSIONS (hPa ↔ inHg)
@@ -269,6 +285,33 @@ function feetToMeters(float $feet): float
 function metersToFeet(float $meters): float
 {
     return $meters / METERS_PER_FOOT;
+}
+
+
+// ============================================================================
+// DISTANCE CONVERSIONS (nautical miles ↔ statute miles)
+// ============================================================================
+
+/**
+ * Convert nautical miles to statute miles
+ * 
+ * @param float $nm Distance in nautical miles
+ * @return float Distance in statute miles
+ */
+function nauticalMilesToStatuteMiles(float $nm): float
+{
+    return $nm * STATUTE_MILES_PER_NAUTICAL_MILE;
+}
+
+/**
+ * Convert statute miles to nautical miles
+ * 
+ * @param float $sm Distance in statute miles
+ * @return float Distance in nautical miles
+ */
+function statuteMilesToNauticalMiles(float $sm): float
+{
+    return $sm / STATUTE_MILES_PER_NAUTICAL_MILE;
 }
 
 
