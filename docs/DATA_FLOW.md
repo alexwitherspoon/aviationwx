@@ -1327,16 +1327,25 @@ The NMS API returns NOTAMs in AIXM 5.1.1 XML format embedded within a JSON wrapp
 
 Not all returned NOTAMs are relevant to the airport. The system filters for two types:
 
+#### Cancellation NOTAMs (Excluded)
+
+**Cancellation NOTAMs are excluded** from display because they indicate a restriction has been **lifted** (good news, not a warning). A NOTAM is identified as a cancellation if:
+- **Type field**: `type='C'` (Cancel) in the parsed NOTAM data
+- **Text contains**: `NOTAMC` (NOTAM Cancel identifier)
+- **Text ends with**: "CANCELED" or "CANCELLED"
+
+Example: `A0261/26 NOTAMC A0248/26 ... RWY 10R/28L CLSD CANCELED` means the runway closure from NOTAM A0248/26 is **canceled** (runway is now open).
+
 #### Aerodrome Closures
 
-A NOTAM is classified as an aerodrome closure if:
+A NOTAM is classified as an aerodrome closure if (and not a cancellation):
 - **Q-code matches**: Code starts with `QMR` (runway) or `QFA` (aerodrome)
 - **Text indicates closure**: Contains "CLSD", "CLOSED", "HAZARD", or "UNSAFE"
 - **Location matches**: The NOTAM location matches the airport's ICAO, IATA, FAA code, or historical identifiers
 
 #### TFR Detection
 
-A NOTAM is classified as a TFR if its text contains any of:
+A NOTAM is classified as a TFR if (and not a cancellation) its text contains any of:
 - "TFR" (explicit abbreviation)
 - "TEMPORARY FLIGHT RESTRICTION" (full phrase)
 - Both "RESTRICTED" and "AIRSPACE" (combined indicators)

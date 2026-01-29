@@ -183,6 +183,9 @@ aviationwx.org/
 - **Dual Query Strategy**: 
   - Location query by ICAO code (for airport-specific NOTAMs)
   - Geospatial query by coordinates (for TFRs affecting nearby airspace)
+- **Cancellation Filtering**:
+  - **Excludes** type='C' (Cancel), NOTAMC, and "CANCELED/CANCELLED" NOTAMs
+  - These indicate restrictions are **lifted** (good news, not warnings)
 - **Filtering Logic**:
   - **Aerodrome Closures**: Q-codes QMR* (runway) or QFA* (aerodrome) with CLSD/CLOSED/HAZARD text
   - **TFRs**: Text containing "TFR", "TEMPORARY FLIGHT RESTRICTION", or "RESTRICTED AIRSPACE"
