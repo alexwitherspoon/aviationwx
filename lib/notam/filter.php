@@ -2,24 +2,28 @@
 /**
  * NOTAM Filter
  * 
- * Filters NOTAMs for aerodrome closures and TFRs relevant to an airport
+ * Filters NOTAMs for aerodrome closures and TFRs relevant to an airport.
+ * Safety-critical: Ensures only geographically relevant NOTAMs are shown to pilots.
  */
 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../units.php';
 require_once __DIR__ . '/../airport-identifiers.php';
+require_once __DIR__ . '/../weather/utils.php';
 
 /**
  * Parse coordinates from TFR NOTAM text
  * 
- * Supports formats:
- * - DDMMSSN/DDDMMSSW (e.g., 413900N1122300W)
- * - DDMMSSNDDDDMMSSW (e.g., 413900N1122300W without separator)
- * - DD-MM-SS N/S, DDD-MM-SS E/W variants
+ * Parses the first coordinate pair found in standard aviation format.
+ * Note: Only parses single-point TFRs; multi-point polygon TFRs will use only the first point.
  * 
- * @param string $text NOTAM text
- * @return array|null ['lat' => float, 'lon' => float] or null if not found
+ * Supported formats:
+ * - DDMMSSN/DDDMMSSW (e.g., 413900N1122300W)
+ * - With optional whitespace between lat/lon
+ * 
+ * @param string $text NOTAM text to parse (empty string returns null)
+ * @return array{lat: float, lon: float}|null Decimal degrees or null if no valid coordinates found
  */
 function parseTfrCoordinates(string $text): ?array {
     // Pattern: DDMMSSN/S followed by DDDMMSSW/E
@@ -62,15 +66,16 @@ function parseTfrCoordinates(string $text): ?array {
  * Parse TFR radius from NOTAM text
  * 
  * FAA NOTAMs specify TFR radii in nautical miles (NM).
+ * Values outside TFR_RADIUS_MIN_NM to TFR_RADIUS_MAX_NM are rejected as parsing errors.
  * 
- * Supports formats:
- * - XNM RADIUS (e.g., "5NM RADIUS")
- * - X NM RADIUS (e.g., "5 NM RADIUS")
- * - X NAUTICAL MILE RADIUS
- * - RADIUS OF XNM
+ * Supported formats:
+ * - "5NM RADIUS" or "5 NM RADIUS"
+ * - "5 NAUTICAL MILE RADIUS"
+ * - "RADIUS OF 5NM"
+ * - "WITHIN 5NM"
  * 
- * @param string $text NOTAM text
- * @return float|null Radius in nautical miles or null if not found
+ * @param string $text NOTAM text to parse (empty string returns null)
+ * @return float|null Radius in nautical miles, or null if not found/invalid
  */
 function parseTfrRadiusNm(string $text): ?float {
     // Pattern: number followed by NM/NAUTICAL MILE(S) and RADIUS
@@ -127,7 +132,7 @@ function calculateDistanceNm(float $lat1, float $lon1, float $lat2, float $lon2)
  * Get all airport identifiers (current and historical)
  * 
  * @param array $airport Airport configuration
- * @return array Array of identifier strings
+ * @return array Array of uppercase identifier strings
  */
 function getAirportIdentifiers(array $airport): array {
     $identifiers = [];
@@ -151,6 +156,25 @@ function getAirportIdentifiers(array $airport): array {
     }
     
     return array_unique($identifiers);
+}
+
+/**
+ * Check if needle exists in haystack as a whole word (word boundary match)
+ * 
+ * Prevents false positives like "FIELD" matching "SPRINGFIELD".
+ * Uses word boundary regex to ensure the match is not part of a larger word.
+ * 
+ * @param string $haystack Text to search in (should be uppercase)
+ * @param string $needle Word to find (should be uppercase)
+ * @return bool True if needle found as a whole word
+ */
+function isWordMatch(string $haystack, string $needle): bool {
+    if (empty($needle) || empty($haystack)) {
+        return false;
+    }
+    // Use word boundary \b to match whole words only
+    $pattern = '/\b' . preg_quote($needle, '/') . '\b/';
+    return preg_match($pattern, $haystack) === 1;
 }
 
 /**
@@ -210,24 +234,22 @@ function isAerodromeClosure(array $notam, array $airport): bool {
 /**
  * Check if NOTAM is a TFR (Temporary Flight Restriction)
  * 
- * @param array $notam Parsed NOTAM data
- * @return bool True if TFR
+ * @param array $notam Parsed NOTAM data with 'text' field
+ * @return bool True if TFR indicators found in text
  */
 function isTfr(array $notam): bool {
     $text = strtoupper($notam['text'] ?? '');
     
-    // Primary indicators
-    if (stripos($text, 'TFR') !== false) {
+    // Primary indicators (text already uppercase, use strpos for efficiency)
+    if (strpos($text, 'TFR') !== false) {
         return true;
     }
-    if (stripos($text, 'TEMPORARY FLIGHT RESTRICTION') !== false) {
+    if (strpos($text, 'TEMPORARY FLIGHT RESTRICTION') !== false) {
         return true;
     }
     
-    // Secondary indicators
-    $hasRestricted = stripos($text, 'RESTRICTED') !== false;
-    $hasAirspace = stripos($text, 'AIRSPACE') !== false;
-    if ($hasRestricted && $hasAirspace) {
+    // Secondary indicators - both must be present
+    if (strpos($text, 'RESTRICTED') !== false && strpos($text, 'AIRSPACE') !== false) {
         return true;
     }
     
@@ -237,16 +259,18 @@ function isTfr(array $notam): bool {
 /**
  * Check if TFR is relevant to airport based on geographic proximity
  * 
- * A TFR is relevant if:
- * 1. The NOTAM location field matches an airport identifier, OR
- * 2. The TFR text explicitly mentions the airport's name or identifier, OR
- * 3. The airport is within the TFR's radius + buffer distance
+ * A TFR is relevant if any of these conditions are met:
+ * 1. The NOTAM location field matches an airport identifier
+ * 2. The NOTAM airport_name field matches the airport name (word boundary match)
+ * 3. The TFR text explicitly mentions the airport's name or identifier
+ * 4. The airport is within the TFR's geographic boundary (radius + buffer)
  * 
  * All distance calculations use nautical miles (standard aviation unit).
+ * Conservative approach: excludes TFR when coordinates cannot be parsed.
  * 
- * @param array $tfr Parsed TFR NOTAM data (with 'text', 'location', 'airport_name' fields)
- * @param array $airport Airport configuration (must have 'lat' and 'lon')
- * @return bool True if relevant
+ * @param array $tfr Parsed TFR NOTAM data with 'text', 'location', 'airport_name' fields
+ * @param array $airport Airport config with 'name', 'lat', 'lon', and identifier fields
+ * @return bool True if TFR is relevant to this airport
  */
 function isTfrRelevantToAirport(array $tfr, array $airport): bool {
     $text = $tfr['text'] ?? '';
@@ -255,37 +279,34 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
     $identifiers = getAirportIdentifiers($airport);
     
     // Check if NOTAM location field matches an airport identifier
-    // This is reliable when the NOTAM was issued for a specific airport
     $notamLocation = strtoupper($tfr['location'] ?? '');
     if (!empty($notamLocation) && in_array($notamLocation, $identifiers)) {
         return true;
     }
     
-    // Check if NOTAM airport_name matches
+    // Check if NOTAM airport_name matches (word boundary to avoid "FIELD" matching "SPRINGFIELD")
     $notamAirportName = strtoupper($tfr['airport_name'] ?? '');
     if (!empty($notamAirportName) && !empty($airportName)) {
-        if (stripos($notamAirportName, $airportName) !== false ||
-            stripos($airportName, $notamAirportName) !== false) {
+        if (isWordMatch($notamAirportName, $airportName) || isWordMatch($airportName, $notamAirportName)) {
             return true;
         }
     }
     
-    // Check if TFR text mentions airport name
-    if (!empty($airportName) && stripos($textUpper, $airportName) !== false) {
+    // Check if TFR text mentions airport name (word boundary match)
+    if (!empty($airportName) && isWordMatch($textUpper, $airportName)) {
         return true;
     }
     
-    // Check if TFR text mentions any airport identifier
+    // Check if TFR text mentions any airport identifier (word boundary match)
     foreach ($identifiers as $identifier) {
-        if (!empty($identifier) && stripos($textUpper, $identifier) !== false) {
+        if (!empty($identifier) && isWordMatch($textUpper, $identifier)) {
             return true;
         }
     }
     
     // Geographic relevance check - parse TFR coordinates and check distance
     if (!isset($airport['lat']) || !isset($airport['lon'])) {
-        // No airport coordinates available, cannot check distance
-        // Be conservative and exclude TFR to avoid false positives
+        // No airport coordinates - be conservative and exclude
         return false;
     }
     
@@ -295,15 +316,14 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
     // Parse TFR center coordinates from text
     $tfrCoords = parseTfrCoordinates($text);
     if ($tfrCoords === null) {
-        // Cannot parse TFR coordinates - be conservative and exclude
-        // This prevents showing distant TFRs when we can't verify location
+        // Cannot parse coordinates - be conservative and exclude
         return false;
     }
     
     // Parse TFR radius in nautical miles (or use default)
     $tfrRadiusNm = parseTfrRadiusNm($text) ?? TFR_DEFAULT_RADIUS_NM;
     
-    // Calculate distance from airport to TFR center in nautical miles
+    // Calculate distance from airport to TFR center
     $distanceNm = calculateDistanceNm(
         $airportLat,
         $airportLon,
@@ -312,18 +332,20 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
     );
     
     // TFR is relevant if airport is within (TFR radius + buffer)
-    $relevanceThresholdNm = $tfrRadiusNm + TFR_RELEVANCE_BUFFER_NM;
-    
-    return $distanceNm <= $relevanceThresholdNm;
+    return $distanceNm <= ($tfrRadiusNm + TFR_RELEVANCE_BUFFER_NM);
 }
 
 /**
  * Determine NOTAM status (active, upcoming_today, expired, upcoming_future)
  * 
- * @param array $notam Parsed NOTAM data
- * @return string Status string
+ * Uses airport's local timezone to determine "today" for proper classification
+ * of upcoming NOTAMs. Without airport context, falls back to UTC.
+ * 
+ * @param array $notam Parsed NOTAM data with 'start_time_utc' and 'end_time_utc'
+ * @param array|null $airport Airport config for timezone (optional, defaults to UTC)
+ * @return string One of: 'active', 'upcoming_today', 'upcoming_future', 'expired', 'unknown'
  */
-function determineNotamStatus(array $notam): string {
+function determineNotamStatus(array $notam, ?array $airport = null): string {
     $now = time();
     $startTime = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : 0;
     $endTime = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : null;
@@ -342,9 +364,20 @@ function determineNotamStatus(array $notam): string {
         return 'active';
     }
     
-    // Upcoming today
-    $todayStart = strtotime('today');
-    $todayEnd = strtotime('tomorrow') - 1;
+    // Determine "today" boundaries using airport timezone
+    $timezone = $airport !== null ? getAirportTimezone($airport) : 'UTC';
+    try {
+        $tz = new DateTimeZone($timezone);
+        $nowDt = new DateTime('now', $tz);
+        $todayStart = (clone $nowDt)->setTime(0, 0, 0)->getTimestamp();
+        $todayEnd = (clone $nowDt)->setTime(23, 59, 59)->getTimestamp();
+    } catch (Exception $e) {
+        // Fallback to server time if timezone is invalid
+        $todayStart = strtotime('today');
+        $todayEnd = strtotime('tomorrow') - 1;
+    }
+    
+    // Upcoming today (starts later today in airport's local time)
     if ($startTime >= $todayStart && $startTime <= $todayEnd) {
         return 'upcoming_today';
     }
@@ -355,9 +388,13 @@ function determineNotamStatus(array $notam): string {
 /**
  * Filter NOTAMs for relevant closures and TFRs
  * 
+ * Returns only NOTAMs that are:
+ * - Relevant to this airport (location match or geographic proximity)
+ * - Currently active or starting later today (in airport's local timezone)
+ * 
  * @param array $notams Array of parsed NOTAM data
- * @param array $airport Airport configuration
- * @return array Filtered NOTAMs with status
+ * @param array $airport Airport configuration with timezone, coordinates, and identifiers
+ * @return array Filtered NOTAMs with 'notam_type' and 'status' fields added
  */
 function filterRelevantNotams(array $notams, array $airport): array {
     $relevant = [];
@@ -367,7 +404,7 @@ function filterRelevantNotams(array $notams, array $airport): array {
         $isTfr = isTfr($notam);
         
         if ($isClosure) {
-            $status = determineNotamStatus($notam);
+            $status = determineNotamStatus($notam, $airport);
             if ($status === 'active' || $status === 'upcoming_today') {
                 $notam['notam_type'] = 'aerodrome_closure';
                 $notam['status'] = $status;
@@ -375,7 +412,7 @@ function filterRelevantNotams(array $notams, array $airport): array {
             }
         } elseif ($isTfr) {
             if (isTfrRelevantToAirport($notam, $airport)) {
-                $status = determineNotamStatus($notam);
+                $status = determineNotamStatus($notam, $airport);
                 if ($status === 'active' || $status === 'upcoming_today') {
                     $notam['notam_type'] = 'tfr';
                     $notam['status'] = $status;

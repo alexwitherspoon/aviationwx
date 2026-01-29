@@ -404,5 +404,107 @@ class NotamFilterTest extends TestCase {
         $this->assertEquals(0.5, TFR_RADIUS_MIN_NM);
         $this->assertEquals(100, TFR_RADIUS_MAX_NM);
     }
+    
+    // ==========================================================================
+    // Word Boundary Matching Tests
+    // ==========================================================================
+    
+    /**
+     * Test isWordMatch prevents substring false positives
+     */
+    public function testIsWordMatch_ExactMatch() {
+        $this->assertTrue(isWordMatch('BOISE AIRPORT', 'BOISE'));
+        $this->assertTrue(isWordMatch('THE BOISE AREA', 'BOISE'));
+    }
+    
+    public function testIsWordMatch_PreventsFalsePositives() {
+        // "FIELD" should NOT match "SPRINGFIELD"
+        $this->assertFalse(isWordMatch('SPRINGFIELD AIRPORT', 'FIELD'));
+        
+        // "BOI" should NOT match "BOISE" (partial identifier)
+        $this->assertFalse(isWordMatch('BOISE AIRPORT', 'BOI'));
+    }
+    
+    public function testIsWordMatch_CaseInsensitiveInput() {
+        // Function expects uppercase input (caller should uppercase)
+        $this->assertTrue(isWordMatch('BOISE AIRPORT', 'BOISE'));
+        $this->assertTrue(isWordMatch('TFR NEAR KBOI AIRPORT', 'KBOI'));
+    }
+    
+    public function testIsWordMatch_EmptyInput() {
+        $this->assertFalse(isWordMatch('', 'BOISE'));
+        $this->assertFalse(isWordMatch('BOISE AIRPORT', ''));
+        $this->assertFalse(isWordMatch('', ''));
+    }
+    
+    public function testIsWordMatch_SpecialCharacterBoundaries() {
+        // Word boundaries work with punctuation
+        $this->assertTrue(isWordMatch('TFR NEAR KBOI, EFFECTIVE', 'KBOI'));
+        $this->assertTrue(isWordMatch('AREA: BOISE', 'BOISE'));
+        $this->assertTrue(isWordMatch('(KBOI) AIRPORT', 'KBOI'));
+    }
+    
+    // ==========================================================================
+    // Timezone-Aware Status Tests
+    // ==========================================================================
+    
+    /**
+     * Test determineNotamStatus with airport timezone
+     */
+    public function testDetermineNotamStatus_WithAirportTimezone() {
+        // Create a NOTAM starting 2 hours from now
+        $notam = [
+            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 7200),
+            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 10800)
+        ];
+        
+        // With an airport timezone specified
+        $airport = [
+            'timezone' => 'America/Los_Angeles'
+        ];
+        
+        $status = determineNotamStatus($notam, $airport);
+        
+        // Should be either upcoming_today or upcoming_future depending on local time
+        $this->assertContains($status, ['upcoming_today', 'upcoming_future']);
+    }
+    
+    public function testDetermineNotamStatus_WithoutAirport() {
+        // Test backward compatibility - no airport parameter
+        $notam = [
+            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() - 3600),
+            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600)
+        ];
+        
+        $status = determineNotamStatus($notam);
+        $this->assertEquals('active', $status);
+    }
+    
+    public function testDetermineNotamStatus_InvalidTimezone() {
+        // Invalid timezone should fall back to server time gracefully
+        $notam = [
+            'start_time_utc' => date('Y-m-d\TH:i:s\Z', time() - 3600),
+            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600)
+        ];
+        
+        $airport = [
+            'timezone' => 'Invalid/Timezone'
+        ];
+        
+        // Should not throw, should return valid status
+        $status = determineNotamStatus($notam, $airport);
+        $this->assertEquals('active', $status);
+    }
+    
+    public function testDetermineNotamStatus_UnknownStatus() {
+        // Missing start time should return 'unknown'
+        $notam = [
+            'start_time_utc' => '',
+            'end_time_utc' => date('Y-m-d\TH:i:s\Z', time() + 3600)
+        ];
+        
+        $status = determineNotamStatus($notam);
+        $this->assertEquals('unknown', $status);
+    }
 }
 
