@@ -1,7 +1,10 @@
 <?php
 /**
  * NOTAM API Endpoint
- * Serves NOTAM data to frontend with stale-while-revalidate caching
+ * 
+ * Serves NOTAM data to frontend with stale-while-revalidate caching.
+ * Safety-critical: Re-validates NOTAM expiration at serve time and
+ * implements failclosed when cache exceeds staleness threshold.
  */
 
 require_once __DIR__ . '/../lib/config.php';
@@ -55,8 +58,10 @@ $notamWarningThreshold = getNotamStaleWarningSeconds();
 $notamErrorThreshold = getNotamStaleErrorSeconds();
 $notamFailclosedThreshold = getNotamStaleFailclosedSeconds();
 
-// Trigger refresh when data reaches warning tier
-$isStale = $cacheAge > $notamWarningThreshold;
+// Determine staleness tier
+$isWarning = $cacheAge > $notamWarningThreshold;
+$isError = $cacheAge > $notamErrorThreshold;
+$isFailclosed = $cacheAge > $notamFailclosedThreshold;
 
 // Load cached data if available
 $cachedData = null;
@@ -69,28 +74,53 @@ if ($cacheExists) {
 
 // If cache is stale, trigger background refresh (non-blocking)
 $refreshing = false;
-if ($isStale && $cacheAge > $cacheTtl) {
-    // Trigger background refresh (don't wait for it)
+if ($isWarning && $cacheAge > $cacheTtl) {
     $refreshing = true;
-    
-    // Use process pool to refresh in background
-    // For now, we'll just log that refresh is needed
-    // The scheduler will handle it automatically
     aviationwx_log('info', 'notam api: cache stale, refresh needed', [
         'airport' => $airportId,
-        'cache_age' => $cacheAge
+        'cache_age' => $cacheAge,
+        'tier' => $isFailclosed ? 'failclosed' : ($isError ? 'error' : 'warning')
     ], 'app');
+}
+
+// Failclosed: Don't show stale NOTAM data after threshold (safety-critical)
+// Better to show no NOTAMs than potentially outdated restriction info
+if ($isFailclosed) {
+    aviationwx_log('warning', 'notam api: failclosed - cache too old', [
+        'airport' => $airportId,
+        'cache_age' => $cacheAge,
+        'threshold' => $notamFailclosedThreshold
+    ], 'app');
+    
+    echo json_encode([
+        'status' => 'success',
+        'airport' => $airportId,
+        'notams' => [],
+        'cache_age' => $cacheAge,
+        'refreshing' => $refreshing,
+        'failclosed' => true,
+        'failclosed_reason' => 'NOTAM data is too old and cannot be trusted'
+    ]);
+    ob_end_flush();
+    exit;
 }
 
 // Use cached data if available, otherwise return empty
 $notams = $cachedData['notams'] ?? [];
-$fetchedAt = $cachedData['fetched_at'] ?? 0;
 
 // Format NOTAMs for frontend (add local times, official links)
+// Re-validate status at serve time to catch NOTAMs that expired since caching
 $formattedNotams = [];
+$timezone = getAirportTimezone($airportId, $airport);
+
 foreach ($notams as $notam) {
-    // Get airport timezone
-    $timezone = getAirportTimezone($airportId, $airport);
+    // Re-validate status at serve time (safety-critical)
+    $currentStatus = revalidateNotamStatus($notam);
+    
+    // Filter out expired and future NOTAMs - only show active and upcoming_today
+    if ($currentStatus !== 'active' && $currentStatus !== 'upcoming_today') {
+        continue;
+    }
     
     // Format times
     $startTimeUtc = $notam['start_time_utc'] ?? '';
@@ -105,7 +135,6 @@ foreach ($notams as $notam) {
             $dt->setTimezone(new DateTimeZone($timezone));
             $startTimeLocal = $dt->format('Y-m-d H:i:s T');
         } catch (Exception $e) {
-            // Fallback
             $startTimeLocal = $startTimeUtc;
         }
     }
@@ -116,7 +145,6 @@ foreach ($notams as $notam) {
             $dt->setTimezone(new DateTimeZone($timezone));
             $endTimeLocal = $dt->format('Y-m-d H:i:s T');
         } catch (Exception $e) {
-            // Fallback
             $endTimeLocal = $endTimeUtc;
         }
     }
@@ -125,14 +153,13 @@ foreach ($notams as $notam) {
     $officialLink = '';
     $notamId = $notam['id'] ?? '';
     if (!empty($notamId)) {
-        // Format: https://notams.aim.faa.gov/notamSearch/search?notamNumber={series}{number}/{year}
         $officialLink = 'https://notams.aim.faa.gov/notamSearch/search?notamNumber=' . urlencode($notamId);
     }
     
     $formattedNotams[] = [
         'id' => $notamId,
         'type' => $notam['notam_type'] ?? 'unknown',
-        'status' => $notam['status'] ?? 'unknown',
+        'status' => $currentStatus,
         'start_time_utc' => $startTimeUtc,
         'end_time_utc' => $endTimeUtc,
         'start_time_local' => $startTimeLocal,

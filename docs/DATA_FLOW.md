@@ -1410,10 +1410,35 @@ Filtered NOTAMs are cached per airport:
 - **Content**: Array of filtered NOTAMs with status
 - **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
 
+### Serve-Time Status Re-validation
+
+**Safety-critical**: NOTAMs may expire between cache time and serve time. The API re-validates each NOTAM's status at serve time:
+
+1. **Expiration check**: If `end_time_utc` has passed, NOTAM is filtered out
+2. **Status update**: If a NOTAM has become active since caching, status is updated
+3. **Filter expired**: Only `active` and `upcoming_today` NOTAMs are returned
+
+This ensures pilots never see expired NOTAMs, even if the cache hasn't refreshed yet.
+
+### Failclosed Behavior
+
+**Safety-critical**: If the NOTAM cache is too old, the system fails closed (returns empty rather than stale data).
+
+**3-Tier Staleness Model**:
+- **Warning** (15 minutes): Triggers background refresh, data still served
+- **Error** (30 minutes): Data served with warning, refresh urgently needed
+- **Failclosed** (1 hour): Returns empty NOTAM array, logs warning
+
+When failclosed:
+- Response includes `failclosed: true` flag
+- `failclosed_reason` explains why data was withheld
+- Better to show no NOTAMs than potentially outdated restriction info
+
 ### API Response
 
 The `/api/notam.php` endpoint serves cached NOTAM data:
-- Loads cached data (or returns empty if no cache)
+- Loads cached data (or returns empty if no cache or failclosed)
+- Re-validates NOTAM status at serve time (filters expired)
 - Converts UTC times to airport local timezone for display
 - Adds official FAA NOTAM links for each NOTAM
 - Returns JSON array of formatted NOTAMs

@@ -387,6 +387,49 @@ function isTfrRelevantToAirport(array $tfr, array $airport): bool {
 }
 
 /**
+ * Re-validate NOTAM status at serve time
+ * 
+ * NOTAMs may expire between cache time and serve time. This function
+ * re-checks the status against current time to ensure expired NOTAMs
+ * are not displayed to pilots. Uses server time (UTC-aware) for simplicity.
+ * 
+ * @param array $notam NOTAM data with 'start_time_utc', 'end_time_utc', and 'status'
+ * @return string Updated status: 'active', 'upcoming_today', 'upcoming_future', 'expired', or original
+ */
+function revalidateNotamStatus(array $notam): string {
+    $now = time();
+    
+    // Parse times - strtotime returns false on failure
+    $startTimeRaw = !empty($notam['start_time_utc']) ? strtotime($notam['start_time_utc']) : false;
+    $endTimeRaw = !empty($notam['end_time_utc']) ? strtotime($notam['end_time_utc']) : false;
+    
+    $startTime = ($startTimeRaw !== false && $startTimeRaw > 0) ? $startTimeRaw : null;
+    $endTime = ($endTimeRaw !== false && $endTimeRaw > 0) ? $endTimeRaw : null;
+    
+    // Check if expired (end time has passed)
+    if ($endTime !== null && $now > $endTime) {
+        return 'expired';
+    }
+    
+    // Check if active (started and not expired)
+    if ($startTime !== null && $now >= $startTime) {
+        return 'active';
+    }
+    
+    // Check if upcoming today (starts before end of today)
+    if ($startTime !== null) {
+        $todayEnd = strtotime('tomorrow') - 1;
+        if ($startTime <= $todayEnd) {
+            return 'upcoming_today';
+        }
+        return 'upcoming_future';
+    }
+    
+    // Preserve original status if we can't determine
+    return $notam['status'] ?? 'unknown';
+}
+
+/**
  * Determine NOTAM status (active, upcoming_today, expired, upcoming_future)
  * 
  * Uses airport's local timezone to determine "today" for proper classification

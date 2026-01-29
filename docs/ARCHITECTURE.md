@@ -165,7 +165,8 @@ aviationwx.org/
 
 **`api/notam.php`**: Serves NOTAM data to frontend
 - Returns filtered NOTAMs as JSON for airport dashboards
-- Stale-while-revalidate caching (scheduler handles refresh)
+- **Re-validates status at serve time** (catches NOTAMs that expired since caching)
+- **Failclosed after 1 hour** (returns empty array if cache too old)
 - Formats times in airport local timezone
 - Includes official FAA NOTAM links
 
