@@ -1,6 +1,6 @@
-# Weather and Webcam Data Flow Documentation
+# Weather, Webcam, and NOTAM Data Flow Documentation
 
-This document describes how weather and webcam data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
+This document describes how weather, webcam, and NOTAM data is fetched, processed, calculated, transformed, and displayed in the AviationWX dashboard. This is written in human-readable format to serve as a reference for understanding the complete data pipeline.
 
 ## Table of Contents
 
@@ -11,7 +11,9 @@ This document describes how weather and webcam data is fetched, processed, calcu
 5. [Weather Data Caching and Staleness](#weather-data-caching-and-staleness)
 6. [Webcam Data Fetching](#webcam-data-fetching)
 7. [Webcam Data Processing](#webcam-data-processing)
-8. [Data Display on Dashboard](#data-display-on-dashboard)
+8. [NOTAM Data Fetching](#notam-data-fetching)
+9. [NOTAM Data Processing](#notam-data-processing)
+10. [Data Display on Dashboard](#data-display-on-dashboard)
 
 ---
 
@@ -1250,6 +1252,165 @@ Otherwise → Output 640x480 (FAA minimum)
 
 ---
 
+## NOTAM Data Fetching
+
+### Overview
+
+NOTAM (Notice to Air Missions) data is fetched from the FAA's NMS (NOTAM Management System) API to provide pilots with critical airspace information including:
+- **Aerodrome Closures**: Runway and airport closures or hazards
+- **TFRs**: Temporary Flight Restrictions affecting the airport's airspace
+
+### Fetching Strategy
+
+The system uses a **dual query strategy** to capture both airport-specific NOTAMs and nearby TFRs:
+
+1. **Location Query** (if ICAO/IATA available): Fetches NOTAMs issued for the specific airport identifier
+2. **Geospatial Query** (if coordinates available): Fetches NOTAMs within a radius of the airport to capture nearby TFRs
+
+Both queries are executed sequentially with rate limiting (1 request per second) to comply with API limits.
+
+### NMS API Authentication
+
+The system uses OAuth bearer token authentication:
+- Tokens are obtained from the NMS API using client credentials
+- Tokens are cached and refreshed automatically before expiration (60-second buffer)
+- Authentication failures prevent NOTAM fetching but don't affect other airport data
+
+### Location-Based Query
+
+**Purpose**: Fetches NOTAMs specifically issued for an airport.
+
+**Endpoint**: `{base_url}/nmsapi/v1/notams?location={icao_code}`
+
+**Behavior**:
+- Uses ICAO code if available, otherwise IATA code
+- Returns NOTAMs with the airport as the affected location
+- Effective for aerodrome closures and airport-specific restrictions
+
+### Geospatial Query
+
+**Purpose**: Fetches NOTAMs affecting airspace near the airport, particularly TFRs.
+
+**Endpoint**: `{base_url}/nmsapi/v1/notams?latitude={lat}&longitude={lon}&radius={nm}`
+
+**Behavior**:
+- Uses airport coordinates from configuration
+- Default radius: 10 NM (`NOTAM_GEO_RADIUS_DEFAULT`)
+- Returns all NOTAMs with geographic boundaries intersecting the search area
+- **Important**: The API returns NOTAMs by ARTCC (Air Route Traffic Control Center), not strict geographic proximity. A TFR in the same ARTCC may be returned even if outside the specified radius.
+
+### Response Format
+
+The NMS API returns NOTAMs in AIXM 5.1.1 XML format embedded within a JSON wrapper:
+- `data.aixm`: Array of AIXM XML strings, one per NOTAM
+- Each XML string contains the full NOTAM details
+
+---
+
+## NOTAM Data Processing
+
+### Parsing Flow
+
+1. **XML Parsing**: Each AIXM XML string is parsed using SimpleXML
+2. **Field Extraction**: Key fields are extracted from the XML structure:
+   - `id`: NOTAM identifier (series + number + year, e.g., "A1234/2026")
+   - `type`: N (New), R (Replace), or C (Cancel)
+   - `location`: ICAO location code (may be FIR/ARTCC code for TFRs)
+   - `code`: Q-code (e.g., QMRLC for runway closure)
+   - `text`: Full NOTAM text
+   - `start_time_utc`: Effective start time
+   - `end_time_utc`: Effective end time (null for permanent NOTAMs)
+   - `airport_name`: Airport name from FAA extension fields
+3. **Deduplication**: NOTAMs are deduplicated by ID to remove duplicates from overlapping queries
+
+### Relevance Filtering
+
+Not all returned NOTAMs are relevant to the airport. The system filters for two types:
+
+#### Aerodrome Closures
+
+A NOTAM is classified as an aerodrome closure if:
+- **Q-code matches**: Code starts with `QMR` (runway) or `QFA` (aerodrome)
+- **Text indicates closure**: Contains "CLSD", "CLOSED", "HAZARD", or "UNSAFE"
+- **Location matches**: The NOTAM location matches the airport's ICAO, IATA, FAA code, or historical identifiers
+
+#### TFR Detection
+
+A NOTAM is classified as a TFR if its text contains any of:
+- "TFR" (explicit abbreviation)
+- "TEMPORARY FLIGHT RESTRICTION" (full phrase)
+- Both "RESTRICTED" and "AIRSPACE" (combined indicators)
+
+### TFR Geographic Relevance
+
+**Problem**: The NMS API returns TFRs by ARTCC region, not geographic proximity. A TFR in Utah (ZLC ARTCC) would appear for airports in Idaho that share the same ARTCC.
+
+**Solution**: Parse TFR coordinates and calculate actual distance to determine relevance.
+
+A TFR is considered relevant to an airport if any of these conditions are met:
+1. The NOTAM `location` field matches an airport identifier
+2. The NOTAM `airport_name` field matches the airport name
+3. The TFR text explicitly mentions the airport name or identifier
+4. The airport is within the TFR's geographic boundary (radius + buffer)
+
+#### Coordinate Parsing
+
+TFR coordinates are parsed from the NOTAM text using the standard aviation format:
+- **Format**: `DDMMSSN/S DDDMMSSW/E` (e.g., "413900N1122300W")
+- **Meaning**: Degrees, minutes, seconds with hemisphere indicator
+- **Example**: 413900N1122300W = 41°39'00"N, 112°23'00"W (Ogden, UT)
+
+#### Radius Parsing
+
+TFR radius is parsed from text patterns:
+- "5NM RADIUS" or "5 NM RADIUS"
+- "RADIUS OF 5NM"
+- "WITHIN 5NM"
+- "5 NAUTICAL MILE RADIUS"
+
+If radius cannot be parsed, a default of 30 NM is used (`TFR_DEFAULT_RADIUS_NM`).
+
+#### Distance Calculation
+
+The haversine formula calculates great-circle distance in nautical miles between the airport and TFR center. The TFR is relevant if:
+
+```
+distance ≤ (TFR radius + relevance buffer)
+```
+
+The relevance buffer is 10 NM by default (`TFR_RELEVANCE_BUFFER_NM`), ensuring airports just outside a TFR boundary are still warned.
+
+#### Conservative Filtering
+
+When coordinates cannot be parsed from the TFR text, the system takes a conservative approach and excludes the TFR. This prevents showing distant TFRs when location cannot be verified, avoiding false positives that could desensitize pilots to warnings.
+
+### Status Classification
+
+Each NOTAM is classified by temporal status:
+- **active**: Currently in effect (now ≥ start time AND now < end time)
+- **upcoming_today**: Starts later today (start time is today but in the future)
+- **upcoming_future**: Starts after today
+- **expired**: End time has passed
+
+Only **active** and **upcoming_today** NOTAMs are displayed on the dashboard.
+
+### Caching
+
+Filtered NOTAMs are cached per airport:
+- **Location**: `cache/notam/{airport_id}.json`
+- **Content**: Array of filtered NOTAMs with status
+- **Refresh**: Configurable via `notam_refresh_seconds` (default: 600 seconds / 10 minutes)
+
+### API Response
+
+The `/api/notam.php` endpoint serves cached NOTAM data:
+- Loads cached data (or returns empty if no cache)
+- Converts UTC times to airport local timezone for display
+- Adds official FAA NOTAM links for each NOTAM
+- Returns JSON array of formatted NOTAMs
+
+---
+
 ## Data Display on Dashboard
 
 ### Weather Data Display
@@ -1329,6 +1490,26 @@ Otherwise → Output 640x480 (FAA minimum)
 - **Format**: Relative time ("2 minutes ago") or absolute time
 - **Update Frequency**: Checks timestamp periodically
 - **Staleness Warning**: Warning emoji (⚠️) appears when webcam age exceeds `MAX_STALE_HOURS` (3 hours)
+
+### NOTAM Display
+
+#### Banner Display
+- **Location**: Top of weather section, below any maintenance banners
+- **Visibility**: Only shown when active or upcoming_today NOTAMs exist
+- **Types Displayed**:
+  - **Aerodrome Closures**: Runway or airport closures/hazards
+  - **TFRs**: Temporary Flight Restrictions affecting the airport
+
+#### NOTAM Content
+- **ID**: NOTAM identifier with link to official FAA source
+- **Status**: Active (currently in effect) or Upcoming (starts later today)
+- **Message**: Full NOTAM text
+- **Effective Times**: Start and end times in airport local timezone
+
+#### Visual Indicators
+- **Warning Icon**: ⚠️ emoji for visibility
+- **Color Coding**: Yellow/amber background for warnings
+- **Collapsible**: Long NOTAM text may be truncated with expand option
 
 ### Data Refresh Behavior
 

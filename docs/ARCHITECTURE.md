@@ -36,6 +36,11 @@ aviationwx.org/
 │   ├── webcam-error-detector.php # Webcam image validation (error frames, pixelation, uniform color)
 │   ├── webcam-format-generation.php # Shared format generation (WebP, JPEG)
 │   ├── exif-utils.php        # EXIF timestamp reading, writing, and validation
+│   ├── notam/
+│   │   ├── auth.php          # NMS API authentication (OAuth bearer token)
+│   │   ├── fetcher.php       # NOTAM fetching (location + geospatial queries)
+│   │   ├── parser.php        # AIXM XML parsing
+│   │   └── filter.php        # Relevance filtering (closures, TFRs, distance)
 │   └── weather/
 │       ├── UnifiedFetcher.php # Unified weather fetch pipeline
 │       ├── WeatherAggregator.php # Multi-source aggregation logic
@@ -155,6 +160,39 @@ aviationwx.org/
   - Atomic file writes (prevents cache corruption)
   - Push timestamp drift validation (rejects images from cameras with misconfigured clocks)
   - State file validation with graceful recovery from corruption
+
+### NOTAM System
+
+**`api/notam.php`**: Serves NOTAM data to frontend
+- Returns filtered NOTAMs as JSON for airport dashboards
+- Stale-while-revalidate caching (scheduler handles refresh)
+- Formats times in airport local timezone
+- Includes official FAA NOTAM links
+
+**`lib/notam/`**: NOTAM processing library
+- **`auth.php`**: NMS API OAuth authentication (bearer token with auto-refresh)
+- **`fetcher.php`**: Dual query strategy (location + geospatial)
+- **`parser.php`**: AIXM 5.1.1 XML parsing to structured data
+- **`filter.php`**: Relevance filtering with geographic distance checking
+
+**`scripts/fetch-notam.php`**: NOTAM fetcher worker
+- Called by scheduler for periodic NOTAM updates
+- Fetches, parses, filters, and caches NOTAMs per airport
+
+**Key Features**:
+- **Dual Query Strategy**: 
+  - Location query by ICAO code (for airport-specific NOTAMs)
+  - Geospatial query by coordinates (for TFRs affecting nearby airspace)
+- **Filtering Logic**:
+  - **Aerodrome Closures**: Q-codes QMR* (runway) or QFA* (aerodrome) with CLSD/CLOSED/HAZARD text
+  - **TFRs**: Text containing "TFR", "TEMPORARY FLIGHT RESTRICTION", or "RESTRICTED AIRSPACE"
+- **Geographic Relevance** (TFRs only):
+  - Parses TFR center coordinates from NOTAM text (format: DDMMSSN/DDDMMSSW)
+  - Parses TFR radius from text (e.g., "5NM RADIUS")
+  - Calculates haversine distance from airport to TFR center (nautical miles)
+  - TFR shown only if airport within (TFR radius + 10 NM buffer)
+  - Falls back to NOTAM location/airport_name fields when available
+- **Status Classification**: active, upcoming_today, expired, upcoming_future
 
 ### Configuration System (`lib/config.php`)
 
@@ -344,6 +382,34 @@ Check cache for requested image
 [If too stale (>3 hours)] Return 503 Service Unavailable (fail-closed safety)
 ```
 
+### NOTAM Data Flow
+
+```
+Scheduler Daemon (runs per notam_refresh_seconds, default 600s)
+  ↓
+fetch-notam.php --worker {airport}
+  ↓
+Query NMS API (location + geospatial queries)
+  ↓
+Parse AIXM XML responses
+  ↓
+Deduplicate by NOTAM ID
+  ↓
+Filter for relevance (closures by Q-code, TFRs by distance)
+  ↓
+Determine status (active/upcoming_today)
+  ↓
+Cache to file (cache/notam/{airport}.json)
+
+User Request → notam.php
+  ↓
+Load cached data + format times to local timezone
+  ↓
+Response (JSON)
+```
+
+See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processing logic.
+
 ## Key Design Decisions
 
 ### 1. Per-Source Staleness Checking
@@ -409,6 +475,20 @@ Check cache for requested image
 - **Generation**: Fully async (non-blocking) using `exec() &`
 - **Mtime Sync**: Automatically synced to match source image's capture time
 - **Benefit**: Best format per browser, smaller file sizes, better quality
+
+### 8. TFR Geographic Relevance Filtering
+
+- **Why**: NMS API returns TFRs by ARTCC region, not geographic proximity
+- **Problem**: A TFR in Utah (ZLC) would appear on Idaho airports in the same ARTCC
+- **Implementation**: Parse TFR coordinates and radius from NOTAM text, calculate actual distance
+- **Key Components**:
+  - Coordinate parsing: Extracts lat/lon from DDMMSSN/DDDMMSSW format
+  - Radius parsing: Extracts nautical mile value from text
+  - Haversine distance: Calculates great-circle distance in nautical miles
+  - Relevance threshold: TFR radius + 10 NM buffer (configurable via `TFR_RELEVANCE_BUFFER_NM`)
+- **Fallback**: Uses NOTAM `location` and `airport_name` fields when coordinates unavailable
+- **Conservative**: Excludes TFRs when coordinates cannot be parsed (prevents false positives)
+- **Benefit**: Only shows TFRs that actually affect the airport's airspace
 
 ## Security Considerations
 
