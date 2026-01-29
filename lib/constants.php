@@ -163,10 +163,34 @@ if (!defined('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS')) {
     define('DEFAULT_NOTAM_STALE_FAILCLOSED_SECONDS', 3600); // 1 hour
 }
 if (!defined('NOTAM_GEO_RADIUS_DEFAULT')) {
-    define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius
+    define('NOTAM_GEO_RADIUS_DEFAULT', 10); // 10 NM default radius for API query
 }
 if (!defined('NOTAM_RATE_LIMIT_SECONDS')) {
     define('NOTAM_RATE_LIMIT_SECONDS', 1); // 1 request per second
+}
+
+// TFR (Temporary Flight Restriction) filtering constants
+// Used for determining if a TFR is relevant to an airport based on distance
+// All distances in nautical miles (NM) - standard aviation unit
+
+// Default radius (NM) to assume when TFR radius cannot be parsed from text
+if (!defined('TFR_DEFAULT_RADIUS_NM')) {
+    define('TFR_DEFAULT_RADIUS_NM', 30);
+}
+
+// Buffer distance (NM) added to TFR radius when checking airport relevance
+// Ensures airports just outside TFR boundary are still warned
+if (!defined('TFR_RELEVANCE_BUFFER_NM')) {
+    define('TFR_RELEVANCE_BUFFER_NM', 10);
+}
+
+// TFR radius parsing bounds (NM) - sanity check for parsed values
+// Values outside this range are rejected as parsing errors
+if (!defined('TFR_RADIUS_MIN_NM')) {
+    define('TFR_RADIUS_MIN_NM', 0.5);
+}
+if (!defined('TFR_RADIUS_MAX_NM')) {
+    define('TFR_RADIUS_MAX_NM', 100);
 }
 if (!defined('RATE_LIMIT_CONFIG_GENERATOR_MAX')) {
     define('RATE_LIMIT_CONFIG_GENERATOR_MAX', 10);
