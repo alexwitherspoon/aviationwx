@@ -144,7 +144,7 @@ function handleGetFrameList(string $airportId, int $camIndex, array $airport): v
     $maxFrames = $airport['webcam_history_max_frames'] ?? 12;
     
     // Get variant heights for metadata
-    $variantHeights = getVariantHeights($airport, $airport['webcams'][$camIndex] ?? []);
+    $variantHeights = getVariantHeights($airportId, $camIndex);
     
     // Build metadata
     $meta = [

@@ -271,14 +271,29 @@
               "maximum": 2160,
               "example": 960
             }
+          },
+          {
+            "name": "metadata",
+            "in": "query",
+            "description": "When set to '1', returns JSON metadata about available formats and variants instead of the image. Useful for discovering what formats and sizes are available for the current image.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"],
+              "example": "1"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Image data",
+            "description": "Image data or metadata (when metadata=1)",
             "content": {
               "image/jpeg": {},
-              "image/webp": {}
+              "image/webp": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebcamMetadataResponse"
+                }
+              }
             }
           },
           "400": {
@@ -1141,6 +1156,94 @@
                     ]
                   },
                   "description": "Available variant heights and/or 'original'"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WebcamMetadataResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "meta": {
+            "allOf": [
+              { "$ref": "#/components/schemas/Meta" },
+              {
+                "type": "object",
+                "properties": {
+                  "airport_id": {
+                    "type": "string"
+                  },
+                  "cam_index": {
+                    "type": "integer"
+                  },
+                  "refresh_seconds": {
+                    "type": "integer",
+                    "description": "Webcam refresh interval in seconds"
+                  },
+                  "variant_heights": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "Configured variant heights (e.g., [1080, 720, 360])"
+                  }
+                }
+              }
+            ]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "integer",
+                "description": "Unix timestamp of the current image"
+              },
+              "timestamp_iso": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp"
+              },
+              "formats": {
+                "type": "object",
+                "description": "Available formats for each variant. Keys are variant names ('original' or numeric height), values are arrays of format names.",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["jpg", "webp"]
+                  }
+                },
+                "example": {
+                  "original": ["jpg"],
+                  "1080": ["jpg", "webp"],
+                  "720": ["jpg", "webp"],
+                  "360": ["jpg", "webp"]
+                }
+              },
+              "recommended_sizes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Recommended variant heights sorted by size (descending)",
+                "example": [1080, 720, 360]
+              },
+              "urls": {
+                "type": "object",
+                "description": "Pre-built URLs for each variant/format combination. Keys follow the pattern '{variant}_{format}' (e.g., 'original_jpg', '1080_webp').",
+                "additionalProperties": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "example": {
+                  "original_jpg": "/v1/airports/kspb/webcams/0/image",
+                  "1080_jpg": "/v1/airports/kspb/webcams/0/image?size=1080",
+                  "1080_webp": "/v1/airports/kspb/webcams/0/image?fmt=webp&size=1080",
+                  "720_webp": "/v1/airports/kspb/webcams/0/image?fmt=webp&size=720"
                 }
               }
             }

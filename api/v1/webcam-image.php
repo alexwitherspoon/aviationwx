@@ -89,6 +89,12 @@ function handleGetWebcamImage(array $params, array $context): void
     
     $webcam = $webcams[$camIndex];
     
+    // Check for metadata request
+    if (isset($_GET['metadata']) && $_GET['metadata'] == '1') {
+        handleGetWebcamMetadata($airportId, $camIndex, $airport, $webcam);
+        return;
+    }
+    
     // Check for profile parameter
     $profile = $_GET['profile'] ?? null;
     
@@ -160,6 +166,10 @@ function handleGetWebcamImage(array $params, array $context): void
             $size = 'original';
         }
         
+        // Track if format was explicitly requested via query parameter
+        $explicitFormatRequest = isset($_GET['fmt']);
+        $requestedFormat = $format;
+        
         // Get image path for requested size
         $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, $format);
         
@@ -169,8 +179,43 @@ function handleGetWebcamImage(array $params, array $context): void
             $size = 'original';
         }
         
-        // Fall back to JPG if requested format doesn't exist
-        if ($cacheFile === null && $format !== 'jpg') {
+        // Handle explicit format request for unavailable format
+        if ($cacheFile === null && $explicitFormatRequest && $requestedFormat !== 'jpg') {
+            // Check if the format exists for any sized variant
+            require_once __DIR__ . '/../../lib/webcam-metadata.php';
+            $variantHeights = getVariantHeights($airportId, $camIndex);
+            $availableSizes = [];
+            
+            foreach ($variantHeights as $height) {
+                $variantPath = getImagePathForSize($airportId, $camIndex, $timestamp, $height, $requestedFormat);
+                if ($variantPath !== null) {
+                    $availableSizes[] = $height;
+                }
+            }
+            
+            if (!empty($availableSizes)) {
+                // Format exists for sized variants but not for original
+                sendPublicApiError(
+                    PUBLIC_API_ERROR_INVALID_REQUEST,
+                    "Format '{$requestedFormat}' is not available for size 'original'. " .
+                    "Available sizes for {$requestedFormat}: " . implode(', ', $availableSizes) . ". " .
+                    "Note: Original images preserve the source format from the camera.",
+                    400
+                );
+                return;
+            } else {
+                // Format doesn't exist at all
+                sendPublicApiError(
+                    PUBLIC_API_ERROR_INVALID_REQUEST,
+                    "Format '{$requestedFormat}' is not available for this webcam",
+                    400
+                );
+                return;
+            }
+        }
+        
+        // Fall back to JPG if requested format doesn't exist (only for non-explicit requests)
+        if ($cacheFile === null && $format !== 'jpg' && !$explicitFormatRequest) {
             $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, $size, 'jpg');
             if ($cacheFile === null && $size !== 'original') {
                 $cacheFile = getImagePathForSize($airportId, $camIndex, $timestamp, 'original', 'jpg');
@@ -424,5 +469,114 @@ function sendImageResponse(
     
     // Output image
     readfile($cacheFile);
+}
+
+/**
+ * Handle metadata request for current webcam image
+ * 
+ * Returns JSON with available formats and variants for the current image.
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
+ * @param array $airport Airport configuration
+ * @param array $webcam Webcam configuration
+ */
+function handleGetWebcamMetadata(
+    string $airportId,
+    int $camIndex,
+    array $airport,
+    array $webcam
+): void {
+    require_once __DIR__ . '/../../lib/webcam-metadata.php';
+    
+    // Get latest timestamp
+    $timestamp = getLatestImageTimestamp($airportId, $camIndex);
+    
+    if ($timestamp === 0) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+            'Webcam image temporarily unavailable',
+            503
+        );
+        return;
+    }
+    
+    // Get available variants
+    $availableVariants = getAvailableVariants($airportId, $camIndex, $timestamp);
+    
+    if (empty($availableVariants)) {
+        sendPublicApiError(
+            PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+            'No image variants available',
+            503
+        );
+        return;
+    }
+    
+    // Get configured variant heights
+    $variantHeights = getVariantHeights($airportId, $camIndex);
+    
+    // Build formats structure: { variant: [formats] }
+    $formats = [];
+    $urls = [];
+    
+    foreach ($availableVariants as $variant => $variantFormats) {
+        $variantKey = ($variant === 'original') ? 'original' : (int)$variant;
+        $formats[$variantKey] = $variantFormats;
+        
+        // Build URLs for each format
+        foreach ($variantFormats as $format) {
+            $urlKey = $variantKey . '_' . $format;
+            $url = '/v1/airports/' . $airportId . '/webcams/' . $camIndex . '/image';
+            
+            $params = [];
+            if ($format !== 'jpg') {
+                $params[] = 'fmt=' . $format;
+            }
+            if ($variant !== 'original') {
+                $params[] = 'size=' . $variant;
+            }
+            
+            if (!empty($params)) {
+                $url .= '?' . implode('&', $params);
+            }
+            
+            $urls[$urlKey] = $url;
+        }
+    }
+    
+    // Build recommended sizes (available sized variants, sorted descending)
+    $recommendedSizes = array_filter(array_keys($availableVariants), function($v) {
+        return $v !== 'original' && is_numeric($v);
+    });
+    $recommendedSizes = array_map('intval', $recommendedSizes);
+    rsort($recommendedSizes);
+    
+    // Build response
+    $data = [
+        'timestamp' => $timestamp,
+        'timestamp_iso' => gmdate('c', $timestamp),
+        'formats' => $formats,
+        'recommended_sizes' => array_values($recommendedSizes),
+        'urls' => $urls,
+    ];
+    
+    // Get webcam refresh interval for metadata
+    $refreshSeconds = $webcam['refresh_seconds'] 
+        ?? $airport['webcam_refresh_seconds'] 
+        ?? 60;
+    
+    $meta = [
+        'airport_id' => $airportId,
+        'cam_index' => $camIndex,
+        'refresh_seconds' => $refreshSeconds,
+        'variant_heights' => $variantHeights,
+    ];
+    
+    // Send cache headers (short TTL since image changes frequently)
+    sendPublicApiCacheHeaders('live');
+    
+    // Send response
+    sendPublicApiSuccess($data, $meta);
 }
 
