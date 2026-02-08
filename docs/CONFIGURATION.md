@@ -428,12 +428,14 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 |------|-------------|------------------|
 | `tempest` | Tempest Weather Station | ~1 minute |
 | `ambient` | Ambient Weather Network | ~1 minute |
-| `weatherlink_v2` | Davis WeatherLink (newer devices) | ~5 minutes |
-| `weatherlink_v1` | Davis WeatherLink (legacy devices) | ~5 minutes |
+| `weatherlink_v2` | Davis WeatherLink (newer devices) | Depends on Davis subscription (see below) |
+| `weatherlink_v1` | Davis WeatherLink (legacy devices) | Depends on Davis subscription (see below) |
 | `pwsweather` | PWSWeather/AerisWeather | Variable |
 | `synopticdata` | SynopticData API | Variable |
 | `nws` | NWS ASOS API (api.weather.gov) | ~5 minutes |
 | `metar` | Aviation Weather METAR | ~60 minutes |
+
+**Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
 
 ### Tempest Weather
 
@@ -464,7 +466,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 
 ### Davis WeatherLink v2 (Newer Devices)
 
-For WeatherLink Live, WeatherLink Console, and EnviroMonitor systems.
+For WeatherLink Live, WeatherLink Console, and EnviroMonitor systems. Data interval depends on Davis subscription; see [Davis WeatherLink update intervals](#source-types) above.
 
 ```json
 "weather_sources": [
@@ -492,7 +494,7 @@ See the [Weather Station Guide](../guides/09-weather-station-configuration.md) f
 
 ### Davis WeatherLink v1 (Legacy Devices)
 
-For older devices: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial loggers.
+For older devices: Vantage Connect, WeatherLinkIP, WeatherLink USB/Serial loggers. Same subscription-based intervals as v2; see [Davis WeatherLink update intervals](#source-types) above or [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions) for device-specific tables.
 
 ```json
 "weather_sources": [

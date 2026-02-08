@@ -320,7 +320,7 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
 
 7. **Max Acceptable Ages** (per source type, used for staleness checks):
    - Tempest: 300 seconds (5 minutes)
-   - Ambient/WeatherLink: 300 seconds (5 minutes)
+   - Ambient/WeatherLink: 300 seconds (5 minutes). WeatherLink's actual data interval is set by Davis subscription (Basic 15m, Pro 5m, Pro+ ~1m); see [CONFIGURATION.md](CONFIGURATION.md) Weather Sources.
    - PWSWeather: 600 seconds (10 minutes)
    - SynopticData: 900 seconds (15 minutes)
    - NWS: 10800 seconds (3 hours) - same as failclosed threshold

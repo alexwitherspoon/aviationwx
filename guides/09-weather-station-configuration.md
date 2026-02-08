@@ -210,10 +210,12 @@ AviationWX supports five weather station platforms plus METAR-only configuration
 |--------|----------|--------------|------|
 | **Tempest** | New installs, community deployments | ~1 minute | Free API |
 | **Ambient Weather** | Budget stations, existing installs | ~1 minute | Free API |
-| **Davis WeatherLink** | Professional/long-term installs | ~1 minute | Free API |
+| **Davis WeatherLink** | Professional/long-term installs | 15 min (Basic/free), 5 min (Pro), ~1 min (Pro+) | Free API (Basic); paid for 5 min / 1 min |
 | **PWSWeather** | Stations already uploading to PWSWeather.com | ~5 minutes | Free API via AerisWeather |
 | **SynopticData** | Backup source, aggregated networks | 5-10 minutes | Free tier available |
 | **METAR Only** | Official airport weather | Hourly | No API key needed |
+
+Davis WeatherLink intervals depend on subscription; see the [Configuration Guide](../docs/CONFIGURATION.md) (Weather Sources) or [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions).
 
 ---
 
