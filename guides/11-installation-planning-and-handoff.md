@@ -1,11 +1,7 @@
 # 11 - Installation Planning & Handoff
 
 ## Goal
-Get from "approved idea" → "working, maintainable installation" with:
-- clear ownership,
-- clean installs,
-- reliable updates,
-- and a simple plan for maintenance and removal.
+Get from approved idea to working, maintainable installation with clear ownership, clean professional installs, reliable updates, and a simple plan for ongoing maintenance and eventual removal when needed. This guide covers planning, pre-staging equipment, installation day procedures, commissioning validation, proper handoff documentation, and long-term operation expectations.
 
 This guide ties together the earlier choices:
 - permission (Guide 01)

@@ -1,11 +1,7 @@
 # 05 - Power Options
 
 ## Goal
-Power the cameras + weather station in a way that is:
-- **safe** (for people and airport operations),
-- **reliable** through weather and seasons,
-- **maintainable** by the local group,
-- and realistic for the budget and install effort.
+Power the cameras and weather station in a way that is safe for people and airport operations, reliable through weather and seasons, maintainable by the local group, and realistic for the budget and install effort. Choose from grid power, PoE, battery backup, or solar options based on your site requirements.
 
 This guide assumes you’ve already chosen a location and mounting approach (Guides 02-03).
 

@@ -1,11 +1,7 @@
 # 06 - Internet Options
 
 ## Goal
-Get images and weather data from the airport to AviationWX in a way that is:
-- **reliable** (works in bad weather and during outages when possible),
-- **simple to maintain** (especially by volunteers),
-- **cost-appropriate** for the airport,
-- and **safe and permitted** (no unsafe cabling, no surprise installs).
+Get images and weather data from the airport to AviationWX in a way that is reliable through all weather conditions, simple to maintain by volunteers, cost-appropriate for the airport budget, and safe with proper permissions. Choose from existing LAN connections, point-to-point wireless bridges, LTE cellular, or Starlink satellite internet based on your location and budget.
 
 AviationWX is designed to work on low bandwidth: still images every **1-15 minutes** plus weather data is usually a small data footprint.
 

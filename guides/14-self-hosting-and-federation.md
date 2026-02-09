@@ -1,7 +1,7 @@
 # 14 - Self-Hosting & Federation (Advanced)
 
 ## Goal
-Enable advanced users to self-host their own AviationWX installation while optionally participating in the larger AviationWX.org network through federation.
+Enable advanced users to self-host their own complete AviationWX installation while optionally participating in the larger AviationWX.org pilot network through federation for discovery. Self-hosting provides complete control over your data and infrastructure while federation allows pilots to discover your airport through the shared network for better visibility and safety.
 
 **This is an advanced option.** Most airports should use [Guide 12 - Submit an Airport](12-submit-an-airport-to-aviationwx.md) to join the shared network directly.
 

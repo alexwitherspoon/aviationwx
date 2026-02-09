@@ -1,11 +1,7 @@
 # 12 - Submit a New Airport to AviationWX (What to send + what happens next)
 
 ## Goal
-Make it easy for a normal, non-technical airport volunteer to send AviationWX the information needed to:
-- add the airport dashboard,
-- connect weather data,
-- connect one or more cameras,
-- and validate it meets the project goals.
+Make it easy for a normal, non-technical airport volunteer to send AviationWX the information needed to add the airport dashboard, connect weather data and cameras, and validate everything meets the project goals. This guide provides a simple checklist of required information including airport identifiers, weather station API credentials, camera connection details, and local contact information.
 
 **Send everything to:** `contact@aviationwx.org`
 

@@ -1,11 +1,7 @@
 # 07 - Equipment Recommendations
 
 ## Goal
-Choose equipment that:
-- produces **useful, trustworthy observations**,
-- is **simple to install and maintain**,
-- fits the airport’s **budget and connectivity**, and
-- can be supported by a volunteer or airport team over time.
+Choose equipment that produces useful and trustworthy weather observations, is simple to install and maintain by volunteers or airport teams, fits the airport's budget and connectivity requirements, and can be reliably supported over time. This guide recommends tested weather stations and cameras that work reliably with AviationWX without requiring paid cloud subscriptions or complex configuration.
 
 This guide is intentionally practical. It does not try to cover every possible vendor or model.
 

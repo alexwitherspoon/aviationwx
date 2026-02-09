@@ -1,11 +1,7 @@
 # 03 - Mounting Options
 
 ## Goal
-Pick a mounting approach that is:
-- **safe** for airport operations,
-- produces a **useful view**,
-- **maintainable** over time,
-- and **approved** by the people who control the site.
+Pick a mounting approach that is safe for airport operations, produces a useful view, is maintainable over time, and has approval from the people who control the site. Your choice affects everything from power access to ongoing maintenance requirements.
 
 ## Before you choose an option
 This guide assumes you have already completed:

@@ -2,10 +2,7 @@
 
 ## What is the AviationWX Bridge?
 
-The AviationWX Bridge is an **optional tool** that runs on a small local device (like a Raspberry Pi) and handles the job of:
-- capturing snapshots from local cameras,
-- validating image quality and timestamps, and
-- uploading them reliably to AviationWX via FTPS.
+The AviationWX Bridge is an optional tool that runs on a small local device like a Raspberry Pi and handles capturing snapshots from local cameras, validating image quality and timestamps, and uploading them reliably to AviationWX via FTPS. Use the Bridge when your cameras don't support scheduled FTP uploads natively, such as UniFi Protect or NVR systems.
 
 Think of it as a dedicated "camera assistant" that sits on your local network and makes sure images get to AviationWX-even when your cameras don't natively support scheduled FTP uploads.
 

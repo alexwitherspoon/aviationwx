@@ -1,10 +1,7 @@
 # 08 - Camera Configuration
 
 ## Goal
-Configure cameras so they reliably provide **clear still images** to AviationWX with:
-- minimal ongoing maintenance,
-- predictable bandwidth use,
-- and easy recovery after power/internet hiccups.
+Configure cameras so they reliably provide clear still images to AviationWX with minimal ongoing maintenance by volunteers, predictable bandwidth use, and easy recovery after power or internet outages. This guide covers scheduled JPEG uploads via FTP, RTSP video streams, snapshot URLs, and the optional AviationWX Bridge for cameras without native upload capability.
 
 This guide focuses on camera integration methods that work well for AviationWX:
 1) **Scheduled JPEG uploads (FTPS/FTP/SFTP)** ✅ **preferred**
