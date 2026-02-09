@@ -1773,8 +1773,19 @@ h3 {
     }
 }
 
-/* Portrait and narrow screens (<834px): Show mobile (stacked), hide desktop (inline) */
-@media (max-width: 833px) {
+/* Phone landscape (<834px but landscape): Show inline period selector */
+@media (max-width: 833px) and (orientation: landscape) {
+    .webcam-player-period-mobile.visible {
+        display: none;
+    }
+    
+    .webcam-player-period-desktop.visible {
+        display: flex;
+    }
+}
+
+/* Portrait (<834px): Show mobile (stacked), hide desktop (inline) */
+@media (max-width: 833px) and (orientation: portrait) {
     .webcam-player-period-mobile.visible {
         display: flex;
     }
@@ -1791,6 +1802,10 @@ h3 {
         padding: 0.2rem 0.5rem;
         font-size: 0.7rem;
     }
+}
+
+/* Small screens base styles (<834px) - applies to both orientations */
+@media (max-width: 833px) {
     
     /* Ensure buttons don't get pushed off screen */
     .webcam-player-controls {
