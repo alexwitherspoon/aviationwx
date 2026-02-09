@@ -1819,13 +1819,6 @@ h3 {
         display: none !important;
     }
     
-    /* Hide action buttons on portrait - keep only playback controls */
-    #webcam-player-autoplay-btn,
-    #webcam-player-download-btn,
-    #webcam-player-hideui-btn {
-        display: none;
-    }
-    
     /* Ensure buttons don't shrink */
     .webcam-player-btn {
         flex-shrink: 0;
@@ -1841,6 +1834,16 @@ h3 {
         width: 48px;
         height: 48px;
         font-size: 16px;
+    }
+}
+
+/* Portrait-only: Hide action buttons to reduce clutter (landscape shows all buttons) */
+@media (max-width: 833px) and (orientation: portrait) {
+    /* Hide action buttons on portrait - keep only playback controls */
+    #webcam-player-autoplay-btn,
+    #webcam-player-download-btn,
+    #webcam-player-hideui-btn {
+        display: none;
     }
 }
 
