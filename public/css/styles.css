@@ -1583,6 +1583,7 @@ h3 {
     height: 30px;
     background: rgba(255, 255, 255, 0.3);
     margin: 0 8px;
+    align-self: center;
 }
 
 /* Toggle button active state */
@@ -1761,8 +1762,8 @@ h3 {
     justify-content: center;
 }
 
-/* Desktop/landscape: Show desktop, hide mobile */
-@media (min-width: 600px) {
+/* Desktop/landscape and large tablets (≥834px): Show desktop, hide mobile */
+@media (min-width: 834px) {
     .webcam-player-period-mobile.visible {
         display: none;
     }
@@ -1772,8 +1773,8 @@ h3 {
     }
 }
 
-/* Portrait mobile (<600px): Show mobile, hide desktop */
-@media (max-width: 599px) {
+/* Portrait and narrow screens (<834px): Show mobile (stacked), hide desktop (inline) */
+@media (max-width: 833px) {
     .webcam-player-period-mobile.visible {
         display: flex;
     }
@@ -1797,9 +1798,37 @@ h3 {
         padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
     }
     
+    /* Simple flex layout - no complex wrapping needed */
     .webcam-player-buttons {
         margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
         gap: 10px;
+        row-gap: 12px;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    /* Hide divider on mobile */
+    .webcam-player-btn-divider {
+        display: none;
+    }
+    
+    /* Desktop period selector hidden on mobile */
+    .webcam-player-period-desktop {
+        display: none !important;
+    }
+    
+    /* Hide action buttons on portrait - keep only playback controls */
+    #webcam-player-autoplay-btn,
+    #webcam-player-download-btn,
+    #webcam-player-hideui-btn {
+        display: none;
+    }
+    
+    /* Ensure buttons don't shrink */
+    .webcam-player-btn {
+        flex-shrink: 0;
     }
     
     .webcam-player-btn {
@@ -1905,6 +1934,7 @@ body.night-mode .webcam-player-period-selector .period-btn.active {
 .webcam-player-buttons {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 20px;
     margin-top: 16px;
 }
