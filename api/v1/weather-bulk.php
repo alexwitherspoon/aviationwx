@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/public-api/config.php';
 require_once __DIR__ . '/../../lib/config.php';
+require_once __DIR__ . '/../../lib/metrics.php';
 
 // Include the weather formatting function from the single weather endpoint
 require_once __DIR__ . '/weather.php';
@@ -98,6 +99,9 @@ function handleGetWeatherBulk(array $params, array $context): void
             $errors[$rawId] = 'Weather data unavailable';
             continue;
         }
+        
+        // Track API request metric (combined with private API metrics)
+        metrics_track_weather_request($airportId);
         
         // Format weather response
         $weatherData[$airportId] = formatWeatherResponse($weather, $airport);

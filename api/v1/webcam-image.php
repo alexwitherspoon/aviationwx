@@ -35,6 +35,7 @@ require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/cache-headers.php';
 require_once __DIR__ . '/../../lib/webcam-metadata.php';
 require_once __DIR__ . '/../../lib/image-transform.php';
+require_once __DIR__ . '/../../lib/metrics.php';
 
 /**
  * Handle GET /v1/airports/{id}/webcams/{cam}/image request
@@ -88,6 +89,9 @@ function handleGetWebcamImage(array $params, array $context): void
     }
     
     $webcam = $webcams[$camIndex];
+    
+    // Track API request metric (combined with private API metrics for high-level view)
+    metrics_track_webcam_request($airportId, $camIndex);
     
     // Check for metadata request
     if (isset($_GET['metadata']) && $_GET['metadata'] == '1') {

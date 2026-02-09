@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
+require_once __DIR__ . '/../../lib/metrics.php';
 
 /**
  * Handle GET /v1/airports/{id}/weather request
@@ -52,6 +53,9 @@ function handleGetWeather(array $params, array $context): void
         );
         return;
     }
+    
+    // Track API request metric (combined with private API metrics for high-level view)
+    metrics_track_weather_request($airportId);
     
     // Get cached weather data
     $weatherData = getWeatherFromCache($airportId);
