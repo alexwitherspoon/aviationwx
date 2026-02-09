@@ -94,6 +94,9 @@ function handleGetWebcamHistory(array $params, array $context): void
 /**
  * Return list of available historical frames
  * 
+ * Uses APCu cache with 60-second TTL to avoid repeated directory scans.
+ * Cache key includes airport and camera to ensure proper isolation.
+ * 
  * @param string $airportId Airport ID
  * @param int $camIndex Camera index
  * @param array $airport Airport configuration
@@ -102,43 +105,59 @@ function handleGetFrameList(string $airportId, int $camIndex, array $airport): v
 {
     require_once __DIR__ . '/../../lib/webcam-history.php';
     
-    $frames = getHistoryFrames($airportId, $camIndex);
+    // Try APCu cache first (60-second TTL matches refresh interval)
+    $cacheKey = "webcam_history_frames_{$airportId}_{$camIndex}";
+    $frames = false;
     
-    $frameList = [];
-    foreach ($frames as $frame) {
-        // Get available variants for this frame (height-based)
-        $availableVariants = getAvailableVariants($airportId, $camIndex, $frame['timestamp']);
-        $variantList = [];
-        if (!empty($availableVariants)) {
-            foreach ($availableVariants as $variant => $formats) {
-                if ($variant === 'original') {
-                    $variantList[] = 'original';
-                } elseif (is_numeric($variant)) {
-                    $variantList[] = (int)$variant;
-                }
-            }
-        }
-        
-        // If no variants found, default to original
-        if (empty($variantList)) {
-            $variantList = ['original'];
-        }
-        
-        $frameList[] = [
-            'timestamp' => $frame['timestamp'],
-            'timestamp_iso' => gmdate('c', $frame['timestamp']),
-            'url' => '/v1/airports/' . $airportId . '/webcams/' . $camIndex . '/history?ts=' . $frame['timestamp'],
-            'formats' => $frame['formats'] ?? ['jpg'],
-            'variants' => $variantList
-        ];
+    if (function_exists('apcu_fetch')) {
+        $frames = apcu_fetch($cacheKey);
     }
     
-    // Sort by timestamp descending (newest first)
-    usort($frameList, function ($a, $b) {
-        return $b['timestamp'] - $a['timestamp'];
-    });
-    
-    $frames = $frameList;
+    // Cache miss - fetch from filesystem
+    if ($frames === false) {
+        $frames = getHistoryFrames($airportId, $camIndex);
+        
+        $frameList = [];
+        foreach ($frames as $frame) {
+            // Use variants data already computed by getHistoryFrames()
+            // Avoids N+1 query pattern (1000+ redundant directory scans)
+            $variantList = [];
+            if (!empty($frame['variants'])) {
+                foreach ($frame['variants'] as $variant => $formats) {
+                    if ($variant === 'original') {
+                        $variantList[] = 'original';
+                    } elseif (is_numeric($variant)) {
+                        $variantList[] = (int)$variant;
+                    }
+                }
+            }
+            
+            // If no variants found, default to original
+            if (empty($variantList)) {
+                $variantList = ['original'];
+            }
+            
+            $frameList[] = [
+                'timestamp' => $frame['timestamp'],
+                'timestamp_iso' => gmdate('c', $frame['timestamp']),
+                'url' => '/v1/airports/' . $airportId . '/webcams/' . $camIndex . '/history?ts=' . $frame['timestamp'],
+                'formats' => $frame['formats'] ?? ['jpg'],
+                'variants' => $variantList
+            ];
+        }
+        
+        $frames = $frameList;
+        
+        // Sort by timestamp descending (newest first)
+        usort($frames, function ($a, $b) {
+            return $b['timestamp'] - $a['timestamp'];
+        });
+        
+        // Store in APCu cache (60-second TTL)
+        if (function_exists('apcu_store')) {
+            apcu_store($cacheKey, $frames, 60);
+        }
+    }
     
     // Get max frames setting
     $maxFrames = $airport['webcam_history_max_frames'] ?? 12;
