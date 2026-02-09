@@ -22,6 +22,9 @@ require_once __DIR__ . '/../lib/cloudflare-analytics.php';
 /**
  * Get cached backoff data
  * 
+ * Uses static variable to cache backoff data within request lifecycle.
+ * APCu not needed as backoff file is small and read-once per request.
+ * 
  * @return array Backoff data array (empty if file doesn't exist)
  */
 function getCachedBackoffData(): array {
@@ -38,33 +41,6 @@ function getCachedBackoffData(): array {
     }
     
     return $backoffData;
-}
-
-/**
- * Get cached status page data with APCu caching
- * 
- * Caches health check results for 30 seconds to reduce file I/O.
- * 
- * @param callable $computeFunc Function to compute fresh data
- * @param string $cacheKey APCu cache key
- * @param int $ttl Cache TTL in seconds (default: 30)
- * @return mixed Cached or freshly computed data
- */
-function getCachedStatusData(callable $computeFunc, string $cacheKey, int $ttl = 30) {
-    if (function_exists('apcu_fetch')) {
-        $cached = @apcu_fetch($cacheKey, $success);
-        if ($success) {
-            return $cached;
-        }
-    }
-    
-    $data = $computeFunc();
-    
-    if (function_exists('apcu_store')) {
-        @apcu_store($cacheKey, $data, $ttl);
-    }
-    
-    return $data;
 }
 
 // Prevent caching (only in web context, not CLI)
@@ -1699,46 +1675,52 @@ if ($config === null) {
     die('Service Unavailable: Configuration cannot be loaded');
 }
 
-// Load usage metrics (multi-period: hour, day, 7-day)
-require_once __DIR__ . '/../lib/metrics.php';
-$usageMetrics = metrics_get_rolling(METRICS_STATUS_PAGE_DAYS);
-$multiPeriodMetrics = metrics_get_multi_period();
+// Load usage metrics with APCu caching (eliminates duplicate file reads)
+require_once __DIR__ . '/../lib/status-metrics.php';
+$usageMetrics = getStatusMetricsRolling(METRICS_STATUS_PAGE_DAYS, 60);
+$multiPeriodMetrics = getStatusMetricsMultiPeriod(60);
+$rolling24h = getStatusMetricsRolling(1, 60);
 
-// Get 24h metrics for hero display
-$rolling24h = metrics_get_rolling(1); // Last 24 hours
+// Get local performance metrics (cached for 30s)
+require_once __DIR__ . '/../lib/status-metrics.php';
+require_once __DIR__ . '/../lib/performance-metrics.php';
+$imageProcessingMetrics = getCachedData(
+    fn() => getImageProcessingMetrics(),
+    'status_image_processing',
+    null,
+    30
+);
+$pageRenderMetrics = getCachedData(
+    fn() => getPageRenderMetrics(),
+    'status_page_render',
+    null,
+    30
+);
+$nodePerformance = getCachedData(function() {
+    return getNodePerformance();
+}, 'status_node_performance', null, 30);
 
 // Get system health (cached for 30s)
-$systemHealth = getCachedStatusData(function() {
+require_once __DIR__ . '/../lib/cached-data-loader.php';
+$systemHealth = getCachedData(function() {
     return checkSystemHealth();
-}, 'status_system_health', 30);
+}, 'status_system_health', null, 30);
 
 // Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
 $cfAnalytics = getCloudflareAnalyticsForStatus();
 $cloudflareConfigured = !empty($cfAnalytics); // Show all CF metrics if configured
 
-// Get local performance metrics
-require_once __DIR__ . '/../lib/performance-metrics.php';
-$imageProcessingMetrics = getImageProcessingMetrics();
-$pageRenderMetrics = getPageRenderMetrics();
-
-// Get node performance metrics (cached for 30s)
-$nodePerformance = getCachedStatusData(function() {
-    return getNodePerformance();
-}, 'status_node_performance', 30);
-
 // Get public API health (if enabled, cached for 30s)
 require_once __DIR__ . '/../lib/public-api/config.php';
 $publicApiHealth = null;
 if (isPublicApiEnabled()) {
-    $publicApiHealth = getCachedStatusData(function() {
+    $publicApiHealth = getCachedData(function() {
         return checkPublicApiHealth();
-    }, 'status_public_api_health', 30);
+    }, 'status_public_api_health', CACHE_PUBLIC_API_HEALTH_FILE, 30);
 }
 
 // Get airport health for each configured airport (cached for 30s)
-// Note: checkAirportHealth() uses getCacheFile() from webcam-format-generation.php
-// which is already included at the top of this file
-$airportHealth = getCachedStatusData(function() use ($config) {
+$airportHealth = getCachedData(function() use ($config) {
     $health = [];
     if (isset($config['airports']) && is_array($config['airports'])) {
         foreach ($config['airports'] as $airportId => $airport) {
@@ -1746,7 +1728,7 @@ $airportHealth = getCachedStatusData(function() use ($config) {
         }
     }
     return $health;
-}, 'status_airport_health', 30);
+}, 'status_airport_health', null, 30);
 
 // Sort airports by status (down first, then maintenance, then degraded, then operational)
 usort($airportHealth, function($a, $b) {
