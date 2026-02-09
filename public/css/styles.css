@@ -1687,8 +1687,8 @@ h3 {
 .webcam-player-controls {
     padding: 16px;
     /* Fallback for browsers without env() support, then safe area with fallback */
-    padding-bottom: 16px;
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    padding-bottom: 36px;
+    padding-bottom: max(36px, env(safe-area-inset-bottom, 0px));
     background: rgba(0, 0, 0, 0.9);
     flex-shrink: 0;
 }
@@ -1994,6 +1994,22 @@ body.night-mode .webcam-player-period-selector .period-btn.active {
 
 .webcam-player-btn.play:active {
     background: rgba(59, 130, 246, 1);
+}
+
+/* Add spacing between period selector and playback controls */
+#webcam-player-prev-btn {
+    margin-left: 20px;
+}
+
+/* Hide download button on small screens (iPad 11" is 834px and larger) */
+#webcam-player-download-btn {
+    display: none;
+}
+
+@media (min-width: 834px) {
+    #webcam-player-download-btn {
+        display: flex;
+    }
 }
 
 /* Reduced motion preference */
