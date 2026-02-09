@@ -5061,6 +5061,33 @@ const WebcamPlayer = {
             btn.title = this.playing ? 'Stop autoplay' : 'Start autoplay';
         }
     },
+    
+    // Download current frame's original image
+    downloadCurrent() {
+        if (!this.active || this.periodFrames.length === 0) {
+            return;
+        }
+        
+        const currentFrame = this.periodFrames[this.currentIndex];
+        if (!currentFrame) {
+            return;
+        }
+        
+        // Build download URL: original size with download=1 parameter
+        const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+        const host = window.location.host;
+        const downloadUrl = `${protocol}//${host}/api/webcam.php?id=${AIRPORT_ID}&cam=${this.camIndex}&size=original&download=1`;
+        
+        // Trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = ''; // Browser will use filename from Content-Disposition header
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log(`[Webcam Player] Downloading original image for ${AIRPORT_ID} cam ${this.camIndex}`);
+    },
 
     toggleHideUI() {
         this.hideUIMode = !this.hideUIMode;
@@ -6059,6 +6086,7 @@ function webcamPlayerTogglePlay() { WebcamPlayer.togglePlay(); }
 function webcamPlayerPrev() { WebcamPlayer.prev(); }
 function webcamPlayerNext() { WebcamPlayer.next(); }
 function webcamPlayerToggleAutoplay() { WebcamPlayer.toggleAutoplay(); }
+function webcamPlayerDownload() { WebcamPlayer.downloadCurrent(); }
 function webcamPlayerToggleHideUI() { WebcamPlayer.toggleHideUI(); }
 function webcamPlayerToggleControls(event) {
     // Don't toggle if clicking on controls or header
@@ -7097,10 +7125,14 @@ function getPreferredFormat(serverFormats) {
  * Uses the actual rendered height of the webcam element to choose the appropriate
  * image size variant. Returns a height in pixels that should be used.
  * 
+ * Dashboard Strategy: Always uses sized variants (never 'original') to ensure
+ * WebP format availability. Original images only have JPG format, while sized
+ * variants have both JPG and WebP, enabling modern browsers to use efficient WebP.
+ * 
  * @param {string} context - Optional context: 'player' for history player, 
  *                           or defaults to grid view
  * @param {Array<number>} availableHeights - Optional array of available heights to choose from
- * @returns {number|string} Preferred height in pixels, or 'original' if display is very large
+ * @returns {number} Preferred height in pixels (never returns 'original' for dashboard)
  */
 function getPreferredVariant(context, availableHeights = null) {
     const dpr = window.devicePixelRatio || 1;
@@ -7138,21 +7170,23 @@ function getPreferredVariant(context, availableHeights = null) {
         // Sort heights descending
         const sortedHeights = [...availableHeights].sort((a, b) => b - a);
         
-        // Find smallest height that's >= effective height (with 1.5x headroom)
-        const targetHeight = effectiveHeight * 1.5;
+        // Find smallest height that's >= effective height (with 1.25x headroom)
+        // Reduced from 1.5x to be less conservative and prefer sized variants
+        const targetHeight = effectiveHeight * 1.25;
         for (const height of sortedHeights) {
             if (height >= targetHeight) {
                 return height;
             }
         }
         
-        // No height is large enough - return largest available or original
-        return sortedHeights[0] >= effectiveHeight ? sortedHeights[0] : 'original';
+        // No variant is large enough - return largest available variant
+        // This ensures WebP format availability (original only has JPG)
+        return sortedHeights[0];
     }
     
-    // Default heights if not provided
+    // Default heights if not provided - fallback to 1080p
     const defaultHeights = [1080, 720, 360];
-    const targetHeight = effectiveHeight * 1.5;
+    const targetHeight = effectiveHeight * 1.25;
     
     for (const height of defaultHeights) {
         if (height >= targetHeight) {
@@ -7160,8 +7194,9 @@ function getPreferredVariant(context, availableHeights = null) {
         }
     }
     
-    // Very large display - use original
-    return 'original';
+    // Very large display - return largest default variant (not 'original')
+    // This ensures WebP format is available for modern browsers
+    return 1080;
 }
 
 /**
@@ -8441,6 +8476,7 @@ window.addEventListener('beforeunload', () => {
             <button class="webcam-player-btn" id="webcam-player-next-btn" onclick="webcamPlayerNext()" aria-label="Next frame" title="Next frame (→ arrow key)">⏭</button>
             <span class="webcam-player-btn-divider"></span>
             <button class="webcam-player-btn toggle" id="webcam-player-autoplay-btn" onclick="webcamPlayerToggleAutoplay()" aria-label="Toggle autoplay" title="Toggle continuous playback">🔄</button>
+            <button class="webcam-player-btn" id="webcam-player-download-btn" onclick="webcamPlayerDownload()" aria-label="Download original image" title="Download original image with EXIF data">⬇️</button>
             <button class="webcam-player-btn toggle" id="webcam-player-hideui-btn" onclick="webcamPlayerToggleHideUI()" aria-label="Toggle fullscreen mode" title="Hide controls for full-screen view">⛶</button>
         </div>
     </div>
