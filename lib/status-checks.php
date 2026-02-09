@@ -1135,56 +1135,112 @@ function checkPublicApiHealth(): array {
         '/api/v1/weather/bulk?airports=kspb' => 'Bulk Weather',
     ];
     
-    $allOperational = true;
-    $anyDown = false;
+    $hasDown = false;
+    $hasDegraded = false;
     
-    foreach ($endpoints as $path => $name) {
-        $url = 'http://localhost' . $path;
-        
-        // Make lightweight HEAD request (doesn't return body)
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_NOBODY, true); // HEAD request
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
-        curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        $endpointStatus = 'operational';
-        if ($httpCode === 200) {
-            $endpointStatus = 'operational';
-        } elseif ($httpCode >= 500) {
-            $endpointStatus = 'down';
-            $anyDown = true;
-            $allOperational = false;
-        } elseif ($httpCode >= 400) {
-            $endpointStatus = 'degraded';
-            $allOperational = false;
-        } else {
-            $endpointStatus = 'down';
-            $anyDown = true;
-            $allOperational = false;
-        }
+    foreach ($endpoints as $endpoint => $name) {
+        $result = performPublicApiHealthCheck($endpoint);
         
         $health['endpoints'][] = [
             'name' => $name,
-            'path' => $path,
-            'status' => $endpointStatus,
-            'http_code' => $httpCode
+            'endpoint' => $endpoint,
+            'status' => $result['status'],
+            'message' => $result['message'],
+            'response_time_ms' => $result['response_time_ms']
         ];
+        
+        if ($result['status'] === 'down') {
+            $hasDown = true;
+        } elseif ($result['status'] === 'degraded') {
+            $hasDegraded = true;
+        }
     }
     
     // Determine overall API health
-    if ($allOperational) {
-        $health['status'] = 'operational';
-    } elseif ($anyDown) {
+    if ($hasDown) {
         $health['status'] = 'down';
-    } else {
+    } elseif ($hasDegraded) {
         $health['status'] = 'degraded';
+    } else {
+        $health['status'] = 'operational';
     }
     
     return $health;
+}
+
+/**
+ * Perform a health check on a single API endpoint
+ * 
+ * @param string $endpoint The endpoint path to check
+ * @return array {status: string, message: string, response_time_ms: int}
+ */
+function performPublicApiHealthCheck(string $endpoint): array {
+    $start = microtime(true);
+    
+    // Use internal request with health check header
+    $context = stream_context_create([
+        'http' => [
+            'header' => "X-Health-Check: internal\r\n",
+            'timeout' => 5,
+            'ignore_errors' => true
+        ]
+    ]);
+    
+    // Use localhost to avoid going through the network
+    $url = 'http://127.0.0.1' . $endpoint;
+    $response = @file_get_contents($url, false, $context);
+    $elapsed = (microtime(true) - $start) * 1000;
+    
+    // Check HTTP response code
+    $httpCode = 0;
+    if (isset($http_response_header) && is_array($http_response_header)) {
+        foreach ($http_response_header as $header) {
+            if (preg_match('/HTTP\/\d\.\d\s+(\d+)/', $header, $matches)) {
+                $httpCode = (int)$matches[1];
+                break;
+            }
+        }
+    }
+    
+    // Determine status
+    if ($response === false || $httpCode === 0) {
+        return [
+            'status' => 'down',
+            'message' => 'Endpoint unreachable',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    if ($httpCode >= 500) {
+        return [
+            'status' => 'down',
+            'message' => 'Server error (HTTP ' . $httpCode . ')',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    if ($httpCode >= 400) {
+        return [
+            'status' => 'degraded',
+            'message' => 'Client error (HTTP ' . $httpCode . ')',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    // Check response time (slow = degraded)
+    if ($elapsed > 2000) {
+        return [
+            'status' => 'degraded',
+            'message' => 'Slow response (' . round($elapsed) . 'ms)',
+            'response_time_ms' => round($elapsed)
+        ];
+    }
+    
+    return [
+        'status' => 'operational',
+        'message' => 'OK (' . round($elapsed) . 'ms)',
+        'response_time_ms' => round($elapsed)
+    ];
 }
 
 /**
