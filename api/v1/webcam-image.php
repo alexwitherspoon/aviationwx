@@ -93,6 +93,62 @@ function handleGetWebcamImage(array $params, array $context): void
     // Track API request metric (combined with private API metrics for high-level view)
     metrics_track_webcam_request($airportId, $camIndex);
     
+    // Handle download request - always serves original JPG with proper filename
+    if (isset($_GET['download']) && $_GET['download'] == '1') {
+        require_once __DIR__ . '/../../lib/webcam-metadata.php';
+        $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+        $originalJpg = $cacheDir . '/original.jpg';
+        
+        if (!file_exists($originalJpg) || !is_readable($originalJpg)) {
+            sendPublicApiError(
+                PUBLIC_API_ERROR_SERVICE_UNAVAILABLE,
+                'Original image not available for download',
+                404
+            );
+            return;
+        }
+        
+        // Get EXIF capture time for filename
+        $captureTime = 0;
+        if (function_exists('exif_read_data')) {
+            $exif = @exif_read_data($originalJpg, 'EXIF', true);
+            if ($exif !== false && isset($exif['EXIF']['DateTimeOriginal'])) {
+                $dateTime = $exif['EXIF']['DateTimeOriginal'];
+                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
+                if ($timestamp !== false && $timestamp > 0) {
+                    $captureTime = (int)$timestamp;
+                }
+            } elseif (isset($exif['DateTimeOriginal'])) {
+                $dateTime = $exif['DateTimeOriginal'];
+                $timestamp = @strtotime(str_replace(':', '-', substr($dateTime, 0, 10)) . ' ' . substr($dateTime, 11) . ' UTC');
+                if ($timestamp !== false && $timestamp > 0) {
+                    $captureTime = (int)$timestamp;
+                }
+            }
+        }
+        
+        // Use EXIF time if available, otherwise file mtime
+        if ($captureTime > 0) {
+            $timestamp = gmdate('Y-m-d_His', $captureTime) . '_UTC';
+        } else {
+            $mtime = filemtime($originalJpg);
+            $timestamp = gmdate('Y-m-d_His', $mtime) . '_UTC';
+        }
+        
+        // Build filename: {airport}_{cam}_{timestamp}.jpg
+        $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}.jpg";
+        
+        // Force download with proper filename
+        header('Content-Type: image/jpeg');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($originalJpg));
+        header('Cache-Control: public, max-age=31536000, immutable');
+        
+        // Serve original file
+        readfile($originalJpg);
+        exit;
+    }
+    
     // Check for metadata request
     if (isset($_GET['metadata']) && $_GET['metadata'] == '1') {
         handleGetWebcamMetadata($airportId, $camIndex, $airport, $webcam);

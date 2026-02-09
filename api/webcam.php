@@ -604,6 +604,46 @@ $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_se
 $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 $perCamRefresh = max(60, $perCamRefresh); // Enforce minimum 60 seconds (cron constraint)
 
+// Handle download request - always serves original JPG with proper filename
+if (isset($_GET['download']) && $_GET['download'] == '1') {
+    // Get original JPG file
+    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+    $originalJpg = $cacheDir . '/original.jpg';
+    
+    if (!file_exists($originalJpg) || !is_readable($originalJpg)) {
+        http_response_code(404);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'error' => 'original_not_available',
+            'message' => 'Original image not available for download'
+        ]);
+        exit;
+    }
+    
+    // Get EXIF capture time for filename
+    $captureTime = getImageCaptureTime($originalJpg);
+    if ($captureTime > 0) {
+        // Format: YYYY-MM-DD_HHMMSS_UTC
+        $timestamp = gmdate('Y-m-d_His', $captureTime) . '_UTC';
+    } else {
+        // Fallback to file mtime
+        $mtime = filemtime($originalJpg);
+        $timestamp = gmdate('Y-m-d_His', $mtime) . '_UTC';
+    }
+    
+    // Build filename: {airport}_{cam}_{timestamp}.jpg
+    $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}.jpg";
+    
+    // Force download with proper filename
+    header('Content-Type: image/jpeg');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . filesize($originalJpg));
+    
+    // Serve original file
+    readfile($originalJpg);
+    exit;
+}
+
 /**
  * Extract actual image capture timestamp from EXIF data
  * 
