@@ -21,6 +21,12 @@ CONFIG_PATH=/var/www/html/secrets/airports.json
 # Logs to /var/log/aviationwx/ via aviationwx_log() function.
 * * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/scheduler-health-check.php >> /var/log/aviationwx/scheduler-health-check.log 2>&1
 
+# Memory Sampler - Runs every minute (samples 12x at 5s intervals internally)
+# Collects memory usage samples for CPU-load-style rolling averages (1m/5m/15m).
+# Samples are stored in hourly JSON buckets following metrics system conventions.
+# Logs to /var/log/aviationwx/ via aviationwx_log() function.
+* * * * * www-data cd /var/www/html && /usr/local/bin/php scripts/sample-memory.php >> /var/log/aviationwx/memory-sampler.log 2>&1
+
 # NOTE: Push webcam processing is now handled by the unified scheduler daemon.
 # The scheduler uses WebcamScheduleQueue for efficient scheduling of ALL webcams
 # (both push and pull) with per-camera refresh_seconds configuration.

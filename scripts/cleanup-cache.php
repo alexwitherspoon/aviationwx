@@ -376,6 +376,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 ensurePushWebcamDirectories($stats, $dryRun, $verbose);
 
 // ============================================================================
+// LAYER 6: Clean Up Old Memory Metrics
+// ============================================================================
+
+cleanupMemoryMetrics(1, $dryRun, $verbose);
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 
@@ -1411,6 +1417,57 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
         ], 'app');
     } elseif ($verbose) {
         echo "  SFTP directories: All directories exist\n";
+    }
+}
+
+// =============================================================================
+// MEMORY METRICS CLEANUP
+// =============================================================================
+
+/**
+ * Clean up old memory metrics hourly files
+ * 
+ * @param int $daysToKeep Number of days to retain
+ * @param bool $dryRun If true, only show what would be deleted
+ * @param bool $verbose Verbose output
+ * @return void
+ */
+function cleanupMemoryMetrics(int $daysToKeep, bool $dryRun, bool $verbose): void {
+    require_once __DIR__ . '/../lib/memory-metrics.php';
+    
+    echo "\n";
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+    echo "Memory Metrics Cleanup\n";
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+    
+    if (!$dryRun) {
+        $deleted = memory_metrics_cleanup($daysToKeep);
+        echo "  Deleted {$deleted} old memory metrics files (>{$daysToKeep} days)\n";
+    } else {
+        // Dry run - count files that would be deleted
+        $memoryDir = CACHE_BASE_DIR . '/metrics/memory';
+        if (!is_dir($memoryDir)) {
+            echo "  Memory metrics directory doesn't exist yet\n";
+            return;
+        }
+        
+        $cutoff = time() - ($daysToKeep * 86400);
+        $count = 0;
+        
+        $files = glob($memoryDir . '/*.json');
+        if ($files !== false) {
+            foreach ($files as $file) {
+                $mtime = @filemtime($file);
+                if ($mtime !== false && $mtime < $cutoff) {
+                    $count++;
+                    if ($verbose) {
+                        echo "  Would delete: " . basename($file) . "\n";
+                    }
+                }
+            }
+        }
+        
+        echo "  Would delete {$count} old memory metrics files (>{$daysToKeep} days)\n";
     }
 }
 

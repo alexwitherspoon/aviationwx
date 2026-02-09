@@ -313,10 +313,11 @@ function getNodePerformance(): array {
     
     $performance['memory_used_bytes'] = $memoryUsed;
     
-    if ($memoryUsed !== null) {
-        $memoryAverages = calculateMemoryAverages($memoryUsed);
-        $performance['memory_average'] = $memoryAverages;
-    }
+    // Get memory rolling averages from background sampler
+    // Uses new memory-metrics system for CPU-load-style averages
+    require_once __DIR__ . '/memory-metrics.php';
+    $memoryAverages = memory_metrics_get_averages();
+    $performance['memory_average'] = $memoryAverages;
     
     // Calculate storage usage (cache, uploads, logs)
     $performance['storage_used_bytes'] = 0;
