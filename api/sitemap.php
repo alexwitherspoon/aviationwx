@@ -1,10 +1,24 @@
 <?php
 /**
  * XML Sitemap Generator for AviationWX.org
- * Generates XML sitemap dynamically using shared URL generation
+ * 
+ * Serves sitemap only from root domain to establish single authoritative source.
+ * Subdomain requests return 404 to prevent duplicate sitemap discovery by search engines.
  * 
  * Usage: https://aviationwx.org/sitemap.xml (via .htaccess rewrite)
  */
+
+// Only serve from root domain to avoid duplicate sitemaps in search engines
+$host = isset($_SERVER['HTTP_HOST']) ? strtolower(trim($_SERVER['HTTP_HOST'])) : '';
+$isRootDomain = preg_match('/^(www\.)?aviationwx\.org$/i', $host);
+
+if (!$isRootDomain) {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "404 Not Found\n\n";
+    echo "Sitemap is only available at https://aviationwx.org/sitemap.xml\n";
+    exit;
+}
 
 header('Content-Type: application/xml; charset=utf-8');
 

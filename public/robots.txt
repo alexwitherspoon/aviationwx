@@ -60,6 +60,7 @@ Disallow: /.github/
 Disallow: /lib/
 Disallow: /docker/
 
-# Sitemap
+# Canonical Sitemap
+# Single authoritative sitemap for entire site (prevents duplicate sitemap issues)
 Sitemap: https://aviationwx.org/sitemap.xml
 

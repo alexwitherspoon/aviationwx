@@ -19,9 +19,15 @@ Options -Indexes
     # Rewrite to index.php with airport parameter
     RewriteRule ^(.*)$ index.php?airport=%1 [QSA,L]
 
-    # Route sitemap.xml to api/sitemap.php
+    # Sitemap only on root domain to establish single authoritative source
     RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{HTTP_HOST} ^(www\.)?aviationwx\.org$ [NC]
     RewriteRule ^sitemap\.xml$ api/sitemap.php [L]
+    
+    # Block subdomain sitemaps (prevents duplicate sitemap discovery)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{HTTP_HOST} !^(www\.)?aviationwx\.org$ [NC]
+    RewriteRule ^sitemap\.xml$ - [R=404,L]
 
     # Route robots.txt to public/robots.txt
     RewriteCond %{REQUEST_FILENAME} !-f

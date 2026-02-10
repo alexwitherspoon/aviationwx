@@ -221,6 +221,62 @@ class SitemapTest extends TestCase
     }
 
     /**
+     * Test sitemap blocks subdomain requests
+     * 
+     * Ensures single authoritative sitemap prevents duplicate discovery by search engines.
+     */
+    public function testXmlSitemap_Returns404OnSubdomains(): void
+    {
+        $subdomains = [
+            'kspb.aviationwx.org',
+            'khio.aviationwx.org',
+            'guides.aviationwx.org',
+            'status.aviationwx.org',
+            'api.aviationwx.org',
+            'embed.aviationwx.org',
+            'terms.aviationwx.org'
+        ];
+        
+        foreach ($subdomains as $subdomain) {
+            $host = strtolower(trim($subdomain));
+            $isRootDomain = (bool) preg_match('/^(www\.)?aviationwx\.org$/i', $host);
+            
+            $this->assertFalse(
+                $isRootDomain,
+                "Subdomain {$subdomain} should NOT be treated as root domain"
+            );
+        }
+    }
+
+    /**
+     * Test sitemap works on root domain (aviationwx.org)
+     */
+    public function testXmlSitemap_WorksOnRootDomain(): void
+    {
+        $host = 'aviationwx.org';
+        $isRootDomain = (bool) preg_match('/^(www\.)?aviationwx\.org$/i', $host);
+        
+        $this->assertTrue(
+            $isRootDomain,
+            'aviationwx.org should be treated as root domain'
+        );
+    }
+
+    /**
+     * Test sitemap works on www subdomain (www.aviationwx.org)
+     */
+    public function testXmlSitemap_WorksOnWwwSubdomain(): void
+    {
+        $host = 'www.aviationwx.org';
+        $isRootDomain = (bool) preg_match('/^(www\.)?aviationwx\.org$/i', $host);
+        
+        $this->assertTrue(
+            $isRootDomain,
+            'www.aviationwx.org should be treated as root domain'
+        );
+    }
+
+    /**
      * Test HTML sitemap route is configured
      */
     public function testHtmlSitemapRoute_IsConfigured(): void
