@@ -941,7 +941,7 @@ if (php_sapi_name() === 'cli') {
         
         <!-- Airport Status Cards -->
         <?php if (!empty($airportHealth)): ?>
-        <h2 class="section-header">Airport Status</h2>
+        <h2 class="section-header">Site Status</h2>
         <?php foreach ($airportHealth as $airport): ?>
         <?php
         // All airports start collapsed - users click to expand
