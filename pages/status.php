@@ -242,6 +242,13 @@ if (php_sapi_name() === 'cli') {
             overflow: hidden;
         }
         
+        .section-header {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+        }
+        
         .status-card-header {
             padding: 1.25rem 1.5rem;
             border-bottom: 1px solid #eee;
@@ -554,6 +561,10 @@ if (php_sapi_name() === 'cli') {
                 background: #121212;
                 color: #e0e0e0;
             }
+            
+            .section-header {
+                color: #e0e0e0;
+            }
         }
         
         body.dark-mode {
@@ -593,6 +604,10 @@ if (php_sapi_name() === 'cli') {
         body.dark-mode .status-card {
             background: #1e1e1e;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        body.dark-mode .section-header {
+            color: #e0e0e0;
         }
         
         body.dark-mode .status-card-header {
@@ -926,7 +941,7 @@ if (php_sapi_name() === 'cli') {
         
         <!-- Airport Status Cards -->
         <?php if (!empty($airportHealth)): ?>
-        <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a1a;">Airport Status</h2>
+        <h2 class="section-header">Airport Status</h2>
         <?php foreach ($airportHealth as $airport): ?>
         <?php
         // All airports start collapsed - users click to expand
