@@ -139,6 +139,23 @@ body {
         color: var(--dark-text-primary);
     }
     
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .partner-name {
+        color: var(--dark-text-bright);
+    }
+    
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .data-sources-content {
+        border-top-color: var(--dark-border);
+    }
+    
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .data-sources-label,
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .data-source-link {
+        color: var(--dark-text-dim);
+    }
+    
+    body:not(.dark-mode):not(.night-mode):not(.light-mode) .data-source-link:hover {
+        color: var(--dark-link);
+    }
+    
     /* Embed section */
     body:not(.dark-mode):not(.night-mode):not(.light-mode) .embed-section {
         background: var(--dark-bg-section);
