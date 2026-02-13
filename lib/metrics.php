@@ -1701,6 +1701,166 @@ function metrics_report_to_sentry(): void {
             }
         }
     }
+    
+    // ADDITIONAL CUSTOM METRICS - Send operational statistics to Sentry
+    metrics_report_operational_stats();
+}
+
+/**
+ * Report operational statistics to Sentry
+ * 
+ * Sends additional custom metrics about system performance and health.
+ * Called by metrics_report_to_sentry() every 5 minutes.
+ * 
+ * @return void
+ */
+function metrics_report_operational_stats(): void {
+    if (!defined('SENTRY_INITIALIZED') || !SENTRY_INITIALIZED) {
+        return;
+    }
+    
+    // Get 24-hour rolling metrics
+    $rolling24h = metrics_get_rolling_hours(24);
+    
+    // Report image processing performance
+    if (file_exists(__DIR__ . '/performance-metrics.php')) {
+        require_once __DIR__ . '/performance-metrics.php';
+        $imagePerf = getImageProcessingMetrics();
+        
+        // Alert if p95 is > 2 seconds (image processing slowdown)
+        if ($imagePerf['p95_ms'] > 2000) {
+            \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($imagePerf): void {
+                $scope->setContext('image_processing', $imagePerf);
+                $scope->setTag('metric_type', 'performance');
+                
+                \Sentry\captureMessage(
+                    "Slow image processing: p95={$imagePerf['p95_ms']}ms (threshold: 2000ms)",
+                    \Sentry\Severity::warning()
+                );
+            });
+        }
+        
+        // Alert if page render p95 is > 500ms (UX degradation)
+        $pagePerf = getPageRenderMetrics();
+        if ($pagePerf['p95_ms'] > 500) {
+            \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($pagePerf): void {
+                $scope->setContext('page_render', $pagePerf);
+                $scope->setTag('metric_type', 'performance');
+                
+                \Sentry\captureMessage(
+                    "Slow page renders: p95={$pagePerf['p95_ms']}ms (threshold: 500ms)",
+                    \Sentry\Severity::warning()
+                );
+            });
+        }
+    }
+    
+    // Report circuit breaker status
+    if (file_exists(__DIR__ . '/circuit-breaker.php')) {
+        require_once __DIR__ . '/circuit-breaker.php';
+        
+        // Check weather circuit breakers
+        $config = loadConfig();
+        if ($config && isset($config['airports'])) {
+            $openBreakers = [];
+            foreach ($config['airports'] as $airportId => $airport) {
+                $weatherStatus = circuitBreakerStatus('weather', $airportId);
+                if ($weatherStatus['state'] === 'open') {
+                    $openBreakers[] = $airportId;
+                }
+            }
+            
+            // Alert if > 10% of airports have open weather breakers
+            $totalAirports = count($config['airports']);
+            $openPercent = ($totalAirports > 0) ? (count($openBreakers) / $totalAirports) * 100 : 0;
+            
+            if ($openPercent > 10) {
+                \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($openBreakers, $openPercent): void {
+                    $scope->setContext('circuit_breakers', [
+                        'open_count' => count($openBreakers),
+                        'open_percent' => round($openPercent, 1),
+                        'airports' => array_slice($openBreakers, 0, 10), // First 10
+                    ]);
+                    $scope->setTag('metric_type', 'reliability');
+                    
+                    \Sentry\captureMessage(
+                        "Multiple weather circuit breakers open: " . round($openPercent, 1) . "% of airports",
+                        \Sentry\Severity::warning()
+                    );
+                });
+            }
+        }
+    }
+    
+    // Report variant health (image pipeline success rate)
+    if (file_exists(__DIR__ . '/variant-health.php')) {
+        require_once __DIR__ . '/variant-health.php';
+        $variantHealth = variant_health_get_stats();
+        
+        // Calculate success rate
+        $totalAttempts = ($variantHealth['success'] ?? 0) + ($variantHealth['failures'] ?? 0);
+        if ($totalAttempts > 0) {
+            $successRate = (($variantHealth['success'] ?? 0) / $totalAttempts) * 100;
+            
+            // Alert if success rate < 90% (image pipeline issues)
+            if ($successRate < 90) {
+                \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($variantHealth, $successRate): void {
+                    $scope->setContext('variant_health', $variantHealth);
+                    $scope->setTag('metric_type', 'reliability');
+                    
+                    \Sentry\captureMessage(
+                        "Low image variant generation success rate: " . round($successRate, 1) . "%",
+                        \Sentry\Severity::warning()
+                    );
+                });
+            }
+        }
+    }
+    
+    // Report scheduler health
+    $schedulerLockFile = '/tmp/scheduler.lock';
+    if (file_exists($schedulerLockFile)) {
+        $lockContent = @file_get_contents($schedulerLockFile);
+        if ($lockContent) {
+            $lockData = @json_decode($lockContent, true);
+            if ($lockData && isset($lockData['health'])) {
+                // Alert if scheduler is unhealthy
+                if ($lockData['health'] !== 'healthy') {
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($lockData): void {
+                        $scope->setContext('scheduler', $lockData);
+                        $scope->setTag('metric_type', 'system_health');
+                        
+                        \Sentry\captureMessage(
+                            "Scheduler unhealthy: {$lockData['health']} - {$lockData['last_error']}",
+                            \Sentry\Severity::error()
+                        );
+                    });
+                }
+                
+                // Alert if scheduler loop is very slow (>10s per iteration)
+                if (isset($lockData['loop_count']) && isset($lockData['uptime']) && $lockData['uptime'] > 0) {
+                    $loopRate = $lockData['loop_count'] / $lockData['uptime']; // loops per second
+                    $loopDuration = 1 / $loopRate; // seconds per loop
+                    
+                    if ($loopDuration > 10) {
+                        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($lockData, $loopDuration): void {
+                            $scope->setContext('scheduler_performance', [
+                                'loop_duration_seconds' => round($loopDuration, 2),
+                                'loop_count' => $lockData['loop_count'],
+                                'uptime' => $lockData['uptime'],
+                            ]);
+                            $scope->setTag('metric_type', 'performance');
+                            
+                            \Sentry\captureMessage(
+                                "Slow scheduler loops: " . round($loopDuration, 2) . "s per iteration (threshold: 10s)",
+                                \Sentry\Severity::warning()
+                            );
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================

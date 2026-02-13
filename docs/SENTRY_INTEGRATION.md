@@ -6,7 +6,9 @@ AviationWX uses [Sentry.io](https://sentry.io) for production error tracking, pe
 
 ## Architecture
 
-### Deployment Model: PHP SDK in Docker
+### Deployment Model
+
+**Backend: PHP SDK in Docker**
 
 The Sentry PHP SDK runs inside the Docker web container, initialized early in the bootstrap process. This provides:
 
@@ -14,6 +16,19 @@ The Sentry PHP SDK runs inside the Docker web container, initialized early in th
 - **Performance tracing** for critical operations (weather/webcam fetching, metrics aggregation)
 - **Custom metrics** for system health (APCu memory, disk space, aggregation issues)
 - **Service tagging** for filtering by component (web, scheduler, workers)
+- **Cron monitoring** for background jobs (heartbeat, health checks, cleanup)
+
+**Frontend: JavaScript SDK via CDN**
+
+The Sentry Browser SDK is loaded from Sentry's CDN and initialized on all public pages. This provides:
+
+- **Automatic error capture** for JavaScript exceptions and promise rejections
+- **Performance monitoring** for page loads, navigation, and AJAX calls
+- **Service Worker error tracking** for offline functionality issues
+- **User context** with privacy-conscious hashed IP addresses
+- **Airport tagging** for filtering errors by specific airport dashboards
+
+Both SDKs share the same DSN and environment configuration, providing a unified view of frontend and backend errors in the Sentry dashboard.
 
 ### Configuration
 
@@ -120,6 +135,45 @@ Event: "Suspiciously low metrics for 2026-02-10: 3 total views"
 Context: date, total_views
 ```
 
+**Image Processing Performance:**
+```
+Severity: warning (p95 > 2000ms)
+Event: "Slow image processing: p95=2456ms (threshold: 2000ms)"
+Context: avg_ms, p50_ms, p95_ms, sample_count, last_hour_count
+```
+
+**Page Render Performance:**
+```
+Severity: warning (p95 > 500ms)
+Event: "Slow page renders: p95=678ms (threshold: 500ms)"
+Context: avg_ms, p50_ms, p95_ms, sample_count, last_hour_count
+```
+
+**Circuit Breaker Status:**
+```
+Severity: warning (>10% airports with open breakers)
+Event: "Multiple weather circuit breakers open: 15.2% of airports"
+Context: open_count, open_percent, airports (first 10)
+```
+
+**Variant Health (Image Pipeline):**
+```
+Severity: warning (success rate < 90%)
+Event: "Low image variant generation success rate: 87.3%"
+Context: success, failures, success_rate
+```
+
+**Scheduler Health:**
+```
+Severity: error (unhealthy status)
+Event: "Scheduler unhealthy: degraded - High memory usage"
+Context: health, last_error, loop_count, uptime, pid
+
+Severity: warning (slow loops > 10s)
+Event: "Slow scheduler loops: 12.5s per iteration (threshold: 10s)"
+Context: loop_duration_seconds, loop_count, uptime
+```
+
 ### 4. Service Context
 
 Each service sets its context on initialization:
@@ -140,7 +194,63 @@ sentrySetServiceContext('worker-webcam', [
 
 This enables filtering in Sentry dashboard by service type and airport.
 
-### 5. Cron Monitoring
+### 5. JavaScript SDK Integration
+
+All public-facing pages load the Sentry Browser SDK from CDN for frontend error tracking.
+
+**Integrated Pages:**
+- Airport dashboard (`pages/airport.php`)
+- Homepage (`pages/homepage.php`)
+- Airport directory (`pages/airports.php`)
+- Status page (`pages/status.php`)
+
+**Features:**
+- Automatic error capture (uncaught exceptions, promise rejections)
+- Performance monitoring (page load, navigation, XHR/fetch)
+- Service Worker error tracking
+- User context with hashed IP (privacy-conscious)
+- Airport tagging for dashboard pages
+
+**SDK Loading:**
+```html
+<script src="https://browser.sentry-cdn.com/8.47.0/bundle.min.js" 
+        integrity="sha384-..." crossorigin="anonymous"></script>
+```
+
+**Configuration:**
+```javascript
+Sentry.init({
+    dsn: "...",
+    environment: "production",
+    release: "git-sha",
+    tracesSampleRate: 0.05,  // 5% performance traces
+    
+    // Filter out browser extensions and known noise
+    ignoreErrors: [
+        'chrome-extension://',
+        'moz-extension://',
+        'NetworkError',
+        'Failed to fetch',
+    ],
+});
+```
+
+**Privacy:**
+- User ID: Hashed IP address (SHA-256, first 16 chars)
+- No PII collected (no usernames, emails, session data)
+- Full URLs retained (essential for debugging routing)
+- User-Agent retained (essential for browser compatibility)
+
+**What's Tracked:**
+- ✅ JavaScript errors (uncaught exceptions)
+- ✅ Promise rejections (async errors)
+- ✅ Service Worker errors (offline functionality)
+- ✅ AJAX failures (fetch/XHR errors)
+- ✅ Page load performance (5% sampled)
+- ✅ Navigation timing (SPA-style transitions)
+- ❌ Session replays (disabled - high quota usage)
+
+### 6. Cron Monitoring
 
 All critical cron jobs report their execution status to Sentry for monitoring:
 
