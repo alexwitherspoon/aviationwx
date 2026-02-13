@@ -140,6 +140,56 @@ sentrySetServiceContext('worker-webcam', [
 
 This enables filtering in Sentry dashboard by service type and airport.
 
+### 5. Cron Monitoring
+
+All critical cron jobs report their execution status to Sentry for monitoring:
+
+**Cron Heartbeat (`cron-heartbeat.php`):**
+```
+Schedule: * * * * * (every minute)
+Monitor: cron-heartbeat
+Max Runtime: 1 minute
+Grace Period: 2 minutes
+```
+
+**Scheduler Health Check (`scheduler-health-check.php`):**
+```
+Schedule: * * * * * (every minute)
+Monitor: scheduler-health-check
+Max Runtime: 2 minutes
+Grace Period: 2 minutes
+```
+
+**Memory Sampler (`sample-memory.php`):**
+```
+Schedule: * * * * * (every minute)
+Monitor: memory-sampler
+Max Runtime: 2 minutes (12 samples * 5s)
+Grace Period: 2 minutes
+```
+
+**Cache Cleanup (`cleanup-cache.php`):**
+```
+Schedule: 0 4 * * * (daily at 4 AM UTC)
+Monitor: cache-cleanup
+Max Runtime: 30 minutes
+Grace Period: 60 minutes
+Status: Reports error if cleanup fails
+```
+
+**What Sentry Tracks:**
+- ✅ Check-in received (job executed)
+- ✅ Execution duration
+- ✅ Success/failure status
+- ✅ Missed executions (alerts if job doesn't run)
+- ✅ Long-running jobs (alerts if exceeds max runtime)
+
+**Alerting:**
+Sentry automatically alerts when:
+- Job doesn't execute within grace period
+- Job runs longer than max runtime
+- Job reports error status
+
 ## Privacy & Data Handling
 
 ### What's Collected
@@ -166,6 +216,28 @@ Sentry automatically ages out data based on your organization's plan:
 No manual data deletion is implemented.
 
 ## Monitoring & Alerting
+
+### Cron Monitors
+
+Sentry automatically creates cron monitors for all check-ins. View them at:
+**Crons → Monitors** in your Sentry project dashboard.
+
+**Configured Monitors:**
+1. **cron-heartbeat** - Confirms cron daemon is running (every minute)
+2. **scheduler-health-check** - Validates scheduler daemon health (every minute)
+3. **memory-sampler** - Tracks memory usage sampling (every minute)
+4. **cache-cleanup** - Daily cache maintenance (4 AM UTC)
+
+**Default Alerts:**
+Sentry automatically alerts (via email) when:
+- Monitor misses a check-in (grace period exceeded)
+- Monitor exceeds max runtime
+- Monitor reports error status
+
+**Customizing Alerts:**
+1. Go to **Crons → Monitors** in Sentry dashboard
+2. Click a monitor name
+3. Configure alert rules and notification channels
 
 ### Recommended Alerts
 
@@ -231,6 +303,7 @@ The integration is automatically tested via existing tests:
    - Check Sentry dashboard for incoming events
    - Trigger a test error: `docker exec aviationwx-web php -r "trigger_error('Test Sentry');"`
    - Verify event appears in Sentry within 1 minute
+   - Check **Crons → Monitors** for cron jobs (appears after first execution)
 
 4. **Configure Alerts:**
    - Set up alert rules in Sentry dashboard

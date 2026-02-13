@@ -14,8 +14,28 @@
  * @package AviationWX
  */
 
+require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/sentry.php';
 require_once __DIR__ . '/../lib/memory-metrics.php';
 require_once __DIR__ . '/../lib/logger.php';
+
+// Start Sentry cron monitor check-in
+$checkInId = null;
+if (isSentryAvailable()) {
+    $checkInId = \Sentry\captureCheckIn(
+        slug: 'memory-sampler',
+        status: \Sentry\CheckInStatus::inProgress(),
+        monitorConfig: new \Sentry\MonitorConfig(
+            schedule: new \Sentry\MonitorSchedule(
+                type: \Sentry\MonitorScheduleType::crontab(),
+                value: '* * * * *', // Every minute
+            ),
+            checkinMargin: 2, // 2 minutes grace period
+            maxRuntime: 2, // Should complete in 2 minutes (12 samples * 5s)
+            timezone: 'UTC',
+        ),
+    );
+}
 
 // Prevent multiple instances from running simultaneously
 $lockFile = __DIR__ . '/../cache/memory-sampler.lock';
@@ -68,5 +88,14 @@ for ($i = 0; $i < $sampleCount; $i++) {
 flock($fp, LOCK_UN);
 fclose($fp);
 @unlink($lockFile);
+
+// Report success to Sentry
+if (isSentryAvailable() && $checkInId) {
+    \Sentry\captureCheckIn(
+        slug: 'memory-sampler',
+        status: \Sentry\CheckInStatus::ok(),
+        checkInId: $checkInId,
+    );
+}
 
 exit(0);

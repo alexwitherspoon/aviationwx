@@ -15,8 +15,27 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/sentry.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-utils.php';
+
+// Start Sentry cron monitor check-in
+$checkInId = null;
+if (isSentryAvailable()) {
+    $checkInId = \Sentry\captureCheckIn(
+        slug: 'scheduler-health-check',
+        status: \Sentry\CheckInStatus::inProgress(),
+        monitorConfig: new \Sentry\MonitorConfig(
+            schedule: new \Sentry\MonitorSchedule(
+                type: \Sentry\MonitorScheduleType::crontab(),
+                value: '* * * * *', // Every minute
+            ),
+            checkinMargin: 2, // 2 minutes grace period
+            maxRuntime: 2, // Should complete in 2 minutes
+            timezone: 'UTC',
+        ),
+    );
+}
 
 $lockFile = '/tmp/scheduler.lock';
 $schedulerScript = __DIR__ . '/scheduler.php';
@@ -118,4 +137,13 @@ if ($needsRestart) {
 
 // Note: We don't log healthy status to avoid log spam
 // Health check runs every 60s, so logging would be very verbose
+
+// Report success to Sentry
+if (isSentryAvailable() && $checkInId) {
+    \Sentry\captureCheckIn(
+        slug: 'scheduler-health-check',
+        status: \Sentry\CheckInStatus::ok(),
+        checkInId: $checkInId,
+    );
+}
 

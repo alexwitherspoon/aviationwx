@@ -72,7 +72,26 @@ chdir(__DIR__ . '/..');
 // Load required files
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/sentry.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
+
+// Start Sentry cron monitor check-in (skip for dry-run/help)
+$checkInId = null;
+if (!$dryRun && !isset($options['help']) && isSentryAvailable()) {
+    $checkInId = \Sentry\captureCheckIn(
+        slug: 'cache-cleanup',
+        status: \Sentry\CheckInStatus::inProgress(),
+        monitorConfig: new \Sentry\MonitorConfig(
+            schedule: new \Sentry\MonitorSchedule(
+                type: \Sentry\MonitorScheduleType::crontab(),
+                value: '0 4 * * *', // Daily at 4 AM UTC
+            ),
+            checkinMargin: 60, // 60 minutes grace period
+            maxRuntime: 30, // Should complete in 30 minutes
+            timezone: 'UTC',
+        ),
+    );
+}
 
 // ============================================================================
 // CONFIGURATION - Cleanup Thresholds (in seconds)
@@ -410,6 +429,20 @@ aviationwx_log('info', 'cache cleanup completed', [
     'duration_seconds' => round($elapsed, 2),
     'dry_run' => $dryRun,
 ], 'app');
+
+// Report to Sentry
+if (!$dryRun && isSentryAvailable() && $checkInId) {
+    $status = $stats['errors'] > 0 
+        ? \Sentry\CheckInStatus::error() 
+        : \Sentry\CheckInStatus::ok();
+    
+    \Sentry\captureCheckIn(
+        slug: 'cache-cleanup',
+        status: $status,
+        checkInId: $checkInId,
+        duration: $elapsed,
+    );
+}
 
 exit($stats['errors'] > 0 ? 1 : 0);
 
