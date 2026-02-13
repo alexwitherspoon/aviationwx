@@ -815,13 +815,14 @@ function checkAirportHealth(string $airportId, array $airport): array {
             
             // Check variant availability (height-based variants)
             
-            // Get latest timestamp to check variants
-            $latestTimestamp = getLatestImageTimestamp($airportId, $idx);
+            // Get last completed timestamp to avoid race conditions
+            // (latest may still be generating variants)
+            $lastCompletedTimestamp = getLastCompletedImageTimestamp($airportId, $idx);
             $variantCoverage = null;
             
-            if ($latestTimestamp > 0) {
+            if ($lastCompletedTimestamp > 0) {
                 // Use manifest-based coverage (dynamic based on actual generation)
-                $variantCoverage = getVariantCoverage($airportId, $idx, $latestTimestamp);
+                $variantCoverage = getVariantCoverage($airportId, $idx, $lastCompletedTimestamp);
             }
             
             // Get refresh seconds (min 60)

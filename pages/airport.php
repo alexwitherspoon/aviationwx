@@ -1,6 +1,7 @@
 <?php
 // Load SEO utilities and config (for getGitSha function)
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/sentry-js.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/address-formatter.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
@@ -595,6 +596,10 @@ if ($themeCookie === 'dark') {
             applyAutoTheme();
         })();
     </script>
+    <?php
+    // Initialize Sentry JavaScript SDK for frontend error tracking
+    renderSentryJsInit('airport_dashboard');
+    ?>
     <title><?= $pageTitle ?></title>
     
     <?php

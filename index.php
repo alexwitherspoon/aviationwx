@@ -8,6 +8,7 @@
 $perfPageStart = microtime(true);
 
 require_once __DIR__ . '/lib/config.php';
+require_once __DIR__ . '/lib/sentry.php'; // Initialize Sentry early
 require_once __DIR__ . '/lib/metrics.php';
 require_once __DIR__ . '/lib/performance-metrics.php';
 

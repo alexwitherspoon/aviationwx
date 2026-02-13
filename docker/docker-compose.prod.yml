@@ -37,7 +37,10 @@ services:
       - NET_ADMIN
       - NET_RAW
       - SYS_NICE
+    env_file:
+      - /home/aviationwx/.env.production
     environment:
+      # Core configuration (can override env_file values if needed)
       - APACHE_DOCUMENT_ROOT=/var/www/html
       - DOMAIN=${DOMAIN:-aviationwx.org}
       - CONFIG_PATH=/var/www/html/config/airports.json

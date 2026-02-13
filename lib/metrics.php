@@ -198,6 +198,89 @@ function metrics_merge_webcams(array &$target, array $source): void {
 // =============================================================================
 
 /**
+ * Determine whether a rate-limited warning should be logged
+ * 
+ * Uses a small timestamp file in the system temp directory to coordinate
+ * rate limiting across PHP processes. This avoids log/Sentry spam when certain
+ * conditions persist.
+ * 
+ * @param string $reasonKey Short identifier for the specific warning type
+ * @param int $intervalSeconds How long to wait between logs (default: 3600 = 1 hour)
+ * @return bool True if we should log now, false if within cooldown period
+ */
+function metrics_should_log_warning(string $reasonKey, int $intervalSeconds = 3600): bool {
+    $tmpDir = sys_get_temp_dir();
+    
+    // If we cannot write to temp dir, fallback to always logging
+    // (better to log than silently suppress in safety-critical application)
+    if ($tmpDir === '' || !is_writable($tmpDir)) {
+        return true;
+    }
+    
+    $filename = rtrim($tmpDir, DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR
+        . 'aviationwx_metrics_warning_' . $reasonKey . '.logstamp';
+    
+    $now = time();
+    
+    if (file_exists($filename)) {
+        $mtime = @filemtime($filename);
+        if ($mtime !== false && ($now - $mtime) < $intervalSeconds) {
+            // Last log was within cooldown period; skip logging
+            return false;
+        }
+    }
+    
+    // Update/create the timestamp file
+    // Ignore errors - they should not prevent logging in a safety-critical application
+    @touch($filename);
+    
+    return true;
+}
+
+/**
+ * Check if APCu is available and log if unavailable
+ * 
+ * Uses cross-request rate limiting via temp file to avoid log spam
+ * (logs once per hour max per warning type, per host) when APCu is
+ * not available or not enabled.
+ * 
+ * @return bool True if APCu is available
+ */
+function metrics_is_apcu_available(): bool {
+    static $apcuAvailable = null;
+    
+    // Cache result within request to avoid repeated checks
+    if ($apcuAvailable !== null) {
+        return $apcuAvailable;
+    }
+    
+    if (!function_exists('apcu_fetch')) {
+        if (metrics_should_log_warning('apcu_missing')) {
+            aviationwx_log('error', 'metrics: APCu not available, metrics collection disabled', [
+                'reason' => 'apcu_fetch function not found'
+            ], 'app');
+        }
+        $apcuAvailable = false;
+        return false;
+    }
+    
+    // Check if APCu is actually functional (enabled in ini)
+    if (!@apcu_enabled()) {
+        if (metrics_should_log_warning('apcu_disabled')) {
+            aviationwx_log('error', 'metrics: APCu not enabled in PHP configuration', [
+                'reason' => 'apcu.enabled is off'
+            ], 'app');
+        }
+        $apcuAvailable = false;
+        return false;
+    }
+    
+    $apcuAvailable = true;
+    return true;
+}
+
+/**
  * Increment a metric counter in APCu
  * 
  * Fast (~1μs) atomic increment. Counters are flushed to disk periodically.
@@ -207,8 +290,8 @@ function metrics_merge_webcams(array &$target, array $source): void {
  * @return void
  */
 function metrics_increment(string $key, int $amount = 1): void {
-    if (!function_exists('apcu_fetch')) {
-        return; // APCu not available, skip silently
+    if (!metrics_is_apcu_available()) {
+        return;
     }
     
     $fullKey = 'metrics_' . $key;
@@ -232,7 +315,7 @@ function metrics_increment(string $key, int $amount = 1): void {
  * @return int Current count (0 if not set)
  */
 function metrics_get(string $key): int {
-    if (!function_exists('apcu_fetch')) {
+    if (!metrics_is_apcu_available()) {
         return 0;
     }
     
@@ -246,7 +329,7 @@ function metrics_get(string $key): int {
  * @return array Associative array of metric key => value
  */
 function metrics_get_all(): array {
-    if (!function_exists('apcu_fetch')) {
+    if (!metrics_is_apcu_available()) {
         return [];
     }
     
@@ -278,7 +361,7 @@ function metrics_get_all(): array {
  * @return void
  */
 function metrics_reset_all(): void {
-    if (!function_exists('apcu_fetch')) {
+    if (!metrics_is_apcu_available()) {
         return;
     }
     
@@ -819,24 +902,44 @@ function metrics_aggregate_daily(string $dateId): bool {
         'generated_at' => time()
     ];
     
+    // Track which hourly files were found
+    $hoursFound = 0;
+    $hoursMissing = [];
+    $hoursCorrupted = [];
+    
     // Find all hourly files for this date
     for ($hour = 0; $hour < 24; $hour++) {
         $hourId = $dateId . '-' . sprintf('%02d', $hour);
         $hourFile = getMetricsHourlyPath($hourId);
         
         if (!file_exists($hourFile)) {
+            $hoursMissing[] = $hour;
             continue;
         }
         
         $content = @file_get_contents($hourFile);
         if ($content === false) {
+            aviationwx_log('warning', 'metrics: failed to read hourly file during daily aggregation', [
+                'date' => $dateId,
+                'hour' => $hour,
+                'file' => $hourFile
+            ], 'app');
             continue;
         }
         
-        $hourData = @json_decode($content, true);
+        $hourData = json_decode($content, true);
         if (!is_array($hourData)) {
+            $hoursCorrupted[] = $hour;
+            aviationwx_log('warning', 'metrics: corrupted JSON in hourly file during daily aggregation', [
+                'date' => $dateId,
+                'hour' => $hour,
+                'file' => $hourFile,
+                'json_error' => json_last_error_msg()
+            ], 'app');
             continue;
         }
+        
+        $hoursFound++;
         
         // Use helper functions for consistent merging
         metrics_merge_airports($dailyData['airports'], $hourData['airports'] ?? []);
@@ -844,16 +947,45 @@ function metrics_aggregate_daily(string $dateId): bool {
         metrics_merge_global($dailyData['global'], $hourData['global'] ?? []);
     }
     
+    // Log summary of aggregation
+    if ($hoursFound < 24) {
+        aviationwx_log('warning', 'metrics: incomplete daily aggregation', [
+            'date' => $dateId,
+            'hours_found' => $hoursFound,
+            'hours_missing' => count($hoursMissing),
+            'hours_corrupted' => count($hoursCorrupted),
+            'missing_hours' => $hoursMissing,
+            'corrupted_hours' => $hoursCorrupted
+        ], 'app');
+    }
+    
     // Write daily file
     $dailyFile = getMetricsDailyPath($dateId);
     $tmpFile = $dailyFile . '.tmp.' . getmypid();
     $written = @file_put_contents($tmpFile, json_encode($dailyData, JSON_PRETTY_PRINT), LOCK_EX);
     if ($written === false) {
+        aviationwx_log('error', 'metrics: failed to write daily aggregation file', [
+            'date' => $dateId,
+            'file' => $dailyFile,
+            'tmp_file' => $tmpFile,
+            'disk_free' => disk_free_space(dirname($dailyFile))
+        ], 'app');
         @unlink($tmpFile);
         return false;
     }
     
-    return @rename($tmpFile, $dailyFile);
+    $renamed = @rename($tmpFile, $dailyFile);
+    if (!$renamed) {
+        aviationwx_log('error', 'metrics: failed to rename daily aggregation temp file', [
+            'date' => $dateId,
+            'tmp_file' => $tmpFile,
+            'target_file' => $dailyFile
+        ], 'app');
+        @unlink($tmpFile);
+        return false;
+    }
+    
+    return true;
 }
 
 /**
@@ -953,11 +1085,13 @@ function metrics_get_rolling(int $days = 7): array {
     ];
     
     // Read daily files for complete days
+    $missingDays = [];
     for ($d = 1; $d <= $days; $d++) {
         $dateId = gmdate('Y-m-d', $now - ($d * 86400));
         $dailyFile = getMetricsDailyPath($dateId);
         
         if (!file_exists($dailyFile)) {
+            $missingDays[] = $dateId;
             continue;
         }
         
@@ -974,6 +1108,18 @@ function metrics_get_rolling(int $days = 7): array {
         metrics_merge_airports($result['airports'], $dailyData['airports'] ?? []);
         metrics_merge_webcams($result['webcams'], $dailyData['webcams'] ?? []);
         metrics_merge_global($result['global'], $dailyData['global'] ?? []);
+    }
+    
+    // Log if daily files are missing (helps detect aggregation failures)
+    // Rate-limit this warning to avoid noisy logs from frequently called request paths
+    if (!empty($missingDays)) {
+        if (metrics_should_log_warning('missing_daily_files', 300)) { // 5 minutes
+            aviationwx_log('warning', 'metrics: missing daily files in rolling window', [
+                'missing_days' => $missingDays,
+                'requested_days' => $days,
+                'files_found' => $days - count($missingDays)
+            ], 'app');
+        }
     }
     
     // Add current day's hourly data
@@ -1273,12 +1419,15 @@ function metrics_get_multi_period(): array {
 /**
  * Clean up old metrics files beyond retention period
  * 
+ * Also cleans up orphaned temporary files older than 1 hour.
+ * 
  * @return int Number of files deleted
  */
 function metrics_cleanup(): int {
     $deleted = 0;
     $retentionSeconds = METRICS_RETENTION_DAYS * 86400;
     $cutoff = time() - $retentionSeconds;
+    $tmpFileCutoff = time() - 3600; // 1 hour for temp files
     
     // Clean hourly files
     if (is_dir(CACHE_METRICS_HOURLY_DIR)) {
@@ -1293,6 +1442,21 @@ function metrics_cleanup(): int {
                 }
             }
         }
+        
+        // Clean orphaned tmp files in hourly dir
+        $tmpFiles = glob(CACHE_METRICS_HOURLY_DIR . '/*.tmp.*');
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @filemtime($tmpFile);
+            if ($mtime !== false && $mtime < $tmpFileCutoff) {
+                if (@unlink($tmpFile)) {
+                    $deleted++;
+                    aviationwx_log('info', 'metrics: cleaned up orphaned temp file', [
+                        'file' => basename($tmpFile),
+                        'age_hours' => round((time() - $mtime) / 3600, 1)
+                    ], 'app');
+                }
+            }
+        }
     }
     
     // Clean daily files
@@ -1301,9 +1465,25 @@ function metrics_cleanup(): int {
         foreach ($files as $file) {
             $basename = basename($file, '.json');
             $timestamp = strtotime($basename . ' 00:00:00 UTC');
-            if ($timestamp !== false && $timestamp < $cutoff) {
+            // Compare end of day to cutoff to avoid deleting files on the boundary day
+            if ($timestamp !== false && ($timestamp + 86400) <= $cutoff) {
                 if (@unlink($file)) {
                     $deleted++;
+                }
+            }
+        }
+        
+        // Clean orphaned tmp files in daily dir
+        $tmpFiles = glob(CACHE_METRICS_DAILY_DIR . '/*.tmp.*');
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @filemtime($tmpFile);
+            if ($mtime !== false && $mtime < $tmpFileCutoff) {
+                if (@unlink($tmpFile)) {
+                    $deleted++;
+                    aviationwx_log('info', 'metrics: cleaned up orphaned temp file', [
+                        'file' => basename($tmpFile),
+                        'age_hours' => round((time() - $mtime) / 3600, 1)
+                    ], 'app');
                 }
             }
         }
@@ -1326,9 +1506,420 @@ function metrics_cleanup(): int {
                 }
             }
         }
+        
+        // Clean orphaned tmp files in weekly dir
+        $tmpFiles = glob(CACHE_METRICS_WEEKLY_DIR . '/*.tmp.*');
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @filemtime($tmpFile);
+            if ($mtime !== false && $mtime < $tmpFileCutoff) {
+                if (@unlink($tmpFile)) {
+                    $deleted++;
+                    aviationwx_log('info', 'metrics: cleaned up orphaned temp file', [
+                        'file' => basename($tmpFile),
+                        'age_hours' => round((time() - $mtime) / 3600, 1)
+                    ], 'app');
+                }
+            }
+        }
     }
     
     return $deleted;
+}
+
+// =============================================================================
+// HEALTH MONITORING
+// =============================================================================
+
+/**
+ * Get APCu memory usage information
+ * 
+ * @return array|null Memory info or null if APCu unavailable
+ */
+function metrics_get_apcu_memory_info(): ?array {
+    if (!metrics_is_apcu_available()) {
+        return null;
+    }
+    
+    $sma = @apcu_sma_info();
+    if (!is_array($sma)) {
+        return null;
+    }
+    
+    $totalMem = $sma['num_seg'] * $sma['seg_size'];
+    $availMem = $sma['avail_mem'];
+    $usedMem = $totalMem - $availMem;
+    $usedPercent = $totalMem > 0 ? ($usedMem / $totalMem) * 100 : 0;
+    
+    return [
+        'total_bytes' => $totalMem,
+        'used_bytes' => $usedMem,
+        'available_bytes' => $availMem,
+        'used_percent' => round($usedPercent, 2),
+        'is_full' => $usedPercent > 90
+    ];
+}
+
+/**
+ * Get disk space information for metrics directory
+ * 
+ * @return array Disk space info
+ */
+function metrics_get_disk_space_info(): array {
+    $metricsDir = CACHE_METRICS_DIR;
+    $totalSpace = @disk_total_space($metricsDir);
+    $freeSpace = @disk_free_space($metricsDir);
+    
+    if ($totalSpace === false || $freeSpace === false) {
+        return [
+            'total_bytes' => 0,
+            'free_bytes' => 0,
+            'used_bytes' => 0,
+            'used_percent' => 0,
+            'is_low' => false,
+            'is_critical' => false,
+            'error' => 'Unable to determine disk space'
+        ];
+    }
+    
+    $usedSpace = $totalSpace - $freeSpace;
+    $usedPercent = $totalSpace > 0 ? ($usedSpace / $totalSpace) * 100 : 0;
+    
+    return [
+        'total_bytes' => $totalSpace,
+        'free_bytes' => $freeSpace,
+        'used_bytes' => $usedSpace,
+        'used_percent' => round($usedPercent, 2),
+        'is_low' => $usedPercent > 90,
+        'is_critical' => $usedPercent > 95
+    ];
+}
+
+/**
+ * Get metrics system health status
+ * 
+ * @return array Health check results
+ */
+function metrics_get_health_status(): array {
+    $health = [
+        'healthy' => true,
+        'warnings' => [],
+        'errors' => []
+    ];
+    
+    // Check APCu availability
+    if (!metrics_is_apcu_available()) {
+        $health['healthy'] = false;
+        $health['errors'][] = 'APCu is not available';
+    } else {
+        $memInfo = metrics_get_apcu_memory_info();
+        if ($memInfo && $memInfo['is_full']) {
+            $health['healthy'] = false;
+            $health['errors'][] = sprintf(
+                'APCu memory %.1f%% full (%s used of %s)',
+                $memInfo['used_percent'],
+                format_bytes($memInfo['used_bytes']),
+                format_bytes($memInfo['total_bytes'])
+            );
+        }
+    }
+    
+    // Check disk space
+    $diskInfo = metrics_get_disk_space_info();
+    if ($diskInfo['is_critical']) {
+        $health['healthy'] = false;
+        $health['errors'][] = sprintf(
+            'Disk space critical: %.1f%% used',
+            $diskInfo['used_percent']
+        );
+    } elseif ($diskInfo['is_low']) {
+        $health['warnings'][] = sprintf(
+            'Disk space low: %.1f%% used',
+            $diskInfo['used_percent']
+        );
+    }
+    
+    // Check timezone
+    $tz = date_default_timezone_get();
+    if ($tz !== 'UTC') {
+        $health['warnings'][] = sprintf(
+            'Timezone is %s, expected UTC',
+            $tz
+        );
+    }
+    
+    return $health;
+}
+
+/**
+ * Format bytes as human-readable string
+ * 
+ * @param int $bytes Bytes to format
+ * @return string Formatted string
+ */
+function format_bytes(int $bytes): string {
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $i = 0;
+    while ($bytes >= 1024 && $i < count($units) - 1) {
+        $bytes /= 1024;
+        $i++;
+    }
+    return round($bytes, 2) . ' ' . $units[$i];
+}
+
+/**
+ * Report metrics health to Sentry
+ * 
+ * Sends custom metrics and health warnings to Sentry for monitoring.
+ * Called periodically by scheduler (every 5 minutes).
+ * 
+ * @return void
+ */
+function metrics_report_to_sentry(): void {
+    if (!defined('SENTRY_INITIALIZED') || !SENTRY_INITIALIZED) {
+        return;
+    }
+    
+    // APCu Memory Pressure
+    $memInfo = metrics_get_apcu_memory_info();
+    if ($memInfo && $memInfo['used_percent'] > 80) {
+        $severity = $memInfo['used_percent'] > 90 ? \Sentry\Severity::error() : \Sentry\Severity::warning();
+        
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($memInfo, $severity): void {
+            $scope->setContext('apcu_memory', $memInfo);
+            $scope->setTag('resource_type', 'memory');
+            
+            \Sentry\captureMessage(
+                "APCu memory pressure: {$memInfo['used_percent']}% used",
+                $severity
+            );
+        });
+    }
+    
+    // Disk Space Monitoring
+    $diskInfo = metrics_get_disk_space_info();
+    if ($diskInfo['is_critical']) {
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($diskInfo): void {
+            $scope->setContext('disk_space', $diskInfo);
+            $scope->setTag('resource_type', 'disk');
+            
+            \Sentry\captureMessage(
+                "Disk space critical: {$diskInfo['used_percent']}% used ({$diskInfo['free_bytes']} bytes free)",
+                \Sentry\Severity::fatal()
+            );
+        });
+    } elseif ($diskInfo['is_low']) {
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($diskInfo): void {
+            $scope->setContext('disk_space', $diskInfo);
+            $scope->setTag('resource_type', 'disk');
+            
+            \Sentry\captureMessage(
+                "Disk space low: {$diskInfo['used_percent']}% used",
+                \Sentry\Severity::warning()
+            );
+        });
+    }
+    
+    // Check for recent aggregation issues
+    // Look for incomplete aggregations in recent daily files
+    $yesterday = gmdate('Y-m-d', time() - 86400);
+    $dailyFile = getMetricsDailyPath($yesterday);
+    
+    if (file_exists($dailyFile)) {
+        $content = @file_get_contents($dailyFile);
+        if ($content !== false) {
+            $data = @json_decode($content, true);
+            
+            // Check if aggregation was incomplete (less than 20 hours indicates issues)
+            if (is_array($data) && isset($data['airports'])) {
+                $totalViews = $data['global']['page_views'] ?? 0;
+                
+                // If we have almost no data, something went wrong
+                if ($totalViews < 10 && gmdate('Y-m-d') !== $yesterday) {
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($yesterday, $totalViews): void {
+                        $scope->setTag('date', $yesterday);
+                        $scope->setContext('aggregation', [
+                            'date' => $yesterday,
+                            'total_views' => $totalViews,
+                        ]);
+                        
+                        \Sentry\captureMessage(
+                            "Suspiciously low metrics for {$yesterday}: {$totalViews} total views",
+                            \Sentry\Severity::warning()
+                        );
+                    });
+                }
+            }
+        }
+    }
+    
+    // ADDITIONAL CUSTOM METRICS - Send operational statistics to Sentry
+    metrics_report_operational_stats();
+}
+
+/**
+ * Report operational statistics to Sentry
+ * 
+ * Sends additional custom metrics about system performance and health.
+ * Called by metrics_report_to_sentry() every 5 minutes.
+ * 
+ * @return void
+ */
+function metrics_report_operational_stats(): void {
+    if (!defined('SENTRY_INITIALIZED') || !SENTRY_INITIALIZED) {
+        return;
+    }
+    
+    // Report image processing performance
+    if (file_exists(__DIR__ . '/performance-metrics.php')) {
+        require_once __DIR__ . '/performance-metrics.php';
+        $imagePerf = getImageProcessingMetrics();
+        
+        // Alert if p95 is > 2 seconds (image processing slowdown)
+        if ($imagePerf['p95_ms'] > 2000) {
+            \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($imagePerf): void {
+                $scope->setContext('image_processing', $imagePerf);
+                $scope->setTag('metric_type', 'performance');
+                
+                \Sentry\captureMessage(
+                    "Slow image processing: p95={$imagePerf['p95_ms']}ms (threshold: 2000ms)",
+                    \Sentry\Severity::warning()
+                );
+            });
+        }
+        
+        // Alert if page render p95 is > 500ms (UX degradation)
+        $pagePerf = getPageRenderMetrics();
+        if ($pagePerf['p95_ms'] > 500) {
+            \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($pagePerf): void {
+                $scope->setContext('page_render', $pagePerf);
+                $scope->setTag('metric_type', 'performance');
+                
+                \Sentry\captureMessage(
+                    "Slow page renders: p95={$pagePerf['p95_ms']}ms (threshold: 500ms)",
+                    \Sentry\Severity::warning()
+                );
+            });
+        }
+    }
+    
+    // Report circuit breaker status
+    if (file_exists(__DIR__ . '/circuit-breaker.php')) {
+        require_once __DIR__ . '/circuit-breaker.php';
+        
+        // Check weather circuit breakers
+        $config = loadConfig();
+        if ($config && isset($config['airports'])) {
+            $openBreakers = [];
+            foreach ($config['airports'] as $airportId => $airport) {
+                $weatherStatus = circuitBreakerStatus('weather', $airportId);
+                if ($weatherStatus['state'] === 'open') {
+                    $openBreakers[] = $airportId;
+                }
+            }
+            
+            // Alert if > 10% of airports have open weather breakers
+            $totalAirports = count($config['airports']);
+            $openPercent = ($totalAirports > 0) ? (count($openBreakers) / $totalAirports) * 100 : 0;
+            
+            if ($openPercent > 10) {
+                \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($openBreakers, $openPercent): void {
+                    $scope->setContext('circuit_breakers', [
+                        'open_count' => count($openBreakers),
+                        'open_percent' => round($openPercent, 1),
+                        'airports' => array_slice($openBreakers, 0, 10), // First 10
+                    ]);
+                    $scope->setTag('metric_type', 'reliability');
+                    
+                    \Sentry\captureMessage(
+                        "Multiple weather circuit breakers open: " . round($openPercent, 1) . "% of airports",
+                        \Sentry\Severity::warning()
+                    );
+                });
+            }
+        }
+    }
+    
+    // Report variant health (image pipeline success rate)
+    if (file_exists(__DIR__ . '/variant-health.php')) {
+        require_once __DIR__ . '/variant-health.php';
+        
+        // Use the public API - variant_health_get_status() returns computed status
+        if (function_exists('variant_health_get_status')) {
+            $variantStatus = variant_health_get_status();
+            
+            // Extract success/failure counts from status
+            $successCount = $variantStatus['generation']['successful'] ?? 0;
+            $failureCount = $variantStatus['generation']['failed'] ?? 0;
+            $totalAttempts = $successCount + $failureCount;
+            
+            if ($totalAttempts > 0) {
+                $successRate = ($successCount / $totalAttempts) * 100;
+                
+                // Alert if success rate < 90% (image pipeline issues)
+                if ($successRate < 90) {
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($variantStatus, $successRate, $successCount, $failureCount): void {
+                        $scope->setContext('variant_health', [
+                            'success' => $successCount,
+                            'failures' => $failureCount,
+                            'success_rate' => round($successRate, 1),
+                            'status' => $variantStatus,
+                        ]);
+                        $scope->setTag('metric_type', 'reliability');
+                        
+                        \Sentry\captureMessage(
+                            "Low image variant generation success rate: " . round($successRate, 1) . "%",
+                            \Sentry\Severity::warning()
+                        );
+                    });
+                }
+            }
+        }
+    }
+    
+    // Report scheduler health
+    $schedulerLockFile = '/tmp/scheduler.lock';
+    if (file_exists($schedulerLockFile)) {
+        $lockContent = @file_get_contents($schedulerLockFile);
+        if ($lockContent) {
+            $lockData = @json_decode($lockContent, true);
+            if ($lockData && isset($lockData['health'])) {
+                // Alert if scheduler is unhealthy
+                if ($lockData['health'] !== 'healthy') {
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($lockData): void {
+                        $scope->setContext('scheduler', $lockData);
+                        $scope->setTag('metric_type', 'system_health');
+                        
+                        \Sentry\captureMessage(
+                            "Scheduler unhealthy: {$lockData['health']} - {$lockData['last_error']}",
+                            \Sentry\Severity::error()
+                        );
+                    });
+                }
+                
+                // Alert if scheduler loop is very slow (>10s per iteration)
+                if (isset($lockData['loop_count']) && isset($lockData['uptime']) && $lockData['uptime'] > 0) {
+                    $loopRate = $lockData['loop_count'] / $lockData['uptime']; // loops per second
+                    $loopDuration = 1 / $loopRate; // seconds per loop
+                    
+                    if ($loopDuration > 10) {
+                        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($lockData, $loopDuration): void {
+                            $scope->setContext('scheduler_performance', [
+                                'loop_duration_seconds' => round($loopDuration, 2),
+                                'loop_count' => $lockData['loop_count'],
+                                'uptime' => $lockData['uptime'],
+                            ]);
+                            $scope->setTag('metric_type', 'performance');
+                            
+                            \Sentry\captureMessage(
+                                "Slow scheduler loops: " . round($loopDuration, 2) . "s per iteration (threshold: 10s)",
+                                \Sentry\Severity::warning()
+                            );
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================

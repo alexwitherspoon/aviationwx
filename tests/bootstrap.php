@@ -4,6 +4,10 @@
  * Sets up test environment and includes required files
  */
 
+// Set default timezone to UTC for deterministic test timestamps
+// Tests use gmdate() and mktime() which rely on this timezone
+date_default_timezone_set('UTC');
+
 // Ensure Composer autoloader is available (required for PHPUnit)
 if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
     require_once __DIR__ . '/../vendor/autoload.php';
@@ -21,10 +25,30 @@ if (!defined('AVIATIONWX_LOG_FILE')) {
     define('AVIATIONWX_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
 }
 
+// Override metrics cache directories for testing (must be before cache-paths.php is loaded)
+// This prevents tests from writing to production cache directories
+if (!defined('CACHE_METRICS_DIR')) {
+    define('CACHE_METRICS_DIR', sys_get_temp_dir() . '/aviationwx_test_metrics');
+}
+if (!defined('CACHE_METRICS_HOURLY_DIR')) {
+    define('CACHE_METRICS_HOURLY_DIR', CACHE_METRICS_DIR . '/hourly');
+}
+if (!defined('CACHE_METRICS_DAILY_DIR')) {
+    define('CACHE_METRICS_DAILY_DIR', CACHE_METRICS_DIR . '/daily');
+}
+if (!defined('CACHE_METRICS_WEEKLY_DIR')) {
+    define('CACHE_METRICS_WEEKLY_DIR', CACHE_METRICS_DIR . '/weekly');
+}
+
 // Create test log directory and log files
 @mkdir(AVIATIONWX_LOG_DIR, 0755, true);
 @touch(AVIATIONWX_LOG_DIR . '/user.log');
 @touch(AVIATIONWX_LOG_DIR . '/app.log');
+
+// Create test metrics directories
+@mkdir(CACHE_METRICS_HOURLY_DIR, 0755, true);
+@mkdir(CACHE_METRICS_DAILY_DIR, 0755, true);
+@mkdir(CACHE_METRICS_WEEKLY_DIR, 0755, true);
 
 // Include core application files for testing (only those that don't have endpoint logic)
 require_once __DIR__ . '/../lib/config.php';
@@ -276,6 +300,23 @@ function cleanTestTempFiles(): void {
             }
         }
         @rmdir($testLogDir);
+    }
+    
+    // Clean test metrics directory
+    $testMetricsDir = $tempDir . '/aviationwx_test_metrics';
+    if (is_dir($testMetricsDir)) {
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($testMetricsDir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($files as $file) {
+            if ($file->isDir()) {
+                @rmdir($file->getRealPath());
+            } else {
+                @unlink($file->getRealPath());
+            }
+        }
+        @rmdir($testMetricsDir);
     }
     
     // Clean test temporary directories (aviationwx_test_*)

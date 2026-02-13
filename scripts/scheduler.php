@@ -21,6 +21,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/sentry.php'; // Initialize Sentry early
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 require_once __DIR__ . '/../lib/webcam-format-generation.php';
@@ -29,6 +30,9 @@ require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
 // Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
+
+// Set Sentry service context
+sentrySetServiceContext('scheduler', ['process' => 'daemon']);
 
 // Lock file location
 $lockFile = '/tmp/scheduler.lock';
@@ -39,6 +43,7 @@ $lastConfigReload = 0;
 $lastConfigMtime = null; // Track config file mtime to detect changes
 $lastConfigSha = null; // Track config file SHA hash to detect ANY content changes
 $lastMetricsFlush = 0;
+$lastMetricsHealthCheck = 0; // Separate timestamp for health checks
 $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
 $lastWeeklyAggregation = '';
@@ -441,24 +446,36 @@ while ($running) {
         
         // 2. Aggregate yesterday's hourly data into daily (once per day, after midnight UTC)
         $yesterdayId = gmdate('Y-m-d', $now - 86400);
-        if ($lastDailyAggregation !== $yesterdayId && (int)gmdate('H') >= 1) {
+        if ($lastDailyAggregation !== $yesterdayId) {
+            $transaction = sentryStartTransaction('metrics.aggregate', 'metrics_aggregate_daily', ['date' => $yesterdayId]);
+            
             if (metrics_aggregate_daily($yesterdayId)) {
                 $lastDailyAggregation = $yesterdayId;
                 aviationwx_log('info', 'scheduler: metrics daily aggregation complete', [
                     'date' => $yesterdayId
                 ], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: metrics daily aggregation failed', [
+                    'date' => $yesterdayId
+                ], 'app');
             }
+            
+            sentryFinishTransaction($transaction);
         }
         
         // 3. Aggregate last week's daily data into weekly (once per week, on Monday after midnight UTC)
         $lastWeekId = gmdate('Y-\WW', $now - (7 * 86400));
         if ($lastWeeklyAggregation !== $lastWeekId && (int)gmdate('N') === 1 && (int)gmdate('H') >= 2) {
+            $transaction = sentryStartTransaction('metrics.aggregate', 'metrics_aggregate_weekly', ['week' => $lastWeekId]);
+            
             if (metrics_aggregate_weekly($lastWeekId)) {
                 $lastWeeklyAggregation = $lastWeekId;
                 aviationwx_log('info', 'scheduler: metrics weekly aggregation complete', [
                     'week' => $lastWeekId
                 ], 'app');
             }
+            
+            sentryFinishTransaction($transaction);
         }
         
         // 4. Cleanup old metrics files (once per day)
@@ -472,7 +489,43 @@ while ($running) {
             $lastMetricsCleanup = $now;
         }
         
-        // 5. Flush weather health counters to cache file (every 60 seconds)
+        // 5. Check metrics system health (every 5 minutes)
+        if (($now - $lastMetricsHealthCheck) >= 300) {
+            $healthStatus = metrics_get_health_status();
+            
+            if (!$healthStatus['healthy']) {
+                foreach ($healthStatus['errors'] as $error) {
+                    aviationwx_log('error', 'scheduler: metrics health check failed', [
+                        'error' => $error
+                    ], 'app');
+                }
+            }
+            
+            if (!empty($healthStatus['warnings'])) {
+                foreach ($healthStatus['warnings'] as $warning) {
+                    aviationwx_log('warning', 'scheduler: metrics health warning', [
+                        'warning' => $warning
+                    ], 'app');
+                }
+            }
+            
+            // Log memory pressure warnings
+            $memInfo = metrics_get_apcu_memory_info();
+            if ($memInfo && $memInfo['used_percent'] > 80) {
+                aviationwx_log('warning', 'scheduler: APCu memory pressure', [
+                    'used_percent' => $memInfo['used_percent'],
+                    'used_mb' => round($memInfo['used_bytes'] / 1048576, 2),
+                    'total_mb' => round($memInfo['total_bytes'] / 1048576, 2)
+                ], 'app');
+            }
+            
+            // Report to Sentry for alerting and trends
+            metrics_report_to_sentry();
+            
+            $lastMetricsHealthCheck = $now;
+        }
+        
+        // 6. Flush weather health counters to cache file (every 60 seconds)
         // Note: Variant health flush is handled by metrics_flush_via_http() above
         // This pre-computes weather fetch health so status page doesn't check file ages
         if (($now - $lastWeatherHealthUpdate) >= 60) {
@@ -481,7 +534,7 @@ while ($running) {
             }
         }
         
-        // 6. Clean up stuck worker processes (every 60 seconds)
+        // 7. Clean up stuck worker processes (every 60 seconds)
         // This is a safety net for workers that become stuck despite self-timeout mechanisms
         if (($now - $lastStuckWorkerCleanup) >= 60) {
             $stuckPids = cleanupStaleWorkerHeartbeats();
@@ -497,7 +550,7 @@ while ($running) {
             $lastStuckWorkerCleanup = $now;
         }
         
-        // 7. Dynamic DNS check for FTP passive mode (configurable interval)
+        // 8. Dynamic DNS check for FTP passive mode (configurable interval)
         // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
         $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
         if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {
