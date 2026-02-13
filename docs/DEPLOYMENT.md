@@ -24,7 +24,7 @@ Complete guide for deploying AviationWX.org to production. This guide covers eve
 ## Minimal Host Customization
 
 This deployment requires **minimal host customization**:
-- ✅ **No log directory setup** - Logs written to `/var/log/aviationwx/` inside container with logrotate
+- ✅ **No log directory setup** - CD creates `/var/aviationwx/logs` on host; logs persist across reboots
 - ✅ **No cache directory setup** - Cache automatically created in `/tmp/aviationwx-cache`
 - ✅ **No cron job setup** - Cron jobs run automatically inside container
 - ✅ **No manual airports.json setup** - Deployed automatically via GitHub Actions
@@ -506,7 +506,7 @@ docker compose -f docker/docker-compose.prod.yml up -d --build
 
 ### Monitor Logs
 
-Logs are written to `/var/log/aviationwx/` inside the container. Logrotate handles rotation (1 rotated file, 100MB max per file).
+Logs are written to `/var/log/aviationwx/` inside the container (mounted from `/var/aviationwx/logs` on host, persists across reboots). Logrotate handles rotation (1 rotated file, 100MB max per file).
 
 ```bash
 # Application logs (PHP - JSONL format)

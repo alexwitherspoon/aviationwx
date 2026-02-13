@@ -29,7 +29,7 @@ curl https://aviationwx.org/admin/cache-clear.php
 
 ### Log Files
 
-All logs are in `/var/log/aviationwx/` inside the container:
+All logs are in `/var/log/aviationwx/` inside the container (mounted from `/var/aviationwx/logs` on host, persists across reboots):
 
 | File | Description |
 |------|-------------|

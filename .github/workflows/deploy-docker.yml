@@ -1119,6 +1119,50 @@ jobs:
           echo "✓ Ownership set to ${WWW_DATA_UID}:${WWW_DATA_GID} (www-data)"
           EOF
 
+      - name: Ensure log directory exists
+        run: |
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} << 'EOF'
+          set -euo pipefail
+          
+          WWW_DATA_UID=33
+          WWW_DATA_GID=33
+          if docker ps --format '{{.Names}}' | grep -q '^aviationwx-web$'; then
+            WWW_DATA_UID=$(docker exec aviationwx-web id -u www-data 2>/dev/null || echo "33")
+            WWW_DATA_GID=$(docker exec aviationwx-web id -g www-data 2>/dev/null || echo "33")
+            echo "Detected www-data UID/GID from container: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          else
+            echo "Using default www-data UID/GID: ${WWW_DATA_UID}:${WWW_DATA_GID}"
+          fi
+          
+          if mkdir -p /var/aviationwx/logs 2>/dev/null; then
+            echo "✓ Created log directory without sudo"
+          else
+            sudo mkdir -p /var/aviationwx/logs || {
+              echo "❌ Failed to create log directory"
+              exit 1
+            }
+            echo "✓ Created log directory with sudo"
+          fi
+          
+          if chown ${WWW_DATA_UID}:${WWW_DATA_GID} /var/aviationwx/logs 2>/dev/null; then
+            echo "✓ Changed log directory ownership"
+          else
+            sudo chown ${WWW_DATA_UID}:${WWW_DATA_GID} /var/aviationwx/logs || {
+              echo "⚠️  Failed to change ownership, using fallback"
+              sudo chmod 777 /var/aviationwx/logs || true
+            }
+          fi
+          
+          chmod 775 /var/aviationwx/logs 2>/dev/null || sudo chmod 775 /var/aviationwx/logs || true
+          
+          if [ ! -d /var/aviationwx/logs ]; then
+            echo "❌ Failed to create log directory at /var/aviationwx/logs"
+            exit 1
+          fi
+          
+          echo "✓ Log directory ready at /var/aviationwx/logs"
+          EOF
+
       - name: Sync repository to server
         run: |
           echo "Syncing repository to server..."
