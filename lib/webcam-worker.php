@@ -219,10 +219,38 @@ class WebcamWorker
                 );
             }
             
-            aviationwx_log('error', 'Webcam acquisition failed', [
+            // Determine log level based on failure reason
+            $logLevel = 'error';
+            $reason = $acquisitionResult->errorReason;
+            
+            // Expected/configuration issues - log as info
+            $expectedReasons = [
+                'no_username_configured',  // Push camera not set up
+                'ffmpeg_not_available',    // RTSP not supported on this system
+                'missing_base_url'         // Federation not configured
+            ];
+            
+            // Transient network/camera issues - log as warning
+            $transientReasons = [
+                'http_error',
+                'fetch_failed',
+                'rtsp_failed',
+                'timeout',
+                'error_frame',           // Camera showing error screen
+                'invalid_format',        // Temporary camera issue
+                'no_jpeg_frame'          // MJPEG stream issue
+            ];
+            
+            if (in_array($reason, $expectedReasons, true)) {
+                $logLevel = 'info';
+            } elseif (in_array($reason, $transientReasons, true)) {
+                $logLevel = 'warning';
+            }
+            
+            aviationwx_log($logLevel, 'Webcam acquisition failed', [
                 'airport' => $this->airportId,
                 'cam' => $this->camIndex,
-                'reason' => $acquisitionResult->errorReason,
+                'reason' => $reason,
                 'source' => $acquisitionResult->sourceType,
                 'metadata' => $acquisitionResult->metadata
             ], 'app');

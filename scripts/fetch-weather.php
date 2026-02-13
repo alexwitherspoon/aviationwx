@@ -118,13 +118,27 @@ function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType
             $success = false;
         }
     } else {
-        aviationwx_log('error', 'weather refresh failed', [
-            'invocation_id' => $invocationId,
-            'trigger' => $triggerType,
-            'airport' => $airportId,
-            'http_code' => $httpCode,
-            'error' => $error
-        ], 'app');
+        // Parse error response to determine log level
+        $data = json_decode($response, true);
+        $errorMessage = $data['error'] ?? null;
+        
+        // If not configured, log as info (expected state), not error
+        if ($httpCode === 503 && $errorMessage === 'Weather source not configured') {
+            aviationwx_log('info', 'weather refresh skipped (not configured)', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
+                'airport' => $airportId
+            ], 'app');
+        } else {
+            // Actual failure - log as error
+            aviationwx_log('error', 'weather refresh failed', [
+                'invocation_id' => $invocationId,
+                'trigger' => $triggerType,
+                'airport' => $airportId,
+                'http_code' => $httpCode,
+                'error' => $error ?: $errorMessage
+            ], 'app');
+        }
         $success = false;
     }
     
