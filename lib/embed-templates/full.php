@@ -426,7 +426,6 @@ HTML;
 HTML;
     
     $lastUpdated = $weather['last_updated_primary'] ?? time();
-    $timezone = $airport['timezone'] ?? 'America/Los_Angeles';
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
     
@@ -485,6 +484,8 @@ function renderFullDualWidget($data, $options) {
     $peakGustTime = $weather['peak_gust_time'] ?? null;
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
+    
+    $timezone = $airport['timezone'] ?? $options['timezone'] ?? 'America/Los_Angeles';
     
     // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
@@ -666,7 +667,6 @@ HTML;
 HTML;
     
     $lastUpdated = $weather['last_updated_primary'] ?? time();
-    $timezone = $airport['timezone'] ?? 'America/Los_Angeles';
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
     
@@ -725,6 +725,8 @@ function renderFullMultiWidget($data, $options) {
     $peakGustTime = $weather['peak_gust_time'] ?? null;
     $tempHighToday = $weather['temp_high_today'] ?? null;
     $tempLowToday = $weather['temp_low_today'] ?? null;
+    
+    $timezone = $airport['timezone'] ?? $options['timezone'] ?? 'America/Los_Angeles';
     
     // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
@@ -907,7 +909,6 @@ HTML;
 HTML;
     
     $lastUpdated = $weather['last_updated_primary'] ?? time();
-    $timezone = $airport['timezone'] ?? 'America/Los_Angeles';
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
     

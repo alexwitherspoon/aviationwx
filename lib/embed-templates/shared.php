@@ -87,8 +87,7 @@ function formatEmbedTemp($tempC, $unit, $precision = 0) {
         return number_format($tempC, $precision) . '°C';
     }
 
-    // Convert Celsius to Fahrenheit
-    $tempF = ($tempC * 9 / 5) + 32;
+    $tempF = celsiusToFahrenheit((float)$tempC);
     return number_format($tempF, $precision) . '°F';
 }
 
@@ -413,6 +412,8 @@ function getWeatherEmojis($weather) {
     }
     
     // Extreme temperatures (only show if extreme - abnormal condition)
+    // Prefer temperature_f from API when available; else convert from Celsius (internal storage)
+    $tempF = $weather['temperature_f'] ?? ($tempC !== null ? celsiusToFahrenheit((float)$tempC) : null);
     if ($tempF !== null) {
         if ($tempF > 90) {
             $emojis[] = '🥵'; // Extreme heat (>90°F)

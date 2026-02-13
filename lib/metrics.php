@@ -1816,7 +1816,7 @@ function metrics_report_operational_stats(): void {
                 $metarStatus = checkWeatherCircuitBreaker($airportId, 'metar');
                 
                 // Circuit is "open" if skip=true (in backoff)
-                if ($primaryStatus['skip'] || $metarStatus['skip']) {
+                if (($primaryStatus['skip'] ?? false) || ($metarStatus['skip'] ?? false)) {
                     $openBreakers[] = $airportId;
                 }
             }
@@ -1851,31 +1851,24 @@ function metrics_report_operational_stats(): void {
         if (function_exists('variant_health_get_status')) {
             $variantStatus = variant_health_get_status();
             
-            // Extract success/failure counts from status
-            $successCount = $variantStatus['generation']['successful'] ?? 0;
-            $failureCount = $variantStatus['generation']['failed'] ?? 0;
-            $totalAttempts = $successCount + $failureCount;
+            // Extract from metrics (variant_health_get_status returns metrics.generation_success_rate, not generation.successful/failed)
+            $successRate = $variantStatus['metrics']['generation_success_rate'] ?? 100;
+            $totalGenerations = $variantStatus['metrics']['total_generations_last_hour'] ?? 0;
             
-            if ($totalAttempts > 0) {
-                $successRate = ($successCount / $totalAttempts) * 100;
-                
-                // Alert if success rate < 90% (image pipeline issues)
-                if ($successRate < 90) {
-                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($variantStatus, $successRate, $successCount, $failureCount): void {
-                        $scope->setContext('variant_health', [
-                            'success' => $successCount,
-                            'failures' => $failureCount,
-                            'success_rate' => round($successRate, 1),
-                            'status' => $variantStatus,
-                        ]);
-                        $scope->setTag('metric_type', 'reliability');
-                        
-                        \Sentry\captureMessage(
-                            "Low image variant generation success rate: " . round($successRate, 1) . "%",
-                            \Sentry\Severity::warning()
-                        );
-                    });
-                }
+            if ($totalGenerations > 0 && $successRate < 90) {
+                \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($variantStatus, $successRate, $totalGenerations): void {
+                    $scope->setContext('variant_health', [
+                        'success_rate' => round($successRate, 1),
+                        'total_generations_last_hour' => $totalGenerations,
+                        'status' => $variantStatus,
+                    ]);
+                    $scope->setTag('metric_type', 'reliability');
+                    
+                    \Sentry\captureMessage(
+                        "Low image variant generation success rate: " . round($successRate, 1) . "%",
+                        \Sentry\Severity::warning()
+                    );
+                });
             }
         }
     }
@@ -1893,8 +1886,9 @@ function metrics_report_operational_stats(): void {
                         $scope->setContext('scheduler', $lockData);
                         $scope->setTag('metric_type', 'system_health');
                         
+                        $lastError = $lockData['last_error'] ?? 'unknown';
                         \Sentry\captureMessage(
-                            "Scheduler unhealthy: {$lockData['health']} - {$lockData['last_error']}",
+                            "Scheduler unhealthy: {$lockData['health']} - {$lastError}",
                             \Sentry\Severity::error()
                         );
                     });

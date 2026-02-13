@@ -89,10 +89,7 @@ jobs:
           echo "✅ Transaction created successfully\n";
           sentryFinishTransaction($transaction);
           
-          // Send test event
-          \Sentry\captureMessage('CI validation test - ' . date('Y-m-d H:i:s'), \Sentry\Severity::info());
-          echo "✅ Test event sent to Sentry\n";
-          echo "\nCheck Sentry dashboard (environment=ci) for validation event\n";
+          echo "✅ Sentry integration validated (init, transaction, finish)\n";
           PHPEOF
       
       - name: Validate PHP syntax
