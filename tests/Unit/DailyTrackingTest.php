@@ -720,5 +720,175 @@ class DailyTrackingTest extends TestCase
         $decoded = json_decode($content, true);
         $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
     }
+    
+    /**
+     * CRITICAL: Ensures both peak gust and temp extremes use observation timestamp for date key
+     * 
+     * This test prevents regressions where one function uses current time while the other
+     * uses observation timestamp, causing data consistency issues.
+     * 
+     * Scenario: Late evening observation (Feb 12 11:30 PM MST) processed after UTC midnight
+     * (Feb 13 06:30 UTC). Both functions must store under Feb 12, not Feb 13.
+     */
+    public function testBothFunctionsUseObservationTimestampConsistently()
+    {
+        $airportId = 'test_consistency_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Boise']);
+        
+        // Observation from Feb 12, 11:30 PM MST (Feb 13 06:30 UTC)
+        // This is AFTER UTC midnight but BEFORE local midnight
+        $obsTimestamp = mktime(6, 30, 0, 2, 13, 2026); // Feb 13 06:30 UTC
+        
+        // Update both peak gust and temp extremes with same observation timestamp
+        updatePeakGust($airportId, 25, $airport, $obsTimestamp);
+        updateTempExtremes($airportId, 15.5, $airport, $obsTimestamp);
+        
+        // Read both cache files
+        $cacheDir = getWeatherCacheDir();
+        
+        $gustFile = $cacheDir . '/peak_gusts.json';
+        $tempFile = $cacheDir . '/temp_extremes.json';
+        
+        clearstatcache();
+        
+        $gustData = json_decode(file_get_contents($gustFile), true);
+        $tempData = json_decode(file_get_contents($tempFile), true);
+        
+        // Get the date keys used by each function
+        $gustDateKeys = array_keys($gustData);
+        $tempDateKeys = array_keys($tempData);
+        
+        // CRITICAL: Both should use the SAME date key (Feb 12 in Boise timezone)
+        $this->assertEquals($gustDateKeys, $tempDateKeys, 
+            'Peak gust and temp extremes MUST use the same date key when given the same observation timestamp');
+        
+        // Verify the date key is Feb 12 (Boise local time), not Feb 13 (UTC)
+        $tz = new DateTimeZone('America/Boise');
+        $obsDate = new DateTime('@' . $obsTimestamp);
+        $obsDate->setTimezone($tz);
+        $expectedDateKey = $obsDate->format('Y-m-d');
+        
+        $this->assertEquals($expectedDateKey, $gustDateKeys[0], 
+            'Date key should be based on observation timestamp in airport timezone');
+        $this->assertEquals('2026-02-12', $expectedDateKey, 
+            'Feb 13 06:30 UTC should be stored as Feb 12 in Boise timezone');
+        
+        // Verify both functions stored the airport data under the correct date key
+        $this->assertArrayHasKey($airportId, $gustData[$expectedDateKey], 
+            'Peak gust should have airport data under correct date key');
+        $this->assertArrayHasKey($airportId, $tempData[$expectedDateKey], 
+            'Temp extremes should have airport data under correct date key');
+    }
+    
+    /**
+     * Ensures observation timestamp logic is consistent across timezones
+     * 
+     * Tests that airports in different timezones all correctly use their
+     * observation timestamps, not current time.
+     */
+    public function testObservationTimestampConsistencyAcrossTimezones()
+    {
+        // Test with 3 different US timezones
+        $airports = [
+            'kboi' => createTestAirport(['timezone' => 'America/Boise']),      // MST (UTC-7)
+            'klax' => createTestAirport(['timezone' => 'America/Los_Angeles']), // PST (UTC-8)
+            'kjfk' => createTestAirport(['timezone' => 'America/New_York']),    // EST (UTC-5)
+        ];
+        
+        // Use the same UTC observation time for all airports
+        // Feb 12, 2026 23:30 UTC (late evening in western US, past midnight in eastern US)
+        $obsTimestamp = mktime(23, 30, 0, 2, 12, 2026);
+        
+        // Update all airports with same observation timestamp
+        foreach ($airports as $airportId => $airport) {
+            updatePeakGust($airportId, 20, $airport, $obsTimestamp);
+            updateTempExtremes($airportId, 10.0, $airport, $obsTimestamp);
+        }
+        
+        // Read cache files
+        $cacheDir = getWeatherCacheDir();
+        clearstatcache();
+        
+        $gustData = json_decode(file_get_contents($cacheDir . '/peak_gusts.json'), true);
+        $tempData = json_decode(file_get_contents($cacheDir . '/temp_extremes.json'), true);
+        
+        // Verify each airport is stored under its correct local date
+        foreach ($airports as $airportId => $airport) {
+            $tz = new DateTimeZone($airport['timezone']);
+            $obsDate = new DateTime('@' . $obsTimestamp);
+            $obsDate->setTimezone($tz);
+            $expectedDateKey = $obsDate->format('Y-m-d');
+            
+            // Both functions should use the same date key for this airport
+            $this->assertArrayHasKey($expectedDateKey, $gustData, 
+                "Peak gust should have date key $expectedDateKey for $airportId");
+            $this->assertArrayHasKey($expectedDateKey, $tempData, 
+                "Temp extremes should have date key $expectedDateKey for $airportId");
+            
+            $this->assertArrayHasKey($airportId, $gustData[$expectedDateKey], 
+                "Peak gust should have data for $airportId under date key $expectedDateKey");
+            $this->assertArrayHasKey($airportId, $tempData[$expectedDateKey], 
+                "Temp extremes should have data for $airportId under date key $expectedDateKey");
+        }
+    }
+    
+    /**
+     * Regression test: Ensures we don't reintroduce the bug where current time is used
+     * 
+     * This test simulates the exact production bug scenario:
+     * - Observation from late evening local time
+     * - Processed hours later after UTC midnight
+     * - Should NOT trigger "new day" initialization
+     */
+    public function testRegressionNoResetWhenProcessedAfterUTCMidnight()
+    {
+        $airportId = 'test_regression_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Boise']);
+        
+        // Step 1: Earlier observation from Feb 12, 5:00 PM MST (Feb 13 00:00 UTC)
+        $obs1 = mktime(0, 0, 0, 2, 13, 2026); // Feb 13 00:00 UTC = Feb 12 5PM MST
+        updatePeakGust($airportId, 30, $airport, $obs1);
+        updateTempExtremes($airportId, 20.0, $airport, $obs1);
+        
+        // Step 2: Later observation from Feb 12, 11:00 PM MST (Feb 13 06:00 UTC)
+        // This is 6 hours later in UTC (well past UTC midnight), but still same day locally
+        $obs2 = mktime(6, 0, 0, 2, 13, 2026); // Feb 13 06:00 UTC = Feb 12 11PM MST
+        
+        // Lower values - should NOT reset the day
+        updatePeakGust($airportId, 15, $airport, $obs2);
+        updateTempExtremes($airportId, 18.0, $airport, $obs2);
+        
+        // Read results
+        $cacheDir = getWeatherCacheDir();
+        clearstatcache();
+        
+        $gustData = json_decode(file_get_contents($cacheDir . '/peak_gusts.json'), true);
+        $tempData = json_decode(file_get_contents($cacheDir . '/temp_extremes.json'), true);
+        
+        // Calculate expected date key (Feb 12 in Boise time)
+        $tz = new DateTimeZone('America/Boise');
+        $obsDate = new DateTime('@' . $obs2);
+        $obsDate->setTimezone($tz);
+        $expectedDateKey = $obsDate->format('Y-m-d');
+        $this->assertEquals('2026-02-12', $expectedDateKey);
+        
+        // Should only have ONE date key (Feb 12)
+        $this->assertCount(1, $gustData, 
+            'Should only have one date key in peak gusts (not reset to new day)');
+        $this->assertCount(1, $tempData, 
+            'Should only have one date key in temp extremes (not reset to new day)');
+        
+        // Verify peak gust is still 30 (not reset to 15)
+        $this->assertEquals(30, $gustData[$expectedDateKey][$airportId]['value'], 
+            'Peak gust should NOT be reset when observation timestamp is from same local day');
+        
+        // Verify high temp is still 20.0 (not reset to 18.0)
+        $this->assertEquals(20.0, $tempData[$expectedDateKey][$airportId]['high'], 
+            'High temp should NOT be reset when observation timestamp is from same local day');
+        
+        // Low temp should be updated to 18.0 (lower than initial 20.0)
+        $this->assertEquals(18.0, $tempData[$expectedDateKey][$airportId]['low'], 
+            'Low temp should update to new low value');
+    }
 }
 
