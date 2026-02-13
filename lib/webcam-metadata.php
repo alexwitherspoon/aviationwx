@@ -478,3 +478,71 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
     return $latestTimestamp;
 }
 
+/**
+ * Get last completed image timestamp for a camera
+ * 
+ * Returns the second-most-recent timestamp to avoid race conditions during
+ * variant generation. The latest image may still be in-progress, but the
+ * second-latest is guaranteed to be fully promoted.
+ * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return int Unix timestamp, or 0 if no completed images found
+ */
+function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
+    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+    if (!is_dir($cacheDir)) {
+        return 0;
+    }
+    
+    // Find all timestamped files (original or variants)
+    $pattern = $cacheDir . '/*_*.{jpg,jpeg,webp}';
+    $files = glob($pattern, GLOB_BRACE);
+    
+    if (empty($files)) {
+        // Fallback: try without GLOB_BRACE (older PHP versions)
+        $files = array_merge(
+            glob($cacheDir . '/*_*.jpg'),
+            glob($cacheDir . '/*_*.jpeg'),
+            glob($cacheDir . '/*_*.webp')
+        );
+    }
+    
+    if (empty($files)) {
+        return 0;
+    }
+    
+    // Collect unique timestamps
+    $timestamps = [];
+    foreach ($files as $file) {
+        // Skip symlinks
+        if (is_link($file)) {
+            continue;
+        }
+        
+        $basename = basename($file);
+        // Match: {timestamp}_original.{format} or {timestamp}_{height}.{format}
+        if (preg_match('/^(\d+)_(original|\d+)\.(jpg|jpeg|webp)$/', $basename, $matches)) {
+            $timestamp = (int)$matches[1];
+            $timestamps[$timestamp] = true;
+        }
+    }
+    
+    if (empty($timestamps)) {
+        return 0;
+    }
+    
+    // Get unique timestamps and sort descending
+    $uniqueTimestamps = array_keys($timestamps);
+    rsort($uniqueTimestamps);
+    
+    // Return second-most-recent (last completed)
+    // If only one image exists, return it (no race condition possible)
+    if (count($uniqueTimestamps) === 1) {
+        return $uniqueTimestamps[0];
+    }
+    
+    return $uniqueTimestamps[1];
+}
+
+
