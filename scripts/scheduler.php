@@ -441,10 +441,14 @@ while ($running) {
         
         // 2. Aggregate yesterday's hourly data into daily (once per day, after midnight UTC)
         $yesterdayId = gmdate('Y-m-d', $now - 86400);
-        if ($lastDailyAggregation !== $yesterdayId && (int)gmdate('H') >= 1) {
+        if ($lastDailyAggregation !== $yesterdayId) {
             if (metrics_aggregate_daily($yesterdayId)) {
                 $lastDailyAggregation = $yesterdayId;
                 aviationwx_log('info', 'scheduler: metrics daily aggregation complete', [
+                    'date' => $yesterdayId
+                ], 'app');
+            } else {
+                aviationwx_log('warning', 'scheduler: metrics daily aggregation failed', [
                     'date' => $yesterdayId
                 ], 'app');
             }

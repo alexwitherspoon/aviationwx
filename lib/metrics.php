@@ -953,11 +953,13 @@ function metrics_get_rolling(int $days = 7): array {
     ];
     
     // Read daily files for complete days
+    $missingDays = [];
     for ($d = 1; $d <= $days; $d++) {
         $dateId = gmdate('Y-m-d', $now - ($d * 86400));
         $dailyFile = getMetricsDailyPath($dateId);
         
         if (!file_exists($dailyFile)) {
+            $missingDays[] = $dateId;
             continue;
         }
         
@@ -974,6 +976,15 @@ function metrics_get_rolling(int $days = 7): array {
         metrics_merge_airports($result['airports'], $dailyData['airports'] ?? []);
         metrics_merge_webcams($result['webcams'], $dailyData['webcams'] ?? []);
         metrics_merge_global($result['global'], $dailyData['global'] ?? []);
+    }
+    
+    // Log if daily files are missing (helps detect aggregation failures)
+    if (!empty($missingDays)) {
+        aviationwx_log('warning', 'metrics: missing daily files in rolling window', [
+            'missing_days' => $missingDays,
+            'requested_days' => $days,
+            'files_found' => $days - count($missingDays)
+        ], 'app');
     }
     
     // Add current day's hourly data
@@ -1301,7 +1312,8 @@ function metrics_cleanup(): int {
         foreach ($files as $file) {
             $basename = basename($file, '.json');
             $timestamp = strtotime($basename . ' 00:00:00 UTC');
-            if ($timestamp !== false && $timestamp < $cutoff) {
+            // Compare end of day to cutoff to avoid deleting files on the boundary day
+            if ($timestamp !== false && ($timestamp + 86400) <= $cutoff) {
                 if (@unlink($file)) {
                     $deleted++;
                 }
