@@ -1370,6 +1370,7 @@ jobs:
       - name: Deploy environment configuration
         run: |
           GIT_SHA="${{ steps.determine-sha.outputs.deploy_sha_short }}"
+          SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
           
           ssh ${{ secrets.USER }}@${{ secrets.HOST }} << ENVEOF
           set -euo pipefail
@@ -1396,7 +1397,7 @@ WEATHER_REFRESH_URL=http://localhost:8080
 GIT_SHA=${GIT_SHA}
 
 # Sentry error tracking and performance monitoring
-SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+SENTRY_DSN=${SENTRY_DSN}
 SENTRY_ENVIRONMENT=production
 SENTRY_SAMPLE_RATE_ERRORS=1.0
 SENTRY_SAMPLE_RATE_TRACES=0.05
