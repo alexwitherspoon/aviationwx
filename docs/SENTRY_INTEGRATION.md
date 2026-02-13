@@ -117,13 +117,13 @@ The scheduler calls `metrics_report_to_sentry()` every 5 minutes to report:
 **APCu Memory Pressure:**
 ```
 Severity: warning (>80%), error (>90%)
-Event: "APCu memory pressure: 85% used"
+Event: "APCu memory pressure: 91% used"
 Context: used_bytes, total_bytes, used_percent, fragmentation
 ```
 
 **Disk Space Warnings:**
 ```
-Severity: warning (>85%), fatal (>95%)
+Severity: warning (>90%), critical (>95%)
 Event: "Disk space critical: 96% used (1.2GB free)"
 Context: free_bytes, used_percent, is_low, is_critical
 ```

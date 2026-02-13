@@ -198,38 +198,85 @@ function metrics_merge_webcams(array &$target, array $source): void {
 // =============================================================================
 
 /**
+ * Determine whether a rate-limited warning should be logged
+ * 
+ * Uses a small timestamp file in the system temp directory to coordinate
+ * rate limiting across PHP processes. This avoids log/Sentry spam when certain
+ * conditions persist.
+ * 
+ * @param string $reasonKey Short identifier for the specific warning type
+ * @param int $intervalSeconds How long to wait between logs (default: 3600 = 1 hour)
+ * @return bool True if we should log now, false if within cooldown period
+ */
+function metrics_should_log_warning(string $reasonKey, int $intervalSeconds = 3600): bool {
+    $tmpDir = sys_get_temp_dir();
+    
+    // If we cannot write to temp dir, fallback to always logging
+    // (better to log than silently suppress in safety-critical application)
+    if ($tmpDir === '' || !is_writable($tmpDir)) {
+        return true;
+    }
+    
+    $filename = rtrim($tmpDir, DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR
+        . 'aviationwx_metrics_warning_' . $reasonKey . '.logstamp';
+    
+    $now = time();
+    
+    if (file_exists($filename)) {
+        $mtime = @filemtime($filename);
+        if ($mtime !== false && ($now - $mtime) < $intervalSeconds) {
+            // Last log was within cooldown period; skip logging
+            return false;
+        }
+    }
+    
+    // Update/create the timestamp file
+    // Ignore errors - they should not prevent logging in a safety-critical application
+    @touch($filename);
+    
+    return true;
+}
+
+/**
  * Check if APCu is available and log if unavailable
  * 
- * Uses rate limiting to avoid log spam (logs once per hour max).
+ * Uses cross-request rate limiting via temp file to avoid log spam
+ * (logs once per hour max per warning type, per host) when APCu is
+ * not available or not enabled.
  * 
  * @return bool True if APCu is available
  */
 function metrics_is_apcu_available(): bool {
-    static $lastLogTime = 0;
+    static $apcuAvailable = null;
+    
+    // Cache result within request to avoid repeated checks
+    if ($apcuAvailable !== null) {
+        return $apcuAvailable;
+    }
     
     if (!function_exists('apcu_fetch')) {
-        $now = time();
-        if (($now - $lastLogTime) >= 3600) {
+        if (metrics_should_log_warning('apcu_missing')) {
             aviationwx_log('error', 'metrics: APCu not available, metrics collection disabled', [
                 'reason' => 'apcu_fetch function not found'
             ], 'app');
-            $lastLogTime = $now;
         }
+        $apcuAvailable = false;
         return false;
     }
     
     // Check if APCu is actually functional (enabled in ini)
     if (!@apcu_enabled()) {
-        $now = time();
-        if (($now - $lastLogTime) >= 3600) {
+        if (metrics_should_log_warning('apcu_disabled')) {
             aviationwx_log('error', 'metrics: APCu not enabled in PHP configuration', [
                 'reason' => 'apcu.enabled is off'
             ], 'app');
-            $lastLogTime = $now;
         }
+        $apcuAvailable = false;
         return false;
     }
     
+    $apcuAvailable = true;
     return true;
 }
 
@@ -1066,16 +1113,12 @@ function metrics_get_rolling(int $days = 7): array {
     // Log if daily files are missing (helps detect aggregation failures)
     // Rate-limit this warning to avoid noisy logs from frequently called request paths
     if (!empty($missingDays)) {
-        static $lastMissingDailyLog = 0;
-        $logIntervalSeconds = 300; // 5 minutes
-
-        if ($lastMissingDailyLog === 0 || ($now - $lastMissingDailyLog) >= $logIntervalSeconds) {
+        if (metrics_should_log_warning('missing_daily_files', 300)) { // 5 minutes
             aviationwx_log('warning', 'metrics: missing daily files in rolling window', [
                 'missing_days' => $missingDays,
                 'requested_days' => $days,
                 'files_found' => $days - count($missingDays)
             ], 'app');
-            $lastMissingDailyLog = $now;
         }
     }
     
@@ -1571,7 +1614,7 @@ function metrics_get_health_status(): array {
         $memInfo = metrics_get_apcu_memory_info();
         if ($memInfo && $memInfo['is_full']) {
             $health['healthy'] = false;
-            $health['warnings'][] = sprintf(
+            $health['errors'][] = sprintf(
                 'APCu memory %.1f%% full (%s used of %s)',
                 $memInfo['used_percent'],
                 format_bytes($memInfo['used_bytes']),
@@ -1726,9 +1769,6 @@ function metrics_report_operational_stats(): void {
         return;
     }
     
-    // Get 24-hour rolling metrics
-    $rolling24h = metrics_get_rolling_hours(24);
-    
     // Report image processing performance
     if (file_exists(__DIR__ . '/performance-metrics.php')) {
         require_once __DIR__ . '/performance-metrics.php';
@@ -1802,24 +1842,36 @@ function metrics_report_operational_stats(): void {
     // Report variant health (image pipeline success rate)
     if (file_exists(__DIR__ . '/variant-health.php')) {
         require_once __DIR__ . '/variant-health.php';
-        $variantHealth = variant_health_get_stats();
         
-        // Calculate success rate
-        $totalAttempts = ($variantHealth['success'] ?? 0) + ($variantHealth['failures'] ?? 0);
-        if ($totalAttempts > 0) {
-            $successRate = (($variantHealth['success'] ?? 0) / $totalAttempts) * 100;
+        // Use the public API - variant_health_get_status() returns computed status
+        if (function_exists('variant_health_get_status')) {
+            $variantStatus = variant_health_get_status();
             
-            // Alert if success rate < 90% (image pipeline issues)
-            if ($successRate < 90) {
-                \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($variantHealth, $successRate): void {
-                    $scope->setContext('variant_health', $variantHealth);
-                    $scope->setTag('metric_type', 'reliability');
-                    
-                    \Sentry\captureMessage(
-                        "Low image variant generation success rate: " . round($successRate, 1) . "%",
-                        \Sentry\Severity::warning()
-                    );
-                });
+            // Extract success/failure counts from status
+            $successCount = $variantStatus['generation']['successful'] ?? 0;
+            $failureCount = $variantStatus['generation']['failed'] ?? 0;
+            $totalAttempts = $successCount + $failureCount;
+            
+            if ($totalAttempts > 0) {
+                $successRate = ($successCount / $totalAttempts) * 100;
+                
+                // Alert if success rate < 90% (image pipeline issues)
+                if ($successRate < 90) {
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($variantStatus, $successRate, $successCount, $failureCount): void {
+                        $scope->setContext('variant_health', [
+                            'success' => $successCount,
+                            'failures' => $failureCount,
+                            'success_rate' => round($successRate, 1),
+                            'status' => $variantStatus,
+                        ]);
+                        $scope->setTag('metric_type', 'reliability');
+                        
+                        \Sentry\captureMessage(
+                            "Low image variant generation success rate: " . round($successRate, 1) . "%",
+                            \Sentry\Severity::warning()
+                        );
+                    });
+                }
             }
         }
     }

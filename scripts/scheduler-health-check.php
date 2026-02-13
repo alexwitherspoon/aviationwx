@@ -37,6 +37,9 @@ if (isSentryAvailable()) {
     );
 }
 
+$checkInStatus = \Sentry\CheckInStatus::ok(); // Assume success unless we encounter errors
+$hadFailure = false;
+
 try {
     $lockFile = '/tmp/scheduler.lock';
     $schedulerScript = __DIR__ . '/scheduler.php';
@@ -113,6 +116,9 @@ try {
                 'reason' => $restartReason,
                 'hint' => 'Scheduler is owned by root but health check runs as www-data'
             ], 'app');
+            // Mark as failure since we couldn't restart
+            $hadFailure = true;
+            $checkInStatus = \Sentry\CheckInStatus::error();
             // Don't try to restart - the existing scheduler is still running
             // A stale lock with running process likely means lock file wasn't updated
             return;
@@ -138,12 +144,21 @@ try {
 
     // Note: We don't log healthy status to avoid log spam
     // Health check runs every 60s, so logging would be very verbose
+} catch (Exception $e) {
+    // Report error on exception
+    $hadFailure = true;
+    $checkInStatus = \Sentry\CheckInStatus::error();
+    
+    aviationwx_log('error', 'scheduler health check: exception during check', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
+    ], 'app');
 } finally {
-    // Report success to Sentry (always report, even on early return/error)
+    // Always report final status to Sentry (ok or error based on what happened)
     if (isSentryAvailable() && $checkInId) {
         \Sentry\captureCheckIn(
             slug: 'scheduler-health-check',
-            status: \Sentry\CheckInStatus::ok(),
+            status: $checkInStatus,
             checkInId: $checkInId,
         );
     }

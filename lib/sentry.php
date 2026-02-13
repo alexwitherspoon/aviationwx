@@ -15,6 +15,12 @@
 
 require_once __DIR__ . '/config.php';
 
+// Load Composer autoloader if available (needed for Sentry SDK)
+$autoloadPath = __DIR__ . '/../vendor/autoload.php';
+if (file_exists($autoloadPath)) {
+    require_once $autoloadPath;
+}
+
 /**
  * Initialize Sentry error tracking
  * 
