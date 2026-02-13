@@ -2,39 +2,33 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
+
 /**
  * Tests for daily temperature extreme tracking with observation timestamps
- * 
+ *
  * Verifies that temp extremes are stored under the correct date key
  * based on observation timestamp, not current time.
+ * Uses per-airport file layout (cache/temp_extremes/{airport}.json).
  */
 class TempExtremesDateKeyTest extends TestCase
 {
-    private string $testCacheDir;
-    private string $tempExtremesFile;
+    private const TEST_AIRPORT = 'kboi';
 
     protected function setUp(): void
     {
-        // Use test-specific cache directory
-        $this->testCacheDir = CACHE_BASE_DIR;
-        $this->tempExtremesFile = $this->testCacheDir . '/temp_extremes.json';
-        
-        // Clean up any existing file
-        if (file_exists($this->tempExtremesFile)) {
-            @unlink($this->tempExtremesFile);
-        }
-        
-        // Ensure cache directory exists
-        if (!is_dir($this->testCacheDir)) {
-            @mkdir($this->testCacheDir, 0755, true);
+        ensureCacheDir(CACHE_TEMP_EXTREMES_DIR);
+        $file = getTempExtremesTrackingPath(self::TEST_AIRPORT);
+        if (file_exists($file)) {
+            @unlink($file);
         }
     }
 
     protected function tearDown(): void
     {
-        // Clean up test file
-        if (file_exists($this->tempExtremesFile)) {
-            @unlink($this->tempExtremesFile);
+        $file = getTempExtremesTrackingPath(self::TEST_AIRPORT);
+        if (file_exists($file)) {
+            @unlink($file);
         }
     }
 
@@ -64,26 +58,21 @@ class TempExtremesDateKeyTest extends TestCase
         // Temperature at observation time: 9.1°C (48.4°F)
         $temp = 9.1;
         
-        // Update temp extremes with observation timestamp
-        updateTempExtremes('kboi', $temp, $airport, $obsTimestamp);
-        
-        // Read file and verify
-        $this->assertFileExists($this->tempExtremesFile);
-        $content = file_get_contents($this->tempExtremesFile);
+        updateTempExtremes(self::TEST_AIRPORT, $temp, $airport, $obsTimestamp);
+
+        $file = getTempExtremesTrackingPath(self::TEST_AIRPORT);
+        $this->assertFileExists($file);
+        $content = file_get_contents($file);
         $data = json_decode($content, true);
-        
-        // Convert observation timestamp to Boise date
+
         $tz = new DateTimeZone('America/Boise');
         $obsDate = new DateTime('@' . $obsTimestamp);
         $obsDate->setTimezone($tz);
         $expectedDateKey = $obsDate->format('Y-m-d');
-        
-        // Verify data is stored under correct date key (Feb 12, not Feb 13)
-        $this->assertArrayHasKey($expectedDateKey, $data, 
+
+        $this->assertArrayHasKey($expectedDateKey, $data,
             'Date key should be based on observation timestamp in airport timezone');
-        $this->assertArrayHasKey('kboi', $data[$expectedDateKey]);
-        
-        $stored = $data[$expectedDateKey]['kboi'];
+        $stored = $data[$expectedDateKey];
         $this->assertEquals($temp, $stored['high']);
         $this->assertEquals($temp, $stored['low']);
         $this->assertEquals($obsTimestamp, $stored['high_ts']);
@@ -107,28 +96,24 @@ class TempExtremesDateKeyTest extends TestCase
         
         // Observation 1: Feb 12, 2:00 PM MST (21:00 UTC) - 5°C
         $obs1 = mktime(21, 0, 0, 2, 12, 2026);
-        updateTempExtremes('kboi', 5.0, $airport, $obs1);
-        
-        // Observation 2: Feb 12, 5:48 PM MST (00:48 UTC Feb 13) - 9.1°C (new high)
+        updateTempExtremes(self::TEST_AIRPORT, 5.0, $airport, $obs1);
+
         $obs2 = mktime(0, 48, 0, 2, 13, 2026);
-        updateTempExtremes('kboi', 9.1, $airport, $obs2);
-        
-        // Observation 3: Feb 12, 6:39 PM MST (01:39 UTC Feb 13) - 7.3°C
+        updateTempExtremes(self::TEST_AIRPORT, 9.1, $airport, $obs2);
+
         $obs3 = mktime(1, 39, 0, 2, 13, 2026);
-        updateTempExtremes('kboi', 7.3, $airport, $obs3);
-        
-        // Read and verify
-        $content = file_get_contents($this->tempExtremesFile);
+        updateTempExtremes(self::TEST_AIRPORT, 7.3, $airport, $obs3);
+
+        $content = file_get_contents(getTempExtremesTrackingPath(self::TEST_AIRPORT));
         $data = json_decode($content, true);
-        
-        // All observations should be under Feb 12 (Boise timezone)
+
         $tz = new DateTimeZone('America/Boise');
         $date1 = new DateTime('@' . $obs1);
         $date1->setTimezone($tz);
         $expectedDateKey = $date1->format('Y-m-d');
-        
+
         $this->assertArrayHasKey($expectedDateKey, $data);
-        $stored = $data[$expectedDateKey]['kboi'];
+        $stored = $data[$expectedDateKey];
         
         // High should be 9.1°C (from obs2)
         $this->assertEquals(9.1, $stored['high']);
@@ -156,62 +141,53 @@ class TempExtremesDateKeyTest extends TestCase
         
         // First observation: Feb 12, 3:00 PM MST - 10°C high
         $obs1 = mktime(22, 0, 0, 2, 12, 2026); // Feb 12 22:00 UTC
-        updateTempExtremes('kboi', 10.0, $airport, $obs1);
-        
-        // Second observation: Feb 12, 11:30 PM MST - 3°C low
-        // This is Feb 13 06:30 UTC (after midnight UTC!)
-        $obs2 = mktime(6, 30, 0, 2, 13, 2026); // Feb 13 06:30 UTC
-        updateTempExtremes('kboi', 3.0, $airport, $obs2);
-        
-        // Read and verify
-        $content = file_get_contents($this->tempExtremesFile);
+        updateTempExtremes(self::TEST_AIRPORT, 10.0, $airport, $obs1);
+
+        $obs2 = mktime(6, 30, 0, 2, 13, 2026);
+        updateTempExtremes(self::TEST_AIRPORT, 3.0, $airport, $obs2);
+
+        $content = file_get_contents(getTempExtremesTrackingPath(self::TEST_AIRPORT));
         $data = json_decode($content, true);
-        
-        // Should only have ONE date key (Feb 12 in Boise timezone)
+
         $this->assertCount(1, $data, 'Should only have one date key despite UTC midnight crossing');
-        
-        // Both observations should be under Feb 12 Boise time
+
         $tz = new DateTimeZone('America/Boise');
         $date2 = new DateTime('@' . $obs2);
         $date2->setTimezone($tz);
         $expectedDateKey = $date2->format('Y-m-d');
         $this->assertEquals('2026-02-12', $expectedDateKey, 'Feb 13 06:30 UTC should be Feb 12 in Boise');
-        
-        $stored = $data[$expectedDateKey]['kboi'];
+
+        $stored = $data[$expectedDateKey];
         $this->assertEquals(10.0, $stored['high']);
         $this->assertEquals(3.0, $stored['low']);
     }
 
     /**
-     * Test fallback path also uses observation timestamp correctly
+     * Test updateTempExtremes stores data with observation timestamp
      */
-    public function testFallbackUsesObservationTimestamp(): void
+    public function testUpdateTempExtremesUsesObservationTimestamp(): void
     {
         require_once __DIR__ . '/../../lib/weather/daily-tracking.php';
-        
+
         $airport = [
             'timezone' => 'America/Boise',
             'name' => 'Boise Air Terminal'
         ];
-        
-        // Observation from Feb 12, 10:00 PM MST (Feb 13 05:00 UTC)
+
         $obsTimestamp = mktime(5, 0, 0, 2, 13, 2026);
         $temp = 8.5;
-        
-        // Calculate expected date key
+
+        updateTempExtremes(self::TEST_AIRPORT, $temp, $airport, $obsTimestamp);
+
         $tz = new DateTimeZone('America/Boise');
         $obsDate = new DateTime('@' . $obsTimestamp);
         $obsDate->setTimezone($tz);
         $expectedDateKey = $obsDate->format('Y-m-d');
-        
-        // Call fallback directly
-        updateTempExtremesFallback('kboi', $temp, $airport, $obsTimestamp, $this->tempExtremesFile, $expectedDateKey);
-        
-        // Verify
-        $content = file_get_contents($this->tempExtremesFile);
+
+        $content = file_get_contents(getTempExtremesTrackingPath(self::TEST_AIRPORT));
         $data = json_decode($content, true);
-        
+
         $this->assertArrayHasKey($expectedDateKey, $data);
-        $this->assertEquals($temp, $data[$expectedDateKey]['kboi']['high']);
+        $this->assertEquals($temp, $data[$expectedDateKey]['high']);
     }
 }

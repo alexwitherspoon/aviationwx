@@ -323,6 +323,81 @@ class WeatherHistoryTest extends TestCase
     }
     
     /**
+     * computeDailyExtremesFromHistory should compute min/max from observations for date
+     */
+    public function testComputeDailyExtremesFromHistory_ComputesFromObservations(): void
+    {
+        $airportId = 'test_extremes_' . uniqid();
+        $timezone = 'America/Los_Angeles';
+        $tz = new DateTimeZone($timezone);
+        $now = new DateTime('now', $tz);
+        $dateKey = $now->format('Y-m-d');
+
+        // Create history file with observations for today
+        $obs1 = $now->getTimestamp() - 7200; // 2 hours ago
+        $obs2 = $now->getTimestamp() - 3600; // 1 hour ago
+        $obs3 = $now->getTimestamp();
+
+        $history = [
+            'airport_id' => $airportId,
+            'updated_at' => time(),
+            'retention_hours' => 24,
+            'observations' => [
+                ['obs_time' => $obs1, 'temperature' => 10.0, 'gust_speed' => 15],
+                ['obs_time' => $obs2, 'temperature' => 20.0, 'gust_speed' => 25],
+                ['obs_time' => $obs3, 'temperature' => 15.0, 'gust_speed' => 18],
+            ],
+        ];
+
+        $file = getWeatherHistoryFilePath($airportId);
+        ensureCacheDir(dirname($file));
+        file_put_contents($file, json_encode($history));
+
+        $computed = computeDailyExtremesFromHistory($airportId, $dateKey, $timezone);
+
+        $this->assertEquals(20.0, $computed['temp_high']);
+        $this->assertEquals($obs2, $computed['temp_high_ts']);
+        $this->assertEquals(10.0, $computed['temp_low']);
+        $this->assertEquals($obs1, $computed['temp_low_ts']);
+        $this->assertEquals(25.0, $computed['peak_gust']);
+        $this->assertEquals($obs2, $computed['peak_gust_ts']);
+
+        @unlink($file);
+    }
+
+    /**
+     * computeDailyExtremesFromHistory should return nulls when no observations for date
+     */
+    public function testComputeDailyExtremesFromHistory_EmptyWhenNoObservationsForDate(): void
+    {
+        $airportId = 'test_empty_' . uniqid();
+        $timezone = 'America/Los_Angeles';
+        $tz = new DateTimeZone($timezone);
+        $now = new DateTime('now', $tz);
+        $yesterday = (clone $now)->modify('-1 day');
+        $dateKey = $yesterday->format('Y-m-d'); // Use yesterday - no observations
+
+        $history = [
+            'airport_id' => $airportId,
+            'observations' => [
+                ['obs_time' => $now->getTimestamp(), 'temperature' => 15.0, 'gust_speed' => 10],
+            ],
+        ];
+
+        $file = getWeatherHistoryFilePath($airportId);
+        ensureCacheDir(dirname($file));
+        file_put_contents($file, json_encode($history));
+
+        $computed = computeDailyExtremesFromHistory($airportId, $dateKey, $timezone);
+
+        $this->assertNull($computed['temp_high']);
+        $this->assertNull($computed['temp_low']);
+        $this->assertNull($computed['peak_gust']);
+
+        @unlink($file);
+    }
+
+    /**
      * Weather history should handle missing source attribution gracefully
      */
     public function testAppendWeatherHistory_HandlesMissingSourceAttribution(): void
