@@ -419,7 +419,19 @@ function updateTempExtremes($airportId, $currentTemp, $airport = null, $obsTimes
         
         $file = $cacheDir . '/temp_extremes.json';
         // Use airport's local timezone to determine "today" (midnight reset at local timezone)
-        $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
+        // If observation timestamp is provided, use it to determine the date key (ensures consistency)
+        // Otherwise, use current time with airport timezone
+        if ($obsTimestamp !== null && $airport !== null) {
+            $timezone = getAirportTimezone($airport);
+            $tz = new DateTimeZone($timezone);
+            // Note: When using '@' prefix, PHP creates DateTime in UTC and ignores the timezone parameter.
+            // We must call setTimezone() after creation to convert to the airport's local timezone.
+            $obsDate = new DateTime('@' . $obsTimestamp);
+            $obsDate->setTimezone($tz);
+            $dateKey = $obsDate->format('Y-m-d');
+        } else {
+            $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
+        }
         
         // Use file locking to prevent race conditions
         // Critical: Lock must be acquired BEFORE reading to prevent concurrent updates
@@ -618,6 +630,15 @@ function updateTempExtremesFallback($airportId, $currentTemp, $airport, $obsTime
         $obsTs = $obsTimestamp !== null ? $obsTimestamp : time();
         $currentTempFloat = is_numeric($currentTemp) ? (float)$currentTemp : 0;
         
+        // Calculate dateKey from observation timestamp if provided (prevent wrong-day writes)
+        if ($obsTimestamp !== null && $airport !== null) {
+            $timezone = getAirportTimezone($airport);
+            $tz = new DateTimeZone($timezone);
+            $obsDate = new DateTime('@' . $obsTimestamp);
+            $obsDate->setTimezone($tz);
+            $dateKey = $obsDate->format('Y-m-d');
+        }
+        
         // Update logic (same as main function)
         if (!isset($tempExtremes[$dateKey][$airportId])) {
             $tempExtremes[$dateKey][$airportId] = [
@@ -676,7 +697,8 @@ function getTempExtremes($airportId, $currentTemp, $airport = null) {
     $file = $cacheDir . '/temp_extremes.json';
     // Use airport's local timezone to determine "today" (midnight reset at local timezone)
     // Fallback to UTC if airport not provided (backward compatibility)
-        $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
+    // Note: getTempExtremes() is read-only, so we use current time (not observation timestamp)
+    $dateKey = $airport !== null ? getAirportDateKey($airport) : gmdate('Y-m-d');
     
     // Handle null/invalid currentTemp - return null values if no stored data
     // This prevents 0°C (32°F) from being shown during outages
