@@ -3550,7 +3550,7 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!isset($ws['type'])) {
                     $errors[] = "Airport '{$airportCode}' weather_source missing 'type' field";
                 } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar'];
+                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'awosnet'];
                     if (!in_array($ws['type'], $validTypes)) {
                         $errors[] = "Airport '{$airportCode}' weather_source has invalid type: '{$ws['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
                     } else {
@@ -3620,7 +3620,7 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!isset($wsBackup['type'])) {
                     $errors[] = "Airport '{$airportCode}' weather_source_backup missing 'type' field";
                 } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar'];
+                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'awosnet'];
                     if (!in_array($wsBackup['type'], $validTypes)) {
                         $errors[] = "Airport '{$airportCode}' weather_source_backup has invalid type: '{$wsBackup['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
                     } else {

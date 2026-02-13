@@ -626,6 +626,57 @@ class ApiParsingTest extends TestCase
     }
     
     /**
+     * Test parseAwosnetResponse - Valid HTML with METAR
+     */
+    public function testParseAwosnetResponse_ValidCompleteResponse()
+    {
+        $response = getMockAwosnetResponse();
+        $result = parseAwosnetResponse($response, []);
+        
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('temperature', $result);
+        $this->assertArrayHasKey('dewpoint', $result);
+        $this->assertArrayHasKey('pressure', $result);
+        $this->assertArrayHasKey('wind_speed', $result);
+        $this->assertArrayHasKey('wind_direction', $result);
+        $this->assertArrayHasKey('visibility', $result);
+        $this->assertEquals(5, $result['temperature']);
+        $this->assertEquals(5, $result['dewpoint']);
+        $this->assertEqualsWithDelta(30.03, $result['pressure'], 0.01);
+        $this->assertEquals(7, $result['wind_speed']);
+        $this->assertEquals(90, $result['wind_direction']);
+        $this->assertEquals(10.0, $result['visibility']);
+    }
+    
+    /**
+     * Test parseAwosnetResponse - No data (///) returns null
+     */
+    public function testParseAwosnetResponse_NoData_ReturnsNull()
+    {
+        $response = getMockAwosnetResponseNoData();
+        $result = parseAwosnetResponse($response, []);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseAwosnetResponse - Invalid HTML returns null
+     */
+    public function testParseAwosnetResponse_InvalidHtml_ReturnsNull()
+    {
+        $result = parseAwosnetResponse('<html><body>No METAR here</body></html>', []);
+        $this->assertNull($result);
+    }
+    
+    /**
+     * Test parseAwosnetResponse - Empty response returns null
+     */
+    public function testParseAwosnetResponse_EmptyResponse_ReturnsNull()
+    {
+        $result = parseAwosnetResponse('', []);
+        $this->assertNull($result);
+    }
+    
+    /**
      * Test parseWeatherLinkResponse - Valid response with all fields
      */
     public function testParseWeatherLinkResponse_ValidCompleteResponse()

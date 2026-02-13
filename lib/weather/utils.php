@@ -291,6 +291,11 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Aviation Weather',
                 'url' => 'https://aviationweather.gov'
             ];
+        case 'awosnet':
+            return [
+                'name' => 'AWOSnet',
+                'url' => 'https://awosnet.com'
+            ];
         case 'nws':
             return [
                 'name' => 'NWS ASOS',

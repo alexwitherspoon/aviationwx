@@ -54,6 +54,42 @@ function getMockAmbientResponse() {
 }
 
 /**
+ * Get a mock AWOSnet XML response (awiAwosNet.php format)
+ *
+ * Structured XML with METAR and individual fields. Invalid values (///, \\, ###, ***) normalize to null.
+ *
+ * @return string XML content
+ */
+function getMockAwosnetResponse() {
+    return '<?xml version="1.0" encoding="UTF-8"?>
+<awosnet>
+<airportIdentifier value="S40" time="1771001654"></airportIdentifier>
+<airTemperature value="5" time="1771001654"></airTemperature>
+<altimeterSetting value="30.03" time="1771001654"></altimeterSetting>
+<dewPoint value="5" time="1771001654"></dewPoint>
+<METAR value="METAR S40 132345Z AUTO 09007KT 10SM CLR 05/05 A3003 RMK A01" time="1771001654"></METAR>
+<relativeHumidity value="100" time="1771001654"></relativeHumidity>
+<tenMinutevisibility value="10" time="1771001654"></tenMinutevisibility>
+<twoMinutewindDirection value="90" time="1771001654"></twoMinutewindDirection>
+<twoMinutewindSpeed value="7" time="1771001654"></twoMinutewindSpeed>
+</awosnet>';
+}
+
+/**
+ * Get a mock AWOSnet XML response with no valid data (///)
+ *
+ * @return string XML content
+ */
+function getMockAwosnetResponseNoData() {
+    return '<?xml version="1.0" encoding="UTF-8"?>
+<awosnet>
+<airTemperature value="///" time="1771001654"></airTemperature>
+<dewPoint value="///"></dewPoint>
+<METAR value="///"></METAR>
+</awosnet>';
+}
+
+/**
  * Get a mock METAR API response
  * 
  * Units: Temperature (C), Pressure (inHg), Wind Speed (knots), Visibility (SM)
