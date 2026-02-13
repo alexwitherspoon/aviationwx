@@ -65,7 +65,6 @@ class ImageTransformTest extends TestCase
             $fg = imagecolorallocate($img, 255, 255, 255);
             imagestring($img, 5, 10, 10, "{$width}x{$height}", $fg);
             imagejpeg($img, $path, 85);
-            imagedestroy($img);
         } else {
             $this->markTestSkipped('GD library not available');
         }
@@ -86,7 +85,6 @@ class ImageTransformTest extends TestCase
             $bg = imagecolorallocate($img, 100, 150, 200);
             imagefill($img, 0, 0, $bg);
             imagewebp($img, $path, 80);
-            imagedestroy($img);
         } else {
             $this->markTestSkipped('GD library with WebP support not available');
         }
@@ -596,7 +594,6 @@ class ImageTransformTest extends TestCase
         $this->assertEquals(800, imagesx($image));
         $this->assertEquals(600, imagesy($image));
         
-        imagedestroy($image);
     }
     
     /**
@@ -615,7 +612,6 @@ class ImageTransformTest extends TestCase
         $this->assertNotNull($image);
         $this->assertInstanceOf(\GdImage::class, $image);
         
-        imagedestroy($image);
     }
     
     /**

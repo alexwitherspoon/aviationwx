@@ -201,7 +201,6 @@ GRAPHQL;
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
-    curl_close($ch);
     
     if ($response === false || $httpCode !== 200) {
         aviationwx_log('error', 'Cloudflare Analytics API request failed', [

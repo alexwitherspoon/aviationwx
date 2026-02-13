@@ -25,7 +25,6 @@ class PublicApiIntegrationTest extends TestCase
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['X-Health-Check: internal']);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         // API is enabled if we get 200 or 404 with API_NOT_ENABLED error
         // (404 with API_NOT_ENABLED means the router works but API is disabled)
@@ -38,7 +37,6 @@ class PublicApiIntegrationTest extends TestCase
             curl_setopt($ch, CURLOPT_TIMEOUT, 5);
             $rootResponse = curl_exec($ch);
             $rootCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             
             if ($rootCode === 0) {
                 self::markTestSkipped('Test server not running at ' . self::$apiBaseUrl);
@@ -74,7 +72,6 @@ class PublicApiIntegrationTest extends TestCase
         $response = curl_exec($ch);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $headerStr = substr($response, 0, $headerSize);
         $body = substr($response, $headerSize);

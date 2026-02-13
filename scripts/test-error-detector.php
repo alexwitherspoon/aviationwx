@@ -95,7 +95,6 @@ if ($img) {
         }
     }
     imagejpeg($img, $nightImage, 85);
-    imagedestroy($img);
     
     $result = detectErrorFrame($nightImage);
     if ($result['is_error']) {
@@ -129,7 +128,6 @@ if ($img) {
         }
     }
     imagejpeg($img, $errorImage, 85);
-    imagedestroy($img);
     
     $result = detectErrorFrame($errorImage);
     if (!$result['is_error']) {
@@ -165,7 +163,6 @@ if ($img) {
         }
     }
     imagejpeg($img, $colorImage, 85);
-    imagedestroy($img);
     
     $result = detectErrorFrame($colorImage);
     if ($result['is_error']) {

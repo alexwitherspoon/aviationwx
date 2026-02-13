@@ -155,7 +155,6 @@ class WeatherStalenessTest extends TestCase
         $body = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err = curl_error($ch);
-        curl_close($ch);
         return ['http_code' => $httpCode, 'body' => $body, 'headers' => $headers, 'error' => $err];
     }
 }

@@ -79,7 +79,6 @@ class WebcamHistoryTest extends TestCase
         $white = imagecolorallocate($image, 255, 255, 255);
         imagefill($image, 0, 0, $white);
         imagejpeg($image, $path);
-        imagedestroy($image);
         
         // Note: GD doesn't support writing EXIF, so we test the function 
         // behavior with files that may or may not have EXIF

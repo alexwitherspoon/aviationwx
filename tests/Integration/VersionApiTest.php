@@ -24,7 +24,6 @@ class VersionApiTest extends TestCase
         curl_setopt($ch, CURLOPT_NOBODY, true);
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         self::$serverAvailable = ($httpCode > 0);
     }
@@ -52,7 +51,6 @@ class VersionApiTest extends TestCase
         $response = curl_exec($ch);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $headerStr = substr($response, 0, $headerSize);
         $body = substr($response, $headerSize);
@@ -196,7 +194,6 @@ class VersionApiTest extends TestCase
         
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(405, $httpCode, 'POST requests should return 405 Method Not Allowed');
     }
@@ -218,7 +215,6 @@ class VersionApiTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
         
         if ($httpCode !== 200) {
             $this->markTestSkipped('Airport page not available');
@@ -250,7 +246,6 @@ class VersionApiTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
         
         if ($httpCode !== 200) {
             $this->markTestSkipped('Airport page not available');

@@ -58,7 +58,6 @@ class PixelationDetectionTest extends TestCase
         
         $path = $this->tmpDir . '/sharp_edges_' . uniqid() . '.jpg';
         imagejpeg($img, $path, 95);
-        imagedestroy($img);
         
         return $path;
     }
@@ -75,7 +74,6 @@ class PixelationDetectionTest extends TestCase
         
         $path = $this->tmpDir . '/flat_' . uniqid() . '.jpg';
         imagejpeg($img, $path, 95);
-        imagedestroy($img);
         
         return $path;
     }
@@ -101,7 +99,6 @@ class PixelationDetectionTest extends TestCase
         
         $path = $this->tmpDir . '/gradient_' . uniqid() . '.jpg';
         imagejpeg($img, $path, 95);
-        imagedestroy($img);
         
         return $path;
     }
@@ -125,7 +122,6 @@ class PixelationDetectionTest extends TestCase
         
         $path = $this->tmpDir . '/dark_noise_' . uniqid() . '.jpg';
         imagejpeg($img, $path, 95);
-        imagedestroy($img);
         
         return $path;
     }
@@ -141,7 +137,6 @@ class PixelationDetectionTest extends TestCase
         
         $result = calculateLaplacianVariance($img, $width, $height);
         
-        imagedestroy($img);
         
         $this->assertGreaterThan(100, $result['variance'], 
             'Sharp edge image should have high Laplacian variance');
@@ -158,7 +153,6 @@ class PixelationDetectionTest extends TestCase
         
         $result = calculateLaplacianVariance($img, $width, $height);
         
-        imagedestroy($img);
         
         $this->assertLessThan(5, $result['variance'], 
             'Flat image should have very low Laplacian variance');
@@ -173,7 +167,6 @@ class PixelationDetectionTest extends TestCase
         
         $result = calculateLaplacianVariance($img, $width, $height);
         
-        imagedestroy($img);
         
         // Gradient should have moderate variance (soft edges)
         $this->assertGreaterThan(5, $result['variance'], 
@@ -278,7 +271,6 @@ class PixelationDetectionTest extends TestCase
         
         $result = detectPixelation($img, $width, $height);
         
-        imagedestroy($img);
         
         $this->assertFalse($result['is_pixelated'],
             'Sharp edge image should NOT be detected as pixelated');
@@ -294,7 +286,6 @@ class PixelationDetectionTest extends TestCase
         
         $result = detectPixelation($img, $width, $height);
         
-        imagedestroy($img);
         
         $this->assertTrue($result['is_pixelated'],
             'Flat image should be detected as pixelated');
@@ -310,7 +301,6 @@ class PixelationDetectionTest extends TestCase
         
         $result = detectPixelation($img, $width, $height);
         
-        imagedestroy($img);
         
         $this->assertFalse($result['is_pixelated'],
             'Dark image with noise should NOT be detected as pixelated');

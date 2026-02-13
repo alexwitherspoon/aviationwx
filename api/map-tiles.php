@@ -218,7 +218,6 @@ curl_setopt($ch, CURLOPT_USERAGENT, 'AviationWX/1.0 (Tile Proxy)');
 $tileData = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $error = curl_error($ch);
-curl_close($ch);
 
 // Handle upstream errors
 if ($httpCode !== 200) {

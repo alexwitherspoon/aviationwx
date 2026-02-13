@@ -98,7 +98,6 @@ function generateMockWebcamImage(string $airportId, int $camIndex, int $width = 
     ob_start();
     imagejpeg($img, null, 85);
     $data = ob_get_clean();
-    imagedestroy($img);
     
     return $data ?: getMinimalJpeg();
 }

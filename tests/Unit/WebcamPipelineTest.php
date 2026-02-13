@@ -66,7 +66,6 @@ class WebcamPipelineTest extends TestCase
             }
             
             imagejpeg($img, $path, 85);
-            imagedestroy($img);
         } else {
             // Fallback: write minimal JPEG header
             file_put_contents($path, "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xFF\xD9");

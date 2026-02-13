@@ -222,7 +222,6 @@ function fetchAllSources(array $sources, string $airportId): array {
         }
         
         curl_multi_remove_handle($mh, $ch);
-        curl_close($ch);
     }
     
     curl_multi_close($mh);

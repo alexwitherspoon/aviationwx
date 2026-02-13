@@ -33,7 +33,6 @@ class PartnerLogoApiTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
         
         if ($error) {
             return ['http_code' => 0, 'error' => $error, 'body' => '', 'headers' => []];
@@ -184,7 +183,6 @@ class PartnerLogoApiTest extends TestCase
             
             $response2 = curl_exec($ch);
             $httpCode2 = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             
             // Should return 304 if not modified
             // Note: This might return 200 if cache is stale, which is also valid

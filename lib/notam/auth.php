@@ -62,7 +62,6 @@ function getNotamBearerToken(): ?string {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
     
     if ($httpCode !== 200 || $response === false) {
         aviationwx_log('error', 'notam auth: failed to get token', [

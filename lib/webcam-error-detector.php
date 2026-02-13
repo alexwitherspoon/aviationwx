@@ -56,7 +56,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
     $height = imagesy($img);
     
     if ($width < WEBCAM_ERROR_MIN_WIDTH || $height < WEBCAM_ERROR_MIN_HEIGHT) {
-        imagedestroy($img);
         return ['is_error' => true, 'confidence' => 0.8, 'error_score' => 0.8, 'reasons' => ['too_small']];
     }
     
@@ -65,7 +64,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
     // This catches: lens caps, dead cameras, corrupted files, solid error screens
     $uniformCheck = detectUniformColor($img, $width, $height);
     if ($uniformCheck['is_uniform']) {
-        imagedestroy($img);
         return [
             'is_error' => true, 
             'confidence' => 1.0, 
@@ -79,7 +77,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
     // Hard fail: pixelated images are rejected
     $pixelationCheck = detectPixelation($img, $width, $height, $airport);
     if ($pixelationCheck['is_pixelated']) {
-        imagedestroy($img);
         return [
             'is_error' => true,
             'confidence' => 0.9, // High confidence but not absolute (phase detection could be off)
@@ -113,7 +110,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
         // High variance = varied content in border = real image, exit early
         // This catches legitimate images quickly (most common case)
         if ($quickBorderVariance > WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD) {
-            imagedestroy($img);
             return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['high_border_variance_early_exit']];
         }
         // Low variance = potential error frame, continue with full border analysis
@@ -205,7 +201,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
     
     // High variance = varied content = real image (should have exited in Strategy 1, but double-check)
     if ($borderVariance > WEBCAM_ERROR_QUICK_BORDER_VARIANCE_THRESHOLD) {
-        imagedestroy($img);
         return ['is_error' => false, 'confidence' => 0.0, 'error_score' => 0.0, 'reasons' => ['high_border_variance']];
     }
     
@@ -238,7 +233,6 @@ function detectErrorFrame(string $imagePath, ?array $airport = null): array {
         $reasons[] = sprintf('low_variance_no_white_text_variance_%.1f_grey_%.1f%%', $borderVariance, $borderGreyRatio * 100);
     }
     
-    imagedestroy($img);
     
     $isError = $errorScore >= WEBCAM_ERROR_SCORE_THRESHOLD;
     $confidence = min(1.0, $errorScore);
@@ -628,7 +622,6 @@ function quickErrorFrameCheck(string $imagePath): bool {
         }
     }
     
-    imagedestroy($img);
     
     // Protect against division by zero
     if ($total === 0) {

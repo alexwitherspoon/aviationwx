@@ -42,7 +42,6 @@ class WebcamHistoryApiTest extends TestCase
         $response = curl_exec($ch);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $headerStr = substr($response, 0, $headerSize);
         $body = substr($response, $headerSize);

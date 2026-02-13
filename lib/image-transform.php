@@ -83,7 +83,6 @@ function transformImage(string $sourcePath, int $targetWidth, int $targetHeight,
     // Create output image
     $outputImage = imagecreatetruecolor($targetWidth, $targetHeight);
     if ($outputImage === false) {
-        imagedestroy($sourceImage);
         aviationwx_log('error', 'image transform failed to create output', [], 'api');
         return null;
     }
@@ -104,10 +103,8 @@ function transformImage(string $sourcePath, int $targetWidth, int $targetHeight,
         $cropRegion['width'], $cropRegion['height'] // Source width, height (crop size)
     );
     
-    imagedestroy($sourceImage);
     
     if (!$result) {
-        imagedestroy($outputImage);
         aviationwx_log('error', 'image transform resample failed', [], 'api');
         return null;
     }
@@ -123,7 +120,6 @@ function transformImage(string $sourcePath, int $targetWidth, int $targetHeight,
     }
     
     $imageData = ob_get_clean();
-    imagedestroy($outputImage);
     
     if (!$outputResult || $imageData === false || strlen($imageData) === 0) {
         aviationwx_log('error', 'image transform output failed', [
@@ -575,7 +571,6 @@ function transformImageFaa(string $sourcePath, array $margins): ?string
     
     // Validate safe zone is large enough
     if ($safeWidth < FAA_MINIMUM_WIDTH || $safeHeight < FAA_MINIMUM_HEIGHT) {
-        imagedestroy($sourceImage);
         aviationwx_log('warning', 'FAA transform safe zone too small', [
             'source_width' => $sourceWidth,
             'source_height' => $sourceHeight,
@@ -612,7 +607,6 @@ function transformImageFaa(string $sourcePath, array $margins): ?string
     // Create output image
     $outputImage = imagecreatetruecolor($targetWidth, $targetHeight);
     if ($outputImage === false) {
-        imagedestroy($sourceImage);
         aviationwx_log('error', 'FAA transform failed to create output', [], 'api');
         return null;
     }
@@ -627,10 +621,8 @@ function transformImageFaa(string $sourcePath, array $margins): ?string
         $cropWidth, $cropHeight         // Source width, height (crop size)
     );
     
-    imagedestroy($sourceImage);
     
     if (!$result) {
-        imagedestroy($outputImage);
         aviationwx_log('error', 'FAA transform resample failed', [], 'api');
         return null;
     }
@@ -639,7 +631,6 @@ function transformImageFaa(string $sourcePath, array $margins): ?string
     ob_start();
     $outputResult = imagejpeg($outputImage, null, IMAGE_TRANSFORM_JPEG_QUALITY);
     $imageData = ob_get_clean();
-    imagedestroy($outputImage);
     
     if (!$outputResult || $imageData === false || strlen($imageData) === 0) {
         aviationwx_log('error', 'FAA transform output failed', [], 'api');

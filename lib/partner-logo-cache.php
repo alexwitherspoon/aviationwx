@@ -94,7 +94,6 @@ function downloadPartnerLogo(string $logoUrl): bool {
     $data = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
     
     if ($error) {
         aviationwx_log('warning', 'partner logo download failed', [
@@ -136,7 +135,6 @@ function downloadPartnerLogo(string $logoUrl): bool {
             $img = @imagecreatefromstring($data);
             if ($img) {
                 if (@imagejpeg($img, $tmpFile, 85)) {
-                    imagedestroy($img);
                     if (@rename($tmpFile, $cacheFile)) {
                         aviationwx_log('info', 'partner logo cached (PNG converted)', [
                             'url' => $logoUrl,
@@ -147,7 +145,6 @@ function downloadPartnerLogo(string $logoUrl): bool {
                         @unlink($tmpFile);
                     }
                 } else {
-                    imagedestroy($img);
                 }
             }
         }

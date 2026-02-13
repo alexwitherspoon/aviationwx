@@ -513,7 +513,6 @@ class WebcamFormatGenerationTest extends TestCase
             $text = imagecolorallocate($img, 0, 0, 0);
             imagestring($img, 5, 10, 10, 'TEST', $text);
             imagejpeg($img, $sourceFile, 85);
-            imagedestroy($img);
         } else {
             // Fallback: create minimal valid JPEG
             file_put_contents($sourceFile, "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xFF\xD9");

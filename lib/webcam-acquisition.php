@@ -401,7 +401,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         $imageData = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
 
         if ($imageData === false || $httpCode !== 200) {
             $this->recordFailure('http_' . $httpCode, 'transient', $httpCode);
@@ -573,7 +572,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         $data = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
 
         if ($error || $httpCode !== 200 || empty($data) || strlen($data) <= 100) {
             $this->recordFailure('http_' . $httpCode, 'transient', $httpCode !== 200 ? $httpCode : null);
@@ -600,11 +598,9 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 return AcquisitionResult::failure('png_decode_failed', $this->sourceType);
             }
             if (!@imagejpeg($img, $stagingPath, 85)) {
-                imagedestroy($img);
                 $this->recordFailure('jpeg_encode_failed', 'transient');
                 return AcquisitionResult::failure('jpeg_encode_failed', $this->sourceType);
             }
-            imagedestroy($img);
         } else {
             if (@file_put_contents($stagingPath, $data) === false) {
                 $this->recordFailure('write_failed', 'transient');
@@ -687,7 +683,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, $outputHandler);
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($httpCode !== 200 || empty($data) || strlen($data) < 1000) {
             $this->recordFailure('http_' . $httpCode, 'transient', $httpCode !== 200 ? $httpCode : null);
@@ -718,7 +713,6 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 $this->recordFailure('invalid_jpeg', 'transient');
                 return AcquisitionResult::failure('invalid_jpeg', 'mjpeg');
             }
-            imagedestroy($testImg);
         }
 
         if (@file_put_contents($stagingPath, $jpegData) === false) {
@@ -1147,7 +1141,6 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
             if ($testImg === false) {
                 return ['valid' => false, 'reason' => 'image_corrupt'];
             }
-            imagedestroy($testImg);
             unset($imageData);
         }
 

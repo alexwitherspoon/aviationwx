@@ -223,11 +223,9 @@ function convertPngToJpeg($pngFile, $jpegFile) {
     $tmpFile = $jpegFile . '.tmp.' . getmypid() . '.' . time() . '.' . mt_rand(1000, 9999);
     
     if (!@imagejpeg($img, $tmpFile, 85)) {
-        imagedestroy($img);
         return false;
     }
     
-    imagedestroy($img);
     
     // Atomic rename
     if (@rename($tmpFile, $jpegFile)) {

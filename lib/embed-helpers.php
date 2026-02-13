@@ -88,7 +88,6 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
     
     // Parse public API response
     if ($httpCode === 200 && $response !== false && empty($error)) {

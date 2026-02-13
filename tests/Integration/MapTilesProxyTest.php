@@ -43,7 +43,6 @@ class MapTilesProxyTest extends TestCase
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno = curl_errno($ch);
-        curl_close($ch);
         
         // If we got any HTTP response (even 404), server is running
         return ($httpCode > 0 && $errno === 0);
@@ -64,7 +63,6 @@ class MapTilesProxyTest extends TestCase
         
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->isRateLimited = ($httpCode === 429);
     }
@@ -87,7 +85,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         // Should return 400 for missing parameters (not 404)
         $this->assertEquals(400, $httpCode, 'Endpoint should exist and return 400 for missing params');
@@ -117,7 +114,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(400, $httpCode, 'Should return 400 for missing layer');
         
@@ -144,7 +140,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(400, $httpCode, 'Should return 400 for invalid layer');
         
@@ -173,7 +168,6 @@ class MapTilesProxyTest extends TestCase
             
             curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             
             // Should return 200 (cached), 401 (API key issue), or 503 (no key configured)
             // But NOT 400 (invalid layer)
@@ -200,7 +194,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(400, $httpCode, 'Should return 400 for negative zoom');
         
@@ -218,7 +211,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(400, $httpCode, 'Should return 400 for zoom > 19');
     }
@@ -243,7 +235,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(400, $httpCode, 'Should return 400 for invalid x coordinate');
         
@@ -271,7 +262,6 @@ class MapTilesProxyTest extends TestCase
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         
         $response = curl_exec($ch);
-        curl_close($ch);
         
         $this->assertStringContainsString('Access-Control-Allow-Origin', $response, 'Should have CORS header');
     }
@@ -295,7 +285,6 @@ class MapTilesProxyTest extends TestCase
         
         curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(200, $httpCode, 'OPTIONS request should return 200');
     }
@@ -323,7 +312,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         // Valid responses depend on configuration:
         // - 200: Tile successfully fetched/cached (valid API key)
@@ -362,7 +350,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         // Should return 200 (success), 404 (timestamp might be invalid), or 429 (rate limited)
         // Not 400 (validation error) or 503 (API key error)
@@ -389,7 +376,6 @@ class MapTilesProxyTest extends TestCase
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $this->assertEquals(400, $httpCode, 'Should return 400 when timestamp missing');
         
@@ -417,7 +403,6 @@ class MapTilesProxyTest extends TestCase
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         
         $response = curl_exec($ch);
-        curl_close($ch);
         
         // Should have either Cache-Control (on success/cache hit) or error response
         // Just verify headers are being set
@@ -447,7 +432,6 @@ class MapTilesProxyTest extends TestCase
             
             curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
             
             // Should not hit rate limit after just 5 requests (limit is 300/min)
             // However, if we're already rate limited from earlier manual tests, that's okay

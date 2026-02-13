@@ -179,7 +179,6 @@ class PerformanceTest extends TestCase
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         $elapsed = microtime(true) - $start;
         
@@ -372,7 +371,6 @@ class PerformanceTest extends TestCase
                 $failed++;
             }
             curl_multi_remove_handle($multiHandle, $ch);
-            curl_close($ch);
         }
         
         curl_multi_close($multiHandle);

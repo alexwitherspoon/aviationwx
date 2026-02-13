@@ -61,7 +61,6 @@ class ExifPipelineCriticalTest extends TestCase
         $gray = imagecolorallocate($image, 128, 128, 128);
         imagefill($image, 0, 0, $gray);
         imagejpeg($image, $filePath, 90);
-        imagedestroy($image);
         
         return $filePath;
     }

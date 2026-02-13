@@ -41,7 +41,6 @@ class PublicApiWebcamTest extends TestCase
             $blue = imagecolorallocate($img, 0, 0, 255);
             imagefill($img, 0, 0, $blue);
             imagejpeg($img, $originalJpg);
-            imagedestroy($img);
         }
         
         // Create sized variants in WebP
@@ -53,7 +52,6 @@ class PublicApiWebcamTest extends TestCase
                 $red = imagecolorallocate($img, 255, 0, 0);
                 imagefill($img, 0, 0, $red);
                 imagewebp($img, $webpFile);
-                imagedestroy($img);
             }
         }
     }
@@ -80,7 +78,6 @@ class PublicApiWebcamTest extends TestCase
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-        curl_close($ch);
         
         $headerStr = substr($response, 0, $headerSize);
         $body = substr($response, $headerSize);

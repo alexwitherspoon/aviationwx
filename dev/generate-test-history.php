@@ -81,7 +81,6 @@ if (!file_exists($sourceFile)) {
     imagestring($img, 4, 720, 130, $subtitle, $textColor);
     
     imagejpeg($img, $sourceFile, 85);
-    imagedestroy($img);
     
     echo "Created placeholder image: {$sourceFile}\n";
 }
@@ -131,7 +130,6 @@ for ($i = 0; $i < $numFrames; $i++) {
     
     // Save
     imagejpeg($img, $destFile, 85);
-    imagedestroy($img);
     
     echo "  [{$i}] OK:   " . date('H:i:s', $timestamp) . " -> " . basename($destFile) . "\n";
     $createdCount++;

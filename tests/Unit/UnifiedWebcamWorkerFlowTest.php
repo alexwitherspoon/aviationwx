@@ -67,7 +67,6 @@ class UnifiedWebcamWorkerFlowTest extends TestCase
         $color = imagecolorallocate($image, 128, 128, 128);
         imagefill($image, 0, 0, $color);
         imagejpeg($image, $filePath, 90);
-        imagedestroy($image);
 
         return $filePath;
     }

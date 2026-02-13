@@ -38,7 +38,6 @@ class ExternalApiDependenciesTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
         
         $this->assertEquals(
             200,
@@ -100,7 +99,6 @@ class ExternalApiDependenciesTest extends TestCase
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         $error = curl_error($ch);
-        curl_close($ch);
         
         $this->assertEquals(
             200,
@@ -145,7 +143,6 @@ class ExternalApiDependenciesTest extends TestCase
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         $error = curl_error($ch);
-        curl_close($ch);
         
         $this->assertEquals(
             200,
@@ -244,7 +241,6 @@ class ExternalApiDependenciesTest extends TestCase
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         $response = curl_exec($ch);
-        curl_close($ch);
         
         $data = json_decode($response, true);
         if (!$data || !isset($data['radar']['past'][0]['time'])) {
@@ -265,7 +261,6 @@ class ExternalApiDependenciesTest extends TestCase
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-        curl_close($ch);
         
         $this->assertEquals(
             200,

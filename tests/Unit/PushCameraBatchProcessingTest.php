@@ -57,7 +57,6 @@ class PushCameraBatchProcessingTest extends TestCase
         // Create minimal JPEG
         $img = imagecreatetruecolor(100, 100);
         imagejpeg($img, $path, 90);
-        imagedestroy($img);
         
         // Set specific mtime
         touch($path, $mtime);

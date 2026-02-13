@@ -71,7 +71,6 @@ class WebcamErrorDetectorTest extends TestCase
         
         $filePath = $this->testImageDir . '/test_' . uniqid() . '.jpg';
         imagejpeg($img, $filePath, 85);
-        imagedestroy($img);
         
         return $filePath;
     }

@@ -483,10 +483,9 @@ class ProcessingPipeline
      */
     private function destroyImage(): void
     {
-        if ($this->gdImage !== null && is_resource($this->gdImage) || $this->gdImage instanceof \GdImage) {
-            @imagedestroy($this->gdImage);
-            $this->gdImage = null;
-        }
+        // imagedestroy() has no effect since PHP 8.0 and is deprecated in PHP 8.5
+        // Just null out the reference to allow garbage collection
+        $this->gdImage = null;
     }
 
     /**

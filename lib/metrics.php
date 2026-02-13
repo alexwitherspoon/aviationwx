@@ -24,6 +24,7 @@
 require_once __DIR__ . '/cache-paths.php';
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/logger.php';
+require_once __DIR__ . '/circuit-breaker.php';
 
 // =============================================================================
 // SCHEMA DEFINITIONS
@@ -855,7 +856,6 @@ function metrics_flush_via_http(): bool {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
     
     if ($httpCode === 200 && $response !== false) {
         $data = json_decode($response, true);
@@ -1811,8 +1811,12 @@ function metrics_report_operational_stats(): void {
         if ($config && isset($config['airports'])) {
             $openBreakers = [];
             foreach ($config['airports'] as $airportId => $airport) {
-                $weatherStatus = circuitBreakerStatus('weather', $airportId);
-                if ($weatherStatus['state'] === 'open') {
+                // Check both primary and metar sources
+                $primaryStatus = checkWeatherCircuitBreaker($airportId, 'primary');
+                $metarStatus = checkWeatherCircuitBreaker($airportId, 'metar');
+                
+                // Circuit is "open" if skip=true (in backoff)
+                if ($primaryStatus['skip'] || $metarStatus['skip']) {
                     $openBreakers[] = $airportId;
                 }
             }
