@@ -12,60 +12,31 @@ require_once __DIR__ . '/../../api/weather.php';
 
 class DailyTrackingTest extends TestCase
 {
-    private $testCacheDir;
-    private $peakGustFile;
-    private $tempExtremesFile;
-    
     protected function setUp(): void
     {
-        // Create isolated test cache directory
-        $this->testCacheDir = sys_get_temp_dir() . '/aviationwx_test_' . uniqid();
-        mkdir($this->testCacheDir, 0755, true);
-        
-        // Use centralized cache paths
-        $this->peakGustFile = CACHE_PEAK_GUSTS_FILE;
-        $this->tempExtremesFile = CACHE_TEMP_EXTREMES_FILE;
-        
-        // Ensure cache directory exists
-        ensureCacheDir(dirname($this->peakGustFile));
-        
-        // Backup existing files if they exist
-        if (file_exists($this->peakGustFile)) {
-            rename($this->peakGustFile, $this->peakGustFile . '.backup');
-        }
-        if (file_exists($this->tempExtremesFile)) {
-            rename($this->tempExtremesFile, $this->tempExtremesFile . '.backup');
-        }
-        
-        // Ensure files are completely removed (not just renamed)
-        if (file_exists($this->peakGustFile)) {
-            @unlink($this->peakGustFile);
-        }
-        if (file_exists($this->tempExtremesFile)) {
-            @unlink($this->tempExtremesFile);
-        }
-        
-        // Clear any file stat cache
-        clearstatcache(true, $this->peakGustFile);
-        clearstatcache(true, $this->tempExtremesFile);
+        ensureCacheDir(CACHE_PEAK_GUSTS_DIR);
+        ensureCacheDir(CACHE_TEMP_EXTREMES_DIR);
+        clearstatcache(true);
     }
-    
+
     protected function tearDown(): void
     {
-        // Clean up test cache files
-        if (file_exists($this->peakGustFile)) {
-            unlink($this->peakGustFile);
-        }
-        if (file_exists($this->tempExtremesFile)) {
-            unlink($this->tempExtremesFile);
-        }
-        
-        // Restore backups
-        if (file_exists($this->peakGustFile . '.backup')) {
-            rename($this->peakGustFile . '.backup', $this->peakGustFile);
-        }
-        if (file_exists($this->tempExtremesFile . '.backup')) {
-            rename($this->tempExtremesFile . '.backup', $this->tempExtremesFile);
+        $this->cleanupPerAirportTestFiles();
+    }
+
+    /**
+     * Remove per-airport test files created during tests
+     */
+    private function cleanupPerAirportTestFiles(): void
+    {
+        foreach ([CACHE_PEAK_GUSTS_DIR, CACHE_TEMP_EXTREMES_DIR] as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $files = glob($dir . '/*.json') ?: [];
+            foreach ($files as $f) {
+                @unlink($f);
+            }
         }
     }
     
@@ -666,25 +637,20 @@ class DailyTrackingTest extends TestCase
     {
         $airportId = 'test_corrupted_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
-        
-        $cacheDir = getWeatherCacheDir();
-        $file = $cacheDir . '/peak_gusts.json';
-        
-        // Create corrupted JSON file
+
+        $file = getPeakGustTrackingPath($airportId);
+        ensureCacheDir(CACHE_PEAK_GUSTS_DIR);
         file_put_contents($file, 'invalid json {', LOCK_EX);
         clearstatcache();
-        
-        // Should handle gracefully and recreate file
+
         updatePeakGust($airportId, 15.0, $airport);
         clearstatcache();
-        
+
         $result = getPeakGust($airportId, 15.0, $airport);
         $value = is_array($result) ? $result['value'] : $result;
-        
-        // Should work after corruption is handled
+
         $this->assertEquals(15.0, $value, 'Should handle corrupted JSON and recreate file');
-        
-        // Verify file is now valid JSON
+
         $content = file_get_contents($file);
         $decoded = json_decode($content, true);
         $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
@@ -697,25 +663,20 @@ class DailyTrackingTest extends TestCase
     {
         $airportId = 'test_temp_corrupted_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
-        
-        $cacheDir = getWeatherCacheDir();
-        $file = $cacheDir . '/temp_extremes.json';
-        
-        // Create corrupted JSON file
+
+        $file = getTempExtremesTrackingPath($airportId);
+        ensureCacheDir(CACHE_TEMP_EXTREMES_DIR);
         file_put_contents($file, 'invalid json {', LOCK_EX);
         clearstatcache();
-        
-        // Should handle gracefully and recreate file
+
         updateTempExtremes($airportId, 20.0, $airport);
         clearstatcache();
-        
+
         $result = getTempExtremes($airportId, 20.0, $airport);
-        
-        // Should work after corruption is handled
+
         $this->assertEquals(20.0, $result['high'], 'Should handle corrupted JSON and recreate file');
         $this->assertEquals(20.0, $result['low'], 'Should handle corrupted JSON and recreate file');
-        
-        // Verify file is now valid JSON
+
         $content = file_get_contents($file);
         $decoded = json_decode($content, true);
         $this->assertIsArray($decoded, 'File should be valid JSON after corruption handling');
@@ -743,41 +704,37 @@ class DailyTrackingTest extends TestCase
         updatePeakGust($airportId, 25, $airport, $obsTimestamp);
         updateTempExtremes($airportId, 15.5, $airport, $obsTimestamp);
         
-        // Read both cache files
-        $cacheDir = getWeatherCacheDir();
-        
-        $gustFile = $cacheDir . '/peak_gusts.json';
-        $tempFile = $cacheDir . '/temp_extremes.json';
-        
         clearstatcache();
-        
+
+        $gustFile = getPeakGustTrackingPath($airportId);
+        $tempFile = getTempExtremesTrackingPath($airportId);
         $gustData = json_decode(file_get_contents($gustFile), true);
         $tempData = json_decode(file_get_contents($tempFile), true);
-        
-        // Get the date keys used by each function
+
         $gustDateKeys = array_keys($gustData);
         $tempDateKeys = array_keys($tempData);
-        
-        // CRITICAL: Both should use the SAME date key (Feb 12 in Boise timezone)
-        $this->assertEquals($gustDateKeys, $tempDateKeys, 
+
+        $this->assertEquals($gustDateKeys, $tempDateKeys,
             'Peak gust and temp extremes MUST use the same date key when given the same observation timestamp');
-        
-        // Verify the date key is Feb 12 (Boise local time), not Feb 13 (UTC)
+
         $tz = new DateTimeZone('America/Boise');
         $obsDate = new DateTime('@' . $obsTimestamp);
         $obsDate->setTimezone($tz);
         $expectedDateKey = $obsDate->format('Y-m-d');
-        
-        $this->assertEquals($expectedDateKey, $gustDateKeys[0], 
+
+        $this->assertEquals($expectedDateKey, $gustDateKeys[0],
             'Date key should be based on observation timestamp in airport timezone');
-        $this->assertEquals('2026-02-12', $expectedDateKey, 
+        $this->assertEquals('2026-02-12', $expectedDateKey,
             'Feb 13 06:30 UTC should be stored as Feb 12 in Boise timezone');
-        
-        // Verify both functions stored the airport data under the correct date key
-        $this->assertArrayHasKey($airportId, $gustData[$expectedDateKey], 
+
+        $this->assertArrayHasKey($expectedDateKey, $gustData,
             'Peak gust should have airport data under correct date key');
-        $this->assertArrayHasKey($airportId, $tempData[$expectedDateKey], 
+        $this->assertArrayHasKey($expectedDateKey, $tempData,
             'Temp extremes should have airport data under correct date key');
+        $this->assertArrayHasKey('value', $gustData[$expectedDateKey],
+            'Peak gust should have value under correct date key');
+        $this->assertArrayHasKey('high', $tempData[$expectedDateKey],
+            'Temp extremes should have high under correct date key');
     }
     
     /**
@@ -805,30 +762,31 @@ class DailyTrackingTest extends TestCase
             updateTempExtremes($airportId, 10.0, $airport, $obsTimestamp);
         }
         
-        // Read cache files
-        $cacheDir = getWeatherCacheDir();
         clearstatcache();
-        
-        $gustData = json_decode(file_get_contents($cacheDir . '/peak_gusts.json'), true);
-        $tempData = json_decode(file_get_contents($cacheDir . '/temp_extremes.json'), true);
-        
-        // Verify each airport is stored under its correct local date
+
         foreach ($airports as $airportId => $airport) {
             $tz = new DateTimeZone($airport['timezone']);
             $obsDate = new DateTime('@' . $obsTimestamp);
             $obsDate->setTimezone($tz);
             $expectedDateKey = $obsDate->format('Y-m-d');
-            
-            // Both functions should use the same date key for this airport
-            $this->assertArrayHasKey($expectedDateKey, $gustData, 
+
+            $gustPath = getPeakGustTrackingPath($airportId);
+            $tempPath = getTempExtremesTrackingPath($airportId);
+            $this->assertFileExists($gustPath, "Peak gust file should exist for $airportId");
+            $this->assertFileExists($tempPath, "Temp extremes file should exist for $airportId");
+
+            $gustData = json_decode(file_get_contents($gustPath), true);
+            $tempData = json_decode(file_get_contents($tempPath), true);
+
+            $this->assertArrayHasKey($expectedDateKey, $gustData,
                 "Peak gust should have date key $expectedDateKey for $airportId");
-            $this->assertArrayHasKey($expectedDateKey, $tempData, 
+            $this->assertArrayHasKey($expectedDateKey, $tempData,
                 "Temp extremes should have date key $expectedDateKey for $airportId");
-            
-            $this->assertArrayHasKey($airportId, $gustData[$expectedDateKey], 
-                "Peak gust should have data for $airportId under date key $expectedDateKey");
-            $this->assertArrayHasKey($airportId, $tempData[$expectedDateKey], 
-                "Temp extremes should have data for $airportId under date key $expectedDateKey");
+
+            $this->assertArrayHasKey('value', $gustData[$expectedDateKey],
+                "Peak gust should have value for $airportId under date key $expectedDateKey");
+            $this->assertArrayHasKey('high', $tempData[$expectedDateKey],
+                "Temp extremes should have high for $airportId under date key $expectedDateKey");
         }
     }
     
@@ -858,37 +816,73 @@ class DailyTrackingTest extends TestCase
         updatePeakGust($airportId, 15, $airport, $obs2);
         updateTempExtremes($airportId, 18.0, $airport, $obs2);
         
-        // Read results
-        $cacheDir = getWeatherCacheDir();
         clearstatcache();
-        
-        $gustData = json_decode(file_get_contents($cacheDir . '/peak_gusts.json'), true);
-        $tempData = json_decode(file_get_contents($cacheDir . '/temp_extremes.json'), true);
-        
-        // Calculate expected date key (Feb 12 in Boise time)
+
+        $gustPath = getPeakGustTrackingPath($airportId);
+        $tempPath = getTempExtremesTrackingPath($airportId);
+        $gustData = json_decode(file_get_contents($gustPath), true);
+        $tempData = json_decode(file_get_contents($tempPath), true);
+
         $tz = new DateTimeZone('America/Boise');
         $obsDate = new DateTime('@' . $obs2);
         $obsDate->setTimezone($tz);
         $expectedDateKey = $obsDate->format('Y-m-d');
         $this->assertEquals('2026-02-12', $expectedDateKey);
-        
-        // Should only have ONE date key (Feb 12)
-        $this->assertCount(1, $gustData, 
+
+        $this->assertCount(1, $gustData,
             'Should only have one date key in peak gusts (not reset to new day)');
-        $this->assertCount(1, $tempData, 
+        $this->assertCount(1, $tempData,
             'Should only have one date key in temp extremes (not reset to new day)');
-        
-        // Verify peak gust is still 30 (not reset to 15)
-        $this->assertEquals(30, $gustData[$expectedDateKey][$airportId]['value'], 
+
+        $this->assertEquals(30, $gustData[$expectedDateKey]['value'],
             'Peak gust should NOT be reset when observation timestamp is from same local day');
-        
-        // Verify high temp is still 20.0 (not reset to 18.0)
-        $this->assertEquals(20.0, $tempData[$expectedDateKey][$airportId]['high'], 
+
+        $this->assertEquals(20.0, $tempData[$expectedDateKey]['high'],
             'High temp should NOT be reset when observation timestamp is from same local day');
-        
-        // Low temp should be updated to 18.0 (lower than initial 20.0)
-        $this->assertEquals(18.0, $tempData[$expectedDateKey][$airportId]['low'], 
+
+        $this->assertEquals(18.0, $tempData[$expectedDateKey]['low'],
             'Low temp should update to new low value');
+    }
+
+    /**
+     * When daily tracking is empty, getPeakGust and getTempExtremes fall back to weather history
+     */
+    public function testHistoryFallback_WhenDailyTrackingEmpty(): void
+    {
+        $airportId = 'test_history_fallback_' . uniqid();
+        $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
+
+        $tz = new DateTimeZone('America/Los_Angeles');
+        $now = new DateTime('now', $tz);
+        $dateKey = $now->format('Y-m-d');
+        $obs1 = $now->getTimestamp() - 7200;
+        $obs2 = $now->getTimestamp() - 3600;
+
+        $history = [
+            'airport_id' => $airportId,
+            'updated_at' => time(),
+            'retention_hours' => 24,
+            'observations' => [
+                ['obs_time' => $obs1, 'temperature' => 10.0, 'gust_speed' => 15],
+                ['obs_time' => $obs2, 'temperature' => 25.0, 'gust_speed' => 30],
+            ],
+        ];
+
+        $historyFile = getWeatherHistoryFilePath($airportId);
+        ensureCacheDir(dirname($historyFile));
+        file_put_contents($historyFile, json_encode($history));
+
+        $peakGust = getPeakGust($airportId, 0, $airport);
+        $tempExtremes = getTempExtremes($airportId, null, $airport);
+
+        $this->assertEquals(30, $peakGust['value'], 'Peak gust should come from history');
+        $this->assertEquals($obs2, $peakGust['ts']);
+        $this->assertEquals(25.0, $tempExtremes['high'], 'Temp high should come from history');
+        $this->assertEquals(10.0, $tempExtremes['low'], 'Temp low should come from history');
+        $this->assertEquals($obs2, $tempExtremes['high_ts']);
+        $this->assertEquals($obs1, $tempExtremes['low_ts']);
+
+        @unlink($historyFile);
     }
 }
 

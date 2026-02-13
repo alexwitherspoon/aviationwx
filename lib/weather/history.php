@@ -274,6 +274,106 @@ function saveWeatherHistory(string $airportId, array $history): bool
 }
 
 /**
+ * Compute daily temp extremes and peak gust from weather history
+ *
+ * Fallback when daily tracking has no data for today. Filters observations
+ * by airport's local date and computes min/max.
+ *
+ * @param string $airportId Airport ID
+ * @param string $dateKey Date key in Y-m-d format (airport's local "today")
+ * @param string $timezone Airport timezone (e.g., 'America/Los_Angeles')
+ * @return array{
+ *   temp_high: float|null,
+ *   temp_low: float|null,
+ *   temp_high_ts: int|null,
+ *   temp_low_ts: int|null,
+ *   peak_gust: float|null,
+ *   peak_gust_ts: int|null
+ * }
+ */
+function computeDailyExtremesFromHistory(string $airportId, string $dateKey, string $timezone): array
+{
+    $result = [
+        'temp_high' => null,
+        'temp_low' => null,
+        'temp_high_ts' => null,
+        'temp_low_ts' => null,
+        'peak_gust' => null,
+        'peak_gust_ts' => null,
+    ];
+
+    if (!isPublicApiWeatherHistoryEnabled()) {
+        return $result;
+    }
+
+    $history = loadWeatherHistory($airportId);
+    $observations = $history['observations'] ?? [];
+    if (empty($observations)) {
+        return $result;
+    }
+
+    $tz = new DateTimeZone($timezone);
+    $todayObs = [];
+    foreach ($observations as $obs) {
+        if (!isset($obs['obs_time'])) {
+            continue;
+        }
+        $dt = new DateTime('@' . $obs['obs_time']);
+        $dt->setTimezone($tz);
+        if ($dt->format('Y-m-d') === $dateKey) {
+            $todayObs[] = $obs;
+        }
+    }
+
+    if (empty($todayObs)) {
+        return $result;
+    }
+
+    $tempHigh = null;
+    $tempHighTs = null;
+    $tempLow = null;
+    $tempLowTs = null;
+    $peakGust = null;
+    $peakGustTs = null;
+
+    foreach ($todayObs as $obs) {
+        $ts = $obs['obs_time'] ?? null;
+        if ($ts === null) {
+            continue;
+        }
+
+        if (isset($obs['temperature']) && is_numeric($obs['temperature'])) {
+            $t = (float)$obs['temperature'];
+            if ($tempHigh === null || $t > $tempHigh) {
+                $tempHigh = $t;
+                $tempHighTs = $ts;
+            }
+            if ($tempLow === null || $t < $tempLow) {
+                $tempLow = $t;
+                $tempLowTs = $ts;
+            }
+        }
+
+        if (isset($obs['gust_speed']) && is_numeric($obs['gust_speed'])) {
+            $g = (float)$obs['gust_speed'];
+            if ($peakGust === null || $g > $peakGust) {
+                $peakGust = $g;
+                $peakGustTs = $ts;
+            }
+        }
+    }
+
+    $result['temp_high'] = $tempHigh;
+    $result['temp_low'] = $tempLow;
+    $result['temp_high_ts'] = $tempHighTs;
+    $result['temp_low_ts'] = $tempLowTs;
+    $result['peak_gust'] = $peakGust;
+    $result['peak_gust_ts'] = $peakGustTs;
+
+    return $result;
+}
+
+/**
  * Prune old observations from weather history
  * 
  * @param string $airportId Airport ID

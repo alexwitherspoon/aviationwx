@@ -32,8 +32,10 @@
  * │       └── {z}_{x}_{y}.png      # Cached map tiles (OpenWeatherMap proxy)
  * ├── rate_limits/                 # Rate limit state files
  * ├── backoff.json                 # Circuit breaker state
- * ├── peak_gusts.json              # Daily peak gust tracking
- * ├── temp_extremes.json           # Daily temperature extremes
+ * ├── peak_gusts/                  # Per-airport daily peak gust tracking
+ * │   └── {airport}.json
+ * ├── temp_extremes/               # Per-airport daily temperature extremes
+ * │   └── {airport}.json
  * ├── outage_{airport}.json        # Outage detection state
  * └── memory_history.json          # Memory usage tracking
  * 
@@ -515,6 +517,35 @@ if (!defined('CACHE_TEMP_EXTREMES_FILE')) {
     define('CACHE_TEMP_EXTREMES_FILE', CACHE_BASE_DIR . '/temp_extremes.json');
 }
 
+// Per-airport tracking subdirectories (preferred over legacy single-file layout)
+if (!defined('CACHE_PEAK_GUSTS_DIR')) {
+    define('CACHE_PEAK_GUSTS_DIR', CACHE_BASE_DIR . '/peak_gusts');
+}
+
+if (!defined('CACHE_TEMP_EXTREMES_DIR')) {
+    define('CACHE_TEMP_EXTREMES_DIR', CACHE_BASE_DIR . '/temp_extremes');
+}
+
+/**
+ * Get path to per-airport peak gust tracking file
+ *
+ * @param string $airportId Airport identifier (e.g., 'kczk')
+ * @return string Full path to peak gust tracking file
+ */
+function getPeakGustTrackingPath(string $airportId): string {
+    return CACHE_PEAK_GUSTS_DIR . '/' . strtolower($airportId) . '.json';
+}
+
+/**
+ * Get path to per-airport temp extremes tracking file
+ *
+ * @param string $airportId Airport identifier (e.g., 'kczk')
+ * @return string Full path to temp extremes tracking file
+ */
+function getTempExtremesTrackingPath(string $airportId): string {
+    return CACHE_TEMP_EXTREMES_DIR . '/' . strtolower($airportId) . '.json';
+}
+
 if (!defined('CACHE_MEMORY_HISTORY_FILE')) {
     define('CACHE_MEMORY_HISTORY_FILE', CACHE_BASE_DIR . '/memory_history.json');
 }
@@ -611,6 +642,8 @@ function ensureCacheDir(string $path): bool {
 function ensureAllCacheDirs(): array {
     $dirs = [
         CACHE_BASE_DIR,
+        CACHE_PEAK_GUSTS_DIR,
+        CACHE_TEMP_EXTREMES_DIR,
         CACHE_WEATHER_DIR,
         CACHE_WEATHER_HISTORY_DIR,
         CACHE_WEBCAMS_DIR,
@@ -649,6 +682,8 @@ function getAirportCachePaths(string $airportId): array {
         'sftp_dir' => CACHE_SFTP_DIR,  // SFTP uses flat structure by username
         'notam' => getNotamCachePath($airportId),
         'outage' => getOutageStatePath($airportId),
+        'peak_gusts' => getPeakGustTrackingPath($airportId),
+        'temp_extremes' => getTempExtremesTrackingPath($airportId),
     ];
 }
 

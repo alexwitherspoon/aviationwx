@@ -1440,5 +1440,5 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `cache/ftp/{airport}/{username}/` | FTP push uploads (ftp:www-data 2775) |
 | `/var/sftp/{username}/` | SFTP chroot (root:root 755) - outside cache |
 | `/var/sftp/{username}/files/` | SFTP push uploads (ftp:www-data 2775) |
-| `cache/peak_gusts.json` | Daily peak gust tracking |
-| `cache/temp_extremes.json` | Daily temperature extremes |
+| `cache/peak_gusts/{airport}.json` | Per-airport daily peak gust tracking |
+| `cache/temp_extremes/{airport}.json` | Per-airport daily temperature extremes |

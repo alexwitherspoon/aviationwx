@@ -31,6 +31,8 @@ services:
       # /var/www/html/ is www-data owned, so we use /var/sftp/ instead
       # Host path is under cache for organizational consistency
       - /tmp/aviationwx-cache/sftp:/var/sftp
+      # Logs persist on host across container restarts and reboots
+      - /var/aviationwx/logs:/var/log/aviationwx
       # Note: FTP uploads go to /var/www/html/cache/uploads/ (inside cache mount)
       - /etc/letsencrypt:/etc/letsencrypt:rw  # Let's Encrypt certificates (rw needed for certbot to write)
     cap_add:

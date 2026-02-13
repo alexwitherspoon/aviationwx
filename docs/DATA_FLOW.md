@@ -591,9 +591,12 @@ The system tracks daily extremes that reset at local midnight:
 - Example: Airport in PST (UTC-8) resets at 00:00 PST, not 00:00 UTC
 
 **Data Persistence**:
-- Stored in `cache/temp_extremes.json` and `cache/peak_gusts.json`
+- Stored in per-airport files: `cache/peak_gusts/{airport}.json` and `cache/temp_extremes/{airport}.json`
+- One file per airport to reduce lock contention and isolate failures
 - File locking prevents race conditions during concurrent updates
 - Old entries (>2 days) automatically cleaned up
+- Legacy single-file format (`cache/peak_gusts.json`, `cache/temp_extremes.json`) is migrated on first access
+- **Fallback**: When daily tracking is empty, values are computed from weather history (if enabled)
 
 ### Staleness Handling
 

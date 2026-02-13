@@ -72,26 +72,7 @@ chdir(__DIR__ . '/..');
 // Load required files
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/config.php';
-require_once __DIR__ . '/../lib/sentry.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
-
-// Start Sentry cron monitor check-in (skip for dry-run/help)
-$checkInId = null;
-if (!$dryRun && !isset($options['help']) && isSentryAvailable()) {
-    $checkInId = \Sentry\captureCheckIn(
-        slug: 'cache-cleanup',
-        status: \Sentry\CheckInStatus::inProgress(),
-        monitorConfig: new \Sentry\MonitorConfig(
-            schedule: new \Sentry\MonitorSchedule(
-                type: \Sentry\MonitorScheduleType::crontab(),
-                value: '0 4 * * *', // Daily at 4 AM UTC
-            ),
-            checkinMargin: 60, // 60 minutes grace period
-            maxRuntime: 30, // Should complete in 30 minutes
-            timezone: 'UTC',
-        ),
-    );
-}
 
 // ============================================================================
 // CONFIGURATION - Cleanup Thresholds (in seconds)
@@ -281,17 +262,33 @@ cleanupFilesByPattern(
     $stats, $dryRun, $verbose
 );
 
-// Clean stale entries in peak_gusts.json and temp_extremes.json
+// Clean stale entries in per-airport tracking files (primary layout)
+foreach ([CACHE_PEAK_GUSTS_DIR, CACHE_TEMP_EXTREMES_DIR] as $dir) {
+    if (!is_dir($dir)) {
+        continue;
+    }
+    $files = glob($dir . '/*.json') ?: [];
+    $label = strpos($dir, 'peak_gusts') !== false ? 'Peak gusts' : 'Temperature extremes';
+    foreach ($files as $file) {
+        cleanupDailyTrackingEntries(
+            $file,
+            strpos($dir, 'peak_gusts') !== false ? CLEANUP_PEAK_GUST_AGE : CLEANUP_TEMP_EXTREMES_AGE,
+            $label . ' entries (' . basename($file) . ')',
+            $stats, $dryRun, $verbose
+        );
+    }
+}
+// Legacy single-file format (migration period)
 cleanupDailyTrackingEntries(
     CACHE_PEAK_GUSTS_FILE,
     CLEANUP_PEAK_GUST_AGE,
-    'Peak gusts entries',
+    'Peak gusts entries (legacy)',
     $stats, $dryRun, $verbose
 );
 cleanupDailyTrackingEntries(
     CACHE_TEMP_EXTREMES_FILE,
     CLEANUP_TEMP_EXTREMES_AGE,
-    'Temperature extremes entries',
+    'Temperature extremes entries (legacy)',
     $stats, $dryRun, $verbose
 );
 // Also check api/cache dir (used by some scripts)
@@ -429,20 +426,6 @@ aviationwx_log('info', 'cache cleanup completed', [
     'duration_seconds' => round($elapsed, 2),
     'dry_run' => $dryRun,
 ], 'app');
-
-// Report to Sentry
-if (!$dryRun && isSentryAvailable() && $checkInId) {
-    $status = $stats['errors'] > 0 
-        ? \Sentry\CheckInStatus::error() 
-        : \Sentry\CheckInStatus::ok();
-    
-    \Sentry\captureCheckIn(
-        slug: 'cache-cleanup',
-        status: $status,
-        checkInId: $checkInId,
-        duration: $elapsed,
-    );
-}
 
 exit($stats['errors'] > 0 ? 1 : 0);
 
@@ -721,7 +704,10 @@ function cleanupWebcamHistoryFrames(
 }
 
 /**
- * Cleanup stale entries in daily tracking files (peak_gusts.json, temp_extremes.json)
+ * Cleanup stale entries in daily tracking files
+ *
+ * Works with both per-airport files (cache/peak_gusts/{airport}.json,
+ * cache/temp_extremes/{airport}.json) and legacy single-file format.
  */
 function cleanupDailyTrackingEntries(
     string $file,
