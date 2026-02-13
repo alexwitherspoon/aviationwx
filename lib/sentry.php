@@ -172,12 +172,17 @@ function sentryStartTransaction(string $operation, string $name, array $tags = [
     $context->setOp($operation);
     $context->setName($name);
     
-    // Set tags on context before creating transaction
-    foreach ($tags as $key => $value) {
-        $context->setTag($key, (string)$value);
-    }
-    
     $transaction = \Sentry\startTransaction($context);
+    
+    // Set tags on the current scope (not on transaction or context)
+    // Tags are indexed and searchable in Sentry dashboard
+    if (!empty($tags)) {
+        \Sentry\configureScope(function (\Sentry\State\Scope $scope) use ($tags): void {
+            foreach ($tags as $key => $value) {
+                $scope->setTag($key, (string)$value);
+            }
+        });
+    }
     
     \Sentry\SentrySdk::getCurrentHub()->setSpan($transaction);
     
