@@ -24,19 +24,29 @@ if (file_exists($autoloadPath)) {
 /**
  * Initialize Sentry error tracking
  * 
- * Only activates in production with valid DSN.
- * Filters events by severity and samples traces.
+ * Activates in production AND CI environments with valid DSN.
+ * Uses SENTRY_ENVIRONMENT to separate prod/ci events in Sentry dashboard.
+ * 
+ * Environments:
+ * - production: Real production errors
+ * - ci: CI/CD test errors (validates Sentry integration works)
+ * - local/dev: Disabled (no DSN)
  * 
  * @return bool True if Sentry was initialized
  */
 function initSentry(): bool {
-    // Don't initialize in test mode
+    // Don't initialize in test mode (PHPUnit tests)
     if (isTestMode()) {
         return false;
     }
     
-    // Only initialize in production
-    if (!isProduction()) {
+    // Initialize in production OR CI (but not local dev)
+    $appEnv = getenv('APP_ENV') ?: 'production';
+    $isCI = getenv('CI') === 'true' || getenv('GITHUB_ACTIONS') === 'true';
+    
+    // Allow: production, ci
+    // Block: testing, development, local
+    if (!isProduction() && !$isCI) {
         return false;
     }
     
