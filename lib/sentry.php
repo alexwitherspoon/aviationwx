@@ -157,11 +157,17 @@ function sentryStartTransaction(string $operation, string $name, array $tags = [
         return null;
     }
     
-    $transaction = \Sentry\startTransaction([
-        'op' => $operation,
-        'name' => $name,
-        'tags' => $tags,
-    ]);
+    // Create TransactionContext object (required by Sentry SDK 4.x)
+    $context = new \Sentry\Tracing\TransactionContext();
+    $context->setOp($operation);
+    $context->setName($name);
+    
+    $transaction = \Sentry\startTransaction($context);
+    
+    // Apply tags to the transaction
+    foreach ($tags as $key => $value) {
+        $transaction->setTag($key, $value);
+    }
     
     \Sentry\SentrySdk::getCurrentHub()->setSpan($transaction);
     
