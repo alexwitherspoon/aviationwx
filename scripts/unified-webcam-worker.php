@@ -35,6 +35,7 @@ if (php_sapi_name() !== 'cli') {
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/sentry.php'; // Initialize Sentry early
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-worker.php';
@@ -226,6 +227,18 @@ function determineWorkerTimeout(string $airportId, int $camIndex): ?int
  */
 function runWorkerMode(string $airportId, int $camIndex): int
 {
+    // Set Sentry service context for this worker
+    sentrySetServiceContext('worker-webcam', [
+        'airport_id' => $airportId,
+        'camera_index' => $camIndex,
+    ]);
+    
+    // Start performance tracing
+    $transaction = sentryStartTransaction('worker.webcam', "fetch_webcam_{$airportId}_{$camIndex}", [
+        'airport_id' => $airportId,
+        'camera_index' => (string)$camIndex,
+    ]);
+    
     // Determine appropriate timeout (extended for push camera backlogs)
     $timeout = determineWorkerTimeout($airportId, $camIndex);
     initWorkerTimeout($timeout, "webcam_{$airportId}_{$camIndex}");
@@ -235,6 +248,7 @@ function runWorkerMode(string $airportId, int $camIndex): int
         aviationwx_log('error', 'unified-webcam-worker: invalid airport ID', [
             'airport' => $airportId
         ], 'app');
+        sentryFinishTransaction($transaction);
         return WorkerResult::FAILURE;
     }
 
@@ -246,6 +260,7 @@ function runWorkerMode(string $airportId, int $camIndex): int
         variant_health_flush();
         metrics_flush();
 
+        sentryFinishTransaction($transaction);
         return $result->exitCode;
 
     } catch (InvalidArgumentException $e) {
@@ -254,6 +269,7 @@ function runWorkerMode(string $airportId, int $camIndex): int
             'cam' => $camIndex,
             'error' => $e->getMessage()
         ], 'app');
+        sentryFinishTransaction($transaction);
         return WorkerResult::FAILURE;
 
     } catch (Exception $e) {
@@ -263,6 +279,7 @@ function runWorkerMode(string $airportId, int $camIndex): int
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ], 'app');
+        sentryFinishTransaction($transaction);
         return WorkerResult::FAILURE;
     }
 }

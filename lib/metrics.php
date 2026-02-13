@@ -1616,6 +1616,93 @@ function format_bytes(int $bytes): string {
     return round($bytes, 2) . ' ' . $units[$i];
 }
 
+/**
+ * Report metrics health to Sentry
+ * 
+ * Sends custom metrics and health warnings to Sentry for monitoring.
+ * Called periodically by scheduler (every 5 minutes).
+ * 
+ * @return void
+ */
+function metrics_report_to_sentry(): void {
+    if (!defined('SENTRY_INITIALIZED') || !SENTRY_INITIALIZED) {
+        return;
+    }
+    
+    // APCu Memory Pressure
+    $memInfo = metrics_get_apcu_memory_info();
+    if ($memInfo && $memInfo['used_percent'] > 80) {
+        $severity = $memInfo['used_percent'] > 90 ? \Sentry\Severity::error() : \Sentry\Severity::warning();
+        
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($memInfo, $severity): void {
+            $scope->setContext('apcu_memory', $memInfo);
+            $scope->setTag('resource_type', 'memory');
+            
+            \Sentry\captureMessage(
+                "APCu memory pressure: {$memInfo['used_percent']}% used",
+                $severity
+            );
+        });
+    }
+    
+    // Disk Space Monitoring
+    $diskInfo = metrics_get_disk_space_info();
+    if ($diskInfo['is_critical']) {
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($diskInfo): void {
+            $scope->setContext('disk_space', $diskInfo);
+            $scope->setTag('resource_type', 'disk');
+            
+            \Sentry\captureMessage(
+                "Disk space critical: {$diskInfo['used_percent']}% used ({$diskInfo['free_bytes']} bytes free)",
+                \Sentry\Severity::fatal()
+            );
+        });
+    } elseif ($diskInfo['is_low']) {
+        \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($diskInfo): void {
+            $scope->setContext('disk_space', $diskInfo);
+            $scope->setTag('resource_type', 'disk');
+            
+            \Sentry\captureMessage(
+                "Disk space low: {$diskInfo['used_percent']}% used",
+                \Sentry\Severity::warning()
+            );
+        });
+    }
+    
+    // Check for recent aggregation issues
+    // Look for incomplete aggregations in recent daily files
+    $yesterday = gmdate('Y-m-d', time() - 86400);
+    $dailyFile = getMetricsDailyPath($yesterday);
+    
+    if (file_exists($dailyFile)) {
+        $content = @file_get_contents($dailyFile);
+        if ($content !== false) {
+            $data = @json_decode($content, true);
+            
+            // Check if aggregation was incomplete (less than 20 hours indicates issues)
+            if (is_array($data) && isset($data['airports'])) {
+                $totalViews = $data['global']['page_views'] ?? 0;
+                
+                // If we have almost no data, something went wrong
+                if ($totalViews < 10 && gmdate('Y-m-d') !== $yesterday) {
+                    \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($yesterday, $totalViews): void {
+                        $scope->setTag('date', $yesterday);
+                        $scope->setContext('aggregation', [
+                            'date' => $yesterday,
+                            'total_views' => $totalViews,
+                        ]);
+                        
+                        \Sentry\captureMessage(
+                            "Suspiciously low metrics for {$yesterday}: {$totalViews} total views",
+                            \Sentry\Severity::warning()
+                        );
+                    });
+                }
+            }
+        }
+    }
+}
+
 // =============================================================================
 // PROMETHEUS EXPORT
 // =============================================================================
