@@ -382,14 +382,37 @@ Create custom dashboards for:
 - Aggregation performance (transaction duration)
 - APCu memory trends (custom context)
 
-## Local Development
+## Environments
 
-Sentry does **not** initialize in local development:
-- No DSN configured → Silent skip
-- `APP_ENV=testing` → No initialization
-- Mock mode → No external calls
+Sentry supports multiple environments with separate event streams:
 
-This ensures local development is fast and doesn't pollute production Sentry data.
+### Production Environment
+- **When:** `APP_ENV=production` with valid `SENTRY_DSN`
+- **Tag:** `environment=production`
+- **Purpose:** Real production errors and metrics
+- **Data:** All production traffic
+
+### CI Environment  
+- **When:** GitHub Actions with valid `SENTRY_DSN`
+- **Tag:** `environment=ci`
+- **Purpose:** Validate Sentry integration in CI before deployment
+- **Data:** Test events from CI runs (low volume)
+
+**Benefits of CI Environment:**
+- Catches Sentry integration bugs before production
+- Validates SDK API usage (transaction creation, tagging, etc.)
+- Separate from production events in Sentry dashboard
+- The `setTag()` production bug would have been caught by this
+
+### Local Development
+- **When:** Local dev, test mode, no DSN configured
+- **Behavior:** Sentry disabled (silent skip)
+- **Purpose:** Fast local development, no pollution of production data
+
+**Environment Separation in Sentry Dashboard:**
+- Filter by environment tag to see only prod or CI events
+- Set up separate alert rules for each environment
+- CI events help validate integration, prod events track real issues
 
 ## Testing
 
