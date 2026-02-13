@@ -43,6 +43,7 @@ $lastConfigReload = 0;
 $lastConfigMtime = null; // Track config file mtime to detect changes
 $lastConfigSha = null; // Track config file SHA hash to detect ANY content changes
 $lastMetricsFlush = 0;
+$lastMetricsHealthCheck = 0; // Separate timestamp for health checks
 $lastMetricsCleanup = 0;
 $lastDailyAggregation = '';
 $lastWeeklyAggregation = '';
@@ -488,8 +489,8 @@ while ($running) {
             $lastMetricsCleanup = $now;
         }
         
-        // 5. Check metrics system health (every 5 minutes, aligned with flush)
-        if (($now - $lastMetricsFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
+        // 5. Check metrics system health (every 5 minutes)
+        if (($now - $lastMetricsHealthCheck) >= 300) {
             $healthStatus = metrics_get_health_status();
             
             if (!$healthStatus['healthy']) {
@@ -520,6 +521,8 @@ while ($running) {
             
             // Report to Sentry for alerting and trends
             metrics_report_to_sentry();
+            
+            $lastMetricsHealthCheck = $now;
         }
         
         // 6. Flush weather health counters to cache file (every 60 seconds)

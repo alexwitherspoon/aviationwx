@@ -49,12 +49,6 @@ services:
       - WEATHER_REFRESH_DEFAULT=${WEATHER_REFRESH_DEFAULT:-60}
       - WEATHER_REFRESH_URL=http://localhost:8080
       - GIT_SHA=${GIT_SHA:-}
-      # Sentry configuration (from env_file)
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
-      - SENTRY_SAMPLE_RATE_ERRORS=${SENTRY_SAMPLE_RATE_ERRORS:-1.0}
-      - SENTRY_SAMPLE_RATE_TRACES=${SENTRY_SAMPLE_RATE_TRACES:-0.05}
-      - SENTRY_RELEASE=${GIT_SHA:-}
     healthcheck:
       # Override Dockerfile healthcheck with longer start_period
       # Dockerfile has 5s which is too short for all services (cron, vsftpd, sshd, fail2ban, Apache)

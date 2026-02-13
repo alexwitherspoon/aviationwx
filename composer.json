@@ -3,7 +3,8 @@
     "description": "Real-time aviation weather and conditions for participating airports",
     "type": "project",
     "require": {
-        "erusev/parsedown": "^1.7"
+        "erusev/parsedown": "^1.7",
+        "sentry/sentry": "^4.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^12.5"

@@ -598,7 +598,7 @@ if ($themeCookie === 'dark') {
     </script>
     <?php
     // Initialize Sentry JavaScript SDK for frontend error tracking
-    renderSentryJsInit();
+    renderSentryJsInit('airport_dashboard');
     ?>
     <title><?= $pageTitle ?></title>
     

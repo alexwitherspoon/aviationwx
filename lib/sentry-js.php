@@ -19,11 +19,12 @@
  * - User context (hashed IP for privacy)
  * - Release tracking (Git SHA)
  * 
+ * @param string $pageType Page identifier for tagging (e.g., 'airport_dashboard', 'homepage', 'status', 'directory')
  * @return void Echoes script tag directly
  */
-function renderSentryJsInit(): void {
+function renderSentryJsInit(string $pageType = 'unknown'): void {
     // Only initialize in production
-    if (defined('APP_ENV') && APP_ENV !== 'production') {
+    if (!isProduction()) {
         return;
     }
     
@@ -50,6 +51,7 @@ function renderSentryJsInit(): void {
     $releaseEscaped = htmlspecialchars($release, ENT_QUOTES, 'UTF-8');
     $userHashEscaped = htmlspecialchars($userHash, ENT_QUOTES, 'UTF-8');
     $airportIdEscaped = $airportId ? htmlspecialchars($airportId, ENT_QUOTES, 'UTF-8') : null;
+    $pageTypeEscaped = htmlspecialchars($pageType, ENT_QUOTES, 'UTF-8');
     
     echo <<<HTML
     <!-- Sentry Browser SDK -->
@@ -139,7 +141,7 @@ HTML;
     
     echo <<<HTML
 
-            Sentry.setTag('page_type', 'airport_dashboard');
+            Sentry.setTag('page_type', '{$pageTypeEscaped}');
             
             // Track Service Worker errors
             if ('serviceWorker' in navigator) {
@@ -165,7 +167,7 @@ HTML;
  * @return bool True if Sentry JS should initialize
  */
 function shouldInitializeSentryJs(): bool {
-    if (defined('APP_ENV') && APP_ENV !== 'production') {
+    if (!isProduction()) {
         return false;
     }
     

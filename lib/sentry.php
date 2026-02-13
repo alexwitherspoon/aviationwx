@@ -29,8 +29,13 @@ function initSentry(): bool {
         return false;
     }
     
+    // Only initialize in production
+    if (!isProduction()) {
+        return false;
+    }
+    
     // Check if Sentry SDK is available
-    if (!class_exists('\Sentry\init')) {
+    if (!function_exists('\Sentry\init')) {
         return false;
     }
     

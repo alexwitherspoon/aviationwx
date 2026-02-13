@@ -118,7 +118,7 @@ $ogImage = file_exists($aboutPhotoWebp)
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <?php
     // Initialize Sentry JavaScript SDK for frontend error tracking
-    renderSentryJsInit();
+    renderSentryJsInit('homepage');
     ?>
     <title><?= htmlspecialchars($pageTitle) ?></title>
     

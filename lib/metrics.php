@@ -1064,12 +1064,19 @@ function metrics_get_rolling(int $days = 7): array {
     }
     
     // Log if daily files are missing (helps detect aggregation failures)
+    // Rate-limit this warning to avoid noisy logs from frequently called request paths
     if (!empty($missingDays)) {
-        aviationwx_log('warning', 'metrics: missing daily files in rolling window', [
-            'missing_days' => $missingDays,
-            'requested_days' => $days,
-            'files_found' => $days - count($missingDays)
-        ], 'app');
+        static $lastMissingDailyLog = 0;
+        $logIntervalSeconds = 300; // 5 minutes
+
+        if ($lastMissingDailyLog === 0 || ($now - $lastMissingDailyLog) >= $logIntervalSeconds) {
+            aviationwx_log('warning', 'metrics: missing daily files in rolling window', [
+                'missing_days' => $missingDays,
+                'requested_days' => $days,
+                'files_found' => $days - count($missingDays)
+            ], 'app');
+            $lastMissingDailyLog = $now;
+        }
     }
     
     // Add current day's hourly data

@@ -52,7 +52,6 @@ COPY composer.json composer.lock* ./
 # Install Composer and dependencies
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && composer install --no-dev --optimize-autoloader --no-interaction \
-    && composer require sentry/sentry:^4.0 --no-interaction \
     && rm -rf /root/.composer/cache
 
 # Copy configuration files (rarely change)

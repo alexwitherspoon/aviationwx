@@ -19,7 +19,15 @@ require_once __DIR__ . '/../lib/sentry.php';
 require_once __DIR__ . '/../lib/memory-metrics.php';
 require_once __DIR__ . '/../lib/logger.php';
 
-// Start Sentry cron monitor check-in
+// Prevent multiple instances from running simultaneously
+$lockFile = __DIR__ . '/../cache/memory-sampler.lock';
+$fp = @fopen($lockFile, 'w');
+if (!$fp || !flock($fp, LOCK_EX | LOCK_NB)) {
+    // Another instance is running, exit silently
+    exit(0);
+}
+
+// Start Sentry cron monitor check-in (after lock acquired)
 $checkInId = null;
 if (isSentryAvailable()) {
     $checkInId = \Sentry\captureCheckIn(
@@ -35,14 +43,6 @@ if (isSentryAvailable()) {
             timezone: 'UTC',
         ),
     );
-}
-
-// Prevent multiple instances from running simultaneously
-$lockFile = __DIR__ . '/../cache/memory-sampler.lock';
-$fp = @fopen($lockFile, 'w');
-if (!$fp || !flock($fp, LOCK_EX | LOCK_NB)) {
-    // Another instance is running, exit silently
-    exit(0);
 }
 
 // Sample 12 times (12 * 5 seconds = 60 seconds total)
