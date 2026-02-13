@@ -162,12 +162,12 @@ function sentryStartTransaction(string $operation, string $name, array $tags = [
     $context->setOp($operation);
     $context->setName($name);
     
-    $transaction = \Sentry\startTransaction($context);
-    
-    // Apply tags to the transaction
+    // Set tags on context before creating transaction
     foreach ($tags as $key => $value) {
-        $transaction->setTag($key, $value);
+        $context->setTag($key, (string)$value);
     }
+    
+    $transaction = \Sentry\startTransaction($context);
     
     \Sentry\SentrySdk::getCurrentHub()->setSpan($transaction);
     
