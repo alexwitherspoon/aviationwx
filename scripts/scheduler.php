@@ -476,7 +476,38 @@ while ($running) {
             $lastMetricsCleanup = $now;
         }
         
-        // 5. Flush weather health counters to cache file (every 60 seconds)
+        // 5. Check metrics system health (every 5 minutes, aligned with flush)
+        if (($now - $lastMetricsFlush) >= METRICS_FLUSH_INTERVAL_SECONDS) {
+            $healthStatus = metrics_get_health_status();
+            
+            if (!$healthStatus['healthy']) {
+                foreach ($healthStatus['errors'] as $error) {
+                    aviationwx_log('error', 'scheduler: metrics health check failed', [
+                        'error' => $error
+                    ], 'app');
+                }
+            }
+            
+            if (!empty($healthStatus['warnings'])) {
+                foreach ($healthStatus['warnings'] as $warning) {
+                    aviationwx_log('warning', 'scheduler: metrics health warning', [
+                        'warning' => $warning
+                    ], 'app');
+                }
+            }
+            
+            // Log memory pressure warnings
+            $memInfo = metrics_get_apcu_memory_info();
+            if ($memInfo && $memInfo['used_percent'] > 80) {
+                aviationwx_log('warning', 'scheduler: APCu memory pressure', [
+                    'used_percent' => $memInfo['used_percent'],
+                    'used_mb' => round($memInfo['used_bytes'] / 1048576, 2),
+                    'total_mb' => round($memInfo['total_bytes'] / 1048576, 2)
+                ], 'app');
+            }
+        }
+        
+        // 6. Flush weather health counters to cache file (every 60 seconds)
         // Note: Variant health flush is handled by metrics_flush_via_http() above
         // This pre-computes weather fetch health so status page doesn't check file ages
         if (($now - $lastWeatherHealthUpdate) >= 60) {
@@ -485,7 +516,7 @@ while ($running) {
             }
         }
         
-        // 6. Clean up stuck worker processes (every 60 seconds)
+        // 7. Clean up stuck worker processes (every 60 seconds)
         // This is a safety net for workers that become stuck despite self-timeout mechanisms
         if (($now - $lastStuckWorkerCleanup) >= 60) {
             $stuckPids = cleanupStaleWorkerHeartbeats();
@@ -501,7 +532,7 @@ while ($running) {
             $lastStuckWorkerCleanup = $now;
         }
         
-        // 7. Dynamic DNS check for FTP passive mode (configurable interval)
+        // 8. Dynamic DNS check for FTP passive mode (configurable interval)
         // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
         $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
         if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {

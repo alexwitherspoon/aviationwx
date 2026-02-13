@@ -198,6 +198,42 @@ function metrics_merge_webcams(array &$target, array $source): void {
 // =============================================================================
 
 /**
+ * Check if APCu is available and log if unavailable
+ * 
+ * Uses rate limiting to avoid log spam (logs once per hour max).
+ * 
+ * @return bool True if APCu is available
+ */
+function metrics_is_apcu_available(): bool {
+    static $lastLogTime = 0;
+    
+    if (!function_exists('apcu_fetch')) {
+        $now = time();
+        if (($now - $lastLogTime) >= 3600) {
+            aviationwx_log('error', 'metrics: APCu not available, metrics collection disabled', [
+                'reason' => 'apcu_fetch function not found'
+            ], 'app');
+            $lastLogTime = $now;
+        }
+        return false;
+    }
+    
+    // Check if APCu is actually functional (enabled in ini)
+    if (!@apcu_enabled()) {
+        $now = time();
+        if (($now - $lastLogTime) >= 3600) {
+            aviationwx_log('error', 'metrics: APCu not enabled in PHP configuration', [
+                'reason' => 'apcu.enabled is off'
+            ], 'app');
+            $lastLogTime = $now;
+        }
+        return false;
+    }
+    
+    return true;
+}
+
+/**
  * Increment a metric counter in APCu
  * 
  * Fast (~1μs) atomic increment. Counters are flushed to disk periodically.
@@ -207,8 +243,8 @@ function metrics_merge_webcams(array &$target, array $source): void {
  * @return void
  */
 function metrics_increment(string $key, int $amount = 1): void {
-    if (!function_exists('apcu_fetch')) {
-        return; // APCu not available, skip silently
+    if (!metrics_is_apcu_available()) {
+        return;
     }
     
     $fullKey = 'metrics_' . $key;
@@ -232,7 +268,7 @@ function metrics_increment(string $key, int $amount = 1): void {
  * @return int Current count (0 if not set)
  */
 function metrics_get(string $key): int {
-    if (!function_exists('apcu_fetch')) {
+    if (!metrics_is_apcu_available()) {
         return 0;
     }
     
@@ -246,7 +282,7 @@ function metrics_get(string $key): int {
  * @return array Associative array of metric key => value
  */
 function metrics_get_all(): array {
-    if (!function_exists('apcu_fetch')) {
+    if (!metrics_is_apcu_available()) {
         return [];
     }
     
@@ -278,7 +314,7 @@ function metrics_get_all(): array {
  * @return void
  */
 function metrics_reset_all(): void {
-    if (!function_exists('apcu_fetch')) {
+    if (!metrics_is_apcu_available()) {
         return;
     }
     
@@ -819,24 +855,44 @@ function metrics_aggregate_daily(string $dateId): bool {
         'generated_at' => time()
     ];
     
+    // Track which hourly files were found
+    $hoursFound = 0;
+    $hoursMissing = [];
+    $hoursCorrupted = [];
+    
     // Find all hourly files for this date
     for ($hour = 0; $hour < 24; $hour++) {
         $hourId = $dateId . '-' . sprintf('%02d', $hour);
         $hourFile = getMetricsHourlyPath($hourId);
         
         if (!file_exists($hourFile)) {
+            $hoursMissing[] = $hour;
             continue;
         }
         
         $content = @file_get_contents($hourFile);
         if ($content === false) {
+            aviationwx_log('warning', 'metrics: failed to read hourly file during daily aggregation', [
+                'date' => $dateId,
+                'hour' => $hour,
+                'file' => $hourFile
+            ], 'app');
             continue;
         }
         
-        $hourData = @json_decode($content, true);
+        $hourData = json_decode($content, true);
         if (!is_array($hourData)) {
+            $hoursCorrupted[] = $hour;
+            aviationwx_log('warning', 'metrics: corrupted JSON in hourly file during daily aggregation', [
+                'date' => $dateId,
+                'hour' => $hour,
+                'file' => $hourFile,
+                'json_error' => json_last_error_msg()
+            ], 'app');
             continue;
         }
+        
+        $hoursFound++;
         
         // Use helper functions for consistent merging
         metrics_merge_airports($dailyData['airports'], $hourData['airports'] ?? []);
@@ -844,16 +900,45 @@ function metrics_aggregate_daily(string $dateId): bool {
         metrics_merge_global($dailyData['global'], $hourData['global'] ?? []);
     }
     
+    // Log summary of aggregation
+    if ($hoursFound < 24) {
+        aviationwx_log('warning', 'metrics: incomplete daily aggregation', [
+            'date' => $dateId,
+            'hours_found' => $hoursFound,
+            'hours_missing' => count($hoursMissing),
+            'hours_corrupted' => count($hoursCorrupted),
+            'missing_hours' => $hoursMissing,
+            'corrupted_hours' => $hoursCorrupted
+        ], 'app');
+    }
+    
     // Write daily file
     $dailyFile = getMetricsDailyPath($dateId);
     $tmpFile = $dailyFile . '.tmp.' . getmypid();
     $written = @file_put_contents($tmpFile, json_encode($dailyData, JSON_PRETTY_PRINT), LOCK_EX);
     if ($written === false) {
+        aviationwx_log('error', 'metrics: failed to write daily aggregation file', [
+            'date' => $dateId,
+            'file' => $dailyFile,
+            'tmp_file' => $tmpFile,
+            'disk_free' => disk_free_space(dirname($dailyFile))
+        ], 'app');
         @unlink($tmpFile);
         return false;
     }
     
-    return @rename($tmpFile, $dailyFile);
+    $renamed = @rename($tmpFile, $dailyFile);
+    if (!$renamed) {
+        aviationwx_log('error', 'metrics: failed to rename daily aggregation temp file', [
+            'date' => $dateId,
+            'tmp_file' => $tmpFile,
+            'target_file' => $dailyFile
+        ], 'app');
+        @unlink($tmpFile);
+        return false;
+    }
+    
+    return true;
 }
 
 /**
@@ -1284,12 +1369,15 @@ function metrics_get_multi_period(): array {
 /**
  * Clean up old metrics files beyond retention period
  * 
+ * Also cleans up orphaned temporary files older than 1 hour.
+ * 
  * @return int Number of files deleted
  */
 function metrics_cleanup(): int {
     $deleted = 0;
     $retentionSeconds = METRICS_RETENTION_DAYS * 86400;
     $cutoff = time() - $retentionSeconds;
+    $tmpFileCutoff = time() - 3600; // 1 hour for temp files
     
     // Clean hourly files
     if (is_dir(CACHE_METRICS_HOURLY_DIR)) {
@@ -1301,6 +1389,21 @@ function metrics_cleanup(): int {
             if ($timestamp !== false && $timestamp < $cutoff) {
                 if (@unlink($file)) {
                     $deleted++;
+                }
+            }
+        }
+        
+        // Clean orphaned tmp files in hourly dir
+        $tmpFiles = glob(CACHE_METRICS_HOURLY_DIR . '/*.tmp.*');
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @filemtime($tmpFile);
+            if ($mtime !== false && $mtime < $tmpFileCutoff) {
+                if (@unlink($tmpFile)) {
+                    $deleted++;
+                    aviationwx_log('info', 'metrics: cleaned up orphaned temp file', [
+                        'file' => basename($tmpFile),
+                        'age_hours' => round((time() - $mtime) / 3600, 1)
+                    ], 'app');
                 }
             }
         }
@@ -1316,6 +1419,21 @@ function metrics_cleanup(): int {
             if ($timestamp !== false && ($timestamp + 86400) <= $cutoff) {
                 if (@unlink($file)) {
                     $deleted++;
+                }
+            }
+        }
+        
+        // Clean orphaned tmp files in daily dir
+        $tmpFiles = glob(CACHE_METRICS_DAILY_DIR . '/*.tmp.*');
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @filemtime($tmpFile);
+            if ($mtime !== false && $mtime < $tmpFileCutoff) {
+                if (@unlink($tmpFile)) {
+                    $deleted++;
+                    aviationwx_log('info', 'metrics: cleaned up orphaned temp file', [
+                        'file' => basename($tmpFile),
+                        'age_hours' => round((time() - $mtime) / 3600, 1)
+                    ], 'app');
                 }
             }
         }
@@ -1338,9 +1456,164 @@ function metrics_cleanup(): int {
                 }
             }
         }
+        
+        // Clean orphaned tmp files in weekly dir
+        $tmpFiles = glob(CACHE_METRICS_WEEKLY_DIR . '/*.tmp.*');
+        foreach ($tmpFiles as $tmpFile) {
+            $mtime = @filemtime($tmpFile);
+            if ($mtime !== false && $mtime < $tmpFileCutoff) {
+                if (@unlink($tmpFile)) {
+                    $deleted++;
+                    aviationwx_log('info', 'metrics: cleaned up orphaned temp file', [
+                        'file' => basename($tmpFile),
+                        'age_hours' => round((time() - $mtime) / 3600, 1)
+                    ], 'app');
+                }
+            }
+        }
     }
     
     return $deleted;
+}
+
+// =============================================================================
+// HEALTH MONITORING
+// =============================================================================
+
+/**
+ * Get APCu memory usage information
+ * 
+ * @return array|null Memory info or null if APCu unavailable
+ */
+function metrics_get_apcu_memory_info(): ?array {
+    if (!metrics_is_apcu_available()) {
+        return null;
+    }
+    
+    $sma = @apcu_sma_info();
+    if (!is_array($sma)) {
+        return null;
+    }
+    
+    $totalMem = $sma['num_seg'] * $sma['seg_size'];
+    $availMem = $sma['avail_mem'];
+    $usedMem = $totalMem - $availMem;
+    $usedPercent = $totalMem > 0 ? ($usedMem / $totalMem) * 100 : 0;
+    
+    return [
+        'total_bytes' => $totalMem,
+        'used_bytes' => $usedMem,
+        'available_bytes' => $availMem,
+        'used_percent' => round($usedPercent, 2),
+        'is_full' => $usedPercent > 90
+    ];
+}
+
+/**
+ * Get disk space information for metrics directory
+ * 
+ * @return array Disk space info
+ */
+function metrics_get_disk_space_info(): array {
+    $metricsDir = CACHE_METRICS_DIR;
+    $totalSpace = @disk_total_space($metricsDir);
+    $freeSpace = @disk_free_space($metricsDir);
+    
+    if ($totalSpace === false || $freeSpace === false) {
+        return [
+            'total_bytes' => 0,
+            'free_bytes' => 0,
+            'used_bytes' => 0,
+            'used_percent' => 0,
+            'is_low' => false,
+            'is_critical' => false,
+            'error' => 'Unable to determine disk space'
+        ];
+    }
+    
+    $usedSpace = $totalSpace - $freeSpace;
+    $usedPercent = $totalSpace > 0 ? ($usedSpace / $totalSpace) * 100 : 0;
+    
+    return [
+        'total_bytes' => $totalSpace,
+        'free_bytes' => $freeSpace,
+        'used_bytes' => $usedSpace,
+        'used_percent' => round($usedPercent, 2),
+        'is_low' => $usedPercent > 90,
+        'is_critical' => $usedPercent > 95
+    ];
+}
+
+/**
+ * Get metrics system health status
+ * 
+ * @return array Health check results
+ */
+function metrics_get_health_status(): array {
+    $health = [
+        'healthy' => true,
+        'warnings' => [],
+        'errors' => []
+    ];
+    
+    // Check APCu availability
+    if (!metrics_is_apcu_available()) {
+        $health['healthy'] = false;
+        $health['errors'][] = 'APCu is not available';
+    } else {
+        $memInfo = metrics_get_apcu_memory_info();
+        if ($memInfo && $memInfo['is_full']) {
+            $health['healthy'] = false;
+            $health['warnings'][] = sprintf(
+                'APCu memory %.1f%% full (%s used of %s)',
+                $memInfo['used_percent'],
+                format_bytes($memInfo['used_bytes']),
+                format_bytes($memInfo['total_bytes'])
+            );
+        }
+    }
+    
+    // Check disk space
+    $diskInfo = metrics_get_disk_space_info();
+    if ($diskInfo['is_critical']) {
+        $health['healthy'] = false;
+        $health['errors'][] = sprintf(
+            'Disk space critical: %.1f%% used',
+            $diskInfo['used_percent']
+        );
+    } elseif ($diskInfo['is_low']) {
+        $health['warnings'][] = sprintf(
+            'Disk space low: %.1f%% used',
+            $diskInfo['used_percent']
+        );
+    }
+    
+    // Check timezone
+    $tz = date_default_timezone_get();
+    if ($tz !== 'UTC') {
+        $health['warnings'][] = sprintf(
+            'Timezone is %s, expected UTC',
+            $tz
+        );
+    }
+    
+    return $health;
+}
+
+/**
+ * Format bytes as human-readable string
+ * 
+ * @param int $bytes Bytes to format
+ * @return string Formatted string
+ */
+function format_bytes(int $bytes): string {
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $i = 0;
+    while ($bytes >= 1024 && $i < count($units) - 1) {
+        $bytes /= 1024;
+        $i++;
+    }
+    return round($bytes, 2) . ' ' . $units[$i];
 }
 
 // =============================================================================
