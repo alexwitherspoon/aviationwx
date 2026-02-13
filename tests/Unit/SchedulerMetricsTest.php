@@ -3,7 +3,7 @@
  * Unit Tests for Scheduler Metrics Logic
  * 
  * Tests the scheduler's daily/weekly aggregation trigger logic to ensure:
- * - Daily aggregation runs after midnight (THIS IS THE BUG - >= 1 should be >= 0)
+ * - Daily aggregation runs after midnight (REGRESSION TEST - hour check removed)
  * - Daily aggregation only runs once per day
  * - Weekly aggregation only runs on Monday
  * - State is properly tracked
@@ -14,12 +14,11 @@ use PHPUnit\Framework\TestCase;
 class SchedulerMetricsTest extends TestCase
 {
     /**
-     * Test daily aggregation timing logic
+     * REGRESSION TEST: Daily aggregation timing logic
      * 
-     * This simulates the scheduler's check:
-     * if ($lastDailyAggregation !== $yesterdayId && (int)gmdate('H') >= 1)
-     * 
-     * BUG: The >= 1 condition prevents aggregation during the midnight hour (00:00-00:59)
+     * Tests the scheduler's check for daily aggregation timing.
+     * Previously used >= 1 condition which blocked aggregation during the midnight hour.
+     * Fixed in scheduler.php line 449 by removing the hour check entirely.
      */
     public function testDailyAggregation_RunsAfterMidnight(): void
     {
@@ -31,7 +30,7 @@ class SchedulerMetricsTest extends TestCase
         
         $currentHour = (int)gmdate('H', $baseTime); // 0
         
-        // Current (buggy) condition
+        // Current (buggy) condition - what the code used to do
         $shouldRunBuggy = ($lastDailyAggregation !== $yesterdayId && $currentHour >= 1);
         
         // Fixed condition

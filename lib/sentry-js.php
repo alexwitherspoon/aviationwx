@@ -42,8 +42,10 @@ function renderSentryJsInit(string $pageType = 'unknown'): void {
     $airportId = $GLOBALS['airportId'] ?? null;
     
     // Hash IP address for privacy-conscious user identification
+    // Use environment variable for salt, or no salt if not configured (anonymization only)
     $userIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    $userHash = substr(hash('sha256', $userIp . 'aviationwx-salt'), 0, 16);
+    $userHashSecret = getenv('SENTRY_USER_HASH_SECRET') ?: '';
+    $userHash = substr(hash('sha256', $userIp . $userHashSecret), 0, 16);
     
     // Escape values for JavaScript
     $dsnEscaped = htmlspecialchars($dsn, ENT_QUOTES, 'UTF-8');
@@ -57,7 +59,7 @@ function renderSentryJsInit(string $pageType = 'unknown'): void {
     <!-- Sentry Browser SDK -->
     <script
         src="https://browser.sentry-cdn.com/8.47.0/bundle.min.js"
-        integrity="sha384-CjF7FqQ0cVDPJvL6kcz+RG5xRNDBtG0SZ9G5GHlT8r0xLz+TU8gNzqKH8JlZx9dQ"
+        integrity="sha384-F1SqswdlOeNYRWB3oa9RUmKftSyuOow0eg62rQ02yu79aQrHRFj4n6JMD8B1oHlO"
         crossorigin="anonymous"
     ></script>
     <script>

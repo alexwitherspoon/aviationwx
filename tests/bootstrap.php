@@ -4,6 +4,10 @@
  * Sets up test environment and includes required files
  */
 
+// Set default timezone to UTC for deterministic test timestamps
+// Tests use gmdate() and mktime() which rely on this timezone
+date_default_timezone_set('UTC');
+
 // Ensure Composer autoloader is available (required for PHPUnit)
 if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
     require_once __DIR__ . '/../vendor/autoload.php';

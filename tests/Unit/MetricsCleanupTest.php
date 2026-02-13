@@ -115,9 +115,10 @@ class MetricsCleanupTest extends TestCase
     }
     
     /**
-     * CRITICAL TEST: Boundary condition at exactly cutoff day
+     * REGRESSION TEST: Boundary condition at exactly cutoff day
      * 
-     * This tests the bug where a file at the cutoff boundary is incorrectly deleted.
+     * Tests that the cleanup boundary condition correctly handles the cutoff day.
+     * Previously, files at the cutoff boundary were incorrectly deleted.
      * 
      * Scenario:
      * - Current time: Feb 13, 2026 00:24:18 UTC
@@ -125,8 +126,7 @@ class MetricsCleanupTest extends TestCase
      * - Cutoff: Jan 30, 2026 00:24:18 UTC
      * - File: 2026-01-30.json (timestamp: Jan 30, 2026 00:00:00 UTC)
      * 
-     * The bug: File timestamp (00:00:00) < cutoff (00:24:18), so it gets deleted
-     * even though Jan 30 is still within the 14-day window!
+     * Fixed in lib/metrics.php line 1469 using: ($timestamp + 86400) <= $cutoff
      */
     public function testCleanup_BoundaryCondition_CutoffDay(): void
     {
@@ -140,14 +140,14 @@ class MetricsCleanupTest extends TestCase
         
         // Create files around the boundary
         $this->createDailyFile('2026-01-31'); // Clearly within retention (should KEEP)
-        $this->createDailyFile('2026-01-30'); // Boundary day (should KEEP - this is the bug!)
+        $this->createDailyFile('2026-01-30'); // Boundary day (should KEEP - regression test for fixed bug)
         $this->createDailyFile('2026-01-29'); // Clearly outside retention (should DELETE)
         
         // Run cleanup
         $deletedCount = metrics_cleanup();
         
-        // BUG: Current implementation deletes 2026-01-30 incorrectly
-        // Because file timestamp (Jan 30 00:00:00) < cutoff (Jan 30 00:24:18)
+        // REGRESSION TEST: Previously deleted 2026-01-30 incorrectly
+        // Because file timestamp (Jan 30 00:00:00) was treated as < cutoff (Jan 30 00:24:18); now fixed
         
         // After fix, should only delete 2026-01-29 (1 file)
         $this->assertEquals(1, $deletedCount, 'Should only delete files truly outside retention period');

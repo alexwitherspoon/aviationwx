@@ -4,7 +4,7 @@
  * 
  * Tests the rolling window calculation logic to ensure:
  * - Correct number of days are included
- * - Missing daily files are handled (THIS IS THE BUG!)
+ * - Missing daily files are handled (REGRESSION TEST - now logged)
  * - Today's hourly data is included
  * - No future dates are included
  */
@@ -123,8 +123,10 @@ class MetricsRollingWindowTest extends TestCase
     }
     
     /**
-     * CRITICAL TEST: Rolling window with missing daily files
-     * This is the bug that causes view counts to drop!
+     * REGRESSION TEST: Rolling window with missing daily files
+     * 
+     * Tests that rolling windows correctly handle missing daily files.
+     * Missing files now trigger warnings (fixed in lib/metrics.php:1113-1123).
      */
     public function testRollingWindow_HandlesMissingDailyFiles_DoesNotSilentlyDrop(): void
     {
@@ -141,11 +143,8 @@ class MetricsRollingWindowTest extends TestCase
         $result = metrics_get_rolling(7);
         
         // Should only have 200 views from the 2 days that exist
-        // The bug is that this silently drops the missing days
+        // Missing files now trigger warning logs (fixed in lib/metrics.php)
         $this->assertEquals(200, $result['airports']['kspb']['page_views']);
-        
-        // TODO: After fixing the bug, we should also add logging or warnings
-        // about missing files so admins can detect aggregation failures
     }
     
     /**
