@@ -252,15 +252,7 @@ Sentry.init({
 
 ### 6. Cron Monitoring
 
-All critical cron jobs report their execution status to Sentry for monitoring:
-
-**Cron Heartbeat (`cron-heartbeat.php`):**
-```
-Schedule: * * * * * (every minute)
-Monitor: cron-heartbeat
-Max Runtime: 1 minute
-Grace Period: 2 minutes
-```
+A single cron monitor captures overall system health:
 
 **Scheduler Health Check (`scheduler-health-check.php`):**
 ```
@@ -270,22 +262,7 @@ Max Runtime: 2 minutes
 Grace Period: 2 minutes
 ```
 
-**Memory Sampler (`sample-memory.php`):**
-```
-Schedule: * * * * * (every minute)
-Monitor: memory-sampler
-Max Runtime: 2 minutes (12 samples * 5s)
-Grace Period: 2 minutes
-```
-
-**Cache Cleanup (`cleanup-cache.php`):**
-```
-Schedule: 0 4 * * * (daily at 4 AM UTC)
-Monitor: cache-cleanup
-Max Runtime: 30 minutes
-Grace Period: 60 minutes
-Status: Reports error if cleanup fails
-```
+The scheduler health check runs every minute, validates the scheduler daemon is running and healthy, and restarts it if needed. This single monitor provides the best signal for system health since the scheduler drives all weather and webcam updates.
 
 **What Sentry Tracks:**
 - ✅ Check-in received (job executed)
@@ -318,6 +295,8 @@ The `before_send` hook does **not** scrub IP addresses, User-Agent strings, or U
 
 ### Data Retention
 
+Sentry stores **error events** (exceptions, `aviationwx_log` errors, `captureMessage` at error severity), not application logs. Local logs remain in `/var/log/aviationwx/` and are not sent to Sentry.
+
 Sentry automatically ages out data based on your organization's plan:
 - Free plan: 30 days
 - Team plan: 90 days
@@ -333,10 +312,7 @@ Sentry automatically creates cron monitors for all check-ins. View them at:
 **Crons → Monitors** in your Sentry project dashboard.
 
 **Configured Monitors:**
-1. **cron-heartbeat** - Confirms cron daemon is running (every minute)
-2. **scheduler-health-check** - Validates scheduler daemon health (every minute)
-3. **memory-sampler** - Tracks memory usage sampling (every minute)
-4. **cache-cleanup** - Daily cache maintenance (4 AM UTC)
+1. **scheduler-health-check** - Validates scheduler daemon health (every minute)
 
 **Default Alerts:**
 Sentry automatically alerts (via email) when:

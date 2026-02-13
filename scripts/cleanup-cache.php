@@ -262,17 +262,33 @@ cleanupFilesByPattern(
     $stats, $dryRun, $verbose
 );
 
-// Clean stale entries in peak_gusts.json and temp_extremes.json
+// Clean stale entries in per-airport tracking files (primary layout)
+foreach ([CACHE_PEAK_GUSTS_DIR, CACHE_TEMP_EXTREMES_DIR] as $dir) {
+    if (!is_dir($dir)) {
+        continue;
+    }
+    $files = glob($dir . '/*.json') ?: [];
+    $label = strpos($dir, 'peak_gusts') !== false ? 'Peak gusts' : 'Temperature extremes';
+    foreach ($files as $file) {
+        cleanupDailyTrackingEntries(
+            $file,
+            strpos($dir, 'peak_gusts') !== false ? CLEANUP_PEAK_GUST_AGE : CLEANUP_TEMP_EXTREMES_AGE,
+            $label . ' entries (' . basename($file) . ')',
+            $stats, $dryRun, $verbose
+        );
+    }
+}
+// Legacy single-file format (migration period)
 cleanupDailyTrackingEntries(
     CACHE_PEAK_GUSTS_FILE,
     CLEANUP_PEAK_GUST_AGE,
-    'Peak gusts entries',
+    'Peak gusts entries (legacy)',
     $stats, $dryRun, $verbose
 );
 cleanupDailyTrackingEntries(
     CACHE_TEMP_EXTREMES_FILE,
     CLEANUP_TEMP_EXTREMES_AGE,
-    'Temperature extremes entries',
+    'Temperature extremes entries (legacy)',
     $stats, $dryRun, $verbose
 );
 // Also check api/cache dir (used by some scripts)
@@ -688,7 +704,10 @@ function cleanupWebcamHistoryFrames(
 }
 
 /**
- * Cleanup stale entries in daily tracking files (peak_gusts.json, temp_extremes.json)
+ * Cleanup stale entries in daily tracking files
+ *
+ * Works with both per-airport files (cache/peak_gusts/{airport}.json,
+ * cache/temp_extremes/{airport}.json) and legacy single-file format.
  */
 function cleanupDailyTrackingEntries(
     string $file,
