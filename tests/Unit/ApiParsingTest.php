@@ -626,7 +626,7 @@ class ApiParsingTest extends TestCase
     }
     
     /**
-     * Test parseAwosnetResponse - Valid HTML with METAR
+     * Test parseAwosnetResponse - Valid XML/HTML with METAR
      */
     public function testParseAwosnetResponse_ValidCompleteResponse()
     {
@@ -659,7 +659,7 @@ class ApiParsingTest extends TestCase
     }
     
     /**
-     * Test parseAwosnetResponse - Invalid HTML returns null
+     * Test parseAwosnetResponse - Invalid XML/HTML returns null
      */
     public function testParseAwosnetResponse_InvalidHtml_ReturnsNull()
     {

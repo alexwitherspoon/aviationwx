@@ -433,7 +433,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `pwsweather` | PWSWeather/AerisWeather | Variable |
 | `synopticdata` | SynopticData API | Variable |
 | `nws` | NWS ASOS API (api.weather.gov) | ~5 minutes |
-| `awosnet` | AWOSnet (awosnet.com HTML pages) | ~10 minutes |
+| `awosnet` | AWOSnet (awosnet.com XML endpoint) | ~10 minutes |
 | `metar` | Aviation Weather METAR | ~60 minutes |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.

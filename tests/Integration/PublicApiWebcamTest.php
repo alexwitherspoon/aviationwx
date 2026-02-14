@@ -268,10 +268,11 @@ class PublicApiWebcamTest extends TestCase
         $data = $response['json'];
         $sizes = $data['data']['recommended_sizes'] ?? [];
         
+        $this->assertIsArray($sizes, 'recommended_sizes should be an array');
         if (count($sizes) > 1) {
             $sortedSizes = $sizes;
             rsort($sortedSizes);
-            $this->assertEquals($sortedSizes, $sizes, 
+            $this->assertEquals($sortedSizes, $sizes,
                 'Recommended sizes should be sorted in descending order');
         }
     }

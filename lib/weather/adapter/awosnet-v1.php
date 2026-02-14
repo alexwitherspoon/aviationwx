@@ -90,6 +90,16 @@ class AwosnetAdapter
             return null;
         }
         $stationId = strtolower(trim($stationId));
+        // Validate: lowercase alphanumeric, 2-20 chars to avoid injection
+        if (!preg_match('/^[a-z0-9]{2,20}$/', $stationId)) {
+            if (function_exists('aviationwx_log')) {
+                aviationwx_log('warning', 'AWOSnet invalid station_id format', [
+                    'station_id' => $stationId,
+                    'expected' => 'lowercase alphanumeric, 2-20 chars',
+                ]);
+            }
+            return null;
+        }
         return "http://{$stationId}.awosnet.com/awiAwosNet.php";
     }
 
@@ -187,9 +197,10 @@ class AwosnetAdapter
         $metar = self::extractMetarFromHtml($response);
         $metarParsed = $metar ? parseRawMETARToWeatherArray($metar) : null;
 
-        libxml_use_internal_errors(true);
+        $prevLibxml = libxml_use_internal_errors(true);
         $xml = @simplexml_load_string($response);
         libxml_clear_errors();
+        libxml_use_internal_errors($prevLibxml);
 
         if ($xml === false) {
             return $metarParsed;
@@ -292,10 +303,10 @@ class AwosnetAdapter
         $windDirection = $parsed['wind_direction'];
         $windSpeed = $parsed['wind_speed'];
         $gustSpeed = $parsed['gust_speed'] ?? null;
-        $hasCompleteWind = $windSpeed !== null && $windDirection !== null;
         if ($windDirection === 'VRB') {
             $windDirection = null;
         }
+        $hasCompleteWind = $windSpeed !== null && $windDirection !== null;
 
         $metar = self::extractMetarFromHtml($response);
 
