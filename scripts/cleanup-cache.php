@@ -1369,33 +1369,22 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
             }
             
             // Check FTP upload directory
+            // Note: Do NOT create here - cleanup-cache runs as www-data and cannot chown to ftp:www-data.
+            // vsftpd requires ftp:www-data ownership for uploads. Use sync-push-config.php (runs as root).
             $ftpDir = getWebcamFtpUploadDir($airportId, $username);
             if (!is_dir($ftpDir)) {
+                $ftpCreated++;
                 if ($verbose) {
                     echo "  📁 Missing FTP directory: " . strtolower($airportId) . "/{$username}\n";
+                    echo "     Run: php scripts/sync-push-config.php (as root)\n";
                 }
-                
                 if (!$dryRun) {
-                    // Create with setgid bit (02775) so uploaded files inherit www-data group
-                    if (@mkdir($ftpDir, 02775, true)) {
-                        $ftpCreated++;
-                        if ($verbose) {
-                            echo "     ✅ Created successfully\n";
-                        }
-                    } else {
-                        $errors++;
-                        $stats['errors']++;
-                        echo "  ❌ Failed to create FTP dir: {$ftpDir}\n";
-                        aviationwx_log('error', 'failed to create push webcam FTP directory', [
-                            'airport' => $airportId,
-                            'cam' => $camIndex,
-                            'username' => $username,
-                            'path' => $ftpDir,
-                            'error' => error_get_last()['message'] ?? 'unknown'
-                        ], 'app');
-                    }
-                } else {
-                    $ftpCreated++;
+                    aviationwx_log('warning', 'missing push webcam FTP directory (run sync-push-config.php as root)', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'username' => $username,
+                        'path' => $ftpDir
+                    ], 'app');
                 }
             } elseif ($verbose) {
                 echo "  ✅ FTP directory exists: " . strtolower($airportId) . "/{$username}\n";
@@ -1415,13 +1404,11 @@ function ensurePushWebcamDirectories(array &$stats, bool $dryRun, bool $verbose)
     }
     
     if ($ftpCreated > 0) {
-        $action = $dryRun ? 'Would create' : 'Created';
-        echo "  FTP directories: {$action} {$ftpCreated} missing directories\n";
+        echo "  FTP directories: {$ftpCreated} missing (run sync-push-config.php as root to create)\n";
         
         if (!$dryRun) {
-            aviationwx_log('warning', 'recreated missing push webcam FTP directories', [
-                'count' => $ftpCreated,
-                'errors' => $errors
+            aviationwx_log('warning', 'missing push webcam FTP directories (run sync-push-config.php as root)', [
+                'count' => $ftpCreated
             ], 'app');
         }
     } elseif ($verbose) {
