@@ -253,13 +253,14 @@ chmod 755 "${SFTP_DIR}" 2>/dev/null || true
 echo "✓ SFTP directory initialized at ${SFTP_DIR}"
 
 # Configure vsftpd pasv_address
-# Priority: 1) config.public_ip (explicit), 2) config.upload_hostname (DNS), 3) default DNS fallback
-# Using single dual-stack instance (listen_ipv6=YES handles both IPv4 and IPv6)
+# Priority: 1) config.public_ip (explicit IP), 2) config.upload_hostname (hostname), 3) default hostname
+# Use hostname + pasv_addr_resolve=YES to avoid 0,0,0,0 bug with dual-stack (listen_ipv6=YES)
 echo "Configuring pasv_address..."
 VSFTPD_PID=""
 PASV_ADDRESS=""
+PASV_ADDR_RESOLVE="NO"
 
-# Step 1: Try to read public_ip from airports.json config (explicit configuration)
+# Step 1: Try to read public_ip from airports.json config (explicit IP - use pasv_addr_resolve=NO)
 if [ -f "$CONFIG_FILE" ]; then
     CONFIG_PUBLIC_IP=$(php -r "
         \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
@@ -273,11 +274,12 @@ if [ -f "$CONFIG_FILE" ]; then
     
     if [ -n "$CONFIG_PUBLIC_IP" ]; then
         PASV_ADDRESS="$CONFIG_PUBLIC_IP"
+        PASV_ADDR_RESOLVE="NO"
         echo "✓ Using explicit public_ip from config: $PASV_ADDRESS"
     fi
 fi
 
-# Step 2: If no explicit IP, try upload_hostname from config (DNS resolution)
+# Step 2: If no explicit IP, use upload_hostname from config (hostname + pasv_addr_resolve=YES)
 if [ -z "$PASV_ADDRESS" ] && [ -f "$CONFIG_FILE" ]; then
     CONFIG_UPLOAD_HOSTNAME=$(php -r "
         \$config = @json_decode(file_get_contents('$CONFIG_FILE'), true);
@@ -288,35 +290,21 @@ if [ -z "$PASV_ADDRESS" ] && [ -f "$CONFIG_FILE" ]; then
         }
     " 2>/dev/null || true)
     
-    if [ -n "$CONFIG_UPLOAD_HOSTNAME" ] && [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
-        RESOLVED_IP=$(/usr/local/bin/resolve-upload-ip.sh "$CONFIG_UPLOAD_HOSTNAME" "ipv4" 2>&1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
-        if [ -n "$RESOLVED_IP" ]; then
-            PASV_ADDRESS="$RESOLVED_IP"
-            echo "✓ Resolved upload_hostname ($CONFIG_UPLOAD_HOSTNAME) to: $PASV_ADDRESS"
-        else
-            echo "⚠️  Warning: Failed to resolve upload_hostname: $CONFIG_UPLOAD_HOSTNAME"
-        fi
+    if [ -n "$CONFIG_UPLOAD_HOSTNAME" ]; then
+        PASV_ADDRESS="$CONFIG_UPLOAD_HOSTNAME"
+        PASV_ADDR_RESOLVE="YES"
+        echo "✓ Using upload_hostname for pasv_address (pasv_addr_resolve=YES): $PASV_ADDRESS"
     fi
 fi
 
-# Step 3: Fallback to default DNS resolution (upload.aviationwx.org)
-if [ -z "$PASV_ADDRESS" ] && [ -f "/usr/local/bin/resolve-upload-ip.sh" ]; then
-    echo "Falling back to DNS resolution for upload.aviationwx.org..."
-    RESOLVED_IP=$(/usr/local/bin/resolve-upload-ip.sh "upload.aviationwx.org" "ipv4" 2>&1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
-    
-    if [ -n "$RESOLVED_IP" ]; then
-        PASV_ADDRESS="$RESOLVED_IP"
-        echo "✓ Resolved pasv_address via fallback DNS: $PASV_ADDRESS"
-    else
-        echo "⚠️  Warning: Failed to resolve IPv4 address for pasv_address"
-    fi
-fi
-
+# Step 3: Fallback to default hostname (upload.aviationwx.org)
 if [ -z "$PASV_ADDRESS" ]; then
-    echo "⚠️  Warning: Could not determine pasv_address - FTP passive mode may not work correctly"
+    PASV_ADDRESS="upload.aviationwx.org"
+    PASV_ADDR_RESOLVE="YES"
+    echo "✓ Using default pasv_address (pasv_addr_resolve=YES): $PASV_ADDRESS"
 fi
 
-# Update vsftpd.conf with pasv_address
+# Update vsftpd.conf with pasv_address and pasv_addr_resolve
 VSFTPD_CONF="/etc/vsftpd/vsftpd.conf"
 if [ -f "$VSFTPD_CONF" ]; then
     if [ -n "$PASV_ADDRESS" ]; then
@@ -326,7 +314,13 @@ if [ -f "$VSFTPD_CONF" ]; then
         else
             echo "pasv_address=$PASV_ADDRESS" >> "$VSFTPD_CONF"
         fi
-        echo "✓ Updated vsftpd pasv_address to: $PASV_ADDRESS"
+        # Add or update pasv_addr_resolve
+        if grep -q "^pasv_addr_resolve=" "$VSFTPD_CONF"; then
+            sed -i "s|^pasv_addr_resolve=.*|pasv_addr_resolve=$PASV_ADDR_RESOLVE|" "$VSFTPD_CONF"
+        else
+            echo "pasv_addr_resolve=$PASV_ADDR_RESOLVE" >> "$VSFTPD_CONF"
+        fi
+        echo "✓ Updated vsftpd pasv_address=$PASV_ADDRESS pasv_addr_resolve=$PASV_ADDR_RESOLVE"
     fi
 else
     echo "Error: vsftpd config not found at $VSFTPD_CONF"

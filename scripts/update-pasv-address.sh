@@ -74,10 +74,18 @@ if [[ -z "$UPLOAD_HOSTNAME" ]]; then
     exit 1
 fi
 
-# Get current pasv_address from vsftpd.conf
+# Get current pasv_address and pasv_addr_resolve from vsftpd.conf
 CURRENT_PASV=""
+PASV_ADDR_RESOLVE="NO"
 if [[ -f "$VSFTPD_CONF" ]]; then
     CURRENT_PASV=$(grep -E "^pasv_address=" "$VSFTPD_CONF" 2>/dev/null | cut -d= -f2 || echo "")
+    PASV_ADDR_RESOLVE=$(grep -E "^pasv_addr_resolve=" "$VSFTPD_CONF" 2>/dev/null | cut -d= -f2 || echo "NO")
+fi
+
+# When using hostname (pasv_addr_resolve=YES), no periodic update needed - vsftpd resolves at startup
+if [[ "$PASV_ADDR_RESOLVE" == "YES" ]]; then
+    log_info "Using pasv_addr_resolve=YES (hostname) - no periodic update needed"
+    exit 0
 fi
 
 # Resolve the hostname to get the new IP
