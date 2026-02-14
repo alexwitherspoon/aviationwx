@@ -252,11 +252,13 @@ function parseRawMETARToWeatherArray(string $rawMetar): ?array {
         $pressure = (int)$m[1] / 100.0;
     }
 
-    // Visibility: 10SM or 1 1/2SM or 1/2SM
+    // Visibility: 10SM or 1 1/2SM or 1/2SM (guard against division by zero in malformed METAR)
     if (preg_match('/\b(\d+)\s+(\d+)\/(\d+)SM\b/', $rawMetar, $m)) {
-        $visibility = (int)$m[1] + ((int)$m[2] / (int)$m[3]);
+        $denom = (int)$m[3];
+        $visibility = $denom !== 0 ? (int)$m[1] + ((int)$m[2] / $denom) : (float)$m[1];
     } elseif (preg_match('/\b(\d+)\/(\d+)SM\b/', $rawMetar, $m) && !preg_match('/\d+\s+\d+\/\d+SM/', $rawMetar)) {
-        $visibility = (int)$m[1] / (int)$m[2];
+        $denom = (int)$m[2];
+        $visibility = $denom !== 0 ? (int)$m[1] / $denom : null;
     } elseif (preg_match('/\b(\d+)SM\b/', $rawMetar, $m)) {
         $visibility = (float)$m[1];
     } elseif (preg_match('/\bP?(\d+)SM\b/', $rawMetar, $m)) {
