@@ -227,6 +227,16 @@ class SafetyCriticalReferenceTest extends TestCase
         $weather = ['ceiling' => null, 'visibility' => 10];
         $this->assertEquals('VFR', calculateFlightCategory($weather));
     }
+
+    /**
+     * P6SM (greater than 6 SM): flight category uses numeric value 6.0, so VFR (>= 5 SM)
+     * visibility_greater_than does not affect flight category - only display
+     */
+    public function testFlightCategory_VFR_P6SM_UsesNumericValue(): void
+    {
+        $weather = ['ceiling' => null, 'visibility' => 6.0, 'visibility_greater_than' => true];
+        $this->assertEquals('VFR', calculateFlightCategory($weather));
+    }
     
     public function testFlightCategory_VFR_HighCeiling()
     {

@@ -776,6 +776,11 @@
             "description": "Visibility in statute miles",
             "nullable": true
           },
+          "visibility_greater_than": {
+            "type": "boolean",
+            "description": "True when METAR P prefix (e.g. P6SM = greater than 6 SM). Display as '6+ SM'.",
+            "default": false
+          },
           "ceiling": {
             "type": "integer",
             "description": "Ceiling in feet AGL",

@@ -1192,10 +1192,13 @@ function performPublicApiHealthCheck(string $endpoint): array {
     $response = @file_get_contents($url, false, $context);
     $elapsed = (microtime(true) - $start) * 1000;
     
-    // Check HTTP response code
+    // Check HTTP response code (use http_get_last_response_headers() on PHP 8.4+)
     $httpCode = 0;
-    if (isset($http_response_header) && is_array($http_response_header)) {
-        foreach ($http_response_header as $header) {
+    $headers = (function_exists('http_get_last_response_headers'))
+        ? (http_get_last_response_headers() ?? [])
+        : ($http_response_header ?? []);
+    if (is_array($headers)) {
+        foreach ($headers as $header) {
             if (preg_match('/HTTP\/\d\.\d\s+(\d+)/', $header, $matches)) {
                 $httpCode = (int)$matches[1];
                 break;

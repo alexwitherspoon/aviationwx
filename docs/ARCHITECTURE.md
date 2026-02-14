@@ -124,7 +124,7 @@ aviationwx.org/
 
 ### Webcam System
 
-**`api/webcam.php`**: Serves cached webcam images
+**`api/webcam.php`** (Internal API): Serves cached webcam images
 - Handles image requests with cache headers
 - Returns placeholder if image missing
 - Supports multiple formats (WebP, JPEG) with content negotiation

@@ -257,7 +257,7 @@ function buildIataToIcaoMapping(string $iataCode, string $apcuCacheKey): ?string
             }
             
             // Parse CSV line (handle quoted fields properly)
-            $fields = str_getcsv($line, ',', '"', null);
+            $fields = str_getcsv($line, ',', '"', '\\');
             if (count($fields) < 15) {
                 continue; // Skip malformed lines
             }
@@ -340,7 +340,7 @@ function buildFaaToIcaoMapping(string $faaCode, string $apcuCacheKey): ?string {
             }
             
             // Parse CSV line (handle quoted fields properly)
-            $fields = str_getcsv($line, ',', '"', null);
+            $fields = str_getcsv($line, ',', '"', '\\');
             if (count($fields) < 15) {
                 continue; // Skip malformed lines
             }

@@ -46,6 +46,7 @@ require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/webcam-history.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/webcam-metadata.php';
+require_once __DIR__ . '/../lib/metrics.php';
 
 // Supported image formats with MIME types
 $supportedFormats = [
@@ -153,6 +154,11 @@ if ($timestamp !== null) {
         exit;
     }
     
+    // Track webcam serve (history player traffic)
+    metrics_track_webcam_request($airportId, $camIndex);
+    $sizeForMetrics = ($servedSize === 'original' || $servedSize === '') ? 'original' : (string)(int)$servedSize;
+    metrics_track_webcam_serve($airportId, $camIndex, $servedFormat, $sizeForMetrics);
+
     // Build filename matching server naming convention: {timestamp}_{variant}.{ext}
     $variant = ($servedSize === 'original') ? 'original' : (int)$servedSize;
     $filename = $timestamp . '_' . $variant . '.' . $servedFormat;

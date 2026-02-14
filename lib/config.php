@@ -2306,8 +2306,7 @@ function getOurAirportsData(bool $forceRefresh = false): ?array {
             }
             
             // Parse CSV line (handle quoted fields properly)
-            // Use null as escape parameter for PHP 8.1+ compatibility
-            $fields = str_getcsv($line, ',', '"', null);
+            $fields = str_getcsv($line, ',', '"', '\\');
             if (count($fields) < 15) {
                 continue; // Skip malformed lines
             }
@@ -3550,7 +3549,7 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!isset($ws['type'])) {
                     $errors[] = "Airport '{$airportCode}' weather_source missing 'type' field";
                 } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar'];
+                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'awosnet'];
                     if (!in_array($ws['type'], $validTypes)) {
                         $errors[] = "Airport '{$airportCode}' weather_source has invalid type: '{$ws['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
                     } else {
@@ -3605,6 +3604,12 @@ function validateAirportsJsonStructure(array $config): array {
                             if (!isset($ws['api_token'])) {
                                 $errors[] = "Airport '{$airportCode}' weather_source (synopticdata) missing 'api_token'";
                             }
+                        } elseif ($wsType === 'awosnet') {
+                            if (!isset($ws['station_id']) || $ws['station_id'] === '') {
+                                $errors[] = "Airport '{$airportCode}' weather_source (awosnet) missing 'station_id'";
+                            } elseif (!preg_match('/^[a-z0-9]{2,20}$/', strtolower(trim($ws['station_id'])))) {
+                                $errors[] = "Airport '{$airportCode}' weather_source (awosnet) invalid 'station_id' format (lowercase alphanumeric, 2-20 chars)";
+                            }
                         }
                     }
                 }
@@ -3620,7 +3625,7 @@ function validateAirportsJsonStructure(array $config): array {
                 if (!isset($wsBackup['type'])) {
                     $errors[] = "Airport '{$airportCode}' weather_source_backup missing 'type' field";
                 } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar'];
+                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'awosnet'];
                     if (!in_array($wsBackup['type'], $validTypes)) {
                         $errors[] = "Airport '{$airportCode}' weather_source_backup has invalid type: '{$wsBackup['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
                     } else {
@@ -3674,6 +3679,12 @@ function validateAirportsJsonStructure(array $config): array {
                             }
                             if (!isset($wsBackup['api_token'])) {
                                 $errors[] = "Airport '{$airportCode}' weather_source_backup (synopticdata) missing 'api_token'";
+                            }
+                        } elseif ($wsBackupType === 'awosnet') {
+                            if (!isset($wsBackup['station_id']) || $wsBackup['station_id'] === '') {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (awosnet) missing 'station_id'";
+                            } elseif (!preg_match('/^[a-z0-9]{2,20}$/', strtolower(trim($wsBackup['station_id'])))) {
+                                $errors[] = "Airport '{$airportCode}' weather_source_backup (awosnet) invalid 'station_id' format (lowercase alphanumeric, 2-20 chars)";
                             }
                         }
                     }

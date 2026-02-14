@@ -142,6 +142,7 @@ function formatWeatherResponse(array $weather, array $airport): array
         'gust_factor' => $weather['gust_factor'] ?? null,
         'pressure' => $weather['pressure'] ?? null,
         'visibility' => $weather['visibility'] ?? null,
+        'visibility_greater_than' => $weather['visibility_greater_than'] ?? false,
         'ceiling' => $weather['ceiling'] ?? null,
         'cloud_cover' => $weather['cloud_cover'] ?? null,
         'precip_accum' => $weather['precip_accum'] ?? null,

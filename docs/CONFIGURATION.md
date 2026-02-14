@@ -433,6 +433,7 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `pwsweather` | PWSWeather/AerisWeather | Variable |
 | `synopticdata` | SynopticData API | Variable |
 | `nws` | NWS ASOS API (api.weather.gov) | ~5 minutes |
+| `awosnet` | AWOSnet (awosnet.com XML endpoint) | ~10 minutes |
 | `metar` | Aviation Weather METAR | ~60 minutes |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
@@ -554,6 +555,21 @@ High-frequency (~5 minute) observations from ASOS stations via the NWS API. Requ
 ```
 
 The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only airport stations are accepted.
+
+### AWOSnet
+
+Fetches weather from AWOSnet data endpoint (awiAwosNet.php). The main page uses JavaScript to load data; we fetch the PHP endpoint directly with a Referer header. Structured XML fields are treated as the primary/authoritative data source, and the embedded METAR string is used to fill gaps or augment fields when available. When the page shows "///" (data not available), values are normalized to null.
+
+```json
+"weather_sources": [
+  {
+    "type": "awosnet",
+    "station_id": "ks40"
+  }
+]
+```
+
+The `station_id` is the AWOSnet station identifier used in the subdomain (e.g., `ks40` for http://ks40.awosnet.com). Use lowercase.
 
 ### METAR
 

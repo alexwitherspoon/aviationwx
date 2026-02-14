@@ -144,8 +144,8 @@ Context: avg_ms, p50_ms, p95_ms, sample_count, last_hour_count
 
 **Page Render Performance:**
 ```
-Severity: warning (p95 > 500ms)
-Event: "Slow page renders: p95=678ms (threshold: 500ms)"
+Severity: warning (p95 > 1000ms)
+Event: "Slow page renders: p95=1200ms (threshold: 1000ms)"
 Context: avg_ms, p50_ms, p95_ms, sample_count, last_hour_count
 ```
 

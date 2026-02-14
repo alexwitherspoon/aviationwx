@@ -116,50 +116,50 @@ class MetricsCleanupTest extends TestCase
     
     /**
      * REGRESSION TEST: Boundary condition at exactly cutoff day
-     * 
+     *
      * Tests that the cleanup boundary condition correctly handles the cutoff day.
      * Previously, files at the cutoff boundary were incorrectly deleted.
-     * 
-     * Scenario:
-     * - Current time: Feb 13, 2026 00:24:18 UTC
-     * - Retention: 14 days
-     * - Cutoff: Jan 30, 2026 00:24:18 UTC
-     * - File: 2026-01-30.json (timestamp: Jan 30, 2026 00:00:00 UTC)
-     * 
+     *
+     * Uses dynamic dates relative to time() so the test passes regardless of run date.
+     * metrics_cleanup() uses time() internally, so we compute dates from the same reference.
+     *
+     * Logic: Delete when (file_date + 86400) <= cutoff. So we KEEP when end-of-file-day > cutoff.
+     * Cutoff = now - 14 days. We create:
+     * - (cutoff - 1 day): end = cutoff 00:00, deleted
+     * - (cutoff): end = cutoff + 1 day 00:00, kept (boundary)
+     * - (cutoff + 1 day): end = cutoff + 2 days 00:00, kept
+     *
      * Fixed in lib/metrics.php line 1469 using: ($timestamp + 86400) <= $cutoff
      */
     public function testCleanup_BoundaryCondition_CutoffDay(): void
     {
-        // Simulate: Current time is Feb 13, 2026 at 00:24:18 UTC
-        // Retention: 14 days
-        // Cutoff: Jan 30, 2026 at 00:24:18 UTC
-        
-        $now = strtotime('2026-02-13 00:24:18 UTC');
         $retentionSeconds = 14 * 86400;
-        $cutoff = $now - $retentionSeconds; // Jan 30, 2026 00:24:18
-        
-        // Create files around the boundary
-        $this->createDailyFile('2026-01-31'); // Clearly within retention (should KEEP)
-        $this->createDailyFile('2026-01-30'); // Boundary day (should KEEP - regression test for fixed bug)
-        $this->createDailyFile('2026-01-29'); // Clearly outside retention (should DELETE)
-        
-        // Run cleanup
+        $cutoff = time() - $retentionSeconds;
+
+        // Create files around the boundary (use same time reference as metrics_cleanup)
+        $deleteDate = gmdate('Y-m-d', $cutoff - 86400);   // Day before cutoff - should DELETE
+        $boundaryDate = gmdate('Y-m-d', $cutoff);        // Cutoff day - should KEEP (regression test)
+        $withinDate = gmdate('Y-m-d', $cutoff + 86400);  // Day after cutoff - should KEEP
+
+        $this->createDailyFile($withinDate);
+        $this->createDailyFile($boundaryDate);
+        $this->createDailyFile($deleteDate);
+
         $deletedCount = metrics_cleanup();
-        
-        // REGRESSION TEST: Previously deleted 2026-01-30 incorrectly
-        // Because file timestamp (Jan 30 00:00:00) was treated as < cutoff (Jan 30 00:24:18); now fixed
-        
-        // After fix, should only delete 2026-01-29 (1 file)
+
+        // Should only delete the file before cutoff (1 file)
         $this->assertEquals(1, $deletedCount, 'Should only delete files truly outside retention period');
-        
+
         // Verify which files remain
         $files = glob(CACHE_METRICS_DAILY_DIR . '/*.json');
-        $this->assertCount(2, $files, 'Should keep 2 files (Jan 30 and Jan 31)');
-        
-        $this->assertFileExists(CACHE_METRICS_DAILY_DIR . '/2026-01-31.json');
-        $this->assertFileExists(CACHE_METRICS_DAILY_DIR . '/2026-01-30.json', 
-            'Jan 30 should NOT be deleted - it is the cutoff day and should be kept');
-        $this->assertFileDoesNotExist(CACHE_METRICS_DAILY_DIR . '/2026-01-29.json');
+        $this->assertCount(2, $files, 'Should keep 2 files (boundary and within)');
+
+        $this->assertFileExists(CACHE_METRICS_DAILY_DIR . '/' . $withinDate . '.json');
+        $this->assertFileExists(
+            CACHE_METRICS_DAILY_DIR . '/' . $boundaryDate . '.json',
+            'Boundary day should NOT be deleted - regression test for fixed bug'
+        );
+        $this->assertFileDoesNotExist(CACHE_METRICS_DAILY_DIR . '/' . $deleteDate . '.json');
     }
     
     /**
