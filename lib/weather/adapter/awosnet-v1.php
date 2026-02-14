@@ -115,6 +115,9 @@ class AwosnetAdapter
     {
         $stationId = $config['station_id'] ?? '';
         $stationId = strtolower(trim($stationId));
+        if (!preg_match('/^[a-z0-9]{2,20}$/', $stationId)) {
+            return ['Accept: */*'];
+        }
         $baseUrl = "http://{$stationId}.awosnet.com/";
         return [
             'Accept: */*',
