@@ -146,6 +146,7 @@ aviationwx.org/
   - `ProcessingPipeline` class for standardized image validation, variant generation, and promotion
   - `WebcamWorker` class that orchestrates acquisition and processing
 - **Pull cameras**: Supports Static images, MJPEG streams, RTSP/RTSPS (via ffmpeg), federated API
+  - **HTTP conditional + checksum** (static URL, federated): Sends `If-None-Match` when ETag cached; on 304 skips download/processing. On 200, compares SHA-256 checksum to cached; skips processing when unchanged. Prevents misrepresenting image age when source has not updated.
 - **Push cameras**: Processes FTP/SFTP uploads with adaptive stability detection and batch processing
   - Batch processing: Processes up to 30 files per run to clear backlogs efficiently
   - Processing order: Newest first (pilot safety), then oldest-to-newest (prevent aging out)

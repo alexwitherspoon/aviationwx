@@ -924,6 +924,7 @@ The webcam processing pipeline uses three main components:
 - **Detection**: URL ends with `.jpg` or `.jpeg`
 - **Fetch Method**: 
   - Simple HTTP download
+  - **HTTP conditional + checksum**: Sends `If-None-Match` when ETag cached; on 304 skips download. On 200, compares SHA-256 checksum to cached; skips processing when unchanged. Prevents misrepresenting image age.
   - Validates JPEG format
   - Saves directly to staging
 
@@ -931,6 +932,7 @@ The webcam processing pipeline uses three main components:
 - **Detection**: URL ends with `.png`
 - **Fetch Method**: 
   - Downloads PNG image
+  - **HTTP conditional + checksum**: Same as Static JPEG (ETag + checksum skip when unchanged)
   - Converts to JPEG using GD library
   - Quality: 85%
   - Saves to staging
@@ -939,6 +941,7 @@ The webcam processing pipeline uses three main components:
 - **Detection**: URL contains `/api/v1/webcams/` and `aviationwx.org` or `localhost`
 - **Fetch Method**:
   - Fetches latest image from another AviationWX instance
+  - **HTTP conditional + checksum**: Same as Static JPEG (ETag + checksum skip when unchanged)
   - Supports API key authentication
   - Validates image data before saving
 
