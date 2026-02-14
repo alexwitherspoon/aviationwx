@@ -86,24 +86,26 @@
      *
      * Expects statute miles (SM) as input (internal storage standard).
      * Converts to kilometers when metric units selected using AviationWX.units.
+     * When greaterThan is true (METAR P prefix, e.g. P6SM), appends "+" to value.
      */
-    function formatEmbedVisibility(valueSM, distUnit) {
+    function formatEmbedVisibility(valueSM, distUnit, greaterThan = false) {
         if (valueSM === null || valueSM === undefined) return '--';
 
         if (distUnit === 'm') {
-            // Convert statute miles to kilometers using centralized conversion
             const valueKm = AviationWX.units.statuteMilesToKilometers(valueSM);
             if (valueKm >= 16) {
                 return '16+ km';
             }
-            return valueKm.toFixed(1) + ' km';
+            const suffix = greaterThan ? '+' : '';
+            return valueKm.toFixed(1) + suffix + ' km';
         }
 
         // Imperial - statute miles
         if (valueSM >= 10) {
             return '10+ SM';
         }
-        return valueSM.toFixed(1) + ' SM';
+        const suffix = greaterThan ? '+' : '';
+        return valueSM.toFixed(1) + suffix + ' SM';
     }
     
     /**

@@ -398,6 +398,7 @@ function emptyWeatherResult(string $airportId): array {
         'gust_speed' => null,
         'gust_factor' => null,
         'visibility' => null,
+        'visibility_greater_than' => false,
         'ceiling' => null,
         'cloud_cover' => null,
         'flight_category' => null,

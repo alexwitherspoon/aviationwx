@@ -36,27 +36,33 @@ class WeatherReading {
     /** @var bool Whether the value passes validation checks */
     public readonly bool $isValid;
     
+    /** @var bool For visibility: true when METAR P prefix (e.g. P6SM = greater than 6 SM) */
+    public readonly bool $greaterThan;
+    
     /**
      * Create a new WeatherReading
-     * 
+     *
      * @param mixed $value The measured value (null if unavailable)
      * @param string $unit The unit of measurement
      * @param int|null $observationTime Unix timestamp of observation
      * @param string|null $source Source identifier
      * @param bool $isValid Whether value passes validation
+     * @param bool $greaterThan For visibility: METAR P prefix semantics (e.g. P6SM)
      */
     public function __construct(
         mixed $value,
         string $unit = '',
         ?int $observationTime = null,
         ?string $source = null,
-        bool $isValid = true
+        bool $isValid = true,
+        bool $greaterThan = false
     ) {
         $this->value = $value;
         $this->unit = $unit;
         $this->observationTime = $observationTime;
         $this->source = $source;
         $this->isValid = $isValid;
+        $this->greaterThan = $greaterThan;
     }
     
     // ========================================================================
@@ -154,17 +160,18 @@ class WeatherReading {
     
     /**
      * Create a visibility reading in statute miles
-     * 
+     *
      * @param float|null $value Visibility in statute miles
      * @param string $source Source identifier
      * @param int|null $observationTime Observation time (defaults to now)
+     * @param bool $greaterThan True when METAR P prefix (e.g. P6SM = greater than 6 SM)
      * @return self
      */
-    public static function statuteMiles(?float $value, string $source, ?int $observationTime = null): self {
+    public static function statuteMiles(?float $value, string $source, ?int $observationTime = null, bool $greaterThan = false): self {
         if ($value === null) {
             return self::null($source);
         }
-        return new self($value, 'SM', $observationTime ?? time(), $source, true);
+        return new self($value, 'SM', $observationTime ?? time(), $source, true, $greaterThan);
     }
     
     /**
@@ -293,13 +300,13 @@ class WeatherReading {
         
         // Same unit, return copy
         if ($this->unit === $targetUnit) {
-            return new self($this->value, $this->unit, $this->observationTime, $this->source, $this->isValid);
+            return new self($this->value, $this->unit, $this->observationTime, $this->source, $this->isValid, $this->greaterThan);
         }
         
         // Use the centralized conversion function
         $convertedValue = \convert($this->value, $this->unit, $targetUnit);
         
-        return new self($convertedValue, $targetUnit, $this->observationTime, $this->source, $this->isValid);
+        return new self($convertedValue, $targetUnit, $this->observationTime, $this->source, $this->isValid, $this->greaterThan);
     }
     
     // ========================================================================
@@ -359,7 +366,7 @@ class WeatherReading {
      * @return self New reading with updated source
      */
     public function withSource(string $source): self {
-        return new self($this->value, $this->unit, $this->observationTime, $source, $this->isValid);
+        return new self($this->value, $this->unit, $this->observationTime, $source, $this->isValid, $this->greaterThan);
     }
     
     /**
@@ -368,7 +375,7 @@ class WeatherReading {
      * @return self New reading marked invalid
      */
     public function asInvalid(): self {
-        return new self($this->value, $this->unit, $this->observationTime, $this->source, false);
+        return new self($this->value, $this->unit, $this->observationTime, $this->source, false, $this->greaterThan);
     }
     
     // ========================================================================
@@ -392,6 +399,7 @@ class WeatherReading {
             'observation_time' => $this->observationTime,
             'source' => $this->source,
             'is_valid' => $this->isValid,
+            'greater_than' => $this->greaterThan,
         ];
     }
     

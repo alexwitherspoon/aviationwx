@@ -218,6 +218,7 @@ class AwosnetAdapter
             'gust_speed' => null,
             'pressure' => null,
             'visibility' => null,
+            'visibility_greater_than' => false,
             'ceiling' => null,
             'cloud_cover' => null,
             'precip_accum' => 0,
@@ -262,6 +263,7 @@ class AwosnetAdapter
         $visVal = self::getNumericAttr($xml->tenMinutevisibility ?? null);
         if ($visVal !== null) {
             $result['visibility'] = $visVal;
+            $result['visibility_greater_than'] = false;  // XML value is exact, not METAR P-prefix
         }
         $ceilVal = self::getNumericAttr($xml->ceilometer ?? null);
         if ($ceilVal !== null) {
@@ -324,7 +326,12 @@ class AwosnetAdapter
             wind: $hasCompleteWind
                 ? WindGroup::from($windSpeed, $windDirection, $gustSpeed, $source, $obsTime)
                 : WindGroup::empty(),
-            visibility: WeatherReading::statuteMiles($parsed['visibility'], $source, $obsTime),
+            visibility: WeatherReading::statuteMiles(
+                $parsed['visibility'],
+                $source,
+                $obsTime,
+                $parsed['visibility_greater_than'] ?? false
+            ),
             ceiling: WeatherReading::feet($parsed['ceiling'], $source, $obsTime),
             cloudCover: WeatherReading::text($parsed['cloud_cover'] ?? null, $source, $obsTime),
             rawMetar: $metar,

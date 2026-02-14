@@ -138,7 +138,11 @@ function buildFullWidgetMetrics($weather, $options, $hasMetarData) {
         
         // Visibility
         if ($visibility !== null) {
-            $visDisplay = formatEmbedVisibility($visibility, $distUnit);
+            $visDisplay = formatEmbedVisibility(
+                $visibility,
+                $distUnit,
+                $weather['visibility_greater_than'] ?? false
+            );
             $html .= "\n                        <div class=\"metric-item\">";
             $html .= "\n                            <span class=\"label\">Visibility</span>";
             $html .= "\n                            <span class=\"value\">{$visDisplay}</span>";

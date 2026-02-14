@@ -102,4 +102,38 @@ class AwosnetAdapterTest extends TestCase
         $this->assertStringNotContainsString('Referer:', $headerStr);
         $this->assertStringNotContainsString('X-Injected', $headerStr);
     }
+
+    /**
+     * P6SM in METAR: parseToSnapshot preserves visibility_greater_than in snapshot
+     * Safety-critical: P prefix indicates "greater than" semantics for display
+     */
+    public function testParseToSnapshot_P6SM_PreservesVisibilityGreaterThan(): void
+    {
+        $response = $this->minimalXmlWithMetar('METAR KSPB 132345Z 09007KT P6SM CLR 05/05 A3003');
+        $snapshot = AwosnetAdapter::parseToSnapshot($response, []);
+        $this->assertNotNull($snapshot);
+        $this->assertEquals(6.0, $snapshot->visibility->value);
+        $this->assertTrue($snapshot->visibility->greaterThan, 'P6SM must preserve greaterThan in snapshot');
+    }
+
+    /**
+     * Plain 6SM: no greater-than flag
+     */
+    public function testParseToSnapshot_6SM_NoGreaterThan(): void
+    {
+        $response = $this->minimalXmlWithMetar('METAR KSPB 132345Z 09007KT 6SM CLR 05/05 A3003');
+        $snapshot = AwosnetAdapter::parseToSnapshot($response, []);
+        $this->assertNotNull($snapshot);
+        $this->assertEquals(6.0, $snapshot->visibility->value);
+        $this->assertFalse($snapshot->visibility->greaterThan);
+    }
+
+    /**
+     * Minimal XML response with embedded METAR for parseToSnapshot tests
+     * extractMetarFromHtml finds METAR via regex in the raw response string
+     */
+    private function minimalXmlWithMetar(string $metar): string
+    {
+        return "<?xml version=\"1.0\"?><response><METAR>$metar</METAR></response>";
+    }
 }

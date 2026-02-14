@@ -70,6 +70,54 @@ class RawMetarParsingTest extends TestCase
         $result = parseRawMETARToWeatherArray($metar);
         $this->assertIsArray($result);
         $this->assertEquals(10.0, $result['visibility']);
+        $this->assertFalse($result['visibility_greater_than'] ?? false, 'Plain 10SM has no greater-than semantics');
+    }
+
+    /**
+     * P6SM: METAR "greater than" prefix - visibility is at least 6 SM
+     * Per ICAO METAR format, P prefix indicates value exceeds the reported number.
+     */
+    public function testVisibility_P6SM_GreaterThan_SetsFlagAndValue(): void
+    {
+        $metar = 'METAR KSPB 132345Z 09007KT P6SM CLR 05/05 A3003';
+        $result = parseRawMETARToWeatherArray($metar);
+        $this->assertIsArray($result);
+        $this->assertEquals(6.0, $result['visibility']);
+        $this->assertTrue($result['visibility_greater_than'] ?? false, 'P6SM must set visibility_greater_than');
+    }
+
+    /**
+     * P10SM: greater than 10 SM (common for unlimited conditions)
+     */
+    public function testVisibility_P10SM_GreaterThan_SetsFlagAndValue(): void
+    {
+        $metar = 'METAR KSPB 132345Z 09007KT P10SM CLR 05/05 A3003';
+        $result = parseRawMETARToWeatherArray($metar);
+        $this->assertIsArray($result);
+        $this->assertEquals(10.0, $result['visibility']);
+        $this->assertTrue($result['visibility_greater_than'] ?? false);
+    }
+
+    /**
+     * 6SM without P: exact value, no greater-than flag
+     */
+    public function testVisibility_6SM_NoPrefix_NoGreaterThanFlag(): void
+    {
+        $metar = 'METAR KSPB 132345Z 09007KT 6SM CLR 05/05 A3003';
+        $result = parseRawMETARToWeatherArray($metar);
+        $this->assertIsArray($result);
+        $this->assertEquals(6.0, $result['visibility']);
+        $this->assertFalse($result['visibility_greater_than'] ?? false);
+    }
+
+    /**
+     * P prefix must be checked before plain number - P6SM must not match (\d+)SM first
+     */
+    public function testVisibility_P6SM_OrderOfRegex_PrefixTakesPrecedence(): void
+    {
+        $metar = 'METAR KSPB 132345Z 09007KT P6SM CLR 05/05 A3003';
+        $result = parseRawMETARToWeatherArray($metar);
+        $this->assertTrue($result['visibility_greater_than'] ?? false, 'P6SM must be parsed with P prefix, not as plain 6SM');
     }
 
     /**

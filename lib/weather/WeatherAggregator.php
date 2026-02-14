@@ -83,6 +83,9 @@ class WeatherAggregator {
             if ($reading->source !== null) {
                 $fieldSourceMap[$fieldName] = $reading->source;
             }
+            if ($fieldName === 'visibility') {
+                $result['visibility_greater_than'] = $reading->greaterThan;
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════════

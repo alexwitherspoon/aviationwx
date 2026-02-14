@@ -100,10 +100,16 @@ function nullStaleFieldsBySource(&$data, $failclosedSeconds, $failclosedSecondsM
             if ($fieldAge >= $failclosedSecondsMetar) {
                 // This specific field has reached failclosed tier - hide it
                 $data[$field] = null;
+                if ($field === 'visibility') {
+                    $data['visibility_greater_than'] = false;
+                }
             }
         } elseif ($metarFailclosed) {
             // No per-field obs time - fall back to source-level failclosed check
             $data[$field] = null;
+            if ($field === 'visibility') {
+                $data['visibility_greater_than'] = false;
+            }
         }
     }
     

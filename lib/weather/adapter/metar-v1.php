@@ -228,6 +228,7 @@ function parseRawMETARToWeatherArray(string $rawMetar): ?array {
     $gustSpeed = null;
     $pressure = null;
     $visibility = null;
+    $visibility_greater_than = false;
     $ceiling = null;
     $cloudCover = null;
     $obsTime = null;
@@ -252,16 +253,17 @@ function parseRawMETARToWeatherArray(string $rawMetar): ?array {
         $pressure = (int)$m[1] / 100.0;
     }
 
-    // Visibility: 10SM or 1 1/2SM or 1/2SM (guard against division by zero in malformed METAR)
+    // Visibility: 10SM or 1 1/2SM or 1/2SM or P6SM (P = greater than; check P prefix before plain number)
     if (preg_match('/\b(\d+)\s+(\d+)\/(\d+)SM\b/', $rawMetar, $m)) {
         $denom = (int)$m[3];
         $visibility = $denom !== 0 ? (int)$m[1] + ((int)$m[2] / $denom) : (float)$m[1];
     } elseif (preg_match('/\b(\d+)\/(\d+)SM\b/', $rawMetar, $m) && !preg_match('/\d+\s+\d+\/\d+SM/', $rawMetar)) {
         $denom = (int)$m[2];
         $visibility = $denom !== 0 ? (int)$m[1] / $denom : null;
-    } elseif (preg_match('/\b(\d+)SM\b/', $rawMetar, $m)) {
+    } elseif (preg_match('/\bP(\d+)SM\b/', $rawMetar, $m)) {
         $visibility = (float)$m[1];
-    } elseif (preg_match('/\bP?(\d+)SM\b/', $rawMetar, $m)) {
+        $visibility_greater_than = true;
+    } elseif (preg_match('/\b(\d+)SM\b/', $rawMetar, $m)) {
         $visibility = (float)$m[1];
     }
 
@@ -314,6 +316,7 @@ function parseRawMETARToWeatherArray(string $rawMetar): ?array {
         'gust_speed' => $gustSpeed,
         'pressure' => $pressure,
         'visibility' => $visibility,
+        'visibility_greater_than' => $visibility_greater_than,
         'ceiling' => $ceiling,
         'cloud_cover' => $cloudCover,
         'precip_accum' => 0,
