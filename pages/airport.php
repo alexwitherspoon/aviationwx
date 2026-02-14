@@ -3811,7 +3811,7 @@ function syncBannerState(state) {
         outageBanner.className = 'data-outage-banner' + (state.limited_availability ? ' data-outage-banner-limited-availability' : '');
         outageBanner.dataset.newestTimestamp = state.newest_timestamp.toString();
         const isLimited = state.limited_availability;
-        outageBanner.innerHTML = (isLimited ? '\uD83D\uDD0B Data unavailable. This site often powers down at night or when the battery is low. It will recover and come back online when conditions allow.<br>Latest data: ' : '\u26A0\uFE0F Data Outage Detected: All local data sources are currently offline due to a local outage.<br>The latest information shown is from ') +
+        outageBanner.innerHTML = (isLimited ? '\uD83E\uDEAB Data unavailable. This site often powers down at night or when the battery is low. It will recover and come back online when conditions allow.<br>Latest data: ' : '\u26A0\uFE0F Data Outage Detected: All local data sources are currently offline due to a local outage.<br>The latest information shown is from ') +
             '<span id="outage-newest-time">--</span>' +
             (isLimited ? '.' : ' and may not reflect current conditions.<br>Data will automatically update once the local site is back online.');
         container.appendChild(outageBanner);
