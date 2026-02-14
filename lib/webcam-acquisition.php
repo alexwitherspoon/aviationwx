@@ -440,6 +440,8 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
 
         $checksum = computeWebcamContentChecksum($imageData);
         if ($metadata['checksum'] !== null && $checksum === $metadata['checksum']) {
+            // Persist new ETag when content unchanged so future requests can use 304
+            saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum);
             $this->recordSuccess();
             return AcquisitionResult::skip('unchanged_checksum', 'federated', ['checksum' => $checksum]);
         }
@@ -470,7 +472,12 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $exifCheck['reason']]);
         }
 
-        saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum);
+        if (!saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum)) {
+            aviationwx_log('warning', 'Failed to save webcam pull metadata', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+            ], 'app');
+        }
         $this->recordSuccess();
         return AcquisitionResult::success($stagingPath, $timestamp, 'federated');
     }
@@ -653,6 +660,8 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
 
         $checksum = computeWebcamContentChecksum($data);
         if ($metadata['checksum'] !== null && $checksum === $metadata['checksum']) {
+            // Persist new ETag when content unchanged so future requests can use 304
+            saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum);
             $this->recordSuccess();
             return AcquisitionResult::skip('unchanged_checksum', $this->sourceType, ['checksum' => $checksum]);
         }
@@ -713,7 +722,12 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('exif_invalid', $this->sourceType, ['reason' => $exifCheck['reason']]);
         }
 
-        saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum);
+        if (!saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum)) {
+            aviationwx_log('warning', 'Failed to save webcam pull metadata', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+            ], 'app');
+        }
         $this->recordSuccess();
         return AcquisitionResult::success($stagingPath, $timestamp, $this->sourceType);
     }
