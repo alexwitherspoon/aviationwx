@@ -558,7 +558,7 @@ The `station_id` must be a valid airport ICAO code (e.g., `KSPB`, `KPDX`). Only 
 
 ### AWOSnet
 
-Fetches weather from AWOSnet data endpoint (awiAwosNet.php). The main page uses JavaScript to load data; we fetch the PHP endpoint directly with a Referer header. Uses the embedded METAR string as the primary data source. When the page shows "///" (data not available), values are normalized to null.
+Fetches weather from AWOSnet data endpoint (awiAwosNet.php). The main page uses JavaScript to load data; we fetch the PHP endpoint directly with a Referer header. Structured XML fields are treated as the primary/authoritative data source, and the embedded METAR string is used to fill gaps or augment fields when available. When the page shows "///" (data not available), values are normalized to null.
 
 ```json
 "weather_sources": [
