@@ -92,6 +92,31 @@ function saveWebcamPullMetadata(string $airportId, int $camIndex, ?string $etag,
 }
 
 /**
+ * Validate ETag for safe use in HTTP headers
+ *
+ * Rejects values containing control characters (CR, LF, etc.) to prevent
+ * header injection when reusing in If-None-Match.
+ *
+ * @param string|null $etag ETag value from response or metadata
+ * @return string|null Valid ETag or null if invalid/empty
+ */
+function sanitizeEtagForHeader(?string $etag): ?string
+{
+    if ($etag === null || $etag === '') {
+        return null;
+    }
+    $trimmed = trim($etag);
+    if ($trimmed === '') {
+        return null;
+    }
+    // Reject control characters (0x00-0x1F, 0x7F) to prevent header injection
+    if (preg_match('/[\x00-\x1F\x7F]/', $trimmed) !== 0) {
+        return null;
+    }
+    return $trimmed;
+}
+
+/**
  * Compute SHA-256 checksum of raw image bytes
  *
  * Used to verify image content unchanged when server returns 200 instead of 304.

@@ -389,14 +389,20 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         if ($apiKey) {
             $headers[] = "X-API-Key: {$apiKey}";
         }
-        if ($metadata['etag'] !== null) {
-            $headers[] = 'If-None-Match: ' . $metadata['etag'];
+        $cachedEtag = sanitizeEtagForHeader($metadata['etag'] ?? null);
+        if ($cachedEtag !== null) {
+            $headers[] = 'If-None-Match: ' . $cachedEtag;
+        } elseif ($metadata['etag'] !== null) {
+            aviationwx_log('warning', 'Invalid ETag in webcam pull metadata; skipping If-None-Match', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+            ], 'app');
         }
 
         $responseEtag = null;
         $headerCallback = function ($ch, $headerLine) use (&$responseEtag) {
             if (stripos($headerLine, 'ETag:') === 0) {
-                $responseEtag = trim(substr($headerLine, 5));
+                $responseEtag = sanitizeEtagForHeader(trim(substr($headerLine, 5)));
             }
             return strlen($headerLine);
         };
@@ -421,7 +427,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
 
         if ($httpCode === 304) {
             $this->recordSuccess();
-            return AcquisitionResult::skip('unchanged_304', 'federated', ['etag' => $metadata['etag']]);
+            return AcquisitionResult::skip('unchanged_304', 'federated', ['etag' => $cachedEtag]);
         }
 
         if ($imageData === false || $httpCode !== 200) {
@@ -591,14 +597,20 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         $metadata = getWebcamPullMetadata($this->airportId, $this->camIndex);
 
         $headers = [];
-        if ($metadata['etag'] !== null) {
-            $headers[] = 'If-None-Match: ' . $metadata['etag'];
+        $cachedEtag = sanitizeEtagForHeader($metadata['etag'] ?? null);
+        if ($cachedEtag !== null) {
+            $headers[] = 'If-None-Match: ' . $cachedEtag;
+        } elseif ($metadata['etag'] !== null) {
+            aviationwx_log('warning', 'Invalid ETag in webcam pull metadata; skipping If-None-Match', [
+                'airport' => $this->airportId,
+                'cam' => $this->camIndex,
+            ], 'app');
         }
 
         $responseEtag = null;
         $headerCallback = function ($ch, $headerLine) use (&$responseEtag) {
             if (stripos($headerLine, 'ETag:') === 0) {
-                $responseEtag = trim(substr($headerLine, 5));
+                $responseEtag = sanitizeEtagForHeader(trim(substr($headerLine, 5)));
             }
             return strlen($headerLine);
         };
@@ -628,7 +640,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
 
         if ($httpCode === 304) {
             $this->recordSuccess();
-            return AcquisitionResult::skip('unchanged_304', $this->sourceType, ['etag' => $metadata['etag']]);
+            return AcquisitionResult::skip('unchanged_304', $this->sourceType, ['etag' => $cachedEtag]);
         }
 
         if ($error || $httpCode !== 200 || empty($data) || strlen($data) <= 100) {

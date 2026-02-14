@@ -122,4 +122,23 @@ class WebcamPullConditionalTest extends TestCase
         $this->assertSame(64, strlen($hash));
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $hash);
     }
+
+    public function testSanitizeEtagForHeader_ValidEtag_ReturnsTrimmed(): void
+    {
+        $this->assertSame('"abc123"', sanitizeEtagForHeader('  "abc123"  '));
+        $this->assertSame('"abc123"', sanitizeEtagForHeader('"abc123"'));
+    }
+
+    public function testSanitizeEtagForHeader_ContainsControlChars_ReturnsNull(): void
+    {
+        $this->assertNull(sanitizeEtagForHeader("\"abc\r\n123\""));
+        $this->assertNull(sanitizeEtagForHeader("\"abc\x00def\""));
+    }
+
+    public function testSanitizeEtagForHeader_NullOrEmpty_ReturnsNull(): void
+    {
+        $this->assertNull(sanitizeEtagForHeader(null));
+        $this->assertNull(sanitizeEtagForHeader(''));
+        $this->assertNull(sanitizeEtagForHeader('   '));
+    }
 }
