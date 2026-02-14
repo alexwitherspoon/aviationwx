@@ -1434,6 +1434,7 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `cache/weather/{airport}.json` | Cached weather data |
 | `cache/weather/history/{airport}.json` | Weather history (24h) |
 | `cache/webcams/{airport}/{cam}/` | Webcam images (current and historical) |
+| `cache/webcams/{airport}/{cam}/pull_metadata.json` | Pull cameras: ETag + checksum for conditional/unchanged skip |
 | `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
 | `cache/webcams/{airport}/{cam}/{ts}_original.{ext}` | Original timestamped webcam images |
 | `cache/webcams/{airport}/{cam}/{ts}_{height}.{ext}` | Variant timestamped webcam images (height in pixels) |

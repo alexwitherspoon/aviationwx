@@ -15,6 +15,7 @@
  * │   └── {airport}/{camIndex}/
  * │       ├── {timestamp}_{variant}.{format}  # Timestamped images (current & historical)
  * │       ├── current.{format}     # Symlink to latest timestamped image
+ * │       ├── pull_metadata.json   # Pull cameras: ETag + checksum for conditional/unchanged skip
  * │       └── state.json           # Push webcam state (last_processed)
  * ├── ftp/
  * │   └── {airport}/{username}/    # FTP uploads (ftp:www-data 2775)

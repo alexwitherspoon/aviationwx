@@ -15,6 +15,7 @@ require_once __DIR__ . '/logger.php';
 require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/exif-utils.php';
 require_once __DIR__ . '/webcam-error-detector.php';
+require_once __DIR__ . '/webcam-pull-metadata.php';
 
 /**
  * Result of an image acquisition attempt
@@ -368,6 +369,8 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
 
     /**
      * Acquire from federated AviationWX API
+     *
+     * Uses HTTP conditional (If-None-Match) and checksum to skip when image unchanged.
      */
     private function acquireFederated(string $stagingPath): AcquisitionResult
     {
@@ -380,11 +383,23 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
         }
 
         $url = "{$baseUrl}/api/v1/webcams/{$this->airportId}/{$this->camIndex}/latest";
-        
+        $metadata = getWebcamPullMetadata($this->airportId, $this->camIndex);
+
         $headers = ['Accept: image/jpeg'];
         if ($apiKey) {
             $headers[] = "X-API-Key: {$apiKey}";
         }
+        if ($metadata['etag'] !== null) {
+            $headers[] = 'If-None-Match: ' . $metadata['etag'];
+        }
+
+        $responseEtag = null;
+        $headerCallback = function ($ch, $headerLine) use (&$responseEtag) {
+            if (stripos($headerLine, 'ETag:') === 0) {
+                $responseEtag = trim(substr($headerLine, 5));
+            }
+            return strlen($headerLine);
+        };
 
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -395,12 +410,19 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_USERAGENT => 'AviationWX-Federation/1.0',
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_HEADERFUNCTION => $headerCallback,
         ]);
 
         $imageData = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode === 304) {
+            $this->recordSuccess();
+            return AcquisitionResult::skip('unchanged_304', 'federated', ['etag' => $metadata['etag']]);
+        }
 
         if ($imageData === false || $httpCode !== 200) {
             $this->recordFailure('http_' . $httpCode, 'transient', $httpCode);
@@ -408,6 +430,12 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 'http_code' => $httpCode,
                 'error' => $error
             ]);
+        }
+
+        $checksum = computeWebcamContentChecksum($imageData);
+        if ($metadata['checksum'] !== null && $checksum === $metadata['checksum']) {
+            $this->recordSuccess();
+            return AcquisitionResult::skip('unchanged_checksum', 'federated', ['checksum' => $checksum]);
         }
 
         // Validate image data
@@ -436,6 +464,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('exif_invalid', 'federated', ['reason' => $exifCheck['reason']]);
         }
 
+        saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum);
         $this->recordSuccess();
         return AcquisitionResult::success($stagingPath, $timestamp, 'federated');
     }
@@ -552,13 +581,29 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
 
     /**
      * Acquire from static image URL (JPEG or PNG)
+     *
+     * Uses HTTP conditional (If-None-Match) and checksum to skip when image unchanged.
+     * Safety-critical: prevents misrepresenting image age when source has not updated.
      */
     private function acquireStatic(string $stagingPath): AcquisitionResult
     {
         $url = $this->camConfig['url'] ?? '';
+        $metadata = getWebcamPullMetadata($this->airportId, $this->camIndex);
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
+        $headers = [];
+        if ($metadata['etag'] !== null) {
+            $headers[] = 'If-None-Match: ' . $metadata['etag'];
+        }
+
+        $responseEtag = null;
+        $headerCallback = function ($ch, $headerLine) use (&$responseEtag) {
+            if (stripos($headerLine, 'ETag:') === 0) {
+                $responseEtag = trim(substr($headerLine, 5));
+            }
+            return strlen($headerLine);
+        };
+
+        $curlOpts = [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => CURL_TIMEOUT,
@@ -567,11 +612,24 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_USERAGENT => 'AviationWX Webcam Bot',
             CURLOPT_MAXFILESIZE => CACHE_FILE_MAX_SIZE,
-        ]);
+            CURLOPT_HEADERFUNCTION => $headerCallback,
+        ];
+        if (!empty($headers)) {
+            $curlOpts[CURLOPT_HTTPHEADER] = $headers;
+        }
+
+        $ch = curl_init();
+        curl_setopt_array($ch, $curlOpts);
 
         $data = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode === 304) {
+            $this->recordSuccess();
+            return AcquisitionResult::skip('unchanged_304', $this->sourceType, ['etag' => $metadata['etag']]);
+        }
 
         if ($error || $httpCode !== 200 || empty($data) || strlen($data) <= 100) {
             $this->recordFailure('http_' . $httpCode, 'transient', $httpCode !== 200 ? $httpCode : null);
@@ -579,6 +637,12 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
                 'http_code' => $httpCode,
                 'error' => $error
             ]);
+        }
+
+        $checksum = computeWebcamContentChecksum($data);
+        if ($metadata['checksum'] !== null && $checksum === $metadata['checksum']) {
+            $this->recordSuccess();
+            return AcquisitionResult::skip('unchanged_checksum', $this->sourceType, ['checksum' => $checksum]);
         }
 
         // Detect and handle image format
@@ -637,6 +701,7 @@ class PullAcquisitionStrategy extends BaseAcquisitionStrategy
             return AcquisitionResult::failure('exif_invalid', $this->sourceType, ['reason' => $exifCheck['reason']]);
         }
 
+        saveWebcamPullMetadata($this->airportId, $this->camIndex, $responseEtag, $checksum);
         $this->recordSuccess();
         return AcquisitionResult::success($stagingPath, $timestamp, $this->sourceType);
     }
