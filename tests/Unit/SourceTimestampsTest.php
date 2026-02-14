@@ -79,18 +79,18 @@ class SourceTimestampsTest extends TestCase
     }
     
     /**
-     * Test that primary source uses last_updated_primary as fallback
+     * Test that primary source returns 0 when obs_time_primary is missing
      */
-    public function testGetSourceTimestamps_PrimarySource_UsesLastUpdatedFallback(): void
+    public function testGetSourceTimestamps_PrimarySource_NoObsTime_ReturnsZero(): void
     {
         $airport = [
             'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
         ];
         
         $weatherCacheFile = getWeatherCachePath($this->testAirportId);
-        $timestamp = time() - 1800; // 30 minutes ago
         $weatherData = [
-            'last_updated_primary' => $timestamp, // No obs_time_primary
+            'last_updated_primary' => time() - 1800,
+            'last_updated' => time() - 60,
             'temperature' => 15.0
         ];
         file_put_contents($weatherCacheFile, json_encode($weatherData));
@@ -98,7 +98,8 @@ class SourceTimestampsTest extends TestCase
         $result = getSourceTimestamps($this->testAirportId, $airport);
         
         $this->assertTrue($result['primary']['available']);
-        $this->assertEquals($timestamp, $result['primary']['timestamp']);
+        $this->assertEquals(0, $result['primary']['timestamp']);
+        $this->assertEquals(PHP_INT_MAX, $result['primary']['age']);
     }
     
     /**

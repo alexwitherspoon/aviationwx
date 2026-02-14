@@ -99,15 +99,12 @@ function getSourceTimestamps(string $airportId, array $airport): array {
             // We handle failures explicitly with fallback mechanisms below
             $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
             if (is_array($weatherData)) {
-                // Check primary source timestamp
+                // Use obs_time_primary only. Fetch/cache timestamps reflect API success,
+                // not real data. When API succeeds but returns no fresh obs (e.g. station offline),
+                // fallbacks would incorrectly treat primary as fresh.
                 $primaryTimestamp = 0;
                 if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
                     $primaryTimestamp = (int)$weatherData['obs_time_primary'];
-                } elseif (isset($weatherData['last_updated_primary']) && $weatherData['last_updated_primary'] > 0) {
-                    $primaryTimestamp = (int)$weatherData['last_updated_primary'];
-                } elseif (isset($weatherData['last_updated']) && $weatherData['last_updated'] > 0) {
-                    // Fallback to general last_updated for unified sources
-                    $primaryTimestamp = (int)$weatherData['last_updated'];
                 }
                 
                 if ($primaryTimestamp > 0) {
