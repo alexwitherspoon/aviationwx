@@ -225,9 +225,11 @@ class AwosnetAdapter
             'obs_time' => null,
         ];
 
-        $obsTime = self::getTimeAttr($xml->METAR ?? null)
+        // Prefer METAR-derived obs_time when available - METAR is in Zulu (UTC) and authoritative.
+        // AWOSnet XML time attribute may be in local time or from misconfigured hardware clock.
+        $obsTime = $result['obs_time']
+            ?? self::getTimeAttr($xml->METAR ?? null)
             ?? self::getTimeAttr($xml->airTemperature ?? null)
-            ?? $result['obs_time']
             ?? time();
 
         $result['obs_time'] = $obsTime;
