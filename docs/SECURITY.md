@@ -179,7 +179,7 @@ default-src 'self';
 img-src 'self' data: blob: https:;
 script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://browser.sentry-cdn.com;
 style-src 'self' 'unsafe-inline';
-connect-src 'self' https://cloudflareinsights.com https://api.rainviewer.com https://tilecache.rainviewer.com https://tile.openweathermap.org https://*.sentry.io;
+connect-src 'self' https://cloudflareinsights.com https://api.rainviewer.com https://tilecache.rainviewer.com https://tile.openweathermap.org https://*.sentry.io https://*.ingest.us.sentry.io https://*.ingest.eu.sentry.io;
 worker-src 'self' blob:;
 frame-ancestors 'self';
 base-uri 'self';
