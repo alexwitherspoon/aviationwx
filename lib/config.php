@@ -1972,6 +1972,19 @@ function isAirportUnlisted(array $airport): bool {
 }
 
 /**
+ * Check if an airport has limited availability (off-grid, solar, battery, wind)
+ *
+ * Returns true only if `limited_availability` is explicitly set to true.
+ * When true, shows informational banner instead of outage banner when all data is stale.
+ *
+ * @param array $airport Airport configuration array
+ * @return bool True if airport has limited availability, false otherwise
+ */
+function isAirportLimitedAvailability(array $airport): bool {
+    return isset($airport['limited_availability']) && $airport['limited_availability'] === true;
+}
+
+/**
  * Get only enabled airports from configuration
  * 
  * Filters the airports array to return only airports with `enabled: true`.
@@ -3256,6 +3269,11 @@ function validateAirportsJsonStructure(array $config): array {
             if (!in_array($towerStatus, ['towered', 'non_towered'], true)) {
                 $errors[] = "Airport '{$airportCode}' has invalid tower_status: '{$towerStatus}' (must be 'towered' or 'non_towered')";
             }
+        }
+        
+        // Validate limited_availability when present (optional; must be boolean if set)
+        if (isset($airport['limited_availability']) && !is_bool($airport['limited_availability'])) {
+            $errors[] = "Airport '{$airportCode}' has invalid limited_availability: must be boolean (true or false)";
         }
         
         // Track airport name for uniqueness (case-insensitive)

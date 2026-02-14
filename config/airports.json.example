@@ -100,7 +100,7 @@
     }
   },
   "airports": {
-    "_comment_airport_states": "enabled: true/false controls if airport is active. maintenance: true shows banner but accessible. unlisted: true hides from discovery (map, search, sitemap, API) but accessible via direct link - useful for test sites and new airports being commissioned.",
+    "_comment_airport_states": "enabled: true/false controls if airport is active. maintenance: true shows banner but accessible. unlisted: true hides from discovery (map, search, sitemap, API) but accessible via direct link - useful for test sites and new airports being commissioned. limited_availability: true for off-grid/solar/battery sites - shows informational banner when data unavailable.",
     "kspb": {
       "name": "Scappoose Industrial Airpark",
       "enabled": true,
@@ -415,6 +415,25 @@
           "url": "https://custom-airport.example.com"
         }
       ]
+    },
+    "2id3": {
+      "name": "Cascade Airport",
+      "enabled": true,
+      "limited_availability": true,
+      "faa": "2ID3",
+      "address": "Cascade, Idaho, USA",
+      "lat": 44.5,
+      "lon": -116.0,
+      "elevation_ft": 5000,
+      "timezone": "America/Denver",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "runways": [{"name": "18/36", "heading_1": 180, "heading_2": 360}],
+      "frequencies": {"ctaf": "122.8"},
+      "services": {"repairs_available": false},
+      "webcams": [],
+      "partners": [],
+      "weather_sources": [{"type": "metar", "station_id": "KBOI", "nearby_stations": []}]
     },
     "4or9": {
       "name": "Country Squire Airpark",

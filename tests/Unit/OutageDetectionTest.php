@@ -96,8 +96,34 @@ class OutageDetectionTest extends TestCase
         $this->assertIsArray($result);
         $this->assertArrayHasKey('newest_timestamp', $result);
         $this->assertArrayHasKey('all_stale', $result);
+        $this->assertArrayHasKey('limited_availability', $result);
         $this->assertTrue($result['all_stale']);
         $this->assertGreaterThan(0, $result['newest_timestamp']);
+        $this->assertFalse($result['limited_availability'], 'Default airport should have limited_availability false');
+    }
+    
+    /**
+     * Test that limited_availability is true when airport has limited_availability config
+     */
+    public function testCheckDataOutageStatus_LimitedAvailability_ReturnsTrue(): void
+    {
+        $airport = [
+            'limited_availability' => true,
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
+        ];
+        
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $staleTimestamp = time() - (4 * 3600);
+        $weatherData = [
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+        
+        $result = checkDataOutageStatus($this->testAirportId, $airport);
+        
+        $this->assertNotNull($result);
+        $this->assertTrue($result['limited_availability']);
     }
     
     /**

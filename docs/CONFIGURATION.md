@@ -83,6 +83,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | **Status** |||
 | `maintenance` | `false` | Show maintenance banner |
 | `unlisted` | `false` | Hide from discovery (map, search, sitemap) |
+| `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
 | **Refresh Overrides** |||
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |

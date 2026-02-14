@@ -1061,6 +1061,47 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Airport without unlisted field should pass validation (defaults to false)');
     }
 
+    public function testAirportStructure_LimitedAvailability_ValidBoolean()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Limited Availability Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true,
+                    'limited_availability' => true
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport with limited_availability: true (boolean) should pass');
+    }
+
+    public function testAirportStructure_LimitedAvailability_InvalidString()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true,
+                    'limited_availability' => 'true'
+                ]
+            ]
+        ];
+        
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Airport with limited_availability: "true" (string) should fail');
+        $this->assertStringContainsString('limited_availability', implode(' ', $result['errors']));
+    }
+
     public function testAirportStructure_InvalidLatitude()
     {
         $config = [

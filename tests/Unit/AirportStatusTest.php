@@ -93,6 +93,33 @@ class AirportStatusTest extends TestCase
     }
     
     /**
+     * Test isAirportLimitedAvailability - limited_availability: true
+     */
+    public function testIsAirportLimitedAvailability_True_ReturnsTrue(): void
+    {
+        $airport = ['limited_availability' => true];
+        $this->assertTrue(isAirportLimitedAvailability($airport), 'Airport with limited_availability: true should return true');
+    }
+    
+    /**
+     * Test isAirportLimitedAvailability - limited_availability: false
+     */
+    public function testIsAirportLimitedAvailability_False_ReturnsFalse(): void
+    {
+        $airport = ['limited_availability' => false];
+        $this->assertFalse(isAirportLimitedAvailability($airport), 'Airport with limited_availability: false should return false');
+    }
+    
+    /**
+     * Test isAirportLimitedAvailability - limited_availability missing
+     */
+    public function testIsAirportLimitedAvailability_Missing_ReturnsFalse(): void
+    {
+        $airport = ['name' => 'Test Airport'];
+        $this->assertFalse(isAirportLimitedAvailability($airport), 'Airport without limited_availability field should return false');
+    }
+    
+    /**
      * Test getEnabledAirports - filters correctly
      */
     public function testGetEnabledAirports_FiltersCorrectly_ReturnsOnlyEnabled(): void

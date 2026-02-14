@@ -1104,6 +1104,8 @@ function checkAirportHealth(string $airportId, array $airport): array {
         $health['status'] = 'maintenance';
     }
     
+    $health['limited_availability'] = isAirportLimitedAvailability($airport);
+    
     return $health;
 }
 

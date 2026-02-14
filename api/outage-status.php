@@ -60,11 +60,14 @@ $sourceTimestamps = getSourceTimestamps($airportId, $airport);
 $outageThresholdSeconds = getStaleFailclosedSeconds($airport);
 $now = time();
 
-// Build response with source details
+// Build response with source details and banner state
+$inOutage = $outageStatus !== null;
 $response = [
     'success' => true,
-    'in_outage' => $outageStatus !== null,
-    'newest_timestamp' => $outageStatus !== null ? $outageStatus['newest_timestamp'] : 0,
+    'maintenance' => isAirportInMaintenance($airport),
+    'in_outage' => $inOutage,
+    'limited_availability' => $inOutage && isset($outageStatus['limited_availability']) && $outageStatus['limited_availability'],
+    'newest_timestamp' => $inOutage ? $outageStatus['newest_timestamp'] : 0,
     'sources' => []
 ];
 

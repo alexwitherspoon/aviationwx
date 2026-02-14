@@ -1187,21 +1187,7 @@ if ($themeCookie === 'dark') {
             <strong>⚠️ JavaScript is required</strong> for this site to function properly. Please enable JavaScript in your browser to view weather data and interactive features.
         </div>
     </noscript>
-    <?php if (isAirportInMaintenance($airport)): ?>
-    <div class="maintenance-banner">
-        ⚠️ This airport is currently under maintenance. Data may be missing or unreliable.
-    </div>
-    <?php endif; ?>
-    <?php 
-    $outageStatus = checkDataOutageStatus($airportId, $airport);
-    if ($outageStatus !== null): 
-    ?>
-    <div id="data-outage-banner" class="data-outage-banner" data-newest-timestamp="<?= $outageStatus['newest_timestamp'] ?>">
-        ⚠️ Data Outage Detected: All local data sources are currently offline due to a local outage.<br>
-        The latest information shown is from <span id="outage-newest-time">--</span> and may not reflect current conditions.<br>
-        Data will automatically update once the local site is back online.
-    </div>
-    <?php endif; ?>
+    <div id="status-banners"></div>
     <div id="notam-banner-container"></div>
     <main>
     <div class="container">
@@ -2054,6 +2040,17 @@ const AIRPORT_DATA = <?php
     } else {
         echo $airportJson;
     }
+?>;
+
+// Initial banner state for status banners (maintenance, outage, limited-availability)
+const INITIAL_BANNER_STATE = <?php
+    $outageStatus = checkDataOutageStatus($airportId, $airport);
+    echo json_encode([
+        'maintenance' => isAirportInMaintenance($airport),
+        'in_outage' => $outageStatus !== null,
+        'limited_availability' => $outageStatus !== null && ($outageStatus['limited_availability'] ?? false),
+        'newest_timestamp' => $outageStatus !== null ? $outageStatus['newest_timestamp'] : 0
+    ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
 
 // Initial weather data (embedded from cache for immediate display)
@@ -3786,224 +3783,169 @@ function updateWeatherTimestamp() {
 }
 
 /**
- * Fetch outage status from server and update banner
- * Called periodically to sync with server state
+ * Sync status banners (maintenance, outage) to match state
+ * Maintenance suppresses outage banner. Call updateOutageBannerTimestamp after when outage banner added.
+ *
+ * @param {Object} state Banner state
+ * @param {boolean} state.maintenance Whether airport is in maintenance mode
+ * @param {boolean} state.in_outage Whether all data sources are stale
+ * @param {boolean} state.limited_availability Whether airport has limited availability (off-grid/solar/battery)
+ * @param {number} state.newest_timestamp Unix timestamp of newest stale data (0 when not in outage)
  */
-async function fetchOutageStatus() {
-    const banner = document.getElementById('data-outage-banner');
-    if (!banner && !AIRPORT_ID) {
-        return; // No banner and no airport ID
+function syncBannerState(state) {
+    const container = document.getElementById('status-banners');
+    if (!container) {
+        return;
     }
-    
-    try {
-        const baseUrl = window.location.protocol + '//' + window.location.host;
-        const url = `${baseUrl}/api/outage-status.php?airport=${AIRPORT_ID}`;
-        
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            },
-            credentials: 'same-origin'
-        });
-        
-        if (!response.ok) {
-            console.warn('[OutageBanner] Failed to fetch outage status:', response.status);
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            console.warn('[OutageBanner] Server returned error:', data.error);
-            return;
-        }
-        
-        // Update banner based on server state
-        if (data.in_outage && data.newest_timestamp > 0) {
-            // Show banner if it exists, or create it if needed
-            if (banner) {
-                banner.style.display = 'block';
-                banner.dataset.newestTimestamp = data.newest_timestamp.toString();
-                updateOutageBannerTimestamp();
-            }
-        } else {
-            // Hide banner if server says no outage
-            if (banner) {
-                banner.style.display = 'none';
-            }
-        }
-    } catch (error) {
-        console.warn('[OutageBanner] Error fetching outage status:', error);
-        // Silently fail - client-side checks will continue
+    container.innerHTML = '';
+    let addedOutageBanner = false;
+    if (state.maintenance) {
+        const maintenanceBanner = document.createElement('div');
+        maintenanceBanner.className = 'maintenance-banner';
+        maintenanceBanner.textContent = '\u26A0\uFE0F This airport is currently under maintenance. Data may be missing or unreliable.';
+        container.appendChild(maintenanceBanner);
+    }
+    if (state.in_outage && !state.maintenance && state.newest_timestamp > 0) {
+        const outageBanner = document.createElement('div');
+        outageBanner.id = 'data-outage-banner';
+        outageBanner.className = 'data-outage-banner' + (state.limited_availability ? ' data-outage-banner-limited-availability' : '');
+        outageBanner.dataset.newestTimestamp = state.newest_timestamp.toString();
+        const isLimited = state.limited_availability;
+        outageBanner.innerHTML = (isLimited ? '\uD83D\uDD0B Data unavailable. This site often powers down at night or when the battery is low. It will recover and come back online when conditions allow. Latest data: ' : '\u26A0\uFE0F Data Outage Detected: All local data sources are currently offline due to a local outage.<br>The latest information shown is from ') +
+            '<span id="outage-newest-time">--</span>' +
+            (isLimited ? '.' : ' and may not reflect current conditions.<br>Data will automatically update once the local site is back online.');
+        container.appendChild(outageBanner);
+        addedOutageBanner = true;
+    }
+    if (addedOutageBanner) {
+        updateOutageBannerTimestamp();
     }
 }
 
 /**
- * Check if all configured data sources are stale and update outage banner
+ * Fetch outage status from server and sync banners
+ * Called periodically to sync with server state
+ */
+async function fetchOutageStatus() {
+    if (!AIRPORT_ID) {
+        return;
+    }
+    try {
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        const url = `${baseUrl}/api/outage-status.php?airport=${encodeURIComponent(AIRPORT_ID)}`;
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        });
+        if (!response.ok) {
+            console.warn('[OutageBanner] Failed to fetch outage status:', response.status);
+            return;
+        }
+        const data = await response.json();
+        if (!data.success) {
+            console.warn('[OutageBanner] Server returned error:', data.error);
+            return;
+        }
+        syncBannerState({
+            maintenance: data.maintenance || false,
+            in_outage: data.in_outage || false,
+            limited_availability: data.limited_availability || false,
+            newest_timestamp: data.newest_timestamp || 0
+        });
+    } catch (error) {
+        console.warn('[OutageBanner] Error fetching outage status:', error);
+        if (typeof Sentry !== 'undefined' && Sentry.captureException) {
+            Sentry.captureException(error, { tags: { component: 'outage_banner' } });
+        }
+    }
+}
+
+/**
+ * Check if all configured data sources are stale and sync banner state
  * Called after weather data updates and webcam updates
  * Uses client-side data for immediate feedback
  */
 function checkAndUpdateOutageBanner() {
     try {
-        const banner = document.getElementById('data-outage-banner');
-        if (!banner) {
-            return; // Banner doesn't exist (not in outage state)
-        }
-    
-    // Outage banner shows when data reaches failclosed tier (too old to display)
-    const outageThresholdSeconds = STALE_FAILCLOSED_SECONDS;
-    const now = Math.floor(Date.now() / 1000);
-    const sources = [];
-    let newestTimestamp = 0;
-    
-    // Check if any weather sources are configured
-    const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
-    const isMetarOnly = hasSources && AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
-    const hasPrimarySource = hasSources && !isMetarOnly;
-    
-    if (hasPrimarySource) {
-        if (weatherLastUpdated) {
-            const timestamp = Math.floor(weatherLastUpdated.getTime() / 1000);
-            const age = now - timestamp;
-            const isStale = age >= outageThresholdSeconds;
-            
-            sources.push({
-                name: 'primary',
-                timestamp: timestamp,
-                age: age,
-                stale: isStale
-            });
-            
-            if (timestamp > newestTimestamp) {
-                newestTimestamp = timestamp;
-            }
-        } else {
-            // No weather data - treat as stale
-            sources.push({
-                name: 'primary',
-                timestamp: 0,
-                age: Infinity,
-                stale: true
-            });
-        }
-    }
-    
-    // Check METAR source (if configured in sources array)
-    const hasMetar = hasSources && AIRPORT_DATA.weather_sources.some(s => s.type === 'metar');
-    
-    if (hasMetar) {
-        // METAR timestamp comes from weather data
-        if (currentWeatherData) {
-            let metarTimestamp = 0;
-            if (currentWeatherData.obs_time_metar && currentWeatherData.obs_time_metar > 0) {
-                metarTimestamp = currentWeatherData.obs_time_metar;
-            } else if (currentWeatherData.last_updated_metar && currentWeatherData.last_updated_metar > 0) {
-                metarTimestamp = currentWeatherData.last_updated_metar;
-            }
-            
-            if (metarTimestamp > 0) {
-                const age = now - metarTimestamp;
-                const isStale = age >= outageThresholdSeconds;
-                
-                sources.push({
-                    name: 'metar',
-                    timestamp: metarTimestamp,
-                    age: age,
-                    stale: isStale
-                });
-                
-                if (metarTimestamp > newestTimestamp) {
-                    newestTimestamp = metarTimestamp;
-                }
-            } else {
-                // No METAR timestamp - treat as stale
-                sources.push({
-                    name: 'metar',
-                    timestamp: 0,
-                    age: Infinity,
-                    stale: true
-                });
-            }
-        } else {
-            // No weather data - treat as stale
-            sources.push({
-                name: 'metar',
-                timestamp: 0,
-                age: Infinity,
-                stale: true
-            });
-        }
-    }
-    
-    // Check all webcams (if configured)
-    if (AIRPORT_DATA && AIRPORT_DATA.webcams && Array.isArray(AIRPORT_DATA.webcams) && AIRPORT_DATA.webcams.length > 0) {
-        let webcamStaleCount = 0;
-        let webcamNewestTimestamp = 0;
-        
-        AIRPORT_DATA.webcams.forEach((cam, index) => {
-            const timestamp = CAM_TS[index] || 0;
-            
-            if (timestamp > 0) {
+        const maintenance = AIRPORT_DATA && AIRPORT_DATA.maintenance === true;
+        const limitedAvailability = AIRPORT_DATA && AIRPORT_DATA.limited_availability === true;
+        const outageThresholdSeconds = STALE_FAILCLOSED_SECONDS;
+        const now = Math.floor(Date.now() / 1000);
+        const sources = [];
+        let newestTimestamp = 0;
+        const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
+        const hasPrimarySource = hasSources && !AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
+        if (hasPrimarySource) {
+            if (weatherLastUpdated) {
+                const timestamp = Math.floor(weatherLastUpdated.getTime() / 1000);
                 const age = now - timestamp;
                 const isStale = age >= outageThresholdSeconds;
-                
-                if (isStale) {
-                    webcamStaleCount++;
-                }
-                
-                if (timestamp > webcamNewestTimestamp) {
-                    webcamNewestTimestamp = timestamp;
+                sources.push({ name: 'primary', timestamp, age, stale: isStale });
+                if (timestamp > newestTimestamp) {
+                    newestTimestamp = timestamp;
                 }
             } else {
-                // No timestamp - treat as stale
-                webcamStaleCount++;
+                sources.push({ name: 'primary', timestamp: 0, age: Infinity, stale: true });
             }
-        });
-        
-        const allWebcamsStale = (webcamStaleCount === AIRPORT_DATA.webcams.length);
-        
-        sources.push({
-            name: 'webcams',
-            stale: allWebcamsStale,
-            total: AIRPORT_DATA.webcams.length,
-            stale_count: webcamStaleCount
-        });
-        
-        if (allWebcamsStale && webcamNewestTimestamp > 0) {
-            if (webcamNewestTimestamp > newestTimestamp) {
+        }
+        const hasMetar = hasSources && AIRPORT_DATA.weather_sources.some(s => s.type === 'metar');
+        if (hasMetar) {
+            if (currentWeatherData) {
+                let metarTimestamp = (currentWeatherData.obs_time_metar && currentWeatherData.obs_time_metar > 0)
+                    ? currentWeatherData.obs_time_metar
+                    : (currentWeatherData.last_updated_metar && currentWeatherData.last_updated_metar > 0)
+                        ? currentWeatherData.last_updated_metar : 0;
+                if (metarTimestamp > 0) {
+                    const age = now - metarTimestamp;
+                    sources.push({ name: 'metar', timestamp: metarTimestamp, age, stale: age >= outageThresholdSeconds });
+                    if (metarTimestamp > newestTimestamp) {
+                        newestTimestamp = metarTimestamp;
+                    }
+                } else {
+                    sources.push({ name: 'metar', timestamp: 0, age: Infinity, stale: true });
+                }
+            } else {
+                sources.push({ name: 'metar', timestamp: 0, age: Infinity, stale: true });
+            }
+        }
+        if (AIRPORT_DATA && AIRPORT_DATA.webcams && Array.isArray(AIRPORT_DATA.webcams) && AIRPORT_DATA.webcams.length > 0) {
+            let webcamStaleCount = 0;
+            let webcamNewestTimestamp = 0;
+            AIRPORT_DATA.webcams.forEach((cam, index) => {
+                const timestamp = CAM_TS[index] || 0;
+                if (timestamp > 0) {
+                    const age = now - timestamp;
+                    if (age >= outageThresholdSeconds) {
+                        webcamStaleCount++;
+                    }
+                    if (timestamp > webcamNewestTimestamp) {
+                        webcamNewestTimestamp = timestamp;
+                    }
+                } else {
+                    webcamStaleCount++;
+                }
+            });
+            const allWebcamsStale = (webcamStaleCount === AIRPORT_DATA.webcams.length);
+            sources.push({ name: 'webcams', stale: allWebcamsStale, total: AIRPORT_DATA.webcams.length, stale_count: webcamStaleCount });
+            if (allWebcamsStale && webcamNewestTimestamp > 0 && webcamNewestTimestamp > newestTimestamp) {
                 newestTimestamp = webcamNewestTimestamp;
             }
         }
-    }
-    
-    // Check if ALL configured sources are stale
-    let allStale = true;
-    for (const source of sources) {
-        if (!source.stale) {
-            allStale = false;
-            break;
+        let allStale = sources.length > 0 && sources.every(s => s.stale);
+        if (sources.length === 0) {
+            syncBannerState({ maintenance, in_outage: false, limited_availability: false, newest_timestamp: 0 });
+            return;
         }
-    }
-    
-    // If no sources configured, hide banner
-    if (sources.length === 0) {
-        banner.style.display = 'none';
-        return;
-    }
-    
-    // Show or hide banner based on all-stale status
-    if (allStale && newestTimestamp > 0) {
-        banner.style.display = 'block';
-        banner.dataset.newestTimestamp = newestTimestamp.toString();
-        updateOutageBannerTimestamp();
-    } else {
-        // At least one source is fresh - hide banner
-        banner.style.display = 'none';
-    }
+        const inOutage = !maintenance && allStale && newestTimestamp > 0;
+        syncBannerState({
+            maintenance,
+            in_outage: inOutage,
+            limited_availability: inOutage && limitedAvailability,
+            newest_timestamp: inOutage ? newestTimestamp : 0
+        });
     } catch (error) {
         console.error('[Weather] Error in checkAndUpdateOutageBanner:', error);
-        // Silently fail - don't break weather display
     }
 }
 
@@ -6593,27 +6535,12 @@ registerTimer('weather-timestamp-refresh', weatherTimestampRefreshMs, updateWeat
 
 // Initialize and update outage banner
 function initializeOutageBanner() {
-    const banner = document.getElementById('data-outage-banner');
-    if (banner) {
-        // Initial update - read from data attribute set by server
-        updateOutageBannerTimestamp();
-        checkAndUpdateOutageBanner();
-        
-        // Update timestamp display periodically
-        setInterval(updateOutageBannerTimestamp, 60000); // Update every minute
-        // Check outage status periodically (every 30 seconds) to show/hide banner as data recovers
-        setInterval(checkAndUpdateOutageBanner, 30000);
-        
-        // Fetch outage status from server periodically (every 2.5 minutes) to sync with backend state
-        // This ensures banner reflects server-side outage detection and state file persistence
-        fetchOutageStatus(); // Initial fetch
-        setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
-    } else if (AIRPORT_ID) {
-        // Banner doesn't exist yet, but check server periodically in case outage starts
-        // This handles cases where outage begins after page load
-        fetchOutageStatus(); // Initial fetch
-        setInterval(fetchOutageStatus, 150000); // Every 2.5 minutes
-    }
+    if (!AIRPORT_ID) return;
+    syncBannerState(typeof INITIAL_BANNER_STATE !== 'undefined' ? INITIAL_BANNER_STATE : { maintenance: false, in_outage: false, limited_availability: false, newest_timestamp: 0 });
+    setInterval(updateOutageBannerTimestamp, 60000);
+    setInterval(checkAndUpdateOutageBanner, 30000);
+    fetchOutageStatus();
+    setInterval(fetchOutageStatus, 150000);
 }
 
 // Initialize when DOM is ready

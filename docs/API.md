@@ -305,6 +305,48 @@ If the image is older than 3 hours, the `mtime=1` endpoint also returns HTTP 503
 
 ---
 
+### Outage Status
+
+#### `GET /api/outage-status.php?airport={airport_id}`
+
+Returns current outage and banner state for an airport. Used by the airport page to sync maintenance, outage, and limited-availability banners.
+
+**Parameters:**
+- `airport` (required): Airport ID (e.g., `kspb`)
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "maintenance": false,
+  "in_outage": true,
+  "limited_availability": true,
+  "newest_timestamp": 1699123456,
+  "sources": {
+    "primary": { "timestamp": 1699123456, "stale": true, "age": 14400 },
+    "metar": { "timestamp": 1699123400, "stale": true, "age": 14456 },
+    "webcams": { "all_stale": true, "newest_timestamp": 1699123456, "total": 2, "stale_count": 2 }
+  }
+}
+```
+
+**Response Fields:**
+- `maintenance`: Whether airport is in maintenance mode (suppresses outage banner)
+- `in_outage`: Whether all configured data sources are stale
+- `limited_availability`: When `in_outage` is true, whether airport has limited availability (off-grid/solar/battery); shows informational banner instead of outage banner
+- `newest_timestamp`: Unix timestamp of newest stale data (0 when not in outage)
+- `sources`: Per-source timestamps and staleness (primary, metar, webcams)
+
+**HTTP Status Codes:**
+- `200`: Success
+- `400`: Missing airport parameter
+- `404`: Airport not found
+- `503`: Configuration error
+
+**Caching:** `Cache-Control: no-cache` (always fresh)
+
+---
+
 ### Admin Endpoints
 
 #### `GET /admin/diagnostics.php`

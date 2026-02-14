@@ -235,6 +235,13 @@ body {
     border: 2px solid #c82333;
 }
 
+/* Limited-availability (off-grid/solar/battery) - informational amber */
+.data-outage-banner-limited-availability {
+    background-color: #fff3cd;
+    color: #856404;
+    border-color: #ffc107;
+}
+
 /* NOTAM Banners */
 .notam-banner-active {
     background-color: #dc3545;
@@ -2608,6 +2615,12 @@ body.night-mode .notam-banner-active {
     border-color: #880000 !important;
 }
 
+body.night-mode .data-outage-banner-limited-availability {
+    background-color: #4a4000 !important;
+    color: #e6d98a !important;
+    border-color: #6a5500 !important;
+}
+
 body.night-mode .notam-banner-upcoming {
     background-color: #553300 !important;
 }
@@ -3059,6 +3072,12 @@ body.dark-mode .data-outage-banner,
 body.dark-mode .notam-banner-active {
     background-color: #4a3000 !important;
     border-color: #6a4500 !important;
+}
+
+body.dark-mode .data-outage-banner-limited-availability {
+    background-color: #4a4000 !important;
+    color: #e6d98a !important;
+    border-color: #6a5500 !important;
 }
 
 body.dark-mode .notam-banner-upcoming {

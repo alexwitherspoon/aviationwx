@@ -41,6 +41,15 @@
               "type": "string",
               "enum": ["true", "false"]
             }
+          },
+          {
+            "name": "limited_availability",
+            "in": "query",
+            "description": "Filter by limited availability. Use 'false' for full-availability airports, 'true' for off-grid/solar/battery sites.",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
           }
         ],
         "responses": {
@@ -592,6 +601,10 @@
             "type": "boolean",
             "description": "Whether airport is in maintenance mode"
           },
+          "limited_availability": {
+            "type": "boolean",
+            "description": "Whether airport has limited availability (off-grid, solar, battery)"
+          },
           "has_weather": {
             "type": "boolean"
           },
@@ -668,6 +681,10 @@
               },
               "maintenance": {
                 "type": "boolean"
+              },
+              "limited_availability": {
+                "type": "boolean",
+                "description": "Whether airport has limited availability (off-grid, solar, battery)"
               },
               "has_weather": {
                 "type": "boolean"

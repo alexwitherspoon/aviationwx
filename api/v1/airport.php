@@ -77,6 +77,7 @@ function formatAirportDetails(string $airportId, array $airport): array
         'timezone' => $airport['timezone'] ?? 'UTC',
         'address' => $airport['address'] ?? null,
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,
+        'limited_availability' => isset($airport['limited_availability']) && $airport['limited_availability'] === true,
     ];
     
     // Add runways

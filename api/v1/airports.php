@@ -9,6 +9,7 @@
  * 
  * Query parameters:
  * - maintenance: Filter by maintenance mode ('true' or 'false')
+ * - limited_availability: Filter by limited availability ('true' or 'false')
  * - include_unlisted: Include unlisted airports ('true' or 'false', default: false)
  */
 
@@ -46,6 +47,17 @@ function handleListAirports(array $params, array $context): void
         }
     }
     
+    // Parse limited_availability filter parameter
+    $limitedAvailabilityFilter = null;
+    if (isset($_GET['limited_availability'])) {
+        $limitedParam = strtolower(trim($_GET['limited_availability']));
+        if ($limitedParam === 'true' || $limitedParam === '1') {
+            $limitedAvailabilityFilter = true;
+        } elseif ($limitedParam === 'false' || $limitedParam === '0') {
+            $limitedAvailabilityFilter = false;
+        }
+    }
+    
     // Format airports for response
     $formattedAirports = [];
     foreach ($airports as $airportId => $airport) {
@@ -53,6 +65,11 @@ function handleListAirports(array $params, array $context): void
         
         // Apply maintenance filter if specified
         if ($maintenanceFilter !== null && $formatted['maintenance'] !== $maintenanceFilter) {
+            continue;
+        }
+        
+        // Apply limited_availability filter if specified
+        if ($limitedAvailabilityFilter !== null && $formatted['limited_availability'] !== $limitedAvailabilityFilter) {
             continue;
         }
         
@@ -99,6 +116,7 @@ function formatAirportSummary(string $airportId, array $airport): array
         'elevation_ft' => $airport['elevation_ft'] ?? null,
         'timezone' => $airport['timezone'] ?? 'UTC',
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,
+        'limited_availability' => isset($airport['limited_availability']) && $airport['limited_availability'] === true,
         'unlisted' => isset($airport['unlisted']) && $airport['unlisted'] === true,
         'has_weather' => $hasWeather,
         'has_webcams' => $hasWebcams,

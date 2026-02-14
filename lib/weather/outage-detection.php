@@ -203,7 +203,8 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
         
         return [
             'newest_timestamp' => $outageStart,
-            'all_stale' => true
+            'all_stale' => true,
+            'limited_availability' => isAirportLimitedAvailability($airport)
         ];
     } else {
         // At least one source is fresh - check for recovery and cleanup
