@@ -1787,15 +1787,15 @@ function metrics_report_operational_stats(): void {
             });
         }
         
-        // Alert if page render p95 is > 500ms (UX degradation)
+        // Alert if page render p95 is > 1000ms (UX degradation)
         $pagePerf = getPageRenderMetrics();
-        if ($pagePerf['p95_ms'] > 500) {
+        if ($pagePerf['p95_ms'] > 1000) {
             \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($pagePerf): void {
                 $scope->setContext('page_render', $pagePerf);
                 $scope->setTag('metric_type', 'performance');
                 
                 \Sentry\captureMessage(
-                    "Slow page renders: p95={$pagePerf['p95_ms']}ms (threshold: 500ms)",
+                    "Slow page renders: p95={$pagePerf['p95_ms']}ms (threshold: 1000ms)",
                     \Sentry\Severity::warning()
                 );
             });

@@ -60,6 +60,12 @@ function getMockHttpResponse(string $url): ?string {
         return getMockNwsApiResponse();
     }
     
+    if (strpos($url, 'awosnet.com') !== false) {
+        // AWOSnet mock (XML METAR response)
+        require_once __DIR__ . '/../tests/mock-weather-responses.php';
+        return getMockAwosnetResponse();
+    }
+    
     // Webcam URLs - return placeholder image
     if (strpos($url, 'example.com') !== false || 
         strpos($url, 'test') !== false ||

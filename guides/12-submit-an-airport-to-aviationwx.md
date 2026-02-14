@@ -127,6 +127,12 @@ If you're using an official airport weather feed:
 
 AviationWX can combine official sources (when present) with local sensors so pilots get the best picture available.
 
+### Option E - AWOSnet
+If your airport's AWOS is hosted on [awosnet.com](https://awosnet.com):
+- tell us the **AWOSnet station ID** (e.g., `ks40` from `http://ks40.awosnet.com`)
+
+No API key needed. Updates approximately every 10 minutes.
+
 ---
 
 ## Step 3 - Camera connection (choose one path)
@@ -202,7 +208,7 @@ Body:
 - Target update cadence:
 
 **Weather source**
-- Type: Tempest / Davis / Ambient / ASOS-AWOS
+- Type: Tempest / Davis / Ambient / ASOS-AWOS / AWOSnet
 - Details (token/key/etc):
 
 **Cameras**

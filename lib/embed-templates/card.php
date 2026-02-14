@@ -113,7 +113,11 @@ function processCardWidgetData($data, $options) {
     // Visibility display
     $visDisplay = '---';
     if ($visibility !== null) {
-        $visDisplay = formatEmbedVisibility($visibility, $distUnit);
+        $visDisplay = formatEmbedVisibility(
+            $visibility,
+            $distUnit,
+            $weather['visibility_greater_than'] ?? false
+        );
     }
     
     // Ceiling display (only for METAR)

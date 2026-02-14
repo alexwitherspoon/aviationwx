@@ -477,28 +477,32 @@ function formatEmbedRainfall($valueIn, $distUnit) {
  *
  * Expects statute miles (SM) as input (internal storage standard).
  * Converts to kilometers when metric units selected using lib/units.php.
+ * When $greaterThan is true (METAR P prefix, e.g. P6SM), appends "+" to indicate
+ * value exceeds the reported number.
  *
  * @param float|null $valueSM Visibility in statute miles
  * @param string $distUnit Distance unit ('ft' for imperial/SM, 'm' for metric/km)
- * @return string Formatted visibility string (e.g., '10+ SM' or '16+ km')
+ * @param bool $greaterThan True when METAR P prefix (e.g. P6SM = greater than 6 SM)
+ * @return string Formatted visibility string (e.g., '10+ SM', '6+ SM', '16+ km')
  */
-function formatEmbedVisibility($valueSM, $distUnit) {
+function formatEmbedVisibility($valueSM, $distUnit, $greaterThan = false) {
     if ($valueSM === null) return '--';
 
     if ($distUnit === 'm') {
-        // Convert statute miles to kilometers using centralized conversion
         $valueKm = statuteMilesToKilometers($valueSM);
         if ($valueKm >= 16) {
             return '16+ km';
         }
-        return round($valueKm, 1) . ' km';
+        $suffix = $greaterThan ? '+' : '';
+        return round($valueKm, 1) . $suffix . ' km';
     }
 
     // Imperial - statute miles
     if ($valueSM >= 10) {
         return '10+ SM';
     }
-    return round($valueSM, 1) . ' SM';
+    $suffix = $greaterThan ? '+' : '';
+    return round($valueSM, 1) . $suffix . ' SM';
 }
 
 /**
@@ -586,7 +590,11 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
     
     // 4. Visibility (show if available)
     if ($visibility !== null) {
-        $visDisplay = formatEmbedVisibility($visibility, $distUnit);
+        $visDisplay = formatEmbedVisibility(
+            $visibility,
+            $distUnit,
+            $weather['visibility_greater_than'] ?? false
+        );
         $availableMetrics[] = ['label' => 'Vis', 'value' => $visDisplay];
     }
     

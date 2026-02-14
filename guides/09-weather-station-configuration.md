@@ -204,7 +204,7 @@ When you connect your station to AviationWX, your data doesn't just help pilots 
 
 ### Supported Weather Sources
 
-AviationWX supports five weather station platforms plus METAR-only configuration:
+AviationWX supports six weather station platforms plus METAR-only configuration:
 
 | Source | Best For | Update Speed | Cost |
 |--------|----------|--------------|------|
@@ -213,6 +213,7 @@ AviationWX supports five weather station platforms plus METAR-only configuration
 | **Davis WeatherLink** | Professional/long-term installs | 15 min (Basic/free), 5 min (Pro), ~1 min (Pro+) | Free API (Basic); paid for 5 min / 1 min |
 | **PWSWeather** | Stations already uploading to PWSWeather.com | ~5 minutes | Free API via AerisWeather |
 | **SynopticData** | Backup source, aggregated networks | 5-10 minutes | Free tier available |
+| **AWOSnet** | Airports with AWOSnet-hosted AWOS | ~10 minutes | No API key needed |
 | **METAR Only** | Official airport weather | Hourly | No API key needed |
 
 Davis WeatherLink intervals depend on subscription; see the [Configuration Guide](../docs/CONFIGURATION.md) (Weather Sources) or [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions).
@@ -569,6 +570,45 @@ The system will try the primary first, then fall back to METAR stations in order
 
 ---
 
+## AWOSnet - What We Need
+
+If an airport has an AWOS station hosted on [awosnet.com](https://awosnet.com), you can use that as the weather source. **No API key required.**
+
+### Required Information
+
+| Field | Description |
+|-------|-------------|
+| `station_id` | AWOSnet station identifier (e.g., `ks40`) |
+
+### How to Find Your Station ID
+
+The station ID is the subdomain used on awosnet.com. For example, if your airport's AWOS page is `http://ks40.awosnet.com`, the station ID is `ks40`. Use lowercase.
+
+1. Visit [awosnet.com](https://awosnet.com) or search for your airport's AWOSnet page
+2. The URL format is `http://{station_id}.awosnet.com`
+3. The station ID is typically the FAA or ICAO identifier in lowercase (e.g., `ks40`, `7s5`)
+
+### Configuration Example
+
+```json
+"weather_source": {
+  "type": "awosnet",
+  "station_id": "ks40"
+}
+```
+
+### AWOSnet Limitations
+
+- Updates approximately every 10 minutes (not real-time like personal weather stations)
+- Only available at airports with AWOSnet-hosted AWOS
+- Good option when METAR is hourly but you want more frequent updates
+
+### Reference
+
+- [AWOSnet](https://awosnet.com)
+
+---
+
 ## Backup Weather Sources
 
 For reliability, you can configure a backup weather source that activates when the primary fails:
@@ -615,6 +655,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 | **Davis WeatherLink** | `station_id`, `api_key`, `api_secret` |
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
 | **SynopticData** | `station_id` + permission (we have a central API key) |
+| **AWOSnet** | `station_id` (e.g., `ks40`) |
 | **METAR Only** | `metar_station` (ICAO code) |
 
 ---

@@ -1392,40 +1392,57 @@ function syncAllPushCameras($config) {
         }
     }
     
+    // Build set of usernames still in config (handles camera reindexing)
+    $configuredUsernames = [];
+    foreach ($configured as $configCam) {
+        if (!empty($configCam['username'])) {
+            $configuredUsernames[$configCam['username']] = true;
+        }
+    }
+
     // Remove orphaned cameras
     foreach ($existing as $existingCam) {
         $found = false;
         $cameraKey = $existingCam['airport'] . '_' . $existingCam['cam'];
-        
+
         foreach ($configured as $configCam) {
-            if ($existingCam['airport'] === $configCam['airport'] && 
+            if ($existingCam['airport'] === $configCam['airport'] &&
                 $existingCam['cam'] === $configCam['cam']) {
                 $found = true;
                 break;
             }
         }
-        
+
         if (!$found) {
             $username = null;
-            
+
             foreach ($usernameMapping as $user => $info) {
-                if ($info['camera'] === $cameraKey) {
+                if (isset($info['camera']) && $info['camera'] === $cameraKey) {
                     $username = $user;
                     break;
                 }
             }
-            
+
+            // Skip removal if username is still in config (camera was reindexed)
+            if ($username && isset($configuredUsernames[$username])) {
+                aviationwx_log('debug', 'sync-push-config: skipping orphan removal (username still in config)', [
+                    'username' => $username,
+                    'old_position' => $cameraKey
+                ], 'app');
+                continue;
+            }
+
             aviationwx_log('info', 'removing orphaned camera', [
                 'airport' => $existingCam['airport'],
                 'cam' => $existingCam['cam'],
                 'username' => $username
             ], 'app');
-            
+
             // Remove both FTP and SFTP users
             if ($username) {
                 removeCameraUser($username);  // Removes both by default
             }
-            
+
             removeCameraDirectory($existingCam['airport'], $existingCam['cam'], $username);
         }
     }

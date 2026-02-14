@@ -29,6 +29,7 @@ require_once __DIR__ . '/adapter/pwsweather-v1.php';
 require_once __DIR__ . '/adapter/metar-v1.php';
 require_once __DIR__ . '/adapter/nws-api-v1.php';
 require_once __DIR__ . '/adapter/aviationwx-api-v1.php';
+require_once __DIR__ . '/adapter/awosnet-v1.php';
 require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
@@ -248,6 +249,7 @@ function buildSourceUrl(array $source): ?string {
         'metar' => MetarAdapter::buildUrl($source),
         'nws' => NwsApiAdapter::buildUrl($source),
         'aviationwx_api' => AviationWXAPIAdapter::buildUrl($source),
+        'awosnet' => AwosnetAdapter::buildUrl($source),
         default => null,
     };
 }
@@ -265,6 +267,7 @@ function buildSourceHeaders(array $source): array {
         'weatherlink_v2' => WeatherLinkV2Adapter::getHeaders($source),
         'weatherlink_v1' => WeatherLinkV1Adapter::getHeaders($source),
         'nws' => NwsApiAdapter::getHeaders(),
+        'awosnet' => AwosnetAdapter::getHeaders($source),
         default => ['Accept: application/json'],
     };
 }
@@ -290,6 +293,7 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'metar' => MetarAdapter::parseToSnapshot($response, $airport),
         'nws' => NwsApiAdapter::parseToSnapshot($response, $source),
         'aviationwx_api' => AviationWXAPIAdapter::parseResponse($response, $source),
+        'awosnet' => AwosnetAdapter::parseToSnapshot($response, $source),
         default => null,
     };
 }
@@ -394,6 +398,7 @@ function emptyWeatherResult(string $airportId): array {
         'gust_speed' => null,
         'gust_factor' => null,
         'visibility' => null,
+        'visibility_greater_than' => false,
         'ceiling' => null,
         'cloud_cover' => null,
         'flight_category' => null,

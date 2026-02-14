@@ -152,6 +152,10 @@
           "station_id": "KSPB"
         },
         {
+          "type": "awosnet",
+          "station_id": "ks40"
+        },
+        {
           "type": "metar",
           "station_id": "KSPB",
           "nearby_stations": ["KABC", "KDEF"]

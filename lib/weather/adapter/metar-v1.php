@@ -201,6 +201,133 @@ class MetarAdapter {
 }
 
 // =============================================================================
+// RAW METAR PARSING (for sources that provide METAR string directly, e.g., AWOSnet)
+// =============================================================================
+
+/**
+ * Parse a raw METAR string into standard weather array format
+ *
+ * Used by AWOSnet and other sources that embed METAR in HTML/text.
+ * Extracts wind, temp, dewpoint, pressure, visibility, clouds, obs time.
+ *
+ * @param string $rawMetar Raw METAR string (e.g., "METAR S40 132345Z AUTO 09007KT 10SM CLR 05/05 A3003 RMK A01")
+ * @return array|null Weather data array with standard keys, or null if unparseable
+ */
+function parseRawMETARToWeatherArray(string $rawMetar): ?array {
+    $rawMetar = trim($rawMetar);
+    if (strlen($rawMetar) < 10) {
+        return null;
+    }
+    // Normalize: ensure we have a space-separated string for regex
+    $rawMetar = preg_replace('/\s+/', ' ', $rawMetar);
+
+    $temperature = null;
+    $dewpoint = null;
+    $windDirection = null;
+    $windSpeed = null;
+    $gustSpeed = null;
+    $pressure = null;
+    $visibility = null;
+    $visibility_greater_than = false;
+    $ceiling = null;
+    $cloudCover = null;
+    $obsTime = null;
+
+    // Temp/dewpoint: TT/TdTd or MTT/MTdTd (M = minus)
+    if (preg_match('/\b(M?\d{2})\/(M?\d{2})\b/', $rawMetar, $m)) {
+        $tempStr = $m[1];
+        $dewStr = $m[2];
+        $temperature = (str_starts_with($tempStr, 'M') ? -1 : 1) * (int)ltrim($tempStr, 'M');
+        $dewpoint = (str_starts_with($dewStr, 'M') ? -1 : 1) * (int)ltrim($dewStr, 'M');
+    }
+
+    // Wind: dddffKT or VRBffKT or dddffGggKT
+    if (preg_match('/\b(?:(\d{3})|VRB)(\d{2,3})(?:G(\d{2,3}))?KT\b/', $rawMetar, $m)) {
+        $windDirection = $m[1] !== '' ? (int)$m[1] : 'VRB';
+        $windSpeed = (int)$m[2];
+        $gustSpeed = isset($m[3]) && $m[3] !== '' ? (int)$m[3] : null;
+    }
+
+    // Pressure: A3012 = 30.12 inHg
+    if (preg_match('/\bA(\d{4})\b/', $rawMetar, $m)) {
+        $pressure = (int)$m[1] / 100.0;
+    }
+
+    // Visibility: 10SM or 1 1/2SM or 1/2SM or P6SM (P = greater than; check P prefix before plain number)
+    if (preg_match('/\b(\d+)\s+(\d+)\/(\d+)SM\b/', $rawMetar, $m)) {
+        $denom = (int)$m[3];
+        $visibility = $denom !== 0 ? (int)$m[1] + ((int)$m[2] / $denom) : (float)$m[1];
+    } elseif (preg_match('/\b(\d+)\/(\d+)SM\b/', $rawMetar, $m) && !preg_match('/\d+\s+\d+\/\d+SM/', $rawMetar)) {
+        $denom = (int)$m[2];
+        $visibility = $denom !== 0 ? (int)$m[1] / $denom : null;
+    } elseif (preg_match('/\bP(\d+)SM\b/', $rawMetar, $m)) {
+        $visibility = (float)$m[1];
+        $visibility_greater_than = true;
+    } elseif (preg_match('/\b(\d+)SM\b/', $rawMetar, $m)) {
+        $visibility = (float)$m[1];
+    }
+
+    // Clouds and ceiling: BKN030, OVC100, FEW015, SCT020, CLR, SKC
+    if (preg_match('/\b(BKN|OVC|OVX)(\d{3})\b/', $rawMetar, $m)) {
+        $ceiling = (int)$m[2] * 100;
+        $cloudCover = $m[1];
+    } elseif (preg_match('/\b(FEW|SCT|BKN|OVC)(\d{3})\b/', $rawMetar, $m)) {
+        $cloudCover = $m[1];
+    } elseif (preg_match('/\b(CLR|SKC)\b/', $rawMetar)) {
+        $cloudCover = 'CLR';
+    }
+
+    // Obs time: DDHHMMZ
+    if (preg_match('/\b(\d{2})(\d{4})Z\b/', $rawMetar, $m)) {
+        $day = (int)$m[1];
+        $hour = (int)substr($m[2], 0, 2);
+        $minute = (int)substr($m[2], 2, 2);
+        if ($day >= 1 && $day <= 31 && $hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
+            try {
+                $now = new DateTime('now', new DateTimeZone('UTC'));
+                $year = (int)$now->format('Y');
+                $month = (int)$now->format('m');
+                $obsDateTime = new DateTime("{$year}-{$month}-{$day} {$hour}:{$minute}:00", new DateTimeZone('UTC'));
+                $daysDiff = ($obsDateTime->getTimestamp() - $now->getTimestamp()) / 86400;
+                if ($daysDiff > 1) {
+                    $obsDateTime->modify('-1 month');
+                } elseif ($daysDiff < -25) {
+                    $obsDateTime->modify('+1 month');
+                }
+                $obsTime = $obsDateTime->getTimestamp();
+            } catch (Exception $e) {
+                // leave null
+            }
+        }
+    }
+
+    // Humidity from temp and dewpoint
+    $humidity = null;
+    if ($temperature !== null && $dewpoint !== null && function_exists('calculateHumidityFromDewpoint')) {
+        $humidity = calculateHumidityFromDewpoint($temperature, $dewpoint);
+    }
+
+    return [
+        'temperature' => $temperature,
+        'dewpoint' => $dewpoint,
+        'humidity' => $humidity,
+        'wind_direction' => $windDirection,
+        'wind_speed' => $windSpeed,
+        'gust_speed' => $gustSpeed,
+        'pressure' => $pressure,
+        'visibility' => $visibility,
+        'visibility_greater_than' => $visibility_greater_than,
+        'ceiling' => $ceiling,
+        'cloud_cover' => $cloudCover,
+        'precip_accum' => 0,
+        'temp_high' => null,
+        'temp_low' => null,
+        'peak_gust' => $gustSpeed,
+        'obs_time' => $obsTime,
+    ];
+}
+
+// =============================================================================
 // LEGACY FUNCTIONS (kept for backward compatibility during migration)
 // =============================================================================
 
