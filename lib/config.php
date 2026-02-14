@@ -539,6 +539,29 @@ function getStaleFailclosedSeconds(?array $airport = null): int {
 }
 
 /**
+ * Get outage banner threshold in seconds
+ * For limited_availability airports: when to show "local data unavailable" banner (default 30 min)
+ * For others: uses stale_failclosed_seconds (default 3 hours)
+ * Cascade for limited_availability: airport limited_availability_outage_seconds → global → built-in default
+ *
+ * @param array|null $airport Airport config (for airport-level override)
+ * @return int Threshold in seconds (enforces minimum)
+ */
+function getOutageBannerThresholdSeconds(?array $airport = null): int {
+    if ($airport !== null && isAirportLimitedAvailability($airport)) {
+        if (isset($airport['limited_availability_outage_seconds'])) {
+            return max(MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS, intval($airport['limited_availability_outage_seconds']));
+        }
+        $global = getGlobalConfig('limited_availability_outage_seconds');
+        if ($global !== null) {
+            return max(MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS, intval($global));
+        }
+        return DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS;
+    }
+    return getStaleFailclosedSeconds($airport);
+}
+
+/**
  * Get all staleness thresholds as an array
  * Useful for passing to JavaScript or APIs
  * 
@@ -2879,6 +2902,7 @@ function validateAirportsJsonStructure(array $config): array {
                 'stale_warning_seconds' => MIN_STALE_WARNING_SECONDS,
                 'stale_error_seconds' => MIN_STALE_ERROR_SECONDS,
                 'stale_failclosed_seconds' => MIN_STALE_FAILCLOSED_SECONDS,
+                'limited_availability_outage_seconds' => MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS,
                 'metar_stale_warning_seconds' => MIN_STALE_WARNING_SECONDS,
                 'metar_stale_error_seconds' => MIN_STALE_ERROR_SECONDS,
                 'metar_stale_failclosed_seconds' => MIN_STALE_FAILCLOSED_SECONDS,
@@ -3274,6 +3298,12 @@ function validateAirportsJsonStructure(array $config): array {
         // Validate limited_availability when present (optional; must be boolean if set)
         if (isset($airport['limited_availability']) && !is_bool($airport['limited_availability'])) {
             $errors[] = "Airport '{$airportCode}' has invalid limited_availability: must be boolean (true or false)";
+        }
+        if (isset($airport['limited_availability_outage_seconds'])) {
+            $val = $airport['limited_availability_outage_seconds'];
+            if (!is_numeric($val) || (int)$val < MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS) {
+                $errors[] = "Airport '{$airportCode}' limited_availability_outage_seconds must be integer >= " . MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS;
+            }
         }
         
         // Track airport name for uniqueness (case-insensitive)

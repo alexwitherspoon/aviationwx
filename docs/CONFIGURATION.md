@@ -84,6 +84,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `maintenance` | `false` | Show maintenance banner |
 | `unlisted` | `false` | Hide from discovery (map, search, sitemap) |
 | `limited_availability` | `false` | Off-grid/solar/battery site; shows informational banner when data unavailable |
+| `limited_availability_outage_seconds` | `1800` | When to show outage banner for limited_availability sites (default 30 min); override per-airport or globally |
 | **Refresh Overrides** |||
 | `webcam_refresh_seconds` | global default | Override webcam refresh for this airport |
 | `weather_refresh_seconds` | global default | Override weather refresh for this airport |
@@ -169,6 +170,7 @@ Unit toggle defaults resolve in this order (first match wins):
     "stale_warning_seconds": 600,
     "stale_error_seconds": 3600,
     "stale_failclosed_seconds": 10800,
+    "limited_availability_outage_seconds": 1800,
     
     "webcam_refresh_default": 60,
     "weather_refresh_default": 60,

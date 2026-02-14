@@ -34,6 +34,9 @@ class ConstantsTest extends TestCase
             'MIN_STALE_WARNING_SECONDS',
             'MIN_STALE_ERROR_SECONDS',
             'MIN_STALE_FAILCLOSED_SECONDS',
+            // Limited-availability outage banner
+            'DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS',
+            'MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS',
             // 3-tier staleness constants (METAR)
             'DEFAULT_METAR_STALE_WARNING_SECONDS',
             'DEFAULT_METAR_STALE_ERROR_SECONDS',
@@ -199,6 +202,9 @@ class ConstantsTest extends TestCase
             'DEFAULT_STALE_ERROR_SECONDS should be >= MIN_STALE_ERROR_SECONDS');
         $this->assertGreaterThanOrEqual(MIN_STALE_FAILCLOSED_SECONDS, DEFAULT_STALE_FAILCLOSED_SECONDS,
             'DEFAULT_STALE_FAILCLOSED_SECONDS should be >= MIN_STALE_FAILCLOSED_SECONDS');
+        // Limited-availability outage banner
+        $this->assertGreaterThanOrEqual(MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS, DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS,
+            'DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS should be >= MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS');
     }
     
     /**

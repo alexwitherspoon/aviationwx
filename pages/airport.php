@@ -2129,6 +2129,9 @@ const STALE_WARNING_SECONDS = <?= getStaleWarningSeconds($airport) ?>;
 const STALE_ERROR_SECONDS = <?= getStaleErrorSeconds($airport) ?>;
 const STALE_FAILCLOSED_SECONDS = <?= getStaleFailclosedSeconds($airport) ?>;
 
+// Outage banner: 30 min for limited_availability (overridable), else failclosed
+const OUTAGE_BANNER_THRESHOLD_SECONDS = <?= getOutageBannerThresholdSeconds($airport) ?>;
+
 // METAR-specific thresholds (global only)
 const METAR_STALE_WARNING_SECONDS = <?= getMetarStaleWarningSeconds() ?>;
 const METAR_STALE_ERROR_SECONDS = <?= getMetarStaleErrorSeconds() ?>;
@@ -3870,7 +3873,7 @@ function checkAndUpdateOutageBanner() {
     try {
         const maintenance = AIRPORT_DATA && AIRPORT_DATA.maintenance === true;
         const limitedAvailability = AIRPORT_DATA && AIRPORT_DATA.limited_availability === true;
-        const outageThresholdSeconds = STALE_FAILCLOSED_SECONDS;
+        const outageThresholdSeconds = OUTAGE_BANNER_THRESHOLD_SECONDS;
         const now = Math.floor(Date.now() / 1000);
         const sources = [];
         let newestTimestamp = 0;

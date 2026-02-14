@@ -36,8 +36,8 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
         return null;
     }
     
-    // Use failclosed threshold for outage detection
-    $outageThresholdSeconds = getStaleFailclosedSeconds($airport);
+    // Use outage banner threshold (30 min for limited_availability, else failclosed)
+    $outageThresholdSeconds = getOutageBannerThresholdSeconds($airport);
     $now = time();
     
     // Get timestamps from all configured sources using shared helper
@@ -239,7 +239,7 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
                 $lastChecked = (int)$outageState['last_checked'];
                 $outageStart = (int)$outageState['outage_start'];
                 $timeSinceLastCheck = $now - $lastChecked;
-                $gracePeriodSeconds = getStaleFailclosedSeconds($airport);
+                $gracePeriodSeconds = getOutageBannerThresholdSeconds($airport);
                 
                 // If more than grace period has passed, delete file (full recovery confirmed)
                 if ($timeSinceLastCheck >= $gracePeriodSeconds) {

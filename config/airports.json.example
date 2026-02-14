@@ -20,6 +20,7 @@
     "stale_warning_seconds": 600,
     "stale_error_seconds": 3600,
     "stale_failclosed_seconds": 10800,
+    "limited_availability_outage_seconds": 1800,
     
     "_comment_metar_staleness": "METAR-specific thresholds (global only, since METAR is hourly)",
     "metar_stale_warning_seconds": 3600,
@@ -417,7 +418,7 @@
       ]
     },
     "2id3": {
-      "_comment": "Josephine Creek Ranch - off-grid/solar. Webcams only, no METAR. limited_availability banner shows when webcams go stale.",
+      "_comment": "Josephine Creek Ranch - off-grid/solar. Webcams only, no METAR. limited_availability banner shows when webcams go stale (default 30 min; override with limited_availability_outage_seconds).",
       "name": "Josephine Creek Ranch Airport",
       "enabled": true,
       "limited_availability": true,

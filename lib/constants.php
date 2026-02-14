@@ -89,6 +89,15 @@ if (!defined('MIN_STALE_FAILCLOSED_SECONDS')) {
     define('MIN_STALE_FAILCLOSED_SECONDS', 3600); // 60 minutes minimum
 }
 
+// Limited-availability (off-grid/solar/battery) sites: show outage banner sooner than general failclosed
+// Default 30 minutes - pilots need to know when local data is unavailable
+if (!defined('DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS')) {
+    define('DEFAULT_LIMITED_AVAILABILITY_OUTAGE_SECONDS', 1800); // 30 minutes
+}
+if (!defined('MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS')) {
+    define('MIN_LIMITED_AVAILABILITY_OUTAGE_SECONDS', 300); // 5 minutes minimum (config override)
+}
+
 // --- METAR-specific thresholds (global only) ---
 // METAR is published hourly, so longer thresholds are appropriate
 if (!defined('DEFAULT_METAR_STALE_WARNING_SECONDS')) {

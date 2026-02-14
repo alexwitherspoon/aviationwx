@@ -389,6 +389,57 @@ class OutageDetectionTest extends TestCase
     }
     
     /**
+     * Test that limited_availability uses 30-minute default threshold (not 3-hour failclosed)
+     */
+    public function testCheckDataOutageStatus_LimitedAvailability_Uses30MinuteThreshold(): void
+    {
+        $airport = [
+            'limited_availability' => true,
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
+        ];
+        
+        // Data 45 minutes old - exceeds 30-min limited_availability threshold
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $staleTimestamp = time() - (45 * 60);
+        $weatherData = [
+            'obs_time_primary' => $staleTimestamp,
+            'last_updated_primary' => $staleTimestamp,
+            'temperature' => 15.0
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+        
+        $result = checkDataOutageStatus($this->testAirportId, $airport);
+        
+        $this->assertNotNull($result, 'Limited-availability should show outage after 30 min (45 min > 30 min)');
+        $this->assertTrue($result['limited_availability']);
+    }
+    
+    /**
+     * Test that limited_availability does not show outage when data is under 30 minutes old
+     */
+    public function testCheckDataOutageStatus_LimitedAvailability_NoOutageUnder30Min(): void
+    {
+        $airport = [
+            'limited_availability' => true,
+            'weather_sources' => [['type' => 'tempest', 'station_id' => '12345']]
+        ];
+        
+        // Data 20 minutes old - under 30-min threshold
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $recentTimestamp = time() - (20 * 60);
+        $weatherData = [
+            'obs_time_primary' => $recentTimestamp,
+            'last_updated_primary' => $recentTimestamp,
+            'temperature' => 15.0
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+        
+        $result = checkDataOutageStatus($this->testAirportId, $airport);
+        
+        $this->assertNull($result, 'Limited-availability should NOT show outage when data is under 30 min old');
+    }
+    
+    /**
      * Test that no banner is shown when some sources are fresh
      */
     public function testCheckDataOutageStatus_SomeSourcesFresh_ReturnsNull(): void

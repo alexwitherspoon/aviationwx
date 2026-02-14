@@ -1102,6 +1102,47 @@ class ConfigValidationTest extends TestCase
         $this->assertStringContainsString('limited_availability', implode(' ', $result['errors']));
     }
 
+    public function testAirportStructure_LimitedAvailabilityOutageSeconds_Valid()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true,
+                    'limited_availability' => true,
+                    'limited_availability_outage_seconds' => 1800
+                ]
+            ]
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Airport with valid limited_availability_outage_seconds should pass');
+    }
+
+    public function testAirportStructure_LimitedAvailabilityOutageSeconds_BelowMinimum()
+    {
+        $config = [
+            'airports' => [
+                'kspb' => [
+                    'name' => 'Test Airport',
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                    'access_type' => 'public',
+                    'tower_status' => 'non_towered',
+                    'enabled' => true,
+                    'limited_availability' => true,
+                    'limited_availability_outage_seconds' => 100
+                ]
+            ]
+        ];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'limited_availability_outage_seconds below minimum should fail');
+        $this->assertStringContainsString('limited_availability_outage_seconds', implode(' ', $result['errors']));
+    }
+
     public function testAirportStructure_InvalidLatitude()
     {
         $config = [
