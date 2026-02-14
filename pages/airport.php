@@ -3909,9 +3909,9 @@ function checkAndUpdateOutageBanner() {
                 sources.push({ name: 'metar', timestamp: 0, age: Infinity, stale: true });
             }
         }
+        let webcamNewestTimestamp = 0;
         if (AIRPORT_DATA && AIRPORT_DATA.webcams && Array.isArray(AIRPORT_DATA.webcams) && AIRPORT_DATA.webcams.length > 0) {
             let webcamStaleCount = 0;
-            let webcamNewestTimestamp = 0;
             AIRPORT_DATA.webcams.forEach((cam, index) => {
                 const timestamp = CAM_TS[index] || 0;
                 if (timestamp > 0) {
@@ -3927,22 +3927,44 @@ function checkAndUpdateOutageBanner() {
                 }
             });
             const allWebcamsStale = (webcamStaleCount === AIRPORT_DATA.webcams.length);
-            sources.push({ name: 'webcams', stale: allWebcamsStale, total: AIRPORT_DATA.webcams.length, stale_count: webcamStaleCount });
+            sources.push({ name: 'webcams', stale: allWebcamsStale, total: AIRPORT_DATA.webcams.length, stale_count: webcamStaleCount, newestTimestamp: webcamNewestTimestamp });
             if (allWebcamsStale && webcamNewestTimestamp > 0 && webcamNewestTimestamp > newestTimestamp) {
                 newestTimestamp = webcamNewestTimestamp;
             }
         }
-        let allStale = sources.length > 0 && sources.every(s => s.stale);
+        // For limited_availability airports, exclude METAR from outage check when local sources exist
+        // (METAR from nearby airport stays fresh when local site powers down)
+        const hasLocalSources = hasPrimarySource || (AIRPORT_DATA?.webcams?.length > 0);
+        const sourcesToCheck = limitedAvailability && hasLocalSources
+            ? sources.filter(s => s.name !== 'metar')
+            : sources;
+        let allStale = sourcesToCheck.length > 0 && sourcesToCheck.every(s => s.stale);
         if (sources.length === 0) {
             syncBannerState({ maintenance, in_outage: false, limited_availability: false, newest_timestamp: 0 });
             return;
         }
-        const inOutage = !maintenance && allStale && newestTimestamp > 0;
+        // For limited_availability outage, use newest from local sources only (not METAR)
+        let tsForBanner = newestTimestamp;
+        if (limitedAvailability && allStale && hasLocalSources) {
+            tsForBanner = 0;
+            const primarySrc = sources.find(s => s.name === 'primary');
+            if (primarySrc && primarySrc.timestamp) {
+                tsForBanner = Math.max(tsForBanner, primarySrc.timestamp);
+            }
+            const webcamSrc = sources.find(s => s.name === 'webcams');
+            if (webcamSrc && webcamSrc.newestTimestamp) {
+                tsForBanner = Math.max(tsForBanner, webcamSrc.newestTimestamp);
+            }
+            if (tsForBanner === 0) {
+                tsForBanner = now; // Fallback so banner can display
+            }
+        }
+        const inOutage = !maintenance && allStale && tsForBanner > 0;
         syncBannerState({
             maintenance,
             in_outage: inOutage,
             limited_availability: inOutage && limitedAvailability,
-            newest_timestamp: inOutage ? newestTimestamp : 0
+            newest_timestamp: inOutage ? tsForBanner : 0
         });
     } catch (error) {
         console.error('[Weather] Error in checkAndUpdateOutageBanner:', error);

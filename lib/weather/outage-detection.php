@@ -113,8 +113,29 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
     }
     
     // Check if ALL configured sources are stale
+    // For limited_availability (off-grid/solar/battery) airports: exclude METAR from the check
+    // when local sources (primary, webcams) exist. METAR comes from a nearby airport and stays
+    // fresh when the local site powers down; pilots need to know when local data is unavailable.
+    $sourcesToCheck = $sources;
+    $newestTimestampLocal = $newestTimestamp;
+    $hasLocalSources = isset($sources['primary']) || isset($sources['webcams']);
+    if (isAirportLimitedAvailability($airport) && $hasLocalSources) {
+        unset($sourcesToCheck['metar']);
+        // Use newest from local sources only (primary, webcams) for banner timestamp
+        $newestTimestampLocal = 0;
+        if (isset($sources['primary']) && $sources['primary']['timestamp'] > 0) {
+            $newestTimestampLocal = max($newestTimestampLocal, $sources['primary']['timestamp']);
+        }
+        if (isset($sources['webcams'])) {
+            $webcamTs = $sourceTimestamps['webcams']['newest_timestamp'] ?? 0;
+            if ($webcamTs > 0) {
+                $newestTimestampLocal = max($newestTimestampLocal, $webcamTs);
+            }
+        }
+    }
+
     $allStale = true;
-    foreach ($sources as $sourceName => $sourceData) {
+    foreach ($sourcesToCheck as $sourceName => $sourceData) {
         if ($sourceName === 'webcams') {
             // For webcams, check if all are stale
             if (!$sourceData['stale']) {
@@ -154,8 +175,10 @@ function checkDataOutageStatus(string $airportId, array $airport): ?array {
         }
         
         // If no existing outage start, use newest timestamp from stale sources
-        if ($outageStart === 0 && $newestTimestamp > 0) {
-            $outageStart = $newestTimestamp;
+        // For limited_availability, use local sources only (not METAR)
+        $tsForOutage = isAirportLimitedAvailability($airport) ? $newestTimestampLocal : $newestTimestamp;
+        if ($outageStart === 0 && $tsForOutage > 0) {
+            $outageStart = $tsForOutage;
         }
         
         // Fallback: try webcam cache file modification times if no timestamp available

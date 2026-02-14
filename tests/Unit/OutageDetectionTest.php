@@ -346,6 +346,49 @@ class OutageDetectionTest extends TestCase
     }
     
     /**
+     * Test that limited_availability airport shows outage when local sources (webcams) are stale
+     * even if METAR from nearby airport is fresh
+     */
+    public function testCheckDataOutageStatus_LimitedAvailability_WebcamsStaleMetarFresh_ReturnsOutage(): void
+    {
+        $airport = [
+            'limited_availability' => true,
+            'weather_sources' => [['type' => 'metar', 'station_id' => 'KBOI']],
+            'webcams' => [
+                ['name' => 'North', 'url' => 'http://example.com/north.jpg']
+            ]
+        ];
+        
+        // Fresh METAR (from nearby KBOI - always reporting)
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $freshMetarTimestamp = time() - 60;
+        $weatherData = [
+            'obs_time_metar' => $freshMetarTimestamp,
+            'last_updated_metar' => $freshMetarTimestamp
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+        
+        // Stale webcam (local site powered down)
+        $webcamDir = CACHE_WEBCAMS_DIR;
+        ensureCacheDir($webcamDir);
+        require_once __DIR__ . '/../../lib/webcam-format-generation.php';
+        $webcamFile = getCacheSymlinkPath($this->testAirportId, 0, 'jpg');
+        $webcamDir = dirname($webcamFile);
+        if (!is_dir($webcamDir)) {
+            mkdir($webcamDir, 0755, true);
+        }
+        $staleWebcamTimestamp = time() - (4 * 3600);
+        touch($webcamFile, $staleWebcamTimestamp);
+        
+        $result = checkDataOutageStatus($this->testAirportId, $airport);
+        
+        // Should return outage (local webcams down) despite fresh METAR
+        $this->assertNotNull($result, 'Limited-availability airport should show outage when local sources are stale');
+        $this->assertTrue($result['limited_availability']);
+        $this->assertGreaterThan(0, $result['newest_timestamp']);
+    }
+    
+    /**
      * Test that no banner is shown when some sources are fresh
      */
     public function testCheckDataOutageStatus_SomeSourcesFresh_ReturnsNull(): void
