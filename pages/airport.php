@@ -3877,13 +3877,20 @@ function checkAndUpdateOutageBanner() {
         const hasSources = AIRPORT_DATA && AIRPORT_DATA.weather_sources && AIRPORT_DATA.weather_sources.length > 0;
         const hasPrimarySource = hasSources && !AIRPORT_DATA.weather_sources.every(s => s.type === 'metar');
         if (hasPrimarySource) {
-            if (weatherLastUpdated) {
-                const timestamp = Math.floor(weatherLastUpdated.getTime() / 1000);
-                const age = now - timestamp;
-                const isStale = age >= outageThresholdSeconds;
-                sources.push({ name: 'primary', timestamp, age, stale: isStale });
-                if (timestamp > newestTimestamp) {
-                    newestTimestamp = timestamp;
+            // obs_time_primary only - last_updated includes METAR and would mask local station outage
+            if (currentWeatherData) {
+                const primaryTimestamp = (currentWeatherData.obs_time_primary && currentWeatherData.obs_time_primary > 0)
+                    ? currentWeatherData.obs_time_primary
+                    : 0;
+                if (primaryTimestamp > 0) {
+                    const age = now - primaryTimestamp;
+                    const isStale = age >= outageThresholdSeconds;
+                    sources.push({ name: 'primary', timestamp: primaryTimestamp, age, stale: isStale });
+                    if (primaryTimestamp > newestTimestamp) {
+                        newestTimestamp = primaryTimestamp;
+                    }
+                } else {
+                    sources.push({ name: 'primary', timestamp: 0, age: Infinity, stale: true });
                 }
             } else {
                 sources.push({ name: 'primary', timestamp: 0, age: Infinity, stale: true });

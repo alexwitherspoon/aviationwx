@@ -417,23 +417,28 @@
       ]
     },
     "2id3": {
-      "name": "Cascade Airport",
+      "_comment": "Josephine Creek Ranch - off-grid/solar. Webcams only, no METAR. limited_availability banner shows when webcams go stale.",
+      "name": "Josephine Creek Ranch Airport",
       "enabled": true,
       "limited_availability": true,
       "faa": "2ID3",
-      "address": "Cascade, Idaho, USA",
-      "lat": 44.5,
-      "lon": -116.0,
-      "elevation_ft": 5000,
-      "timezone": "America/Denver",
-      "access_type": "public",
+      "address": "Triangle, ID, USA",
+      "lat": 42.7518333,
+      "lon": -116.6773333,
+      "elevation_ft": 5100,
+      "timezone": "America/Boise",
+      "access_type": "private",
+      "permission_required": true,
       "tower_status": "non_towered",
       "runways": [{"name": "18/36", "heading_1": 180, "heading_2": 360}],
-      "frequencies": {"ctaf": "122.8"},
+      "frequencies": {"ctaf": "122.9"},
       "services": {"repairs_available": false},
-      "webcams": [],
+      "webcams": [
+        {"name": "North - POE", "url": "https://example.com/north.jpg"},
+        {"name": "South - POE", "url": "https://example.com/south.jpg"}
+      ],
       "partners": [],
-      "weather_sources": [{"type": "metar", "station_id": "KBOI", "nearby_stations": []}]
+      "weather_sources": []
     },
     "4or9": {
       "name": "Country Squire Airpark",
