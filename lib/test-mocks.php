@@ -61,7 +61,7 @@ function getMockHttpResponse(string $url): ?string {
     }
     
     if (strpos($url, 'awosnet.com') !== false) {
-        // AWOSnet (HTML with embedded METAR)
+        // AWOSnet mock (XML METAR response)
         require_once __DIR__ . '/../tests/mock-weather-responses.php';
         return getMockAwosnetResponse();
     }
