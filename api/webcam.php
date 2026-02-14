@@ -1,6 +1,9 @@
 <?php
 /**
- * Webcam Image Server with Background Refresh
+ * Internal API - Webcam Image Server with Background Refresh
+ * 
+ * Part of the Internal API (used by the dashboard). For third-party integrations,
+ * use the Public API: GET /v1/airports/{id}/webcams/{cam}/image
  * 
  * Implements stale-while-revalidate pattern for optimal performance:
  * 1. If cache is fresh: serve immediately
@@ -1036,7 +1039,7 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
         // Track browser format support (based on Accept header)
         $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
         $supportsWebp = (stripos($acceptHeader, 'image/webp') !== false);
-        metrics_track_format_support(false, $supportsWebp);
+        metrics_track_format_support($supportsWebp);
     }
     
     // Check rate limiting (re-check since we can't easily pass the variable)
@@ -1349,6 +1352,10 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
         $cacheDir = getWebcamCameraDir($airportId, $camIndex);
         $realCacheDir = realpath($cacheDir);
         if ($realPath !== false && $realCacheDir !== false && strpos($realPath, $realCacheDir) === 0) {
+            // Track webcam serve (timestamp-based URLs used by dashboard srcset)
+            $sizeForMetrics = $requestedSize ?? 'original';
+            metrics_track_webcam_serve($airportId, $camIndex, $requestedFormat, $sizeForMetrics);
+
             // Serve timestamp-based file with immutable cache headers
             $mimeType = getMimeTypeForFormat($requestedFormat);
             $mtime = @filemtime($timestampFile);

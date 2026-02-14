@@ -1,6 +1,6 @@
 # Internal API Documentation
 
-This document describes the **internal** API endpoints used by the AviationWX.org web interface. These endpoints are designed for the frontend and are not versioned.
+This document describes the **Internal API** endpoints used by the AviationWX.org web interface. These endpoints are designed for the frontend and are not versioned. The Internal API is long-lived and distinct from the Public API.
 
 > **For Third-Party Developers:** If you're building an application that integrates with AviationWX, please use the [**Public API**](https://api.aviationwx.org) instead. The Public API provides:
 > - Stable, versioned endpoints (`/v1/...`)

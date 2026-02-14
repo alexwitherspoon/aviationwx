@@ -296,7 +296,7 @@ function handleGetWebcamImage(array $params, array $context): void
     }
     
     // Send the image response
-    sendImageResponse($cacheFile, $timestamp, $variant, $format, $airport, $webcams[$camIndex]);
+    sendImageResponse($airportId, $camIndex, $cacheFile, $timestamp, $variant, $format, $airport, $webcams[$camIndex]);
 }
 
 /**
@@ -363,7 +363,7 @@ function handleFaaProfileRequest(
     $variant = 'faa_' . $outputWidth . 'x' . $outputHeight;
     
     // Send the image response (always JPG for FAA)
-    sendImageResponse($cacheFile, $timestamp, $variant, 'jpg', $airport, $webcam);
+    sendImageResponse($airportId, $camIndex, $cacheFile, $timestamp, $variant, 'jpg', $airport, $webcam);
 }
 
 /**
@@ -475,21 +475,38 @@ function handleTransformRequest(
 /**
  * Send the image response with appropriate headers
  * 
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index
  * @param string $cacheFile Path to image file
  * @param int $timestamp Image timestamp
- * @param string $variant Variant identifier for filename
- * @param string $format Image format
+ * @param string|int $variant Variant identifier for filename (original, 720, faa_1280x960, etc.)
+ * @param string $format Image format (jpg, webp)
  * @param array $airport Airport configuration
  * @param array $cam Camera configuration
  */
 function sendImageResponse(
+    string $airportId,
+    int $camIndex,
     string $cacheFile,
     int $timestamp,
-    string $variant,
+    string|int $variant,
     string $format,
     array $airport,
     array $cam
 ): void {
+    // Track webcam serve for status page format/size breakdown
+    $sizeForMetrics = 'original';
+    if (is_numeric($variant) && (int)$variant >= 1 && (int)$variant <= 5000) {
+        $sizeForMetrics = (string)(int)$variant;
+    } elseif ($variant === 'original') {
+        $sizeForMetrics = 'original';
+    } elseif (is_string($variant) && str_starts_with($variant, 'faa_')) {
+        $sizeForMetrics = 'faa';
+    } elseif (is_string($variant) && (str_contains($variant, 'x') || str_starts_with($variant, 'w') || str_starts_with($variant, 'h'))) {
+        $sizeForMetrics = 'transform';
+    }
+    metrics_track_webcam_serve($airportId, $camIndex, $format, $sizeForMetrics);
+
     // Get file info
     $fileSize = filesize($cacheFile);
     $mtime = filemtime($cacheFile);
