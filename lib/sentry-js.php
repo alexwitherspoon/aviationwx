@@ -56,10 +56,10 @@ function renderSentryJsInit(string $pageType = 'unknown'): void {
     $pageTypeEscaped = htmlspecialchars($pageType, ENT_QUOTES, 'UTF-8');
     
     echo <<<HTML
-    <!-- Sentry Browser SDK -->
+    <!-- Sentry Browser SDK (tracing bundle for performance + HTTP instrumentation) -->
     <script
-        src="https://browser.sentry-cdn.com/8.47.0/bundle.min.js"
-        integrity="sha384-F1SqswdlOeNYRWB3oa9RUmKftSyuOow0eg62rQ02yu79aQrHRFj4n6JMD8B1oHlO"
+        src="https://browser.sentry-cdn.com/8.47.0/bundle.tracing.min.js"
+        integrity="sha384-wYec/atCKBIhxMeAqO4JgQzLgv7nPphrOELh1UduVUFqt5DXn0Ey8pqiYEyYvZZ3"
         crossorigin="anonymous"
     ></script>
     <script>
@@ -76,18 +76,15 @@ function renderSentryJsInit(string $pageType = 'unknown'): void {
                 environment: "{$environmentEscaped}",
                 release: "{$releaseEscaped}",
                 
-                // Performance Monitoring
+                // Performance Monitoring (browserTracingIntegration auto-instruments fetch/XHR)
                 integrations: [
                     Sentry.browserTracingIntegration({
-                        // Track navigation (page loads)
                         tracePropagationTargets: [
                             "localhost",
                             /^\//,  // Relative URLs
                             /^https:\/\/.*\.aviationwx\.org/  // Our domains
                         ],
                     }),
-                    // Track fetch/XHR requests
-                    Sentry.httpClientIntegration(),
                 ],
                 
                 // Sample rates
