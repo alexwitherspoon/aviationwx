@@ -2,7 +2,7 @@
 
 This document provides a comprehensive reference for all safety-critical weather calculations in AviationWX. These calculations directly affect flight safety decisions and must be verified against official FAA and ICAO sources.
 
-**Last Updated**: 2026-01-12  
+**Last Updated**: 2026-02-14  
 **Verification Status**: ✅ All formulas verified against FAA sources
 
 ---
@@ -15,6 +15,7 @@ This document provides a comprehensive reference for all safety-critical weather
 4. [Dewpoint Calculations](#dewpoint-calculations)
 5. [Temperature Conversions](#temperature-conversions)
 6. [Wind Calculations](#wind-calculations)
+7. [METAR Visibility Parsing](#metar-visibility-parsing)
 
 ---
 
@@ -380,6 +381,35 @@ Gust Factor = Peak Gust - Steady Wind Speed
   - 5 gust factor tests
   - Covers normal, strong, no gusts, calm, and negative protection
   - Validates clamping to 0 for invalid data
+
+---
+
+## METAR Visibility Parsing
+
+**⚠️ SAFETY CRITICAL**: Incorrect visibility parsing can mislead pilots. The METAR P prefix indicates "greater than" semantics and must be preserved for display.
+
+### P Prefix (Greater Than)
+
+Per **ICAO METAR format, visibility group**:
+- `P6SM` = visibility greater than 6 statute miles (reportable value exceeds 6)
+- `6SM` = visibility exactly 6 statute miles
+- `P10SM` = greater than 10 SM (common for unlimited conditions)
+
+**Display**: `P6SM` should display as "6+ SM" to distinguish from exact "6 SM".
+
+**Flight category**: Uses the numeric value for thresholds (6.0 SM = VFR). The `visibility_greater_than` flag affects display only, not flight category calculation.
+
+### Implementation
+
+- **File**: `lib/weather/adapter/metar-v1.php`
+- **Function**: `parseRawMETARToWeatherArray()`
+- **Parsing order**: Check `P(\d+)SM` before `(\d+)SM` so the prefix is not lost
+- **Tests**: `tests/Unit/RawMetarParsingTest.php` (P6SM, P10SM, 6SM, regex order)
+- **Display**: `formatEmbedVisibility()` in `lib/embed-templates/shared.php` appends "+" when `visibility_greater_than` is true
+
+### Official Sources
+
+- ICAO WMO Manual on Codes (WMO-306)
 
 ---
 

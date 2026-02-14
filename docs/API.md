@@ -52,6 +52,7 @@ Returns weather data for the specified airport.
     "gust_factor": 4,
     "pressure": 30.12,
     "visibility": 10.0,
+    "visibility_greater_than": false,
     "ceiling": null,
     "cloud_cover": "SCT",
     "precip_accum": 0.0,
