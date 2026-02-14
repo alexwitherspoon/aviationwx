@@ -23,6 +23,7 @@ require_once __DIR__ . '/weather/utils.php';
 require_once __DIR__ . '/circuit-breaker.php';
 require_once __DIR__ . '/variant-health.php';
 require_once __DIR__ . '/weather-health.php';
+require_once __DIR__ . '/weather/outage-detection.php';
 
 /**
  * Check system health
@@ -451,13 +452,15 @@ function checkFtpSftpServices(): array {
 
 /**
  * Check airport health
- * 
+ *
  * @param string $airportId Airport identifier
  * @param array $airport Airport configuration array
  * @return array {
  *   'id' => string,
  *   'status' => 'operational'|'degraded'|'down'|'maintenance',
- *   'components' => array<string, array>
+ *   'components' => array<string, array>,
+ *   'limited_availability' => bool,
+ *   'all_sources_down' => bool  True when every local source is down (for limited_availability display)
  * }
  */
 function checkAirportHealth(string $airportId, array $airport): array {
@@ -1105,6 +1108,13 @@ function checkAirportHealth(string $airportId, array $airport): array {
     }
     
     $health['limited_availability'] = isAirportLimitedAvailability($airport);
+    
+    // limited_availability: show special banner only when all local sources down (one down = normal outage)
+    $health['all_sources_down'] = false;
+    if ($health['limited_availability'] && $hasDown) {
+        $outageStatus = checkDataOutageStatus($airportId, $airport);
+        $health['all_sources_down'] = ($outageStatus !== null);
+    }
     
     return $health;
 }

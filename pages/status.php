@@ -981,7 +981,7 @@ if (php_sapi_name() === 'cli') {
                 <span class="status-badge">
                     <?php if ($airport['status'] === 'maintenance'): ?>
                         Under Maintenance <span class="status-indicator <?php echo getStatusColor($airport['status']); ?>"><?php echo getStatusIcon($airport['status']); ?></span>
-                    <?php elseif ($airport['status'] === 'down' && !empty($airport['limited_availability'])): ?>
+                    <?php elseif ($airport['status'] === 'down' && !empty($airport['limited_availability']) && !empty($airport['all_sources_down'])): ?>
                         <span class="status-indicator green">🪫</span>
                         Limited availability
                     <?php else: ?>
