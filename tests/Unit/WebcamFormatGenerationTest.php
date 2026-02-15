@@ -408,6 +408,22 @@ class WebcamFormatGenerationTest extends TestCase
     }
 
     /**
+     * P3: EXIF copy failure must fail format generation - no || true
+     *
+     * When exiftool is used to copy EXIF, failure must propagate (fail closed).
+     * The command must NOT include "|| true" which would silence exiftool failures.
+     */
+    public function testBuildFormatCommand_WhenExiftoolUsed_DoesNotSilenceExifCopyFailure(): void
+    {
+        $cmd = buildFormatCommand('/source/file.jpg', '/dest/file.webp', 'webp', time());
+
+        if (str_contains($cmd, 'exiftool')) {
+            $this->assertStringNotContainsString('|| true', $cmd,
+                'EXIF copy failure must fail format generation - remove || true for safety');
+        }
+    }
+
+    /**
      * Test promoteFormats() returns empty array when no formats to promote
      */
     public function testPromoteFormats_NoFormats_ReturnsSourceFormatIfExists(): void
@@ -833,6 +849,26 @@ class WebcamFormatGenerationTest extends TestCase
         
         $this->assertStringContainsString('pad=', $cmd);
         $this->assertStringContainsString('color=black', $cmd);
+    }
+
+    /**
+     * P3: EXIF copy failure must fail variant generation - no || true
+     *
+     * When exiftool is used to copy EXIF, failure must propagate (fail closed).
+     */
+    public function testBuildVariantCommand_WhenExiftoolUsed_DoesNotSilenceExifCopyFailure(): void
+    {
+        $sourceFile = $this->testImageDir . '/source.jpg';
+        $destFile = $this->testImageDir . '/dest.jpg';
+        $this->createTestJpeg('source.jpg');
+        $variantDims = ['width' => 320, 'height' => 180];
+
+        $cmd = buildVariantCommand($sourceFile, $destFile, 'small', 'jpg', $variantDims, false, time());
+
+        if (str_contains($cmd, 'exiftool')) {
+            $this->assertStringNotContainsString('|| true', $cmd,
+                'EXIF copy failure must fail variant generation - remove || true for safety');
+        }
     }
     
     /**

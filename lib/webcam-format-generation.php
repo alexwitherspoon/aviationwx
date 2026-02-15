@@ -760,15 +760,16 @@ function buildVariantCommand(string $sourceFile, string $destFile, string $varia
     }
     
     // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
+    // EXIF copy failure must fail variant generation (fail closed)
     if (isExiftoolAvailable()) {
         $cmdExif = sprintf(
-            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s || true",
+            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s",
             escapeshellarg($sourceFile),
             escapeshellarg($destFile)
         );
         $cmd = $cmd . ' && ' . $cmdExif;
     }
-    
+
     return $cmd;
 }
 
@@ -813,15 +814,16 @@ function buildFormatCommand(string $sourceFile, string $destFile, string $format
     }
     
     // Chain EXIF copy to preserve metadata in generated format (if exiftool available)
+    // EXIF copy failure must fail format generation (fail closed)
     if (isExiftoolAvailable()) {
         $cmdExif = sprintf(
-            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s || true",
+            "exiftool -overwrite_original -q -P -TagsFromFile %s -all:all %s",
             escapeshellarg($sourceFile),
             escapeshellarg($destFile)
         );
         $cmd = $cmd . ' && ' . $cmdExif;
     }
-    
+
     return $cmd;
 }
 
@@ -954,7 +956,7 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
                         'dest_file' => basename($proc['dest'])
                     ], 'app');
                 } else {
-                    aviationwx_log('warning', 'webcam format generation failed', [
+                    $logContext = [
                         'airport' => $airportId,
                         'cam' => $camIndex,
                         'format' => $format,
@@ -963,8 +965,13 @@ function generateFormatsSync(string $sourceFile, string $airportId, int $camInde
                         'file_exists' => file_exists($proc['dest']),
                         'file_size' => file_exists($proc['dest']) ? filesize($proc['dest']) : 0,
                         'dest_file' => $proc['dest'],
-                        'stderr_preview' => substr($stderr, 0, 500)
-                    ], 'app');
+                        'stderr_preview' => substr($stderr, 0, 500),
+                    ];
+                    if ($format === 'webp') {
+                        $logContext['exiftool_version'] = getExiftoolVersion() ?? 'unknown';
+                        $logContext['note'] = 'WebP EXIF copy may fail with older exiftool';
+                    }
+                    aviationwx_log('warning', 'webcam format generation failed', $logContext, 'app');
                     
                     // Clean up failed staging file
                     if (file_exists($proc['dest'])) {
