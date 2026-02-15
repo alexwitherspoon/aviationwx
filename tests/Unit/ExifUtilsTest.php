@@ -215,7 +215,111 @@ class ExifUtilsTest extends TestCase
         
         $this->assertFalse($result['found']);
     }
-    
+
+    // ========================================
+    // False positive prevention tests
+    // ========================================
+
+    /**
+     * Reject 14 digits embedded in longer numeric string (product ID / serial)
+     *
+     * "20251229210421000123" - first 14 digits look like timestamp but are part
+     * of longer number. Non-digit boundaries prevent false positive.
+     */
+    public function testParseFilenameTimestamp_14DigitsInLongerNumber_ReturnsNotFound()
+    {
+        $now = time();
+        $ts = date('YmdHis', $now);
+        $filename = "product{$ts}00123.jpg";
+        $filePath = $this->createTestFile($filename, $now);
+
+        $result = parseFilenameTimestamp($filePath);
+
+        $this->assertFalse($result['found'], 'Must not extract timestamp from longer numeric string');
+    }
+
+    /**
+     * Reject product ID format: no delimiter before 14 digits
+     *
+     * "SN20251229210421X" - serial number, not camera timestamp.
+     */
+    public function testParseFilenameTimestamp_ProductIdNoDelimiter_ReturnsNotFound()
+    {
+        $now = time();
+        $ts = date('YmdHis', $now);
+        $filename = "SN{$ts}X.jpg";
+        $filePath = $this->createTestFile($filename, $now);
+
+        $result = parseFilenameTimestamp($filePath);
+
+        $this->assertFalse($result['found'], 'Must require delimiter before 14-digit timestamp');
+    }
+
+    /**
+     * Accept timestamp at start of filename (no delimiter needed)
+     */
+    public function testParseFilenameTimestamp_TimestampAtStart_ReturnsTimestamp()
+    {
+        $now = time();
+        $ts = date('YmdHis', $now);
+        $filename = "{$ts}.jpg";
+        $filePath = $this->createTestFile($filename, $now);
+
+        $result = parseFilenameTimestamp($filePath);
+
+        $this->assertTrue($result['found']);
+        $this->assertEqualsWithDelta($now, $result['timestamp'], 1);
+    }
+
+    /**
+     * When multiple 14-digit sequences exist, prefer one closest to mtime
+     */
+    public function testParseFilenameTimestamp_Multiple14DigitSequences_PrefersClosestToMtime()
+    {
+        $now = time();
+        $ts1 = date('YmdHis', $now - (2 * 3600));
+        $ts2 = date('YmdHis', $now + 3600);
+        $filename = "{$ts1}_{$ts2}.jpg";
+        $filePath = $this->createTestFile($filename, $now);
+
+        $result = parseFilenameTimestamp($filePath);
+
+        $this->assertTrue($result['found']);
+        $this->assertEqualsWithDelta($now + 3600, $result['timestamp'], 1,
+            'Should prefer ts2 (1h ahead) over ts1 (2h behind) - closer to mtime');
+    }
+
+    /**
+     * Reject when timestamp exceeds tighter mtime window (±12 hours)
+     */
+    public function testParseFilenameTimestamp_Exceeds12HourMtimeWindow_ReturnsNotFound()
+    {
+        $now = time();
+        $ts = date('YmdHis', $now);
+        $filename = "cam_{$ts}.jpg";
+        $filePath = $this->createTestFile($filename, $now - (14 * 3600));
+
+        $result = parseFilenameTimestamp($filePath);
+
+        $this->assertFalse($result['found'], '14h difference must exceed 12h window');
+    }
+
+    /**
+     * Accept when timestamp within 12-hour mtime window
+     */
+    public function testParseFilenameTimestamp_Within12HourMtimeWindow_ReturnsTimestamp()
+    {
+        $now = time();
+        $ts = date('YmdHis', $now);
+        $filename = "cam_{$ts}.jpg";
+        $filePath = $this->createTestFile($filename, $now - (10 * 3600));
+
+        $result = parseFilenameTimestamp($filePath);
+
+        $this->assertTrue($result['found']);
+        $this->assertEqualsWithDelta($now, $result['timestamp'], 1);
+    }
+
     // ========================================
     // parseTimestampComponents() Tests
     // ========================================

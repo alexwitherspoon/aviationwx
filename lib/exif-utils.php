@@ -46,12 +46,69 @@ function isExiftoolAvailable(): bool {
 }
 
 /**
+ * Get exiftool version string for failure diagnostics
+ *
+ * Cached per process. Used when WebP EXIF copy fails - exiftool WebP support
+ * varies by version. Includes timeout to avoid blocking on hang.
+ *
+ * @return string|null Version string (e.g. "12.70") or null if unavailable
+ */
+function getExiftoolVersion(): ?string
+{
+    static $cached = null;
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $timeoutSec = 2;
+    $cmd = 'exiftool -ver 2>/dev/null';
+    $descriptorSpec = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+    $process = @proc_open($cmd, $descriptorSpec, $pipes);
+
+    if (!is_resource($process)) {
+        $cached = null;
+        return null;
+    }
+
+    @fclose($pipes[0]);
+    $stdout = @stream_get_contents($pipes[1]);
+    @fclose($pipes[1]);
+    @fclose($pipes[2]);
+
+    $deadline = time() + $timeoutSec;
+    while (time() < $deadline) {
+        $status = @proc_get_status($process);
+        if ($status && !$status['running']) {
+            @proc_close($process);
+            $version = trim((string)$stdout);
+            if ($version !== '' && preg_match('/^\d+\.\d+/', $version)) {
+                $cached = $version;
+                return $cached;
+            }
+            $cached = null;
+            return null;
+        }
+        usleep(50000);
+    }
+
+    @proc_terminate($process, defined('SIGTERM') ? SIGTERM : 15);
+    @proc_close($process);
+    $cached = null;
+    return null;
+}
+
+/**
  * Require exiftool to be available
- * 
+ *
  * Throws RuntimeException if exiftool is not installed.
  * Call at startup of scripts that need EXIF functionality.
  * In test mode, requirement is waived.
- * 
+ *
  * @return bool Always returns true
  * @throws RuntimeException If exiftool not found
  */
@@ -217,23 +274,99 @@ function hasExifTimestamp(string $filePath): bool {
 }
 
 /**
+ * Execute exiftool command with timeout and retry
+ *
+ * Uses proc_open for timeout support. Retries on non-zero exit (transient failures).
+ *
+ * @param string $cmd Full exiftool command (runs via shell)
+ * @return array{success: bool, exit_code: int, output: array}
+ */
+function runExiftoolWithRetry(string $cmd): array
+{
+    $maxAttempts = defined('EXIFTOOL_MAX_RETRIES') ? EXIFTOOL_MAX_RETRIES : 3;
+    $timeoutSec = defined('EXIFTOOL_TIMEOUT_SECONDS') ? EXIFTOOL_TIMEOUT_SECONDS : 10;
+    $delayMs = defined('EXIFTOOL_RETRY_DELAY_MS') ? EXIFTOOL_RETRY_DELAY_MS : 100;
+
+    $lastExitCode = -1;
+    $lastOutput = [];
+
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        $descriptorSpec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = @proc_open($cmd, $descriptorSpec, $pipes);
+
+        if (!is_resource($process)) {
+            $lastExitCode = -1;
+            $lastOutput = ['proc_open failed'];
+            usleep($delayMs * 1000);
+            continue;
+        }
+
+        @fclose($pipes[0]);
+        $stdout = @stream_get_contents($pipes[1]);
+        $stderr = @stream_get_contents($pipes[2]);
+        @fclose($pipes[1]);
+        @fclose($pipes[2]);
+
+        $deadline = time() + $timeoutSec;
+        while (time() < $deadline) {
+            $status = @proc_get_status($process);
+            if ($status && !$status['running']) {
+                $lastExitCode = $status['exitcode'];
+                $combined = trim((string)$stdout . "\n" . (string)$stderr);
+                $lastOutput = $combined !== '' ? explode("\n", $combined) : [];
+                @proc_close($process);
+                if ($lastExitCode === 0) {
+                    return ['success' => true, 'exit_code' => 0, 'output' => $lastOutput];
+                }
+                break;
+            }
+            usleep(50000);
+        }
+
+        if (time() >= $deadline) {
+            $sigTerm = defined('SIGTERM') ? SIGTERM : 15;
+            $sigKill = defined('SIGKILL') ? SIGKILL : 9;
+            @proc_terminate($process, $sigTerm);
+            usleep(100000);
+            $status = @proc_get_status($process);
+            if ($status && $status['running']) {
+                @proc_terminate($process, $sigKill);
+            }
+            @proc_close($process);
+            $lastExitCode = -1;
+            $lastOutput = ['exiftool timeout'];
+        }
+
+        if ($attempt < $maxAttempts) {
+            usleep($delayMs * 1000);
+        }
+    }
+
+    return ['success' => false, 'exit_code' => $lastExitCode, 'output' => $lastOutput];
+}
+
+/**
  * Add EXIF DateTimeOriginal to image using exiftool
- * 
+ *
  * Follows EXIF standard:
  * - DateTimeOriginal: Local time at the location (camera's timezone)
  * - GPS fields: UTC (Zulu time)
- * 
- * For server-generated images (RTSP/MJPEG/static), uses file mtime as capture time.
- * Must be called immediately after capture (within 1 second) to ensure accuracy.
- * 
- * @param string $filePath Path to image
+ *
+ * Uses proc_open with timeout and retry for reliability.
+ *
+ * @param string $filePath Path to image file
  * @param int|null $timestamp Unix timestamp to set (default: file mtime)
  * @param string $timezone IANA timezone (e.g., 'America/Los_Angeles') for DateTimeOriginal
  * @param bool $preserveOriginalDateTime If true, keep existing DateTimeOriginal (only update GPS)
+ * @param array<string, mixed>|null $context Optional context for error logs (airport_id, cam_index, source_type)
  * @return bool True on success
  * @throws RuntimeException If exiftool not available (unless in test mode)
  */
-function addExifTimestamp(string $filePath, ?int $timestamp = null, string $timezone = 'UTC', bool $preserveOriginalDateTime = false): bool {
+function addExifTimestamp(string $filePath, ?int $timestamp = null, string $timezone = 'UTC', bool $preserveOriginalDateTime = false, ?array $context = null): bool {
     // In test mode without exiftool, simulate success
     if (function_exists('isTestMode') && isTestMode()) {
         exec('which exiftool 2>/dev/null', $output, $exitCode);
@@ -245,9 +378,8 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     requireExiftool();
     
     if (!file_exists($filePath)) {
-        aviationwx_log('error', 'addExifTimestamp: file not found', [
-            'file' => $filePath
-        ], 'app');
+        $logData = array_merge(['file' => $filePath], (array)$context);
+        aviationwx_log('error', 'addExifTimestamp: file not found', $logData, 'app');
         return false;
     }
     
@@ -316,18 +448,22 @@ function addExifTimestamp(string $filePath, ?int $timestamp = null, string $time
     // Add file path
     $cmd .= ' ' . escapeshellarg($filePath);
     $cmd .= ' 2>&1';
-    
-    exec($cmd, $output, $exitCode);
-    
-    if ($exitCode !== 0) {
-        aviationwx_log('error', 'addExifTimestamp: exiftool failed', [
-            'file' => basename($filePath),
-            'exit_code' => $exitCode,
-            'output' => implode("\n", array_slice($output, 0, 5))
-        ], 'app');
+
+    $result = runExiftoolWithRetry($cmd);
+
+    if (!$result['success']) {
+        $logData = array_merge(
+            [
+                'file' => basename($filePath),
+                'exit_code' => $result['exit_code'],
+                'output' => implode("\n", array_slice($result['output'], 0, 5)),
+            ],
+            (array)$context
+        );
+        aviationwx_log('error', 'addExifTimestamp: exiftool failed', $logData, 'app');
         return false;
     }
-    
+
     return true;
 }
 
@@ -436,7 +572,12 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
         ]);
         // Camera writes UTC - convert DateTimeOriginal to local time and set correct offset
         // Pass preserveOriginalDateTime=false to rewrite DateTimeOriginal to local time
-        addExifTimestamp($filePath, $exifTimestamp, $timezone, false);
+        $context = ['airport_id' => $airportId, 'cam_index' => $camIndex, 'source_type' => 'push'];
+        if (!addExifTimestamp($filePath, $exifTimestamp, $timezone, false, $context)) {
+            logWebcamRejection($airportId, $camIndex, 'exif_rewrite_failed',
+                'exiftool failed to add GPS fields', $filePath);
+            return false;
+        }
         return true;
     }
     
@@ -472,7 +613,8 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
             
             // Add GPS UTC fields, preserve original DateTimeOriginal (local time)
             // The GPS fields will be used by client for verification, not DateTimeOriginal
-            if (!addExifTimestamp($filePath, $utcTimestamp, $timezone, true)) {
+            $context = ['airport_id' => $airportId, 'cam_index' => $camIndex, 'source_type' => 'push'];
+            if (!addExifTimestamp($filePath, $utcTimestamp, $timezone, true, $context)) {
                 aviationwx_log('error', 'Failed to add GPS UTC fields', [
                     'file' => basename($filePath),
                     'airport' => $airportId,
@@ -763,12 +905,16 @@ function copyExifMetadata(string $sourceFile, string $destFile): bool {
     exec($cmd, $output, $exitCode);
     
     if ($exitCode !== 0) {
-        // Log but don't fail - some formats may not support all metadata
-        aviationwx_log('warning', 'copyExifMetadata: exiftool returned non-zero', [
+        $logContext = [
             'source' => basename($sourceFile),
             'dest' => basename($destFile),
-            'exit_code' => $exitCode
-        ], 'app');
+            'exit_code' => $exitCode,
+        ];
+        if (strtolower(pathinfo($destFile, PATHINFO_EXTENSION)) === 'webp') {
+            $logContext['exiftool_version'] = getExiftoolVersion() ?? 'unknown';
+            $logContext['note'] = 'WebP EXIF copy may fail with older exiftool';
+        }
+        aviationwx_log('warning', 'copyExifMetadata: exiftool returned non-zero', $logContext, 'app');
     }
     
     return true;
@@ -890,7 +1036,7 @@ function formatExifValidationResult(array $result): string {
  * Validation uses tight rolling windows to prevent false matches:
  * - Year: current year only (±1 year at year boundaries for timezone edge cases)
  * - Unix timestamp: current time ±31 days
- * - All timestamps must be within ±24 hours of file mtime
+ * - All timestamps must be within FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS (default 12h) of file mtime
  * 
  * @param string $filePath Path to file (uses basename for parsing)
  * @return array {
@@ -918,21 +1064,34 @@ function parseFilenameTimestamp(string $filePath): array {
     }
     
     // Pattern 1: YYYYMMDDHHmmss (14 consecutive digits) - most common for IP cameras
-    // Example: KCZK-01_00_20251229210421.jpg → 20251229210421
-    if (preg_match('/(\d{14})/', $filenameNoExt, $matches)) {
-        $ts = $matches[1];
-        $parsed = parseTimestampComponents(
-            substr($ts, 0, 4),   // year
-            substr($ts, 4, 2),   // month
-            substr($ts, 6, 2),   // day
-            substr($ts, 8, 2),   // hour
-            substr($ts, 10, 2),  // minute
-            substr($ts, 12, 2)   // second
-        );
-        
-        if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+    // Delimiter (?:^|[-_. ]) - at start or after underscore/dash/dot/space (rejects SN2025...)
+    // (?![0-9]) - non-digit after prevents extraction from longer numbers (2025...00123)
+    // When multiple matches exist, prefer the one closest to file mtime
+    $pattern = '(?:^|[-_. ])(\d{14})(?![0-9])';
+    if (preg_match_all('/' . $pattern . '/', $filenameNoExt, $matches, PREG_SET_ORDER)) {
+        $bestParsed = null;
+        $bestDiff = PHP_INT_MAX;
+        foreach ($matches as $m) {
+            $ts = $m[1];
+            $parsed = parseTimestampComponents(
+                substr($ts, 0, 4),
+                substr($ts, 4, 2),
+                substr($ts, 6, 2),
+                substr($ts, 8, 2),
+                substr($ts, 10, 2),
+                substr($ts, 12, 2)
+            );
+            if ($parsed !== null && isTimestampReasonable($parsed, $fileMtime)) {
+                $diff = abs($parsed - $fileMtime);
+                if ($diff < $bestDiff) {
+                    $bestDiff = $diff;
+                    $bestParsed = $parsed;
+                }
+            }
+        }
+        if ($bestParsed !== null) {
             $result['found'] = true;
-            $result['timestamp'] = $parsed;
+            $result['timestamp'] = $bestParsed;
             $result['pattern'] = 'YYYYMMDDHHmmss';
             return $result;
         }
@@ -1110,27 +1269,26 @@ function parseTimestampComponents(string $year, string $month, string $day, stri
 
 /**
  * Check if parsed timestamp is reasonable compared to file mtime
- * 
+ *
  * A timestamp from a filename should be close to the file's modification time.
- * Allows ±24 hours to account for timezone differences and upload delays.
- * 
+ * Uses FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS (default 12h) to reduce false positives.
+ *
  * @param int $timestamp Parsed timestamp
  * @param int $fileMtime File modification time
  * @return bool True if timestamp is reasonable
  */
-function isTimestampReasonable(int $timestamp, int $fileMtime): bool {
-    // Must be positive
+function isTimestampReasonable(int $timestamp, int $fileMtime): bool
+{
     if ($timestamp <= 0) {
         return false;
     }
-    
-    // Allow ±24 hours difference (86400 seconds) to account for:
-    // - Timezone differences between camera and server
-    // - Upload delays
-    // - Clock drift
-    $maxDifference = 86400;
+
+    $hours = defined('FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS')
+        ? FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS
+        : 12;
+    $maxDifference = $hours * 3600;
     $difference = abs($timestamp - $fileMtime);
-    
+
     return $difference <= $maxDifference;
 }
 
@@ -1193,18 +1351,20 @@ function getTimestampForExif(string $filePath): int {
 
 /**
  * Ensure image has valid EXIF timestamp (defensive entry point)
- * 
+ *
  * Priority order:
  * 1. Existing EXIF DateTimeOriginal (if valid) - ensures GPS fields added
  * 2. Filename/folder timestamp pattern
  * 3. File mtime
  * 4. Provided fallback timestamp
- * 
+ *
  * @param string $filePath Path to image file
  * @param int|null $fallbackTimestamp Fallback if no other timestamp found
+ * @param string $timezone IANA timezone for EXIF
+ * @param array<string, mixed>|null $context Optional context for error logs (airport_id, cam_index, source_type)
  * @return bool True if image has valid EXIF, false otherwise
  */
-function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, string $timezone = 'UTC'): bool {
+function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, string $timezone = 'UTC', ?array $context = null): bool {
     if (!isExiftoolAvailable()) {
         return false;
     }
@@ -1219,12 +1379,13 @@ function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, st
         // Use existing EXIF timestamp, not mtime, to preserve the original capture time
         $timestamp = getExifTimestamp($filePath);
         if ($timestamp > 0) {
-            // Add GPS fields, preserve original DateTimeOriginal
-            addExifTimestamp($filePath, $timestamp, $timezone, true);
+            if (!addExifTimestamp($filePath, $timestamp, $timezone, true, $context)) {
+                return false;
+            }
         }
         return true;
     }
-    
+
     // Priority 1: Try to extract from filename/folder
     $filenameResult = parseFilenameTimestamp($filePath);
     $timestamp = $filenameResult['found'] ? $filenameResult['timestamp'] : 0;
@@ -1245,7 +1406,7 @@ function ensureImageHasExif(string $filePath, ?int $fallbackTimestamp = null, st
     }
     
     // Add EXIF with timestamp (local time in DateTimeOriginal, UTC in GPS fields)
-    return addExifTimestamp($filePath, $timestamp, $timezone, false);
+    return addExifTimestamp($filePath, $timestamp, $timezone, false, $context);
 }
 
 

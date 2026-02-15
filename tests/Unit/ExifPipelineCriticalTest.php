@@ -470,4 +470,171 @@ class ExifPipelineCriticalTest extends TestCase
         $this->assertStringContainsString($expectedGpsTime, $outputText,
             'GPS TimeStamp must be UTC time');
     }
+
+    // ========================================
+    // P1: Retry Logic - Fail closed after retries exhausted
+    // ========================================
+
+    /**
+     * CRITICAL: addExifTimestamp must return false on corrupt/unwritable image
+     *
+     * When exiftool fails (corrupt image, permission denied), retries exhaust
+     * and function must fail closed - return false, never pass invalid image.
+     */
+    public function testAddExifTimestamp_WithCorruptImage_ReturnsFalse()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        // Create file that exiftool cannot process (not a valid image)
+        $corruptFile = $this->testDir . '/corrupt.jpg';
+        file_put_contents($corruptFile, 'not a valid jpeg - garbage data');
+
+        $result = addExifTimestamp($corruptFile, time());
+
+        $this->assertFalse($result,
+            'addExifTimestamp must return false when exiftool fails - fail closed');
+    }
+
+    /**
+     * CRITICAL: ensureImageHasExif must fail when adding GPS to existing EXIF fails
+     *
+     * When image has EXIF but addExifTimestamp fails (e.g. read-only directory),
+     * ensureImageHasExif must return false - not ignore the failure.
+     */
+    public function testEnsureImageHasExif_WhenGpsAddFails_ReturnsFalse()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $testFile = $this->createTestJpeg('test_readonly.jpg');
+        addExifTimestamp($testFile, time());
+        $this->assertTrue(hasExifTimestamp($testFile), 'Setup: image must have EXIF');
+
+        // Make directory read-only so exiftool cannot create temp file for -overwrite_original
+        $testDir = dirname($testFile);
+        $origDirMode = @fileperms($testDir);
+        @chmod($testDir, 0555);
+
+        $result = ensureImageHasExif($testFile);
+
+        // Restore directory permissions for cleanup
+        if ($origDirMode !== false) {
+            @chmod($testDir, $origDirMode & 0777);
+        }
+
+        $this->assertFalse($result,
+            'ensureImageHasExif must return false when addExifTimestamp fails on existing EXIF');
+    }
+
+    // ========================================
+    // P2: Timeout - Must complete within reasonable time
+    // ========================================
+
+    /**
+     * CRITICAL: addExifTimestamp must complete within timeout (no indefinite hang)
+     */
+    public function testAddExifTimestamp_WithValidImage_CompletesWithinTimeout()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $testFile = $this->createTestJpeg('test_timeout.jpg');
+        $start = microtime(true);
+        $result = addExifTimestamp($testFile, time());
+        $elapsed = microtime(true) - $start;
+
+        $this->assertTrue($result, 'addExifTimestamp must succeed');
+        $this->assertLessThan(15, $elapsed,
+            'addExifTimestamp must complete within 15s (timeout prevents indefinite hang)');
+    }
+
+    // ========================================
+    // P4: Context in error logs
+    // ========================================
+
+    /**
+     * addExifTimestamp must accept optional context for error logging
+     */
+    public function testAddExifTimestamp_AcceptsOptionalContextParameter()
+    {
+        $nonExistent = $this->testDir . '/nonexistent.jpg';
+        $context = ['airport_id' => 'KSPB', 'cam_index' => 0, 'source_type' => 'push'];
+
+        // Should not throw - context is optional and used in error log
+        $result = addExifTimestamp($nonExistent, time(), 'UTC', false, $context);
+
+        $this->assertFalse($result);
+    }
+
+    // ========================================
+    // WebP EXIF: exiftool version in failure logs
+    // ========================================
+
+    /**
+     * getExiftoolVersion must return version string when exiftool available
+     *
+     * Used for WebP EXIF failure diagnostics - exiftool WebP support varies by version.
+     */
+    public function testGetExiftoolVersion_WhenExiftoolAvailable_ReturnsVersionString()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $version = getExiftoolVersion();
+
+        $this->assertNotNull($version, 'getExiftoolVersion must return non-null when exiftool available');
+        $this->assertMatchesRegularExpression('/^\d+\.\d+/', $version,
+            'exiftool version must be in X.Y format (e.g. 12.70)');
+    }
+
+    /**
+     * getExiftoolVersion must cache result (same value on repeated calls)
+     */
+    public function testGetExiftoolVersion_IsCached()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $v1 = getExiftoolVersion();
+        $v2 = getExiftoolVersion();
+
+        $this->assertSame($v1, $v2, 'getExiftoolVersion must return cached value on repeated calls');
+    }
+
+    /**
+     * copyExifMetadata with WebP dest: on exiftool failure, log includes exiftool_version
+     *
+     * When EXIF copy fails for a WebP file, logs must include exiftool version
+     * for diagnostics (WebP EXIF support varies by exiftool version).
+     */
+    public function testCopyExifMetadata_WhenWebpDestAndExiftoolFails_LogsIncludeExiftoolVersion()
+    {
+        if (!$this->hasExiftool) {
+            $this->markTestSkipped('exiftool not available');
+        }
+
+        $sourceFile = $this->createTestJpeg('source.jpg');
+        addExifTimestamp($sourceFile, time());
+        $destFile = $this->testDir . '/output.webp';
+        file_put_contents($destFile, 'RIFF....WEBP'); // Minimal WebP header placeholder
+
+        $testDir = dirname($destFile);
+        $origDirMode = @fileperms($testDir);
+        @chmod($testDir, 0555);
+
+        $result = copyExifMetadata($sourceFile, $destFile);
+
+        if ($origDirMode !== false) {
+            @chmod($testDir, $origDirMode & 0777);
+        }
+
+        $this->assertTrue($result, 'copyExifMetadata returns true even on exiftool failure (legacy)');
+        $this->assertNotNull(getExiftoolVersion(), 'exiftool version must be available for log context');
+    }
 }

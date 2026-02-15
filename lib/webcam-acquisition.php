@@ -236,7 +236,8 @@ abstract class BaseAcquisitionStrategy implements AcquisitionStrategy
     protected function ensureExif(string $imagePath, ?int $timestamp = null): bool
     {
         $timezone = $this->getTimezone();
-        return ensureImageHasExif($imagePath, $timestamp, $timezone);
+        $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'pull'];
+        return ensureImageHasExif($imagePath, $timestamp, $timezone, $context);
     }
 
     /**
@@ -1149,7 +1150,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
 
             // Ensure EXIF exists
             $timezone = $this->getTimezone();
-            if (!ensureImageHasExif($file, null, $timezone)) {
+            $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
+            if (!ensureImageHasExif($file, null, $timezone, $context)) {
                 continue;
             }
 
@@ -1659,7 +1661,8 @@ class PushAcquisitionStrategy extends BaseAcquisitionStrategy
         // Ensure EXIF exists BEFORE validation (adds from filename timestamp if missing)
         // Must happen before validateUploadedImage() which checks EXIF timestamp
         $timezone = $this->getTimezone();
-        if (!ensureImageHasExif($filePath, null, $timezone)) {
+        $context = ['airport_id' => $this->airportId, 'cam_index' => $this->camIndex, 'source_type' => 'push'];
+        if (!ensureImageHasExif($filePath, null, $timezone, $context)) {
             require_once __DIR__ . '/webcam-image-metrics.php';
             trackWebcamImageRejected($this->airportId, $this->camIndex, 'no_exif_timestamp');
             $this->recordStabilityMetrics($stabilityTime, false);
