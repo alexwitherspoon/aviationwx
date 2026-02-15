@@ -76,14 +76,16 @@ function getExiftoolVersion(): ?string
     }
 
     @fclose($pipes[0]);
-    $stdout = @stream_get_contents($pipes[1]);
-    @fclose($pipes[1]);
-    @fclose($pipes[2]);
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
 
     $deadline = time() + $timeoutSec;
     while (time() < $deadline) {
         $status = @proc_get_status($process);
         if ($status && !$status['running']) {
+            $stdout = @stream_get_contents($pipes[1]);
+            @fclose($pipes[1]);
+            @fclose($pipes[2]);
             @proc_close($process);
             $version = trim((string)$stdout);
             if ($version !== '' && preg_match('/^\d+\.\d+/', $version)) {
@@ -97,6 +99,8 @@ function getExiftoolVersion(): ?string
     }
 
     @proc_terminate($process, defined('SIGTERM') ? SIGTERM : 15);
+    @fclose($pipes[1]);
+    @fclose($pipes[2]);
     @proc_close($process);
     $cached = null;
     return null;
@@ -306,16 +310,19 @@ function runExiftoolWithRetry(string $cmd): array
         }
 
         @fclose($pipes[0]);
-        $stdout = @stream_get_contents($pipes[1]);
-        $stderr = @stream_get_contents($pipes[2]);
-        @fclose($pipes[1]);
-        @fclose($pipes[2]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
 
         $deadline = time() + $timeoutSec;
+        $timedOut = false;
         while (time() < $deadline) {
             $status = @proc_get_status($process);
             if ($status && !$status['running']) {
                 $lastExitCode = $status['exitcode'];
+                $stdout = @stream_get_contents($pipes[1]);
+                $stderr = @stream_get_contents($pipes[2]);
+                @fclose($pipes[1]);
+                @fclose($pipes[2]);
                 $combined = trim((string)$stdout . "\n" . (string)$stderr);
                 $lastOutput = $combined !== '' ? explode("\n", $combined) : [];
                 @proc_close($process);
@@ -326,8 +333,11 @@ function runExiftoolWithRetry(string $cmd): array
             }
             usleep(50000);
         }
-
         if (time() >= $deadline) {
+            $timedOut = true;
+        }
+
+        if ($timedOut) {
             $sigTerm = defined('SIGTERM') ? SIGTERM : 15;
             $sigKill = defined('SIGKILL') ? SIGKILL : 9;
             @proc_terminate($process, $sigTerm);
@@ -336,6 +346,8 @@ function runExiftoolWithRetry(string $cmd): array
             if ($status && $status['running']) {
                 @proc_terminate($process, $sigKill);
             }
+            @fclose($pipes[1]);
+            @fclose($pipes[2]);
             @proc_close($process);
             $lastExitCode = -1;
             $lastOutput = ['exiftool timeout'];
@@ -513,6 +525,8 @@ function ensureExifTimestamp(string $filePath, string $timezone = 'UTC'): bool {
  * @return bool True if image timestamp is reliable and GPS fields added
  */
 function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, string $timezone = 'UTC'): bool {
+    $context = ['airport_id' => $airportId, 'cam_index' => $camIndex, 'source_type' => 'push'];
+
     // Get server file modification time (UTC, set on upload completion)
     $mtime = filemtime($filePath);
     if ($mtime === false) {
@@ -572,7 +586,6 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
         ]);
         // Camera writes UTC - convert DateTimeOriginal to local time and set correct offset
         // Pass preserveOriginalDateTime=false to rewrite DateTimeOriginal to local time
-        $context = ['airport_id' => $airportId, 'cam_index' => $camIndex, 'source_type' => 'push'];
         if (!addExifTimestamp($filePath, $exifTimestamp, $timezone, false, $context)) {
             logWebcamRejection($airportId, $camIndex, 'exif_rewrite_failed',
                 'exiftool failed to add GPS fields', $filePath);
@@ -610,10 +623,9 @@ function normalizeExifToUtc(string $filePath, string $airportId, int $camIndex, 
                         $imageAge / 3600, $maxAge / 3600), $filePath);
                 return false;
             }
-            
+
             // Add GPS UTC fields, preserve original DateTimeOriginal (local time)
             // The GPS fields will be used by client for verification, not DateTimeOriginal
-            $context = ['airport_id' => $airportId, 'cam_index' => $camIndex, 'source_type' => 'push'];
             if (!addExifTimestamp($filePath, $utcTimestamp, $timezone, true, $context)) {
                 aviationwx_log('error', 'Failed to add GPS UTC fields', [
                     'file' => basename($filePath),
@@ -858,13 +870,14 @@ function addAviationWxMetadata(string $filePath, string $airportId, int $camInde
 
 /**
  * Copy EXIF metadata from source to destination image
- * 
+ *
  * Used when generating WebP from source JPEG.
  * Copies all EXIF/IPTC/XMP metadata to maintain clean dataset.
- * 
+ * Uses runExiftoolWithRetry for timeout and retry consistency with addExifTimestamp.
+ *
  * @param string $sourceFile Source image with EXIF
  * @param string $destFile Destination image (must already exist)
- * @return bool True on success
+ * @return bool True on success, false on exiftool failure
  */
 function copyExifMetadata(string $sourceFile, string $destFile): bool {
     // In test mode without exiftool, simulate success
@@ -874,23 +887,23 @@ function copyExifMetadata(string $sourceFile, string $destFile): bool {
             return true; // Simulate success in test mode
         }
     }
-    
+
     requireExiftool();
-    
+
     if (!file_exists($sourceFile)) {
         aviationwx_log('error', 'copyExifMetadata: source file not found', [
             'source' => $sourceFile
         ], 'app');
         return false;
     }
-    
+
     if (!file_exists($destFile)) {
         aviationwx_log('error', 'copyExifMetadata: destination file not found', [
             'dest' => $destFile
         ], 'app');
         return false;
     }
-    
+
     // Copy all metadata from source to destination
     // -overwrite_original: Don't create backup files
     // -q: Quiet mode
@@ -901,22 +914,24 @@ function copyExifMetadata(string $sourceFile, string $destFile): bool {
         escapeshellarg($sourceFile),
         escapeshellarg($destFile)
     );
-    
-    exec($cmd, $output, $exitCode);
-    
-    if ($exitCode !== 0) {
+
+    $result = runExiftoolWithRetry($cmd);
+
+    if (!$result['success']) {
         $logContext = [
             'source' => basename($sourceFile),
             'dest' => basename($destFile),
-            'exit_code' => $exitCode,
+            'exit_code' => $result['exit_code'],
+            'output' => implode("\n", array_slice($result['output'], 0, 5)),
         ];
         if (strtolower(pathinfo($destFile, PATHINFO_EXTENSION)) === 'webp') {
             $logContext['exiftool_version'] = getExiftoolVersion() ?? 'unknown';
             $logContext['note'] = 'WebP EXIF copy may fail with older exiftool';
         }
-        aviationwx_log('warning', 'copyExifMetadata: exiftool returned non-zero', $logContext, 'app');
+        aviationwx_log('warning', 'copyExifMetadata: exiftool failed', $logContext, 'app');
+        return false;
     }
-    
+
     return true;
 }
 

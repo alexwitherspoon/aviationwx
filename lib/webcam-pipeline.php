@@ -259,6 +259,7 @@ class ProcessingPipeline
             return ['success' => false, 'reason' => 'file_not_readable'];
         }
 
+        // @: file can be deleted between existence check and size read (race)
         $size = @filesize($imagePath);
         if ($size === false || $size < 100) {
             return ['success' => false, 'reason' => 'file_too_small'];

@@ -1100,6 +1100,13 @@ The webcam processing pipeline uses three main components:
 - Critical for accurate "Last Updated" display on frontend
 - Function: `copyExifMetadata($source, $dest)` in `lib/exif-utils.php`
 
+**Filename Timestamp Parsing** (for server-generated images without EXIF):
+- IP cameras often embed timestamps in filenames (e.g., `20251229210421.jpg`)
+- `parseFilenameTimestamp()` in `lib/exif-utils.php` extracts and validates these
+- **12-hour mtime window**: Extracted timestamp must be within ±12h of file mtime (`FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS`)
+- Reduces false positives from product IDs, serial numbers, or coincidental digit sequences
+- Covers timezone differences and typical upload delays; override via `define()` before `constants.php` loads if needed
+
 ### Format Generation
 
 **Multi-Format Support**:

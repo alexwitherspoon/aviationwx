@@ -1169,8 +1169,13 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
             // Rename staging file to timestamp-based file
             if (@rename($stagingFile, $timestampFile)) {
                 // Copy EXIF metadata from source format to generated format (ensures timestamps are preserved)
-                if (file_exists($sourceTimestampFile)) {
-                    copyExifMetadata($sourceTimestampFile, $timestampFile);
+                if (file_exists($sourceTimestampFile) && !copyExifMetadata($sourceTimestampFile, $timestampFile)) {
+                    aviationwx_log('warning', 'webcam format promotion: EXIF copy failed', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'format' => $format,
+                        'file' => basename($timestampFile)
+                    ], 'app');
                 }
                 
                 // Create/update symlink
@@ -1490,8 +1495,22 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
             }
             // Copy EXIF metadata from original to variant (ensures timestamps are preserved)
             if (file_exists($originalPath)) {
-                copyExifMetadata($originalPath, $finalPath);
-                
+                if (!copyExifMetadata($originalPath, $finalPath)) {
+                    aviationwx_log('warning', 'generateVariantsFromOriginal: EXIF copy failed for variant', [
+                        'airport' => $airportId,
+                        'cam' => $camIndex,
+                        'variant' => $height . '_' . $format,
+                        'file' => basename($finalPath),
+                        'note' => 'exiftool failed - variant will fail browser verification'
+                    ], 'app');
+                    require_once __DIR__ . '/webcam-quarantine.php';
+                    quarantineImage($finalPath, $airportId, $camIndex, 'variant_missing_exif', [
+                        'variant' => $height . '_' . $format,
+                        'file' => basename($finalPath)
+                    ]);
+                    continue;
+                }
+
                 // Defensive validation: Verify EXIF was copied successfully
                 // This is critical for browser-side verification
                 if (!hasExifTimestamp($finalPath)) {

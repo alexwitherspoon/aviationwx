@@ -634,7 +634,7 @@ class ExifPipelineCriticalTest extends TestCase
             @chmod($testDir, $origDirMode & 0777);
         }
 
-        $this->assertTrue($result, 'copyExifMetadata returns true even on exiftool failure (legacy)');
+        $this->assertFalse($result, 'copyExifMetadata returns false when exiftool fails');
         $this->assertNotNull(getExiftoolVersion(), 'exiftool version must be available for log context');
     }
 }
