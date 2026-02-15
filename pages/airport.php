@@ -1374,18 +1374,24 @@ if ($themeCookie === 'dark') {
         <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
         <script>
         (function() {
-            var handled = new Set();
+            const handled = new Set();
             window.handleWebcamError = function(camIndex, img) {
-                var key = camIndex + '-' + (img.src || '');
-                if (handled.has(key) || (img.src && img.src.includes('cam=999'))) return;
+                const key = camIndex + '-' + (img.src || '');
+                if (handled.has(key) || (img.src && img.src.includes('cam=999'))) {
+                    return;
+                }
                 handled.add(key);
-                var airportId = (typeof AIRPORT_ID !== 'undefined') ? AIRPORT_ID : '';
-                var protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
-                var placeholderUrl = protocol + '//' + window.location.host + '/webcam.php?id=' + encodeURIComponent(airportId) + '&cam=999';
+                const airportId = (typeof AIRPORT_ID !== 'undefined') ? AIRPORT_ID : '';
+                const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                const placeholderUrl = protocol + '//' + window.location.host + '/webcam.php?id=' + encodeURIComponent(airportId) + '&cam=999';
                 img.onerror = null;
-                var newImg = img.cloneNode(false);
-                if (img.id) newImg.id = img.id;
-                if (img.className) newImg.className = img.className;
+                const newImg = img.cloneNode(false);
+                if (img.id) {
+                    newImg.id = img.id;
+                }
+                if (img.className) {
+                    newImg.className = img.className;
+                }
                 if (img.parentNode) {
                     img.parentNode.replaceChild(newImg, img);
                     newImg.src = placeholderUrl;
