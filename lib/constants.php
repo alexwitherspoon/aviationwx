@@ -619,6 +619,23 @@ if (!defined('WEBCAM_EXIF_MAX_VALID_YEAR')) {
     define('WEBCAM_EXIF_MAX_VALID_YEAR', 2100); // After 2100 = garbage/corrupted EXIF
 }
 
+// exiftool execution (safety-critical: retry transient failures, timeout prevents hang)
+if (!defined('EXIFTOOL_TIMEOUT_SECONDS')) {
+    define('EXIFTOOL_TIMEOUT_SECONDS', 10);
+}
+if (!defined('EXIFTOOL_MAX_RETRIES')) {
+    define('EXIFTOOL_MAX_RETRIES', 3);
+}
+if (!defined('EXIFTOOL_RETRY_DELAY_MS')) {
+    define('EXIFTOOL_RETRY_DELAY_MS', 100);
+}
+
+// Filename timestamp validation: mtime window (hours) for parseFilenameTimestamp
+// Tighter window reduces false positives from product IDs; ±12h covers timezone/upload delay
+if (!defined('FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS')) {
+    define('FILENAME_TIMESTAMP_MTIME_WINDOW_HOURS', 12);
+}
+
 // Climate bounds for weather data validation (Earth extremes + 10% margin)
 // Used to validate weather data quality and reject clearly invalid values
 // Temperature: -89.2°C to 56.7°C (Vostok Station, Antarctica to Death Valley, USA)
