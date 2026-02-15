@@ -1348,17 +1348,8 @@ jobs:
         run: |
           echo "Checking for Docker configuration file changes..."
           
-          # Get the previous commit SHA (if available)
-          # Note: github.event.before is only available for push events
-          # For workflow_run/workflow_dispatch, we'll use git to find the parent
-          PREV_SHA=""
-          if [ "${{ github.event_name }}" = "push" ]; then
-            PREV_SHA="${{ github.event.before }}"
-          else
-            # For workflow_run/workflow_dispatch, try to get parent from git
-            # This will be set if we have the previous commit info
-            PREV_SHA="${{ steps.previous-commit.outputs.previous_commit_sha }}"
-          fi
+          # workflow_run/workflow_dispatch only - github.event.before unavailable
+          PREV_SHA="${{ steps.previous-commit.outputs.previous_commit_sha }}"
           CURRENT_SHA="${{ steps.determine-sha.outputs.deploy_sha }}"
           
           # Docker config files that require image rebuild
