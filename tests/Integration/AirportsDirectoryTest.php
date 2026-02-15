@@ -215,5 +215,17 @@ class AirportsDirectoryTest extends TestCase
         $this->assertStringContainsString('openweathermap.org', strtolower($output), 'Should integrate OpenWeatherMap');
         $this->assertStringContainsString('clouds_new', $output, 'Should use clouds layer');
     }
+
+    /**
+     * Test safe storage pattern is present (handles SecurityError in iOS Private Browsing)
+     */
+    public function testSafeStoragePattern_IsPresent()
+    {
+        $output = $this->getAirportsPageContent();
+
+        $this->assertStringContainsString('safeStorageGet', $output, 'Should define safeStorageGet');
+        $this->assertStringContainsString('safeStorageSet', $output, 'Should define safeStorageSet');
+        $this->assertStringContainsString('try { return localStorage.getItem', $output, 'Should wrap getItem in try/catch');
+    }
 }
 

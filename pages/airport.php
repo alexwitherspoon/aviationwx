@@ -286,13 +286,13 @@ if ($themeCookie === 'dark') {
         echo '(async function() {' . "\n";
         echo '    "use strict";' . "\n";
         echo '    console.warn("[CacheCleanup] Clearing all caches for kspb stuck client");' . "\n";
-        echo '    ' . "\n";
-        echo '    // Prevent multiple cleanup attempts' . "\n";
-        echo '    if (sessionStorage.getItem("aviationwx-cleanup-in-progress")) {' . "\n";
-        echo '        console.log("[CacheCleanup] Already in progress, skipping");' . "\n";
-        echo '        return;' . "\n";
-        echo '    }' . "\n";
-        echo '    sessionStorage.setItem("aviationwx-cleanup-in-progress", Date.now().toString());' . "\n";
+        echo '    try {' . "\n";
+        echo '        if (sessionStorage.getItem("aviationwx-cleanup-in-progress")) {' . "\n";
+        echo '            console.log("[CacheCleanup] Already in progress, skipping");' . "\n";
+        echo '            return;' . "\n";
+        echo '        }' . "\n";
+        echo '        sessionStorage.setItem("aviationwx-cleanup-in-progress", Date.now().toString());' . "\n";
+        echo '    } catch (e) { console.warn("[CacheCleanup] sessionStorage unavailable:", e.message); return; }' . "\n";
         echo '    ' . "\n";
         echo '    try {' . "\n";
         echo '        // 1. Clear all Cache API caches' . "\n";
@@ -885,12 +885,16 @@ if ($themeCookie === 'dark') {
         'use strict';
         console.warn('[StuckClientCleanup] Triggered: <?= addslashes($stuckClientCleanupReason) ?>');
         
-        // Prevent cleanup loops
-        if (sessionStorage.getItem('aviationwx-cleanup-in-progress')) {
-            console.log('[StuckClientCleanup] Already in progress, skipping');
+        try {
+            if (sessionStorage.getItem('aviationwx-cleanup-in-progress')) {
+                console.log('[StuckClientCleanup] Already in progress, skipping');
+                return;
+            }
+            sessionStorage.setItem('aviationwx-cleanup-in-progress', Date.now().toString());
+        } catch (e) {
+            console.warn('[StuckClientCleanup] sessionStorage unavailable:', e.message);
             return;
         }
-        sessionStorage.setItem('aviationwx-cleanup-in-progress', Date.now().toString());
         
         (async function() {
             try {
@@ -941,13 +945,27 @@ if ($themeCookie === 'dark') {
          */
         (function() {
             'use strict';
-            
+
+            // localStorage/sessionStorage throw SecurityError in iOS Private Browsing
+            function safeStorageGet(key) {
+                try { return localStorage.getItem(key); } catch (e) { return null; }
+            }
+            function safeStorageSet(key, value) {
+                try { localStorage.setItem(key, value); } catch (e) { /* unavailable */ }
+            }
+            function safeSessionStorageGet(key) {
+                try { return sessionStorage.getItem(key); } catch (e) { return null; }
+            }
+            function safeSessionStorageSet(key, value) {
+                try { sessionStorage.setItem(key, value); } catch (e) { /* unavailable */ }
+            }
+
             const BUILD_TIMESTAMP = <?= $buildTimestamp ?>;
             const BUILD_HASH = '<?= $buildHash ?>';
             const MAX_NO_UPDATE_DAYS = <?= $maxNoUpdateDays ?>;
             const LAST_UPDATE_KEY = 'aviationwx-last-sw-update';
             const CLEANUP_IN_PROGRESS_KEY = 'aviationwx-cleanup-in-progress';
-            
+
             /**
              * Perform full cleanup - clear all caches, storage, and service workers
              * This is intentionally aggressive as it only triggers in rare stuck states
@@ -956,14 +974,12 @@ if ($themeCookie === 'dark') {
                 console.warn('[Version] Performing full cleanup. Reason:', reason);
                 
                 // Prevent cleanup loops - if we just did a cleanup, don't do another
-                const cleanupInProgress = sessionStorage.getItem(CLEANUP_IN_PROGRESS_KEY);
+                const cleanupInProgress = safeSessionStorageGet(CLEANUP_IN_PROGRESS_KEY);
                 if (cleanupInProgress) {
                     console.log('[Version] Cleanup already in progress, skipping');
                     return;
                 }
-                
-                // Mark cleanup as in progress (session-scoped to prevent loops)
-                sessionStorage.setItem(CLEANUP_IN_PROGRESS_KEY, Date.now().toString());
+                safeSessionStorageSet(CLEANUP_IN_PROGRESS_KEY, Date.now().toString());
                 
                 try {
                     // 1. Clear all Cache API caches
@@ -985,10 +1001,10 @@ if ($themeCookie === 'dark') {
                     
                     // 3. Clear sessionStorage (except cleanup flag)
                     try {
-                        const cleanupFlag = sessionStorage.getItem(CLEANUP_IN_PROGRESS_KEY);
+                        const cleanupFlag = safeSessionStorageGet(CLEANUP_IN_PROGRESS_KEY);
                         sessionStorage.clear();
                         if (cleanupFlag) {
-                            sessionStorage.setItem(CLEANUP_IN_PROGRESS_KEY, cleanupFlag);
+                            safeSessionStorageSet(CLEANUP_IN_PROGRESS_KEY, cleanupFlag);
                         }
                         console.log('[Version] Cleared sessionStorage');
                     } catch (e) {
@@ -1027,8 +1043,7 @@ if ($themeCookie === 'dark') {
                 const now = Date.now();
                 const maxAgeMs = MAX_NO_UPDATE_DAYS * 24 * 60 * 60 * 1000;
                 
-                // Get last SW update timestamp from localStorage
-                const lastUpdateStr = localStorage.getItem(LAST_UPDATE_KEY);
+                const lastUpdateStr = safeStorageGet(LAST_UPDATE_KEY);
                 
                 if (!lastUpdateStr) {
                     // No record of last update - this could be:
@@ -1044,15 +1059,13 @@ if ($themeCookie === 'dark') {
                         return `Build is ${Math.floor(buildAge / 86400000)} days old with no update record`;
                     }
                     
-                    // First visit or recent build - initialize tracking
-                    localStorage.setItem(LAST_UPDATE_KEY, now.toString());
+                    safeStorageSet(LAST_UPDATE_KEY, now.toString());
                     return null;
                 }
                 
                 const lastUpdate = parseInt(lastUpdateStr, 10);
                 if (isNaN(lastUpdate) || lastUpdate <= 0) {
-                    // Invalid timestamp - reset and continue
-                    localStorage.setItem(LAST_UPDATE_KEY, now.toString());
+                    safeStorageSet(LAST_UPDATE_KEY, now.toString());
                     return null;
                 }
                 
@@ -1127,7 +1140,7 @@ if ($themeCookie === 'dark') {
             function trackSwUpdates() {
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.addEventListener('controllerchange', () => {
-                        localStorage.setItem(LAST_UPDATE_KEY, Date.now().toString());
+                        safeStorageSet(LAST_UPDATE_KEY, Date.now().toString());
                         console.log('[Version] SW controller changed, updated last update timestamp');
                     });
                 }
@@ -1135,13 +1148,10 @@ if ($themeCookie === 'dark') {
             
             // Initialize version checking
             function init() {
-                // Skip if cleanup is in progress (we're about to reload)
-                if (sessionStorage.getItem(CLEANUP_IN_PROGRESS_KEY)) {
-                    // Clear the flag after reload completes
-                    sessionStorage.removeItem(CLEANUP_IN_PROGRESS_KEY);
+                if (safeSessionStorageGet(CLEANUP_IN_PROGRESS_KEY)) {
+                    try { sessionStorage.removeItem(CLEANUP_IN_PROGRESS_KEY); } catch (e) { /* unavailable */ }
                     console.log('[Version] Post-cleanup reload complete');
-                    // Initialize tracking fresh
-                    localStorage.setItem(LAST_UPDATE_KEY, Date.now().toString());
+                    safeStorageSet(LAST_UPDATE_KEY, Date.now().toString());
                     return;
                 }
                 
@@ -2643,6 +2653,17 @@ let currentWeatherData = null;
 // Cookie helper functions for cross-subdomain preference sharing
 // Hybrid approach: cookies (source of truth, cross-subdomain) + localStorage (fast cache)
 
+// localStorage/sessionStorage throw SecurityError in iOS Private Browsing, disabled storage
+function safeStorageGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function safeStorageSet(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* unavailable */ }
+}
+function safeSessionStorageGet(key) {
+    try { return sessionStorage.getItem(key); } catch (e) { return null; }
+}
+
 /**
  * Get cookie value by name
  * @param {string} name - Cookie name
@@ -2690,14 +2711,7 @@ function setCookie(name, value, days = 365) {
     cookieString += '; SameSite=Lax';
     
     document.cookie = cookieString;
-    
-    // Also update localStorage as cache
-    try {
-        localStorage.setItem(name, value);
-    } catch (e) {
-        // localStorage may be disabled or full - continue without cache
-        console.warn('[Preferences] Could not update localStorage cache:', e);
-    }
+    safeStorageSet(name, value);
 }
 
 /**
@@ -2714,15 +2728,10 @@ function syncPreferencesFromCookies() {
     
     preferences.forEach(pref => {
         const cookieValue = getCookie(pref);
-        const localValue = localStorage.getItem(pref);
-        
+        const localValue = safeStorageGet(pref);
+
         if (cookieValue) {
-            // Cookie exists - use it as source of truth, sync to localStorage
-            try {
-                localStorage.setItem(pref, cookieValue);
-            } catch {
-                // localStorage may be disabled - continue
-            }
+            safeStorageSet(pref, cookieValue);
         } else if (localValue) {
             // No cookie but localStorage exists - migrate to cookie
             setCookie(pref, localValue);
@@ -2735,22 +2744,16 @@ syncPreferencesFromCookies();
 
 // Time format preference (user cookie → airport config → global config → hardcoded default)
 function getTimeFormat() {
-    const format = getCookie('aviationwx_time_format') 
-        || localStorage.getItem('aviationwx_time_format')
+    const format = getCookie('aviationwx_time_format')
+        || safeStorageGet('aviationwx_time_format')
         || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.time_format)
         || '12hr';
     return format;
 }
 
 function setTimeFormat(format) {
-    // Set cookie (source of truth, cross-subdomain)
     setCookie('aviationwx_time_format', format);
-    // localStorage is updated by setCookie, but ensure it's set
-    try {
-        localStorage.setItem('aviationwx_time_format', format);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_time_format', format);
 }
 
 // Format time string (HH:MM or HH:MM:SS) based on preference
@@ -2786,7 +2789,7 @@ function formatTime(timeStr) {
 // Temperature unit preference (user cookie → airport config → global config → hardcoded default)
 function getTempUnit() {
     const unit = getCookie('aviationwx_temp_unit')
-        || localStorage.getItem('aviationwx_temp_unit')
+        || safeStorageGet('aviationwx_temp_unit')
         || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.temp_unit)
         || 'F';
     return unit;
@@ -2796,11 +2799,7 @@ function setTempUnit(unit) {
     // Set cookie (source of truth, cross-subdomain)
     setCookie('aviationwx_temp_unit', unit);
     // localStorage is updated by setCookie, but ensure it's set
-    try {
-        localStorage.setItem('aviationwx_temp_unit', unit);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_temp_unit', unit);
 }
 
 // Convert Celsius to Fahrenheit
@@ -2873,7 +2872,7 @@ function formatTempTimestamp(timestamp) {
 // Distance/altitude unit preference (user cookie → airport config → global config → hardcoded default)
 function getDistanceUnit() {
     const unit = getCookie('aviationwx_distance_unit')
-        || localStorage.getItem('aviationwx_distance_unit')
+        || safeStorageGet('aviationwx_distance_unit')
         || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.distance_unit)
         || 'ft';
     return unit;
@@ -2883,11 +2882,7 @@ function setDistanceUnit(unit) {
     // Set cookie (source of truth, cross-subdomain)
     setCookie('aviationwx_distance_unit', unit);
     // localStorage is updated by setCookie, but ensure it's set
-    try {
-        localStorage.setItem('aviationwx_distance_unit', unit);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_distance_unit', unit);
 }
 
 // Convert feet to meters
@@ -2926,7 +2921,7 @@ function formatRainfall(inches) {
 // Barometer unit preference (user cookie → airport config → global config → hardcoded default)
 function getBaroUnit() {
     const unit = getCookie('aviationwx_baro_unit')
-        || localStorage.getItem('aviationwx_baro_unit')
+        || safeStorageGet('aviationwx_baro_unit')
         || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.baro_unit)
         || 'inHg';
     return unit;
@@ -2936,11 +2931,7 @@ function setBaroUnit(unit) {
     // Set cookie (source of truth, cross-subdomain)
     setCookie('aviationwx_baro_unit', unit);
     // localStorage is updated by setCookie, but ensure it's set
-    try {
-        localStorage.setItem('aviationwx_baro_unit', unit);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_baro_unit', unit);
 }
 
 // Convert inHg to hPa (hectopascals/millibars)
@@ -3002,7 +2993,7 @@ function formatCeiling(ft) {
 // Wind speed unit preference (user cookie → airport config → global config → hardcoded default)
 function getWindSpeedUnit() {
     const unit = getCookie('aviationwx_wind_speed_unit')
-        || localStorage.getItem('aviationwx_wind_speed_unit')
+        || safeStorageGet('aviationwx_wind_speed_unit')
         || (typeof DEFAULT_PREFERENCES !== 'undefined' && DEFAULT_PREFERENCES.wind_speed_unit)
         || 'kts';
     return unit;
@@ -3012,11 +3003,7 @@ function setWindSpeedUnit(unit) {
     // Set cookie (source of truth, cross-subdomain)
     setCookie('aviationwx_wind_speed_unit', unit);
     // localStorage is updated by setCookie, but ensure it's set
-    try {
-        localStorage.setItem('aviationwx_wind_speed_unit', unit);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_wind_speed_unit', unit);
 }
 
 // Convert knots to miles per hour
@@ -3251,8 +3238,7 @@ var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
 
 // Theme modes: 'auto' (default, follows browser), 'day', 'dark' (night is time-based, not stored)
 function getThemePreference() {
-    // Try cookie first (source of truth), then localStorage (cache)
-    var pref = getCookie('aviationwx_theme') || localStorage.getItem('aviationwx_theme');
+    var pref = getCookie('aviationwx_theme') || safeStorageGet('aviationwx_theme');
     // Valid stored preferences: auto/day/dark/night
     // Night mode can now be stored when manually selected by user
     if (pref === 'auto' || pref === 'day' || pref === 'dark' || pref === 'night') {
@@ -3262,26 +3248,14 @@ function getThemePreference() {
 }
 
 function setThemePreference(value) {
-    // Set cookie (source of truth, cross-subdomain)
     setCookie('aviationwx_theme', value);
-    // localStorage is updated by setCookie, but ensure it's set
-    try {
-        localStorage.setItem('aviationwx_theme', value);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_theme', value);
 }
 
 function setThemeManualOverride() {
-    // Set manual override cookie to today's date (in airport's timezone)
-    // This disables auto mode until the next day
     var today = NIGHT_MODE_DATA && NIGHT_MODE_DATA.todayDate ? NIGHT_MODE_DATA.todayDate : new Date().toISOString().split('T')[0];
     setCookie('aviationwx_theme_override', today);
-    try {
-        localStorage.setItem('aviationwx_theme_override', today);
-    } catch (e) {
-        // localStorage may be disabled - continue
-    }
+    safeStorageSet('aviationwx_theme_override', today);
 }
 
 function getCurrentTheme() {
@@ -3380,10 +3354,10 @@ function getTodayInAirportTimezone() {
 
 function hasManualOverrideToday() {
     // Check both old and new cookie names for backwards compatibility
-    var override = getCookie('aviationwx_theme_override') 
-        || localStorage.getItem('aviationwx_theme_override')
-        || getCookie('aviationwx_night_override') 
-        || localStorage.getItem('aviationwx_night_override');
+    var override = getCookie('aviationwx_theme_override')
+        || safeStorageGet('aviationwx_theme_override')
+        || getCookie('aviationwx_night_override')
+        || safeStorageGet('aviationwx_night_override');
     if (!override) return false;
     var today = getTodayInAirportTimezone();
     return override === today;

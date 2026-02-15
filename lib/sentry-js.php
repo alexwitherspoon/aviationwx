@@ -108,6 +108,8 @@ function renderSentryJsInit(string $pageType = 'unknown'): void {
                     'NetworkError',
                     'Failed to fetch',
                     'Load failed',
+                    // localStorage/sessionStorage SecurityError (iOS Private Browsing, disabled storage)
+                    'The operation is insecure',
                 ],
                 
                 // Filter events before sending

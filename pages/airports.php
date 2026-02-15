@@ -1640,12 +1640,20 @@ $breadcrumbs = generateBreadcrumbSchema([
         var radarBtn = document.getElementById('radar-btn');
         var cloudsBtn = document.getElementById('clouds-btn');
         
+        // Safe localStorage access (throws SecurityError in iOS Private Browsing, disabled storage)
+        function safeStorageGet(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+        function safeStorageSet(key, value) {
+            try { localStorage.setItem(key, value); } catch (e) { /* unavailable */ }
+        }
+        
         // Determine default state based on screen size and saved preferences
         var isMobile = window.innerWidth <= 640;
         
         // Check saved preferences or use defaults (off on mobile, on on desktop)
-        var radarSavedState = localStorage.getItem('radarEnabled');
-        var cloudsSavedState = localStorage.getItem('cloudsEnabled');
+        var radarSavedState = safeStorageGet('radarEnabled');
+        var cloudsSavedState = safeStorageGet('cloudsEnabled');
         
         var radarEnabled = radarSavedState !== null ? radarSavedState === 'true' : !isMobile;
         var cloudsEnabled = cloudsSavedState !== null ? cloudsSavedState === 'true' : !isMobile;
@@ -1685,7 +1693,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             }
             
             // Save preference
-            localStorage.setItem('radarEnabled', radarEnabled);
+            safeStorageSet('radarEnabled', radarEnabled);
         });
         
         // Only add cloud button listener if cloud layer is available
@@ -1702,7 +1710,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 }
                 
                 // Save preference
-                localStorage.setItem('cloudsEnabled', cloudsEnabled);
+                safeStorageSet('cloudsEnabled', cloudsEnabled);
             });
         }
         
@@ -1734,7 +1742,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         // Determine default visibility based on screen size and saved preference
         var isMobile = window.innerWidth <= 640;
-        var savedPreference = localStorage.getItem('legendHidden');
+        var savedPreference = safeStorageGet('legendHidden');
         var legendHidden;
         
         if (savedPreference !== null) {
@@ -1760,7 +1768,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 legendToggleBtn.classList.toggle('active', !isHidden);
                 
                 // Save preference
-                localStorage.setItem('legendHidden', isHidden);
+                safeStorageSet('legendHidden', isHidden);
             });
         }
         
