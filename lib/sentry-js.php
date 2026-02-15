@@ -98,6 +98,8 @@ function renderSentryJsInit(string $pageType = 'unknown'): void {
                     'top.GLOBALS',
                     'chrome-extension://',
                     'moz-extension://',
+                    'runtime.sendMessage',
+                    'Tab not found',
                     // Third-party scripts
                     /fb_xd_fragment/,
                     /google-analytics/,

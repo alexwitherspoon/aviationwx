@@ -259,7 +259,7 @@ class ProcessingPipeline
             return ['success' => false, 'reason' => 'file_not_readable'];
         }
 
-        $size = filesize($imagePath);
+        $size = @filesize($imagePath);
         if ($size === false || $size < 100) {
             return ['success' => false, 'reason' => 'file_too_small'];
         }

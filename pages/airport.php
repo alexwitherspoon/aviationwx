@@ -1372,6 +1372,28 @@ if ($themeCookie === 'dark') {
         <?php endif; ?>
 
         <?php if (isset($airport['webcams']) && !empty($airport['webcams']) && count($airport['webcams']) > 0): ?>
+        <script>
+        (function() {
+            var handled = new Set();
+            window.handleWebcamError = function(camIndex, img) {
+                var key = camIndex + '-' + (img.src || '');
+                if (handled.has(key) || (img.src && img.src.includes('cam=999'))) return;
+                handled.add(key);
+                var airportId = (typeof AIRPORT_ID !== 'undefined') ? AIRPORT_ID : '';
+                var protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+                var placeholderUrl = protocol + '//' + window.location.host + '/webcam.php?id=' + encodeURIComponent(airportId) + '&cam=999';
+                img.onerror = null;
+                var newImg = img.cloneNode(false);
+                if (img.id) newImg.id = img.id;
+                if (img.className) newImg.className = img.className;
+                if (img.parentNode) {
+                    img.parentNode.replaceChild(newImg, img);
+                    newImg.src = placeholderUrl;
+                    handled.add(camIndex + '-' + placeholderUrl);
+                }
+            };
+        })();
+        </script>
         <!-- Webcams -->
         <section class="webcam-section">
             <div class="webcam-grid">
@@ -2417,7 +2439,9 @@ function debouncedWakeHandler(reason) {
 }
 
 // Setup wake/reconnect event listeners
+// Defer to next tick so weatherLastUpdated, CAM_LAST_FETCH, etc. are initialized (avoids TDZ)
 (function setupWakeRecovery() {
+    const init = () => {
     // Visibility change - tab becomes visible
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
@@ -2435,8 +2459,10 @@ function debouncedWakeHandler(reason) {
     window.addEventListener('focus', () => {
         debouncedWakeHandler('focus');
     });
-    
+
     console.log('[Recovery] Wake/reconnect handlers initialized');
+    };
+    setTimeout(init, 0);
 })();
 
 /**
@@ -3028,7 +3054,8 @@ function getWindSpeedUnitLabel() {
 function initTempUnitToggle() {
     const toggle = document.getElementById('temp-unit-toggle');
     const display = document.getElementById('temp-unit-display');
-    
+    if (!toggle || !display) return;
+
     function updateToggle() {
         const unit = getTempUnit();
         display.textContent = unit === 'C' ? '°C' : '°F';
@@ -3053,7 +3080,8 @@ function initTempUnitToggle() {
 function initDistanceUnitToggle() {
     const toggle = document.getElementById('distance-unit-toggle');
     const display = document.getElementById('distance-unit-display');
-    
+    if (!toggle || !display) return;
+
     function updateToggle() {
         const unit = getDistanceUnit();
         display.textContent = unit === 'm' ? 'm' : 'ft';
@@ -3117,7 +3145,8 @@ function initBaroUnitToggle() {
 function initTimeFormatToggle() {
     const toggle = document.getElementById('time-format-toggle');
     const display = document.getElementById('time-format-display');
-    
+    if (!toggle || !display) return;
+
     function updateToggle() {
         const format = getTimeFormat();
         display.textContent = format === '24hr' ? '24hr' : '12hr';
@@ -3357,8 +3386,7 @@ function hasManualOverrideToday() {
 function initThemeToggle() {
     var toggle = document.getElementById('night-mode-toggle');
     var icon = document.getElementById('night-mode-icon');
-    
-    if (!toggle) return;
+    if (!toggle || !icon) return;
     
     // Track current preference mode (auto/day/dark/night-visual)
     // This is separate from the visual theme applied to the page
@@ -3626,7 +3654,8 @@ function updateThemeToggleDisplay() {
 function initWindSpeedUnitToggle() {
     const toggle = document.getElementById('wind-speed-unit-toggle');
     const display = document.getElementById('wind-speed-unit-display');
-    
+    if (!toggle || !display) return;
+
     function updateToggle() {
         const unit = getWindSpeedUnit();
         display.textContent = getWindSpeedUnitLabel();
@@ -4931,9 +4960,17 @@ const WebcamPlayer = {
     selectedPeriod: null,              // Currently selected period in hours (null = all)
     actualSpanHours: 0,                // Actual time span of available frames
     PRELOAD_RADIUS: 10,                // Frames to preload around current position
+    _updateURLThrottle: null,         // Throttle: avoid history.replaceState rate limit (100/10s)
 
     // Update URL to reflect current state (for sharing)
+    // Throttled to avoid SecurityError when scrubbing timeline rapidly
     updateURL() {
+        const now = Date.now();
+        if (this._updateURLThrottle !== null && now - this._updateURLThrottle < 500) {
+            return;
+        }
+        this._updateURLThrottle = now;
+
         const params = new URLSearchParams(window.location.search);
         
         if (this.active && this.camIndex !== null && this.camIndex !== undefined) {
@@ -6939,6 +6976,7 @@ function isWebcamStale(camIndex) {
 }
 
 // Handle webcam image load errors - show placeholder image
+// Expose on window for inline onerror handlers (ensures availability before script fully executes)
 function handleWebcamError(camIndex, img) {
     // Prevent infinite loops - if we've already handled this error or it's a placeholder URL, stop
     const errorKey = `${camIndex}-${img.src}`;
@@ -6987,6 +7025,7 @@ function handleWebcamError(camIndex, img) {
         webcamErrorHandled.add(`${camIndex}-${placeholderUrl}`);
     }
 }
+window.handleWebcamError = handleWebcamError;
 
 /**
  * Setup webcam refresh using the timer worker

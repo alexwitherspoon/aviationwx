@@ -93,10 +93,14 @@ function checkSystemHealth(): array {
                     if ($files) {
                         foreach ($files as $file) {
                             // Skip symlinks to avoid double-counting
-                            if (!is_link($file)) {
+                            if (!is_link($file) && file_exists($file)) {
+                                $size = @filesize($file);
+                                $mtime = @filemtime($file);
+                                if ($size === false || $mtime === false) {
+                                    continue;
+                                }
                                 $webcamImageCount++;
-                                $webcamSizeBytes += filesize($file);
-                                $mtime = filemtime($file);
+                                $webcamSizeBytes += $size;
                                 if ($mtime > $latestCacheMtime) {
                                     $latestCacheMtime = $mtime;
                                 }
@@ -1023,11 +1027,15 @@ function checkAirportHealth(string $airportId, array $airport): array {
                 $files = glob($camDir . '/*.{jpg,webp}', GLOB_BRACE);
                 if ($files) {
                     foreach ($files as $file) {
-                        // Skip symlinks to avoid double-counting
-                        if (!is_link($file)) {
+                        // Skip symlinks to avoid double-counting; skip missing (staging files can be deleted mid-scan)
+                        if (!is_link($file) && file_exists($file)) {
+                            $size = @filesize($file);
+                            $mtime = @filemtime($file);
+                            if ($size === false || $mtime === false) {
+                                continue;
+                            }
                             $airportCacheStats['total_images']++;
-                            $airportCacheStats['total_size_bytes'] += filesize($file);
-                            $mtime = filemtime($file);
+                            $airportCacheStats['total_size_bytes'] += $size;
                             
                             if ($airportCacheStats['oldest_image_time'] === 0 || $mtime < $airportCacheStats['oldest_image_time']) {
                                 $airportCacheStats['oldest_image_time'] = $mtime;
