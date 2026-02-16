@@ -80,8 +80,15 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
     // Aggregate using the new aggregator
     // Aggregator now uses failclosed threshold (3 hours) for all sources
     // Staleness indicators (warning/error) are applied later during display
+    // localAirportIcao enables local vs neighboring METAR: local measurements override neighboring
+    $localAirportIcao = $airport['icao'] ?? null;
+    if (is_string($localAirportIcao)) {
+        $localAirportIcao = strtoupper(trim($localAirportIcao));
+    } else {
+        $localAirportIcao = null;
+    }
     $aggregator = new WeatherAggregator();
-    $result = $aggregator->aggregate($snapshots);
+    $result = $aggregator->aggregate($snapshots, null, $localAirportIcao);
     
     // Validate and fix pressure if it's clearly in wrong units
     // Normal pressure range is 28-32 inHg. Values > 100 indicate unit conversion issues.
@@ -295,7 +302,7 @@ function parseSourceResponse(array $source, string $response, array $airport): ?
         'weatherlink_v2' => WeatherLinkV2Adapter::parseToSnapshot($response, $source),
         'weatherlink_v1' => WeatherLinkV1Adapter::parseToSnapshot($response, $source),
         'pwsweather' => PWSWeatherAdapter::parseToSnapshot($response, $source),
-        'metar' => MetarAdapter::parseToSnapshot($response, $airport),
+        'metar' => MetarAdapter::parseToSnapshot($response, $airport, $source),
         'nws' => NwsApiAdapter::parseToSnapshot($response, $source),
         'aviationwx_api' => AviationWXAPIAdapter::parseResponse($response, $source),
         'awosnet' => AwosnetAdapter::parseToSnapshot($response, $source),

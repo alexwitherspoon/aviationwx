@@ -31,11 +31,17 @@ class WeatherAggregatorTest extends TestCase {
     
     /**
      * Helper to create a snapshot with specified fields
+     *
+     * @param string $source Source identifier (e.g., 'tempest', 'metar')
+     * @param array $fields Field values keyed by name
+     * @param int|null $obsTime Observation timestamp
+     * @param string|null $metarStationId For METAR source: station ICAO (e.g., KSPB). Null = not METAR or unknown.
      */
     private function createSnapshot(
         string $source,
         array $fields,
-        ?int $obsTime = null
+        ?int $obsTime = null,
+        ?string $metarStationId = null
     ): WeatherSnapshot {
         $obsTime = $obsTime ?? $this->now;
         
@@ -76,7 +82,8 @@ class WeatherAggregatorTest extends TestCase {
                 ? WeatherReading::from($fields['cloud_cover'], $source, $obsTime)
                 : WeatherReading::null($source),
             rawMetar: $fields['raw_metar'] ?? null,
-            isValid: true
+            isValid: true,
+            metarStationId: $metarStationId
         );
     }
     
@@ -337,6 +344,130 @@ class WeatherAggregatorTest extends TestCase {
         // All fields should be null (fail closed)
         $this->assertNull($result['temperature']);
         $this->assertEmpty($result['_field_source_map']);
+    }
+
+    /**
+     * Local wind overrides neighboring METAR wind even when METAR is fresher.
+     *
+     * Safety: Wind at the airport must come from on-site sensors when available.
+     * Neighboring METAR (different station) must not override local measurements.
+     */
+    public function testLocalWindOverridesNeighboringMetar_EvenWhenMetarFresher(): void {
+        $localTime = $this->now - 600; // 10 min ago - local is older
+        $local = $this->createSnapshot('tempest', [
+            'wind_speed' => 8,
+            'wind_direction' => 270,
+            'gust_speed' => 12,
+            'temperature' => 18.0,
+        ], $localTime);
+
+        $metarTime = $this->now - 120; // 2 min ago - neighboring METAR is fresher
+        $neighboringMetar = $this->createSnapshot('metar', [
+            'wind_speed' => 15,
+            'wind_direction' => 180,
+            'gust_speed' => 20,
+            'temperature' => 17.0,
+            'visibility' => 10,
+            'ceiling' => 3500,
+            'cloud_cover' => 'BKN',
+        ], $metarTime, 'KVUO'); // Neighboring station, not KSPB
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$local, $neighboringMetar], null, 'KSPB');
+
+        $this->assertEquals(8, $result['wind_speed'], 'Local wind must override neighboring METAR');
+        $this->assertEquals(270, $result['wind_direction']);
+        $this->assertEquals(12, $result['gust_speed']);
+        $this->assertEquals('tempest', $result['_field_source_map']['wind_speed']);
+
+        $this->assertEquals(18.0, $result['temperature'], 'Local temp must override neighboring METAR');
+        $this->assertEquals('tempest', $result['_field_source_map']['temperature']);
+
+        // Aviation fields: neighboring METAR can fill in (local doesn't have them)
+        $this->assertEquals(10, $result['visibility']);
+        $this->assertEquals(3500, $result['ceiling']);
+        $this->assertEquals('metar', $result['_field_source_map']['visibility']);
+    }
+
+    /**
+     * Neighboring METAR fills in missing local fields when local has no data.
+     */
+    public function testNeighboringMetarFillsInMissingFields_WhenLocalHasNoData(): void {
+        $local = $this->createSnapshot('tempest', [
+            'temperature' => 20.5,
+            'wind_speed' => 10,
+            'wind_direction' => 270,
+            // No visibility, ceiling, cloud_cover
+        ]);
+
+        $neighboringMetar = $this->createSnapshot('metar', [
+            'visibility' => 6,
+            'ceiling' => 2500,
+            'cloud_cover' => 'OVC',
+            'wind_speed' => 8,
+            'wind_direction' => 180,
+        ], $this->now - 300, 'KVUO');
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$local, $neighboringMetar], null, 'KSPB');
+
+        $this->assertEquals(10, $result['wind_speed'], 'Local wind must be used');
+        $this->assertEquals(270, $result['wind_direction']);
+        $this->assertEquals(20.5, $result['temperature']);
+
+        $this->assertEquals(6, $result['visibility'], 'Neighboring METAR fills visibility');
+        $this->assertEquals(2500, $result['ceiling']);
+        $this->assertEquals('OVC', $result['cloud_cover']);
+        $this->assertEquals('metar', $result['_field_source_map']['visibility']);
+    }
+
+    /**
+     * Local METAR (same station as airport) - freshest wins, no local override.
+     */
+    public function testLocalMetar_SameStation_FreshestWins(): void {
+        $localTime = $this->now - 600;
+        $local = $this->createSnapshot('tempest', [
+            'wind_speed' => 8,
+            'wind_direction' => 270,
+            'temperature' => 18.0,
+        ], $localTime);
+
+        $metarTime = $this->now - 120;
+        $localMetar = $this->createSnapshot('metar', [
+            'wind_speed' => 12,
+            'wind_direction' => 180,
+            'temperature' => 17.5,
+        ], $metarTime, 'KSPB'); // Same station as airport
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$local, $localMetar], null, 'KSPB');
+
+        $this->assertEquals(12, $result['wind_speed'], 'Local METAR (same station) fresher wins');
+        $this->assertEquals(17.5, $result['temperature']);
+        $this->assertEquals('metar', $result['_field_source_map']['wind_speed']);
+    }
+
+    /**
+     * When localAirportIcao is null, preserve existing freshness-based behavior.
+     */
+    public function testNullLocalAirportIcao_PreservesFreshnessBehavior(): void {
+        $localTime = $this->now - 600;
+        $local = $this->createSnapshot('tempest', [
+            'wind_speed' => 8,
+            'wind_direction' => 270,
+        ], $localTime);
+
+        $metarTime = $this->now - 120;
+        $metar = $this->createSnapshot('metar', [
+            'wind_speed' => 12,
+            'wind_direction' => 180,
+        ], $metarTime, 'KVUO');
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$local, $metar], null, null);
+
+        $this->assertEquals(12, $result['wind_speed'], 'Without localAirportIcao, freshest wins');
+        $this->assertEquals('metar', $result['_field_source_map']['wind_speed']);
     }
 }
 

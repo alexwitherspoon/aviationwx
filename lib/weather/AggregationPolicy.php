@@ -54,6 +54,26 @@ class AggregationPolicy {
         'pressure',
         'precip_accum',
     ];
+
+    /**
+     * Local fields: prefer local source over neighboring METAR.
+     *
+     * Wind, temperature, humidity, etc. at the airport should come from
+     * on-site sensors when available. Neighboring METAR (different station)
+     * may fill in missing fields but must not override local measurements.
+     *
+     * @see docs/DATA_FLOW.md Local vs Neighboring METAR
+     */
+    public const LOCAL_FIELDS = [
+        'wind_speed',
+        'wind_direction',
+        'gust_speed',
+        'temperature',
+        'dewpoint',
+        'humidity',
+        'pressure',
+        'precip_accum',
+    ];
     
     /**
      * All weather fields we track

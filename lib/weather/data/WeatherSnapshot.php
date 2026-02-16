@@ -61,12 +61,17 @@ class WeatherSnapshot {
     
     /** @var string|null Raw METAR string (for METAR source only) */
     public readonly ?string $rawMetar;
-    
+
+    /** @var string|null METAR station ICAO (e.g., KSPB). Set only for metar source. Used to detect neighboring vs local. */
+    public readonly ?string $metarStationId;
+
     /** @var bool Whether this snapshot was successfully parsed */
     public readonly bool $isValid;
-    
+
     /**
      * Create a new WeatherSnapshot
+     *
+     * @param string|null $metarStationId For METAR source: station ICAO. Null for non-METAR or when unknown.
      */
     public function __construct(
         string $source,
@@ -81,7 +86,8 @@ class WeatherSnapshot {
         WeatherReading $ceiling,
         WeatherReading $cloudCover,
         ?string $rawMetar = null,
-        bool $isValid = true
+        bool $isValid = true,
+        ?string $metarStationId = null
     ) {
         $this->source = $source;
         $this->fetchTime = $fetchTime;
@@ -96,6 +102,7 @@ class WeatherSnapshot {
         $this->cloudCover = $cloudCover;
         $this->rawMetar = $rawMetar;
         $this->isValid = $isValid;
+        $this->metarStationId = $metarStationId;
     }
     
     /**
@@ -119,7 +126,8 @@ class WeatherSnapshot {
             ceiling: WeatherReading::null($source),
             cloudCover: WeatherReading::null($source),
             rawMetar: null,
-            isValid: false
+            isValid: false,
+            metarStationId: null
         );
     }
     

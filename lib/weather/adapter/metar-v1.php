@@ -141,7 +141,7 @@ class MetarAdapter {
     
     /**
      * Parse API response into a WeatherSnapshot
-     * 
+     *
      * Units returned:
      * - Temperature/Dewpoint: Celsius
      * - Humidity: Percent
@@ -150,16 +150,23 @@ class MetarAdapter {
      * - Wind: knots
      * - Visibility: statute miles
      * - Ceiling: feet AGL
-     * 
+     *
      * @param string $response Raw API response
      * @param array $airport Airport configuration
+     * @param array $sourceConfig Source config with station_id (for metarStationId)
      * @return WeatherSnapshot|null
      */
-    public static function parseToSnapshot(string $response, array $airport = []): ?WeatherSnapshot {
-        // Use existing parser
+    public static function parseToSnapshot(string $response, array $airport = [], array $sourceConfig = []): ?WeatherSnapshot {
         $parsed = parseMETARResponse($response, $airport);
         if ($parsed === null) {
             return WeatherSnapshot::empty(self::SOURCE_TYPE);
+        }
+
+        $metarStationId = $sourceConfig['station_id'] ?? null;
+        if (is_string($metarStationId)) {
+            $metarStationId = strtoupper(trim($metarStationId));
+        } else {
+            $metarStationId = null;
         }
         
         $obsTime = $parsed['obs_time'] ?? time();
@@ -195,7 +202,8 @@ class MetarAdapter {
             ceiling: WeatherReading::feet($parsed['ceiling'], $source, $obsTime),
             cloudCover: WeatherReading::text($parsed['cloud_cover'], $source, $obsTime),
             rawMetar: $airport['rawOb'] ?? null,
-            isValid: true
+            isValid: true,
+            metarStationId: $metarStationId
         );
     }
 }

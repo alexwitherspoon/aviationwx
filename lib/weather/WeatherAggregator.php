@@ -39,32 +39,38 @@ class WeatherAggregator {
     
     /**
      * Aggregate weather data from multiple sources
-     * 
+     *
      * Sources should be provided in preference order (first = most preferred).
      * The aggregator will select the best data from each source based on
      * freshness and completeness.
-     * 
+     *
+     * Local vs neighboring METAR: For LOCAL_FIELDS (wind, temp, humidity, etc.),
+     * local sources (on-site sensors or METAR from same station) always override
+     * neighboring METAR when both have valid data. Neighboring METAR may fill in
+     * missing fields (e.g. visibility, ceiling) but never overrides local measurements.
+     *
      * During aggregation, we accept any data < 3 hours old (failclosed threshold).
      * Staleness indicators (warning/error) are applied later during display.
-     * 
+     *
      * @param array<WeatherSnapshot> $snapshots Snapshots in preference order
      * @param array<string, int>|null $maxAges Optional per-source max age overrides (source => seconds)
+     * @param string|null $localAirportIcao Airport ICAO (e.g. KSPB) for local vs neighboring METAR detection
      * @return array Aggregated weather data with attribution
      */
-    public function aggregate(array $snapshots, ?array $maxAges = null): array {
+    public function aggregate(array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
         if (empty($snapshots)) {
             return $this->emptyResult();
         }
-        
+
         $result = [];
         $fieldObsTimeMap = [];
         $fieldSourceMap = [];
-        
+
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1: Select wind group (must be complete from single source)
         // ═══════════════════════════════════════════════════════════════════
-        
-        $windResult = $this->selectWindGroup($snapshots, $maxAges);
+
+        $windResult = $this->selectWindGroup($snapshots, $maxAges, $localAirportIcao);
         $result = array_merge($result, $windResult['fields']);
         $fieldObsTimeMap = array_merge($fieldObsTimeMap, $windResult['obs_times']);
         $fieldSourceMap = array_merge($fieldSourceMap, $windResult['sources']);
@@ -75,7 +81,7 @@ class WeatherAggregator {
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::METAR_PREFERRED_FIELDS as $fieldName) {
-            $reading = $this->selectMetarPreferredField($fieldName, $snapshots, $maxAges);
+            $reading = $this->selectMetarPreferredField($fieldName, $snapshots, $maxAges, $localAirportIcao);
             $result[$fieldName] = $reading->value;
             if ($reading->observationTime !== null) {
                 $fieldObsTimeMap[$fieldName] = $reading->observationTime;
@@ -94,7 +100,7 @@ class WeatherAggregator {
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::INDEPENDENT_FIELDS as $fieldName) {
-            $reading = $this->selectBestField($fieldName, $snapshots, $maxAges);
+            $reading = $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
             $result[$fieldName] = $reading->value;
             if ($reading->observationTime !== null) {
                 $fieldObsTimeMap[$fieldName] = $reading->observationTime;
@@ -133,41 +139,73 @@ class WeatherAggregator {
     }
     
     /**
+     * Check if snapshot is from a local source (on-site or same-station METAR).
+     *
+     * @param WeatherSnapshot $snapshot
+     * @param string|null $localAirportIcao Airport ICAO (e.g. KSPB)
+     * @return bool True if local; when localAirportIcao is null, all sources are treated as local
+     */
+    private function isLocalSource(WeatherSnapshot $snapshot, ?string $localAirportIcao): bool {
+        if ($localAirportIcao === null || $localAirportIcao === '') {
+            return true;
+        }
+        if ($snapshot->source !== 'metar') {
+            return true;
+        }
+        if ($snapshot->metarStationId === null) {
+            return true;
+        }
+        return strcasecmp($snapshot->metarStationId, $localAirportIcao) === 0;
+    }
+
+    /**
      * Select wind group from the source with the freshest complete data
-     * 
+     *
      * Wind must come as a complete group (speed + direction) from a single source.
      * We don't mix wind speed from one source with direction from another.
-     * Selects the source with the most recent observation time.
-     * 
+     * Local sources override neighboring METAR when both have valid wind.
+     *
      * @param array<WeatherSnapshot> $snapshots
      * @param array<string, int>|null $maxAges Optional per-source max age overrides
+     * @param string|null $localAirportIcao Airport ICAO for local vs neighboring detection
      * @return array{fields: array, obs_times: array, sources: array}
      */
-    private function selectWindGroup(array $snapshots, ?array $maxAges = null): array {
+    private function selectWindGroup(array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
         $bestWind = null;
         $bestObsTime = 0;
         $bestSource = null;
-        
+        $bestIsLocal = false;
+
         foreach ($snapshots as $snapshot) {
             if (!$snapshot->hasCompleteWind()) {
                 continue;
             }
-            
-            // Determine max age for this source
+
             $maxAge = $this->getMaxAgeForSource($snapshot->source, $maxAges);
-            
             if ($snapshot->wind->isStale($maxAge, $this->now)) {
                 continue;
             }
-            
-            // Get observation time for this wind group
+
             $obsTime = $snapshot->wind->speed->observationTime ?? 0;
-            
-            // Select freshest wind group
+            $isLocal = $this->isLocalSource($snapshot, $localAirportIcao);
+
+            // Prefer local over neighboring METAR when both have valid wind
+            if ($bestWind !== null && $bestIsLocal && !$isLocal) {
+                continue;
+            }
+            if ($bestWind !== null && !$bestIsLocal && $isLocal) {
+                $bestObsTime = $obsTime;
+                $bestWind = $snapshot->wind;
+                $bestSource = $snapshot->source;
+                $bestIsLocal = $isLocal;
+                continue;
+            }
+
             if ($obsTime > $bestObsTime) {
                 $bestObsTime = $obsTime;
                 $bestWind = $snapshot->wind;
                 $bestSource = $snapshot->source;
+                $bestIsLocal = $isLocal;
             }
         }
         
@@ -205,56 +243,68 @@ class WeatherAggregator {
     
     /**
      * Select a field typically provided by METAR (visibility, ceiling, cloud_cover)
-     * 
-     * Uses freshness-based selection. METAR is often the only source for 
-     * ceiling and cloud_cover, so it wins by default for those fields.
-     * For visibility, the freshest source is selected.
-     * 
+     *
+     * Local sources override neighboring METAR when both have valid data.
+     * Neighboring METAR may fill in when local has no data.
+     *
      * @param string $fieldName
      * @param array<WeatherSnapshot> $snapshots
      * @param array<string, int>|null $maxAges Optional per-source max age overrides
+     * @param string|null $localAirportIcao Airport ICAO for local vs neighboring detection
      * @return WeatherReading
      */
-    private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null): WeatherReading {
-        // Use same freshness-based selection as all other fields
-        return $this->selectBestField($fieldName, $snapshots, $maxAges);
+    private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): WeatherReading {
+        return $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
     }
     
     /**
-     * Select the best value for a field based on freshness
-     * 
-     * Returns the freshest valid, non-stale value from any source.
-     * 
+     * Select the best value for a field based on freshness and local vs neighboring.
+     *
+     * Local sources override neighboring METAR when both have valid data.
+     * When both are local or both neighboring, freshest wins.
+     *
      * @param string $fieldName
      * @param array<WeatherSnapshot> $snapshots
      * @param array<string, int>|null $maxAges Optional per-source max age overrides
+     * @param string|null $localAirportIcao Airport ICAO for local vs neighboring detection
      * @return WeatherReading
      */
-    private function selectBestField(string $fieldName, array $snapshots, ?array $maxAges = null): WeatherReading {
+    private function selectBestField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): WeatherReading {
         $bestReading = null;
         $bestObsTime = 0;
-        
+        $bestIsLocal = false;
+
         foreach ($snapshots as $snapshot) {
             $reading = $snapshot->getField($fieldName);
             if ($reading === null || !$reading->hasValue()) {
                 continue;
             }
-            
-            // Determine max age for this source
+
             $maxAge = $this->getMaxAgeForSource($snapshot->source, $maxAges);
-            
             if ($reading->isStale($maxAge, $this->now)) {
                 continue;
             }
-            
-            // Select freshest reading
+
             $obsTime = $reading->observationTime ?? 0;
+            $isLocal = $this->isLocalSource($snapshot, $localAirportIcao);
+
+            if ($bestReading !== null && $bestIsLocal && !$isLocal) {
+                continue;
+            }
+            if ($bestReading !== null && !$bestIsLocal && $isLocal) {
+                $bestObsTime = $obsTime;
+                $bestReading = $reading->withSource($snapshot->source);
+                $bestIsLocal = $isLocal;
+                continue;
+            }
+
             if ($obsTime > $bestObsTime) {
                 $bestObsTime = $obsTime;
                 $bestReading = $reading->withSource($snapshot->source);
+                $bestIsLocal = $isLocal;
             }
         }
-        
+
         return $bestReading ?? WeatherReading::null();
     }
     
