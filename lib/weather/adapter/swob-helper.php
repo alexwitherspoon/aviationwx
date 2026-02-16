@@ -9,6 +9,38 @@
  */
 
 /**
+ * Parse SWOB date_tm as UTC timestamp.
+ *
+ * Environment Canada SWOB-ML uses UTC per meteorological convention. If the
+ * string lacks a timezone indicator (Z or offset), we treat it as UTC to avoid
+ * server timezone affecting the result. Without this, strtotime() would use the
+ * server's default timezone and produce incorrect timestamps (e.g. 1 hour off).
+ *
+ * @param string $dateTm ISO 8601 datetime (e.g. 2026-02-16T01:00:00.000Z)
+ * @return int|null Unix timestamp or null on parse failure
+ */
+function parseSwobDateAsUtc(string $dateTm): ?int
+{
+    $dateTm = trim($dateTm);
+    if ($dateTm === '') {
+        return null;
+    }
+    // If already has UTC indicator, strtotime parses correctly
+    if (str_ends_with(strtoupper($dateTm), 'Z') || preg_match('/[+-]\d{2}:?\d{2}$/', $dateTm)) {
+        $ts = strtotime($dateTm);
+        return $ts !== false ? $ts : null;
+    }
+    // No timezone: treat as UTC (append Z) to avoid server timezone affecting result
+    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/i', $dateTm)) {
+        $ts = strtotime($dateTm . 'Z');
+        return $ts !== false ? $ts : null;
+    }
+    // Fallback for other formats
+    $ts = strtotime($dateTm . ' UTC');
+    return $ts !== false ? $ts : null;
+}
+
+/**
  * Parse SWOB-ML XML into a standard weather array.
  *
  * Extracts: air_temp, dwpt_temp, rel_hum, altmetr_setng, wind, visibility,
@@ -53,8 +85,7 @@ function parseSwobXmlToWeatherArray(string $xml): ?array
     $obsTime = null;
     $dateTm = $getValue('date_tm');
     if ($dateTm !== null && strtoupper($dateTm) !== 'MSNG') {
-        $ts = strtotime($dateTm);
-        $obsTime = $ts !== false ? $ts : null;
+        $obsTime = parseSwobDateAsUtc($dateTm);
     }
     $obsTime = $obsTime ?? time();
 

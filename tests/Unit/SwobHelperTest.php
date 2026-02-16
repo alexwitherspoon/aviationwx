@@ -119,6 +119,24 @@ class SwobHelperTest extends TestCase
     }
 
     /**
+     * date_tm without Z suffix is parsed as UTC (server timezone must not affect result).
+     * ECCC SWOB-ML uses UTC per Met-ML schema; strtotime() would use server TZ if no Z.
+     */
+    public function testParseSwobXmlToWeatherArray_DateTmWithoutZ_ParsedAsUtc(): void
+    {
+        $base = file_get_contents($this->fixturePath);
+        $xml = str_replace(
+            'value="2026-02-16T01:00:00.000Z"',
+            'value="2026-02-16T01:00:00.000"',
+            $base
+        );
+        $result = parseSwobXmlToWeatherArray($xml);
+        $this->assertNotNull($result);
+        $expectedTs = strtotime('2026-02-16T01:00:00.000Z');
+        $this->assertEquals($expectedTs, $result['obs_time'], 'date_tm without Z must be parsed as UTC');
+    }
+
+    /**
      * Cloud height m converted to feet
      */
     public function testParseSwobXmlToWeatherArray_CloudHeightM_ConvertedToFeet(): void
