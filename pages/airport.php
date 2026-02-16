@@ -1529,7 +1529,7 @@ if ($themeCookie === 'dark') {
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
-                        <span class="webcam-timestamp">Last updated: <span id="webcam-timestamp-warning-<?= $index ?>" class="webcam-timestamp-warning" style="display: none;">⚠️ </span><span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
+                        <span class="webcam-timestamp">Last updated: <span id="webcam-timestamp-clock-skew-<?= $index ?>" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="webcam-timestamp-warning-<?= $index ?>" class="webcam-timestamp-warning" style="display: none;">⚠️ </span><span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -1601,7 +1601,7 @@ if ($themeCookie === 'dark') {
                         <span id="wind-speed-unit-display">kts</span>
                     </button>
                 </div>
-                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="wind-last-updated">--</span></p>
+                <p style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="wind-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="wind-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="wind-last-updated">--</span></p>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: center;">
                 <div id="wind-visual" class="wind-visual-container">
@@ -1651,7 +1651,7 @@ if ($themeCookie === 'dark') {
                         </button>
                     </div>
                 </div>
-                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
+                <p class="weather-last-updated-text" style="font-size: 0.85rem; color: #555; margin: 0;">Last updated: <span id="weather-timestamp-clock-skew" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="weather-timestamp-warning" class="weather-timestamp-warning" style="display: none;">⚠️ </span><span id="weather-last-updated">--</span></p>
             </div>
             <div id="weather-data" class="weather-grid">
                 <div class="weather-item loading">
@@ -2080,6 +2080,12 @@ if ($themeCookie === 'dark') {
     <script>
 // Airport page JavaScript
 const AIRPORT_ID = '<?= $airportId ?>';
+const SERVER_TIME_UTC = <?= time() ?>; // For client clock skew detection (5 min threshold)
+const CLIENT_CLOCK_SKEW_SECONDS = 300; // 5 min - if client differs from server by more, show warning
+let clientClockSkewDetected = (function() {
+    const clientUtc = Math.floor(Date.now() / 1000);
+    return Math.abs(clientUtc - SERVER_TIME_UTC) > CLIENT_CLOCK_SKEW_SECONDS;
+})();
 const AIRPORT_DATA = <?php
     // Defensive JSON encoding with error handling
     $airportJson = json_encode($airport, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -3709,6 +3715,19 @@ function updateWeatherTimestamp() {
             windEl.textContent = '--';
             return;
         }
+    
+    // When clock skew detected: show absolute observation time only (no relative - client time unreliable)
+    if (clientClockSkewDetected) {
+        const timeStr = formatObservationTimeForClockSkew(Math.floor(weatherLastUpdated.getTime() / 1000));
+        weatherEl.textContent = timeStr;
+        windEl.textContent = timeStr;
+        // Hide staleness warnings - we cannot compute them reliably when client clock is wrong
+        const weatherWarningEl = document.getElementById('weather-timestamp-warning');
+        const windWarningEl = document.getElementById('wind-timestamp-warning');
+        if (weatherWarningEl) weatherWarningEl.style.display = 'none';
+        if (windWarningEl) windWarningEl.style.display = 'none';
+        return;
+    }
     
     const now = new Date();
     const diffSeconds = Math.floor((now - weatherLastUpdated) / 1000);
@@ -6175,8 +6194,74 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+// Format observation time for display when clock skew detected (no relative time - client clock unreliable)
+// Always uses local/airport timezone; respects 12hr/24hr format preference
+function formatObservationTimeForClockSkew(timestamp) {
+    const ts = parseInt(timestamp, 10);
+    if (isNaN(ts) || ts <= 0) return '--';
+    const date = new Date(ts * 1000);
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || (typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC');
+    const timeFormat = getTimeFormat();
+    const tzAbbr = getTimezoneAbbreviation(date, timezone);
+    const timeOptions = {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: timeFormat === '12hr'
+    };
+    try {
+        const timeStr = date.toLocaleTimeString('en-US', timeOptions);
+        return tzAbbr ? timeStr + ' ' + tzAbbr : timeStr;
+    } catch (e) {
+        return '--';
+    }
+}
+
+// Show/hide clock skew indicators next to "Last updated" when client clock differs from server by >5 min
+function updateClockSkewIndicators() {
+    document.querySelectorAll('.timestamp-clock-skew').forEach(el => {
+        el.style.display = clientClockSkewDetected ? 'inline' : 'none';
+    });
+}
+
+// Re-check clock skew using server time (called periodically)
+function checkClockSkewFromServerTime(serverTimeUtc) {
+    const clientUtc = Math.floor(Date.now() / 1000);
+    const wasDetected = clientClockSkewDetected;
+    clientClockSkewDetected = Math.abs(clientUtc - serverTimeUtc) > CLIENT_CLOCK_SKEW_SECONDS;
+    if (wasDetected !== clientClockSkewDetected) {
+        updateClockSkewIndicators();
+        // Refresh timestamp displays (switch between relative and absolute time)
+        if (typeof updateWebcamTimestamps === 'function') updateWebcamTimestamps();
+        updateWeatherTimestamp();
+    }
+}
+
+// Fetch server time and re-check clock skew (allows detection over time, not just on load)
+async function fetchServerTimeAndCheckSkew() {
+    try {
+        const baseUrl = window.location.protocol + '//' + window.location.host;
+        const response = await fetch(baseUrl + '/api/time.php?_=' + Date.now(), { cache: 'no-store' });
+        if (response.ok) {
+            const data = await response.json();
+            const serverTime = data?.time;
+            // Sanity check: Unix timestamp should be in reasonable range (2020-2035)
+            if (typeof serverTime === 'number' && serverTime >= 1577836800 && serverTime <= 2040000000) {
+                checkClockSkewFromServerTime(serverTime);
+            }
+        }
+    } catch (e) {
+        // Silently ignore - network errors shouldn't affect UX; next interval will retry
+    }
+}
+
 // Check URL params on page load and open player if needed
 document.addEventListener('DOMContentLoaded', () => {
+    updateClockSkewIndicators();
+    // Re-check clock skew every 10 min (client clock may drift or be corrected)
+    const clockSkewCheckMs = 600000;
+    setInterval(fetchServerTimeAndCheckSkew, clockSkewCheckMs);
     const params = new URLSearchParams(window.location.search);
     const camParam = params.get('cam');
     
@@ -6301,6 +6386,20 @@ function updateTimestampDisplay(elem, timestamp) {
     if (isNaN(timestampNum) || timestampNum <= 0) {
         if (elem) {
             elem.textContent = '--';
+        }
+        return;
+    }
+    
+    // When clock skew detected: show absolute observation time only (no relative - client time unreliable)
+    if (clientClockSkewDetected) {
+        elem.textContent = formatObservationTimeForClockSkew(timestampNum);
+        elem.dataset.timestamp = timestampNum.toString();
+        const camIndex = lastCamIndexForElem(elem);
+        if (camIndex !== undefined) {
+            CAM_TS[camIndex] = timestampNum;
+            // Hide staleness warning - we cannot compute it reliably when client clock is wrong
+            const warningElem = document.getElementById(`webcam-timestamp-warning-${camIndex}`);
+            if (warningElem) warningElem.style.display = 'none';
         }
         return;
     }
