@@ -306,6 +306,12 @@ function getWeatherSourceInfo(string $sourceType): ?array {
                 'name' => 'Federated AviationWX',
                 'url' => null
             ];
+        case 'swob_auto':
+        case 'swob_man':
+            return [
+                'name' => 'Environment Canada (SWOB)',
+                'url' => 'https://dd.weather.gc.ca/'
+            ];
         default:
             return null;
     }

@@ -239,6 +239,27 @@
           "station_id": "KTEST"
         }
       ]
+    },
+    "cyav": {
+      "name": "Winnipeg/St. Andrews Airport",
+      "enabled": true,
+      "maintenance": false,
+      "icao": "CYAV",
+      "iata": null,
+      "faa": null,
+      "address": "Winnipeg, Manitoba",
+      "lat": 50.0564,
+      "lon": -97.0325,
+      "elevation_ft": 759,
+      "timezone": "America/Winnipeg",
+      "access_type": "public",
+      "tower_status": "non_towered",
+      "weather_sources": [
+        {
+          "type": "swob_auto",
+          "station_id": "CYAV"
+        }
+      ]
     }
   }
 }
