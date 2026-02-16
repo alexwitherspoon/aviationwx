@@ -437,6 +437,8 @@ All weather sources are configured in a unified `weather_sources` array. Sources
 | `synopticdata` | SynopticData API | Variable |
 | `nws` | NWS ASOS API (api.weather.gov) | ~5 minutes |
 | `awosnet` | AWOSnet (awosnet.com XML endpoint) | ~10 minutes |
+| `swob_auto` | Environment Canada SWOB-ML (automated stations) | ~5 minutes |
+| `swob_man` | Environment Canada SWOB-ML (manned stations) | ~5 minutes |
 | `metar` | Aviation Weather METAR | ~60 minutes |
 
 **Davis WeatherLink update intervals** (per [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions)): **Basic (free)** = most recent 15-minute record; **Pro (paid)** = most recent 5-minute record; **Pro+ (paid)** = most recent record (~1 minute). Historic data is only available on Pro/Pro+.
@@ -573,6 +575,34 @@ Fetches weather from AWOSnet data endpoint (awiAwosNet.php). The main page uses 
 ```
 
 The `station_id` is the AWOSnet station identifier used in the subdomain (e.g., `ks40` for http://ks40.awosnet.com). Use lowercase.
+
+### Environment Canada SWOB (Canadian Airports)
+
+Fetches weather from Environment Canada's SWOB-ML XML feed for Canadian airports. Use `swob_auto` for automated stations (NAV Canada AWOS) or `swob_man` for manned stations (NAV Canada HWOS). Most airports use one or the other, not both.
+
+**swob_auto** – Automated stations (e.g., CYAV Winnipeg/St. Andrews, CBBC Bella Bella):
+
+```json
+"weather_sources": [
+  {
+    "type": "swob_auto",
+    "station_id": "CYAV"
+  }
+]
+```
+
+**swob_man** – Manned stations (e.g., CYVR Vancouver, CYYZ Toronto, CYOW Ottawa):
+
+```json
+"weather_sources": [
+  {
+    "type": "swob_man",
+    "station_id": "CYVR"
+  }
+]
+```
+
+The `station_id` must be a 4-letter ICAO code (e.g., `CYAV`, `CYVR`). Case is normalized to uppercase.
 
 ### METAR
 

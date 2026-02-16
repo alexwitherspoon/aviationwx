@@ -98,7 +98,7 @@ aviationwx.org/
 
 - **Purpose**: Fetches and serves weather data as JSON API
 - **Key Features**:
-  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, PWSWeather, SynopticData, METAR)
+  - Supports multiple weather sources (Tempest, Ambient, WeatherLink, PWSWeather, SynopticData, METAR, SWOB for Canadian airports)
   - **Unified Fetcher** (default): Clean aggregation pipeline with predictable behavior
   - Parallel fetching via `curl_multi` for all sources
   - Field-level source tracking and observation times
