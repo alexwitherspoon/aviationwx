@@ -1979,6 +1979,63 @@ function getAviationRegionFromIcao(?string $icao): string {
 }
 
 /**
+ * Infer aviation region from full airport config (ICAO, FAA, coordinates, address).
+ *
+ * Fallback for airports without ICAO (e.g. 7S5 with FAA LID only). Uses:
+ * 1. ICAO if present
+ * 2. FAA LID (US-only identifier)
+ * 3. Coordinates (lat/lon bounding boxes for US, Canada, Australia)
+ * 4. Address (US state / Canadian province abbreviations)
+ *
+ * @param array $airport Airport config with icao, faa, lat, lon, address
+ * @return string 'US'|'CA'|'AU'|'default'
+ */
+function getAviationRegionFromAirport(array $airport): string {
+    $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+    if ($region !== 'default') {
+        return $region;
+    }
+
+    // FAA LID is US-only; presence strongly indicates US
+    if (!empty($airport['faa']) && is_string($airport['faa'])) {
+        return 'US';
+    }
+
+    // Coordinate-based fallback
+    $lat = isset($airport['lat']) ? (float) $airport['lat'] : null;
+    $lon = isset($airport['lon']) ? (float) $airport['lon'] : null;
+    if ($lat !== null && $lon !== null) {
+        if ($lat >= -44 && $lat <= -10 && $lon >= 113 && $lon <= 154) {
+            return 'AU'; // Australia
+        }
+        if ($lat >= 42 && $lat <= 84 && $lon >= -141 && $lon <= -52) {
+            if ($lon < -130 && $lat >= 51) {
+                return 'US'; // Alaska (west of 130°W)
+            }
+            return 'CA'; // Canada (east of Alaska)
+        }
+        if ($lat >= 17 && $lat <= 72 && $lon >= -180 && $lon <= -52) {
+            return 'US'; // Continental US, Hawaii, Puerto Rico, Guam, etc.
+        }
+    }
+
+    // Address fallback: US state or Canadian province abbreviations
+    $address = $airport['address'] ?? '';
+    if (is_string($address) && $address !== '') {
+        $usStates = 'AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR|VI|GU';
+        if (preg_match('/,\s*(' . $usStates . ')\s*(?:,|\d|$)/i', $address)) {
+            return 'US';
+        }
+        $caProvinces = 'AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT';
+        if (preg_match('/,\s*(' . $caProvinces . ')\s*(?:,|\d|$)/i', $address)) {
+            return 'CA';
+        }
+    }
+
+    return 'default';
+}
+
+/**
  * Get regional weather link for airport dashboard.
  *
  * Returns URL and label for region-appropriate weather resource (Canada, Australia)
@@ -1994,7 +2051,7 @@ function getRegionalWeatherLinkForAirport(array $airport): ?array {
             'label' => $airport['regional_weather_label'] ?? 'Weather Cams',
         ];
     }
-    $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+    $region = getAviationRegionFromAirport($airport);
     if ($region === 'CA') {
         return [
             'url' => 'https://plan.navcanada.ca/wxrecall/',

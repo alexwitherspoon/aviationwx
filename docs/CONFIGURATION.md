@@ -111,7 +111,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `regional_weather_label` | — | Label for regional weather link (e.g., "NAV Canada WxCam") |
 | `foreflight_url` | auto | Override ForeFlight link |
 
-**Regional link behavior:** FAA Weather and AOPA are shown only for US airports (ICAO prefix K or P). For Canadian airports (ICAO prefix C), "NAV Canada Weather" (plan.navcanada.ca/wxrecall) is shown by default. For Australian airports (ICAO prefix Y), "Airservices Weather Cams" is shown. Use `regional_weather_url` to override with a specific camera site (e.g., a NAV Canada metcam site with known ID) or to add a regional link for other areas. Use `links` for additional custom links.
+**Regional link behavior:** FAA Weather and AOPA are shown only for US airports. For Canadian airports, "NAV Canada Weather" (plan.navcanada.ca/wxrecall) is shown by default. For Australian airports, "Airservices Weather Cams" is shown. Region is inferred from ICAO first; for airports without ICAO (e.g. 7S5 with FAA LID only), region falls back to FAA LID (US), coordinates (lat/lon), or address (US state / Canadian province abbreviations). Use `regional_weather_url` to override with a specific camera site (e.g., a NAV Canada metcam site with known ID) or to add a regional link for other areas. Use `links` for additional custom links.
 
 ### Webcam Options (`webcams[]` array items)
 

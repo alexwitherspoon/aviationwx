@@ -1810,7 +1810,7 @@ if ($themeCookie === 'dark') {
                 <?php
                 // Get the best available identifier for external links (ICAO > IATA > FAA)
                 $linkIdentifier = getBestIdentifierForLinks($airport);
-                $aviationRegion = getAviationRegionFromIcao($airport['icao'] ?? null);
+                $aviationRegion = getAviationRegionFromAirport($airport);
                 
                 // AirNav link (manual override or auto-generated)
                 $airnavUrl = null;

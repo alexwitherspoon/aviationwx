@@ -569,4 +569,36 @@ class ConfigTest extends TestCase {
         $this->assertSame('https://example.com/weather', $link['url']);
         $this->assertSame('Weather Cams', $link['label']);
     }
+
+    /**
+     * Test getAviationRegionFromAirport() falls back to FAA LID when ICAO is null (e.g. 7S5)
+     */
+    public function testGetAviationRegionFromAirport_FaaLidOnly_ReturnsUs(): void {
+        $airport = ['faa' => '7S5', 'lat' => 44.87, 'lon' => -123.20, 'address' => 'Independence, OR, 97351'];
+        $this->assertSame('US', getAviationRegionFromAirport($airport));
+    }
+
+    /**
+     * Test getAviationRegionFromAirport() falls back to coordinates for Canada when no ICAO
+     */
+    public function testGetAviationRegionFromAirport_CoordinatesOnly_Canada_ReturnsCa(): void {
+        $airport = ['lat' => 50.06, 'lon' => -97.03, 'address' => 'Winnipeg, MB'];
+        $this->assertSame('CA', getAviationRegionFromAirport($airport));
+    }
+
+    /**
+     * Test getAviationRegionFromAirport() falls back to address for US state
+     */
+    public function testGetAviationRegionFromAirport_AddressOnly_UsState_ReturnsUs(): void {
+        $airport = ['address' => '123 Main St, Independence, OR, 97351'];
+        $this->assertSame('US', getAviationRegionFromAirport($airport));
+    }
+
+    /**
+     * Test getAviationRegionFromAirport() ICAO takes precedence over FAA
+     */
+    public function testGetAviationRegionFromAirport_IcaoTakesPrecedence(): void {
+        $airport = ['icao' => 'CYAV', 'faa' => 'YAV', 'lat' => 50.06, 'lon' => -97.03];
+        $this->assertSame('CA', getAviationRegionFromAirport($airport));
+    }
 }

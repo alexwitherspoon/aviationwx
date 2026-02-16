@@ -115,7 +115,7 @@ class ExternalLinksTest extends TestCase
     public function testAOPALinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+            $region = getAviationRegionFromAirport($airport);
             if (empty($airport['aopa_url']) && $region !== 'US') {
                 continue; // AOPA only shown for US airports
             }
@@ -144,7 +144,7 @@ class ExternalLinksTest extends TestCase
     public function testFAAWeatherLinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+            $region = getAviationRegionFromAirport($airport);
             if (empty($airport['faa_weather_url']) && $region !== 'US') {
                 continue; // FAA Weather only shown for US airports
             }
@@ -303,7 +303,7 @@ class ExternalLinksTest extends TestCase
     {
         foreach ($this->testAirports as $airportId => $airport) {
             $linkIdentifier = getBestIdentifierForLinks($airport);
-            $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+            $region = getAviationRegionFromAirport($airport);
             
             // Test SkyVector format
             if ($linkIdentifier !== null) {
