@@ -285,16 +285,24 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
    - **All Other Fields** (temperature, dewpoint, humidity, pressure, visibility, ceiling, cloud_cover, precip_accum): Selects the freshest non-stale observation from any source
    - METAR typically provides ceiling and cloud_cover (other sources do not provide these fields)
 
-4. **Aggregation Process**:
+4. **Local vs Neighboring METAR** (Safety-Critical):
+   - **Local source**: On-site sensors (Tempest, Ambient, etc.) or METAR from the same station as the airport (e.g., KSPB METAR for KSPB airport)
+   - **Neighboring METAR**: METAR from a different station (e.g., KVUO METAR when displaying KSPB airport)
+   - **Rule**: For LOCAL_FIELDS (wind, temperature, dewpoint, humidity, pressure, precip_accum), local measurements **always override** neighboring METAR when both have valid data, regardless of freshness
+   - **Rationale**: Wind and temperature at the airport can differ significantly from nearby airports. Using neighboring METAR for these fields could mislead pilots
+   - **Fill-in allowed**: Neighboring METAR may fill in missing fields (visibility, ceiling, cloud_cover) when local sources have no data
+   - **Implementation**: `WeatherSnapshot.metarStationId` identifies the METAR station; `localAirportIcao` from airport config enables the override logic
+
+5. **Aggregation Process**:
    1. Fetch all configured sources in parallel using `curl_multi`
-   2. Parse each response into `WeatherSnapshot` with per-field observation times
-   3. For wind group: Find the source with the freshest complete wind data (speed + direction)
-   4. For each other field: Compare observation times across all sources, select the freshest non-stale value
+   2. Parse each response into `WeatherSnapshot` with per-field observation times (METAR adapter sets `metarStationId` from source config)
+   3. For wind group: Prefer local sources over neighboring METAR; among same type, select freshest complete wind data
+   4. For each other field: Prefer local over neighboring METAR when both have valid data; otherwise select freshest non-stale value
    5. Build aggregated result with `_field_source_map` (which source provided each field) and `_field_obs_time_map` (observation time for each field)
    6. Validate all fields against climate bounds (catches unit errors, sensor malfunctions)
    7. Fix pressure unit issues automatically (values > 100 inHg divided by 100)
 
-5. **Example: NWS + METAR Aggregation**:
+6. **Example: NWS + METAR Aggregation**:
    
    When NWS is fresher:
    
@@ -313,12 +321,14 @@ The unified weather pipeline uses `WeatherAggregator` with `AggregationPolicy` t
    | wind_speed | 6 kts | 3 kts | **METAR** (fresher) |
    | temperature | -2°C | -2°C | **METAR** (fresher) |
 
-6. **Data Classes**:
-   - `WeatherSnapshot`: Complete weather state from one source
+   **Note**: If METAR is from a neighboring station (different ICAO) and NWS/local source has data, local wins regardless of freshness.
+
+7. **Data Classes**:
+   - `WeatherSnapshot`: Complete weather state from one source; `metarStationId` set for METAR source (station ICAO)
    - `WeatherReading`: Single field value with source and observation time
    - `WindGroup`: Grouped wind fields ensuring consistency
 
-7. **Max Acceptable Ages** (per source type, used for staleness checks):
+8. **Max Acceptable Ages** (per source type, used for staleness checks):
    - Tempest: 300 seconds (5 minutes)
    - Ambient/WeatherLink: 300 seconds (5 minutes). WeatherLink's actual data interval is set by Davis subscription (Basic 15m, Pro 5m, Pro+ ~1m); see [CONFIGURATION.md](CONFIGURATION.md) Weather Sources.
    - PWSWeather: 600 seconds (10 minutes)

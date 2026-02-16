@@ -16,6 +16,7 @@ This document provides a comprehensive reference for all safety-critical weather
 5. [Temperature Conversions](#temperature-conversions)
 6. [Wind Calculations](#wind-calculations)
 7. [METAR Visibility Parsing](#metar-visibility-parsing)
+8. [Local vs Neighboring METAR Aggregation](#local-vs-neighboring-metar-aggregation)
 
 ---
 
@@ -410,6 +411,31 @@ Per **ICAO METAR format, visibility group**:
 ### Official Sources
 
 - ICAO WMO Manual on Codes (WMO-306)
+
+---
+
+## Local vs Neighboring METAR Aggregation
+
+**⚠️ SAFETY CRITICAL**: Wind and temperature at an airport can differ significantly from nearby airports. Using neighboring METAR data for local measurements could mislead pilots about actual conditions at the field.
+
+### Rule
+
+For LOCAL_FIELDS (wind_speed, wind_direction, gust_speed, temperature, dewpoint, humidity, pressure, precip_accum), **local sources always override neighboring METAR** when both have valid data, regardless of observation freshness.
+
+- **Local source**: On-site sensors (Tempest, Ambient, etc.) or METAR from the same station as the airport (e.g., KSPB METAR for KSPB airport)
+- **Neighboring METAR**: METAR from a different station (e.g., KVUO when displaying KSPB)
+- **Fill-in allowed**: Neighboring METAR may fill in missing fields (visibility, ceiling, cloud_cover) when local has no data
+
+### Implementation
+
+- **File**: `lib/weather/WeatherAggregator.php`
+- **Policy**: `AggregationPolicy::LOCAL_FIELDS`
+- **Detection**: `WeatherSnapshot.metarStationId` vs `localAirportIcao` (from airport config)
+- **Tests**: `tests/Unit/WeatherAggregatorTest.php` (testLocalWindOverridesNeighboringMetar_EvenWhenMetarFresher, etc.)
+
+### Rationale
+
+Wind and temperature vary with local terrain, elevation, and microclimate. A METAR from an airport 10 nm away may report different conditions. Pilots need accurate local data for takeoff/landing decisions.
 
 ---
 
