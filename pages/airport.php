@@ -1810,6 +1810,7 @@ if ($themeCookie === 'dark') {
                 <?php
                 // Get the best available identifier for external links (ICAO > IATA > FAA)
                 $linkIdentifier = getBestIdentifierForLinks($airport);
+                $aviationRegion = getAviationRegionFromIcao($airport['icao'] ?? null);
                 
                 // AirNav link (manual override or auto-generated)
                 $airnavUrl = null;
@@ -1839,11 +1840,11 @@ if ($themeCookie === 'dark') {
                 <?php endif; ?>
                 
                 <?php
-                // AOPA link (manual override or auto-generated)
+                // AOPA link (US-focused; manual override or auto-generated for US airports only)
                 $aopaUrl = null;
                 if (!empty($airport['aopa_url'])) {
                     $aopaUrl = $airport['aopa_url'];
-                } elseif ($linkIdentifier !== null) {
+                } elseif ($aviationRegion === 'US' && $linkIdentifier !== null) {
                     $aopaUrl = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
                 }
                 if ($aopaUrl !== null): ?>
@@ -1853,11 +1854,11 @@ if ($themeCookie === 'dark') {
                 <?php endif; ?>
                 
                 <?php
-                // FAA Weather link (manual override or auto-generated)
+                // FAA Weather link (US-focused; manual override or auto-generated for US airports only)
                 $faaWeatherUrl = null;
                 if (!empty($airport['faa_weather_url'])) {
                     $faaWeatherUrl = $airport['faa_weather_url'];
-                } elseif ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])) {
+                } elseif ($aviationRegion === 'US' && $linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])) {
                     // Generate FAA Weather Cams URL
                     // URL format: https://weathercams.faa.gov/map/{min_lon},{min_lat},{max_lon},{max_lat}/airport/{identifier}/
                     $buffer = 2.0;
@@ -1879,6 +1880,16 @@ if ($themeCookie === 'dark') {
                 if ($faaWeatherUrl !== null): ?>
                 <a href="<?= htmlspecialchars($faaWeatherUrl) ?>" target="_blank" rel="noopener" class="btn" title="View FAA weather cameras for this area (opens in new tab)">
                     FAA Weather
+                </a>
+                <?php endif; ?>
+                
+                <?php
+                $regionalWeatherLink = getRegionalWeatherLinkForAirport($airport);
+                if ($regionalWeatherLink !== null):
+                    $regionalLabel = $regionalWeatherLink['label'];
+                ?>
+                <a href="<?= htmlspecialchars($regionalWeatherLink['url']) ?>" target="_blank" rel="noopener" class="btn" title="View <?= htmlspecialchars($regionalLabel) ?> (opens in new tab)">
+                    <?= htmlspecialchars($regionalLabel) ?>
                 </a>
                 <?php endif; ?>
                 

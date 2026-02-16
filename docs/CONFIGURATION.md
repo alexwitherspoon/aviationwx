@@ -105,9 +105,13 @@ All configuration lives in a single `airports.json` file with two sections:
 | **Link Overrides** |||
 | `airnav_url` | auto | Override AirNav link |
 | `skyvector_url` | auto | Override SkyVector link |
-| `aopa_url` | auto | Override AOPA link |
-| `faa_weather_url` | auto | Override FAA Weather link |
+| `aopa_url` | auto | Override AOPA link (US airports only by default) |
+| `faa_weather_url` | auto | Override FAA Weather link (US airports only by default) |
+| `regional_weather_url` | — | Override or add regional weather camera link (Canada, Australia, or custom) |
+| `regional_weather_label` | — | Label for regional weather link (e.g., "NAV Canada WxCam") |
 | `foreflight_url` | auto | Override ForeFlight link |
+
+**Regional link behavior:** FAA Weather and AOPA are shown only for US airports (ICAO prefix K or P). For Canadian airports (ICAO prefix C), "NAV Canada Weather" (plan.navcanada.ca/wxrecall) is shown by default. For Australian airports (ICAO prefix Y), "Airservices Weather Cams" is shown. Use `regional_weather_url` to override with a specific camera site (e.g., a NAV Canada metcam site with known ID) or to add a regional link for other areas. Use `links` for additional custom links.
 
 ### Webcam Options (`webcams[]` array items)
 
@@ -1268,6 +1272,13 @@ Standard links auto-generate from best identifier. Override when needed:
 ```json
 "airnav_url": "https://www.airnav.com/airport/KSPB",
 "skyvector_url": "https://skyvector.com/airport/KSPB"
+```
+
+**Regional weather links:** Canadian airports (ICAO C*) automatically show "NAV Canada Weather" (CFPS Weather and NOTAM). Australian airports (ICAO Y*) show "Airservices Weather Cams". To link to a specific camera site (e.g., a NAV Canada metcam site with known ID), use `regional_weather_url` and optional `regional_weather_label`:
+
+```json
+"regional_weather_url": "https://www.metcam.navcanada.ca/lb/cameraSite.jsp?lang=e&id=170",
+"regional_weather_label": "NAV Canada WxCam (Calgary Springbank)"
 ```
 
 ---

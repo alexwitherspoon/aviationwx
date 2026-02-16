@@ -110,16 +110,18 @@ class ExternalLinksTest extends TestCase
     }
     
     /**
-     * Test AOPA URLs are valid and reachable
+     * Test AOPA URLs are valid and reachable (US airports only, or manual override)
      */
     public function testAOPALinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            // Check for manual override first
+            $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+            if (empty($airport['aopa_url']) && $region !== 'US') {
+                continue; // AOPA only shown for US airports
+            }
             if (!empty($airport['aopa_url'])) {
                 $url = $airport['aopa_url'];
             } else {
-                // Use auto-generated URL if identifier available
                 $linkIdentifier = getBestIdentifierForLinks($airport);
                 if ($linkIdentifier === null) {
                     $this->markTestIncomplete("No identifier available for AOPA URL: $airportId");
@@ -127,9 +129,7 @@ class ExternalLinksTest extends TestCase
                 }
                 $url = 'https://www.aopa.org/destinations/airports/' . $linkIdentifier;
             }
-            
             $result = $this->validateUrl($url, 'aopa.org');
-            
             $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertTrue(
                 $result['valid'],
@@ -139,31 +139,29 @@ class ExternalLinksTest extends TestCase
     }
     
     /**
-     * Test FAA Weather Cams URLs are valid and reachable
+     * Test FAA Weather Cams URLs are valid and reachable (US airports only, or manual override)
      */
     public function testFAAWeatherLinks_AreValid()
     {
         foreach ($this->testAirports as $airportId => $airport) {
-            // Check for manual override first
+            $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+            if (empty($airport['faa_weather_url']) && $region !== 'US') {
+                continue; // FAA Weather only shown for US airports
+            }
             if (!empty($airport['faa_weather_url'])) {
                 $url = $airport['faa_weather_url'];
             } else {
-                // Generate FAA Weather URL if identifier and coordinates available
                 $linkIdentifier = getBestIdentifierForLinks($airport);
                 if ($linkIdentifier === null || empty($airport['lat']) || empty($airport['lon'])) {
                     $this->markTestIncomplete("Required fields missing for FAA Weather URL: $airportId");
                     continue;
                 }
-                
                 $buffer = 2.0;
                 $min_lon = $airport['lon'] - $buffer;
                 $min_lat = $airport['lat'] - $buffer;
                 $max_lon = $airport['lon'] + $buffer;
                 $max_lat = $airport['lat'] + $buffer;
-                
-                // Remove K prefix from identifier if present (e.g., KSPB -> SPB)
                 $faa_identifier = preg_replace('/^K/', '', $linkIdentifier);
-                
                 $url = sprintf(
                     'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
                     $min_lon,
@@ -173,9 +171,7 @@ class ExternalLinksTest extends TestCase
                     $faa_identifier
                 );
             }
-            
             $result = $this->validateUrl($url, 'weathercams.faa.gov');
-            
             $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
             $this->assertTrue(
                 $result['valid'],
@@ -307,6 +303,7 @@ class ExternalLinksTest extends TestCase
     {
         foreach ($this->testAirports as $airportId => $airport) {
             $linkIdentifier = getBestIdentifierForLinks($airport);
+            $region = getAviationRegionFromIcao($airport['icao'] ?? null);
             
             // Test SkyVector format
             if ($linkIdentifier !== null) {
@@ -320,8 +317,8 @@ class ExternalLinksTest extends TestCase
                 );
             }
             
-            // Test AOPA format
-            if ($linkIdentifier !== null) {
+            // Test AOPA format (US only, or override)
+            if ($linkIdentifier !== null && ($region === 'US' || !empty($airport['aopa_url']))) {
                 $aopaUrl = !empty($airport['aopa_url']) 
                     ? $airport['aopa_url'] 
                     : "https://www.aopa.org/destinations/airports/$linkIdentifier";
@@ -332,8 +329,9 @@ class ExternalLinksTest extends TestCase
                 );
             }
             
-            // Test FAA Weather format
-            if ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])) {
+            // Test FAA Weather format (US only, or override)
+            if ($linkIdentifier !== null && !empty($airport['lat']) && !empty($airport['lon'])
+                && ($region === 'US' || !empty($airport['faa_weather_url']))) {
                 if (!empty($airport['faa_weather_url'])) {
                     $faaUrl = $airport['faa_weather_url'];
                 } else {
@@ -343,7 +341,6 @@ class ExternalLinksTest extends TestCase
                     $max_lon = $airport['lon'] + $buffer;
                     $max_lat = $airport['lat'] + $buffer;
                     $faa_identifier = preg_replace('/^K/', '', $linkIdentifier);
-                    
                     $faaUrl = sprintf(
                         'https://weathercams.faa.gov/map/%.5f,%.5f,%.5f,%.5f/airport/%s/',
                         $min_lon,
@@ -353,7 +350,6 @@ class ExternalLinksTest extends TestCase
                         $faa_identifier
                     );
                 }
-                
                 $this->assertMatchesRegularExpression(
                     '/^https:\/\/weathercams\.faa\.gov\/map\/[\d\-\.]+,[\d\-\.]+,[\d\-\.]+,[\d\-\.]+\/airport\/[A-Z0-9]+\/$/',
                     $faaUrl,

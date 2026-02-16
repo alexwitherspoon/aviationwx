@@ -1947,6 +1947,70 @@ function getBestIdentifierForLinks(array $airport): ?string {
 }
 
 /**
+ * Infer aviation region from ICAO code for link display.
+ *
+ * Used to show region-appropriate external links (e.g., FAA Weather for US,
+ * NAV Canada Weather for Canada). ICAO prefixes follow geographic structure.
+ *
+ * @param string|null $icao ICAO code (e.g., KSPB, CYAV, EGLL)
+ * @return string 'US'|'CA'|'AU'|'default'
+ */
+function getAviationRegionFromIcao(?string $icao): string {
+    if (empty($icao)) {
+        return 'default';
+    }
+    $icao = strtoupper(trim($icao));
+    $first = $icao[0] ?? '';
+    $prefix2 = substr($icao, 0, 2);
+
+    if ($first === 'K') {
+        return 'US';
+    }
+    if (in_array($prefix2, ['PA', 'PH', 'PG', 'PM', 'PW'], true)) {
+        return 'US'; // Alaska, Hawaii, US Pacific
+    }
+    if ($first === 'C') {
+        return 'CA';
+    }
+    if ($first === 'Y') {
+        return 'AU';
+    }
+    return 'default';
+}
+
+/**
+ * Get regional weather link for airport dashboard.
+ *
+ * Returns URL and label for region-appropriate weather resource (Canada, Australia)
+ * or manual override. Used for external link display on airport pages.
+ *
+ * @param array $airport Airport config with optional icao, regional_weather_url, regional_weather_label
+ * @return array{url: string, label: string}|null Link data or null if no regional link applies
+ */
+function getRegionalWeatherLinkForAirport(array $airport): ?array {
+    if (!empty($airport['regional_weather_url'])) {
+        return [
+            'url' => $airport['regional_weather_url'],
+            'label' => $airport['regional_weather_label'] ?? 'Weather Cams',
+        ];
+    }
+    $region = getAviationRegionFromIcao($airport['icao'] ?? null);
+    if ($region === 'CA') {
+        return [
+            'url' => 'https://plan.navcanada.ca/wxrecall/',
+            'label' => 'NAV Canada Weather',
+        ];
+    }
+    if ($region === 'AU') {
+        return [
+            'url' => 'https://weathercams.airservicesaustralia.com/',
+            'label' => 'Airservices Weather Cams',
+        ];
+    }
+    return null;
+}
+
+/**
  * Check if an airport is enabled
  * 
  * Airports are opt-in: they must have `enabled: true` to be active.

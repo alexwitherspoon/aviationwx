@@ -366,7 +366,29 @@ class HtmlOutputValidationTest extends TestCase
             $this->markTestSkipped("Custom links not found - server may be using production config without test fixture links");
         }
     }
-    
+
+    /**
+     * Test that Canadian airport pages show NAV Canada Weather regional link
+     */
+    public function testAirportPage_CanadianAirport_ShowsNavCanadaWeatherLink(): void
+    {
+        $html = $this->getCachedHtml('cyav');
+        if ($html === null) {
+            $this->markTestSkipped('Airport page not available');
+            return;
+        }
+        $this->assertStringContainsString(
+            'NAV Canada Weather',
+            $html,
+            'Canadian airport page should show NAV Canada Weather link'
+        );
+        $this->assertStringContainsString(
+            'plan.navcanada.ca/wxrecall',
+            $html,
+            'Canadian airport page should link to NAV Canada CFPS Weather and NOTAM'
+        );
+    }
+
     /**
      * Test that there are no PHP errors in the output
      */

@@ -451,4 +451,122 @@ class ConfigTest extends TestCase {
             'getDynamicDnsRefreshSeconds should return 0 or >= 60'
         );
     }
+
+    /**
+     * Test getAviationRegionFromIcao() returns US for K prefix
+     */
+    public function testGetAviationRegionFromIcao_ReturnsUsForKPrefix(): void {
+        $this->assertSame('US', getAviationRegionFromIcao('KSPB'));
+        $this->assertSame('US', getAviationRegionFromIcao('KDEN'));
+        $this->assertSame('US', getAviationRegionFromIcao('ksea'));
+    }
+
+    /**
+     * Test getAviationRegionFromIcao() returns US for Pacific prefixes
+     */
+    public function testGetAviationRegionFromIcao_ReturnsUsForPacificPrefixes(): void {
+        $this->assertSame('US', getAviationRegionFromIcao('PANC'));
+        $this->assertSame('US', getAviationRegionFromIcao('PHNL'));
+        $this->assertSame('US', getAviationRegionFromIcao('PGUM'));
+    }
+
+    /**
+     * Test getAviationRegionFromIcao() returns CA for Canadian prefix
+     */
+    public function testGetAviationRegionFromIcao_ReturnsCaForCanadianPrefix(): void {
+        $this->assertSame('CA', getAviationRegionFromIcao('CYAV'));
+        $this->assertSame('CA', getAviationRegionFromIcao('CYVR'));
+        $this->assertSame('CA', getAviationRegionFromIcao('cyav'));
+    }
+
+    /**
+     * Test getAviationRegionFromIcao() returns AU for Australian prefix
+     */
+    public function testGetAviationRegionFromIcao_ReturnsAuForAustralianPrefix(): void {
+        $this->assertSame('AU', getAviationRegionFromIcao('YSSY'));
+        $this->assertSame('AU', getAviationRegionFromIcao('YMEL'));
+    }
+
+    /**
+     * Test getAviationRegionFromIcao() returns default for other regions
+     */
+    public function testGetAviationRegionFromIcao_ReturnsDefaultForOtherRegions(): void {
+        $this->assertSame('default', getAviationRegionFromIcao('EGLL'));
+        $this->assertSame('default', getAviationRegionFromIcao('LFPG'));
+        $this->assertSame('default', getAviationRegionFromIcao('NZWN'));
+    }
+
+    /**
+     * Test getAviationRegionFromIcao() returns default for null/empty
+     */
+    public function testGetAviationRegionFromIcao_ReturnsDefaultForNullOrEmpty(): void {
+        $this->assertSame('default', getAviationRegionFromIcao(null));
+        $this->assertSame('default', getAviationRegionFromIcao(''));
+    }
+
+    /**
+     * Test getRegionalWeatherLinkForAirport() returns NAV Canada Weather for Canadian airports
+     */
+    public function testGetRegionalWeatherLinkForAirport_CanadianAirport_ReturnsNavCanadaWeather(): void {
+        $airport = ['icao' => 'CYAV', 'name' => 'Winnipeg/St. Andrews'];
+        $link = getRegionalWeatherLinkForAirport($airport);
+        $this->assertNotNull($link);
+        $this->assertSame('https://plan.navcanada.ca/wxrecall/', $link['url']);
+        $this->assertSame('NAV Canada Weather', $link['label']);
+    }
+
+    /**
+     * Test getRegionalWeatherLinkForAirport() returns Airservices for Australian airports
+     */
+    public function testGetRegionalWeatherLinkForAirport_AustralianAirport_ReturnsAirservicesWeatherCams(): void {
+        $airport = ['icao' => 'YSSY', 'name' => 'Sydney Kingsford Smith'];
+        $link = getRegionalWeatherLinkForAirport($airport);
+        $this->assertNotNull($link);
+        $this->assertSame('https://weathercams.airservicesaustralia.com/', $link['url']);
+        $this->assertSame('Airservices Weather Cams', $link['label']);
+    }
+
+    /**
+     * Test getRegionalWeatherLinkForAirport() returns null for US airports
+     */
+    public function testGetRegionalWeatherLinkForAirport_UsAirport_ReturnsNull(): void {
+        $airport = ['icao' => 'KSPB', 'name' => 'Scappoose'];
+        $link = getRegionalWeatherLinkForAirport($airport);
+        $this->assertNull($link);
+    }
+
+    /**
+     * Test getRegionalWeatherLinkForAirport() returns null for default region
+     */
+    public function testGetRegionalWeatherLinkForAirport_DefaultRegion_ReturnsNull(): void {
+        $airport = ['icao' => 'EGLL', 'name' => 'London Heathrow'];
+        $link = getRegionalWeatherLinkForAirport($airport);
+        $this->assertNull($link);
+    }
+
+    /**
+     * Test getRegionalWeatherLinkForAirport() returns manual override when set
+     */
+    public function testGetRegionalWeatherLinkForAirport_ManualOverride_ReturnsOverride(): void {
+        $airport = [
+            'icao' => 'CYAV',
+            'regional_weather_url' => 'https://www.metcam.navcanada.ca/lb/cameraSite.jsp?lang=e&id=170',
+            'regional_weather_label' => 'NAV Canada WxCam (Calgary Springbank)',
+        ];
+        $link = getRegionalWeatherLinkForAirport($airport);
+        $this->assertNotNull($link);
+        $this->assertSame('https://www.metcam.navcanada.ca/lb/cameraSite.jsp?lang=e&id=170', $link['url']);
+        $this->assertSame('NAV Canada WxCam (Calgary Springbank)', $link['label']);
+    }
+
+    /**
+     * Test getRegionalWeatherLinkForAirport() uses default label when override has URL but no label
+     */
+    public function testGetRegionalWeatherLinkForAirport_OverrideWithoutLabel_UsesDefaultLabel(): void {
+        $airport = ['icao' => 'CYAV', 'regional_weather_url' => 'https://example.com/weather'];
+        $link = getRegionalWeatherLinkForAirport($airport);
+        $this->assertNotNull($link);
+        $this->assertSame('https://example.com/weather', $link['url']);
+        $this->assertSame('Weather Cams', $link['label']);
+    }
 }
