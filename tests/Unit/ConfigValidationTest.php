@@ -1553,11 +1553,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'tempest',
                         'station_id' => '149918',
                         'api_key' => 'test-api-key'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1576,11 +1576,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'ambient',
                         'api_key' => 'test-api-key',
                         'application_key' => 'test-app-key'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1599,12 +1599,12 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'ambient',
                         'api_key' => 'test-api-key',
                         'application_key' => 'test-app-key',
                         'mac_address' => 'AA:BB:CC:DD:EE:FF'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1623,12 +1623,12 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'weatherlink_v2',
                         'api_key' => 'test-api-key',
                         'api_secret' => 'test-api-secret',
                         'station_id' => '123456'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1647,12 +1647,12 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'pwsweather',
                         'station_id' => 'KORSCAPP1',
                         'client_id' => 'test-client-id',
                         'client_secret' => 'test-client-secret'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1671,9 +1671,9 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'metar'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1692,11 +1692,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'synopticdata',
                         'station_id' => 'AT297',
                         'api_token' => 'test-api-token'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1718,9 +1718,9 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'invalid-type'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1740,9 +1740,9 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'station_id' => '149918'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1762,10 +1762,10 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'tempest',
                         'api_key' => 'test-api-key'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1785,10 +1785,10 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'tempest',
                         'station_id' => '149918'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1808,10 +1808,10 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'ambient',
                         'application_key' => 'test-app-key'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1831,10 +1831,10 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'ambient',
                         'api_key' => 'test-api-key'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1854,11 +1854,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'weatherlink_v2',
                         'api_secret' => 'test-secret',
                         'station_id' => '123456'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1878,11 +1878,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'weatherlink_v2',
                         'api_key' => 'test-api-key',
                         'station_id' => '123456'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1902,11 +1902,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'weatherlink_v2',
                         'api_key' => 'test-api-key',
                         'api_secret' => 'test-secret'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1926,11 +1926,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'pwsweather',
                         'client_id' => 'test-client-id',
                         'client_secret' => 'test-client-secret'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1950,11 +1950,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'pwsweather',
                         'station_id' => 'KORSCAPP1',
                         'client_secret' => 'test-client-secret'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1974,11 +1974,11 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'pwsweather',
                         'station_id' => 'KORSCAPP1',
                         'client_id' => 'test-client-id'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -1998,10 +1998,10 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'synopticdata',
                         'api_token' => 'test-api-token'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -2021,10 +2021,10 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => [
+                    'weather_sources' => [[
                         'type' => 'synopticdata',
                         'station_id' => 'AT297'
-                    ]
+                    ]]
                 ]
             ]
         ];
@@ -2044,14 +2044,14 @@ class ConfigValidationTest extends TestCase
                     'lon' => -122.0,
                     'access_type' => 'public',
                     'tower_status' => 'non_towered',
-                    'weather_source' => 'not-an-object'
+                    'weather_sources' => 'not-an-array'
                 ]
             ]
         ];
         
         $result = validateAirportsJsonStructure($config);
-        $this->assertFalse($result['valid'], 'Weather source that is not an object should fail validation');
-        $this->assertStringContainsString('weather_source must be an object', implode(' ', $result['errors']));
+        $this->assertFalse($result['valid'], 'Weather sources that is not an array should fail validation');
+        $this->assertStringContainsString('weather_sources must be an array', implode(' ', $result['errors']));
     }
 
     /**

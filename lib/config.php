@@ -3588,154 +3588,99 @@ function validateAirportsJsonStructure(array $config): array {
             }
         }
         
-        // Validate weather source
-        if (isset($airport['weather_source'])) {
-            $ws = $airport['weather_source'];
-            if (!is_array($ws)) {
-                $errors[] = "Airport '{$airportCode}' weather_source must be an object";
+        // Validate weather_sources array (current spec)
+        if (isset($airport['weather_sources'])) {
+            if (!is_array($airport['weather_sources'])) {
+                $errors[] = "Airport '{$airportCode}' weather_sources must be an array";
             } else {
-                if (!isset($ws['type'])) {
-                    $errors[] = "Airport '{$airportCode}' weather_source missing 'type' field";
-                } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'awosnet'];
+                $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'nws', 'aviationwx_api', 'awosnet', 'swob_auto', 'swob_man'];
+                foreach ($airport['weather_sources'] as $idx => $ws) {
+                    $label = "weather_sources[{$idx}]";
+                    if (!is_array($ws)) {
+                        $errors[] = "Airport '{$airportCode}' {$label} must be an object";
+                        continue;
+                    }
+                    if (!isset($ws['type'])) {
+                        $errors[] = "Airport '{$airportCode}' {$label} missing 'type' field";
+                        continue;
+                    }
                     if (!in_array($ws['type'], $validTypes)) {
-                        $errors[] = "Airport '{$airportCode}' weather_source has invalid type: '{$ws['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
-                    } else {
-                        $wsType = $ws['type'];
-                        if ($wsType === 'tempest') {
-                            if (!isset($ws['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (tempest) missing 'station_id'";
-                            }
-                            if (!isset($ws['api_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (tempest) missing 'api_key'";
-                            }
-                        } elseif ($wsType === 'ambient') {
-                            if (!isset($ws['api_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (ambient) missing 'api_key'";
-                            }
-                            if (!isset($ws['application_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (ambient) missing 'application_key'";
-                            }
-                        } elseif ($wsType === 'weatherlink_v2') {
-                            // WeatherLink v2 API (for newer devices: WeatherLink Live, Console, EnviroMonitor)
-                            if (!isset($ws['api_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (weatherlink_v2) missing 'api_key'";
-                            }
-                            if (!isset($ws['api_secret'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (weatherlink_v2) missing 'api_secret'";
-                            }
-                            if (!isset($ws['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (weatherlink_v2) missing 'station_id'";
-                            }
-                        } elseif ($wsType === 'weatherlink_v1') {
-                            // WeatherLink v1 API (for legacy devices: Vantage Connect, WeatherLinkIP)
-                            if (!isset($ws['device_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (weatherlink_v1) missing 'device_id'";
-                            }
-                            if (!isset($ws['api_token'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (weatherlink_v1) missing 'api_token'";
-                            }
-                        } elseif ($wsType === 'pwsweather') {
-                            if (!isset($ws['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'station_id'";
-                            }
-                            if (!isset($ws['client_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'client_id'";
-                            }
-                            if (!isset($ws['client_secret'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (pwsweather) missing 'client_secret'";
-                            }
-                        } elseif ($wsType === 'synopticdata') {
-                            if (!isset($ws['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (synopticdata) missing 'station_id'";
-                            }
-                            if (!isset($ws['api_token'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (synopticdata) missing 'api_token'";
-                            }
-                        } elseif ($wsType === 'awosnet') {
-                            if (!isset($ws['station_id']) || $ws['station_id'] === '') {
-                                $errors[] = "Airport '{$airportCode}' weather_source (awosnet) missing 'station_id'";
-                            } elseif (!preg_match('/^[a-z0-9]{2,20}$/', strtolower(trim($ws['station_id'])))) {
-                                $errors[] = "Airport '{$airportCode}' weather_source (awosnet) invalid 'station_id' format (lowercase alphanumeric, 2-20 chars)";
-                            }
+                        $errors[] = "Airport '{$airportCode}' {$label} has invalid type: '{$ws['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
+                        continue;
+                    }
+                    $wsType = $ws['type'];
+                    if ($wsType === 'tempest') {
+                        if (!isset($ws['station_id'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (tempest) missing 'station_id'";
+                        }
+                        if (!isset($ws['api_key'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (tempest) missing 'api_key'";
+                        }
+                    } elseif ($wsType === 'ambient') {
+                        if (!isset($ws['api_key'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (ambient) missing 'api_key'";
+                        }
+                        if (!isset($ws['application_key'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (ambient) missing 'application_key'";
+                        }
+                    } elseif ($wsType === 'weatherlink_v2') {
+                        if (!isset($ws['api_key'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (weatherlink_v2) missing 'api_key'";
+                        }
+                        if (!isset($ws['api_secret'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (weatherlink_v2) missing 'api_secret'";
+                        }
+                        if (!isset($ws['station_id'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (weatherlink_v2) missing 'station_id'";
+                        }
+                    } elseif ($wsType === 'weatherlink_v1') {
+                        if (!isset($ws['device_id'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (weatherlink_v1) missing 'device_id'";
+                        }
+                        if (!isset($ws['api_token'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (weatherlink_v1) missing 'api_token'";
+                        }
+                    } elseif ($wsType === 'pwsweather') {
+                        if (!isset($ws['station_id'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (pwsweather) missing 'station_id'";
+                        }
+                        if (!isset($ws['client_id'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (pwsweather) missing 'client_id'";
+                        }
+                        if (!isset($ws['client_secret'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (pwsweather) missing 'client_secret'";
+                        }
+                    } elseif ($wsType === 'synopticdata') {
+                        if (!isset($ws['station_id'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (synopticdata) missing 'station_id'";
+                        }
+                        if (!isset($ws['api_token'])) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (synopticdata) missing 'api_token'";
+                        }
+                    } elseif ($wsType === 'nws') {
+                        if (!isset($ws['station_id']) || $ws['station_id'] === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (nws) missing 'station_id'";
+                        } elseif (!preg_match('/^[A-Za-z0-9]{3,4}$/', trim($ws['station_id']))) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (nws) invalid 'station_id' format (3-4 char ICAO)";
+                        }
+                    } elseif ($wsType === 'aviationwx_api') {
+                        if (!isset($ws['base_url']) || $ws['base_url'] === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (aviationwx_api) missing 'base_url'";
+                        }
+                    } elseif ($wsType === 'awosnet') {
+                        if (!isset($ws['station_id']) || $ws['station_id'] === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} (awosnet) missing 'station_id'";
+                        } elseif (!preg_match('/^[a-z0-9]{2,20}$/', strtolower(trim($ws['station_id'])))) {
+                            $errors[] = "Airport '{$airportCode}' {$label} (awosnet) invalid 'station_id' format (lowercase alphanumeric, 2-20 chars)";
+                        }
+                    } elseif ($wsType === 'swob_auto' || $wsType === 'swob_man') {
+                        if (!isset($ws['station_id']) || $ws['station_id'] === '') {
+                            $errors[] = "Airport '{$airportCode}' {$label} ({$wsType}) missing 'station_id'";
+                        } elseif (!preg_match('/^[A-Za-z]{4}$/', trim($ws['station_id']))) {
+                            $errors[] = "Airport '{$airportCode}' {$label} ({$wsType}) invalid 'station_id' format (4-letter ICAO code)";
                         }
                     }
-                }
-            }
-        }
-        
-        // Validate backup weather source (same structure as primary)
-        if (isset($airport['weather_source_backup'])) {
-            $wsBackup = $airport['weather_source_backup'];
-            if (!is_array($wsBackup)) {
-                $errors[] = "Airport '{$airportCode}' weather_source_backup must be an object";
-            } else {
-                if (!isset($wsBackup['type'])) {
-                    $errors[] = "Airport '{$airportCode}' weather_source_backup missing 'type' field";
-                } else {
-                    $validTypes = ['tempest', 'ambient', 'weatherlink_v2', 'weatherlink_v1', 'pwsweather', 'synopticdata', 'metar', 'awosnet'];
-                    if (!in_array($wsBackup['type'], $validTypes)) {
-                        $errors[] = "Airport '{$airportCode}' weather_source_backup has invalid type: '{$wsBackup['type']}' (must be one of: " . implode(', ', $validTypes) . ")";
-                    } else {
-                        $wsBackupType = $wsBackup['type'];
-                        if ($wsBackupType === 'tempest') {
-                            if (!isset($wsBackup['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (tempest) missing 'station_id'";
-                            }
-                            if (!isset($wsBackup['api_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (tempest) missing 'api_key'";
-                            }
-                        } elseif ($wsBackupType === 'ambient') {
-                            if (!isset($wsBackup['api_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (ambient) missing 'api_key'";
-                            }
-                            if (!isset($wsBackup['application_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (ambient) missing 'application_key'";
-                            }
-                        } elseif ($wsBackupType === 'weatherlink_v2') {
-                            // WeatherLink v2 API (for newer devices)
-                            if (!isset($wsBackup['api_key'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink_v2) missing 'api_key'";
-                            }
-                            if (!isset($wsBackup['api_secret'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink_v2) missing 'api_secret'";
-                            }
-                            if (!isset($wsBackup['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink_v2) missing 'station_id'";
-                            }
-                        } elseif ($wsBackupType === 'weatherlink_v1') {
-                            // WeatherLink v1 API (for legacy devices)
-                            if (!isset($wsBackup['device_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink_v1) missing 'device_id'";
-                            }
-                            if (!isset($wsBackup['api_token'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (weatherlink_v1) missing 'api_token'";
-                            }
-                        } elseif ($wsBackupType === 'pwsweather') {
-                            if (!isset($wsBackup['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (pwsweather) missing 'station_id'";
-                            }
-                            if (!isset($wsBackup['client_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (pwsweather) missing 'client_id'";
-                            }
-                            if (!isset($wsBackup['client_secret'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (pwsweather) missing 'client_secret'";
-                            }
-                        } elseif ($wsBackupType === 'synopticdata') {
-                            if (!isset($wsBackup['station_id'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (synopticdata) missing 'station_id'";
-                            }
-                            if (!isset($wsBackup['api_token'])) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (synopticdata) missing 'api_token'";
-                            }
-                        } elseif ($wsBackupType === 'awosnet') {
-                            if (!isset($wsBackup['station_id']) || $wsBackup['station_id'] === '') {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (awosnet) missing 'station_id'";
-                            } elseif (!preg_match('/^[a-z0-9]{2,20}$/', strtolower(trim($wsBackup['station_id'])))) {
-                                $errors[] = "Airport '{$airportCode}' weather_source_backup (awosnet) invalid 'station_id' format (lowercase alphanumeric, 2-20 chars)";
-                            }
-                        }
-                    }
+                    // metar: station_id optional (nearby_stations can provide fallback)
                 }
             }
         }
