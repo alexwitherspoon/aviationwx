@@ -14,14 +14,26 @@ require_once __DIR__ . '/../../lib/weather/adapter/swob-auto-v1.php';
 class SwobAutoAdapterTest extends TestCase
 {
     /**
-     * Valid station_id returns correct AUTO URL
+     * Valid station_id returns minute SWOB URL (preferred)
      */
-    public function testBuildUrl_ValidStationId_ReturnsAutoUrl(): void
+    public function testBuildUrl_ValidStationId_ReturnsMinuteUrl(): void
     {
         $url = SwobAutoAdapter::buildUrl(['station_id' => 'CYAV']);
         $this->assertNotNull($url);
         $this->assertStringContainsString('dd.weather.gc.ca', $url);
+        $this->assertStringContainsString('CYAV-AUTO-minute-swob.xml', $url);
+    }
+
+    /**
+     * buildStandardUrl returns standard (hourly) SWOB URL for fallback
+     */
+    public function testBuildStandardUrl_ValidStationId_ReturnsStandardUrl(): void
+    {
+        $url = SwobAutoAdapter::buildStandardUrl(['station_id' => 'CYAV']);
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('dd.weather.gc.ca', $url);
         $this->assertStringContainsString('CYAV-AUTO-swob.xml', $url);
+        $this->assertStringNotContainsString('minute', $url);
     }
 
     /**
@@ -31,7 +43,7 @@ class SwobAutoAdapterTest extends TestCase
     {
         $url = SwobAutoAdapter::buildUrl(['station_id' => 'cyav']);
         $this->assertNotNull($url);
-        $this->assertStringContainsString('CYAV-AUTO-swob.xml', $url);
+        $this->assertStringContainsString('CYAV-AUTO-minute-swob.xml', $url);
     }
 
     /**
@@ -42,6 +54,7 @@ class SwobAutoAdapterTest extends TestCase
         $this->assertNull(SwobAutoAdapter::buildUrl(['station_id' => '']));
         $this->assertNull(SwobAutoAdapter::buildUrl([]));
         $this->assertNull(SwobAutoAdapter::buildUrl(['station_id' => 'evil/../path']));
+        $this->assertNull(SwobAutoAdapter::buildStandardUrl(['station_id' => '']));
     }
 
     /**

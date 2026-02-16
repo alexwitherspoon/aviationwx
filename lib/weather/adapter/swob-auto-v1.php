@@ -3,7 +3,9 @@
  * SWOB-ML AUTO Adapter v1
  *
  * Fetches weather from Environment Canada SWOB-ML for automated Canadian
- * stations (NAV Canada AWOS). Uses {ICAO}-AUTO-swob.xml endpoint.
+ * stations (NAV Canada AWOS). Prefers {ICAO}-AUTO-minute-swob.xml when available
+ * (sub-hourly updates); falls back to {ICAO}-AUTO-swob.xml (hourly) for stations
+ * without minute data.
  *
  * Configuration:
  * - station_id: ICAO station identifier (e.g., "CYAV", "CBBC") - REQUIRED
@@ -36,7 +38,7 @@ class SwobAutoAdapter
         'cloud_cover',
     ];
 
-    /** Typical update frequency in seconds (~5 min per ECCC) */
+    /** Typical update frequency: minute SWOB ~5 min, standard SWOB hourly */
     public const UPDATE_FREQUENCY = 300;
 
     /** Max acceptable age before data is stale (1 hour) */
@@ -72,22 +74,46 @@ class SwobAutoAdapter
     }
 
     /**
-     * Build the fetch URL for a SWOB AUTO station
+     * Build the fetch URL for a SWOB AUTO station (prefers minute when available)
      *
      * @param array $config Source config with station_id (e.g., "CYAV")
      * @return string|null URL or null if invalid
      */
     public static function buildUrl(array $config): ?string
     {
-        $stationId = $config['station_id'] ?? '';
+        $stationId = self::normalizeStationId($config['station_id'] ?? '');
+        if ($stationId === null) {
+            return null;
+        }
+        return self::BASE_URL . '/' . $stationId . '-AUTO-minute-swob.xml';
+    }
+
+    /**
+     * Build fallback URL for standard SWOB (hourly) when minute SWOB returns 404
+     *
+     * @param array $config Source config with station_id
+     * @return string|null URL or null if invalid
+     */
+    public static function buildStandardUrl(array $config): ?string
+    {
+        $stationId = self::normalizeStationId($config['station_id'] ?? '');
+        if ($stationId === null) {
+            return null;
+        }
+        return self::BASE_URL . '/' . $stationId . '-AUTO-swob.xml';
+    }
+
+    /**
+     * @param mixed $stationId
+     * @return string|null Uppercase 4-char ICAO or null
+     */
+    private static function normalizeStationId($stationId): ?string
+    {
         if (empty($stationId) || !is_string($stationId)) {
             return null;
         }
         $stationId = strtoupper(trim($stationId));
-        if (!preg_match('/^[A-Z]{4}$/', $stationId)) {
-            return null;
-        }
-        return self::BASE_URL . '/' . $stationId . '-AUTO-swob.xml';
+        return preg_match('/^[A-Z]{4}$/', $stationId) ? $stationId : null;
     }
 
     /**

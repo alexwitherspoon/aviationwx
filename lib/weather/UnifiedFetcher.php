@@ -212,10 +212,19 @@ function fetchAllSources(array $sources, string $airportId): array {
     
     // Collect responses
     $responses = [];
+    $swobAuto404Retries = [];
     foreach ($handles as $sourceKey => $ch) {
         $response = curl_multi_getcontent($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $sourceType = $sources[$sourceKey]['type'];
+        
+        // swob_auto 404: minute feed not available - retry with standard URL before failing
+        if ($sourceType === 'swob_auto' && $httpCode === 404) {
+            $swobAuto404Retries[$sourceKey] = $sources[$sourceKey];
+            $responses[$sourceKey] = null;
+            curl_multi_remove_handle($mh, $ch);
+            continue;
+        }
         
         // Circuit breaker should only open on API/auth failures (HTTP errors, network issues)
         // Valid responses (2xx) should always pass through, even if data is null/empty
@@ -236,6 +245,38 @@ function fetchAllSources(array $sources, string $airportId): array {
     }
     
     curl_multi_close($mh);
+    
+    // Fallback: swob_auto 404 → try standard (hourly) URL
+    foreach ($swobAuto404Retries as $sourceKey => $source) {
+        $fallbackUrl = SwobAutoAdapter::buildStandardUrl($source);
+        if ($fallbackUrl === null) {
+            recordWeatherFailure($airportId, 'swob_auto', 'transient', 404);
+            weather_health_track_fetch($airportId, 'swob_auto', false, 404);
+            continue;
+        }
+        $ch = curl_init($fallbackUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => defined('CURL_TIMEOUT') ? CURL_TIMEOUT : 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_USERAGENT => 'AviationWX/2.0',
+            CURLOPT_FAILONERROR => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_HTTPHEADER => buildSourceHeaders($source),
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode >= 200 && $httpCode < 300) {
+            $responses[$sourceKey] = $response;
+            recordWeatherSuccess($airportId, 'swob_auto');
+            weather_health_track_fetch($airportId, 'swob_auto', true, $httpCode);
+        } else {
+            recordWeatherFailure($airportId, 'swob_auto', 'transient', $httpCode);
+            weather_health_track_fetch($airportId, 'swob_auto', false, $httpCode);
+        }
+    }
     
     return $responses;
 }
