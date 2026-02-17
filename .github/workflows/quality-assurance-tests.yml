@@ -51,7 +51,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: apcu, gd, zip, curl, exif
           coverage: pcov
       
@@ -226,7 +226,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: apcu, gd, zip, curl, exif
           coverage: none
       
@@ -562,7 +562,7 @@ jobs:
             exit 1
           fi
           
-          grep -q "FROM php:8.3-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.3-apache" && exit 1)
+          grep -q "FROM php:8.4-apache" docker/Dockerfile || (echo "❌ Dockerfile doesn't use PHP 8.4-apache" && exit 1)
           grep -q "ffmpeg" docker/Dockerfile || (echo "⚠️  ffmpeg not found in Dockerfile" || true)
           grep -q "vsftpd" docker/Dockerfile || (echo "❌ vsftpd not found in Dockerfile (required for push webcams)" && exit 1)
           grep -q "openssh-server" docker/Dockerfile || (echo "❌ openssh-server not found in Dockerfile (required for SFTP)" && exit 1)
@@ -637,7 +637,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
@@ -687,7 +687,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
@@ -809,7 +809,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       
@@ -913,7 +913,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: apcu, gd, zip, curl, json, mbstring
           coverage: none
       

@@ -385,7 +385,7 @@ This runs the **exact same** validation as GitHub Actions, including:
 
 ### CI Environment
 
-- PHP 8.3 with extensions: apcu, gd, zip, curl
+- PHP 8.4 with extensions: apcu, gd, zip, curl
 - Composer dependencies cached
 - Docker images cached via GitHub Actions cache
 - Test fixtures used (no production secrets)
