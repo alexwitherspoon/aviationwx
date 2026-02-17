@@ -349,13 +349,12 @@ function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?ar
     $cachePath = CACHE_RUNWAYS_DATA_FILE;
     $fixturePath = dirname(__DIR__) . '/tests/Fixtures/runways_data.json';
 
-    if (!file_exists($cachePath)) {
-        if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
-            && file_exists($fixturePath)) {
-            $cachePath = $fixturePath;
-        } else {
-            return null;
-        }
+    // In test mode, prefer fixture for deterministic results
+    if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
+        && file_exists($fixturePath)) {
+        $cachePath = $fixturePath;
+    } elseif (!file_exists($cachePath)) {
+        return null;
     }
 
     // @ suppresses read errors; we handle failure explicitly below
@@ -385,13 +384,12 @@ function warmRunwaysApcuCache(array $airports): int {
     $cachePath = CACHE_RUNWAYS_DATA_FILE;
     $fixturePath = dirname(__DIR__) . '/tests/Fixtures/runways_data.json';
 
-    if (!file_exists($cachePath)) {
-        if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
-            && file_exists($fixturePath)) {
-            $cachePath = $fixturePath;
-        } else {
-            return 0;
-        }
+    // In test mode, prefer fixture for deterministic results
+    if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
+        && file_exists($fixturePath)) {
+        $cachePath = $fixturePath;
+    } elseif (!file_exists($cachePath)) {
+        return 0;
     }
 
     // @ suppresses read errors; we handle failure explicitly below
