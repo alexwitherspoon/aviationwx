@@ -21,6 +21,7 @@ require_once __DIR__ . '/webcam-variant-manifest.php';
 require_once __DIR__ . '/webcam-image-metrics.php';
 require_once __DIR__ . '/weather/utils.php';
 require_once __DIR__ . '/circuit-breaker.php';
+require_once __DIR__ . '/runways.php';
 require_once __DIR__ . '/variant-health.php';
 require_once __DIR__ . '/weather-health.php';
 require_once __DIR__ . '/weather/outage-detection.php';
@@ -45,6 +46,7 @@ function checkSystemHealth(): array {
     
     $configPath = getenv('CONFIG_PATH') ?: __DIR__ . '/../config/airports.json';
     $configReadable = file_exists($configPath) && is_readable($configPath);
+    $config = null;
     $configValid = false;
     if ($configReadable) {
         $config = loadConfig(false); // Don't use cache for status check
@@ -280,6 +282,17 @@ function checkSystemHealth(): array {
     
     $health['components']['weather_fetching'] = $weatherDataHealth;
     
+    // Runway cache (FAA/OurAirports)
+    $runwayCacheHealth = checkRunwayCacheHealth($config);
+    $health['components']['runway_cache'] = $runwayCacheHealth;
+    
+    // Magnetic declination (NOAA geomag) - only when geomag_api_key is configured
+    $geomagKey = getGlobalConfig('geomag_api_key');
+    if ($geomagKey !== null && $geomagKey !== '' && trim((string) $geomagKey) !== '') {
+        $geomagHealth = checkMagneticDeclinationHealth();
+        $health['components']['magnetic_declination'] = $geomagHealth;
+    }
+    
     return $health;
 }
 
@@ -299,6 +312,110 @@ function checkSystemHealth(): array {
  */
 function checkVariantGenerationHealth(): array {
     return variant_health_get_status();
+}
+
+/**
+ * Check runway cache health (FAA/OurAirports)
+ *
+ * @param array|null $config Full config (for airport count and missing list)
+ * @return array Component health array
+ */
+function checkRunwayCacheHealth(?array $config): array {
+    $path = CACHE_RUNWAYS_DATA_FILE;
+    if (!file_exists($path)) {
+        return [
+            'name' => 'Runway Cache',
+            'status' => 'down',
+            'message' => 'Runway cache missing (run fetch-runways.php)',
+            'lastChanged' => 0,
+        ];
+    }
+    $mtime = filemtime($path);
+    $age = time() - $mtime;
+    $needsRefresh = runwaysCacheNeedsRefresh();
+    $data = @json_decode((string) file_get_contents($path), true);
+    $airportCount = isset($data['airports']) && is_array($data['airports']) ? count($data['airports']) : 0;
+    $fetchedAt = $data['fetched_at'] ?? $mtime;
+    $status = $needsRefresh ? 'degraded' : 'operational';
+    $message = "{$airportCount} airports in cache";
+    if ($needsRefresh) {
+        $message .= ' • Stale (refresh recommended)';
+    } else {
+        $message .= ' • Up to date';
+    }
+    $details = ['airports_in_cache' => $airportCount, 'age_days' => (int) round($age / 86400)];
+    $airports = $config['airports'] ?? [];
+    if (!empty($airports)) {
+        $missing = [];
+        $identsToTry = static function ($airportId, $airport) {
+            $id = strtoupper($airportId);
+            $icao = isset($airport['icao']) ? strtoupper((string) $airport['icao']) : null;
+            $faa = isset($airport['faa']) ? strtoupper((string) $airport['faa']) : null;
+            return array_values(array_unique(array_filter([$icao, $faa, $id])));
+        };
+        $cacheAirports = $data['airports'] ?? [];
+        foreach ($airports as $airportId => $airport) {
+            if (!is_array($airport) || (!empty($airport['runways']) && is_array($airport['runways']))) {
+                continue;
+            }
+            $idents = $identsToTry($airportId, $airport);
+            $found = false;
+            foreach ($idents as $ident) {
+                if (isset($cacheAirports[$ident]['segments']) && !empty($cacheAirports[$ident]['segments'])) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $missing[] = $airportId;
+            }
+        }
+        if (!empty($missing)) {
+            $details['airports_missing_runways'] = $missing;
+            $message .= ' • ' . count($missing) . ' configured airports without runway data';
+        }
+    }
+    return [
+        'name' => 'Runway Cache',
+        'status' => $status,
+        'message' => $message,
+        'lastChanged' => $fetchedAt,
+        'details' => $details,
+    ];
+}
+
+/**
+ * Check magnetic declination (geomag) health when API key is configured
+ *
+ * @return array Component health array
+ */
+function checkMagneticDeclinationHealth(): array {
+    $breaker = checkGeomagCircuitBreaker();
+    $geomagDir = CACHE_GEOMAG_DIR;
+    $cacheExists = is_dir($geomagDir);
+    $cacheFiles = $cacheExists ? glob($geomagDir . '/*.json') : [];
+    $cacheCount = is_array($cacheFiles) ? count($cacheFiles) : 0;
+    if ($breaker['skip']) {
+        return [
+            'name' => 'Magnetic Declination',
+            'status' => 'degraded',
+            'message' => 'Circuit breaker open: ' . ($breaker['last_failure_reason'] ?? $breaker['reason'] ?? 'API temporarily disabled'),
+            'lastChanged' => 0,
+            'details' => ['cached_locations' => $cacheCount],
+        ];
+    }
+    $status = 'operational';
+    $message = 'NOAA geomag API available';
+    if ($cacheCount > 0) {
+        $message .= " • {$cacheCount} locations cached";
+    }
+    return [
+        'name' => 'Magnetic Declination',
+        'status' => $status,
+        'message' => $message,
+        'lastChanged' => 0,
+        'details' => ['cached_locations' => $cacheCount],
+    ];
 }
 
 /**
