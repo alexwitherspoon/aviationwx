@@ -601,4 +601,32 @@ class ConfigTest extends TestCase {
         $airport = ['icao' => 'CYAV', 'faa' => 'YAV', 'lat' => 50.06, 'lon' => -97.03];
         $this->assertSame('CA', getAviationRegionFromAirport($airport));
     }
+
+    /**
+     * Test getMagneticDeclination() returns airport override when set
+     */
+    public function testGetMagneticDeclination_AirportOverride_ReturnsOverride(): void {
+        $airport = ['magnetic_declination' => 13.2, 'lat' => 45.54, 'lon' => -122.95];
+        $this->assertSame(13.2, getMagneticDeclination($airport));
+    }
+
+    /**
+     * Test getMagneticDeclination() returns 0 when no override and no API key
+     */
+    public function testGetMagneticDeclination_NoOverride_ReturnsZero(): void {
+        $airport = ['lat' => 45.54, 'lon' => -122.95];
+        $result = getMagneticDeclination($airport);
+        $this->assertIsFloat($result);
+        $this->assertSame(0.0, $result, 'Should return 0 when no override (API not called in test mode)');
+    }
+
+    /**
+     * Test getMagneticDeclination() with null airport returns 0 or global
+     */
+    public function testGetMagneticDeclination_NullAirport_ReturnsZeroOrGlobal(): void {
+        $result = getMagneticDeclination(null);
+        $this->assertIsFloat($result);
+        $this->assertGreaterThanOrEqual(-180.0, $result);
+        $this->assertLessThanOrEqual(180.0, $result);
+    }
 }

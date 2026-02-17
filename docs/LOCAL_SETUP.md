@@ -329,5 +329,6 @@ See `config/env.example` for full list. Key Docker/infrastructure variables:
 - `SSL_ENABLED`: Enable SSL for local dev (default: false)
 
 **Note:** Application defaults (timezone, refresh intervals, etc.) are configured in the `config` section of `airports.json`, not in `.env`. See [CONFIGURATION.md](CONFIGURATION.md) for details.
-- `CACHE_ENABLED`: Enable caching (default: true)
+
+**Magnetic declination:** For automatic runway wind diagram alignment, add `geomag_api_key` to the `config` section of `airports.json`. [Register free](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml). Without it, declination uses config override or 0.
 

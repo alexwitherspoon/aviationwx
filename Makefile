@@ -134,6 +134,8 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ ErrorHandlingTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WeatherAggregatorTest.php --testdox --stop-on-failure --no-coverage; \
 	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
+	@APP_ENV=testing vendor/bin/phpunit tests/Unit/MagneticDeclinationSafetyTest.php --testdox --stop-on-failure --no-coverage; \
+	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ MagneticDeclinationSafetyTest failed"; exit 1; fi
 	@echo "✓ Critical safety tests passed"
 	@echo ""
 	@echo "5️⃣  Validating JavaScript..."

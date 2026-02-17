@@ -428,3 +428,48 @@ function recordWebcamSuccess($airportId, $camIndex) {
     recordCircuitBreakerSuccessBase($key, CACHE_BACKOFF_FILE);
 }
 
+/** Circuit breaker key for NOAA geomag API (single global endpoint) */
+const GEOMAG_CIRCUIT_BREAKER_KEY = 'geomag_noaa';
+
+/**
+ * Check if geomag API should be skipped due to circuit breaker
+ *
+ * @return array {
+ *   'skip' => bool,              // True if should skip (circuit open)
+ *   'reason' => string,          // Reason for skip ('circuit_open' or '')
+ *   'backoff_remaining' => int,  // Seconds remaining in backoff period
+ *   'failures' => int,           // Number of consecutive failures
+ *   'last_failure_reason' => string|null  // Reason for last failure (if available)
+ * }
+ */
+function checkGeomagCircuitBreaker(): array {
+    if (!ensureCacheDir(CACHE_BASE_DIR)) {
+        return ['skip' => false, 'reason' => '', 'backoff_remaining' => 0, 'failures' => 0, 'last_failure_reason' => null];
+    }
+    return checkCircuitBreakerBase(GEOMAG_CIRCUIT_BREAKER_KEY, CACHE_BACKOFF_FILE);
+}
+
+/**
+ * Record geomag API failure and update backoff state
+ *
+ * @param string $severity 'transient' or 'permanent' (default: 'transient')
+ * @param int|null $httpCode HTTP status code (4xx/5xx) if available, null otherwise
+ * @param string|null $failureReason Human-readable reason for the failure
+ * @return void
+ */
+function recordGeomagFailure(string $severity = 'transient', ?int $httpCode = null, ?string $failureReason = null): void {
+    if (!ensureCacheDir(CACHE_BASE_DIR)) {
+        return;
+    }
+    recordCircuitBreakerFailureBase(GEOMAG_CIRCUIT_BREAKER_KEY, CACHE_BACKOFF_FILE, $severity, $httpCode, $failureReason);
+}
+
+/**
+ * Record geomag API success and reset backoff state
+ *
+ * @return void
+ */
+function recordGeomagSuccess(): void {
+    recordCircuitBreakerSuccessBase(GEOMAG_CIRCUIT_BREAKER_KEY, CACHE_BACKOFF_FILE);
+}
+

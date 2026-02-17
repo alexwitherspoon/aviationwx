@@ -324,6 +324,12 @@ nano /home/aviationwx/airports.json
 
 See [Configuration Guide](CONFIGURATION.md) for detailed configuration options.
 
+**Deployment checklist** – Ensure `airports.json` includes keys for full functionality:
+- Weather sources (Open-Meteo, AviationWX API, etc.)
+- `geomag_api_key` – NOAA NCEI geomagnetic API key for automatic magnetic declination (runway wind diagram). [Register free](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml). Optional; without it, declination falls back to config override or 0.
+- NOTAM API credentials (if using NOTAMs)
+- OpenWeatherMap API key (if using cloud layer)
+
 ### 3. Start Application
 
 ```bash

@@ -236,6 +236,17 @@ if (!defined('PARTNER_LOGO_CACHE_TTL')) {
     define('PARTNER_LOGO_CACHE_TTL', 2592000); // 30 days
 }
 
+// Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old
+if (!defined('RUNWAYS_FETCH_CHECK_INTERVAL')) {
+    define('RUNWAYS_FETCH_CHECK_INTERVAL', 604800); // 7 days
+}
+if (!defined('RUNWAYS_CACHE_MAX_AGE')) {
+    define('RUNWAYS_CACHE_MAX_AGE', 2592000); // 30 days
+}
+if (!defined('RUNWAYS_APCU_TTL')) {
+    define('RUNWAYS_APCU_TTL', 2592000); // 30 days (match cache max age)
+}
+
 // Circuit breaker / backoff
 // Circuit breaker failure threshold - require this many consecutive failures before opening
 if (!defined('CIRCUIT_BREAKER_FAILURE_THRESHOLD')) {

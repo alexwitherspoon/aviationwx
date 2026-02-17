@@ -577,6 +577,43 @@ function getStalenessThresholds(?array $airport = null): array {
 }
 
 /**
+ * Get magnetic declination for runway wind diagram (degrees)
+ *
+ * Safety-critical: Aligns runway wind diagram with magnetic north.
+ * Positive = East (magnetic north is East of true north), negative = West.
+ * Cascade: airport override → global override → NOAA API (when geomag_api_key set) → 0.
+ * Values clamped to -180..180 (invalid config/API data must not mislead).
+ *
+ * @param array|null $airport Airport config (with lat, lon for API lookup)
+ * @return float Declination in degrees (-180 to 180)
+ */
+function getMagneticDeclination(?array $airport = null): float
+{
+    $decl = 0.0;
+
+    if ($airport !== null && isset($airport['magnetic_declination'])) {
+        $decl = (float) $airport['magnetic_declination'];
+    } elseif (($global = getGlobalConfig('magnetic_declination')) !== null) {
+        $decl = (float) $global;
+    } else {
+        $apiKey = getGlobalConfig('geomag_api_key');
+        if (is_string($apiKey) && $apiKey !== '' && $airport !== null) {
+            $lat = isset($airport['lat']) ? (float) $airport['lat'] : null;
+            $lon = isset($airport['lon']) ? (float) $airport['lon'] : null;
+            if ($lat !== null && $lon !== null) {
+                require_once __DIR__ . '/magnetic-declination.php';
+                $apiDecl = fetchMagneticDeclinationFromApi($lat, $lon, $apiKey);
+                if ($apiDecl !== null) {
+                    $decl = $apiDecl;
+                }
+            }
+        }
+    }
+
+    return max(-180.0, min(180.0, $decl));
+}
+
+/**
  * Get METAR stale warning threshold in seconds (global only)
  * @return int Threshold in seconds
  */

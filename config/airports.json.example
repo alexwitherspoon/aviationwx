@@ -63,6 +63,9 @@
     "_comment_openweathermap": "OpenWeatherMap API key for cloud cover tiles on airports map. Get free key at: https://home.openweathermap.org/api_keys",
     "openweathermap_api_key": "",
     
+    "_comment_geomag": "NOAA NCEI geomagnetic API key for automatic magnetic declination lookup. Register at https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml. When set, declination is fetched for airports without magnetic_declination override.",
+    "geomag_api_key": "",
+    
     "default_preferences": {
       "time_format": "12hr",
       "temp_unit": "F",
@@ -131,6 +134,7 @@
           "heading_2": 332
         }
       ],
+      "magnetic_declination": 13.2,
       "frequencies": {
         "ctaf": "122.8",
         "asos": "135.875",
@@ -455,7 +459,15 @@
       "access_type": "private",
       "permission_required": false,
       "tower_status": "non_towered",
-      "note": "Example of airport with 'formerly' field. This airport was previously known as S48. NOTAMs issued before the rename may still reference the old identifier (S48), so we include it in the 'formerly' array to ensure those NOTAMs are matched correctly."
+      "runways": [
+        {
+          "name": "04/22",
+          "04": {"lat": 45.356, "lon": -122.268},
+          "22": {"lat": 45.353, "lon": -122.270}
+        }
+      ],
+      "magnetic_declination": 13.0,
+      "note": "Example of lat/lon runway format and 'formerly' field. Run php scripts/convert-runways-to-latlon.php 4or9 to fetch from FAA/OurAirports."
     }
   }
 }
