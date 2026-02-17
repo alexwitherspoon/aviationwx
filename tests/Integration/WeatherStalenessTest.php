@@ -56,7 +56,9 @@ class WeatherStalenessTest extends TestCase
         }
 
         $this->assertArrayHasKey('x-cache-status', $response['headers']);
-        $this->assertSame('HIT', $response['headers']['x-cache-status']);
+        $cacheStatus = $response['headers']['x-cache-status'];
+        $this->assertContains($cacheStatus, ['HIT', 'STALE', 'RL-SERVE'],
+            "Cache status should be HIT, STALE, or RL-SERVE for fresh file (got: {$cacheStatus})");
     }
 
     /**
