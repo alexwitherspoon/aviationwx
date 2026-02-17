@@ -101,5 +101,50 @@ class WeatherUtilsTest extends TestCase
         $this->assertTrue(isUnlimitedCeiling(UNLIMITED_CEILING_FT), 'Sentinel should be recognized as unlimited');
         $this->assertFalse(isUnlimitedCeiling($normalCeiling), 'Normal value should not be recognized as unlimited');
     }
+
+    /**
+     * getWeatherSourceDisplayName without stationId returns base name
+     */
+    public function testGetWeatherSourceDisplayName_WithoutStationId_ReturnsBaseName(): void
+    {
+        $this->assertEquals('NOAA Aviation Weather', getWeatherSourceDisplayName('metar'));
+        $this->assertEquals('Tempest Weather', getWeatherSourceDisplayName('tempest'));
+        $this->assertEquals('Nav Canada Weather', getWeatherSourceDisplayName('swob_auto'));
+    }
+
+    /**
+     * getWeatherSourceDisplayName with stationId returns "Source Name (ICAO)" format
+     */
+    public function testGetWeatherSourceDisplayName_WithStationId_ReturnsIcaoFormat(): void
+    {
+        $this->assertEquals('NOAA Aviation Weather (KSPB)', getWeatherSourceDisplayName('metar', 'KSPB'));
+        $this->assertEquals('NOAA Aviation Weather (CYYZ)', getWeatherSourceDisplayName('metar', 'cyyz'));
+        $this->assertEquals('Nav Canada Weather (CYAV)', getWeatherSourceDisplayName('swob_auto', 'CYAV'));
+        $this->assertEquals('NWS ASOS (KSPB)', getWeatherSourceDisplayName('nws', 'KSPB'));
+    }
+
+    /**
+     * getWeatherSourceDisplayName with empty stationId returns base name
+     */
+    public function testGetWeatherSourceDisplayName_WithEmptyStationId_ReturnsBaseName(): void
+    {
+        $this->assertEquals('NOAA Aviation Weather', getWeatherSourceDisplayName('metar', ''));
+        $this->assertEquals('NOAA Aviation Weather', getWeatherSourceDisplayName('metar', null));
+    }
+
+    /**
+     * getWeatherSourceInfo returns Nav Canada for swob sources
+     */
+    public function testGetWeatherSourceInfo_SwobSources_ReturnsNavCanada(): void
+    {
+        $swobAuto = getWeatherSourceInfo('swob_auto');
+        $this->assertNotNull($swobAuto);
+        $this->assertEquals('Nav Canada Weather', $swobAuto['name']);
+        $this->assertEquals('https://www.navcanada.ca/', $swobAuto['url']);
+
+        $swobMan = getWeatherSourceInfo('swob_man');
+        $this->assertNotNull($swobMan);
+        $this->assertEquals('Nav Canada Weather', $swobMan['name']);
+    }
 }
 

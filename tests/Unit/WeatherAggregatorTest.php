@@ -36,12 +36,14 @@ class WeatherAggregatorTest extends TestCase {
      * @param array $fields Field values keyed by name
      * @param int|null $obsTime Observation timestamp
      * @param string|null $metarStationId For METAR source: station ICAO (e.g., KSPB). Null = not METAR or unknown.
+     * @param string|null $stationId For ICAO-keyed sources (swob, nws, awosnet): station ICAO for attribution.
      */
     private function createSnapshot(
         string $source,
         array $fields,
         ?int $obsTime = null,
-        ?string $metarStationId = null
+        ?string $metarStationId = null,
+        ?string $stationId = null
     ): WeatherSnapshot {
         $obsTime = $obsTime ?? $this->now;
         
@@ -83,7 +85,8 @@ class WeatherAggregatorTest extends TestCase {
                 : WeatherReading::null($source),
             rawMetar: $fields['raw_metar'] ?? null,
             isValid: true,
-            metarStationId: $metarStationId
+            metarStationId: $metarStationId,
+            stationId: $stationId
         );
     }
     
@@ -468,6 +471,106 @@ class WeatherAggregatorTest extends TestCase {
 
         $this->assertEquals(12, $result['wind_speed'], 'Without localAirportIcao, freshest wins');
         $this->assertEquals('metar', $result['_field_source_map']['wind_speed']);
+    }
+
+    /**
+     * _field_station_map populated for METAR when metarStationId is set
+     */
+    public function testFieldStationMap_MetarWithStationId_PopulatesMap(): void
+    {
+        $metar = $this->createSnapshot('metar', [
+            'wind_speed' => 10,
+            'wind_direction' => 270,
+            'visibility' => 10,
+            'temperature' => 15.0,
+        ], null, 'KSPB');
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$metar]);
+
+        $this->assertArrayHasKey('_field_station_map', $result);
+        $this->assertEquals('KSPB', $result['_field_station_map']['wind_speed']);
+        $this->assertEquals('KSPB', $result['_field_station_map']['wind_direction']);
+        $this->assertEquals('KSPB', $result['_field_station_map']['visibility']);
+        $this->assertEquals('KSPB', $result['_field_station_map']['temperature']);
+    }
+
+    /**
+     * _field_station_map populated for swob_auto when stationId is set
+     */
+    public function testFieldStationMap_SwobWithStationId_PopulatesMap(): void
+    {
+        $swob = $this->createSnapshot('swob_auto', [
+            'wind_speed' => 12,
+            'wind_direction' => 180,
+            'temperature' => -5.0,
+            'pressure' => 29.92,
+        ], null, null, 'CYAV');
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$swob]);
+
+        $this->assertArrayHasKey('_field_station_map', $result);
+        $this->assertEquals('CYAV', $result['_field_station_map']['wind_speed']);
+        $this->assertEquals('CYAV', $result['_field_station_map']['temperature']);
+    }
+
+    /**
+     * _field_station_map empty when source has no station (e.g. tempest)
+     */
+    public function testFieldStationMap_NonIcaoSource_EmptyMap(): void
+    {
+        $tempest = $this->createSnapshot('tempest', [
+            'temperature' => 20.5,
+            'wind_speed' => 10,
+            'wind_direction' => 270,
+        ]);
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$tempest]);
+
+        $this->assertArrayHasKey('_field_station_map', $result);
+        $this->assertEmpty($result['_field_station_map']);
+    }
+
+    /**
+     * _field_station_map from winning source when multiple ICAO sources
+     */
+    public function testFieldStationMap_MultipleIcaoSources_UsesWinningStation(): void
+    {
+        $olderTime = $this->now - 600;
+        $swob = $this->createSnapshot('swob_auto', [
+            'wind_speed' => 8,
+            'wind_direction' => 270,
+            'temperature' => 10.0,
+        ], $olderTime, null, 'CYAV');
+
+        $fresherTime = $this->now - 60;
+        $nws = $this->createSnapshot('nws', [
+            'wind_speed' => 12,
+            'wind_direction' => 180,
+            'temperature' => 12.0,
+        ], $fresherTime, null, 'KSPB');
+
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([$swob, $nws]);
+
+        $this->assertEquals('nws', $result['_field_source_map']['wind_speed']);
+        $this->assertEquals('KSPB', $result['_field_station_map']['wind_speed']);
+        $this->assertEquals('KSPB', $result['_field_station_map']['temperature']);
+    }
+
+    /**
+     * Empty result includes empty _field_station_map
+     */
+    public function testEmptyResult_IncludesFieldStationMap(): void
+    {
+        $aggregator = new WeatherAggregator($this->now);
+        $result = $aggregator->aggregate([]);
+
+        $this->assertArrayHasKey('_field_station_map', $result);
+        $this->assertIsArray($result['_field_station_map']);
+        $this->assertEmpty($result['_field_station_map']);
     }
 }
 
