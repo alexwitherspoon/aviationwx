@@ -36,6 +36,8 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_history_preset_hours` | `[1, 3, 6, 24]` | Period options in UI |
 | `webcam_history_max_frames` | — | *Deprecated* - use retention_hours |
 | `default_preferences` | — | Default unit toggle settings (see below) |
+| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram; overridable per-airport |
+| `geomag_api_key` | — | NOAA NCEI geomagnetic API key for automatic declination lookup. [Register](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml) for free. When set, declination is fetched for airports without manual override. |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
 | `notam_api_client_secret` | — | NOTAM API client secret |
@@ -98,6 +100,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
+| `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
 | `frequencies` | `{}` | Radio frequencies |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |
@@ -1223,15 +1226,41 @@ After adding your API key:
 
 ## Runway Configuration
 
+Two formats are supported:
+
+**Heading format** (simple, for single runways or when lat/lon unavailable):
+
 ```json
 "runways": [
   { "name": "15/33", "heading_1": 152, "heading_2": 332 },
-  { "name": "28L/10R", "heading_1": 280, "heading_2": 100 },
-  { "name": "28R/10L", "heading_1": 280, "heading_2": 100 }
+  { "name": "28L/10R", "heading_1": 280, "heading_2": 100 }
 ]
 ```
 
+**Lat/lon format** (preferred for accurate geometry; use `scripts/convert-runways-to-latlon.php` to generate from FAA/OurAirports):
+
+```json
+"runways": [
+  {
+    "name": "15/33",
+    "15": { "lat": 45.777901, "lon": -122.863998 },
+    "33": { "lat": 45.764198, "lon": -122.860001 }
+  },
+  {
+    "name": "28L/10R",
+    "28L": { "lat": 45.549599, "lon": -122.959999 },
+    "10R": { "lat": 45.535, "lon": -122.944 }
+  }
+]
+```
+
+Each runway end ident (e.g. `15`, `33`, `28L`, `10R`) maps to `{ lat, lon }` coordinates. Labels are placed by bearing from airport center. Run `php scripts/convert-runways-to-latlon.php kspb khio` to fetch from FAA/OurAirports and output the lat/lon schema.
+
+**Compare manual vs cache:** `CONFIG_PATH=/path/to/airports.json php scripts/compare-runways.php` compares manual runway definitions with FAA/OurAirports data. Use `--tolerance 0.0001` (default, ~11m) or `--tolerance 0.001` (~111m) to control what counts as a match.
+
 Parallel runways (L/C/R) are automatically detected and displayed side-by-side.
+
+**Magnetic declination** (optional): Override per-airport or globally for runway wind diagram alignment. Positive = East (mag N east of true N). When `geomag_api_key` is configured, declination is fetched from NOAA when no override exists. See `magnetic_declination` in the options table.
 
 ---
 

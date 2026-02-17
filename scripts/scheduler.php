@@ -29,6 +29,7 @@ require_once __DIR__ . '/../lib/metrics.php';
 require_once __DIR__ . '/../lib/weather-health.php';
 require_once __DIR__ . '/../lib/worker-timeout.php';
 require_once __DIR__ . '/../lib/webcam-schedule-queue.php';
+require_once __DIR__ . '/../lib/runways.php';
 // Note: variant-health.php flush is handled by metrics_flush_via_http() endpoint
 
 // Set Sentry service context
@@ -50,6 +51,8 @@ $lastWeeklyAggregation = '';
 $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastDynamicDnsCheck = 0;
+$lastRunwaysFetch = 0;
+$runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
 $lastError = null;
@@ -550,7 +553,43 @@ while ($running) {
             $lastStuckWorkerCleanup = $now;
         }
         
-        // 8. Dynamic DNS check for FTP passive mode (configurable interval)
+        // 8. Runways data fetch (weekly check; startup if missing)
+        // Fetches FAA + OurAirports runway data for wind visualization
+        if (!$runwaysFetchOnStartupDone && runwaysCacheNeedsRefresh()) {
+            $runwaysScript = __DIR__ . '/fetch-runways.php';
+            if (file_exists($runwaysScript)) {
+                $output = [];
+                $exitCode = 0;
+                exec('php ' . escapeshellarg($runwaysScript) . ' 2>&1', $output, $exitCode);
+                $runwaysFetchOnStartupDone = true;
+                if ($exitCode === 0) {
+                    aviationwx_log('info', 'scheduler: runways fetch complete (startup)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: runways fetch failed at startup', [
+                        'exit_code' => $exitCode,
+                        'output' => implode("\n", $output)
+                    ], 'app');
+                }
+            }
+        } elseif (($now - $lastRunwaysFetch) >= RUNWAYS_FETCH_CHECK_INTERVAL && runwaysCacheNeedsRefresh()) {
+            $runwaysScript = __DIR__ . '/fetch-runways.php';
+            if (file_exists($runwaysScript)) {
+                $output = [];
+                $exitCode = 0;
+                exec('php ' . escapeshellarg($runwaysScript) . ' 2>&1', $output, $exitCode);
+                $lastRunwaysFetch = $now;
+                if ($exitCode === 0) {
+                    aviationwx_log('info', 'scheduler: runways fetch complete (weekly)', [], 'app');
+                } else {
+                    aviationwx_log('warning', 'scheduler: runways fetch failed', [
+                        'exit_code' => $exitCode,
+                        'output' => implode("\n", $output)
+                    ], 'app');
+                }
+            }
+        }
+
+        // 9. Dynamic DNS check for FTP passive mode (configurable interval)
         // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
         $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
         if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {

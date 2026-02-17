@@ -1,0 +1,78 @@
+{
+  "fetched_at": 1700000000,
+  "airports": {
+    "03S": {
+      "segments": [
+        {
+          "start": [-0.307, -0.851],
+          "end": [0.307, 0.851],
+          "le_ident": "16",
+          "he_ident": "34",
+          "source": "programmatic"
+        }
+      ],
+      "center_lat": 45.395,
+      "center_lon": -122.261
+    },
+    "CYAV": {
+      "segments": [
+        {
+          "start": [0, -0.9],
+          "end": [0, 0.9],
+          "le_ident": "18L",
+          "he_ident": "36",
+          "source": "programmatic"
+        },
+        {
+          "start": [-0.766, 0.643],
+          "end": [0.766, -0.643],
+          "le_ident": "13",
+          "he_ident": "31",
+          "source": "programmatic"
+        },
+        {
+          "start": [0.643, 0.766],
+          "end": [-0.643, -0.766],
+          "le_ident": "04",
+          "he_ident": "22",
+          "source": "programmatic"
+        }
+      ],
+      "center_lat": 50.0564,
+      "center_lon": -97.0325
+    },
+    "KPDX": {
+      "segments": [
+        {
+          "start": [-0.94, -0.342],
+          "end": [0.94, 0.342],
+          "le_ident": "28L",
+          "he_ident": "10R",
+          "source": "programmatic"
+        },
+        {
+          "start": [-0.94, -0.342],
+          "end": [0.94, 0.342],
+          "le_ident": "28R",
+          "he_ident": "10L",
+          "source": "programmatic"
+        }
+      ],
+      "center_lat": 45.5897694,
+      "center_lon": -122.5950944
+    },
+    "KSPB": {
+      "segments": [
+        {
+          "start": [-0.469, -0.883],
+          "end": [0.469, 0.883],
+          "le_ident": "15",
+          "he_ident": "33",
+          "source": "programmatic"
+        }
+      ],
+      "center_lat": 45.7710278,
+      "center_lon": -122.8618333
+    }
+  }
+}

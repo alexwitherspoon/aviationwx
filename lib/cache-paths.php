@@ -586,6 +586,58 @@ if (!defined('CACHE_FAA_MAPPING_FILE')) {
 }
 
 // =============================================================================
+// RUNWAY GEOMETRY CACHE (FAA + OurAirports)
+// =============================================================================
+// Bulk runway data from FAA (US) and OurAirports (worldwide)
+// Processed segments stored per-airport; FAA preferred when both exist
+
+if (!defined('CACHE_RUNWAYS_DIR')) {
+    define('CACHE_RUNWAYS_DIR', CACHE_BASE_DIR . '/runways');
+}
+
+if (!defined('CACHE_RUNWAYS_DATA_FILE')) {
+    define('CACHE_RUNWAYS_DATA_FILE', CACHE_RUNWAYS_DIR . '/runways_data.json');
+}
+
+if (!defined('CACHE_RUNWAYS_FETCH_LOCK')) {
+    define('CACHE_RUNWAYS_FETCH_LOCK', CACHE_RUNWAYS_DIR . '/.fetch.lock');
+}
+
+/**
+ * Get path to runway fetch lock file
+ *
+ * @return string Full path to lock file
+ */
+function getRunwaysFetchLockPath(): string {
+    return CACHE_RUNWAYS_FETCH_LOCK;
+}
+
+// =============================================================================
+// GEOMAGNETIC DECLINATION CACHE (NOAA NCEI API)
+// =============================================================================
+// Cached by rounded lat/lon; TTL 7 days (declination changes ~0.1°/year)
+
+if (!defined('CACHE_GEOMAG_DIR')) {
+    define('CACHE_GEOMAG_DIR', CACHE_BASE_DIR . '/geomag');
+}
+
+if (!defined('GEOMAG_CACHE_TTL')) {
+    define('GEOMAG_CACHE_TTL', 7 * 24 * 3600);
+}
+
+/**
+ * Get path to cached geomag declination for a lat/lon
+ *
+ * @param float $lat Latitude (rounded to 2 decimals for cache key)
+ * @param float $lon Longitude (rounded to 2 decimals for cache key)
+ * @return string Full path to cache file
+ */
+function getGeomagDeclinationCachePath(float $lat, float $lon): string {
+    $key = round($lat, 2) . '_' . round($lon, 2);
+    return CACHE_GEOMAG_DIR . '/' . $key . '.json';
+}
+
+// =============================================================================
 // MAP TILES CACHE (OpenWeatherMap Proxy)
 // =============================================================================
 
@@ -645,6 +697,8 @@ function ensureAllCacheDirs(): array {
         CACHE_BASE_DIR,
         CACHE_PEAK_GUSTS_DIR,
         CACHE_TEMP_EXTREMES_DIR,
+        CACHE_RUNWAYS_DIR,
+        CACHE_GEOMAG_DIR,
         CACHE_WEATHER_DIR,
         CACHE_WEATHER_HISTORY_DIR,
         CACHE_WEBCAMS_DIR,
