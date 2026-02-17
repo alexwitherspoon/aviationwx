@@ -462,6 +462,7 @@ function emptyWeatherResult(string $airportId): array {
         'last_updated_iso' => date('c'),
         '_field_obs_time_map' => [],
         '_field_source_map' => [],
+        '_field_station_map' => [],
         '_sources_attempted' => 0,
         '_sources_succeeded' => 0,
     ];

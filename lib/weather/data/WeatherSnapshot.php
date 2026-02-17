@@ -65,6 +65,9 @@ class WeatherSnapshot {
     /** @var string|null METAR station ICAO (e.g., KSPB). Set only for metar source. Used to detect neighboring vs local. */
     public readonly ?string $metarStationId;
 
+    /** @var string|null Station ICAO for ICAO-keyed sources (swob, nws, awosnet). Used for "Source Name (ICAO)" attribution. */
+    public readonly ?string $stationId;
+
     /** @var bool Whether this snapshot was successfully parsed */
     public readonly bool $isValid;
 
@@ -72,6 +75,7 @@ class WeatherSnapshot {
      * Create a new WeatherSnapshot
      *
      * @param string|null $metarStationId For METAR source: station ICAO. Null for non-METAR or when unknown.
+     * @param string|null $stationId For ICAO-keyed sources (swob, nws, awosnet): station ICAO for attribution.
      */
     public function __construct(
         string $source,
@@ -87,7 +91,8 @@ class WeatherSnapshot {
         WeatherReading $cloudCover,
         ?string $rawMetar = null,
         bool $isValid = true,
-        ?string $metarStationId = null
+        ?string $metarStationId = null,
+        ?string $stationId = null
     ) {
         $this->source = $source;
         $this->fetchTime = $fetchTime;
@@ -103,6 +108,15 @@ class WeatherSnapshot {
         $this->rawMetar = $rawMetar;
         $this->isValid = $isValid;
         $this->metarStationId = $metarStationId;
+        $this->stationId = $stationId;
+    }
+
+    /**
+     * Get station ICAO for attribution (Source Name (ICAO) format).
+     * METAR uses metarStationId; other ICAO sources use stationId.
+     */
+    public function getStationIdForAttribution(): ?string {
+        return $this->stationId ?? $this->metarStationId;
     }
     
     /**
@@ -127,7 +141,8 @@ class WeatherSnapshot {
             cloudCover: WeatherReading::null($source),
             rawMetar: null,
             isValid: false,
-            metarStationId: null
+            metarStationId: null,
+            stationId: null
         );
     }
     

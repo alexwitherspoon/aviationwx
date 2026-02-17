@@ -65,6 +65,7 @@ class WeatherAggregator {
         $result = [];
         $fieldObsTimeMap = [];
         $fieldSourceMap = [];
+        $fieldStationMap = [];
 
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1: Select wind group (must be complete from single source)
@@ -74,6 +75,7 @@ class WeatherAggregator {
         $result = array_merge($result, $windResult['fields']);
         $fieldObsTimeMap = array_merge($fieldObsTimeMap, $windResult['obs_times']);
         $fieldSourceMap = array_merge($fieldSourceMap, $windResult['sources']);
+        $fieldStationMap = array_merge($fieldStationMap, $windResult['stations']);
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 2: Select aviation fields (visibility, ceiling, cloud_cover)
@@ -81,13 +83,17 @@ class WeatherAggregator {
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::METAR_PREFERRED_FIELDS as $fieldName) {
-            $reading = $this->selectMetarPreferredField($fieldName, $snapshots, $maxAges, $localAirportIcao);
+            $selection = $this->selectMetarPreferredField($fieldName, $snapshots, $maxAges, $localAirportIcao);
+            $reading = $selection['reading'];
             $result[$fieldName] = $reading->value;
             if ($reading->observationTime !== null) {
                 $fieldObsTimeMap[$fieldName] = $reading->observationTime;
             }
             if ($reading->source !== null) {
                 $fieldSourceMap[$fieldName] = $reading->source;
+            }
+            if ($selection['station_id'] !== null) {
+                $fieldStationMap[$fieldName] = $selection['station_id'];
             }
             if ($fieldName === 'visibility') {
                 $result['visibility_greater_than'] = $reading->greaterThan;
@@ -100,13 +106,17 @@ class WeatherAggregator {
         // ═══════════════════════════════════════════════════════════════════
         
         foreach (AggregationPolicy::INDEPENDENT_FIELDS as $fieldName) {
-            $reading = $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
+            $selection = $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
+            $reading = $selection['reading'];
             $result[$fieldName] = $reading->value;
             if ($reading->observationTime !== null) {
                 $fieldObsTimeMap[$fieldName] = $reading->observationTime;
             }
             if ($reading->source !== null) {
                 $fieldSourceMap[$fieldName] = $reading->source;
+            }
+            if ($selection['station_id'] !== null) {
+                $fieldStationMap[$fieldName] = $selection['station_id'];
             }
         }
         
@@ -116,6 +126,7 @@ class WeatherAggregator {
         
         $result['_field_obs_time_map'] = $fieldObsTimeMap;
         $result['_field_source_map'] = $fieldSourceMap;
+        $result['_field_station_map'] = $fieldStationMap;
         
         // Determine overall observation times
         $result['obs_time_primary'] = $this->findPrimaryObsTime($snapshots);
@@ -174,6 +185,7 @@ class WeatherAggregator {
         $bestWind = null;
         $bestObsTime = 0;
         $bestSource = null;
+        $bestSnapshot = null;
         $bestIsLocal = false;
 
         foreach ($snapshots as $snapshot) {
@@ -197,6 +209,7 @@ class WeatherAggregator {
                 $bestObsTime = $obsTime;
                 $bestWind = $snapshot->wind;
                 $bestSource = $snapshot->source;
+                $bestSnapshot = $snapshot;
                 $bestIsLocal = $isLocal;
                 continue;
             }
@@ -205,6 +218,7 @@ class WeatherAggregator {
                 $bestObsTime = $obsTime;
                 $bestWind = $snapshot->wind;
                 $bestSource = $snapshot->source;
+                $bestSnapshot = $snapshot;
                 $bestIsLocal = $isLocal;
             }
         }
@@ -220,6 +234,7 @@ class WeatherAggregator {
                 ],
                 'obs_times' => [],
                 'sources' => [],
+                'stations' => [],
             ];
         }
         
@@ -228,9 +243,14 @@ class WeatherAggregator {
         $obsTimeMap = $bestWind->getObservationTimeMap();
         
         $sourceMap = [];
+        $stationMap = [];
+        $stationId = $bestSnapshot?->getStationIdForAttribution();
         foreach (array_keys($windData) as $field) {
             if ($windData[$field] !== null) {
                 $sourceMap[$field] = $bestSource;
+                if ($stationId !== null) {
+                    $stationMap[$field] = $stationId;
+                }
             }
         }
         
@@ -238,6 +258,7 @@ class WeatherAggregator {
             'fields' => $windData,
             'obs_times' => $obsTimeMap,
             'sources' => $sourceMap,
+            'stations' => $stationMap,
         ];
     }
     
@@ -251,9 +272,9 @@ class WeatherAggregator {
      * @param array<WeatherSnapshot> $snapshots
      * @param array<string, int>|null $maxAges Optional per-source max age overrides
      * @param string|null $localAirportIcao Airport ICAO for local vs neighboring detection
-     * @return WeatherReading
+     * @return array{reading: WeatherReading, station_id: string|null}
      */
-    private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): WeatherReading {
+    private function selectMetarPreferredField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
         return $this->selectBestField($fieldName, $snapshots, $maxAges, $localAirportIcao);
     }
     
@@ -267,10 +288,11 @@ class WeatherAggregator {
      * @param array<WeatherSnapshot> $snapshots
      * @param array<string, int>|null $maxAges Optional per-source max age overrides
      * @param string|null $localAirportIcao Airport ICAO for local vs neighboring detection
-     * @return WeatherReading
+     * @return array{reading: WeatherReading, station_id: string|null}
      */
-    private function selectBestField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): WeatherReading {
+    private function selectBestField(string $fieldName, array $snapshots, ?array $maxAges = null, ?string $localAirportIcao = null): array {
         $bestReading = null;
+        $bestSnapshot = null;
         $bestObsTime = 0;
         $bestIsLocal = false;
 
@@ -294,6 +316,7 @@ class WeatherAggregator {
             if ($bestReading !== null && !$bestIsLocal && $isLocal) {
                 $bestObsTime = $obsTime;
                 $bestReading = $reading->withSource($snapshot->source);
+                $bestSnapshot = $snapshot;
                 $bestIsLocal = $isLocal;
                 continue;
             }
@@ -301,11 +324,14 @@ class WeatherAggregator {
             if ($obsTime > $bestObsTime) {
                 $bestObsTime = $obsTime;
                 $bestReading = $reading->withSource($snapshot->source);
+                $bestSnapshot = $snapshot;
                 $bestIsLocal = $isLocal;
             }
         }
 
-        return $bestReading ?? WeatherReading::null();
+        $reading = $bestReading ?? WeatherReading::null();
+        $stationId = $bestSnapshot?->getStationIdForAttribution();
+        return ['reading' => $reading, 'station_id' => $stationId];
     }
     
     /**
@@ -410,6 +436,7 @@ class WeatherAggregator {
         $result['gust_factor'] = null;
         $result['_field_obs_time_map'] = [];
         $result['_field_source_map'] = [];
+        $result['_field_station_map'] = [];
         $result['last_updated'] = $this->now;
         $result['last_updated_iso'] = date('c', $this->now);
         

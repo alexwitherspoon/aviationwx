@@ -658,7 +658,7 @@ function checkAirportHealth(string $airportId, array $airport): array {
         }
         
         $weatherSources[] = [
-            'name' => 'Aviation Weather',
+            'name' => 'NOAA Aviation Weather',
             'status' => $metarStatus,
             'message' => $metarMessage,
             'lastChanged' => $metarLastChanged

@@ -131,7 +131,11 @@ class SwobManAdapter
                 ? new WeatherReading($parsed['cloud_cover'], 'text', $obsTime, $source, true)
                 : WeatherReading::null($source),
             rawMetar: null,
-            isValid: true
+            isValid: true,
+            metarStationId: null,
+            stationId: isset($config['station_id']) && is_string($config['station_id'])
+                ? strtoupper(trim($config['station_id']))
+                : null
         );
     }
 }

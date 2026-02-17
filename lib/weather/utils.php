@@ -288,7 +288,7 @@ function getWeatherSourceInfo(string $sourceType): ?array {
             ];
         case 'metar':
             return [
-                'name' => 'Aviation Weather',
+                'name' => 'NOAA Aviation Weather',
                 'url' => 'https://aviationweather.gov'
             ];
         case 'awosnet':
@@ -309,8 +309,8 @@ function getWeatherSourceInfo(string $sourceType): ?array {
         case 'swob_auto':
         case 'swob_man':
             return [
-                'name' => 'Environment Canada (SWOB)',
-                'url' => 'https://dd.weather.gc.ca/'
+                'name' => 'Nav Canada Weather',
+                'url' => 'https://www.navcanada.ca/'
             ];
         default:
             return null;
@@ -321,13 +321,22 @@ function getWeatherSourceInfo(string $sourceType): ?array {
  * Get weather source display name
  * 
  * Returns only the human-readable name for a weather source type.
+ * For ICAO-keyed sources (metar, swob, nws, awosnet), pass stationId for "Source Name (ICAO)" format.
  * 
  * @param string $sourceType Weather source type (e.g., 'tempest', 'ambient', 'metar')
+ * @param string|null $stationId Optional station ICAO for "Source Name (ICAO)" attribution
  * @return string Display name, or 'Unknown Source' if source type is unknown
  */
-function getWeatherSourceDisplayName(string $sourceType): string {
+function getWeatherSourceDisplayName(string $sourceType, ?string $stationId = null): string {
     $info = getWeatherSourceInfo($sourceType);
-    return $info !== null ? $info['name'] : 'Unknown Source';
+    if ($info === null) {
+        return 'Unknown Source';
+    }
+    $name = $info['name'];
+    if ($stationId !== null && $stationId !== '') {
+        $name .= ' (' . strtoupper(trim($stationId)) . ')';
+    }
+    return $name;
 }
 
 /**

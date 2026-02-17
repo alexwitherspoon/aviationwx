@@ -214,7 +214,7 @@ AviationWX supports six weather station platforms plus METAR-only configuration:
 | **PWSWeather** | Stations already uploading to PWSWeather.com | ~5 minutes | Free API via AerisWeather |
 | **SynopticData** | Backup source, aggregated networks | 5-10 minutes | Free tier available |
 | **AWOSnet** | Airports with AWOSnet-hosted AWOS | ~10 minutes | No API key needed |
-| **Environment Canada SWOB** | Canadian airports (CYAV, CYVR, etc.) | ~5 minutes | No API key needed |
+| **Nav Canada Weather** | Canadian airports (CYAV, CYVR, etc.) | ~5 minutes | No API key needed |
 | **METAR Only** | Official airport weather | Hourly | No API key needed |
 
 Davis WeatherLink intervals depend on subscription; see the [Configuration Guide](../docs/CONFIGURATION.md) (Weather Sources) or [WeatherLink v2 Data Permissions](https://weatherlink.github.io/v2-api/data-permissions).
@@ -610,9 +610,9 @@ The station ID is the subdomain used on awosnet.com. For example, if your airpor
 
 ---
 
-## Environment Canada SWOB (Canadian Airports)
+## Nav Canada Weather (Canadian Airports)
 
-For Canadian airports, AviationWX can use Environment Canada's SWOB-ML feed. **No API key required.** This covers many Canadian airports that don't have METAR on aviationweather.gov, including NAV Canada AWOS and manned stations.
+For Canadian airports, AviationWX can use Nav Canada weather data via the SWOB-ML feed. **No API key required.** This covers many Canadian airports that don't have METAR on aviationweather.gov, including Nav Canada AWOS and manned stations.
 
 ### Required Information
 
@@ -626,7 +626,7 @@ For Canadian airports, AviationWX can use Environment Canada's SWOB-ML feed. **N
 - **swob_auto** – Automated stations (e.g., CYAV Winnipeg/St. Andrews, CBBC Bella Bella)
 - **swob_man** – Manned stations (e.g., CYVR Vancouver, CYYZ Toronto, CYOW Ottawa)
 
-Most airports use one or the other. Check the [ECCC station list](https://dd.meteo.gc.ca/today/observations/doc/swob-xml_station_list.csv) or try the AUTO endpoint first; if it returns 404, try MAN.
+Most airports use one or the other. Check the [SWOB station list](https://dd.meteo.gc.ca/today/observations/doc/swob-xml_station_list.csv) or try the AUTO endpoint first; if it returns 404, try MAN.
 
 ### Configuration Example
 
@@ -652,13 +652,13 @@ Or for a manned station:
 
 ### SWOB Limitations
 
-- Only available for Canadian airports in the ECCC SWOB-ML feed
+- Only available for Canadian airports in the SWOB-ML feed
 - Updates approximately every 5 minutes
 - Good option when aviationweather.gov METAR doesn't cover your Canadian airport
 
 ### Reference
 
-- [ECCC MSC Datamart](https://dd.weather.gc.ca/)
+- [Nav Canada](https://www.navcanada.ca/)
 - [SWOB-ML Documentation](https://eccc-msc.github.io/open-data/msc-data/obs_station/readme_obs_insitu_swobdatamart_en/)
 
 ---
@@ -710,7 +710,7 @@ We'll validate the connection, verify data quality, and add your airport to the 
 | **PWSWeather** | `station_id`, `client_id`, `client_secret` |
 | **SynopticData** | `station_id` + permission (we have a central API key) |
 | **AWOSnet** | `station_id` (e.g., `ks40`) |
-| **Environment Canada SWOB** | `station_id` (4-letter ICAO, e.g., `CYAV`), `type` (`swob_auto` or `swob_man`) |
+| **Nav Canada Weather** | `station_id` (4-letter ICAO, e.g., `CYAV`), `type` (`swob_auto` or `swob_man`) |
 | **METAR Only** | `metar_station` (ICAO code) |
 
 ---

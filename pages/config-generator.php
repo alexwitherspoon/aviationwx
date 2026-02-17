@@ -1236,7 +1236,7 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         <label for="weather_type">Primary Weather Source Type</label>
                         <select id="weather_type" name="weather_type">
                             <option value="">None</option>
-                            <option value="metar" <?= ($_POST['weather_type'] ?? '') === 'metar' ? 'selected' : '' ?>>METAR (Aviation Weather)</option>
+                            <option value="metar" <?= ($_POST['weather_type'] ?? '') === 'metar' ? 'selected' : '' ?>>METAR (NOAA Aviation Weather)</option>
                             <option value="tempest" <?= ($_POST['weather_type'] ?? '') === 'tempest' ? 'selected' : '' ?>>Tempest Weather Station</option>
                             <option value="ambient" <?= ($_POST['weather_type'] ?? '') === 'ambient' ? 'selected' : '' ?>>Ambient Weather</option>
                             <option value="weatherlink_v2" <?= ($_POST['weather_type'] ?? '') === 'weatherlink_v2' ? 'selected' : '' ?>>Davis WeatherLink v2 (Newer Devices)</option>

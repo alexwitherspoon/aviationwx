@@ -337,7 +337,11 @@ class AwosnetAdapter
             ceiling: WeatherReading::feet($parsed['ceiling'], $source, $obsTime),
             cloudCover: WeatherReading::text($parsed['cloud_cover'] ?? null, $source, $obsTime),
             rawMetar: $metar,
-            isValid: true
+            isValid: true,
+            metarStationId: null,
+            stationId: isset($config['station_id']) && is_string($config['station_id'])
+                ? strtoupper(trim($config['station_id']))
+                : null
         );
     }
 }

@@ -133,13 +133,13 @@ If your airport's AWOS is hosted on [awosnet.com](https://awosnet.com):
 
 No API key needed. Updates approximately every 10 minutes.
 
-### Option F - Environment Canada SWOB (Canadian airports)
-For Canadian airports, AviationWX can use Environment Canada's SWOB-ML feed. No API key needed.
+### Option F - Nav Canada Weather (Canadian airports)
+For Canadian airports, AviationWX can use Nav Canada weather data via the SWOB-ML feed. No API key needed.
 
 - tell us the **4-letter ICAO code** (e.g., `CYAV`, `CYVR`)
 - we'll determine whether your airport uses the automated (`swob_auto`) or manned (`swob_man`) feed
 
-Updates approximately every 5 minutes. See [Guide 09](09-weather-station-configuration.md#environment-canada-swob-canadian-airports) for details.
+Updates approximately every 5 minutes. See [Guide 09](09-weather-station-configuration.md#nav-canada-weather-canadian-airports) for details.
 
 ---
 

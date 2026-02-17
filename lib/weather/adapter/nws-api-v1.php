@@ -227,7 +227,11 @@ class NwsApiAdapter {
             visibility: WeatherReading::statuteMiles($parsed['visibility'], $source, $obsTime),
             ceiling: WeatherReading::null($source),    // Use METAR for ceiling
             cloudCover: WeatherReading::null($source), // Use METAR for cloud cover
-            isValid: true
+            isValid: true,
+            metarStationId: null,
+            stationId: isset($config['station_id']) && is_string($config['station_id'])
+                ? strtoupper(trim($config['station_id']))
+                : null
         );
     }
     

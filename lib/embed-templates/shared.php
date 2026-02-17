@@ -22,23 +22,37 @@ function getThemeClass($theme) {
 /**
  * Get weather source organization name for attribution
  * 
- * Returns the organization name (e.g., "Tempest Weather", "Davis WeatherLink", "Aviation Weather")
- * instead of generic source types (e.g., "METAR", "PWS").
+ * Returns the organization name (e.g., "Tempest Weather", "NOAA Aviation Weather (KSPB)")
+ * with optional station ICAO for "Source Name (ICAO)" format when available.
  * 
- * @param array $weather Weather data array
+ * @param array $weather Weather data array (may include _field_source_map, _field_station_map)
  * @param bool $hasMetarData Whether METAR data is available
  * @return string Organization name for attribution
  */
 function getWeatherSourceAttribution($weather, $hasMetarData) {
+    $fieldSourceMap = $weather['_field_source_map'] ?? [];
+    $fieldStationMap = $weather['_field_station_map'] ?? [];
+    
+    $getStationForSource = function($sourceType) use ($fieldSourceMap, $fieldStationMap) {
+        foreach ($fieldSourceMap as $field => $src) {
+            if ($src === $sourceType) {
+                return $fieldStationMap[$field] ?? null;
+            }
+        }
+        return null;
+    };
+    
     // If we have METAR data, use 'metar' as the source type
     if ($hasMetarData) {
-        return getWeatherSourceDisplayName('metar');
+        $stationId = $getStationForSource('metar');
+        return getWeatherSourceDisplayName('metar', $stationId);
     }
     
     // Otherwise, use the actual source type from weather data
     $sourceType = $weather['source'] ?? null;
     if ($sourceType && is_string($sourceType)) {
-        return getWeatherSourceDisplayName($sourceType);
+        $stationId = $getStationForSource($sourceType);
+        return getWeatherSourceDisplayName($sourceType, $stationId);
     }
     
     // Fallback to generic PWS if no source is available
