@@ -25,6 +25,12 @@ if (!defined('AVIATIONWX_LOG_FILE')) {
     define('AVIATIONWX_LOG_FILE', AVIATIONWX_LOG_DIR . '/app.log');
 }
 
+// When hitting a live server (TEST_API_URL), use the same cache path the server uses
+// so integration tests can seed data the server will serve (Docker uses /tmp/aviationwx-cache)
+if (getenv('TEST_API_URL') && !defined('CACHE_BASE_DIR')) {
+    define('CACHE_BASE_DIR', '/tmp/aviationwx-cache');
+}
+
 // Override metrics cache directories for testing (must be before cache-paths.php is loaded)
 // This prevents tests from writing to production cache directories
 if (!defined('CACHE_METRICS_DIR')) {
