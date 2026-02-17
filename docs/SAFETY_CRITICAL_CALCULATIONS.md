@@ -15,8 +15,9 @@ This document provides a comprehensive reference for all safety-critical weather
 4. [Dewpoint Calculations](#dewpoint-calculations)
 5. [Temperature Conversions](#temperature-conversions)
 6. [Wind Calculations](#wind-calculations)
-7. [METAR Visibility Parsing](#metar-visibility-parsing)
-8. [Local vs Neighboring METAR Aggregation](#local-vs-neighboring-metar-aggregation)
+7. [Wind Direction: True North](#wind-direction-true-north)
+8. [METAR Visibility Parsing](#metar-visibility-parsing)
+9. [Local vs Neighboring METAR Aggregation](#local-vs-neighboring-metar-aggregation)
 
 ---
 
@@ -382,6 +383,37 @@ Gust Factor = Peak Gust - Steady Wind Speed
   - 5 gust factor tests
   - Covers normal, strong, no gusts, calm, and negative protection
   - Validates clamping to 0 for invalid data
+
+---
+
+## Wind Direction: True North
+
+**⚠️ SAFETY CRITICAL**: All internal wind direction values are normalized to **TRUE NORTH** (degrees 0-360). Incorrect conversion between true and magnetic north could misalign runway wind displays with pilot expectations.
+
+### Convention
+
+- **Storage/API**: `wind_direction` is always true north
+- **Display**: Convert to magnetic at render time when needed (runway wind diagram, compass)
+- **Conversion**: Centralized in `lib/heading-conversion.php`
+
+### Conversion Functions
+
+```php
+// lib/heading-conversion.php - SAFETY-CRITICAL, single source of truth
+convertMagneticToTrue(float $magneticDegrees, float $declinationDegrees): float
+convertTrueToMagnetic(float $trueDegrees, float $declinationDegrees): float
+rotatePointTrueToMagnetic(float $x, float $y, float $declinationDegrees): array
+```
+
+- **Declination**: Positive = East (magnetic north east of true north)
+- **Formula**: True = Magnetic + Declination; Magnetic = True - Declination
+
+### Runway Segments
+
+- **Lat/lon runways** (manual or FAA/OurAirports): Geographic bearing = true north. Rotated to magnetic in `getRunwaySegmentsForAirport()` before returning.
+- **Heading-based runways** (`heading_1`/`heading_2`): Runway numbers = magnetic north. No rotation.
+
+See [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source) for per-source conventions.
 
 ---
 

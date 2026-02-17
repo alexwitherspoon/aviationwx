@@ -250,6 +250,22 @@ Each weather measurement is stored as a `WeatherReading` object that carries:
 | Altitude/Ceiling | Feet (ft) | ICAO standard |
 | Humidity | Percent (%) | Universal |
 
+### Wind Direction Conventions by Source
+
+All internal wind direction values are normalized to **true north** (degrees 0-360). See [Wind Direction: True North](SAFETY_CRITICAL_CALCULATIONS.md#wind-direction-true-north) for conversion functions and runway segment handling.
+
+| Source | Convention | Notes |
+|--------|------------|-------|
+| METAR | True north | Aviation standard |
+| NWS API | True north | NOAA standard |
+| AWOSnet | True north | Same as METAR |
+| SWOB (Nav Canada) | True north | Meteorological data |
+| Tempest | True north | Calibration to true north |
+| Ambient | True north | Calibration to true north |
+| WeatherLink | True north | Calibration to true north |
+| Synoptic | True north | Meteorological practice |
+| PWSWeather | Magnetic (assumed) | Converted to true at ingest |
+
 ### Observation Time Handling
 
 **Critical for Safety**: The system tracks when weather was actually observed, not just when it was fetched.

@@ -24,6 +24,7 @@ aviationwx.org/
 │       └── version.php       # Deployment version info for client checking
 ├── lib/
 │   ├── config.php            # Configuration loading and utilities
+│   ├── heading-conversion.php # SAFETY-CRITICAL: true↔magnetic heading conversion
 │   ├── rate-limit.php        # Rate limiting utilities
 │   ├── logger.php            # Logging utilities
 │   ├── seo.php               # SEO utilities (structured data, meta tags)
@@ -48,6 +49,7 @@ aviationwx.org/
 │       ├── calculator.php    # Aviation calculations
 │       ├── daily-tracking.php # Daily high/low tracking
 │       ├── cache-utils.php   # Cache staleness utilities
+│       ├── wind-normalizer.php # Magnetic→true conversion at ingest (PWS sources)
 │       ├── source-timestamps.php # Timestamp extraction
 │       ├── utils.php         # Weather utilities (timezone, sunrise/sunset, daylight phases)
 │       ├── data/             # Data classes
@@ -107,6 +109,8 @@ aviationwx.org/
   - Rate limiting
   - Debug endpoint (`?debug=1`) for troubleshooting
   - Legacy fallback (`?legacy=1`) for backward compatibility
+
+**Wind direction**: All internal values use true north. See [Wind Direction: True North](SAFETY_CRITICAL_CALCULATIONS.md#wind-direction-true-north) and [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source). Conversion in `lib/heading-conversion.php` (safety-critical).
 
 **Data Flow** (Unified Fetcher):
 1. Request validation (airport ID, rate limiting)
