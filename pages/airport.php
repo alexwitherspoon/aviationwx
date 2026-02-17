@@ -5042,31 +5042,30 @@ const WebcamPlayer = {
         }
     },
     
-    // Download current frame's original image
+    // Download current frame's original image (the one displayed, not latest)
     downloadCurrent() {
         if (!this.active || this.periodFrames.length === 0) {
             return;
         }
-        
+
         const currentFrame = this.periodFrames[this.currentIndex];
         if (!currentFrame) {
             return;
         }
-        
-        // Build download URL: original size with download=1 parameter
+
         const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
         const host = window.location.host;
-        const downloadUrl = `${protocol}//${host}/api/webcam.php?id=${AIRPORT_ID}&cam=${this.camIndex}&size=original&download=1`;
-        
-        // Trigger download
+        const tsParam = currentFrame.timestamp ? `&ts=${currentFrame.timestamp}` : '';
+        const downloadUrl = `${protocol}//${host}/api/webcam.php?id=${AIRPORT_ID}&cam=${this.camIndex}&size=original&download=1${tsParam}`;
+
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = ''; // Browser will use filename from Content-Disposition header
+        link.download = '';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
-        console.log(`[Webcam Player] Downloading original image for ${AIRPORT_ID} cam ${this.camIndex}`);
+
+        console.log(`[Webcam Player] Downloading frame at ${currentFrame.timestamp || 'latest'} for ${AIRPORT_ID} cam ${this.camIndex}`);
     },
 
     toggleHideUI() {

@@ -607,12 +607,30 @@ $airportWebcamRefresh = isset($config['airports'][$airportId]['webcam_refresh_se
 $perCamRefresh = isset($cam['refresh_seconds']) ? intval($cam['refresh_seconds']) : $airportWebcamRefresh;
 $perCamRefresh = max(60, $perCamRefresh); // Enforce minimum 60 seconds (cron constraint)
 
-// Handle download request - always serves original JPG with proper filename
+// Handle download request - serves original JPG with proper filename
+// When ts= provided (history player), serve that frame; otherwise serve latest
 if (isset($_GET['download']) && $_GET['download'] == '1') {
-    // Get original JPG file
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    $originalJpg = $cacheDir . '/original.jpg';
-    
+    $originalJpg = null;
+
+    if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
+        $originalJpg = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, 'original', 'jpg');
+        if ($originalJpg === null) {
+            $originalJpg = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, 'original', 'webp');
+            if ($originalJpg !== null) {
+                header('Content-Type: image/webp');
+                header('Content-Disposition: attachment; filename="' . strtolower($airportId) . "_{$camIndex}_{$requestedTimestamp}.webp\"");
+                header('Content-Length: ' . filesize($originalJpg));
+                readfile($originalJpg);
+                exit;
+            }
+        }
+    }
+
+    if ($originalJpg === null) {
+        $originalJpg = $cacheDir . '/original.jpg';
+    }
+
     if (!file_exists($originalJpg) || !is_readable($originalJpg)) {
         http_response_code(404);
         header('Content-Type: application/json');
@@ -622,27 +640,20 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
         ]);
         exit;
     }
-    
-    // Get EXIF capture time for filename
-    $captureTime = getImageCaptureTime($originalJpg);
+
+    // Get EXIF capture time for filename (or use requested timestamp for history)
+    $captureTime = $requestedTimestamp ?? getImageCaptureTime($originalJpg);
     if ($captureTime > 0) {
-        // Format: YYYY-MM-DD_HHMMSS_UTC
         $timestamp = gmdate('Y-m-d_His', $captureTime) . '_UTC';
     } else {
-        // Fallback to file mtime
         $mtime = filemtime($originalJpg);
         $timestamp = gmdate('Y-m-d_His', $mtime) . '_UTC';
     }
-    
-    // Build filename: {airport}_{cam}_{timestamp}.jpg
+
     $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}.jpg";
-    
-    // Force download with proper filename
     header('Content-Type: image/jpeg');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Content-Length: ' . filesize($originalJpg));
-    
-    // Serve original file
     readfile($originalJpg);
     exit;
 }
