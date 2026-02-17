@@ -4992,9 +4992,10 @@ const WebcamPlayer = {
 
     // Update URL to reflect current state (for sharing)
     // Throttled to avoid SecurityError when scrubbing timeline rapidly
-    updateURL() {
+    // force=true bypasses throttle (e.g. when closing - URL must clear immediately)
+    updateURL(force = false) {
         const now = Date.now();
-        if (this._updateURLThrottle !== null && now - this._updateURLThrottle < 500) {
+        if (!force && this._updateURLThrottle !== null && now - this._updateURLThrottle < 500) {
             return;
         }
         this._updateURLThrottle = now;
@@ -5387,6 +5388,9 @@ const WebcamPlayer = {
             this.savedScrollY = 0; // Reset for next time
         });
 
+        // Clear URL params so back returns to clean dashboard URL
+        this.updateURL(true);
+
         // Clean up
         this.preloadedImages = {};
         this.loadingFrames.clear();
@@ -5405,9 +5409,6 @@ const WebcamPlayer = {
         document.getElementById('webcam-player-period-selector-desktop').classList.remove('visible');
         this.updateHideUIButton();
         this.updateAutoplayButton();
-        
-        // Update URL to remove player params
-        this.updateURL();
     },
 
     // Calculate available presets based on actual frame data
