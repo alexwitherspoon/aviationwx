@@ -20,8 +20,24 @@ require_once __DIR__ . '/../lib/weather/UnifiedFetcher.php';
 require_once __DIR__ . '/../lib/weather/cache-utils.php';
 require_once __DIR__ . '/../lib/weather/history.php';
 require_once __DIR__ . '/../lib/cache-headers.php';
+require_once __DIR__ . '/../lib/heading-conversion.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
+
+/**
+ * Add wind_direction_magnetic for compass display (true north → magnetic)
+ *
+ * @param array $weather Weather data (modified in place)
+ * @param array $airport Airport config for declination
+ */
+function addWindDirectionMagneticToWeather(array &$weather, array $airport): void
+{
+    $wd = $weather['wind_direction'] ?? null;
+    if (is_numeric($wd) && $wd >= 0 && $wd <= 360) {
+        $decl = getMagneticDeclination($airport);
+        $weather['wind_direction_magnetic'] = (int) round(convertTrueToMagnetic((float) $wd, $decl));
+    }
+}
 
 /**
  * Generate mock weather data for local testing
@@ -227,7 +243,8 @@ function generateMockWeatherData($airportId, $airport) {
         if (!isset($mockWeather['_field_obs_time_map']) || !is_array($mockWeather['_field_obs_time_map'])) {
             $mockWeather['_field_obs_time_map'] = [];
         }
-        
+        addWindDirectionMagneticToWeather($mockWeather, $airport);
+
         // Build response
         $payload = ['success' => true, 'weather' => $mockWeather];
         $body = json_encode($payload);
@@ -311,7 +328,8 @@ function generateMockWeatherData($airportId, $airport) {
             if (!isset($cached['_field_obs_time_map']) || !is_array($cached['_field_obs_time_map'])) {
                 $cached['_field_obs_time_map'] = [];
             }
-            
+            addWindDirectionMagneticToWeather($cached, $airport);
+
             $payload = ['success' => true, 'weather' => $cached];
             
             // Add debug info if debug mode is enabled
@@ -377,7 +395,8 @@ function generateMockWeatherData($airportId, $airport) {
             if (!isset($staleData['_field_obs_time_map']) || !is_array($staleData['_field_obs_time_map'])) {
                 $staleData['_field_obs_time_map'] = [];
             }
-            
+            addWindDirectionMagneticToWeather($staleData, $airport);
+
             $payload = ['success' => true, 'weather' => $staleData, 'stale' => true];
             
             // Add debug info if debug mode is enabled
@@ -627,6 +646,8 @@ function generateMockWeatherData($airportId, $airport) {
     if (!isset($weatherData['_field_obs_time_map']) || !is_array($weatherData['_field_obs_time_map'])) {
         $weatherData['_field_obs_time_map'] = [];
     }
+
+    addWindDirectionMagneticToWeather($weatherData, $airport);
 
     // Determine backup status from field source map
     $backupStatus = 'standby';

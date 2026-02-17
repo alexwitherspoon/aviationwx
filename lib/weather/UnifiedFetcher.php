@@ -33,6 +33,7 @@ require_once __DIR__ . '/adapter/awosnet-v1.php';
 require_once __DIR__ . '/adapter/swob-helper.php';
 require_once __DIR__ . '/adapter/swob-auto-v1.php';
 require_once __DIR__ . '/adapter/swob-man-v1.php';
+require_once __DIR__ . '/wind-normalizer.php';
 require_once __DIR__ . '/calculator.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/../constants.php';
@@ -73,6 +74,8 @@ function fetchWeatherUnified(array $airport, string $airportId): array {
         
         $snapshot = parseSourceResponse($source, $responses[$sourceKey], $airport);
         if ($snapshot !== null && $snapshot->isValid) {
+            $sourceType = $source['type'] ?? '';
+            $snapshot = normalizeWindToTrueNorth($snapshot, $airport, $sourceType);
             $snapshots[] = $snapshot;
         }
     }
