@@ -333,6 +333,7 @@ function checkRunwayCacheHealth(?array $config): array {
     $mtime = filemtime($path);
     $age = time() - $mtime;
     $needsRefresh = runwaysCacheNeedsRefresh();
+    // @ suppresses json_decode warnings for malformed cache; we handle null below
     $data = @json_decode((string) file_get_contents($path), true);
     $airportCount = isset($data['airports']) && is_array($data['airports']) ? count($data['airports']) : 0;
     $fetchedAt = $data['fetched_at'] ?? $mtime;
@@ -344,7 +345,7 @@ function checkRunwayCacheHealth(?array $config): array {
         $message .= ' • Up to date';
     }
     $details = ['airports_in_cache' => $airportCount, 'age_days' => (int) round($age / 86400)];
-    $airports = $config['airports'] ?? [];
+    $airports = ($config ?? [])['airports'] ?? [];
     if (!empty($airports)) {
         $missing = [];
         $identsToTry = static function ($airportId, $airport) {
