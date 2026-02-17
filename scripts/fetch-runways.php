@@ -252,9 +252,10 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
         $points[] = ['x' => $x2, 'y' => $y2];
     }
 
+    // Use Euclidean distance so diagonal runways get same buffer as N-S/E-W
     $maxExtent = 0;
     foreach ($points as $p) {
-        $d = max(abs($p['x']), abs($p['y']));
+        $d = sqrt($p['x'] * $p['x'] + $p['y'] * $p['y']);
         if ($d > $maxExtent) {
             $maxExtent = $d;
         }

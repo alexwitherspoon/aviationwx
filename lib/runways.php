@@ -257,7 +257,10 @@ function normalizeLatLonToSegment(array $center, array $p0, array $p1, string $i
     $y0 = (float) ($p0['lat'] ?? 0) - $latC;
     $x1 = (float) ($p1['lon'] ?? 0) - $lonC;
     $y1 = (float) ($p1['lat'] ?? 0) - $latC;
-    $max = max(abs($x0), abs($y0), abs($x1), abs($y1), 0.001);
+    // Use Euclidean distance so diagonal runways get same buffer as N-S/E-W
+    $d0 = sqrt($x0 * $x0 + $y0 * $y0);
+    $d1 = sqrt($x1 * $x1 + $y1 * $y1);
+    $max = max($d0, $d1, 0.001);
     $scale = 0.9 / $max;
     return [
         'start' => [$x0 * $scale, $y0 * $scale],
