@@ -4775,8 +4775,8 @@ function updateWindVisual(weather) {
             // Position labels closer to runway ends (small offset from runway end)
             const labelOffset = 12; // Distance from runway end to label
             
-            // Label for heading 1 (at start end)
-            const heading1Str = Math.floor(heading1 / 10).toString().padStart(2, '0');
+            // Label for heading 1 (at start end) - round to nearest 10 per FAA runway designation
+            const heading1Str = Math.round(heading1 / 10).toString().padStart(2, '0');
             const label1 = heading1Str + (designations.designation1 || '');
             // Position label just beyond the start end of the runway
             const label1X = (cx - Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
@@ -4790,8 +4790,8 @@ function updateWindVisual(weather) {
             ctx.fillStyle = colors.runwayLabel;
             ctx.fillText(label1, label1X, label1Y);
             
-            // Label for heading 2 (at end end)
-            const heading2Str = Math.floor(heading2 / 10).toString().padStart(2, '0');
+            // Label for heading 2 (at end end) - round to nearest 10 per FAA runway designation
+            const heading2Str = Math.round(heading2 / 10).toString().padStart(2, '0');
             const label2 = heading2Str + (designations.designation2 || '');
             // Position label just beyond the end end of the runway
             const label2X = (cx + Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;

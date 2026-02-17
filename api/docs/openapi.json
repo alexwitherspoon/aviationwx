@@ -686,6 +686,58 @@
                 "type": "boolean",
                 "description": "Whether airport has limited availability (off-grid, solar, battery)"
               },
+              "access_type": {
+                "type": "string",
+                "nullable": true,
+                "enum": ["public", "private"],
+                "description": "Airport access type"
+              },
+              "permission_required": {
+                "type": "boolean",
+                "nullable": true,
+                "description": "Whether permission is required to land (private airports only)"
+              },
+              "tower_status": {
+                "type": "string",
+                "nullable": true,
+                "enum": ["towered", "non_towered"],
+                "description": "Whether airport has an active control tower"
+              },
+              "partners": {
+                "type": "array",
+                "description": "Supporting organizations",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "url": { "type": "string" },
+                    "logo": { "type": "string" },
+                    "description": { "type": "string" }
+                  }
+                }
+              },
+              "links": {
+                "type": "array",
+                "description": "Custom links from airport config",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": { "type": "string" },
+                    "url": { "type": "string" }
+                  }
+                }
+              },
+              "external_links": {
+                "type": "array",
+                "description": "Resolved external links (AirNav, SkyVector, AOPA, etc.)",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": { "type": "string" },
+                    "url": { "type": "string" }
+                  }
+                }
+              },
               "has_weather": {
                 "type": "boolean"
               },

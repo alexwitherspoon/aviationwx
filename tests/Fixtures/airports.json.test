@@ -17,12 +17,12 @@
       "version": "1",
       "rate_limits": {
         "anonymous": {
-          "requests_per_minute": 20,
-          "requests_per_hour": 200,
-          "requests_per_day": 2000
+          "requests_per_minute": 100,
+          "requests_per_hour": 1000,
+          "requests_per_day": 10000
         },
         "partner": {
-          "requests_per_minute": 120,
+          "requests_per_minute": 500,
           "requests_per_hour": 5000,
           "requests_per_day": 50000
         }
@@ -209,7 +209,7 @@
       "elevation_ft": 1000,
       "timezone": "America/Los_Angeles",
       "access_type": "private",
-      "permission_required": false,
+      "permission_required": true,
       "tower_status": "non_towered",
       "weather_sources": [
         {

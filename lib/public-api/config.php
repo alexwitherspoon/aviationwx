@@ -60,14 +60,15 @@ function getPublicApiVersion(): string
 function getPublicApiRateLimits(string $tier = 'anonymous'): array
 {
     $config = getPublicApiConfig();
+    // Base: 100/min anonymous, 500/min partner; 10x for hour, 100x for day
     $defaults = [
         'anonymous' => [
-            'requests_per_minute' => 20,
-            'requests_per_hour' => 200,
-            'requests_per_day' => 2000,
+            'requests_per_minute' => 100,
+            'requests_per_hour' => 1000,
+            'requests_per_day' => 10000,
         ],
         'partner' => [
-            'requests_per_minute' => 120,
+            'requests_per_minute' => 500,
             'requests_per_hour' => 5000,
             'requests_per_day' => 50000,
         ],

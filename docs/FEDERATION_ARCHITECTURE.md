@@ -359,7 +359,7 @@ if (isset($webcam['type']) && $webcam['type'] === 'aviationwx_api') {
       "version": "1",
       "rate_limits": {
         "partner": {
-          "requests_per_minute": 120,
+          "requests_per_minute": 500,
           "requests_per_hour": 5000,
           "requests_per_day": 50000
         }
