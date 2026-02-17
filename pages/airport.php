@@ -9,6 +9,7 @@ require_once __DIR__ . '/../lib/weather/source-timestamps.php';
 require_once __DIR__ . '/../lib/weather/outage-detection.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/runways.php';
 
 // Check if airport has any weather sources configured
 $hasWeatherSources = hasWeatherSources($airport);
@@ -2185,14 +2186,19 @@ const DEFAULT_PREFERENCES = <?php
     echo json_encode($defaultPrefs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
 
-const RUNWAYS = <?php
-    // Defensive JSON encoding with error handling
-    $runwaysJson = json_encode($airport['runways'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
-    if ($runwaysJson === false) {
-        error_log('JSON encode failed for runways data: ' . json_last_error_msg());
-        echo '[]'; // Fallback to empty array
+// Magnetic declination for runway diagram (degrees, positive=East). Rotates diagram so N aligns with magnetic north.
+const MAGNETIC_DECLINATION = <?= (float) getMagneticDeclination($airport) ?>;
+
+// Precomputed runway segments for wind visualization (normalized -1..1, North=+y, true north)
+// Manual override in config takes precedence; otherwise from FAA/OurAirports programmatic data
+const RUNWAY_SEGMENTS = <?php
+    $segments = getRunwaySegmentsForAirport($airportId, $airport);
+    $segmentsJson = json_encode($segments ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    if ($segmentsJson === false) {
+        error_log('JSON encode failed for runway segments: ' . json_last_error_msg());
+        echo '[]';
     } else {
-        echo $runwaysJson;
+        echo $segmentsJson;
     }
 ?>;
 
@@ -4619,80 +4625,6 @@ let windAnimationFrame = null;
 let windDirection = 0;
 let windSpeed = 0;
 
-// Parse runway name to extract designations (e.g., "28L/10R" → {heading1: 280, designation1: "L", heading2: 100, designation2: "R"})
-function parseRunwayName(name) {
-    if (!name || typeof name !== 'string') {
-        return { designation1: '', designation2: '' };
-    }
-    
-    // Split by / to get both ends
-    const parts = name.split('/');
-    if (parts.length !== 2) {
-        return { designation1: '', designation2: '' };
-    }
-    
-    // Extract designation (L, C, or R) from each end
-    const extractDesignation = (str) => {
-        const match = str.match(/(\d+)([LCR])/i);
-        return match ? match[2].toUpperCase() : '';
-    };
-    
-    return {
-        designation1: extractDesignation(parts[0]),
-        designation2: extractDesignation(parts[1])
-    };
-}
-
-// Group parallel runways by similar heading_1 (within 5 degrees)
-function groupParallelRunways(runways) {
-    const groups = [];
-    const processed = new Set();
-    
-    runways.forEach((rw, i) => {
-        if (processed.has(i)) return;
-        
-        const group = [rw];
-        processed.add(i);
-        
-        // Find all runways with similar heading_1 (within 5 degrees)
-        runways.forEach((otherRw, j) => {
-            if (i === j || processed.has(j)) return;
-            
-            const headingDiff = Math.abs(rw.heading_1 - otherRw.heading_1);
-            const normalizedDiff = Math.min(headingDiff, 360 - headingDiff); // Handle wrap-around
-            
-            if (normalizedDiff <= 5) {
-                group.push(otherRw);
-                processed.add(j);
-            }
-        });
-        
-        groups.push(group);
-    });
-    
-    return groups;
-}
-
-// Calculate horizontal offset for parallel runways
-// Offset is perpendicular to the runway heading
-function calculateRunwayOffset(heading, groupIndex, groupSize, maxOffset) {
-    if (groupSize === 1) return { x: 0, y: 0 };
-    
-    // Calculate offset index (centered: -1, 0, 1 for 3 runways)
-    const offsetIndex = groupIndex - (groupSize - 1) / 2;
-    
-    // Calculate perpendicular angle (heading + 90 degrees)
-    const perpAngle = ((heading + 90) * Math.PI) / 180;
-    
-    // Calculate offset distance
-    const offsetDist = offsetIndex * maxOffset;
-    
-    return {
-        x: Math.sin(perpAngle) * offsetDist,
-        y: -Math.cos(perpAngle) * offsetDist
-    };
-}
-
 function updateWindVisual(weather) {
     const canvas = document.getElementById('windCanvas');
     if (!canvas) {
@@ -4733,78 +4665,88 @@ function updateWindVisual(weather) {
     // Draw outer circle
     ctx.strokeStyle = colors.circle; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
     
-    // Group parallel runways
-    const runwayGroups = groupParallelRunways(RUNWAYS);
-    const maxOffset = 20; // Maximum offset in pixels for parallel runways
-    
-    // Draw each runway group
-    runwayGroups.forEach(group => {
-        group.forEach((rw, groupIndex) => {
-            const heading1 = rw.heading_1;
-            const heading2 = rw.heading_2;
-            const angle1 = (heading1 * Math.PI) / 180;
-            const runwayLength = r * 0.9;
-            
-            // Parse runway name to get designations
-            const designations = parseRunwayName(rw.name);
-            
-            // Calculate offset for parallel runways
-            const offset = calculateRunwayOffset(heading1, groupIndex, group.length, maxOffset);
-            
-            // Draw runway as a single line (not twice!)
-            ctx.strokeStyle = colors.runway;
-            ctx.lineWidth = 8;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            
-            // Calculate runway endpoints with offset
-            const startX = cx - Math.sin(angle1) * runwayLength / 2 + offset.x;
-            const startY = cy + Math.cos(angle1) * runwayLength / 2 + offset.y;
-            const endX = cx + Math.sin(angle1) * runwayLength / 2 + offset.x;
-            const endY = cy - Math.cos(angle1) * runwayLength / 2 + offset.y;
-            
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-            
-            // Label runway ends with designations
-            ctx.font = 'bold 14px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Position labels closer to runway ends (small offset from runway end)
-            const labelOffset = 12; // Distance from runway end to label
-            
-            // Label for heading 1 (at start end) - round to nearest 10 per FAA runway designation
-            const heading1Str = Math.round(heading1 / 10).toString().padStart(2, '0');
-            const label1 = heading1Str + (designations.designation1 || '');
-            // Position label just beyond the start end of the runway
-            const label1X = (cx - Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
-            const label1Y = (cy + Math.cos(angle1) * (runwayLength / 2 + labelOffset)) + offset.y;
-            
-            // Draw outline for label 1
-            ctx.strokeStyle = colors.labelOutline;
-            ctx.lineWidth = 3;
-            ctx.strokeText(label1, label1X, label1Y);
-            // Draw label text
-            ctx.fillStyle = colors.runwayLabel;
-            ctx.fillText(label1, label1X, label1Y);
-            
-            // Label for heading 2 (at end end) - round to nearest 10 per FAA runway designation
-            const heading2Str = Math.round(heading2 / 10).toString().padStart(2, '0');
-            const label2 = heading2Str + (designations.designation2 || '');
-            // Position label just beyond the end end of the runway
-            const label2X = (cx + Math.sin(angle1) * (runwayLength / 2 + labelOffset)) + offset.x;
-            const label2Y = (cy - Math.cos(angle1) * (runwayLength / 2 + labelOffset)) + offset.y;
-            
-            // Draw outline for label 2
-            ctx.strokeStyle = colors.labelOutline;
-            ctx.lineWidth = 3;
-            ctx.strokeText(label2, label2X, label2Y);
-            // Draw label text
-            ctx.fillStyle = colors.runwayLabel;
-            ctx.fillText(label2, label2X, label2Y);
+    // Rotate by -MAGNETIC_DECLINATION so diagram aligns with magnetic north (N at top = magnetic)
+    const declRad = (MAGNETIC_DECLINATION * Math.PI) / 180;
+    const cosD = Math.cos(declRad);
+    const sinD = Math.sin(declRad);
+    const rotate = (x, y) => ({
+        x: x * cosD + y * sinD,
+        y: -x * sinD + y * cosD
+    });
+
+    const runwayScale = 0.86; // Runways extend to 86% of circle (14% buffer; was 72%/28%)
+    const LABEL_POSITION = 0.85; // Place labels at 85% along runway (15% inward from end)
+    const MIN_LABEL_DIST = 18;
+
+    const labelPositions = [];
+    RUNWAY_SEGMENTS.forEach((seg) => {
+        const [sx, sy] = seg.start;
+        const [ex, ey] = seg.end;
+        const s = rotate(sx, sy);
+        const e = rotate(ex, ey);
+        const rw = r * runwayScale;
+        const startX = cx + rw * s.x;
+        const startY = cy - rw * s.y;
+        const endX = cx + rw * e.x;
+        const endY = cy - rw * e.y;
+        
+        ctx.strokeStyle = colors.runway;
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        
+        const leIdent = seg.le_ident || '';
+        const heIdent = seg.he_ident || '';
+        // Place labels at 90% along runway line (10% inward from each end) to reduce overlap at intersections
+        const labelAtStart = LABEL_POSITION * s.x + (1 - LABEL_POSITION) * e.x;
+        const labelAtStartY = LABEL_POSITION * s.y + (1 - LABEL_POSITION) * e.y;
+        const labelAtEnd = LABEL_POSITION * e.x + (1 - LABEL_POSITION) * s.x;
+        const labelAtEndY = LABEL_POSITION * e.y + (1 - LABEL_POSITION) * s.y;
+        labelPositions.push({
+            x: cx + rw * labelAtStart,
+            y: cy - rw * labelAtStartY,
+            ident: leIdent
         });
+        labelPositions.push({
+            x: cx + rw * labelAtEnd,
+            y: cy - rw * labelAtEndY,
+            ident: heIdent
+        });
+    });
+    
+    // Resolve label overlaps (e.g. CYAV intersecting runways) by pushing apart along connecting line
+    for (let i = 0; i < labelPositions.length; i++) {
+        for (let j = i + 1; j < labelPositions.length; j++) {
+            const a = labelPositions[i];
+            const b = labelPositions[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < MIN_LABEL_DIST && dist > 0) {
+                const push = (MIN_LABEL_DIST - dist) / 2;
+                const ux = dx / dist;
+                const uy = dy / dist;
+                a.x -= ux * push;
+                a.y -= uy * push;
+                b.x += ux * push;
+                b.y += uy * push;
+            }
+        }
+    }
+    
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    labelPositions.forEach((lp) => {
+        if (!lp.ident) return;
+        ctx.strokeStyle = colors.labelOutline;
+        ctx.lineWidth = 3;
+        ctx.strokeText(lp.ident, lp.x, lp.y);
+        ctx.fillStyle = colors.runwayLabel;
+        ctx.fillText(lp.ident, lp.x, lp.y);
     });
     
     // Check if wind data is stale before displaying wind indicators

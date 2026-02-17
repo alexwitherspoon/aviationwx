@@ -115,6 +115,7 @@ function formatAirportSummary(string $airportId, array $airport): array
         'lon' => $airport['lon'] ?? null,
         'elevation_ft' => $airport['elevation_ft'] ?? null,
         'timezone' => $airport['timezone'] ?? 'UTC',
+        'magnetic_declination' => getMagneticDeclination($airport),
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,
         'limited_availability' => isset($airport['limited_availability']) && $airport['limited_availability'] === true,
         'unlisted' => isset($airport['unlisted']) && $airport['unlisted'] === true,

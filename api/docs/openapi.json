@@ -597,6 +597,10 @@
           "timezone": {
             "type": "string"
           },
+          "magnetic_declination": {
+            "type": "number",
+            "description": "Magnetic declination in degrees (positive=East, negative=West). Used for runway wind diagram alignment."
+          },
           "maintenance": {
             "type": "boolean",
             "description": "Whether airport is in maintenance mode"
@@ -678,6 +682,10 @@
               },
               "timezone": {
                 "type": "string"
+              },
+              "magnetic_declination": {
+                "type": "number",
+                "description": "Magnetic declination in degrees (positive=East, negative=West). Used for runway wind diagram alignment."
               },
               "maintenance": {
                 "type": "boolean"
