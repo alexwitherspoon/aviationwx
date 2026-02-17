@@ -1258,6 +1258,8 @@ Each runway end ident (e.g. `15`, `33`, `28L`, `10R`) maps to `{ lat, lon }` coo
 
 **Compare manual vs cache:** `CONFIG_PATH=/path/to/airports.json php scripts/compare-runways.php` compares manual runway definitions with FAA/OurAirports data. Use `--tolerance 0.0001` (default, ~11m) or `--tolerance 0.001` (~111m) to control what counts as a match.
 
+**List airports missing runway data:** `php scripts/list-airports-missing-runways.php` lists configured airports that have no runways in the cache (manual runways are skipped). Run `scripts/fetch-runways.php` first to populate the cache.
+
 Parallel runways (L/C/R) are automatically detected and displayed side-by-side.
 
 **Magnetic declination** (optional): Override per-airport or globally for runway wind diagram alignment. Positive = East (mag N east of true N). When `geomag_api_key` is configured, declination is fetched from NOAA when no override exists. See `magnetic_declination` in the options table.
