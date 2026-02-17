@@ -1,7 +1,7 @@
 # AviationWX - Docker Container
 # Syntax: dockerfile:1.4 (for BuildKit cache mounts)
 #syntax=docker/dockerfile:1.4
-FROM php:8.3-apache
+FROM php:8.4-apache
 
 # Install dependencies and PHP extensions
 # Use BuildKit cache mounts to speed up apt package installation
