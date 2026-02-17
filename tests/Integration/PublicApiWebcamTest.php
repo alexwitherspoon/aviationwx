@@ -7,17 +7,19 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../../lib/cache-paths.php';
+
 class PublicApiWebcamTest extends TestCase
 {
     private static $apiBaseUrl;
     private static $testAirport = 'kspb';
-    private static $testCam = 1;
+    private static $testCam = 0;  // Fixture has 1 webcam at index 0
     
     public static function setUpBeforeClass(): void
     {
         self::$apiBaseUrl = getenv('TEST_API_URL') ?: 'http://localhost:8080';
         
-        // Ensure test images exist
+        // Ensure test images exist (use CACHE_WEBCAMS_DIR so server sees them when TEST_API_URL is set)
         self::createTestImages();
     }
     
@@ -26,7 +28,7 @@ class PublicApiWebcamTest extends TestCase
      */
     private static function createTestImages(): void
     {
-        $cacheDir = __DIR__ . '/../../cache/webcams/' . self::$testAirport . '/' . self::$testCam;
+        $cacheDir = getWebcamCameraDir(self::$testAirport, self::$testCam);
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0755, true);
         }
@@ -35,19 +37,23 @@ class PublicApiWebcamTest extends TestCase
         
         // Create original JPG
         $originalJpg = $cacheDir . '/' . $timestamp . '_original.jpg';
-        if (!file_exists($originalJpg)) {
-            // Create a simple test image
-            $img = imagecreatetruecolor(800, 600);
-            $blue = imagecolorallocate($img, 0, 0, 255);
-            imagefill($img, 0, 0, $blue);
-            imagejpeg($img, $originalJpg);
-        }
+        $img = imagecreatetruecolor(800, 600);
+        $blue = imagecolorallocate($img, 0, 0, 255);
+        imagefill($img, 0, 0, $blue);
+        imagejpeg($img, $originalJpg);
         
-        // Create sized variants in WebP
+        // Create original.jpg symlink (required by API)
+        $originalSymlink = $cacheDir . '/original.jpg';
+        if (file_exists($originalSymlink)) {
+            @unlink($originalSymlink);
+        }
+        @symlink(basename($originalJpg), $originalSymlink);
+        
+        // Create sized variants in WebP (config has 1080, 720, 360)
         $variants = [1080 => [800, 600], 720 => [720, 540], 360 => [360, 270]];
         foreach ($variants as $height => $dims) {
             $webpFile = $cacheDir . '/' . $timestamp . '_' . $height . '.webp';
-            if (!file_exists($webpFile) && function_exists('imagewebp')) {
+            if (function_exists('imagewebp')) {
                 $img = imagecreatetruecolor($dims[0], $dims[1]);
                 $red = imagecolorallocate($img, 255, 0, 0);
                 imagefill($img, 0, 0, $red);
