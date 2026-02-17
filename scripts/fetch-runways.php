@@ -17,6 +17,10 @@ require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/runways.php';
 
+// Large runway cache + APCu warm needs extra memory for json_decode
+// @ suppresses ini_set failure in restricted environments (e.g. disable_functions)
+@ini_set('memory_limit', '256M');
+
 $OURAIRPORTS_RUNWAYS_URL = 'https://davidmegginson.github.io/ourairports-data/runways.csv';
 $FAA_RUNWAYS_URL = 'https://ngda-transportation-geoplatform.hub.arcgis.com/api/download/v1/items/110af7b8a9424a59a3fb1d8fc69a2172/csv?layers=0';
 
@@ -83,17 +87,17 @@ function downloadUrl(string $url): ?string {
  * @return array<string, array> Runways by airport_ident
  */
 function parseOurAirportsRunways(string $csv): array {
-    $lines = str_getcsv($csv, "\n");
+    $lines = str_getcsv($csv, "\n", '"', '\\');
     if (count($lines) < 2) {
         return [];
     }
 
-    $header = str_getcsv(array_shift($lines), ',');
+    $header = str_getcsv(array_shift($lines), ',', '"', '\\');
     $idx = array_flip(array_map('trim', $header));
 
     $byAirport = [];
     foreach ($lines as $line) {
-        $row = str_getcsv($line, ',');
+        $row = str_getcsv($line, ',', '"', '\\');
         if (count($row) < 5) {
             continue;
         }
@@ -152,12 +156,12 @@ function parseOurAirportsRunways(string $csv): array {
  * @return array<string, array> Runways by ARPT_ID
  */
 function parseFaaRunways(string $csv): array {
-    $lines = str_getcsv($csv, "\n");
+    $lines = str_getcsv($csv, "\n", '"', '\\');
     if (count($lines) < 2) {
         return [];
     }
 
-    $header = str_getcsv(array_shift($lines), ',');
+    $header = str_getcsv(array_shift($lines), ',', '"', '\\');
     $idx = array_flip(array_map('trim', $header));
 
     $lat1Key = 'LAT1_DECIMAL';
@@ -173,7 +177,7 @@ function parseFaaRunways(string $csv): array {
 
     $byAirport = [];
     foreach ($lines as $line) {
-        $row = str_getcsv($line, ',');
+        $row = str_getcsv($line, ',', '"', '\\');
         if (count($row) < 5) {
             continue;
         }
@@ -211,6 +215,19 @@ function parseFaaRunways(string $csv): array {
         ];
     }
     return $byAirport;
+}
+
+/**
+ * Bearing from center (0,0) to point (x,y) in normalized coords (x=East, y=North)
+ *
+ * @param float $x East component
+ * @param float $y North component
+ * @return float Bearing in degrees 0-360
+ */
+function bearingFromNormalized(float $x, float $y): float {
+    $rad = atan2($x, $y);
+    $deg = rad2deg($rad);
+    return $deg < 0 ? $deg + 360 : $deg;
 }
 
 /**
@@ -254,11 +271,31 @@ function runwaysToSegments(array $runways, float $centerLat, float $centerLon): 
         $x2 = ($rw['lon2'] - $centerLon) * $scaleLon * $scale;
         $y2 = ($rw['lat2'] - $centerLat) * $scaleLat * $scale;
 
+        $leIdent = $rw['le_ident'] ?? '';
+        $heIdent = $rw['he_ident'] ?? '';
+        // Assign idents by bearing: runway numbers are at approach end (opposite of bearing).
+        // Point at 80° (east) gets 26; point at 260° (west) gets 8.
+        $bearing1 = bearingFromNormalized($x1, $y1);
+        $bearing2 = bearingFromNormalized($x2, $y2);
+        $hLe = parseIdentHeading($leIdent);
+        $hHe = parseIdentHeading($heIdent);
+        $diff1Le = min(abs($bearing1 - $hLe), 360 - abs($bearing1 - $hLe));
+        $diff1He = min(abs($bearing1 - $hHe), 360 - abs($bearing1 - $hHe));
+        if ($diff1Le < $diff1He) {
+            $identAt1 = $heIdent;
+            $identAt2 = $leIdent;
+        } else {
+            $identAt1 = $leIdent;
+            $identAt2 = $heIdent;
+        }
+
         $segments[] = [
             'start' => [$x1, $y1],
             'end' => [$x2, $y2],
-            'le_ident' => $rw['le_ident'] ?? '',
-            'he_ident' => $rw['he_ident'] ?? '',
+            'le_ident' => $identAt1,
+            'he_ident' => $identAt2,
+            'ident_at_start' => $identAt1,
+            'ident_at_end' => $identAt2,
             'source' => $rw['source'] ?? 'programmatic',
         ];
     }
@@ -374,8 +411,8 @@ $faaToIcao = [];
 if ($ourairportsCsv !== null) {
     $airportsCsv = downloadUrl('https://davidmegginson.github.io/ourairports-data/airports.csv');
     if ($airportsCsv !== null) {
-        $lines = str_getcsv($airportsCsv, "\n");
-        $header = str_getcsv(array_shift($lines), ',');
+        $lines = str_getcsv($airportsCsv, "\n", '"', '\\');
+        $header = str_getcsv(array_shift($lines), ',', '"', '\\');
         $idx = array_flip(array_map('trim', $header));
         $identIdx = $idx['ident'] ?? null;
         $latIdx = $idx['latitude_deg'] ?? null;

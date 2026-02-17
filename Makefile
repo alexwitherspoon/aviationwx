@@ -25,7 +25,7 @@ help: ## Show this help message
 	@grep -E '^(test-up|test-down|test-shell|test-logs|test-clean):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mConfiguration:\033[0m'
-	@grep -E '^(init|config|config-check|config-example):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^(init|config|config-check|config-example|runways-cache-reset):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ''
 	@echo '\033[1;33mBuild & Cleanup:\033[0m'
 	@grep -E '^(build|build-force|clean|update-leaflet):.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -45,6 +45,14 @@ init: ## Initialize environment (copy env.example to .env)
 
 config: ## Generate configuration from .env
 	@bash config/docker-config.sh
+
+runways-cache-reset: ## Reset runway cache (delete and regenerate)
+	@echo "Resetting runway cache..."
+	@rm -f cache/runways/runways_data.json
+	@rm -f /tmp/aviationwx-cache/runways/runways_data.json
+	@echo "Regenerating runway cache (requires network)..."
+	@php scripts/fetch-runways.php
+	@echo "✓ Runway cache reset complete"
 
 config-check: ## Validate current configuration and show mock mode status
 	@echo "Configuration Check"

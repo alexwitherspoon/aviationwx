@@ -1584,18 +1584,16 @@ if ($themeCookie === 'dark') {
             }
         }
         
-        // Check METAR source - credit if we have fresh METAR data
+        // METAR attribution: use station only from a METAR-sourced field (wind_speed etc. may be swob_auto)
         if (is_array($weatherData) && isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
             $metarStaleThreshold = 7200; // 2 hours - METAR updates hourly with specials
             $metarAge = time() - $weatherData['last_updated_metar'];
             if ($metarAge < $metarStaleThreshold) {
-                $metarStationId = $fieldStationMap['wind_speed'] ?? $fieldStationMap['visibility'] ?? $fieldStationMap['temperature'] ?? null;
-                if ($metarStationId === null) {
-                    foreach ($fieldSourceMap as $f => $src) {
-                        if ($src === 'metar') {
-                            $metarStationId = $fieldStationMap[$f] ?? null;
-                            break;
-                        }
+                $metarStationId = null;
+                foreach ($fieldSourceMap as $f => $src) {
+                    if ($src === 'metar') {
+                        $metarStationId = $fieldStationMap[$f] ?? null;
+                        break;
                     }
                 }
                 $addSource('metar', $metarStationId);
@@ -2186,11 +2184,11 @@ const DEFAULT_PREFERENCES = <?php
     echo json_encode($defaultPrefs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
 
-// Magnetic declination for runway diagram (degrees, positive=East). Rotates diagram so N aligns with magnetic north.
+// Magnetic declination (fallback when wind_direction_magnetic not in API response)
 const MAGNETIC_DECLINATION = <?= (float) getMagneticDeclination($airport) ?>;
 
-// Precomputed runway segments for wind visualization (normalized -1..1, North=+y, true north)
-// Manual override in config takes precedence; otherwise from FAA/OurAirports programmatic data
+// Precomputed runway segments for wind visualization (normalized -1..1, North=+y, magnetic north)
+// Segments are rotated to magnetic in PHP (lib/heading-conversion.php)
 const RUNWAY_SEGMENTS = <?php
     $segments = getRunwaySegmentsForAirport($airportId, $airport);
     $segmentsJson = json_encode($segments ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -4664,16 +4662,8 @@ function updateWindVisual(weather) {
     
     // Draw outer circle
     ctx.strokeStyle = colors.circle; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
-    
-    // Rotate by -MAGNETIC_DECLINATION so diagram aligns with magnetic north (N at top = magnetic)
-    const declRad = (MAGNETIC_DECLINATION * Math.PI) / 180;
-    const cosD = Math.cos(declRad);
-    const sinD = Math.sin(declRad);
-    const rotate = (x, y) => ({
-        x: x * cosD + y * sinD,
-        y: -x * sinD + y * cosD
-    });
 
+    // Runway segments are pre-rotated to magnetic north in PHP (lib/heading-conversion.php)
     const runwayScale = 0.86; // Runways extend to 86% of circle (14% buffer; was 72%/28%)
     const LABEL_POSITION = 0.85; // Place labels at 85% along runway (15% inward from end)
     const MIN_LABEL_DIST = 18;
@@ -4682,13 +4672,11 @@ function updateWindVisual(weather) {
     RUNWAY_SEGMENTS.forEach((seg) => {
         const [sx, sy] = seg.start;
         const [ex, ey] = seg.end;
-        const s = rotate(sx, sy);
-        const e = rotate(ex, ey);
         const rw = r * runwayScale;
-        const startX = cx + rw * s.x;
-        const startY = cy - rw * s.y;
-        const endX = cx + rw * e.x;
-        const endY = cy - rw * e.y;
+        const startX = cx + rw * sx;
+        const startY = cy - rw * sy;
+        const endX = cx + rw * ex;
+        const endY = cy - rw * ey;
         
         ctx.strokeStyle = colors.runway;
         ctx.lineWidth = 8;
@@ -4701,19 +4689,21 @@ function updateWindVisual(weather) {
         const leIdent = seg.le_ident || '';
         const heIdent = seg.he_ident || '';
         // Place labels at 90% along runway line (10% inward from each end) to reduce overlap at intersections
-        const labelAtStart = LABEL_POSITION * s.x + (1 - LABEL_POSITION) * e.x;
-        const labelAtStartY = LABEL_POSITION * s.y + (1 - LABEL_POSITION) * e.y;
-        const labelAtEnd = LABEL_POSITION * e.x + (1 - LABEL_POSITION) * s.x;
-        const labelAtEndY = LABEL_POSITION * e.y + (1 - LABEL_POSITION) * s.y;
+        const labelAtStart = LABEL_POSITION * sx + (1 - LABEL_POSITION) * ex;
+        const labelAtStartY = LABEL_POSITION * sy + (1 - LABEL_POSITION) * ey;
+        const labelAtEnd = LABEL_POSITION * ex + (1 - LABEL_POSITION) * sx;
+        const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
+        const identAtStart = seg.ident_at_start ?? leIdent;
+        const identAtEnd = seg.ident_at_end ?? heIdent;
         labelPositions.push({
             x: cx + rw * labelAtStart,
             y: cy - rw * labelAtStartY,
-            ident: leIdent
+            ident: identAtStart
         });
         labelPositions.push({
             x: cx + rw * labelAtEnd,
             y: cy - rw * labelAtEndY,
-            ident: heIdent
+            ident: identAtEnd
         });
     });
     
@@ -4826,8 +4816,11 @@ function updateWindVisual(weather) {
     if (!windStale) {
         if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && !isVariableWind && windDirNumeric !== null) {
             // Convert wind direction FROM to TOWARD (add 180°) for windsock visualization
-            // Normalize to 0-360° range (e.g., 270° + 180° = 450° → 90°)
-            const windDirToward = (windDirNumeric + 180) % 360;
+            // Prefer wind_direction_magnetic from API (centralized); fallback: convert true→magnetic client-side
+            const windDirFromMag = (weather.wind_direction_magnetic != null && typeof weather.wind_direction_magnetic === 'number')
+                ? weather.wind_direction_magnetic
+                : (windDirNumeric - (MAGNETIC_DECLINATION || 0) + 360) % 360;
+            const windDirToward = (windDirFromMag + 180) % 360;
             windDirection = (windDirToward * Math.PI) / 180;
             windSpeed = ws;
             

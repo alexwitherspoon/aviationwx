@@ -10,6 +10,7 @@
 
 require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/heading-conversion.php';
 
 /** APCu key prefix for runway segments per airport */
 const RUNWAYS_APCU_PREFIX = 'aviationwx_runways_';
@@ -18,10 +19,53 @@ const RUNWAYS_APCU_PREFIX = 'aviationwx_runways_';
 const RUNWAYS_APCU_MTIME_KEY = 'aviationwx_runways_file_mtime';
 
 /**
+ * Check if runway segments are in true north (geographic) vs magnetic north
+ *
+ * Lat/lon runways (manual or FAA/OurAirports) use geographic bearing = true north.
+ * Heading-based runways (heading_1/heading_2) use runway numbers = magnetic north.
+ * Declination is only applied to convert true → magnetic for display.
+ *
+ * @param array $airport Airport config with runways (optional)
+ * @return bool True if segments are in true north (need declination conversion)
+ */
+function runwaysSegmentsAreInTrueNorth(array $airport): bool {
+    if (empty($airport['runways']) || !is_array($airport['runways'])) {
+        return true; // Programmatic/FAA/OurAirports from lat/lon = true north
+    }
+    return isManualRunwaysLatLonFormat($airport['runways']);
+}
+
+/**
+ * Rotate runway segments from true north to magnetic north for display
+ *
+ * @param array $segments Segments with start/end [x,y]
+ * @param float $declination Declination (positive=East)
+ * @return array Rotated segments
+ */
+function rotateRunwaySegmentsToMagnetic(array $segments, float $declination): array {
+    if ($declination === 0.0) {
+        return $segments;
+    }
+    $rotated = [];
+    foreach ($segments as $seg) {
+        $s = $seg['start'] ?? [0, 0];
+        $e = $seg['end'] ?? [0, 0];
+        $rs = rotatePointTrueToMagnetic((float) $s[0], (float) $s[1], $declination);
+        $re = rotatePointTrueToMagnetic((float) $e[0], (float) $e[1], $declination);
+        $rotated[] = array_merge($seg, [
+            'start' => [$rs['x'], $rs['y']],
+            'end' => [$re['x'], $re['y']],
+        ]);
+    }
+    return $rotated;
+}
+
+/**
  * Get runway segments for an airport (unified format for frontend)
  *
  * Returns array of segments: [{ start: [x,y], end: [x,y], le_ident, he_ident, source }, ...]
  * Coordinates are normalized -1..1, centered on airport, North = +y.
+ * Segments in true north are rotated to magnetic for display (compass alignment).
  *
  * @param string $airportId Airport identifier (e.g. kspb, cyav)
  * @param array $airport Airport config with lat, lon, runways (optional manual override)
@@ -33,9 +77,11 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
     // Manual override: use config runways, convert to segments
     if (!empty($airport['runways']) && is_array($airport['runways'])) {
         if (isManualRunwaysLatLonFormat($airport['runways'])) {
-            return manualRunwaysLatLonToSegments($airport['runways'], $airport);
+            $segments = manualRunwaysLatLonToSegments($airport['runways'], $airport);
+        } else {
+            $segments = manualRunwaysToSegments($airport['runways']);
         }
-        return manualRunwaysToSegments($airport['runways']);
+        return rotateSegmentsIfTrueNorth($segments, $airport);
     }
 
     // Programmatic: check APCu, then file cache (invalidate APCu when file is newer)
@@ -48,7 +94,7 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         if ($mtimeSuccess && $fileMtime > 0 && (int) $storedMtime === (int) $fileMtime) {
             $cached = @apcu_fetch($apcuKey, $success);
             if ($success && $cached !== false && is_array($cached)) {
-                return $cached;
+                return rotateSegmentsIfTrueNorth($cached, $airport);
             }
         }
     }
@@ -59,9 +105,26 @@ function getRunwaySegmentsForAirport(string $airportId, array $airport): ?array 
         if ($fileMtime > 0) {
             @apcu_store(RUNWAYS_APCU_MTIME_KEY, $fileMtime, RUNWAYS_APCU_TTL);
         }
+        return rotateSegmentsIfTrueNorth($segments, $airport);
     }
 
-    return $segments;
+    return null;
+}
+
+/**
+ * Rotate segments to magnetic if they are in true north
+ *
+ * @param array $segments Segments array
+ * @param array $airport Airport config for declination
+ * @return array Segments (rotated when in true north)
+ */
+function rotateSegmentsIfTrueNorth(array $segments, array $airport): array {
+    if (!runwaysSegmentsAreInTrueNorth($airport)) {
+        return $segments;
+    }
+    require_once __DIR__ . '/config.php';
+    $declination = getMagneticDeclination($airport);
+    return rotateRunwaySegmentsToMagnetic($segments, $declination);
 }
 
 /**
@@ -231,16 +294,45 @@ function manualRunwaysToSegments(array $runways): array {
 
         $angle = ($h1 * M_PI) / 180;
         $length = 0.9;
-
+        // Aviation: 0°=N (+y), 90°=E (+x). start = heading_1 end (e.g. 80°=east), end = heading_2 end (260°=west).
+        // Runway numbers are at approach end: 8 at west (end), 26 at east (start).
         $segments[] = [
-            'start' => [-sin($angle) * $length, cos($angle) * $length],
-            'end' => [sin($angle) * $length, -cos($angle) * $length],
+            'start' => [sin($angle) * $length, cos($angle) * $length],
+            'end' => [-sin($angle) * $length, -cos($angle) * $length],
             'le_ident' => trim($leIdent),
             'he_ident' => trim($heIdent),
+            'ident_at_start' => trim($heIdent),
+            'ident_at_end' => trim($leIdent),
             'source' => 'manual',
         ];
     }
     return $segments;
+}
+
+/**
+ * Extract runway segments for an airport from parsed cache data
+ *
+ * @param array $data Parsed runways cache (must have 'airports' key)
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport config with icao, faa (optional)
+ * @return array|null Segments or null if not found
+ */
+function getRunwaySegmentsFromParsedCache(array $data, string $airportId, array $airport): ?array {
+    if (!isset($data['airports']) || !is_array($data['airports'])) {
+        return null;
+    }
+    $airports = $data['airports'];
+    $identsToTry = array_filter([
+        strtoupper($airportId),
+        isset($airport['icao']) ? strtoupper((string) $airport['icao']) : null,
+        isset($airport['faa']) ? strtoupper((string) $airport['faa']) : null,
+    ]);
+    foreach ($identsToTry as $ident) {
+        if (isset($airports[$ident]) && !empty($airports[$ident]['segments'])) {
+            return $airports[$ident]['segments'];
+        }
+    }
+    return null;
 }
 
 /**
@@ -263,6 +355,7 @@ function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?ar
         }
     }
 
+    // @ suppresses read errors; we handle failure explicitly below
     $content = @file_get_contents($cachePath);
     if ($content === false) {
         return null;
@@ -273,39 +366,42 @@ function loadRunwaySegmentsFromFileCache(string $airportId, array $airport): ?ar
         return null;
     }
 
-    $airportLat = isset($airport['lat']) ? (float) $airport['lat'] : null;
-    $airportLon = isset($airport['lon']) ? (float) $airport['lon'] : null;
-
-    $airports = $data['airports'];
-    $identsToTry = array_filter([
-        strtoupper($airportId),
-        isset($airport['icao']) ? strtoupper((string) $airport['icao']) : null,
-        isset($airport['faa']) ? strtoupper((string) $airport['faa']) : null,
-    ]);
-    $runwayData = null;
-    foreach ($identsToTry as $ident) {
-        if (isset($airports[$ident])) {
-            $runwayData = $airports[$ident];
-            break;
-        }
-    }
-    if ($runwayData === null) {
-        return null;
-    }
-    if (empty($runwayData['segments'])) {
-        return null;
-    }
-
-    return $runwayData['segments'];
+    return getRunwaySegmentsFromParsedCache($data, $airportId, $airport);
 }
 
 /**
  * Warm APCu cache for configured airports
  *
+ * Loads the runway cache file once and parses once to avoid memory exhaustion
+ * when many airports are configured.
+ *
  * @param array $airports Config airports array
  * @return int Number of airports warmed
  */
 function warmRunwaysApcuCache(array $airports): int {
+    $cachePath = CACHE_RUNWAYS_DATA_FILE;
+    $fixturePath = dirname(__DIR__) . '/tests/Fixtures/runways_data.json';
+
+    if (!file_exists($cachePath)) {
+        if ((getenv('APP_ENV') === 'testing' || (defined('APP_ENV') && APP_ENV === 'testing'))
+            && file_exists($fixturePath)) {
+            $cachePath = $fixturePath;
+        } else {
+            return 0;
+        }
+    }
+
+    // @ suppresses read errors; we handle failure explicitly below
+    $content = @file_get_contents($cachePath);
+    if ($content === false) {
+        return 0;
+    }
+
+    $data = json_decode($content, true);
+    if (!is_array($data) || !isset($data['airports'])) {
+        return 0;
+    }
+
     $warmed = 0;
     foreach ($airports as $airportId => $airport) {
         if (!is_array($airport)) {
@@ -314,7 +410,7 @@ function warmRunwaysApcuCache(array $airports): int {
         if (!empty($airport['runways'])) {
             continue;
         }
-        $segments = loadRunwaySegmentsFromFileCache(strtolower($airportId), $airport);
+        $segments = getRunwaySegmentsFromParsedCache($data, strtolower($airportId), $airport);
         if ($segments !== null && function_exists('apcu_store')) {
             $key = RUNWAYS_APCU_PREFIX . strtolower($airportId);
             @apcu_store($key, $segments, RUNWAYS_APCU_TTL);
