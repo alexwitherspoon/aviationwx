@@ -2386,6 +2386,7 @@ body.night-mode #wind-details {
 
 body.night-mode #wind-details > div {
     border-bottom-color: var(--night-border) !important;
+    border-top-color: var(--night-border) !important;
 }
 
 body.night-mode #wind-details span {
@@ -2884,6 +2885,23 @@ body.dark-mode #baro-unit-toggle:hover {
 /* Wind visual */
 body.dark-mode .wind-visual-container {
     background: transparent !important;
+}
+
+body.dark-mode #wind-details {
+    color: var(--dark-text-primary) !important;
+}
+
+body.dark-mode #wind-details > div {
+    border-bottom-color: var(--dark-border) !important;
+    border-top-color: var(--dark-border) !important;
+}
+
+body.dark-mode #wind-details span {
+    color: var(--dark-text-muted) !important;
+}
+
+body.dark-mode #wind-details span[style*="font-weight: bold"] {
+    color: var(--dark-text-bright) !important;
 }
 
 /* Webcam section */
