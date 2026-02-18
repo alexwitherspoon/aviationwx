@@ -2,7 +2,7 @@
 
 ## What is the AviationWX Bridge?
 
-The AviationWX Bridge is an optional tool that runs on a small local device like a Raspberry Pi and handles capturing snapshots from local cameras, validating image quality and timestamps, and uploading them reliably to AviationWX via FTPS. Use the Bridge when your cameras don't support scheduled FTP uploads natively, such as UniFi Protect or NVR systems.
+The AviationWX Bridge is an optional tool that runs on a small local device like a Raspberry Pi and handles capturing snapshots from local cameras, validating image quality and timestamps, and uploading them reliably to AviationWX via SFTP (or FTPS when required). Use the Bridge when your cameras don't support scheduled FTP uploads natively, such as UniFi Protect or NVR systems.
 
 Think of it as a dedicated "camera assistant" that sits on your local network and makes sure images get to AviationWX-even when your cameras don't natively support scheduled FTP uploads.
 
@@ -53,7 +53,7 @@ The AviationWX Bridge runs on your local network, close to the cameras. It:
 - captures high-quality snapshots directly from cameras
 - validates timestamps and image integrity before upload
 - queues images locally if the internet is temporarily down
-- uploads via encrypted FTPS when connectivity is available
+- uploads via SFTP (preferred) or FTPS when connectivity is available
 
 **The result:** more consistent image quality and reliable uploads, even with cameras that weren't designed for this workflow.
 
@@ -102,7 +102,7 @@ The AviationWX Bridge runs on your local network, close to the cameras. It:
 |  |  |                                                          |    |       |
 |  |  |   • Validates image quality                              |    |       |
 |  |  |   • Verifies timestamps (EXIF + NTP)                     |    |       |
-|  |  |   • Uploads via FTPS to upload.aviationwx.org            |    |       |
+|  |  |   • Uploads via SFTP/FTPS to upload.aviationwx.org        |    |       |
 |  |  |   • Retries with backoff if network hiccups              |    |       |
 |  |  +----------------------------------------------------------+    |       |
 |  |                                                                  |       |
@@ -110,7 +110,7 @@ The AviationWX Bridge runs on your local network, close to the cameras. It:
 |                                    |                                        |
 +-----------------------------------------------------------------------------+
                                      |
-                                     | FTPS (encrypted)
+                                     | SFTP / FTPS (encrypted)
                                      v
 +-----------------------------------------------------------------------------+
 |                         upload.aviationwx.org                               |
@@ -123,7 +123,7 @@ The AviationWX Bridge runs on your local network, close to the cameras. It:
 **Key points:**
 - The Bridge captures images locally at high quality
 - Images are queued in RAM (not SD card) to avoid wear on flash storage
-- Uploads happen via encrypted FTPS with automatic retry
+- Uploads happen via SFTP (preferred) or FTPS with automatic retry
 - A web console lets you configure cameras and monitor status from any browser
 
 ---
@@ -194,7 +194,7 @@ The Bridge uses RAM for image queuing, so storage wear is minimal. However:
 
 The device needs:
 - Network access to your cameras (usually on the same LAN or VLAN)
-- Internet access to upload to AviationWX (FTPS outbound)
+- Internet access to upload to AviationWX (SFTP or FTPS outbound)
 
 ---
 
@@ -290,7 +290,7 @@ The AviationWX Bridge uses the same credential process as direct camera uploads:
 3. **Receive upload details** (server, port, username, password)
 4. **Enter credentials** in the Bridge web console
 
-AviationWX provides FTPS credentials for the `upload.aviationwx.org` server. The Bridge handles the rest.
+**Protocol preference:** We recommend **SFTP** by default. Use SFTP in all cases unless FTPS is specifically required for your setup. AviationWX provides credentials for `upload.aviationwx.org` (SFTP port 2222, or FTPS port 2121 when needed).
 
 ---
 
@@ -313,42 +313,27 @@ The Bridge is designed for unattended operation at remote locations:
 
 ### Scenario 1: UniFi Protect cameras
 
-UniFi Protect doesn't offer scheduled FTP uploads. The Bridge can:
-- connect to the RTSP stream from each camera
-- extract high-quality still images
-- upload them on a schedule
+UniFi Protect doesn't offer scheduled FTP uploads. The Bridge connects to the RTSP stream, extracts still images, and uploads them. **The Bridge must be on the same network as the NVR.**
 
-**UniFi Protect RTSP URL formats:**
+**Get and convert the RTSP URL:**
 
-UniFi Protect provides two RTSP stream types:
+1. **Get the URL from UniFi Protect:** Home → Protect → UniFi Devices → (select camera) → Settings → Advanced → toggle the resolution you want → copy the URL (e.g., `rtsps://192.168.1.1:7441/QxJCVMefFHfBnqrp?enableSrtp`)
 
-| Type | URL Pattern | Port | Best For |
-|------|-------------|------|----------|
-| **Local RTSP** | `rtsp://nvr-ip:7447/STREAM_ID` | 7447 | Bridge on local network (recommended) |
-| **Shared RTSPS** | `rtsps://nvr-ip:7441/STREAM_ID?enableSrtp` | 7441 | Remote access with encryption |
+2. **Convert it** — UniFi's URL needs a few adjustments. Apply these three changes:
+   - Change `rtsps://` to `rtsp://` (remove the second `s`)
+   - Change port `7441` to `7447`
+   - Remove `?enableSrtp` from the end
 
-**Example Bridge configuration for UniFi:**
+3. **Use in the Bridge:** Enter the converted URL in the Bridge web console. Leave the username and password fields empty—UniFi Local RTSP does not use authentication.
+
+**Example:**
 ```
-# Local RTSP (recommended when Bridge is on same network as NVR)
-rtsp://192.168.1.1:7447/FKEFbCxO0CiAF3TH
+# What UniFi gives you:
+rtsps://192.168.1.1:7441/QxJCVMefFHfBnqrp?enableSrtp
 
-# Shared RTSPS (use if you need encryption)
-rtsps://192.168.1.1:7441/FKEFbCxO0CiAF3TH?enableSrtp
+# What to enter in the Bridge:
+rtsp://192.168.1.1:7447/QxJCVMefFHfBnqrp
 ```
-
-**Why use Local RTSP (port 7447) with the Bridge?**
-- Simpler setup - no encryption overhead
-- Lower latency on local network
-- No `?enableSrtp` parameter needed
-- The Bridge handles secure upload to AviationWX via FTPS
-
-**Finding the STREAM_ID:**
-1. Open UniFi Protect web interface
-2. Go to **Cameras** → select your camera → **Settings** → **Advanced**
-3. Enable RTSP and copy the stream URL
-4. The `STREAM_ID` is the unique identifier (e.g., `FKEFbCxO0CiAF3TH`)
-
-> **Note:** The `STREAM_ID` is generated by UniFi Protect and is unique to each camera. You must copy it from the UniFi interface - it cannot be guessed.
 
 ### Scenario 2: NVR-only installations
 
@@ -377,11 +362,13 @@ At remote sites where reliability matters most:
 ## Troubleshooting
 
 ### "Camera captures are failing"
+- **Test RTSP separately:** To confirm the feed is reachable, try it from a computer on the same network as the camera or NVR. Open **VLC** (Media → Open Network Stream) and paste your RTSP URL. If VLC can play the stream, the Bridge should be able to reach it too. If VLC fails, the issue is likely with the network or camera configuration—troubleshoot that first.
 - Verify the camera URL is reachable from the Bridge device
-- For RTSP, confirm credentials and stream path
+- For RTSP, confirm the stream path (and that username/password are empty for UniFi Local RTSP)
 - Check the Bridge logs via the web console
 
 ### "Uploads aren't happening"
+- **Test SFTP/FTPS separately:** Use **FileZilla** (or similar) to connect to `upload.aviationwx.org` with your credentials. If FileZilla can connect and upload a test file, the Bridge should be able to as well. If FileZilla fails, the issue is likely with credentials or network connectivity—check those first.
 - Verify internet connectivity from the Bridge device
 - Check upload credentials in the web console
 - Look for queue buildup (images waiting to upload)
