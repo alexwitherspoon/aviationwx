@@ -4644,7 +4644,7 @@ function updateWindVisual(weather) {
         compass: '#993333',         // Muted red compass
         windArrow: '#ff4444',       // Red wind arrow
         windFill: 'rgba(255, 68, 68, 0.2)',  // Red transparent fill (legacy, replaced by petals)
-        windRosePetal: 'rgba(255, 68, 68, 0.2)',      // Wind rose petal fill (matches former circle)
+        windRosePetal: 'rgba(255, 68, 68, 0.5)',      // Wind rose petal fill
         windRosePetalStroke: 'rgba(255, 68, 68, 0.4)', // Wind rose petal stroke
         calmText: '#cc4444',        // Red calm text
         vrbText: '#ff4444'          // Red VRB text
@@ -4656,7 +4656,7 @@ function updateWindVisual(weather) {
         compass: '#666',
         windArrow: '#dc3545',
         windFill: 'rgba(220, 53, 69, 0.2)',
-        windRosePetal: 'rgba(220, 53, 69, 0.2)',      // Wind rose petal fill (matches former circle)
+        windRosePetal: 'rgba(220, 53, 69, 0.5)',      // Wind rose petal fill
         windRosePetalStroke: 'rgba(220, 53, 69, 0.4)', // Wind rose petal stroke
         calmText: '#333',
         vrbText: '#dc3545'
@@ -4901,7 +4901,7 @@ function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
         ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, length, a1, a2);
         ctx.closePath();
-        ctx.fillStyle = colors.windRosePetal || 'rgba(220, 53, 69, 0.2)';
+        ctx.fillStyle = colors.windRosePetal || 'rgba(220, 53, 69, 0.5)';
         ctx.fill();
         ctx.strokeStyle = colors.windRosePetalStroke || 'rgba(220, 53, 69, 0.4)';
         ctx.lineWidth = 1;
