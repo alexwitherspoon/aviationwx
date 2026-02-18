@@ -203,11 +203,11 @@ class WeatherEndpointTest extends TestCase
     public function testWeatherEndpoint_RateLimiting()
     {
         // Make rapid requests as fast as possible to actually hit rate limit
-        // Rate limit is 60 requests per 60 seconds, so we'll make 65 requests quickly
+        // Rate limit is 120 requests per 60 seconds (RATE_LIMIT_WEATHER_MAX), so we make 125 requests
         $requests = [];
         $startTime = microtime(true);
         
-        for ($i = 0; $i < 65; $i++) { // Slightly more than 60 requests/minute limit
+        for ($i = 0; $i < 125; $i++) { // Slightly more than 120 requests/minute limit
             $response = $this->makeRequest("api/weather.php?airport={$this->testAirport}", false);
             $requests[] = $response['http_code'];
             

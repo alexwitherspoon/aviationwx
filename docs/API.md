@@ -95,7 +95,7 @@ Returns weather data for the specified airport.
 - `429`: Rate limit exceeded
 - `500`: Server error
 
-**Rate Limiting:** 60 requests per minute per IP
+**Rate Limiting:** 120 requests per minute per IP
 
 **Caching:** 
 - Responses are cached with multi-layer cache control
@@ -553,7 +553,7 @@ Error messages are sanitized to prevent information leakage.
 
 ## Rate Limiting
 
-- **Weather API**: 60 requests per minute per IP
+- **Weather API**: 120 requests per minute per IP
 - **Webcam API**: 100 requests per minute per IP
 
 Rate limit exceeded returns:

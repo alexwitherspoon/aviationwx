@@ -502,7 +502,7 @@ See [DATA_FLOW.md](DATA_FLOW.md#notam-data-fetching) for detailed NOTAM processi
 ## Security Considerations
 
 - **Input Validation**: All user input validated and sanitized
-- **Rate Limiting**: Prevents abuse (60/min weather, 100/min webcams)
+- **Rate Limiting**: Prevents abuse (120/min weather, 100/min webcams)
 - **Credential Protection**: API keys never exposed to frontend
 - **File Permissions**: Sensitive files properly protected
 - **Error Messages**: Sanitized to prevent information leakage

@@ -91,8 +91,8 @@ curl https://api.aviationwx.org/v1/airports
 
 | Tier | Requests/min | Requests/day |
 |------|--------------|--------------|
-| Anonymous | 20 | 2,000 |
-| Partner (API key) | 120 | 50,000 |
+| Anonymous | 100 | 10,000 |
+| Partner (API key) | 500 | 50,000 |
 
 See [API documentation](https://api.aviationwx.org) for full endpoint details, authentication, and usage guidelines.
 
