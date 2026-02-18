@@ -4783,7 +4783,7 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Direction:</span>
-            <span style="font-weight: bold;">${isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '--')}</span>
+            <span style="font-weight: bold;">${(ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) ? '--' : (isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '--'))}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Gusting:</span>
