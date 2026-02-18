@@ -90,6 +90,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 10.0, 0.0);
+        $this->appendObs($baseTime - 300, 10.0, 0.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -103,6 +104,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 12.0, 90.0);
+        $this->appendObs($baseTime - 300, 12.0, 90.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -116,6 +118,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 8.0, 180.0);
+        $this->appendObs($baseTime - 300, 8.0, 180.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -129,6 +132,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 15.0, 270.0);
+        $this->appendObs($baseTime - 300, 15.0, 270.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -142,6 +146,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 7.0, -20.0); // -20° = 340° -> sector 15 (NNW)
+        $this->appendObs($baseTime - 300, 7.0, 340.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -155,6 +160,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 7.0, 360.0);
+        $this->appendObs($baseTime - 300, 7.0, 0.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -168,6 +174,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 5.0, 11.0);
+        $this->appendObs($baseTime - 300, 5.0, 11.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -181,6 +188,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 6.0, 12.0);
+        $this->appendObs($baseTime - 300, 6.0, 12.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
@@ -292,6 +300,18 @@ class WindRoseSafetyTest extends TestCase
     }
 
     /**
+     * 1 or fewer valid observations must return null (insufficient for distribution)
+     */
+    public function testFailSafe_OneOrFewerObservations_ReturnsNull(): void
+    {
+        $baseTime = time();
+        $this->appendObs($baseTime - 600, 10.0, 0.0);
+
+        $petals = computeLastHourWindRose($this->testAirportId);
+        $this->assertNull($petals, 'Single observation must return null');
+    }
+
+    /**
      * All calm (zero speed) in last hour must return null
      */
     public function testFailSafe_AllCalm_ReturnsNull(): void
@@ -337,6 +357,7 @@ class WindRoseSafetyTest extends TestCase
     {
         $baseTime = time();
         $this->appendObs($baseTime - 600, 5.0, 0.0);
+        $this->appendObs($baseTime - 300, 5.0, 0.0);
 
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);

@@ -432,6 +432,11 @@ function computeLastHourWindRose(string $airportId): ?array
         $sectorCounts[$sector]++;
     }
 
+    $validObsCount = array_sum($sectorCounts);
+    if ($validObsCount <= 1) {
+        return null;
+    }
+
     $petals = [];
     $maxAvg = 0.0;
     for ($i = 0; $i < 16; $i++) {
