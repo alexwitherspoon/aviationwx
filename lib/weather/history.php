@@ -7,6 +7,7 @@
  * the retention period.
  */
 
+require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../public-api/config.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../cache-paths.php';
@@ -417,6 +418,9 @@ function computeLastHourWindRose(string $airportId): ?array
         $dir = (float) $dir;
         $speed = (float) $speed;
         if ($speed < 0) {
+            continue;
+        }
+        if ($speed < CALM_WIND_THRESHOLD_KTS) {
             continue;
         }
         // Normalize direction to 0-360 (handles negative, >360, malformed)

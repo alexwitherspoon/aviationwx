@@ -312,6 +312,35 @@ class WindRoseSafetyTest extends TestCase
     }
 
     /**
+     * Winds below calm threshold (< 3 kts) must not contribute to petals
+     */
+    public function testFailSafe_CalmWindsExcluded_NoPetalContribution(): void
+    {
+        $baseTime = time();
+        $this->appendObs($baseTime - 600, 2.0, 0.0);  // Below 3 kts = calm, excluded
+        $this->appendObs($baseTime - 300, 2.5, 90.0); // Below 3 kts = calm, excluded
+
+        $petals = computeLastHourWindRose($this->testAirportId);
+        $this->assertNull($petals, 'Calm winds must not contribute - insufficient valid obs');
+    }
+
+    /**
+     * Calm observations excluded; non-calm observations produce petals
+     */
+    public function testFailSafe_CalmExcluded_NonCalmProducesPetals(): void
+    {
+        $baseTime = time();
+        $this->appendObs($baseTime - 600, 5.0, 0.0);
+        $this->appendObs($baseTime - 300, 5.0, 0.0);
+        $this->appendObs($baseTime - 150, 2.0, 90.0); // Calm, excluded
+
+        $petals = computeLastHourWindRose($this->testAirportId);
+        $this->assertNotNull($petals);
+        $this->assertEqualsWithDelta(5.0, $petals[0], 0.1, 'Sector 0 (N) should have 5.0 from non-calm obs only');
+        $this->assertEqualsWithDelta(0.0, $petals[4], 0.1, 'Sector 4 (E) should be 0 - calm obs excluded');
+    }
+
+    /**
      * All calm (zero speed) in last hour must return null
      */
     public function testFailSafe_AllCalm_ReturnsNull(): void
