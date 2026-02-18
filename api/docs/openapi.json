@@ -774,12 +774,14 @@
               },
               "frequencies": {
                 "type": "object",
+                "description": "Radio frequencies (e.g. ctaf, tower). Empty object {} when none configured.",
                 "additionalProperties": {
                   "type": "string"
                 }
               },
               "services": {
-                "type": "object"
+                "type": "object",
+                "description": "Available services (e.g. fuel, repairs_available). Empty object {} when none configured."
               }
             }
           }

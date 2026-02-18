@@ -114,18 +114,17 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['runways'] = [];
     }
     
-    // Add frequencies
-    if (isset($airport['frequencies']) && is_array($airport['frequencies'])) {
+    // Frequencies and services: empty returns {} for schema consistency
+    if (isset($airport['frequencies']) && is_array($airport['frequencies']) && !empty($airport['frequencies'])) {
         $formatted['frequencies'] = $airport['frequencies'];
     } else {
-        $formatted['frequencies'] = [];
+        $formatted['frequencies'] = (object) [];
     }
-    
-    // Add services
-    if (isset($airport['services']) && is_array($airport['services'])) {
+
+    if (isset($airport['services']) && is_array($airport['services']) && !empty($airport['services'])) {
         $formatted['services'] = $airport['services'];
     } else {
-        $formatted['services'] = [];
+        $formatted['services'] = (object) [];
     }
 
     // Partners (public fields only - no credentials)

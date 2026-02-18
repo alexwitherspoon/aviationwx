@@ -171,4 +171,31 @@ class PublicApiAirportTest extends TestCase
         $this->assertArrayHasKey('links', $formatted);
         $this->assertSame([], $formatted['links']);
     }
+
+    public function testFormatAirportDetails_ServicesAndFrequenciesReturnObjectWhenEmpty(): void
+    {
+        self::loadFormatAirportDetails();
+        $airport = $this->getTestAirport('pdx');
+        $formatted = formatAirportDetails('pdx', $airport);
+
+        $this->assertArrayHasKey('services', $formatted);
+        $this->assertIsObject($formatted['services']);
+        $this->assertEmpty((array) $formatted['services']);
+
+        $this->assertArrayHasKey('frequencies', $formatted);
+        $this->assertIsObject($formatted['frequencies']);
+        $this->assertEmpty((array) $formatted['frequencies']);
+    }
+
+    public function testFormatAirportDetails_ServicesAndFrequenciesReturnObjectWhenPopulated(): void
+    {
+        self::loadFormatAirportDetails();
+        $airport = $this->getTestAirport('kspb');
+        $formatted = formatAirportDetails('kspb', $airport);
+
+        $this->assertArrayHasKey('services', $formatted);
+        $this->assertIsArray($formatted['services']);
+        $this->assertArrayHasKey('fuel', $formatted['services']);
+        $this->assertSame('100LL, Jet-A', $formatted['services']['fuel']);
+    }
 }
