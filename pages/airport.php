@@ -4643,7 +4643,9 @@ function updateWindVisual(weather) {
         labelOutline: '#330000',    // Dark red outline
         compass: '#993333',         // Muted red compass
         windArrow: '#ff4444',       // Red wind arrow
-        windFill: 'rgba(255, 68, 68, 0.2)',  // Red transparent fill
+        windFill: 'rgba(255, 68, 68, 0.2)',  // Red transparent fill (legacy, replaced by petals)
+        windRosePetal: 'rgba(255, 68, 68, 0.2)',      // Wind rose petal fill (matches former circle)
+        windRosePetalStroke: 'rgba(255, 68, 68, 0.4)', // Wind rose petal stroke
         calmText: '#cc4444',        // Red calm text
         vrbText: '#ff4444'          // Red VRB text
     } : {
@@ -4654,6 +4656,8 @@ function updateWindVisual(weather) {
         compass: '#666',
         windArrow: '#dc3545',
         windFill: 'rgba(220, 53, 69, 0.2)',
+        windRosePetal: 'rgba(220, 53, 69, 0.2)',      // Wind rose petal fill (matches former circle)
+        windRosePetalStroke: 'rgba(220, 53, 69, 0.4)', // Wind rose petal stroke
         calmText: '#333',
         vrbText: '#dc3545'
     };
@@ -4748,6 +4752,12 @@ function updateWindVisual(weather) {
     const windStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly) ||
                       isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
     
+    // Draw wind rose petals (last hour) when available - before wind indicators
+    const lastHourWind = weather.last_hour_wind;
+    if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
+        drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
+    }
+
     // Check staleness for individual wind fields for details panel
     const windSpeedStale = isFieldStale('wind_speed', weather, refreshIntervalSeconds, isMetarOnly);
     const windDirectionStale = isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
@@ -4857,6 +4867,38 @@ function updateWindVisual(weather) {
     });
 }
 
+function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
+    // petals: 16 sectors [N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW]
+    // Wind rose convention: petals extend in direction wind is FROM (0°=N, 90°=E)
+    // Canvas arc: 0 = 3 o'clock (E), angles increase clockwise. North = -Math.PI/2
+    const maxPetalLength = Math.min(45, r * 0.35);
+    const maxSpeed = Math.max(1, ...petals);
+    const deg2rad = Math.PI / 180;
+
+    for (let i = 0; i < 16; i++) {
+        const speed = petals[i] || 0;
+        if (speed <= 0) continue;
+        const length = (speed / maxSpeed) * maxPetalLength;
+        if (length < 2) continue;
+
+        // Sector i: met angle = i*22.5° (from N). Canvas: angle = met - 90 (so N -> -90°)
+        const centerAngle = (i * 22.5 - 90) * deg2rad;
+        const halfWidth = (22.5 / 2) * deg2rad;
+        const a1 = centerAngle - halfWidth;
+        const a2 = centerAngle + halfWidth;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, length, a1, a2);
+        ctx.closePath();
+        ctx.fillStyle = colors.windRosePetal || 'rgba(220, 53, 69, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = colors.windRosePetalStroke || 'rgba(220, 53, 69, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+}
+
 function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0, colors = null) {
     // Use default colors if not provided (for backwards compatibility)
     if (!colors) {
@@ -4872,9 +4914,7 @@ function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0, colors = null) 
     const arrowEndX = cx + Math.sin(angle) * arrowLength;
     const arrowEndY = cy - Math.cos(angle) * arrowLength;
     
-    ctx.fillStyle = colors.windFill;
-    const circleRadius = Math.max(20, speed * 4);
-    ctx.beginPath(); ctx.arc(cx, cy, circleRadius, 0, 2 * Math.PI); ctx.fill();
+    // Faded circle replaced by wind rose petals (drawn earlier when last_hour_wind available)
     
     ctx.strokeStyle = colors.windArrow; ctx.fillStyle = colors.windArrow; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(arrowEndX, arrowEndY); ctx.stroke();

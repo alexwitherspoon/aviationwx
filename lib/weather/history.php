@@ -374,6 +374,82 @@ function computeDailyExtremesFromHistory(string $airportId, string $dateKey, str
 }
 
 /**
+ * Compute last-hour wind rose data for wind rose petal visualization
+ *
+ * Returns 16 sectors (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
+ * with average wind speed when wind was from that direction. Wind direction is "from" (meteorological).
+ * Petals extend in the direction wind is coming from.
+ *
+ * @param string $airportId Airport ID
+ * @return array|null Array of 16 floats (sector 0=N, 1=NNE, ... 15=NNW), or null if unavailable
+ */
+function computeLastHourWindRose(string $airportId): ?array
+{
+    if (!isPublicApiWeatherHistoryEnabled()) {
+        return null;
+    }
+
+    $history = loadWeatherHistory($airportId);
+    $observations = $history['observations'] ?? [];
+    if (empty($observations)) {
+        return null;
+    }
+
+    $cutoff = time() - 3600; // Last hour
+    $lastHourObs = array_filter($observations, function ($obs) use ($cutoff) {
+        return isset($obs['obs_time']) && $obs['obs_time'] >= $cutoff;
+    });
+    if (empty($lastHourObs)) {
+        return null;
+    }
+
+    // 16 sectors: N=0, NNE=1, NE=2, ENE=3, E=4, ESE=5, SE=6, SSE=7, S=8, SSW=9, SW=10, WSW=11, W=12, WNW=13, NW=14, NNW=15
+    // Sector i is centered at i*22.5°. Assign obs to sector by round(dir/22.5) % 16
+    $sectorSums = array_fill(0, 16, 0.0);
+    $sectorCounts = array_fill(0, 16, 0);
+
+    foreach ($lastHourObs as $obs) {
+        $dir = $obs['wind_direction'] ?? null;
+        $speed = $obs['wind_speed'] ?? null;
+        if ($dir === null || $speed === null || !is_numeric($dir) || !is_numeric($speed)) {
+            continue;
+        }
+        $dir = (float) $dir;
+        $speed = (float) $speed;
+        if ($speed < 0) {
+            continue;
+        }
+        // Normalize direction to 0-360 (handles negative, >360, malformed)
+        $dir = fmod($dir + 360.0, 360.0);
+        if ($dir < 0) {
+            $dir += 360.0;
+        }
+        $sector = (int) round($dir / 22.5) % 16;
+        if ($sector < 0 || $sector >= 16) {
+            continue;
+        }
+        $sectorSums[$sector] += $speed;
+        $sectorCounts[$sector]++;
+    }
+
+    $petals = [];
+    $maxAvg = 0.0;
+    for ($i = 0; $i < 16; $i++) {
+        $avg = $sectorCounts[$i] > 0 ? $sectorSums[$i] / $sectorCounts[$i] : 0.0;
+        $petals[] = round($avg, 1);
+        if ($avg > $maxAvg) {
+            $maxAvg = $avg;
+        }
+    }
+
+    if ($maxAvg <= 0) {
+        return null;
+    }
+
+    return $petals;
+}
+
+/**
  * Prune old observations from weather history
  * 
  * @param string $airportId Airport ID

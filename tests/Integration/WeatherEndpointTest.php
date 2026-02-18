@@ -116,6 +116,17 @@ class WeatherEndpointTest extends TestCase
                 foreach ($expectedFields as $field) {
                     $this->assertArrayHasKey($field, $weather, "Should have field: $field");
                 }
+
+                // SAFETY: last_hour_wind (wind rose petals) - when present, must be valid
+                if (isset($weather['last_hour_wind'])) {
+                    $lhw = $weather['last_hour_wind'];
+                    $this->assertIsArray($lhw, 'last_hour_wind must be array');
+                    $this->assertCount(16, $lhw, 'last_hour_wind must have exactly 16 sectors');
+                    foreach ($lhw as $i => $v) {
+                        $this->assertTrue(is_numeric($v), "last_hour_wind sector $i must be numeric");
+                        $this->assertGreaterThanOrEqual(0, (float) $v, "last_hour_wind sector $i must be non-negative");
+                    }
+                }
             }
         }
     }

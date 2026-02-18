@@ -647,6 +647,12 @@ function generateMockWeatherData($airportId, $airport) {
         $weatherData['_field_obs_time_map'] = [];
     }
 
+    // Last-hour wind rose for petal visualization (16 sectors: N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
+    $lastHourWindRose = computeLastHourWindRose($airportId);
+    if ($lastHourWindRose !== null) {
+        $weatherData['last_hour_wind'] = $lastHourWindRose;
+    }
+
     addWindDirectionMagneticToWeather($weatherData, $airport);
 
     // Determine backup status from field source map

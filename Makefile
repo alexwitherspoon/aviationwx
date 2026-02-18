@@ -144,10 +144,15 @@ test-ci: ## Run all tests that GitHub CI runs (comprehensive)
 	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WeatherAggregatorTest failed"; exit 1; fi
 	@APP_ENV=testing vendor/bin/phpunit tests/Unit/MagneticDeclinationSafetyTest.php --testdox --stop-on-failure --no-coverage; \
 	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ MagneticDeclinationSafetyTest failed"; exit 1; fi
+	@APP_ENV=testing vendor/bin/phpunit tests/Unit/WindRoseSafetyTest.php --testdox --stop-on-failure --no-coverage; \
+	exit_code=$$?; if [ "$$exit_code" -gt 1 ]; then echo "❌ WindRoseSafetyTest failed"; exit 1; fi
 	@echo "✓ Critical safety tests passed"
 	@echo ""
 	@echo "5️⃣  Validating JavaScript..."
 	@php scripts/validate-javascript.php
+	@echo ""
+	@echo "5a️⃣  Wind Rose Safety Tests (JS)..."
+	@node tests/js/wind-rose.test.js || { echo "❌ Wind rose JS tests failed"; exit 1; }
 	@echo ""
 	@echo "5b️⃣  ESLint JavaScript Linting..."
 	@if [ -f package.json ]; then \
