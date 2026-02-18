@@ -4731,18 +4731,6 @@ function updateWindVisual(weather) {
         }
     }
     
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    labelPositions.forEach((lp) => {
-        if (!lp.ident) return;
-        ctx.strokeStyle = colors.labelOutline;
-        ctx.lineWidth = 3;
-        ctx.strokeText(lp.ident, lp.x, lp.y);
-        ctx.fillStyle = colors.runwayLabel;
-        ctx.fillText(lp.ident, lp.x, lp.y);
-    });
-    
     // Check if wind data is stale before displaying wind indicators
     const refreshIntervalSeconds = (AIRPORT_DATA && AIRPORT_DATA.weather_refresh_seconds) 
         ? AIRPORT_DATA.weather_refresh_seconds 
@@ -4754,6 +4742,9 @@ function updateWindVisual(weather) {
     
     // Draw wind rose petals (last hour) when available - before wind indicators
     const lastHourWind = weather.last_hour_wind;
+    canvas.title = Array.isArray(lastHourWind) && lastHourWind.length === 16
+        ? 'Wind rose: Petals show last hour distribution'
+        : '';
     if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
         drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
     }
@@ -4820,6 +4811,12 @@ function updateWindVisual(weather) {
                 return `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${formatted}</div>`;
             })() : ''}
         </div>
+        ${Array.isArray(weather.last_hour_wind) && weather.last_hour_wind.length === 16 ? `
+        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid #e0e0e0;">
+            <span style="color: #555;">Wind rose:</span>
+            <span style="font-weight: bold;">Last hour</span>
+        </div>
+        ` : ''}
     `;
     
     // Only draw wind indicators if data is fresh (not stale)
@@ -4858,6 +4855,19 @@ function updateWindVisual(weather) {
         }
     }
     // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
+    
+    // Draw runway labels (after petals/arrow so labels sit on top)
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    labelPositions.forEach((lp) => {
+        if (!lp.ident) return;
+        ctx.strokeStyle = colors.labelOutline;
+        ctx.lineWidth = 3;
+        ctx.strokeText(lp.ident, lp.x, lp.y);
+        ctx.fillStyle = colors.runwayLabel;
+        ctx.fillText(lp.ident, lp.x, lp.y);
+    });
     
     // Draw cardinal directions
     ['N', 'E', 'S', 'W'].forEach((l, i) => {

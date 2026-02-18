@@ -847,6 +847,8 @@ When new data is fetched but some fields are missing:
 
 **API Access**: Available via Public API endpoint `/v1/airports/{id}/weather/history` with optional time filtering and resolution downsampling (all, hourly, 15min).
 
+**Wind Rose Petals**: `computeLastHourWindRose()` derives 16-sector wind distribution from observations in the rolling last hour. Result is added to weather cache as `last_hour_wind` when `config.public_api.weather_history_enabled` is true. Petals extend in direction wind is FROM (meteorological convention). Arrow shows direction wind is blowing TOWARD (windsock convention).
+
 ### Refresh Intervals
 
 **Per-Airport Configuration**:
@@ -1519,7 +1521,7 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 - **Wind Direction**: Degrees (or "VRB" if variable)
 - **Gust Speed**: Same unit as wind speed (user-selected)
 - **Gust Factor**: Additional speed from gusts (same unit)
-- **Visual**: Wind rose/compass showing direction
+- **Visual**: Wind rose/compass with current wind arrow and last-hour petal distribution
 - **Peak Gust Today**:
   - Highest gust observed today (displayed in user-selected unit)
   - Timestamp showing when peak occurred

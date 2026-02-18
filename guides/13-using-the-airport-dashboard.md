@@ -137,10 +137,10 @@ The wind rose shows wind relative to the runway(s):
 |                                                                             |
 |                               N                                             |
 |                               |                                             |
-|                          \    |    /                                        |
-|                           \   |   /                                         |
-|                       W ----- o ----- E       <-- Wind direction arrow      |
-|                           /   |   \               points FROM wind source   |
+|                          \    |    /     <-- Petals: last-hour distribution |
+|                           \   |   /          (direction wind is FROM)       |
+|                       W ----- o ----- E       <-- Arrow: current wind        |
+|                           /   |   \               (direction blowing TO)    |
 |                          /    |    \                                        |
 |                               |                                             |
 |                               S                                             |
@@ -149,14 +149,16 @@ The wind rose shows wind relative to the runway(s):
 |                 |  Runway 15/33                     |                       |
 |                 |  Headwind:  8 kts  (Rwy 33)       |                       |
 |                 |  Crosswind: 5 kts  (from left)    |                       |
+|                 |  Wind rose: Last hour              |                       |
 |                 +-----------------------------------+                       |
 +-----------------------------------------------------------------------------+
 ```
 
 **What you see:**
-- **Wind arrow** pointing FROM the wind direction
+- **Wind arrow** (red) – current wind direction, points where wind is blowing TOWARD (windsock style)
+- **Petals** (light red) – last-hour wind distribution by direction (16 sectors). Petals extend in direction wind is FROM. Only shown when weather history is available.
 - **Runway alignment** overlaid for reference
-- **Component breakdown** - headwind/tailwind and crosswind for each runway end
+- **Component breakdown** – headwind/tailwind and crosswind for each runway end
 
 ---
 
