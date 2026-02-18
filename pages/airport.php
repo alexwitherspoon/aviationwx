@@ -4812,7 +4812,7 @@ function updateWindVisual(weather) {
             })() : ''}
         </div>
         ${Array.isArray(weather.last_hour_wind) && weather.last_hour_wind.length === 16 ? `
-        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid #e0e0e0;">
+        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid #e0e0e0;" title="Wind direction distribution over the last hour. Petals extend in the direction wind is coming from.">
             <span style="color: #555;">Wind rose:</span>
             <span style="font-weight: bold;">Last hour</span>
         </div>
