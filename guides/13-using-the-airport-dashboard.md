@@ -156,7 +156,7 @@ The wind rose shows wind relative to the runway(s):
 
 **What you see:**
 - **Wind arrow** (red) – current wind direction, points where wind is blowing TOWARD (windsock style)
-- **Petals** (light red) – last-hour wind distribution by direction (16 sectors). Petals extend in direction wind is FROM. Only shown when weather history is available.
+- **Petals** (light red) – last-hour wind distribution by direction (16 sectors). Petals extend in direction wind is FROM. Calm winds (&lt; 3 kts) are excluded. Only shown when weather history has 2+ valid observations.
 - **Runway alignment** overlaid for reference
 - **Component breakdown** – headwind/tailwind and crosswind for each runway end
 
