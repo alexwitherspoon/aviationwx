@@ -85,6 +85,21 @@ class AirportsDirectoryTest extends TestCase
     }
     
     /**
+     * Test location button is present and triggers geolocation on click (not on load)
+     */
+    public function testLocationButton_IsPresentAndTriggersGeolocationOnClick()
+    {
+        $output = $this->getAirportsPageContent();
+
+        $this->assertStringContainsString('location-btn', $output, 'Should have location button');
+        $this->assertStringContainsString('Center map on my location', $output, 'Should have location button aria-label');
+        $this->assertStringContainsString('location-error-msg', $output, 'Should have error feedback element for geolocation failures');
+        $this->assertStringContainsString('locationBtn.addEventListener', $output, 'Should wire location button click handler');
+        $this->assertStringContainsString('map.locate', $output, 'Should use geolocation when button clicked');
+        $this->assertStringContainsString('map.fitBounds(group.getBounds()', $output, 'Should fit all airports by default on load');
+    }
+
+    /**
      * Test weather layer controls are present
      */
     public function testWeatherLayerControls_ArePresent()

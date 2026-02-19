@@ -268,6 +268,62 @@ $breadcrumbs = generateBreadcrumbSchema([
             background: white;
         }
         
+        .location-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 1000;
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .location-btn:hover {
+            background: #f8f9fa;
+            transform: scale(1.05);
+        }
+        
+        .location-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .location-btn:disabled:hover {
+            transform: none;
+        }
+        
+        .location-error-msg {
+            position: absolute;
+            bottom: 55px;
+            right: 10px;
+            z-index: 1000;
+            padding: 0.5rem 0.75rem;
+            background: rgba(220, 53, 69, 0.95);
+            color: white;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            max-width: 220px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        .location-error-msg.visible {
+            display: block;
+        }
+        
+        body.dark-mode .location-error-msg {
+            background: rgba(200, 50, 65, 0.95);
+        }
+        
         .weather-opacity-control {
             display: flex;
             flex-direction: column;
@@ -883,6 +939,15 @@ $breadcrumbs = generateBreadcrumbSchema([
             background: rgba(42, 42, 42, 0.95);
         }
         
+        body.dark-mode .location-btn {
+            background: rgba(42, 42, 42, 0.95);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        body.dark-mode .location-btn:hover {
+            background: #3a3a3a;
+        }
+        
         body.dark-mode .map-control-btn {
             background: #2a2a2a;
             border-color: #444;
@@ -1040,6 +1105,17 @@ $breadcrumbs = generateBreadcrumbSchema([
             </div>
             
             <div id="map"></div>
+            <div id="location-error-msg" class="location-error-msg" role="alert" aria-live="polite"></div>
+            <button id="location-btn" class="location-btn" title="Center map on my location" aria-label="Center map on my location">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="8"/>
+                    <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                    <line x1="12" y1="4" x2="12" y2="6"/>
+                    <line x1="18" y1="12" x2="20" y2="12"/>
+                    <line x1="12" y1="18" x2="12" y2="20"/>
+                    <line x1="4" y1="12" x2="6" y2="12"/>
+                </svg>
+            </button>
         </div>
         
         <section class="airports-section">
@@ -1213,7 +1289,7 @@ $breadcrumbs = generateBreadcrumbSchema([
             };
         }
         
-        // Initialize map (will set view after location detection or fallback)
+        // Initialize map (default view fits all airports; location button centers on user)
         var map = L.map('map', {
             scrollWheelZoom: true,
             zoomControl: false // Disable default zoom controls, we'll use custom ones
@@ -1510,59 +1586,52 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         map.addLayer(markers);
         
-        // Fit map to show all airports (or center on user location if available)
+        // Fit map to show all airports by default (no location request on load)
         if (allMarkers.length > 0) {
             var group = L.featureGroup(allMarkers);
-            var locationDetected = false;
-            
-            // Try to center map on user's location, fall back to fitting all markers
-            if (navigator.geolocation) {
-                // Request user location (non-blocking)
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        // Success - center on user location
-                        var userLat = position.coords.latitude;
-                        var userLon = position.coords.longitude;
-                        
-                        map.setView([userLat, userLon], 8); // Zoom 8 shows ~100-200 mile radius
-                        locationDetected = true;
-                        
-                        console.log('Map centered on user location:', userLat, userLon);
-                    },
-                    function(error) {
-                        // Error or denied - fall back to showing all airports
-                        if (!locationDetected) {
-                            map.fitBounds(group.getBounds().pad(0.1));
-                            if (map.getZoom() > 10) {
-                                map.setZoom(10);
-                            }
-                            console.log('Location access denied or unavailable, showing all airports');
-                        }
-                    },
-                    {
-                        enableHighAccuracy: false, // Don't need GPS precision
-                        timeout: 5000,             // 5 second timeout
-                        maximumAge: 300000         // Accept 5-minute cached position
-                    }
-                );
-                
-                // Set initial view immediately while waiting for location
-                // (prevents blank map during permission prompt)
-                map.fitBounds(group.getBounds().pad(0.1));
-                if (map.getZoom() > 10) {
-                    map.setZoom(10);
-                }
-            } else {
-                // Geolocation not supported - fall back to showing all airports
-                map.fitBounds(group.getBounds().pad(0.1));
-                if (map.getZoom() > 10) {
-                    map.setZoom(10);
-                }
-                console.log('Geolocation not supported by browser, showing all airports');
+            map.fitBounds(group.getBounds().pad(0.1));
+            if (map.getZoom() > 10) {
+                map.setZoom(10);
             }
         }
         
-        // (Note: No need for separate zoom limit - handled in fallback logic above)
+        // ========================================================================
+        // FEATURE: Location Button (center map on user location on click)
+        // ========================================================================
+        var locationBtn = document.getElementById('location-btn');
+        if (locationBtn && navigator.geolocation) {
+            locationBtn.addEventListener('click', function() {
+                locationBtn.disabled = true;
+                locationBtn.title = 'Getting location…';
+                map.once('locationfound', function(e) {
+                    map.setView(e.latlng, 8);
+                    var errMsg = document.getElementById('location-error-msg');
+                    if (errMsg) errMsg.classList.remove('visible');
+                    locationBtn.disabled = false;
+                    locationBtn.title = 'Center map on my location';
+                });
+                map.once('locationerror', function(e) {
+                    locationBtn.disabled = false;
+                    locationBtn.title = 'Location denied or unavailable';
+                    var errMsg = document.getElementById('location-error-msg');
+                    if (errMsg) {
+                        errMsg.textContent = 'Location denied or unavailable. Grant permission in your browser.';
+                        errMsg.classList.add('visible');
+                        setTimeout(function() { errMsg.classList.remove('visible'); }, 5000);
+                    }
+                });
+                map.locate({
+                    setView: false,
+                    maxZoom: 8,
+                    enableHighAccuracy: false,
+                    timeout: 5000,
+                    maximumAge: 300000  // Use cached location up to 5 min for faster response
+                });
+            });
+        } else if (locationBtn) {
+            locationBtn.disabled = true;
+            locationBtn.title = 'Location not supported by browser';
+        }
         
         // ========================================================================
         // FEATURE: Custom Zoom Controls
