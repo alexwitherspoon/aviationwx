@@ -1,0 +1,75 @@
+name: Weekly Link Check
+run-name: "Link Check (${{ github.event_name }})"
+
+on:
+  schedule:
+    # Monday 9:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: {}
+
+# Prevent concurrent runs
+concurrency:
+  group: weekly-link-check
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  link-check:
+    name: Check dashboard links
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Ensure link-check label exists
+        run: |
+          curl -s -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/labels \
+            -d '{"name":"link-check","color":"1d76db","description":"Broken links from weekly dashboard check"}' \
+            || true
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, json, mbstring
+          coverage: none
+
+      - name: Run link check
+        env:
+          BASE_URL: https://aviationwx.org
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TIMEOUT_MINUTES: 30
+        run: |
+          php scripts/link-check.php | tee link-check-output.json
+
+      - name: Summary
+        run: |
+          if [ -f link-check-output.json ]; then
+            echo "## Link Check Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            php -r '
+              $j = json_decode(file_get_contents("link-check-output.json"), true);
+              if ($j) {
+                echo "| Metric | Value |" . PHP_EOL;
+                echo "|--------|-------|" . PHP_EOL;
+                echo "| Elapsed | " . ($j["elapsed_seconds"] ?? 0) . "s |" . PHP_EOL;
+                echo "| Airports checked | " . ($j["airports_checked"] ?? 0) . " |" . PHP_EOL;
+                echo "| Links checked | " . ($j["links_checked"] ?? 0) . " |" . PHP_EOL;
+                echo "| Broken links | " . ($j["broken_count"] ?? 0) . " |" . PHP_EOL;
+                echo "| Issues closed (now healthy) | " . ($j["closed_count"] ?? 0) . " |" . PHP_EOL;
+                if (!empty($j["stopped_early"])) {
+                  echo PHP_EOL . "⚠️ Run stopped early (30 min limit)" . PHP_EOL;
+                }
+              }
+            '
+          fi
