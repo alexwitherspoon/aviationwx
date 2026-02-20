@@ -1,267 +1,194 @@
-# GitHub Copilot Code Review Instructions
+# GitHub Copilot Instructions – AviationWX.org
 
-This document provides context and guidelines for GitHub Copilot when reviewing pull requests for AviationWX.org.
+Repository custom instructions for GitHub Copilot coding agent and code review. This file provides context so Copilot can work efficiently with minimal exploration.
 
-## Project Context
+---
 
-**AviationWX.org is a safety-critical application used by pilots for flight decisions.** Code quality, reliability, and graceful degradation are paramount. When reviewing code, prioritize safety and clarity over cleverness.
+## Project Overview
+
+**AviationWX.org** is a safety-critical application used by pilots for flight decisions. Real-time weather, webcams, and aviation metrics (density altitude, VFR/IFR status) are displayed per airport. Code quality, reliability, and graceful degradation are paramount.
+
+### AviationWX.org Ecosystem
+
+- **This repository**: Main application. Multi-airport platform with subdomain routing (e.g., `kspb.aviationwx.org`, `cyav.aviationwx.org`).
+- **airports.aviationwx.org**: Airport directory map and listing (in `pages/airports.php`).
+- **embed.aviationwx.org**: Embed generator for external weather widgets.
+- **api.aviationwx.org**: Public API (OpenAPI spec, separate docs).
+- **Secrets**: Production config (`airports.json` with API keys) lives in private repo `aviationwx.org-secrets`.
 
 ### Technology Stack
+
 - **Backend**: PHP 8.x (no framework, minimal dependencies)
-- **Frontend**: Vanilla JavaScript, CSS
+- **Frontend**: Vanilla JavaScript, CSS (no React/Vue)
 - **Infrastructure**: Docker, nginx, PHP-FPM
-- **Testing**: PHPUnit
-- **Data**: JSON files (no database), APCu caching
+- **Testing**: PHPUnit (Unit + Integration suites)
+- **Data**: JSON config (no database), APCu caching
+- **Maps**: Leaflet (airports directory)
 
 ---
 
-## Critical Review Areas
+## Build & Validation
 
-### 1. Data Staleness Handling (SAFETY CRITICAL)
+**Always run `make test-ci` before committing or pushing.** This matches GitHub Actions validation.
 
-**Always flag code that could show stale data to pilots.**
+### Commands (use these, in order)
 
-- Data older than `MAX_STALE_HOURS` (3 hours) must be nulled out
-- Timestamps must always be displayed to users
-- Warnings should appear when data exceeds staleness thresholds
-- Fields should show "---" instead of stale values
+| Purpose | Command | Notes |
+|---------|---------|-------|
+| **Start dev** | `make dev` | Builds containers, tails logs. Use Docker, never `php -S`. |
+| **Run tests** | `make test-ci` | Required before commit. PHP syntax + PHPUnit + safety tests + JS validation. |
+| **Faster tests** | `make test` | PHPUnit only (incomplete – misses syntax in untested files). |
+| **Unit only** | `make test-unit` | Fast iteration. |
+| **Config check** | `make config-check` | Validates config, shows mock mode. |
+| **Without secrets** | `make config-example` then `make dev` | Mock mode auto-activates. |
 
-**Flag if:**
-- Weather/webcam data is displayed without age checks
-- Stale data could be served without warnings
-- Missing null checks for stale fields
+### Local Development
 
-### 2. Error Handling
+- **URL**: http://localhost:8080
+- **DO NOT** use `php -S localhost:8080` – always use Docker.
+- **With secrets**: Mount `aviationwx.org-secrets/airports.json` via `docker-compose.override.yml`, set `CONFIG_PATH`.
 
-**This application must never silently fail.**
+### CI Pipeline (.github/workflows/test.yml)
 
-- All errors must be handled explicitly
-- Each airport should degrade independently
-- Use `aviationwx_log()` for structured logging with context
-
-**Flag if:**
-- Errors are caught but not logged or handled
-- Empty catch blocks
-- Missing error handling for external API calls
-- Silent failures that could affect data quality
-
-### 3. Unit Handling (SAFETY CRITICAL)
-
-**Incorrect unit handling is a common source of aviation accidents.**
-
-- Always use `WeatherReading` factory methods: `celsius()`, `knots()`, `inHg()`, `feet()`, etc.
-- Never hardcode conversion factors - use `lib/units.php`
-- Document units in PHPDoc when handling weather data
-
-**Flag if:**
-- Raw numbers used without unit context
-- Hardcoded conversion factors
-- Ambiguous unit handling
+Runs on PR and push to main: PHP syntax check, PHPUnit Unit + Integration, critical safety tests, JavaScript static analysis, config validation, required file checks. Replicate locally with `make test-ci`.
 
 ---
 
-## Code Style Requirements
+## Project Layout
 
-### Comments
-
-**Focus on "why" not "what"** - code should be self-documenting.
-
-**Good comments explain:**
-- Complex business logic or algorithms
-- Non-obvious behavior or edge cases
-- Safety-critical logic
-- Race conditions or concurrency issues
-- The rationale behind a decision
-
-**Flag comments that:**
-- Describe what code does (obvious from reading)
-- Are transitory ("Changed X to Y", "Updated for new API")
-- Include dates or version history (use git for that)
-- Explain simple operations (`// Increment counter`)
-
-### PHPDoc Requirements
-
-All public functions must have PHPDoc blocks:
-
-```php
-/**
- * Brief description (one line preferred)
- *
- * @param string $airportId Airport ICAO identifier
- * @return array{success: bool, data: ?array, error: ?string}
- */
+```
+aviationwx.org/
+├── index.php              # Router – subdomain/query → airport or homepage
+├── pages/
+│   ├── airport.php        # Airport dashboard (weather, webcam, wind)
+│   ├── airports.php       # Airport directory map
+│   ├── homepage.php       # Homepage
+│   └── ...
+├── api/
+│   ├── weather.php        # Weather JSON API
+│   ├── webcam.php         # Webcam image server
+│   └── ...
+├── lib/
+│   ├── config.php         # Config loading, env detection (use loadConfig(), never read JSON directly)
+│   ├── constants.php      # MAX_STALE_HOURS, etc.
+│   ├── weather/           # UnifiedFetcher, adapters, WeatherSnapshot
+│   └── ...
+├── scripts/
+│   ├── scheduler.php      # Daemon – weather, webcam, NOTAM
+│   ├── unified-webcam-worker.php
+│   └── fetch-weather.php
+├── tests/
+│   ├── Unit/
+│   ├── Integration/
+│   └── Fixtures/airports.json.test
+├── config/airports.json.example
+├── docker/
+├── CODE_STYLE.md          # Full coding standards – MUST follow
+└── docs/ARCHITECTURE.md   # System design
 ```
 
-**Flag if:**
-- Public functions missing PHPDoc
-- Missing `@param` or `@return` annotations
-- Outdated PHPDoc that doesn't match function signature
+### Key Files to Reference
 
-### PHP Standards
-
-- Follow **PSR-12** coding standards
-- Use type hints on all new code
-- Use meaningful variable and function names
-- Keep functions focused (single responsibility)
-
-**Flag if:**
-- Inconsistent naming conventions
-- Missing type hints on new functions
-- Functions doing too many things
-- Inconsistent code style with existing codebase
+- `CODE_STYLE.md` – Coding standards (PSR-12, comments, PHPDoc, testing)
+- `docs/ARCHITECTURE.md` – Data flow, weather aggregation, webcam pipeline
+- `lib/config.php` – `loadConfig()`, `isTestMode()`, `shouldMockExternalServices()`
+- `lib/constants.php` – `MAX_STALE_HOURS`, `PLACEHOLDER_CACHE_TTL`
+- `phpunit.xml` – Sets `APP_ENV=testing`, `CONFIG_PATH=tests/Fixtures/airports.json.test`
 
 ---
 
-## Testing Requirements
+## Code Conventions
 
-### What Must Have Tests
+### Config & Environment
 
-1. **Bug fixes** - Must include a test that would have caught the bug
-2. **New features** - Critical paths and complex logic
-3. **Safety-critical code** - Data staleness, validation, calculations
+- Use `loadConfig()` – never read `airports.json` directly. Config is cached in APCu.
+- Use `isTestMode()`, `shouldMockExternalServices()` for environment checks.
+- Tests use `tests/Fixtures/airports.json.test`; mock mode is automatic.
 
-### Test Naming Convention
+### Error Handling
+
+- **Never silently fail.** Handle errors explicitly.
+- Use `aviationwx_log()` for structured logging.
+- Per-airport degradation: one airport’s failure must not affect others.
+
+### Naming
+
+- Files: `lowercase-with-hyphens`
+- Classes: `PascalCase`
+- Functions: `camelCase`
+- Constants: `UPPER_SNAKE_CASE`
+
+### Test Naming
 
 ```php
 testFunctionName_Scenario_ExpectedBehavior()
 ```
 
-**Examples:**
-- `testNullStaleFields_ExceedsMaxHours_NullsTemperature()`
-- `testFetchWeather_ApiTimeout_ReturnsNull()`
+---
 
-**Flag if:**
-- Bug fixes without corresponding tests
-- New safety-critical code without tests
-- Tests that don't follow naming convention
-- Tests with unclear assertions
+## Safety-Critical Requirements
+
+### Data Staleness
+
+- Data older than `MAX_STALE_HOURS` (3 hours) must be nulled out.
+- Show "---" for stale/missing fields, never stale values.
+- Always display timestamps to users.
+- Use `nullStaleFieldsBySource()` for weather.
+
+### Unit Handling
+
+- Use `WeatherReading` factory methods: `celsius()`, `knots()`, `inHg()`, `feet()`.
+- Never hardcode conversion factors – use `lib/units.php`.
+- Document units in PHPDoc when handling weather data.
+
+### Testing
+
+- Bug fixes must include a test that would have caught the bug.
+- New features need tests for critical paths.
+- Safety-critical code (staleness, validation, calculations) must have tests.
 
 ---
 
-## Security Review Points
+## Code Review Checklist
 
-**Flag if:**
-- API keys, passwords, or credentials in code
-- Unsanitized user input
-- Missing input validation on API endpoints
-- Sensitive data in logs
-
----
-
-## Configuration Management
-
-- All config is in `airports.json` (validated on load)
-- Use `loadConfig()` - never read JSON directly
-- Config errors should fail fast in CI, isolate in production
-
-**Flag if:**
-- Direct file reads of airports.json
-- Missing config validation
-- Config changes without schema updates
-
----
-
-## Dependencies
-
-**Preference: Minimize dependencies.**
-
-- Prefer PHP built-ins over libraries
-- Use dependencies only for complex, mature software (e.g., ffmpeg)
-- Avoid simple utility libraries
-
-**Flag if:**
-- New dependency added without justification
-- Dependency for something PHP can do natively
-- Missing documentation for why dependency is needed
-
----
-
-## File Organization
-
-### Naming Conventions
-- **Files**: lowercase with hyphens (`circuit-breaker.php`)
-- **Classes**: PascalCase (`CircuitBreaker`)
-- **Functions**: camelCase (`getWeatherData()`)
-- **Constants**: UPPER_SNAKE_CASE (`MAX_STALE_HOURS`)
-
-### Structure
-```
-lib/           # Shared libraries
-scripts/       # CLI scripts and workers
-api/           # API endpoints
-pages/         # Page templates
-tests/Unit/    # Unit tests
-tests/Integration/  # Integration tests
-```
-
----
-
-## Review Checklist Summary
-
-When reviewing a PR, check for:
+When reviewing PRs, verify:
 
 ### Safety Critical
-- [ ] Data staleness properly handled
-- [ ] No stale data shown to users
+- [ ] Data staleness handled (no stale data shown)
 - [ ] Units explicitly tracked and converted correctly
 - [ ] Errors handled explicitly (no silent failures)
 
 ### Code Quality
-- [ ] Follows PSR-12 standards
+- [ ] PSR-12 standards
 - [ ] Comments focus on "why" not "what"
 - [ ] PHPDoc on all public functions
 - [ ] Type hints on new code
-- [ ] Meaningful names
 
 ### Testing
 - [ ] Bug fixes have tests
 - [ ] Critical paths tested
-- [ ] Tests follow naming convention
+- [ ] Test naming: `testFunctionName_Scenario_ExpectedBehavior`
 
 ### Security
 - [ ] No credentials in code
 - [ ] Input validated
-- [ ] No sensitive data logged
+- [ ] No sensitive data in logs
 
 ### Documentation
 - [ ] Breaking changes documented
 - [ ] Config changes documented
-- [ ] Temporary files cleaned up
+- [ ] Temporary docs cleaned up
 
 ---
 
-## Tone and Approach
+## Severity Levels for Review Feedback
 
-When providing feedback:
-
-1. **Be constructive** - Explain why something is problematic
-2. **Prioritize safety** - Safety issues are blockers, style issues are suggestions
-3. **Reference guidelines** - Point to CODE_STYLE.md or this document
-4. **Suggest improvements** - Don't just flag issues, offer solutions
-5. **Acknowledge good patterns** - Recognize when code follows best practices
-
-### Severity Levels
-
-- **🔴 Blocker**: Safety-critical issues, security vulnerabilities, data integrity risks
-- **🟡 Important**: Missing tests, error handling gaps, code style violations
-- **🟢 Suggestion**: Minor improvements, optional refactoring, style preferences
+- **Blocker**: Safety issues, security vulnerabilities, data integrity risks
+- **Important**: Missing tests, error handling gaps, code style violations
+- **Suggestion**: Minor improvements, optional refactoring
 
 ---
 
-## Quick Reference
+## Trust These Instructions
 
-### Key Files
-- `CODE_STYLE.md` - Full coding standards
-- `docs/ARCHITECTURE.md` - System design
-- `lib/constants.php` - Application constants
-
-### Key Constants
-- `MAX_STALE_HOURS = 3` - Maximum data age before nulling
-- `WEATHER_STALENESS_WARNING_HOURS_METAR = 1` - Warning threshold
-- `PLACEHOLDER_CACHE_TTL` - Webcam placeholder timeout
-
-### Key Functions
-- `loadConfig()` - Load airports.json (cached)
-- `aviationwx_log()` - Structured logging
-- `nullStaleFieldsBySource()` - Null stale weather fields
-- `WeatherReading::celsius()` etc. - Unit-safe weather values
+Use this file as the primary source. Search the codebase only when information here is incomplete or incorrect. Before making changes, run `make test-ci` to validate.
