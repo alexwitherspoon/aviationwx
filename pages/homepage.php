@@ -1578,7 +1578,7 @@ Best regards,
                         <h4 style="margin-top: 0; color: #0066cc;">📷 AviationWX Bridge</h4>
                         <p style="font-size: 0.95rem;">Camera integration tool for Axis, Reolink, and other RTSP-capable cameras to work with the platform.</p>
                         <div style="margin-top: 1rem;">
-                            <a href="https://github.com/alexwitherspoon/aviationwx-bridge" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">View on GitHub →</a>
+                            <a href="https://github.com/alexwitherspoon/aviationwx.org-bridge" target="_blank" rel="noopener" style="color: #0066cc; font-weight: 500; font-size: 0.9rem;">View on GitHub →</a>
                         </div>
                     </div>
                 </div>

@@ -81,7 +81,7 @@ $baseDomain = getBaseDomain();
                         <span class="dropdown-item-icon">🛬</span>
                         <span>Platform Source Code</span>
                     </a>
-                    <a href="https://github.com/alexwitherspoon/aviationwx-bridge" target="_blank" rel="noopener" class="site-nav-dropdown-item">
+                    <a href="https://github.com/alexwitherspoon/aviationwx.org-bridge" target="_blank" rel="noopener" class="site-nav-dropdown-item">
                         <span class="dropdown-item-icon">📷</span>
                         <span>Camera Bridge Tool</span>
                     </a>
@@ -125,7 +125,7 @@ $baseDomain = getBaseDomain();
         <span class="dropdown-item-icon">🛬</span>
         <span>Platform Source Code</span>
     </a>
-    <a href="https://github.com/alexwitherspoon/aviationwx-bridge" target="_blank" rel="noopener" class="site-nav-mobile-item site-nav-mobile-indent">
+    <a href="https://github.com/alexwitherspoon/aviationwx.org-bridge" target="_blank" rel="noopener" class="site-nav-mobile-item site-nav-mobile-indent">
         <span class="dropdown-item-icon">📷</span>
         <span>Camera Bridge Tool</span>
     </a>

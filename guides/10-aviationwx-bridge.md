@@ -220,7 +220,7 @@ After installation, open `http://<device-ip>:1229` to configure cameras.
 Best for environments with existing Docker infrastructure:
 
 ```text
-docker pull ghcr.io/alexwitherspoon/aviationwx-bridge:latest
+docker pull ghcr.io/alexwitherspoon/aviationwx.org-bridge:latest
 ```
 
 Your IT team manages updates via their existing tooling (Portainer, Watchtower, Kubernetes, etc.).
@@ -383,7 +383,7 @@ At remote sites where reliability matters most:
 - Check that the device is on the network
 - For Raspberry Pi: try power cycling (unplug, wait 10 seconds, plug in)
 
-For detailed troubleshooting, see the [Bridge documentation](https://github.com/alexwitherspoon/aviationwx-bridge).
+For detailed troubleshooting, see the [Bridge documentation](https://github.com/alexwitherspoon/aviationwx.org-bridge).
 
 ---
 
@@ -406,7 +406,7 @@ Before setting up a Bridge, confirm:
 
 | Resource | Link |
 |----------|------|
-| **Bridge GitHub repository** | https://github.com/alexwitherspoon/aviationwx-bridge |
+| **Bridge GitHub repository** | https://github.com/alexwitherspoon/aviationwx.org-bridge |
 | **Installation documentation** | See README in GitHub repository |
 | **Configuration reference** | See `/docs` folder in GitHub repository |
 | **Request credentials** | contact@aviationwx.org |
