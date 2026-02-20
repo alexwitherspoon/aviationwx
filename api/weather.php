@@ -20,6 +20,7 @@ require_once __DIR__ . '/../lib/weather/UnifiedFetcher.php';
 require_once __DIR__ . '/../lib/weather/cache-utils.php';
 require_once __DIR__ . '/../lib/weather/history.php';
 require_once __DIR__ . '/../lib/cache-headers.php';
+require_once __DIR__ . '/../lib/cors.php';
 require_once __DIR__ . '/../lib/heading-conversion.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
@@ -104,6 +105,12 @@ function generateMockWeatherData($airportId, $airport) {
 
 // Only execute endpoint logic when called as a web request (not when included for testing)
     if (php_sapi_name() !== 'cli' && !empty($_SERVER['REQUEST_METHOD'])) {
+    // CORS for embed widget (allows cross-origin fetch from third-party sites)
+    if (handleEmbedCorsPreflight()) {
+        exit;
+    }
+    sendEmbedCorsHeaders();
+
     // Start output buffering to catch any stray output (errors, warnings, whitespace)
     ob_start();
 

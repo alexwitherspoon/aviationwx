@@ -375,6 +375,71 @@ class EmbedEndpointTest extends TestCase
     }
     
     /**
+     * Test embed API endpoints return CORS headers for cross-origin embedding
+     */
+    public function testEmbedApiEndpoints_ReturnCorsHeaders()
+    {
+        $endpoints = [
+            '/api/embed-widget.php?airport=kspb&style=card',
+            '/api/weather.php?airport=kspb',
+        ];
+        
+        foreach ($endpoints as $path) {
+            $response = $this->makeRequest($path);
+            
+            if ($response['http_code'] == 0) {
+                $this->markTestSkipped("Endpoint not available");
+                return;
+            }
+            
+            $this->assertArrayHasKey(
+                'access-control-allow-origin',
+                $response['headers'],
+                "Embed API endpoint {$path} should include CORS Access-Control-Allow-Origin header"
+            );
+            $this->assertEquals(
+                '*',
+                $response['headers']['access-control-allow-origin'],
+                "CORS should allow all origins for embed widget"
+            );
+        }
+    }
+    
+    /**
+     * Test OPTIONS preflight returns CORS headers
+     */
+    public function testEmbedApi_OptionsPreflight_ReturnsCorsHeaders()
+    {
+        $url = rtrim($this->baseUrl, '/') . '/api/embed-widget.php?airport=kspb';
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'OPTIONS');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $headers = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($ch, $header) use (&$headers) {
+            $parts = explode(':', $header, 2);
+            if (count($parts) == 2) {
+                $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+            }
+            return strlen($header);
+        });
+        
+        curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        
+        if ($httpCode == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+        
+        $this->assertEquals(204, $httpCode, "OPTIONS preflight should return 204");
+        $this->assertArrayHasKey('access-control-allow-origin', $headers, "OPTIONS should include CORS header");
+    }
+    
+    /**
      * Helper method to make HTTP request
      */
     private function makeRequest(string $path): array

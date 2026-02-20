@@ -19,6 +19,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/cors.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
@@ -29,6 +30,12 @@ require_once __DIR__ . '/../lib/embed-templates/webcam.php';
 require_once __DIR__ . '/../lib/embed-templates/dual.php';
 require_once __DIR__ . '/../lib/embed-templates/multi.php';
 require_once __DIR__ . '/../lib/embed-templates/full.php';
+
+// CORS for embed widget (allows cross-origin fetch from third-party sites)
+if (handleEmbedCorsPreflight()) {
+    exit;
+}
+sendEmbedCorsHeaders();
 
 // Get embed parameters
 $airportId = $_GET['airport'] ?? '';
