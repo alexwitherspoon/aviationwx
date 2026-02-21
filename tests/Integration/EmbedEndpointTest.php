@@ -331,6 +331,84 @@ class EmbedEndpointTest extends TestCase
     }
     
     /**
+     * Test embed card style contains dashboard link
+     */
+    public function testEmbedRenderer_CardStyle_ContainsDashboardLink()
+    {
+        $response = $this->makeRequest('?embed&airport=kspb&style=card&theme=light&render=1');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+
+        if ($response['http_code'] == 200) {
+            $this->assertStringContainsString(
+                'embed-dashboard-link',
+                $response['body'],
+                "Card style should contain embed-dashboard-link class"
+            );
+        }
+    }
+
+    /**
+     * Test embed webcam-only style contains per-webcam link to history player
+     */
+    public function testEmbedRenderer_WebcamOnlyStyle_ContainsHistoryPlayerLink()
+    {
+        $response = $this->makeRequest('?embed&airport=kspb&style=webcam-only&theme=light&webcam=0&render=1');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+
+        if ($response['http_code'] == 200) {
+            $this->assertStringContainsString(
+                'embed-webcam-link',
+                $response['body'],
+                "Webcam-only style should contain embed-webcam-link for history player"
+            );
+            $this->assertStringContainsString(
+                '?cam=0',
+                $response['body'],
+                "Webcam-only with webcam=0 should link to ?cam=0 (history player)"
+            );
+            $this->assertStringContainsString(
+                'embed-dashboard-link',
+                $response['body'],
+                "Webcam-only footer should contain embed-dashboard-link"
+            );
+        }
+    }
+
+    /**
+     * Test embed API returns per-webcam links for multi-cam styles
+     */
+    public function testEmbedApi_MultiOnlyStyle_ContainsPerWebcamLinks()
+    {
+        $response = $this->makeRequest('/api/embed-widget.php?airport=kspb&style=multi-only&theme=light&cams=0,1,2,3');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+
+        if ($response['http_code'] == 200) {
+            $this->assertStringContainsString(
+                'embed-webcam-link',
+                $response['body'],
+                "Multi-only style should contain embed-webcam-link for each webcam"
+            );
+            $this->assertStringContainsString(
+                '?cam=0',
+                $response['body'],
+                "Should contain history player link for camera 0"
+            );
+        }
+    }
+
+    /**
      * Test embed has proper footer with attribution
      */
     public function testEmbedRenderer_HasProperAttribution()
