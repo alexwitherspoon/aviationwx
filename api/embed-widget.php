@@ -7,7 +7,7 @@
  * 
  * Query Parameters:
  *   - airport: Airport ID (required)
- *   - style: Widget style (card, webcam, dual, multi, full-single, full-dual, full-multi)
+ *   - style: Widget style (card, webcam-only, dual-only, multi-only, full-single, full-dual, full-multi)
  *   - theme: Color theme (light, dark, auto)
  *   - webcam: Webcam index for single-cam styles
  *   - cams: Comma-separated camera indices for multi-cam styles
@@ -68,7 +68,7 @@ if (!in_array($windUnit, ['kt', 'mph', 'kmh'])) $windUnit = 'kt';
 if (!in_array($baroUnit, ['inHg', 'hPa', 'mmHg'])) $baroUnit = 'inHg';
 
 // Validate style
-$validStyles = ['card', 'webcam', 'dual', 'multi', 'full', 'full-single', 'full-dual', 'full-multi'];
+$validStyles = ['card', 'webcam-only', 'dual-only', 'multi-only', 'full', 'full-single', 'full-dual', 'full-multi'];
 if (!in_array($style, $validStyles)) {
     $style = 'card';
 }
@@ -124,14 +124,14 @@ switch ($style) {
     case 'card':
         $widgetHtml = renderCardWidget($data, $options);
         break;
-    case 'webcam':
-        $widgetHtml = renderWebcamWidget($data, $options);
+    case 'webcam-only':
+        $widgetHtml = renderWebcamOnlyWidget($data, $options);
         break;
-    case 'dual':
-        $widgetHtml = renderDualWidget($data, $options);
+    case 'dual-only':
+        $widgetHtml = renderDualOnlyWidget($data, $options);
         break;
-    case 'multi':
-        $widgetHtml = renderMultiWidget($data, $options);
+    case 'multi-only':
+        $widgetHtml = renderMultiOnlyWidget($data, $options);
         break;
     case 'full':
     case 'full-single':

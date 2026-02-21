@@ -82,9 +82,9 @@
     // Widget size presets (default dimensions for each style)
     const SIZE_PRESETS = {
         'card': { width: 300, height: 300 },
-        'webcam': { width: 450, height: 450 },
-        'dual': { width: 600, height: 300 },
-        'multi': { width: 600, height: 475 },
+        'webcam-only': { width: 450, height: 380 },
+        'dual-only': { width: 600, height: 250 },
+        'multi-only': { width: 600, height: 400 },
         'full-single': { width: 800, height: 740 },
         'full-dual': { width: 800, height: 550 },
         'full-multi': { width: 800, height: 750 }
@@ -188,7 +188,7 @@
             const height = parseInt(this.getAttr('height', preset.height.toString()), 10);
 
             // Validate values
-            const validStyles = ['card', 'webcam', 'dual', 'multi', 'full-single', 'full-dual', 'full-multi'];
+            const validStyles = ['card', 'webcam-only', 'dual-only', 'multi-only', 'full-single', 'full-dual', 'full-multi'];
             const validThemes = ['light', 'dark', 'auto'];
             const validTemps = ['F', 'C'];
             const validDists = ['ft', 'm'];
@@ -552,11 +552,11 @@
                 target: attrs.target
             });
             
-            if (attrs.style === 'webcam') {
+            if (attrs.style === 'webcam-only' || attrs.style === 'full-single') {
                 params.set('webcam', attrs.webcam.toString());
             }
             
-            if (attrs.style === 'dual' || attrs.style === 'multi' || attrs.style === 'full-dual' || attrs.style === 'full-multi') {
+            if (attrs.style === 'dual-only' || attrs.style === 'multi-only' || attrs.style === 'full-dual' || attrs.style === 'full-multi') {
                 params.set('cams', attrs.cams.join(','));
             }
             

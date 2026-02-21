@@ -1005,17 +1005,17 @@ $shouldNoIndex = $hasQueryParams;
                             <input type="radio" name="style" value="card" checked>
                             <span>Weather Card (400×435)</span>
                         </label>
-                        <label class="radio-item" id="style-webcam">
-                            <input type="radio" name="style" value="webcam">
-                            <span>Compact Single (450×450)</span>
+                        <label class="radio-item" id="style-webcam-only">
+                            <input type="radio" name="style" value="webcam-only">
+                            <span>Webcam Only Single (450×380)</span>
                         </label>
-                        <label class="radio-item" id="style-dual">
-                            <input type="radio" name="style" value="dual">
-                            <span>Compact Dual (600×300)</span>
+                        <label class="radio-item" id="style-dual-only">
+                            <input type="radio" name="style" value="dual-only">
+                            <span>Webcam Only Dual (600×250)</span>
                         </label>
-                        <label class="radio-item" id="style-multi">
-                            <input type="radio" name="style" value="multi">
-                            <span>Compact Quad (600×475)</span>
+                        <label class="radio-item" id="style-multi-only">
+                            <input type="radio" name="style" value="multi-only">
+                            <span>Webcam Only Quad (600×400)</span>
                         </label>
                         <label class="radio-item" id="style-full-single">
                             <input type="radio" name="style" value="full-single">
@@ -1284,9 +1284,9 @@ $shouldNoIndex = $hasQueryParams;
         // Size presets for each style
         var SIZE_PRESETS = {
             card: { width: 400, height: 435 },
-            webcam: { width: 450, height: 450 },
-            dual: { width: 600, height: 300 },
-            multi: { width: 600, height: 475 },
+            'webcam-only': { width: 450, height: 380 },
+            'dual-only': { width: 600, height: 250 },
+            'multi-only': { width: 600, height: 400 },
             full: { width: 800, height: 700 },
             'full-single': { width: 800, height: 740 },
             'full-dual': { width: 800, height: 550 },
@@ -1312,8 +1312,9 @@ $shouldNoIndex = $hasQueryParams;
             heightInput: document.getElementById('height'),
             webcamOptions: document.getElementById('webcam-options'),
             webcamSelect: document.getElementById('webcam-select'),
-            styleWebcam: document.getElementById('style-webcam'),
-            styleMulti: document.getElementById('style-multi'),
+            styleWebcamOnly: document.getElementById('style-webcam-only'),
+            styleDualOnly: document.getElementById('style-dual-only'),
+            styleMultiOnly: document.getElementById('style-multi-only'),
             styleFullSingle: document.getElementById('style-full-single'),
             styleFullDual: document.getElementById('style-full-dual'),
             styleFullMulti: document.getElementById('style-full-multi')
@@ -1339,13 +1340,13 @@ $shouldNoIndex = $hasQueryParams;
             params.push('airport=' + state.airport.id);
             params.push('style=' + state.style);
             params.push('theme=' + state.theme);
-            if (state.style === 'webcam' || state.style === 'full' || state.style === 'full-single') {
+            if (state.style === 'webcam-only' || state.style === 'full' || state.style === 'full-single') {
                 params.push('webcam=' + state.webcam);
             }
-            if (state.style === 'dual' || state.style === 'full-dual') {
+            if (state.style === 'dual-only' || state.style === 'full-dual') {
                 params.push('cams=' + state.cams.slice(0, 2).join(','));
             }
-            if (state.style === 'multi' || state.style === 'full-multi') {
+            if (state.style === 'multi-only' || state.style === 'full-multi') {
                 params.push('cams=' + state.cams.slice(0, 4).join(','));
             }
             params.push('target=' + state.target);
@@ -1366,14 +1367,14 @@ $shouldNoIndex = $hasQueryParams;
             if (state.airport) params.set('airport', state.airport.id);
             params.set('style', state.style);
             params.set('theme', state.theme);
-            if (state.style === 'webcam' || state.style === 'full' || state.style === 'full-single') {
+            if (state.style === 'webcam-only' || state.style === 'full' || state.style === 'full-single') {
                 // Explicitly convert to string to handle webcam=0 correctly
                 params.set('webcam', String(state.webcam));
             }
-            if (state.style === 'dual' || state.style === 'full-dual') {
+            if (state.style === 'dual-only' || state.style === 'full-dual') {
                 params.set('cams', state.cams.slice(0, 2).join(','));
             }
-            if (state.style === 'multi' || state.style === 'full-multi') {
+            if (state.style === 'multi-only' || state.style === 'full-multi') {
                 params.set('cams', state.cams.slice(0, 4).join(','));
             }
             // Explicitly convert to string to handle width=0 or height=0 correctly
@@ -1409,7 +1410,15 @@ $shouldNoIndex = $hasQueryParams;
                     return '<iframe\n  src="' + embedUrl + '"\n  width="' + state.width + '"\n  height="' + state.height + '"\n  frameborder="0"\n  loading="lazy"\n  title="' + state.airport.identifier + ' Weather - AviationWX.org">\n</iframe>';
                 
                 case 'webcomponent':
-                    return '<!-- Include the AviationWX.org widget script (once per page) -->\n<script src="https://embed.' + BASE_DOMAIN + '/widget.js"></' + 'script>\n\n<!-- Place the widget where you want it to appear -->\n<aviation-wx\n  airport="' + state.airport.id + '"\n  style="' + state.style + '"\n  theme="' + state.theme + '"' + (state.style === 'webcam' ? '\n  webcam="' + state.webcam + '"' : '') + '>\n</aviation-wx>';
+                    var wcAttrs = ' airport="' + state.airport.id + '" style="' + state.style + '" theme="' + state.theme + '"';
+                    if (state.style === 'webcam-only' || state.style === 'full' || state.style === 'full-single') {
+                        wcAttrs += ' webcam="' + state.webcam + '"';
+                    } else if (state.style === 'dual-only' || state.style === 'full-dual') {
+                        wcAttrs += ' cams="' + state.cams.slice(0, 2).join(',') + '"';
+                    } else if (state.style === 'multi-only' || state.style === 'full-multi') {
+                        wcAttrs += ' cams="' + state.cams.slice(0, 4).join(',') + '"';
+                    }
+                    return '<!-- Include the AviationWX.org widget script (once per page) -->\n<script src="https://embed.' + BASE_DOMAIN + '/widget.js"></' + 'script>\n\n<!-- Place the widget where you want it to appear -->\n<aviation-wx' + wcAttrs + '>\n</aviation-wx>';
                 
                 default:
                     return '';
@@ -1493,7 +1502,7 @@ $shouldNoIndex = $hasQueryParams;
             }
             
             // Show webcam options for webcam styles
-            if (state.style === 'webcam' || state.style === 'dual' || state.style === 'multi' || state.style === 'full' || state.style === 'full-single' || state.style === 'full-dual' || state.style === 'full-multi') {
+            if (state.style === 'webcam-only' || state.style === 'dual-only' || state.style === 'multi-only' || state.style === 'full' || state.style === 'full-single' || state.style === 'full-dual' || state.style === 'full-multi') {
                 elements.webcamOptions.style.display = 'block';
                 
                 var camCount = state.airport.webcam_count;
@@ -1510,12 +1519,12 @@ $shouldNoIndex = $hasQueryParams;
                     return html;
                 }
                 
-                if (state.style === 'webcam' || state.style === 'full' || state.style === 'full-single') {
+                if (state.style === 'webcam-only' || state.style === 'full' || state.style === 'full-single') {
                     // Single webcam selector
                     singleSelectGroup.style.display = 'block';
                     multiCamSlots.style.display = 'none';
                     elements.webcamSelect.innerHTML = buildOptions(state.webcam);
-                } else if (state.style === 'dual' || state.style === 'full-dual') {
+                } else if (state.style === 'dual-only' || state.style === 'full-dual') {
                     // Dual camera selectors
                     singleSelectGroup.style.display = 'none';
                     multiCamSlots.style.display = 'block';
@@ -1524,7 +1533,7 @@ $shouldNoIndex = $hasQueryParams;
                     
                     document.getElementById('cam-slot-0').innerHTML = buildOptions(state.cams[0]);
                     document.getElementById('cam-slot-1').innerHTML = buildOptions(state.cams[1] < camCount ? state.cams[1] : Math.min(1, camCount - 1));
-                } else if (state.style === 'multi' || state.style === 'full-multi') {
+                } else if (state.style === 'multi-only' || state.style === 'full-multi') {
                     // 4 camera grid selectors
                     singleSelectGroup.style.display = 'none';
                     multiCamSlots.style.display = 'block';
@@ -1545,39 +1554,19 @@ $shouldNoIndex = $hasQueryParams;
         // Update webcam style availability
         function updateWebcamStyles() {
             var hasWebcams = state.airport && state.airport.has_webcams;
-            var webcamRadio = elements.styleWebcam.querySelector('input');
-            var multiRadio = elements.styleMulti.querySelector('input');
-            var fullSingleRadio = elements.styleFullSingle.querySelector('input');
-            var fullDualRadio = elements.styleFullDual.querySelector('input');
-            var fullMultiRadio = elements.styleFullMulti.querySelector('input');
+            var webcamStyles = [elements.styleWebcamOnly, elements.styleDualOnly, elements.styleMultiOnly, elements.styleFullSingle, elements.styleFullDual, elements.styleFullMulti];
+            var webcamStyleValues = ['webcam-only', 'dual-only', 'multi-only', 'full-single', 'full-dual', 'full-multi'];
             
             if (hasWebcams) {
-                elements.styleWebcam.classList.remove('disabled');
-                elements.styleMulti.classList.remove('disabled');
-                elements.styleFullSingle.classList.remove('disabled');
-                elements.styleFullDual.classList.remove('disabled');
-                elements.styleFullMulti.classList.remove('disabled');
-                webcamRadio.disabled = false;
-                multiRadio.disabled = false;
-                fullSingleRadio.disabled = false;
-                fullDualRadio.disabled = false;
-                fullMultiRadio.disabled = false;
+                webcamStyles.forEach(function(el) { if (el) { el.classList.remove('disabled'); el.querySelector('input').disabled = false; } });
             } else {
-                elements.styleWebcam.classList.add('disabled');
-                elements.styleMulti.classList.add('disabled');
-                elements.styleFullSingle.classList.add('disabled');
-                elements.styleFullDual.classList.add('disabled');
-                elements.styleFullMulti.classList.add('disabled');
-                webcamRadio.disabled = true;
-                multiRadio.disabled = true;
-                fullSingleRadio.disabled = true;
-                fullDualRadio.disabled = true;
-                fullMultiRadio.disabled = true;
+                webcamStyles.forEach(function(el) { if (el) { el.classList.add('disabled'); el.querySelector('input').disabled = true; } });
                 
                 // If webcam style was selected, switch to card
-                if (state.style === 'webcam' || state.style === 'multi' || state.style === 'full-single' || state.style === 'full-dual' || state.style === 'full-multi') {
+                if (webcamStyleValues.indexOf(state.style) >= 0) {
                     state.style = 'card';
-                    document.querySelector('input[name="style"][value="card"]').checked = true;
+                    var cardRadio = document.querySelector('input[name="style"][value="card"]');
+                    if (cardRadio) cardRadio.checked = true;
                     updateSizeFromStyle();
                 }
             }

@@ -13,7 +13,7 @@ class EmbedConfiguratorTest extends TestCase
      */
     public function testValidEmbedStyles()
     {
-        $validStyles = ['card', 'webcam', 'dual', 'multi', 'full'];
+        $validStyles = ['card', 'webcam-only', 'dual-only', 'multi-only', 'full'];
         
         foreach ($validStyles as $style) {
             $this->assertTrue(
@@ -28,7 +28,7 @@ class EmbedConfiguratorTest extends TestCase
      */
     public function testInvalidStyleDefaultsToCard()
     {
-        $validStyles = ['card', 'webcam', 'dual', 'multi', 'full'];
+        $validStyles = ['card', 'webcam-only', 'dual-only', 'multi-only', 'full'];
         $invalidStyle = 'invalid_style';
         
         // Simulate default behavior
@@ -75,7 +75,7 @@ class EmbedConfiguratorTest extends TestCase
     public function testEmbedUrlGenerationProduction()
     {
         $airportId = 'kspb';
-        $style = 'webcam';
+        $style = 'webcam-only';
         $theme = 'dark';
         $webcam = 0;
         
@@ -85,7 +85,7 @@ class EmbedConfiguratorTest extends TestCase
         
         $this->assertStringContainsString('embed.aviationwx.org', $expectedUrl);
         $this->assertStringContainsString('kspb', $expectedUrl);
-        $this->assertStringContainsString('style=webcam', $expectedUrl);
+        $this->assertStringContainsString('style=webcam-only', $expectedUrl);
     }
     
     /**
@@ -217,20 +217,20 @@ class EmbedConfiguratorTest extends TestCase
     {
         $sizePresets = [
             'card' => ['width' => 400, 'height' => 435],
-            'webcam' => ['width' => 450, 'height' => 450],
-            'dual' => ['width' => 600, 'height' => 300],
-            'multi' => ['width' => 600, 'height' => 475],
+            'webcam-only' => ['width' => 450, 'height' => 380],
+            'dual-only' => ['width' => 600, 'height' => 250],
+            'multi-only' => ['width' => 600, 'height' => 400],
             'full' => ['width' => 800, 'height' => 700],
         ];
         
         $this->assertEquals(400, $sizePresets['card']['width']);
         $this->assertEquals(435, $sizePresets['card']['height']);
         
-        $this->assertEquals(600, $sizePresets['dual']['width']);
-        $this->assertEquals(300, $sizePresets['dual']['height']);
+        $this->assertEquals(600, $sizePresets['dual-only']['width']);
+        $this->assertEquals(250, $sizePresets['dual-only']['height']);
         
-        $this->assertEquals(600, $sizePresets['multi']['width']);
-        $this->assertEquals(475, $sizePresets['multi']['height']);
+        $this->assertEquals(600, $sizePresets['multi-only']['width']);
+        $this->assertEquals(400, $sizePresets['multi-only']['height']);
         
         $this->assertEquals(800, $sizePresets['full']['width']);
         $this->assertEquals(700, $sizePresets['full']['height']);

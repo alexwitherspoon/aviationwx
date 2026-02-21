@@ -467,10 +467,10 @@ Want to display an AviationWX dashboard on your own website, FBO lobby screen, o
 |                                                                             |
 |    Airport:  [ KSPB v ]                                                     |
 |                                                                             |
-|    Options:                                                                 |
-|    [x] Show webcams            [x] Show weather                             |
-|    [x] Show wind rose          [ ] Dark theme                               |
-|    [ ] Hide controls           [ ] Autoplay webcam                          |
+|    Widget Style:  ( ) Card  ( ) Webcam Only  ( ) Dual  ( ) Quad            |
+|                   ( ) Full Single  ( ) Full Dual  ( ) Full Quad             |
+|                                                                             |
+|    Theme: Light / Dark / Auto    Units: °F, kt, ft, inHg                    |
 |                                                                             |
 |    Preview:                                                                 |
 |    +-------------------------------------------------------------------+    |

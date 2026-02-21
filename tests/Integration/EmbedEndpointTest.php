@@ -73,21 +73,21 @@ class EmbedEndpointTest extends TestCase
         );
         
         $this->assertStringContainsString(
-            'Compact Single',
+            'Webcam Only Single',
             $response['body'],
-            "Should have Compact Single style option"
+            "Should have Webcam Only Single style option"
         );
         
         $this->assertStringContainsString(
-            'Compact Dual',
+            'Webcam Only Dual',
             $response['body'],
-            "Should have Compact Dual style option"
+            "Should have Webcam Only Dual style option"
         );
         
         $this->assertStringContainsString(
-            'Compact Quad',
+            'Webcam Only Quad',
             $response['body'],
-            "Should have Compact Quad style option"
+            "Should have Webcam Only Quad style option"
         );
         
         $this->assertStringContainsString(
@@ -148,38 +148,48 @@ class EmbedEndpointTest extends TestCase
     }
     
     /**
-     * Test embed renderer with webcam style
+     * Test embed renderer with webcam-only single style
      */
-    public function testEmbedRenderer_WebcamStyle()
+    public function testEmbedRenderer_WebcamOnlySingleStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=webcam&theme=light&webcam=0&render=1');
-        
+        $response = $this->makeRequest('?embed&airport=kspb&style=webcam-only&theme=light&webcam=0&render=1');
+
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
             return;
         }
-        
+
         $this->assertContains(
             $response['http_code'],
             [200, 404],
             "Embed renderer should return 200 or 404"
         );
-        
+
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
-                'style-webcam',
+                'style-webcam-only',
                 $response['body'],
-                "Should render webcam style embed"
+                "Should render webcam-only style embed"
+            );
+            $this->assertStringContainsString(
+                'embed-footer',
+                $response['body'],
+                "Should include footer"
+            );
+            $this->assertStringNotContainsString(
+                'webcam-metrics',
+                $response['body'],
+                "Webcam-only should not include weather metrics"
             );
         }
     }
-    
+
     /**
-     * Test embed renderer with dual camera style
+     * Test embed renderer with multi webcam-only style
      */
-    public function testEmbedRenderer_DualStyle()
+    public function testEmbedRenderer_MultiOnlyStyle()
     {
-        $response = $this->makeRequest('?embed&airport=kspb&style=dual&theme=light&cams=0,1&render=1');
+        $response = $this->makeRequest('?embed&airport=kspb&style=multi-only&theme=light&cams=0,1,2,3&render=1');
         
         if ($response['http_code'] == 0) {
             $this->markTestSkipped("Endpoint not available");
@@ -194,36 +204,9 @@ class EmbedEndpointTest extends TestCase
         
         if ($response['http_code'] == 200) {
             $this->assertStringContainsString(
-                'style-dual',
+                'style-multi-only',
                 $response['body'],
-                "Should render dual camera style embed"
-            );
-        }
-    }
-    
-    /**
-     * Test embed renderer with multi camera style
-     */
-    public function testEmbedRenderer_MultiStyle()
-    {
-        $response = $this->makeRequest('?embed&airport=kspb&style=multi&theme=light&cams=0,1,2,3&render=1');
-        
-        if ($response['http_code'] == 0) {
-            $this->markTestSkipped("Endpoint not available");
-            return;
-        }
-        
-        $this->assertContains(
-            $response['http_code'],
-            [200, 404],
-            "Embed renderer should return 200 or 404"
-        );
-        
-        if ($response['http_code'] == 200) {
-            $this->assertStringContainsString(
-                'style-multi',
-                $response['body'],
-                "Should render multi camera style embed"
+                "Should render multi webcam-only style embed"
             );
         }
     }

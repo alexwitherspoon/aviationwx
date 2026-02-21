@@ -28,20 +28,20 @@ A compact card showing essential weather data including wind, temperature, altim
 
 **Style Code:** `card`
 
-### Compact Single (400×425)
-Displays a single webcam feed with weather summary bar and wind compass. Useful for highlighting a specific runway view.
+### Webcam Only Single (450×380)
+Displays a single webcam feed with footer. Webcams and footer only—no weather metrics.
 
-**Style Code:** `webcam`
+**Style Code:** `webcam-only`
 
-### Compact Dual (600×300)
-Shows two webcams side by side with a weather bar including wind compass. Good for airports with two runways or different viewing angles.
+### Webcam Only Dual (600×250)
+Shows two webcams side by side with footer. Webcams and footer only—no weather metrics.
 
-**Style Code:** `dual`
+**Style Code:** `dual-only`
 
-### Compact Quad (600×475)
-Displays up to four webcams in a compact grid layout with comprehensive weather information and wind compass. Ideal for airports with multiple camera positions.
+### Webcam Only Quad (600×400)
+Displays up to four webcams in a compact grid with footer. Webcams and footer only—no weather metrics.
 
-**Style Code:** `multi`
+**Style Code:** `multi-only`
 
 ### Full Single (800×740)
 Full-featured widget with a large single webcam, detailed wind visualization, and complete weather metrics organized in columns. Best for dedicated weather sections with one primary camera view.
@@ -66,7 +66,7 @@ The most complete widget featuring up to four webcams in a grid, comprehensive w
 - **Auto**: Automatically adapts to the user's system color scheme preference
 
 ### Webcam Selection
-For multi-camera widgets (Compact Dual, Compact Quad, Full Dual, Full Quad), you can choose which camera appears in each slot. This allows you to prioritize specific runway views or angles.
+For multi-camera widgets (Webcam Only Dual, Webcam Only Quad, Full Dual, Full Quad), you can choose which camera appears in each slot. This allows you to prioritize specific runway views or angles.
 
 ### Units
 Configure measurement units to match your preference:
@@ -131,7 +131,7 @@ A modern JavaScript custom element for tighter integration with your website. Th
 | Attribute | Values | Description |
 |-----------|--------|-------------|
 | `airport` | Airport ID | **Required** - Airport identifier (e.g., `kspb`) |
-| `style` | `card`, `webcam`, `dual`, `multi`, `full-single`, `full-dual`, `full-multi` | Widget style (default: `card`) |
+| `style` | `card`, `webcam-only`, `dual-only`, `multi-only`, `full-single`, `full-dual`, `full-multi` | Widget style (default: `card`) |
 | `theme` | `light`, `dark`, `auto` | Color theme (default: `auto`) |
 | `webcam` | `0`, `1`, `2`, ... | Camera index for single-cam styles (default: `0`) |
 | `cams` | `0,1,2,3` | Comma-separated camera indices for multi-cam styles |
@@ -149,9 +149,9 @@ A modern JavaScript custom element for tighter integration with your website. Th
 | Style | Width | Height |
 |-------|-------|--------|
 | `card` | 300px | 300px |
-| `webcam` | 450px | 450px |
-| `dual` | 600px | 300px |
-| `multi` | 600px | 475px |
+| `webcam-only` | 450px | 380px |
+| `dual-only` | 600px | 250px |
+| `multi-only` | 600px | 400px |
 | `full-single` | 800px | 740px |
 | `full-dual` | 800px | 550px |
 | `full-multi` | 800px | 750px |
@@ -203,7 +203,7 @@ When embedding directly, you can customize the widget using URL parameters:
 |-----------|--------|-------------|
 | `render` | `1` | **Required** - Triggers widget rendering (vs configurator) |
 | `airport` | Airport ID | **Required** - Airport identifier (e.g., `kspb`) |
-| `style` | `card`, `webcam`, `dual`, `multi`, `full-single`, `full-dual`, `full-multi` | Widget style |
+| `style` | `card`, `webcam-only`, `dual-only`, `multi-only`, `full-single`, `full-dual`, `full-multi` | Widget style |
 | `theme` | `light`, `dark`, `auto` | Color theme |
 | `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam styles) |
 | `cams` | `0,1,2,3` | Comma-separated camera indices (for multi-cam styles) |
@@ -215,7 +215,7 @@ When embedding directly, you can customize the widget using URL parameters:
 
 Example URL:
 ```
-https://embed.aviationwx.org/?render=1&airport=kspb&style=dual&theme=light&cams=0,1&target=_blank&temp=F&wind=kt
+https://embed.aviationwx.org/?render=1&airport=kspb&style=dual-only&theme=light&cams=0,1&target=_blank&temp=F&wind=kt
 ```
 
 ## Local Development

@@ -198,149 +198,42 @@ function processWebcamWidgetData($data, $options) {
 }
 
 /**
- * Render webcam style widget
- * 
+ * Render webcam-only style widget (single webcam, no weather)
+ *
+ * Compact single layout with webcam and footer only.
+ *
  * @param array $data Widget data
  * @param array $options Widget options
  * @return string HTML output
  */
-function renderWebcamWidget($data, $options) {
-    // Process data using shared function
+function renderWebcamOnlyWidget($data, $options) {
     $processed = processWebcamWidgetData($data, $options);
-    
-    // Extract processed values
-    $airportName = htmlspecialchars($processed['airportName']);
     $primaryIdentifier = htmlspecialchars($processed['primaryIdentifier']);
     $webcamCount = $processed['webcamCount'];
     $webcamIndex = $processed['webcamIndex'];
-    $hasMetarData = $processed['hasMetarData'];
-    $flightCategory = $processed['flightCategory'];
-    $flightCategoryData = $processed['flightCategoryData'];
-    $weatherEmojis = $processed['weatherEmojis'];
-    $windDisplay = $processed['windDisplay'];
-    $windSpeedValue = $processed['windSpeedValue'];
-    $windDirValue = $processed['windDirValue'];
-    $gustValue = $processed['gustValue'];
-    $metrics = $processed['metrics'];
-    $windSpeed = $processed['windSpeed'];
-    $windDirection = $processed['windDirection'];
-    $isVRB = $processed['isVRB'];
     $lastUpdated = $processed['lastUpdated'];
     $timezone = $processed['timezone'];
     $dataSource = $processed['dataSource'];
-    $runways = $processed['runways'];
-    $isDark = $processed['isDark'];
     $aspectRatio = $processed['aspectRatio'];
-    $webcamWidth = $processed['webcamWidth'];
-    $webcamHeight = $processed['webcamHeight'];
-    
-    // Extract options for HTML-specific needs
     $dashboardUrl = $options['dashboardUrl'];
-    $target = $options['target'];
-    $theme = $options['theme'];
     $airportId = $data['airportId'];
-    
-    // Webcam data
     $webcamUrl = $webcamCount > 0 ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex) : null;
-    
     $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
-    
-    // Use CSS aspect-ratio property for responsive scaling (more reliable than padding-bottom)
-    // Validate aspect ratio: must be positive, finite number, and reasonable (between 0.1 and 10)
-    $aspectRatioCss = 1.777; // Default 16:9
-    if ($aspectRatio > 0 && is_finite($aspectRatio) && $aspectRatio >= 0.1 && $aspectRatio <= 10) {
-        $aspectRatioCss = round($aspectRatio, 6);
-    }
-    
-    // Build HTML - use aspect ratio on image itself for proper scaling
-    $html = <<<HTML
-<div class="style-webcam">
-    <div class="webcam-container">
-HTML;
-    
+    $aspectRatioCss = ($aspectRatio > 0 && is_finite($aspectRatio) && $aspectRatio >= 0.1 && $aspectRatio <= 10)
+        ? round($aspectRatio, 6) : 1.777;
+
+    $html = '<div class="style-webcam style-webcam-only">';
+    $html .= '<div class="webcam-container">';
     if ($webcamUrl) {
-        // Use responsive picture element with srcset
         $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatioCss, "{$primaryIdentifier} Webcam", 'webcam-image');
     } else {
-        $html .= "\n        <div class=\"no-webcam-placeholder\">No webcam available</div>";
+        $html .= '<div class="no-webcam-placeholder">No webcam available</div>';
     }
-    
-    $html .= <<<HTML
-
-        <div class="overlay-info">
-            <div class="overlay-row">
-                <div class="overlay-left">
-                    <div class="overlay-airport">
-                        <span class="code">{$primaryIdentifier}</span>
-                        <span class="name">{$airportName}</span>
-                    </div>
-                </div>
-                <div class="overlay-right">
-HTML;
-    
-    // Flight category badge with emojis (matching card style) - positioned in lower right
-    if ($hasMetarData && $flightCategory) {
-        $fcClass = $flightCategoryData['class'];
-        $fcText = htmlspecialchars($flightCategoryData['text']);
-        $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
-        $html .= "\n                    <span class=\"flight-category-badge {$fcClass}\">{$fcText}{$emojiDisplay}</span>";
-    } else if ($hasMetarData && !$flightCategory) {
-        // METAR data but couldn't calculate category - show with emojis
-        $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
-        $html .= "\n                    <span class=\"flight-category-badge no-category\">METAR{$emojiDisplay}</span>";
-    } else if (!$hasMetarData && $weatherEmojis) {
-        // For PWS sites, show emojis even without flight category
-        $html .= "\n                    <span class=\"flight-category-badge no-category\">" . htmlspecialchars($weatherEmojis) . "</span>";
-    }
-    
-    $html .= <<<HTML
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Vertical layout: webcam image stacked above metrics and footer -->
-    <div class="webcam-content-wrapper">
-        <div class="webcam-metrics">
-HTML;
-    
-    // Render metrics in rows of 2 (will be 3 columns on wider views via CSS)
-    for ($i = 0; $i < count($metrics); $i += 2) {
-        $metric1 = $metrics[$i];
-        $metric2 = $metrics[$i + 1] ?? ['label' => '---', 'value' => '---'];
-        
-        $label1 = htmlspecialchars($metric1['label']);
-        $value1 = htmlspecialchars($metric1['value']);
-        $label2 = htmlspecialchars($metric2['label']);
-        $value2 = htmlspecialchars($metric2['value']);
-        
-        $html .= <<<HTML
-            <div class="metric-row">
-                <div class="metric">
-                    <span class="metric-label">{$label1}</span>
-                    <span class="metric-value">{$value1}</span>
-                </div>
-                <div class="metric">
-                    <span class="metric-label">{$label2}</span>
-                    <span class="metric-value">{$value2}</span>
-                </div>
-            </div>
-HTML;
-    }
-    
-    $html .= <<<HTML
-        </div>
-HTML;
-    
-    // Add footer inside content wrapper
+    $html .= '</div>';
+    $html .= '<div class="webcam-only-footer-wrapper">';
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
-    
-    $html .= <<<HTML
+    $html .= '</div>';
+    $html .= '</div>';
 
-    </div>
-</div>
-
-HTML;
-    
     return $html;
 }
