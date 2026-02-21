@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/../weather/utils.php';
 require_once __DIR__ . '/../units.php';
+require_once __DIR__ . '/../runways.php';
 
 /**
  * Get theme CSS class
@@ -717,34 +718,70 @@ function getCompactWidgetMetrics($weather, $options, $hasMetarData) {
 }
 
 /**
+ * Build full-mode options for wind compass (dashboard-matching viz)
+ *
+ * @param string $airportId Airport identifier
+ * @param array $airport Airport config
+ * @param array $weather Weather data
+ * @return array|null Full-mode options or null if runway segments unavailable
+ */
+function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
+    $segments = getRunwaySegmentsForAirport($airportId, $airport);
+    $runwaySegments = is_array($segments) ? $segments : [];
+
+    $sourcesConfigured = hasWeatherSources($airport);
+    $weatherSources = $airport['weather_sources'] ?? [];
+    $isMetarOnly = $sourcesConfigured
+        && is_array($weatherSources)
+        && count($weatherSources) > 0
+        && count(array_filter($weatherSources, function ($s) {
+            return ($s['type'] ?? '') !== 'metar';
+        })) === 0;
+
+    return [
+        'runwaySegments' => $runwaySegments,
+        'lastHourWind' => $weather['last_hour_wind'] ?? null,
+        'windDirectionMagnetic' => $weather['wind_direction_magnetic'] ?? null,
+        'magneticDeclination' => (float) getMagneticDeclination($airport),
+        'fieldObsTimeMap' => $weather['_field_obs_time_map'] ?? [],
+        'staleFailclosedSeconds' => getStaleFailclosedSeconds($airport),
+        'metarStaleFailclosedSeconds' => getMetarStaleFailclosedSeconds(),
+        'isMetarOnly' => $isMetarOnly,
+    ];
+}
+
+/**
  * Render wind compass script
  * Works in both regular DOM and shadow DOM contexts
- * 
+ *
+ * Full mode (dashboard-matching): pass fullModeOptions with runwaySegments,
+ * lastHourWind, windDirectionMagnetic, staleness data. Uses 300x300 canvas.
+ *
  * @param string $canvasId Canvas element ID
  * @param float|null $windSpeed Wind speed in knots
- * @param int|null $windDirection Wind direction in degrees
+ * @param int|null $windDirection Wind direction in degrees (true north; used when windDirectionMagnetic absent)
  * @param bool $isVRB Whether wind is variable
- * @param array $runways Array of runway headings
+ * @param array $runways Array of runway headings (legacy; ignored when fullModeOptions.runwaySegments provided)
  * @param bool|null $isDark Dark mode flag (null for auto-detect)
- * @param int $size Canvas size in pixels (default: 60)
+ * @param int $size Canvas size in pixels (default: 60; use 300 for full mode)
+ * @param array|null $fullModeOptions Optional full-mode options (runwaySegments, lastHourWind, etc.)
  * @return string JavaScript code to initialize compass
  */
-function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, $size = 60) {
+function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, $size = 60, $fullModeOptions = null) {
     $windSpeedJson = json_encode($windSpeed);
     $windDirectionJson = json_encode($windDirection);
     $isVRBJson = $isVRB ? 'true' : 'false';
     $runwaysJson = json_encode($runways);
-    // Handle auto mode: null means detect from system preference
-    // Pass null as JSON null so JavaScript can detect it
     if ($isDark === null) {
         $isDarkJson = 'null';
     } else {
         $isDarkJson = $isDark ? 'true' : 'false';
     }
-    
-    // Determine size variant based on canvas size
+
     $sizeVariant = 'medium';
-    if ($size >= 100) {
+    if ($size >= 300) {
+        $sizeVariant = 'full';
+    } elseif ($size >= 100) {
         $sizeVariant = 'large';
     } elseif ($size >= 80) {
         $sizeVariant = 'medium';
@@ -754,6 +791,11 @@ function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, 
         $sizeVariant = 'mini';
     }
     $sizeVariantJson = json_encode($sizeVariant);
+
+    $fullModeJson = 'null';
+    if ($fullModeOptions !== null && is_array($fullModeOptions)) {
+        $fullModeJson = json_encode($fullModeOptions);
+    }
 
     return <<<JAVASCRIPT
     <script>
@@ -805,14 +847,19 @@ function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, 
                 isDarkValue = detectDarkMode();
             }
             
-            window.AviationWX.drawWindCompass(canvas, {
+            var opts = {
                 windSpeed: {$windSpeedJson},
                 windDirection: {$windDirectionJson},
                 isVRB: {$isVRBJson},
                 runways: {$runwaysJson},
                 isDark: isDarkValue,
                 size: {$sizeVariantJson}
-            });
+            };
+            var fullModeData = {$fullModeJson};
+            if (fullModeData) {
+                opts.fullMode = fullModeData;
+            }
+            window.AviationWX.drawWindCompass(canvas, opts);
         }
         
         // Draw compass immediately if ready

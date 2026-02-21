@@ -334,21 +334,80 @@ $shouldNoIndex = $hasQueryParams;
         /* Size inputs */
         .size-inputs {
             display: flex;
+            flex-direction: column;
             gap: 0.75rem;
-            align-items: center;
         }
-        
+
+        .size-input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .size-label {
+            font-size: 0.9rem;
+            color: #555;
+            min-width: 52px;
+        }
+
+        .size-input-with-steppers {
+            display: flex;
+            align-items: center;
+            gap: 0;
+        }
+
         .size-inputs input {
-            width: 80px;
-            padding: 0.5rem;
+            width: 72px;
+            padding: 0.5rem 0.35rem;
             background: #f8f9fa;
             border: 1px solid #ddd;
-            border-radius: 6px;
+            border-radius: 6px 0 0 6px;
             color: #333;
             text-align: center;
+            -moz-appearance: textfield;
         }
-        
-        .size-inputs span {
+
+        .size-inputs input::-webkit-outer-spin-button,
+        .size-inputs input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .size-steppers {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #ddd;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            overflow: hidden;
+        }
+
+        .size-stepper {
+            width: 24px;
+            height: 18px;
+            padding: 0;
+            border: none;
+            background: #f0f0f0;
+            color: #555;
+            font-size: 0.65rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .size-stepper:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .size-stepper:active {
+            background: #d0d0d0;
+        }
+
+        .size-unit {
+            font-size: 0.9rem;
             color: #666;
         }
         
@@ -654,6 +713,28 @@ $shouldNoIndex = $hasQueryParams;
                 background: #1a1a1a;
                 border-color: #444;
                 color: #e0e0e0;
+            }
+
+            .size-steppers {
+                border-color: #444;
+            }
+
+            .size-stepper {
+                background: #2a2a2a;
+                color: #888;
+            }
+
+            .size-stepper:hover {
+                background: #444;
+                color: #ccc;
+            }
+
+            .size-stepper:active {
+                background: #555;
+            }
+
+            .size-label {
+                color: #888;
             }
             
             .preview-panel {
@@ -1109,13 +1190,31 @@ $shouldNoIndex = $hasQueryParams;
                 <div class="config-section">
                     <h3>Size</h3>
                     <div class="size-inputs">
-                        <input type="number" id="width" value="300" min="200" max="1200">
-                        <span>×</span>
-                        <input type="number" id="height" value="300" min="80" max="800">
-                        <span>px</span>
+                        <div class="size-input-group">
+                            <label for="width" class="size-label">Width</label>
+                            <div class="size-input-with-steppers">
+                                <input type="number" id="width" value="400" min="200" max="1200" step="10">
+                                <div class="size-steppers">
+                                    <button type="button" class="size-stepper" id="width-up" aria-label="Increase width">▲</button>
+                                    <button type="button" class="size-stepper" id="width-down" aria-label="Decrease width">▼</button>
+                                </div>
+                            </div>
+                            <span class="size-unit">px</span>
+                        </div>
+                        <div class="size-input-group">
+                            <label for="height" class="size-label">Height</label>
+                            <div class="size-input-with-steppers">
+                                <input type="number" id="height" value="535" min="80" max="800" step="10">
+                                <div class="size-steppers">
+                                    <button type="button" class="size-stepper" id="height-up" aria-label="Increase height">▲</button>
+                                    <button type="button" class="size-stepper" id="height-down" aria-label="Decrease height">▼</button>
+                                </div>
+                            </div>
+                            <span class="size-unit">px</span>
+                        </div>
                     </div>
                     <div class="info-callout" style="margin-top: 0.75rem;">
-                        <strong>Tip:</strong> Size updates automatically when you change widget style. Adjust manually for custom dimensions.
+                        <strong>Tip:</strong> Size updates automatically when you change widget style. Presets assume 16:9 webcam aspect ratio.
                     </div>
                 </div>
                 
@@ -1272,7 +1371,7 @@ $shouldNoIndex = $hasQueryParams;
             webcam: 0,
             cams: [0, 1, 2, 3], // Camera indices for multi-cam widgets
             width: 400,
-            height: 435,
+            height: 535,
             target: '_blank',
             embedType: 'iframe',
             tempUnit: 'F',
@@ -1281,16 +1380,16 @@ $shouldNoIndex = $hasQueryParams;
             baroUnit: 'inHg'
         };
         
-        // Size presets for each style
+        // Size presets for each style (16:9 webcam aspect ratio)
         var SIZE_PRESETS = {
-            card: { width: 400, height: 435 },
-            'webcam-only': { width: 450, height: 380 },
-            'dual-only': { width: 600, height: 250 },
-            'multi-only': { width: 600, height: 400 },
-            full: { width: 800, height: 700 },
-            'full-single': { width: 800, height: 740 },
-            'full-dual': { width: 800, height: 550 },
-            'full-multi': { width: 800, height: 750 }
+            card: { width: 400, height: 535 },
+            'webcam-only': { width: 480, height: 340 },
+            'dual-only': { width: 800, height: 270 },
+            'multi-only': { width: 640, height: 410 },
+            full: { width: 800, height: 725 },
+            'full-single': { width: 700, height: 760 },
+            'full-dual': { width: 840, height: 610 },
+            'full-multi': { width: 760, height: 790 }
         };
         
         // DOM elements
@@ -1761,16 +1860,40 @@ $shouldNoIndex = $hasQueryParams;
         
         // Size inputs
         elements.widthInput.addEventListener('input', function() {
-            state.width = parseInt(this.value, 10) || 300;
+            state.width = parseInt(this.value, 10) || 400;
             updatePreview();
             updateEmbedCode();
         });
-        
+
         elements.heightInput.addEventListener('input', function() {
-            state.height = parseInt(this.value, 10) || 200;
+            state.height = parseInt(this.value, 10) || 535;
             updatePreview();
             updateEmbedCode();
         });
+
+        // Size stepper buttons
+        function setupSizeStepper(upId, downId, stateKey, minVal, maxVal, step) {
+            var upBtn = document.getElementById(upId);
+            var downBtn = document.getElementById(downId);
+            var input = stateKey === 'width' ? elements.widthInput : elements.heightInput;
+            if (!upBtn || !downBtn || !input) return;
+            upBtn.addEventListener('click', function() {
+                var val = Math.min(maxVal, (parseInt(input.value, 10) || minVal) + step);
+                state[stateKey] = val;
+                input.value = val;
+                updatePreview();
+                updateEmbedCode();
+            });
+            downBtn.addEventListener('click', function() {
+                var val = Math.max(minVal, (parseInt(input.value, 10) || minVal) - step);
+                state[stateKey] = val;
+                input.value = val;
+                updatePreview();
+                updateEmbedCode();
+            });
+        }
+        setupSizeStepper('width-up', 'width-down', 'width', 200, 1200, 10);
+        setupSizeStepper('height-up', 'height-down', 'height', 80, 800, 10);
         
         // Webcam select (single)
         elements.webcamSelect.addEventListener('change', function() {
@@ -1857,12 +1980,17 @@ $shouldNoIndex = $hasQueryParams;
             
             // Style
             var style = params.get('style');
-            if (style && ['card', 'webcam', 'dual', 'multi', 'full', 'full-single', 'full-dual', 'full-multi'].indexOf(style) !== -1) {
+            if (style && ['card', 'webcam-only', 'dual-only', 'multi-only', 'full', 'full-single', 'full-dual', 'full-multi'].indexOf(style) !== -1) {
                 state.style = style;
                 var styleRadio = document.querySelector('input[name="style"][value="' + style + '"]');
                 if (styleRadio) styleRadio.checked = true;
             }
-            
+
+            // Size: use URL values if both provided; otherwise apply preset for selected style
+            var widthFromUrl = params.get('width');
+            var heightFromUrl = params.get('height');
+            var hasExplicitSize = widthFromUrl && !isNaN(parseInt(widthFromUrl)) && heightFromUrl && !isNaN(parseInt(heightFromUrl));
+
             // Theme
             var theme = params.get('theme');
             if (theme && ['light', 'dark', 'auto'].indexOf(theme) !== -1) {
@@ -1872,19 +2000,13 @@ $shouldNoIndex = $hasQueryParams;
             }
             
             // Size
-            var width = params.get('width');
-            var height = params.get('height');
-            if (width && !isNaN(parseInt(width))) {
-                state.width = parseInt(width);
-                if (elements.widthInput) {
-                    elements.widthInput.value = state.width;
-                }
-            }
-            if (height && !isNaN(parseInt(height))) {
-                state.height = parseInt(height);
-                if (elements.heightInput) {
-                    elements.heightInput.value = state.height;
-                }
+            if (hasExplicitSize) {
+                state.width = parseInt(widthFromUrl, 10);
+                state.height = parseInt(heightFromUrl, 10);
+                if (elements.widthInput) elements.widthInput.value = state.width;
+                if (elements.heightInput) elements.heightInput.value = state.height;
+            } else {
+                updateSizeFromStyle();
             }
             
             // Target

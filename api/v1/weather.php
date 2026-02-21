@@ -170,6 +170,9 @@ function formatWeatherResponse(array $weather, array $airport): array
         'last_updated' => isset($weather['last_updated']) 
             ? gmdate('c', $weather['last_updated']) 
             : null,
+        'wind_direction_magnetic' => $weather['wind_direction_magnetic'] ?? null,
+        'last_hour_wind' => $weather['last_hour_wind'] ?? null,
+        '_field_obs_time_map' => $weather['_field_obs_time_map'] ?? [],
     ];
 }
 

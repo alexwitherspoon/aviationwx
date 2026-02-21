@@ -282,7 +282,8 @@ function renderFullSingleWidget($data, $options) {
     $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
 
     $canvasId = 'full-wind-canvas-' . uniqid();
-    
+    $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weather);
+
     // Format wind display parts
     $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
     $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
@@ -343,7 +344,7 @@ function renderFullSingleWidget($data, $options) {
     $html .= <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="140" height="140"></canvas>
+                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
                     <div class="wind-summary">
                         <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
                     </div>
@@ -432,7 +433,7 @@ HTML;
     $html .= '</a>';
     $html .= "\n</div>\n";
 
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, ($theme === 'dark'));
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 200, $fullModeOptions);
 
     return $html;
 }
@@ -493,6 +494,7 @@ function renderFullDualWidget($data, $options) {
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
     
     $canvasId = 'full-dual-wind-canvas-' . uniqid();
+    $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weather);
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
 
@@ -575,7 +577,7 @@ function renderFullDualWidget($data, $options) {
     $html .= <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="140" height="140"></canvas>
+                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
                     <div class="wind-summary">
                         <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
                     </div>
@@ -664,7 +666,7 @@ HTML;
     $html .= '</a>';
     $html .= "\n</div>\n";
 
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, ($theme === 'dark'));
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 200, $fullModeOptions);
 
     return $html;
 }
@@ -725,6 +727,7 @@ function renderFullMultiWidget($data, $options) {
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
     
     $canvasId = 'full-multi-wind-canvas-' . uniqid();
+    $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weather);
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
 
@@ -808,7 +811,7 @@ function renderFullMultiWidget($data, $options) {
     $html .= <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
-                    <canvas id="{$canvasId}" width="140" height="140"></canvas>
+                    <canvas id="{$canvasId}" width="200" height="200"></canvas>
                     <div class="wind-summary">
                         <span class="wind-value">{$windDir}@{$windSpd}{$gustVal}{$windUnitLabel}</span>
                     </div>
@@ -897,7 +900,7 @@ HTML;
     $html .= '</a>';
     $html .= "\n</div>\n";
 
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, ($theme === 'dark'));
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 200, $fullModeOptions);
 
     return $html;
 }

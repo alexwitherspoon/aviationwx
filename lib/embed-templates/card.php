@@ -156,7 +156,10 @@ function processCardWidgetData($data, $options) {
     
     // Runway data for wind compass (empty array if no runways - compass will render without runway line)
     $runways = $airport['runways'] ?? [];
-    
+
+    // Full-mode options for dashboard-matching wind viz (runway segments, petals, staleness)
+    $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weather);
+
     // For dark mode detection: 'dark' = true, 'light' = false, 'auto' = null (JS will detect)
     $isDark = ($theme === 'dark') ? true : (($theme === 'light') ? false : null);
     
@@ -211,6 +214,7 @@ function processCardWidgetData($data, $options) {
         'timezone' => $timezone,
         'dataSource' => $dataSource,
         'runways' => $runways,
+        'fullModeOptions' => $fullModeOptions,
         'isDark' => $isDark,
     ];
 }
@@ -250,6 +254,7 @@ function renderCardWidget($data, $options) {
     $timezone = $processed['timezone'];
     $dataSource = $processed['dataSource'];
     $runways = $processed['runways'];
+    $fullModeOptions = $processed['fullModeOptions'];
     $isDark = $processed['isDark'];
     
     // Extract options for HTML-specific needs
@@ -295,7 +300,7 @@ HTML;
     
     <div class="card-compass-section">
         <div class="compass-side">
-            <canvas id="{$canvasId}" width="140" height="140"></canvas>
+            <canvas id="{$canvasId}" width="180" height="180"></canvas>
         </div>
         <div class="wind-details-side">
 HTML;
@@ -376,8 +381,8 @@ HTML;
     $html .= "\n</div>\n";
     $html .= '</a>';
 
-    // Add wind compass script (larger size for side-by-side layout)
-    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 140);
+    // Add wind compass script (full mode: runway segments, petals, staleness, matching dashboard)
+    $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 180, $fullModeOptions);
 
     return $html;
 }
