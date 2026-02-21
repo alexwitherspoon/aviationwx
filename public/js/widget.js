@@ -60,6 +60,25 @@
     
     const BASE_URL = getBaseUrl();
 
+    /**
+     * Build dashboard URL for the given airport (matches API/embed.php logic)
+     * @param {string} airport Airport ID (e.g., 'khio')
+     * @returns {string} Dashboard URL (e.g., 'https://khio.aviationwx.org')
+     */
+    const getDashboardUrl = (airport) => {
+        if (!airport) return BASE_URL;
+        try {
+            const url = new URL(BASE_URL);
+            if (url.hostname === 'localhost' || url.hostname.includes('127.0.0.1')) {
+                return url.origin;
+            }
+            const domain = url.hostname.startsWith('embed.') ? url.hostname.substring(6) : url.hostname;
+            return `${url.protocol}//${airport.toLowerCase()}.${domain}`;
+        } catch (e) {
+            return `https://${airport.toLowerCase()}.aviationwx.org`;
+        }
+    };
+
     // Widget size presets (default dimensions for each style)
     const SIZE_PRESETS = {
         'card': { width: 300, height: 300 },
@@ -394,12 +413,16 @@
             
             // Apply theme class to container
             const containerClass = actualThemeClass ? ` ${actualThemeClass}` : '';
-            
+            const dashboardUrl = getDashboardUrl(attrs.airport);
+            const target = attrs.target || '_blank';
+            const relAttr = target === '_blank' ? ' rel="noopener"' : '';
+
+            // Wrap widget in anchor so entire widget is clickable (matches iframe embed behavior)
             this.shadowRoot.innerHTML = `
                 ${this.getStyles(attrs)}
-                <div class="embed-container${containerClass}">
+                <a href="${dashboardUrl}" target="${target}"${relAttr} class="embed-container${containerClass}">
                     ${html}
-                </div>
+                </a>
             `;
 
             // Execute any scripts that were included in the HTML (wind compass initialization)
