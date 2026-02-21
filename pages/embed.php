@@ -279,8 +279,8 @@ switch ($style) {
     <?php endif; ?>
 </head>
 <body class="<?= htmlspecialchars($themeClass) ?>">
-    <a href="<?= htmlspecialchars($dashboardUrl) ?>" target="<?= htmlspecialchars($target) ?>" class="embed-container <?= htmlspecialchars($themeClass) ?>">
+    <div class="embed-container <?= htmlspecialchars($themeClass) ?>">
         <?= $widgetHtml ?>
-    </a>
+    </div>
 </body>
 </html>

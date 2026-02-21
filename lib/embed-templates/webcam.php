@@ -216,6 +216,8 @@ function renderWebcamOnlyWidget($data, $options) {
     $dataSource = $processed['dataSource'];
     $aspectRatio = $processed['aspectRatio'];
     $dashboardUrl = $options['dashboardUrl'];
+    $target = $options['target'] ?? '_blank';
+    $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
     $webcamUrl = $webcamCount > 0 ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex) : null;
     $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
@@ -223,6 +225,8 @@ function renderWebcamOnlyWidget($data, $options) {
         ? round($aspectRatio, 6) : 1.777;
 
     $html = '<div class="style-webcam style-webcam-only">';
+    $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $webcamIndex);
+    $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link"' . $linkAttrs . '>';
     $html .= '<div class="webcam-container">';
     if ($webcamUrl) {
         $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatioCss, "{$primaryIdentifier} Webcam", 'webcam-image');
@@ -230,9 +234,10 @@ function renderWebcamOnlyWidget($data, $options) {
         $html .= '<div class="no-webcam-placeholder">No webcam available</div>';
     }
     $html .= '</div>';
-    $html .= '<div class="webcam-only-footer-wrapper">';
+    $html .= '</a>';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link webcam-only-footer-wrapper"' . $linkAttrs . '>';
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
-    $html .= '</div>';
+    $html .= '</a>';
     $html .= '</div>';
 
     return $html;

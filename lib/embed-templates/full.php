@@ -269,15 +269,18 @@ function renderFullSingleWidget($data, $options) {
     // For auto mode, pass null to let JavaScript detect system preference
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
     
-    $webcamUrl = ($webcamCount > 0 && $webcamIndex < $webcamCount) 
-        ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex) 
+    $webcamUrl = ($webcamCount > 0 && $webcamIndex < $webcamCount)
+        ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex)
         : null;
-    
+
+    $target = $options['target'] ?? '_blank';
+    $linkAttrs = buildEmbedLinkAttrs($target);
+
     // Get webcam metadata for aspect ratio
     require_once __DIR__ . '/../webcam-metadata.php';
     $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $webcamIndex) : null;
     $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
-    
+
     $canvasId = 'full-wind-canvas-' . uniqid();
     
     // Format wind display parts
@@ -302,52 +305,42 @@ function renderFullSingleWidget($data, $options) {
         $weatherEmojis = getWeatherEmojis($pwsWeather);
     }
     
-    // Build HTML
-    $html = <<<HTML
-<div class="style-full">
-    <div class="full-header">
-        <div class="airport-title">
-            <span class="identifier">{$primaryIdentifier}</span>
-            <span class="name">{$airportName}</span>
-        </div>
-HTML;
-    
-    // Flight category badge with emojis (right-aligned, matching compact styles)
+    // Build HTML - header and data-row link to dashboard, webcam links to history player
+    $html = '<div class="style-full">';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="full-header">';
+    $html .= '<div class="airport-title">';
+    $html .= '<span class="identifier">' . $primaryIdentifier . '</span>';
+    $html .= '<span class="name">' . $airportName . '</span>';
+    $html .= '</div>';
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
         $html .= "\n        <span class=\"flight-category-badge {$fcClass}\">{$fcText}{$emojiDisplay}</span>";
     } else if ($hasMetarData && !$flightCategory) {
-        // METAR data but couldn't calculate category - show with emojis
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
         $html .= "\n        <span class=\"flight-category-badge no-category\">METAR{$emojiDisplay}</span>";
     } else if (!$hasMetarData && $weatherEmojis) {
-        // For PWS sites, show emojis even without flight category
         $html .= "\n        <span class=\"flight-category-badge no-category\">" . htmlspecialchars($weatherEmojis) . "</span>";
     } else if ($gustSpeed !== null && $gustSpeed > 0) {
         $gustKt = round($gustSpeed);
         $html .= "\n        <span class=\"flight-category-badge no-category\">G{$gustKt}kt</span>";
     }
-    
-    $html .= <<<HTML
-
-    </div>
-    <div class="full-body">
-        <div class="webcam-section">
-HTML;
-    
+    $html .= '</div></a>';
+    $html .= '<div class="full-body">';
+    $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $webcamIndex);
+    $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link"' . $linkAttrs . '>';
+    $html .= '<div class="webcam-section">';
     if ($webcamUrl) {
-        // Use responsive picture element with srcset
         $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $webcamIndex, $aspectRatio, "{$primaryIdentifier} Webcam", 'webcam-image');
     } else {
         $html .= "\n            <div class=\"no-webcam-placeholder\" style=\"height: 100%;\">No webcam available</div>";
     }
-    
+    $html .= '</div></a>';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="data-row">';
     $html .= <<<HTML
-
-        </div>
-        <div class="data-row">
             <div class="wind-section">
                 <div class="wind-viz-container">
                     <canvas id="{$canvasId}" width="140" height="140"></canvas>
@@ -426,18 +419,21 @@ HTML;
             </div>
         </div>
     </div>
+</a>
 
 HTML;
-    
+
     $lastUpdated = $weather['last_updated_primary'] ?? time();
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
-    
+
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
+    $html .= '</a>';
     $html .= "\n</div>\n";
-    
+
     $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, ($theme === 'dark'));
-    
+
     return $html;
 }
 
@@ -497,7 +493,9 @@ function renderFullDualWidget($data, $options) {
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
     
     $canvasId = 'full-dual-wind-canvas-' . uniqid();
-    
+    $target = $options['target'] ?? '_blank';
+    $linkAttrs = buildEmbedLinkAttrs($target);
+
     // Format wind display
     $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
     $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
@@ -520,75 +518,61 @@ function renderFullDualWidget($data, $options) {
         $weatherEmojis = getWeatherEmojis($pwsWeather);
     }
     
-    // Build HTML
-    $html = <<<HTML
-<div class="style-full">
-    <div class="full-header">
-        <div class="airport-title">
-            <span class="identifier">{$primaryIdentifier}</span>
-            <span class="name">{$airportName}</span>
-        </div>
-HTML;
-    
-    // Flight category badge with emojis (right-aligned, matching compact styles)
+    // Build HTML - header and data-row link to dashboard, each webcam links to history player
+    $html = '<div class="style-full">';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="full-header">';
+    $html .= '<div class="airport-title">';
+    $html .= '<span class="identifier">' . $primaryIdentifier . '</span>';
+    $html .= '<span class="name">' . $airportName . '</span>';
+    $html .= '</div>';
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
         $html .= "\n        <span class=\"flight-category-badge {$fcClass}\">{$fcText}{$emojiDisplay}</span>";
     } else if ($hasMetarData && !$flightCategory) {
-        // METAR data but couldn't calculate category - show with emojis
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
         $html .= "\n        <span class=\"flight-category-badge no-category\">METAR{$emojiDisplay}</span>";
     } else if (!$hasMetarData && $weatherEmojis) {
-        // For PWS sites, show emojis even without flight category
         $html .= "\n        <span class=\"flight-category-badge no-category\">" . htmlspecialchars($weatherEmojis) . "</span>";
     } else if ($gustSpeed !== null && $gustSpeed > 0) {
         $gustKt = round($gustSpeed);
         $html .= "\n        <span class=\"flight-category-badge no-category\">G{$gustKt}kt</span>";
     }
-    
-    $html .= <<<HTML
+    $html .= '</div></a>';
+    $html .= '<div class="full-body">';
+    $html .= '<div class="webcam-section"><div class="webcam-grid grid-2">';
 
-    </div>
-    <div class="full-body">
-        <div class="webcam-section">
-            <div class="webcam-grid grid-2">
-HTML;
-    
-    // Render two webcam cells
+    // Render two webcam cells - each links to history player
     for ($i = 0; $i < 2; $i++) {
         $camIdx = $cams[$i] ?? $i;
-        $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount) 
-            ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx) 
+        $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount)
+            ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
             : null;
-        
+
         $camName = 'Camera ' . ($camIdx + 1);
         if (isset($airport['webcams'][$camIdx]['name'])) {
             $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
         }
-        
-        // Get webcam metadata for aspect ratio
+
         require_once __DIR__ . '/../webcam-metadata.php';
         $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $camIdx) : null;
         $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
-        
-        $html .= "\n                <div class=\"webcam-cell\">";
-        
+
+        $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
+        $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            // Use responsive picture element with srcset
             $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camName, 'webcam-image');
             $html .= "\n                    <span class=\"cam-label\">{$camName}</span>";
         }
-        
-        $html .= "\n                </div>";
+        $html .= '</a>';
     }
-    
-    $html .= <<<HTML
 
-            </div>
-        </div>
-        <div class="data-row">
+    $html .= '</div></div>';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="data-row">';
+    $html .= <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
                     <canvas id="{$canvasId}" width="140" height="140"></canvas>
@@ -667,18 +651,21 @@ HTML;
             </div>
         </div>
     </div>
+</a>
 
 HTML;
-    
+
     $lastUpdated = $weather['last_updated_primary'] ?? time();
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
-    
+
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
+    $html .= '</a>';
     $html .= "\n</div>\n";
-    
+
     $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, ($theme === 'dark'));
-    
+
     return $html;
 }
 
@@ -738,7 +725,9 @@ function renderFullMultiWidget($data, $options) {
     $isDark = ($theme === 'auto') ? null : ($theme === 'dark');
     
     $canvasId = 'full-multi-wind-canvas-' . uniqid();
-    
+    $target = $options['target'] ?? '_blank';
+    $linkAttrs = buildEmbedLinkAttrs($target);
+
     // Format wind display
     $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
     $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
@@ -761,76 +750,62 @@ function renderFullMultiWidget($data, $options) {
         $weatherEmojis = getWeatherEmojis($pwsWeather);
     }
     
-    // Build HTML
-    $html = <<<HTML
-<div class="style-full">
-    <div class="full-header">
-        <div class="airport-title">
-            <span class="identifier">{$primaryIdentifier}</span>
-            <span class="name">{$airportName}</span>
-        </div>
-HTML;
-    
-    // Flight category badge with emojis (right-aligned, matching compact styles)
+    // Build HTML - header and data-row link to dashboard, each webcam links to history player
+    $html = '<div class="style-full">';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="full-header">';
+    $html .= '<div class="airport-title">';
+    $html .= '<span class="identifier">' . $primaryIdentifier . '</span>';
+    $html .= '<span class="name">' . $airportName . '</span>';
+    $html .= '</div>';
     if ($hasMetarData && $flightCategory) {
         $fcClass = $flightCategoryData['class'];
         $fcText = htmlspecialchars($flightCategoryData['text']);
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
         $html .= "\n        <span class=\"flight-category-badge {$fcClass}\">{$fcText}{$emojiDisplay}</span>";
     } else if ($hasMetarData && !$flightCategory) {
-        // METAR data but couldn't calculate category - show with emojis
         $emojiDisplay = $weatherEmojis ? ' ' . htmlspecialchars($weatherEmojis) : '';
         $html .= "\n        <span class=\"flight-category-badge no-category\">METAR{$emojiDisplay}</span>";
     } else if (!$hasMetarData && $weatherEmojis) {
-        // For PWS sites, show emojis even without flight category
         $html .= "\n        <span class=\"flight-category-badge no-category\">" . htmlspecialchars($weatherEmojis) . "</span>";
     } else if ($gustSpeed !== null && $gustSpeed > 0) {
         $gustKt = round($gustSpeed);
         $html .= "\n        <span class=\"flight-category-badge no-category\">G{$gustKt}kt</span>";
     }
-    
-    $html .= <<<HTML
+    $html .= '</div></a>';
+    $html .= '<div class="full-body">';
+    $html .= '<div class="webcam-section"><div class="webcam-grid grid-4">';
 
-    </div>
-    <div class="full-body">
-        <div class="webcam-section">
-            <div class="webcam-grid grid-4">
-HTML;
-    
-    // Render four webcam cells
+    // Render four webcam cells - each links to history player
     $displayCamCount = min($webcamCount, 4);
     for ($i = 0; $i < $displayCamCount; $i++) {
         $camIdx = $cams[$i] ?? $i;
-        $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount) 
-            ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx) 
+        $webcamUrl = ($webcamCount > 0 && $camIdx < $webcamCount)
+            ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIdx)
             : null;
-        
+
         $camName = 'Camera ' . ($camIdx + 1);
         if (isset($airport['webcams'][$camIdx]['name'])) {
             $camName = htmlspecialchars($airport['webcams'][$camIdx]['name']);
         }
-        
-        // Get webcam metadata for aspect ratio
+
         require_once __DIR__ . '/../webcam-metadata.php';
         $webcamMetadata = $webcamUrl ? getWebcamMetadata($airportId, $camIdx) : null;
         $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
-        
-        $html .= "\n                <div class=\"webcam-cell\">";
-        
+
+        $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
+        $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
-            // Use responsive picture element with srcset
             $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatio, $camName, 'webcam-image');
             $html .= "\n                    <span class=\"cam-label\">{$camName}</span>";
         }
-        
-        $html .= "\n                </div>";
+        $html .= '</a>';
     }
-    
-    $html .= <<<HTML
 
-            </div>
-        </div>
-        <div class="data-row">
+    $html .= '</div></div>';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= '<div class="data-row">';
+    $html .= <<<HTML
             <div class="wind-section">
                 <div class="wind-viz-container">
                     <canvas id="{$canvasId}" width="140" height="140"></canvas>
@@ -909,17 +884,20 @@ HTML;
             </div>
         </div>
     </div>
+</a>
 
 HTML;
-    
+
     $lastUpdated = $weather['last_updated_primary'] ?? time();
     $sourceName = getWeatherSourceAttribution($weather, $hasMetarData);
     $sourceAttribution = ' & ' . htmlspecialchars($sourceName);
-    
+
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
+    $html .= '</a>';
     $html .= "\n</div>\n";
-    
+
     $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, ($theme === 'dark'));
-    
+
     return $html;
 }

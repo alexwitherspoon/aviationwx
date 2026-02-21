@@ -213,6 +213,15 @@ a {
     text-decoration: none;
 }
 
+/* Embed links - webcam (history player) and dashboard links */
+.embed-webcam-link,
+.embed-dashboard-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
 .embed-container {
     width: 100%;
     height: 100%;

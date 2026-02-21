@@ -209,6 +209,8 @@ function renderDualOnlyWidget($data, $options) {
     $dataSource = $processed['dataSource'];
     $webcamData = $processed['webcamData'];
     $dashboardUrl = $options['dashboardUrl'];
+    $target = $options['target'] ?? '_blank';
+    $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
     $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
 
@@ -221,18 +223,19 @@ function renderDualOnlyWidget($data, $options) {
         $aspectRatioCss = ($aspectRatio > 0 && is_finite($aspectRatio) && $aspectRatio >= 0.1 && $aspectRatio <= 10)
             ? round($aspectRatio, 6) : 1.777;
 
-        $html .= '<div class="dual-webcam-cell">';
+        $historyPlayerUrl = buildHistoryPlayerUrl($dashboardUrl, $camIdx);
+        $html .= '<a href="' . htmlspecialchars($historyPlayerUrl) . '" class="embed-webcam-link dual-webcam-cell"' . $linkAttrs . '>';
         if ($webcamUrl) {
             $html .= buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIdx, $aspectRatioCss, "{$primaryIdentifier} Webcam {$camIdx}", 'webcam-image');
         } else {
             $html .= '<div class="no-webcam-placeholder">No webcam available</div>';
         }
-        $html .= '</div>';
+        $html .= '</a>';
     }
     $html .= '</div>';
-    $html .= '<div class="webcam-only-footer-wrapper">';
+    $html .= '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link webcam-only-footer-wrapper"' . $linkAttrs . '>';
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
-    $html .= '</div>';
+    $html .= '</a>';
     $html .= '</div>';
 
     return $html;

@@ -413,16 +413,13 @@
             
             // Apply theme class to container
             const containerClass = actualThemeClass ? ` ${actualThemeClass}` : '';
-            const dashboardUrl = getDashboardUrl(attrs.airport);
-            const target = attrs.target || '_blank';
-            const relAttr = target === '_blank' ? ' rel="noopener"' : '';
 
-            // Wrap widget in anchor so entire widget is clickable (matches iframe embed behavior)
+            // Links are inside the widget HTML (per-webcam to history player, dashboard for weather/footer)
             this.shadowRoot.innerHTML = `
                 ${this.getStyles(attrs)}
-                <a href="${dashboardUrl}" target="${target}"${relAttr} class="embed-container${containerClass}">
+                <div class="embed-container${containerClass}">
                     ${html}
-                </a>
+                </div>
             `;
 
             // Execute any scripts that were included in the HTML (wind compass initialization)

@@ -204,8 +204,36 @@ function formatLocalTimeEmbed($timestamp, $timezone) {
 }
 
 /**
+ * Build URL for webcam history player (opens player for specific camera on dashboard)
+ *
+ * @param string $dashboardUrl Base dashboard URL (e.g., https://khio.aviationwx.org)
+ * @param int $camIndex Camera index (0-based)
+ * @return string URL with ?cam= query param
+ */
+function buildHistoryPlayerUrl(string $dashboardUrl, int $camIndex): string
+{
+    return $dashboardUrl . '?cam=' . $camIndex;
+}
+
+/**
+ * Build target and rel attributes for embed links
+ *
+ * @param string|null $target Link target (_blank, _self, etc.)
+ * @return string HTML attributes for target and rel
+ */
+function buildEmbedLinkAttrs(?string $target): string
+{
+    $target = $target ?? '_blank';
+    $attrs = ' target="' . htmlspecialchars($target) . '"';
+    if ($target === '_blank') {
+        $attrs .= ' rel="noopener"';
+    }
+    return $attrs;
+}
+
+/**
  * Build webcam URL with cache busting
- * 
+ *
  * @param string $dashboardUrl Base dashboard URL
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)

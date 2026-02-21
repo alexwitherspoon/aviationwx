@@ -257,12 +257,14 @@ function renderCardWidget($data, $options) {
     $target = $options['target'];
     $theme = $options['theme'];
     $windUnit = $options['windUnit']; // Needed for wind compass script
-    
+    $linkAttrs = buildEmbedLinkAttrs($target);
+
     $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
     $canvasId = 'card-wind-canvas-' . uniqid();
-    
-    // Build HTML
-    $html = <<<HTML
+
+    // Build HTML - wrap entire card in link to dashboard
+    $html = '<a href="' . htmlspecialchars($dashboardUrl) . '" class="embed-dashboard-link"' . $linkAttrs . '>';
+    $html .= <<<HTML
 <div class="style-card">
     <div class="card-header-v2">
         <div class="airport-title">
@@ -372,9 +374,10 @@ HTML;
     $html .= renderEmbedFooter($lastUpdated, $timezone, $sourceAttribution);
     
     $html .= "\n</div>\n";
-    
+    $html .= '</a>';
+
     // Add wind compass script (larger size for side-by-side layout)
     $html .= renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, 140);
-    
+
     return $html;
 }
