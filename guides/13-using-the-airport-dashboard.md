@@ -451,7 +451,11 @@ Active NOTAMs for the airport appear at the top:
 
 ## Section 8: Embedding Dashboards
 
-Want to display an AviationWX dashboard on your own website, FBO lobby screen, or flight school? Use the **Embed Generator**.
+Want to display an AviationWX dashboard on your own website, FBO lobby screen, or flight school? Use the **Embed Generator** at [embed.aviationwx.org](https://embed.aviationwx.org).
+
+**What you get:**
+- **Web component** (default) — Best for modern sites. Paste a script tag and a custom element. Responsive by default.
+- **iframe** — For platforms that restrict JavaScript (e.g., some CMS blocks). Add `responsive=1` to the URL for auto-height.
 
 ```
 +-----------------------------------------------------------------------------+
@@ -467,22 +471,15 @@ Want to display an AviationWX dashboard on your own website, FBO lobby screen, o
 |                                                                             |
 |    Airport:  [ KSPB v ]                                                     |
 |                                                                             |
+|    Size:  (•) Responsive  ( ) Fixed    Theme: Auto / Light / Dark          |
+|                                                                             |
 |    Widget Style:  ( ) Card  ( ) Webcam Only  ( ) Dual  ( ) Quad            |
 |                   ( ) Full Single  ( ) Full Dual  ( ) Full Quad             |
 |                                                                             |
-|    Theme: Light / Dark / Auto    Units: °F, kt, ft, inHg                    |
-|                                                                             |
-|    Preview:                                                                 |
+|    Embed Code:  [ Web Component ]  [ iframe ]                               |
 |    +-------------------------------------------------------------------+    |
-|    |                                                                   |    |
-|    |                       [ Live Preview ]                            |    |
-|    |                                                                   |    |
-|    +-------------------------------------------------------------------+    |
-|                                                                             |
-|    Embed Code:                                                              |
-|    +-------------------------------------------------------------------+    |
-|    | <iframe src="https://embed.aviationwx.org/..."                    |    |
-|    |         width="100%" height="600"></iframe>                       |    |
+|    | <script src="...widget.js"></script>                              |    |
+|    | <aviation-wx airport="kspb" style="card" theme="auto"></aviation-wx>  |
 |    +-------------------------------------------------------------------+    |
 |                                                       [ Copy Code ]         |
 +-----------------------------------------------------------------------------+

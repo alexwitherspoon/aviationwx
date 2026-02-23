@@ -80,34 +80,16 @@ Choose whether dashboard links open in a new tab or the same tab.
 
 ## Embed Types
 
-### iframe Embed (Recommended)
-```html
-<iframe
-  src="https://embed.aviationwx.org/?render=1&airport=kspb&style=card&theme=light&target=_blank"
-  width="300"
-  height="300"
-  frameborder="0"
-  loading="lazy"
-  title="KSPB Weather - AviationWX">
-</iframe>
-```
+### Web Component (Recommended for modern sites)
 
-Works on most platforms including:
-- WordPress (use Custom HTML block)
-- Google Sites (use Embed URL)
-- Squarespace (use Code block)
-- Any HTML page
-
-### Web Component
-
-A modern JavaScript custom element for tighter integration with your website. The web component provides:
+A JavaScript custom element that integrates directly with your page. Best for sites that support JavaScript.
 
 - **Direct rendering** - No iframe overhead, faster performance
 - **Auto-refresh** - Configurable refresh intervals (default: 5 minutes)
 - **Theme support** - Light, dark, and auto (follows system preference)
 - **Unit conversion** - Temperature, distance, wind speed, barometer units
 - **Style isolation** - Shadow DOM prevents style conflicts
-- **Responsive sizing** - Configurable dimensions with defaults per style
+- **Responsive sizing** - Fills container width by default; height adjusts automatically
 
 **Usage:**
 
@@ -126,7 +108,30 @@ A modern JavaScript custom element for tighter integration with your website. Th
 </aviation-wx>
 ```
 
-**Attributes:**
+### iframe Embed (Universal compatibility)
+
+Works on platforms that restrict JavaScript (e.g., some CMS blocks). Add `responsive=1` to have the widget height adjust to content.
+
+```html
+<iframe
+  src="https://embed.aviationwx.org/?render=1&airport=kspb&style=card&theme=light&responsive=1&target=_blank"
+  width="100%"
+  height="600"
+  frameborder="0"
+  loading="lazy"
+  title="KSPB Weather - AviationWX">
+</iframe>
+```
+
+Works on most platforms including:
+- WordPress (use Custom HTML block)
+- Google Sites (use Embed URL)
+- Squarespace (use Code block)
+- Any HTML page
+
+**Responsive mode:** Use `responsive=1` in the URL. The iframe will post its height to the parent so the container can auto-resize. Omit for fixed dimensions.
+
+### Web Component Attributes
 
 | Attribute | Values | Description |
 |-----------|--------|-------------|
@@ -205,6 +210,7 @@ When embedding directly, you can customize the widget using URL parameters:
 | `airport` | Airport ID | **Required** - Airport identifier (e.g., `kspb`) |
 | `style` | `card`, `webcam-only`, `dual-only`, `multi-only`, `full-single`, `full-dual`, `full-multi` | Widget style |
 | `theme` | `light`, `dark`, `auto` | Color theme |
+| `responsive` | `1` | Iframe height auto-adjusts to content (postMessage to parent) |
 | `webcam` | `0`, `1`, `2`, ... | Camera index (for single webcam styles) |
 | `cams` | `0,1,2,3` | Comma-separated camera indices (for multi-cam styles) |
 | `target` | `_blank`, `_self` | Link target |
@@ -279,8 +285,9 @@ The embed subdomain requires modified security headers to allow iframe embedding
 - Verify the webcam index is valid for that airport
 
 ### Widget appears too small/large
-- Adjust the `width` and `height` attributes on the iframe
-- Each widget style has recommended dimensions shown in the configurator
+- **iframe:** Add `responsive=1` to the URL for auto-height; the iframe posts its height to the parent. Or set fixed `width` and `height` attributes.
+- **Web component:** Uses responsive sizing by default; set `width` and `height` attributes for fixed dimensions.
+- Each widget style has recommended dimensions shown in the configurator.
 
 ## Security Considerations
 
