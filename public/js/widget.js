@@ -183,9 +183,13 @@
             }
 
             // Get dimensions (use preset defaults if not specified)
+            // width="100%" means responsive: fill container, height from content
             const preset = SIZE_PRESETS[style] || SIZE_PRESETS.card;
-            const width = parseInt(this.getAttr('width', preset.width.toString()), 10);
-            const height = parseInt(this.getAttr('height', preset.height.toString()), 10);
+            const widthAttr = this.getAttr('width', preset.width.toString());
+            const heightAttr = this.getAttr('height', preset.height.toString());
+            const isResponsive = String(widthAttr).trim() === '100%';
+            const width = isResponsive ? null : (parseInt(widthAttr, 10) || preset.width);
+            const height = isResponsive ? null : (parseInt(heightAttr, 10) || preset.height);
 
             // Validate values
             const validStyles = ['card', 'webcam-only', 'dual-only', 'multi-only', 'full-single', 'full-dual', 'full-multi'];
@@ -208,32 +212,43 @@
                 baro: validBaros.includes(baro) ? baro : 'inHg',
                 target: validTargets.includes(target) ? target : '_blank',
                 refresh: Math.max(refresh, 60000), // Minimum 1 minute refresh
+                responsive: isResponsive,
                 width,
                 height
             };
         }
 
         /**
-         * Fetch weather data from API
+         * Fetch weather data from Embed API (single endpoint)
+         * Uses GET /api/v1/airports/{id}/embed - full payload on first load
          */
         async fetchWeatherData(airport) {
-            // Check cache to prevent redundant API calls
             const now = Date.now();
             if (this.weatherData && (now - this.lastFetchTime) < this.cacheTimeout) {
                 return this.weatherData;
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/weather.php?airport=${encodeURIComponent(airport)}`);
+                const response = await fetch(`${BASE_URL}/api/v1/airports/${encodeURIComponent(airport)}/embed`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                const data = await response.json();
-                
-                // Cache the data
+                const apiData = await response.json();
+
+                if (!apiData.success || !apiData.data?.embed) {
+                    throw new Error('Invalid embed API response');
+                }
+
+                const embed = apiData.data.embed;
+                const data = {
+                    success: true,
+                    weather: embed.weather || {},
+                    airport: embed.airport || {}
+                };
+
                 this.weatherData = data;
                 this.lastFetchTime = now;
-                
+
                 return data;
             } catch (error) {
                 console.error('[AviationWX] Failed to fetch weather data:', error);
@@ -320,8 +335,13 @@
         showLoadingState(attrs) {
             const container = document.createElement('div');
             container.className = 'widget-container loading';
-            container.style.width = `${attrs.width}px`;
-            container.style.height = `${attrs.height}px`;
+            if (attrs.responsive) {
+                container.style.width = '100%';
+                container.style.minHeight = '200px';
+            } else {
+                container.style.width = `${attrs.width}px`;
+                container.style.height = `${attrs.height}px`;
+            }
             container.innerHTML = `
                 <div class="loading-spinner">
                     <div class="spinner"></div>
@@ -459,48 +479,25 @@
                 }
             }
             
-            // Debug: Check if webcam image exists and is visible (use setTimeout to ensure DOM is ready)
+            // Detect and lock webcam aspect ratio from actual image dimensions (all webcam-only styles)
             setTimeout(() => {
-                const webcamImage = this.shadowRoot.querySelector('.webcam-image');
-                const placeholder = this.shadowRoot.querySelector('.no-webcam-placeholder');
-                
-                console.log('[AviationWX] Shadow DOM check:', {
-                    hasImage: !!webcamImage,
-                    hasPlaceholder: !!placeholder,
-                    imageSrc: webcamImage?.src,
-                    htmlContainsImg: html.includes('<img'),
-                    htmlLength: html.length
-                });
-                
-                if (webcamImage) {
-                    const computedStyle = window.getComputedStyle(webcamImage);
-                    console.log('[AviationWX] Webcam image found - src:', webcamImage.src);
-                    console.log('[AviationWX] Webcam image - display:', computedStyle.display, 'width:', webcamImage.offsetWidth, 'height:', webcamImage.offsetHeight);
-                    console.log('[AviationWX] Webcam image - aspectRatio (inline):', webcamImage.style.aspectRatio, 'computed:', computedStyle.aspectRatio);
-                    console.log('[AviationWX] Webcam image - naturalWidth:', webcamImage.naturalWidth, 'naturalHeight:', webcamImage.naturalHeight);
-                    
-                    // Ensure image loads - add error handler
-                    webcamImage.onerror = function() {
-                        console.error('[AviationWX] Webcam image failed to load:', this.src);
-                    };
-                    webcamImage.onload = function() {
-                        console.log('[AviationWX] Webcam image loaded - naturalWidth:', this.naturalWidth, 'naturalHeight:', this.naturalHeight, 'offsetWidth:', this.offsetWidth, 'offsetHeight:', this.offsetHeight);
-                        
-                        // If image has natural dimensions, update aspect ratio to match actual image
-                        if (this.naturalWidth > 0 && this.naturalHeight > 0) {
-                            const actualAspectRatio = this.naturalWidth / this.naturalHeight;
-                            const currentAspectRatio = parseFloat(this.style.aspectRatio) || parseFloat(window.getComputedStyle(this).aspectRatio);
-                            
-                            // If aspect ratio differs significantly (more than 5%), update it
-                            if (Math.abs(actualAspectRatio - currentAspectRatio) > 0.05) {
-                                console.log('[AviationWX] Updating aspect ratio from', currentAspectRatio, 'to', actualAspectRatio);
-                                this.style.aspectRatio = actualAspectRatio.toString();
+                const webcamImages = this.shadowRoot.querySelectorAll('.webcam-image');
+                webcamImages.forEach((img) => {
+                    const lockAspectRatio = () => {
+                        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                            const actual = img.naturalWidth / img.naturalHeight;
+                            const current = parseFloat(img.style.aspectRatio) || parseFloat(window.getComputedStyle(img).aspectRatio);
+                            if (Math.abs(actual - current) > 0.05) {
+                                img.style.aspectRatio = actual.toString();
                             }
                         }
                     };
-                } else {
-                    console.warn('[AviationWX] No webcam image found in shadow DOM. HTML contains img tag:', html.includes('<img'));
-                }
+                    if (img.complete && img.naturalWidth) {
+                        lockAspectRatio();
+                    } else {
+                        img.addEventListener('load', lockAspectRatio);
+                    }
+                });
             }, 100);
 
             // Always manually initialize canvas to ensure runways are drawn
@@ -518,7 +515,6 @@
             // Fetch HTML from PHP template system (single source of truth)
             try {
                 const html = await this.fetchWidgetHTML(attrs);
-                console.log('[AviationWX] Fetched widget HTML length:', html.length, 'contains img:', html.includes('<img'));
                 return html;
             } catch (error) {
                 console.error('[AviationWX] Failed to fetch widget HTML:', error);
@@ -589,7 +585,7 @@
         
         /**
          * Draw compasses using shared function
-         * Fetches airport data if needed for runway information
+         * Airport data (including runways) comes from embed API response
          */
         async drawCompasses(data, attrs) {
             const canvases = this.shadowRoot.querySelectorAll('canvas');
@@ -599,7 +595,7 @@
             }
 
             const weather = data.weather || {};
-            let airport = data.airport || {};
+            const airport = data.airport || {};
             const theme = attrs.theme;
             
             // Ensure AviationWX is loaded
@@ -609,23 +605,7 @@
                 return;
             }
             
-            // Always fetch airport data to ensure we have runways
-            // The weather API doesn't include airport metadata
-            // Use the REST API endpoint: /api/v1/airports/{id}
-            try {
-                const airportResponse = await fetch(`${BASE_URL}/api/v1/airports/${encodeURIComponent(attrs.airport)}`);
-                if (airportResponse.ok) {
-                    const airportData = await airportResponse.json();
-                    if (airportData.success && airportData.airport) {
-                        airport = airportData.airport;
-                        console.log('[AviationWX] Loaded airport data with runways:', airport.runways?.length || 0);
-                    }
-                } else {
-                    console.warn('[AviationWX] Airport API returned status:', airportResponse.status);
-                }
-            } catch (error) {
-                console.warn('[AviationWX] Failed to fetch airport data for runways:', error);
-            }
+            // Airport data (including runways) comes from embed API - single endpoint
             
             // Helper to detect dark mode
             const detectDarkMode = () => {
@@ -729,6 +709,9 @@
         getStyles(attrs) {
             // Load shared CSS file to match iframe embeds exactly
             const cssUrl = `${BASE_URL}/public/css/embed-widgets.css`;
+            const hostWidth = attrs.responsive ? 'width: 100%;' : `width: ${attrs.width}px;`;
+            const hostHeight = attrs.responsive ? '' : `height: ${attrs.height}px;`;
+            const containerHeight = attrs.responsive ? 'min-height: 0; height: auto;' : 'height: 100%;';
             
             return `
                 <link rel="stylesheet" href="${cssUrl}">
@@ -737,10 +720,12 @@
                     :host {
                         display: block;
                         max-width: 100%;
+                        ${hostWidth}
+                        ${hostHeight}
                     }
                     .embed-container {
                         width: 100%;
-                        height: 100%;
+                        ${containerHeight}
                         display: flex;
                         flex-direction: column;
                     }

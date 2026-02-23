@@ -12,8 +12,8 @@
  * Data flow:
  * 1. Scheduler triggers weather refresh (WRITE PATH)
  * 2. api/weather.php updates daily tracking + writes cache file
- * 3. Public API reads cache file (READ PATH)
- * 4. Embed widgets call Public API (READ ONLY)
+ * 3. Embed API and Public API read cache file (READ PATH)
+ * 4. Embed widgets call Embed API or Public API (READ ONLY)
  * 
  * RATE LIMITING:
  * Embed requests forward the original client IP via X-Forwarded-Client-IP header.
@@ -163,11 +163,12 @@ function convertPublicApiToInternalFormat(array $apiWeather): array {
  */
 function readWeatherCacheFile(string $airportId): ?array {
     $cacheFile = getWeatherCachePath($airportId);
-    
+
     if (!file_exists($cacheFile)) {
         return null;
     }
-    
+
+    // @ suppresses read errors; we handle failures explicitly below
     $content = @file_get_contents($cacheFile);
     if ($content === false) {
         return null;
@@ -183,20 +184,19 @@ function readWeatherCacheFile(string $airportId): ?array {
 
 /**
  * Fetch airport and weather data for embed widgets
- * 
- * READ-ONLY: Calls the public API to get weather data.
- * All daily tracking data (temp_high_today, temp_low_today) is already
- * in the cache file, written by api/weather.php during refresh.
- * 
+ *
+ * Uses the Embed API (GET /api/v1/airports/{id}/embed) when available.
+ * Falls back to public API + weather cache for compatibility.
+ *
  * @param string $airportId Airport identifier
  * @return array|null {
- *   'airport' => array,  // Airport configuration data
- *   'weather' => array,  // Weather data with daily tracking
+ *   'airport' => array,
+ *   'weather' => array,
  *   'airportId' => string
  * } or null if airport not found
  */
-function fetchEmbedDataFromApi(string $airportId): ?array {
-    // Normalize airport ID (same validation as public API)
+function fetchEmbedDataFromApi(string $airportId): ?array
+{
     $trimmed = trim($airportId);
     if (empty($trimmed) || strlen($trimmed) < 3 || strlen($trimmed) > 20) {
         return null;
@@ -205,29 +205,87 @@ function fetchEmbedDataFromApi(string $airportId): ?array {
         return null;
     }
     $normalizedId = strtolower($trimmed);
-    
-    // Get airport configuration
-    // getPublicApiAirport() is a read-only lookup in the config
-    $airport = getPublicApiAirport($normalizedId);
+
+    $data = fetchEmbedDataFromEmbedApi($normalizedId);
+    if ($data !== null) {
+        return $data;
+    }
+
+    return fetchEmbedDataFromPublicApiFallback($normalizedId);
+}
+
+/**
+ * Fetch embed data from Embed API (single endpoint)
+ *
+ * Internal call to localhost avoids DNS/SSL overhead.
+ *
+ * @param string $airportId Normalized airport ID
+ * @return array|null Embed data or null
+ */
+function fetchEmbedDataFromEmbedApi(string $airportId): ?array
+{
+    $apiUrl = 'http://127.0.0.1:8080/api/v1/airports/' . urlencode($airportId) . '/embed';
+    $originalClientIp = getOriginalClientIp();
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $apiUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'X-Internal-Request: embed-widget',
+            'X-Forwarded-Client-IP: ' . $originalClientIp,
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+
+    if ($httpCode !== 200 || $response === false || !empty($error)) {
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    if (!is_array($data) || !($data['success'] ?? false) || !isset($data['data']['embed'])) {
+        return null;
+    }
+
+    $embed = $data['data']['embed'];
+    $airport = $embed['airport'] ?? [];
+    $weather = $embed['weather'] ?? [];
+
+    // Embed API returns full airport (runways, weather_sources, webcams) - use directly
+    $airport['id'] = $airportId;
+
+    return [
+        'airport' => $airport,
+        'weather' => $weather,
+        'airportId' => $airportId,
+    ];
+}
+
+/**
+ * Fallback when Embed API unavailable
+ *
+ * @param string $airportId Normalized airport ID
+ * @return array|null Embed data or null
+ */
+function fetchEmbedDataFromPublicApiFallback(string $airportId): ?array
+{
+    $airport = getPublicApiAirport($airportId);
     if ($airport === null) {
         return null;
     }
-    
-    // Fetch weather data from public API (READ-ONLY)
-    $weatherData = fetchWeatherFromPublicApi($normalizedId);
-    
-    if ($weatherData === null) {
-        // Weather unavailable - return airport data only
-        return [
-            'airport' => $airport,
-            'weather' => [],
-            'airportId' => $normalizedId
-        ];
-    }
-    
+
+    $weatherData = fetchWeatherFromPublicApi($airportId);
+
     return [
         'airport' => $airport,
-        'weather' => $weatherData,
-        'airportId' => $normalizedId
+        'weather' => $weatherData ?? [],
+        'airportId' => $airportId,
     ];
 }
