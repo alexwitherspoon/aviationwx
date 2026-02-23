@@ -877,14 +877,14 @@ a {
     min-height: 0;
 }
 
-/* 2x2 grid for 4 webcams */
+/* 2x2 grid for 4 webcams - rows auto-size to fit 16:9 images for dynamic scaling */
 .style-multi .multi-webcam-grid {
     display: grid;
     gap: 2px;
     background: var(--border-color);
     flex-shrink: 0;
     grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
+    grid-template-rows: auto auto;
 }
 
 /* Responsive: stack vertically when narrow */
@@ -895,20 +895,20 @@ a {
     }
 }
 
-/* Handle fewer than 4 webcams */
+/* Handle fewer than 4 webcams - rows auto-size to fit image aspect ratios */
 .style-multi .multi-webcam-grid.cams-1 {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
+    grid-template-rows: auto;
 }
 
 .style-multi .multi-webcam-grid.cams-2 {
     grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: 1fr;
+    grid-template-rows: auto;
 }
 
 .style-multi .multi-webcam-grid.cams-3 {
     grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
+    grid-template-rows: auto auto;
 }
 
 .style-multi .multi-webcam-cell {

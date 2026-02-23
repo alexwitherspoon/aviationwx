@@ -22,6 +22,7 @@ require_once __DIR__ . '/../lib/embed-templates/full.php';
 $embedAirportId = $_GET['embed_airport'] ?? $_GET['airport'] ?? '';
 $style = $_GET['style'] ?? 'card';
 $theme = $_GET['theme'] ?? 'light';
+$responsive = isset($_GET['responsive']) && $_GET['responsive'] === '1';
 $webcamIndex = isset($_GET['webcam']) ? intval($_GET['webcam']) : 0;
 $target = $_GET['target'] ?? '_blank';
 
@@ -189,6 +190,16 @@ switch ($style) {
             height: 100%;
             overflow: hidden;
         }
+        /* Responsive: allow content to grow vertically so 16:9 images aren't cut off */
+        body.embed-responsive {
+            height: auto;
+            min-height: 100%;
+            overflow: visible;
+        }
+        body.embed-responsive .embed-container {
+            height: auto;
+            min-height: 100%;
+        }
     </style>
     <?php if ($theme === 'auto'): ?>
     <script>
@@ -277,8 +288,63 @@ switch ($style) {
         })();
     </script>
     <?php endif; ?>
+    <script>
+        (function() {
+            'use strict';
+            function lockWebcamAspectRatio(img) {
+                if (!img || !img.naturalWidth || !img.naturalHeight) return;
+                var actual = img.naturalWidth / img.naturalHeight;
+                var current = parseFloat(img.style.aspectRatio) || parseFloat(window.getComputedStyle(img).aspectRatio);
+                if (Math.abs(actual - current) > 0.05) {
+                    img.style.aspectRatio = actual.toString();
+                }
+            }
+            function initWebcamAspectRatios() {
+                document.querySelectorAll('.webcam-image').forEach(function(img) {
+                    if (img.complete && img.naturalWidth) {
+                        lockWebcamAspectRatio(img);
+                    } else {
+                        img.addEventListener('load', function() { lockWebcamAspectRatio(this); });
+                    }
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initWebcamAspectRatios);
+            } else {
+                initWebcamAspectRatios();
+            }
+        })();
+    </script>
+    <?php if ($responsive): ?>
+    <script>
+        (function() {
+            'use strict';
+            function reportHeight() {
+                if (window.parent !== window) {
+                    var h = Math.ceil(document.body.scrollHeight);
+                    window.parent.postMessage({ type: 'aviationwx-resize', height: h }, '*');
+                }
+            }
+            function initResizeReporting() {
+                reportHeight();
+                document.querySelectorAll('.webcam-image').forEach(function(img) {
+                    img.addEventListener('load', reportHeight);
+                });
+                if (window.ResizeObserver) {
+                    var obs = new ResizeObserver(function() { reportHeight(); });
+                    obs.observe(document.body);
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initResizeReporting);
+            } else {
+                initResizeReporting();
+            }
+        })();
+    </script>
+    <?php endif; ?>
 </head>
-<body class="<?= htmlspecialchars($themeClass) ?>">
+<body class="<?= htmlspecialchars($themeClass) ?><?= $responsive ? ' embed-responsive' : '' ?>">
     <div class="embed-container <?= htmlspecialchars($themeClass) ?>">
         <?= $widgetHtml ?>
     </div>

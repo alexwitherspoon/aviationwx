@@ -331,6 +331,38 @@ $shouldNoIndex = $hasQueryParams;
             color: white;
         }
         
+        /* Size mode toggle */
+        .size-mode-toggle {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .size-mode-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .size-mode-option:hover {
+            background: #f0f0f0;
+        }
+
+        .size-mode-option input {
+            margin-top: 0.2rem;
+        }
+
+        .size-mode-option span {
+            font-size: 0.9rem;
+            color: #333;
+            line-height: 1.4;
+        }
+
         /* Size inputs */
         .size-inputs {
             display: flex;
@@ -471,7 +503,8 @@ $shouldNoIndex = $hasQueryParams;
             background: white;
             position: relative;
             overflow: hidden;
-            transition: all 0.3s;
+            /* Exclude width/height so responsive resize updates instantly */
+            transition: border-color 0.2s, background-color 0.2s;
         }
         
         .preview-frame iframe {
@@ -1117,16 +1150,16 @@ $shouldNoIndex = $hasQueryParams;
                     <h3>Theme</h3>
                     <div class="radio-group">
                         <label class="radio-item">
-                            <input type="radio" name="theme" value="light" checked>
+                            <input type="radio" name="theme" value="auto" checked>
+                            <span>Auto (System)</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="theme" value="light">
                             <span>Light</span>
                         </label>
                         <label class="radio-item">
                             <input type="radio" name="theme" value="dark">
                             <span>Dark</span>
-                        </label>
-                        <label class="radio-item">
-                            <input type="radio" name="theme" value="auto">
-                            <span>Auto (System)</span>
                         </label>
                     </div>
                 </div>
@@ -1189,7 +1222,17 @@ $shouldNoIndex = $hasQueryParams;
                 
                 <div class="config-section">
                     <h3>Size</h3>
-                    <div class="size-inputs">
+                    <div class="size-mode-toggle">
+                        <label class="radio-item size-mode-option">
+                            <input type="radio" name="size_mode" value="responsive" checked>
+                            <span><strong>Responsive</strong> — Fills container width, height adjusts automatically</span>
+                        </label>
+                        <label class="radio-item size-mode-option">
+                            <input type="radio" name="size_mode" value="fixed">
+                            <span><strong>Fixed size</strong> — Set exact width and height in pixels</span>
+                        </label>
+                    </div>
+                    <div id="size-fixed-inputs" class="size-inputs" style="display: none;">
                         <div class="size-input-group">
                             <label for="width" class="size-label">Width</label>
                             <div class="size-input-with-steppers">
@@ -1214,7 +1257,8 @@ $shouldNoIndex = $hasQueryParams;
                         </div>
                     </div>
                     <div class="info-callout" style="margin-top: 0.75rem;">
-                        <strong>Tip:</strong> Size updates automatically when you change widget style. Presets assume 16:9 webcam aspect ratio.
+                        <span id="size-mode-tip-responsive"><strong>Responsive:</strong> Widget stretches to fill its container. Best for most sites.</span>
+                        <span id="size-mode-tip-fixed" style="display: none;"><strong>Fixed:</strong> Size updates when you change widget style. Adjust manually for custom dimensions.</span>
                     </div>
                 </div>
                 
@@ -1319,13 +1363,13 @@ $shouldNoIndex = $hasQueryParams;
                 <!-- Embed Code Panel -->
                 <div class="embed-code-panel">
                     <div class="embed-tabs">
-                        <button class="embed-tab active" data-type="iframe">iframe Embed</button>
-                        <button class="embed-tab" data-type="webcomponent">Web Component</button>
+                        <button class="embed-tab active" data-type="webcomponent">Web Component</button>
+                        <button class="embed-tab" data-type="iframe">iframe Embed</button>
                     </div>
                     
                     <div class="embed-code-container">
                         <div class="embed-code-header">
-                            <span id="embed-type-label">iframe Embed Code</span>
+                            <span id="embed-type-label">Web Component Code</span>
                             <button class="copy-btn" id="copy-btn">📋 Copy</button>
                         </div>
                         <div class="embed-code">
@@ -1334,7 +1378,7 @@ $shouldNoIndex = $hasQueryParams;
                     </div>
                     
                     <div class="info-callout" id="embed-info">
-                        <strong>iframe Embed:</strong> Works on Google Sites, WordPress, Squarespace, and any HTML page. Simply paste the code where you want the widget to appear.
+                        <strong>Web Component:</strong> Modern approach that integrates seamlessly with your page. Requires JavaScript support.
                     </div>
                 </div>
             </div>
@@ -1367,13 +1411,14 @@ $shouldNoIndex = $hasQueryParams;
         var state = {
             airport: null,
             style: 'card',
-            theme: 'light',
+            theme: 'auto',
+            sizeMode: 'responsive',
             webcam: 0,
             cams: [0, 1, 2, 3], // Camera indices for multi-cam widgets
             width: 400,
             height: 535,
             target: '_blank',
-            embedType: 'iframe',
+            embedType: 'webcomponent',
             tempUnit: 'F',
             distUnit: 'ft',
             windUnit: 'kt',
@@ -1390,6 +1435,11 @@ $shouldNoIndex = $hasQueryParams;
             'full-single': { width: 700, height: 760 },
             'full-dual': { width: 840, height: 610 },
             'full-multi': { width: 760, height: 790 }
+        };
+        // Responsive mode: larger heights so 16:9 webcam grids don't get cut off at typical widths
+        var RESPONSIVE_HEIGHTS = {
+            'multi-only': 600,
+            'full-multi': 800
         };
         
         // DOM elements
@@ -1449,6 +1499,9 @@ $shouldNoIndex = $hasQueryParams;
                 params.push('cams=' + state.cams.slice(0, 4).join(','));
             }
             params.push('target=' + state.target);
+            if (state.sizeMode === 'responsive') {
+                params.push('responsive=1');
+            }
             // Add unit preferences (only if not default)
             if (state.tempUnit !== 'F') params.push('temp=' + state.tempUnit);
             if (state.distUnit !== 'ft') params.push('dist=' + state.distUnit);
@@ -1476,9 +1529,11 @@ $shouldNoIndex = $hasQueryParams;
             if (state.style === 'multi-only' || state.style === 'full-multi') {
                 params.set('cams', state.cams.slice(0, 4).join(','));
             }
-            // Explicitly convert to string to handle width=0 or height=0 correctly
-            params.set('width', String(state.width));
-            params.set('height', String(state.height));
+            params.set('size_mode', state.sizeMode);
+            if (state.sizeMode === 'fixed') {
+                params.set('width', String(state.width));
+                params.set('height', String(state.height));
+            }
             params.set('target', state.target);
             if (state.tempUnit !== 'F') params.set('temp', state.tempUnit);
             if (state.distUnit !== 'ft') params.set('dist', state.distUnit);
@@ -1506,10 +1561,26 @@ $shouldNoIndex = $hasQueryParams;
             
             switch (state.embedType) {
                 case 'iframe':
-                    return '<iframe\n  src="' + embedUrl + '"\n  width="' + state.width + '"\n  height="' + state.height + '"\n  frameborder="0"\n  loading="lazy"\n  title="' + state.airport.identifier + ' Weather - AviationWX.org">\n</iframe>';
+                    var preset = SIZE_PRESETS[state.style] || SIZE_PRESETS.card;
+                    var iframeWidth = state.sizeMode === 'responsive' ? '100%' : state.width;
+                    var iframeHeight = state.sizeMode === 'responsive'
+                        ? (RESPONSIVE_HEIGHTS[state.style] || preset.height)
+                        : state.height;
+                    var iframeAttrs = 'src="' + embedUrl + '" frameborder="0" loading="lazy" title="' + state.airport.identifier + ' Weather - AviationWX.org"';
+                    if (state.sizeMode === 'responsive') {
+                        iframeAttrs += '\n  style="width: 100%; height: ' + iframeHeight + 'px;"';
+                    } else {
+                        iframeAttrs += '\n  width="' + state.width + '" height="' + state.height + '"';
+                    }
+                    return '<iframe\n  ' + iframeAttrs + '>\n</iframe>';
                 
                 case 'webcomponent':
                     var wcAttrs = ' airport="' + state.airport.id + '" style="' + state.style + '" theme="' + state.theme + '"';
+                    if (state.sizeMode === 'responsive') {
+                        wcAttrs += ' width="100%"';
+                    } else {
+                        wcAttrs += ' width="' + state.width + '" height="' + state.height + '"';
+                    }
                     if (state.style === 'webcam-only' || state.style === 'full' || state.style === 'full-single') {
                         wcAttrs += ' webcam="' + state.webcam + '"';
                     } else if (state.style === 'dual-only' || state.style === 'full-dual') {
@@ -1526,12 +1597,18 @@ $shouldNoIndex = $hasQueryParams;
         
         // Update preview
         function updatePreview() {
-            // Update dimensions display
-            elements.previewDimensions.textContent = state.width + ' × ' + state.height + ' px';
-            
-            // Update preview frame size
-            elements.previewFrame.style.width = state.width + 'px';
-            elements.previewFrame.style.height = state.height + 'px';
+            var preset = SIZE_PRESETS[state.style] || SIZE_PRESETS.card;
+            if (state.sizeMode === 'responsive') {
+                var respHeight = RESPONSIVE_HEIGHTS[state.style] || preset.height;
+                elements.previewDimensions.textContent = '100% × ' + respHeight + ' px (responsive)';
+                elements.previewFrame.style.width = '100%';
+                elements.previewFrame.style.maxWidth = 'none';
+                elements.previewFrame.style.height = respHeight + 'px';
+            } else {
+                elements.previewDimensions.textContent = state.width + ' × ' + state.height + ' px';
+                elements.previewFrame.style.width = state.width + 'px';
+                elements.previewFrame.style.height = state.height + 'px';
+            }
             
             // If no airport selected, show placeholder
             if (!state.airport) {
@@ -1871,6 +1948,28 @@ $shouldNoIndex = $hasQueryParams;
             updateEmbedCode();
         });
 
+        // Size mode toggle
+        document.querySelectorAll('input[name="size_mode"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                state.sizeMode = this.value;
+                var fixedInputs = document.getElementById('size-fixed-inputs');
+                var tipResponsive = document.getElementById('size-mode-tip-responsive');
+                var tipFixed = document.getElementById('size-mode-tip-fixed');
+                if (state.sizeMode === 'responsive') {
+                    if (fixedInputs) fixedInputs.style.display = 'none';
+                    if (tipResponsive) tipResponsive.style.display = '';
+                    if (tipFixed) tipFixed.style.display = 'none';
+                } else {
+                    if (fixedInputs) fixedInputs.style.display = 'flex';
+                    if (tipResponsive) tipResponsive.style.display = 'none';
+                    if (tipFixed) tipFixed.style.display = '';
+                }
+                updateSizeFromStyle();
+                updatePreview();
+                updateEmbedCode();
+            });
+        });
+
         // Size stepper buttons
         function setupSizeStepper(upId, downId, stateKey, minVal, maxVal, step) {
             var upBtn = document.getElementById(upId);
@@ -1986,10 +2085,30 @@ $shouldNoIndex = $hasQueryParams;
                 if (styleRadio) styleRadio.checked = true;
             }
 
-            // Size: use URL values if both provided; otherwise apply preset for selected style
+            // Size mode
+            var sizeMode = params.get('size_mode');
+            if (sizeMode && ['responsive', 'fixed'].indexOf(sizeMode) !== -1) {
+                state.sizeMode = sizeMode;
+                var sizeModeRadio = document.querySelector('input[name="size_mode"][value="' + sizeMode + '"]');
+                if (sizeModeRadio) sizeModeRadio.checked = true;
+            }
+            var fixedInputs = document.getElementById('size-fixed-inputs');
+            var tipResponsive = document.getElementById('size-mode-tip-responsive');
+            var tipFixed = document.getElementById('size-mode-tip-fixed');
+            if (state.sizeMode === 'responsive') {
+                if (fixedInputs) fixedInputs.style.display = 'none';
+                if (tipResponsive) tipResponsive.style.display = '';
+                if (tipFixed) tipFixed.style.display = 'none';
+            } else {
+                if (fixedInputs) fixedInputs.style.display = 'flex';
+                if (tipResponsive) tipResponsive.style.display = 'none';
+                if (tipFixed) tipFixed.style.display = '';
+            }
+
+            // Size: use URL values if fixed mode and both provided; otherwise apply preset
             var widthFromUrl = params.get('width');
             var heightFromUrl = params.get('height');
-            var hasExplicitSize = widthFromUrl && !isNaN(parseInt(widthFromUrl)) && heightFromUrl && !isNaN(parseInt(heightFromUrl));
+            var hasExplicitSize = state.sizeMode === 'fixed' && widthFromUrl && !isNaN(parseInt(widthFromUrl)) && heightFromUrl && !isNaN(parseInt(heightFromUrl));
 
             // Theme
             var theme = params.get('theme');
@@ -2072,6 +2191,18 @@ $shouldNoIndex = $hasQueryParams;
                 }
             }
         }
+        
+        // Listen for responsive resize from embed (iframe reports content height)
+        window.addEventListener('message', function(ev) {
+            if (ev.data && ev.data.type === 'aviationwx-resize' && state.sizeMode === 'responsive') {
+                var frame = elements.previewFrame.querySelector('iframe');
+                if (frame && ev.source === frame.contentWindow) {
+                    var h = Math.max(200, Math.min(1200, ev.data.height || 0));
+                    elements.previewFrame.style.height = h + 'px';
+                    elements.previewDimensions.textContent = '100% × ' + h + ' px (responsive)';
+                }
+            }
+        });
         
         // Initialize
         initFromUrl();
