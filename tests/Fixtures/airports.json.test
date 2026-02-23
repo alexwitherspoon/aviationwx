@@ -77,6 +77,9 @@
           "url": "https://example.com/cam1.jpg"
         }
       ],
+      "runways": [
+        {"name": "17/35", "heading_1": 170, "heading_2": 350}
+      ],
       "airnav_url": "https://www.airnav.com/airport/KSPB",
       "services": {
         "fuel": "100LL, Jet-A",

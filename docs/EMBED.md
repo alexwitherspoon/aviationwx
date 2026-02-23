@@ -218,6 +218,28 @@ Example URL:
 https://embed.aviationwx.org/?render=1&airport=kspb&style=dual-only&theme=light&cams=0,1&target=_blank&temp=F&wind=kt
 ```
 
+## Embed API (JSON)
+
+For programmatic access, use the Embed API endpoint:
+
+```
+GET /api/v1/airports/{id}/embed
+GET /api/v1/airports/{id}/embed?refresh=1
+```
+
+**Full payload** (no `refresh` or `refresh=0`): Returns weather, airport metadata, and observed timestamps. Use on first load or when returning to focus.
+
+**Differential payload** (`refresh=1`): Returns only topics that changed since the last refresh cycle (value-diff). Client merges into cached state. Use for polling between full fetches.
+
+**Response structure:**
+- `data.embed`: Full or differential payload
+- `data.diff`: `true` when differential, `false` when full
+- Topics: `weather`, `weather_observed_at`, `airport`, `airport_observed_at`
+- Airport topic includes: `id`, `name`, `icao`, `lat`, `lon`, `elevation_ft`, `timezone`, `webcams`, `runways`, `weather_sources` (all data needed for embed widgets)
+- Explicit observed times for staleness validation
+
+**CORS:** Permissive (`*`) for third-party embedding.
+
 ## Local Development
 
 To test the embed generator locally:
