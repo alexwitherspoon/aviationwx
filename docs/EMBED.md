@@ -5,6 +5,9 @@ The Embed Generator allows you to create embeddable weather widgets for any Avia
 ## Quick Start
 
 ### Option 1: Web Component (Recommended for Modern Sites)
+
+Use the [Embed Configurator](https://embed.aviationwx.org) to generate embed code—it includes a version query param (`?v=...`) for cache busting so embeds get updates within minutes of deploy.
+
 ```html
 <!-- Include the widget script once per page -->
 <script src="https://aviationwx.org/public/js/widget.js"></script>
@@ -293,6 +296,10 @@ frame-src ... https://embed.aviationwx.org;
 ```
 
 Sites without CSP (e.g., most WordPress, Squarespace) work without changes. Add these only if the widget fails to load and your console shows CSP violations.
+
+## Caching and Updates
+
+The widget script uses short cache headers (`max-age=300`, `stale-while-revalidate=3600`) so updates propagate within ~5 minutes of deploy. For immediate cache busting, use the versioned URL from the [Embed Configurator](https://embed.aviationwx.org)—it appends `?v=<timestamp>` based on file modification time, so new embeds always fetch the latest script.
 
 ## Troubleshooting
 

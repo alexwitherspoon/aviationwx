@@ -1405,6 +1405,11 @@ $shouldNoIndex = $hasQueryParams;
         // Airport data
         var AIRPORTS = <?= json_encode($airports) ?>;
         var BASE_DOMAIN = <?= json_encode($baseDomain) ?>;
+        <?php
+        // @ suppresses file stat errors; time() fallback when file missing (e.g. test env)
+        $widgetVersion = @filemtime(__DIR__ . '/../public/js/widget.js') ?: time();
+        ?>
+        var WIDGET_VERSION = <?= json_encode($widgetVersion) ?>;
         var IS_LOCAL_DEV = <?= json_encode(!isProduction()) ?>;
         
         // State
@@ -1588,7 +1593,7 @@ $shouldNoIndex = $hasQueryParams;
                     } else if (state.style === 'multi-only' || state.style === 'full-multi') {
                         wcAttrs += ' cams="' + state.cams.slice(0, 4).join(',') + '"';
                     }
-                    return '<!-- Include the AviationWX.org widget script (once per page) -->\n<script src="https://embed.' + BASE_DOMAIN + '/widget.js"></' + 'script>\n\n<!-- Place the widget where you want it to appear -->\n<aviation-wx' + wcAttrs + '>\n</aviation-wx>';
+                    return '<!-- Include the AviationWX.org widget script (once per page) -->\n<script src="https://embed.' + BASE_DOMAIN + '/widget.js?v=' + WIDGET_VERSION + '"></' + 'script>\n\n<!-- Place the widget where you want it to appear -->\n<aviation-wx' + wcAttrs + '>\n</aviation-wx>';
                 
                 default:
                     return '';

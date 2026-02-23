@@ -168,14 +168,14 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
-# Cache widget.js for 1 hour (production can be longer with versioning)
-<FilesMatch "^public/js/widget\.js$">
+# Cache widget.js: short TTL so embed updates propagate on deploy
+<FilesMatch "^(public/js/widget\.js|widget\.js)$">
     <IfModule mod_expires.c>
         ExpiresActive On
-        ExpiresDefault "access plus 1 hour"
+        ExpiresDefault "access plus 5 minutes"
     </IfModule>
     <IfModule mod_headers.c>
-        Header set Cache-Control "public, max-age=3600"
+        Header set Cache-Control "public, max-age=300, stale-while-revalidate=3600"
     </IfModule>
 </FilesMatch>
 
