@@ -134,6 +134,62 @@
         }
       }
     },
+    "/airports/{id}/embed": {
+      "get": {
+        "summary": "Get embed data",
+        "description": "Single endpoint for embed widgets. Full payload or differential (refresh=1). Use full on first load/focus return; use refresh=1 for polling.",
+        "operationId": "getEmbed",
+        "tags": ["Embed"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AirportId"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "When 1, return only changed topics (value-diff). Omit or 0 for full payload.",
+            "schema": {
+              "type": "string",
+              "enum": ["0", "1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "embed": {
+                          "type": "object",
+                          "description": "Weather, airport, and observed_at timestamps"
+                        },
+                        "diff": {
+                          "type": "boolean",
+                          "description": "True when differential, false when full"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
     "/airports/{id}/weather/history": {
       "get": {
         "summary": "Get weather history",

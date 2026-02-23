@@ -693,7 +693,12 @@ function generateMockWeatherData($airportId, $airport) {
     unset($weatherData['_quality_metadata']);
 
     $cacheWriteResult = @file_put_contents($weatherCacheFile, json_encode($weatherData), LOCK_EX);
-    
+
+    if ($cacheWriteResult !== false) {
+        require_once __DIR__ . '/../lib/embed-diff.php';
+        updateEmbedDiffCache($airportId, $weatherData, $airport);
+    }
+
     if ($cacheWriteResult === false) {
         aviationwx_log('error', 'failed to write weather cache file', [
             'airport' => $airportId,

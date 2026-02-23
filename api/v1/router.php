@@ -72,6 +72,9 @@ function routePublicApiRequest(string $path, array $context): void
         // GET /v1/airports/{id}/weather/history
         '#^/airports/([a-zA-Z0-9-]+)/weather/history$#' => ['file' => 'weather-history.php', 'handler' => 'handleGetWeatherHistory'],
         
+        // GET /v1/airports/{id}/embed
+        '#^/airports/([a-zA-Z0-9-]+)/embed$#' => ['file' => 'embed.php', 'handler' => 'handleGetEmbed'],
+
         // GET /v1/airports/{id}/webcams
         '#^/airports/([a-zA-Z0-9-]+)/webcams$#' => ['file' => 'webcams.php', 'handler' => 'handleListWebcams'],
         
