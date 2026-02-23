@@ -2197,7 +2197,7 @@ $shouldNoIndex = $hasQueryParams;
             if (ev.data && ev.data.type === 'aviationwx-resize' && state.sizeMode === 'responsive') {
                 var frame = elements.previewFrame.querySelector('iframe');
                 if (frame && ev.source === frame.contentWindow) {
-                    var h = Math.max(200, Math.min(1200, ev.data.height || 0));
+                    var h = Math.max(200, Math.min(5000, ev.data.height || 0));
                     elements.previewFrame.style.height = h + 'px';
                     elements.previewDimensions.textContent = '100% × ' + h + ' px (responsive)';
                 }
