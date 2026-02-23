@@ -1,10 +1,51 @@
 <?php
 /**
- * CORS Helpers for Embed Widget
+ * CORS Helpers for Embed Widget and Public API
  *
  * Embed widgets are loaded in iframes or web components on third-party sites.
  * These endpoints must return CORS headers to allow cross-origin fetch requests.
+ *
+ * Public API (M2M) uses allowlist CORS: *.aviationwx.org and localhost for dev.
  */
+
+/**
+ * Check if an origin is allowed for CORS (M2M API)
+ *
+ * Uses base_domain from airports.json config. Allows https://{base_domain},
+ * https://*.{base_domain}, and localhost for dev.
+ *
+ * @param string|null $origin The Origin header value (e.g. "https://kspb.aviationwx.org")
+ * @param string|null $baseDomain Base domain from config (e.g. "aviationwx.org"). When null, uses getBaseDomain().
+ * @return string|null The origin if allowed, null if not
+ */
+function getCorsAllowOriginForAviationWx(?string $origin, ?string $baseDomain = null): ?string
+{
+    if ($origin === null || $origin === '') {
+        return null;
+    }
+
+    $parsed = parse_url($origin);
+    if ($parsed === false || !isset($parsed['host'])) {
+        return null;
+    }
+
+    $host = strtolower($parsed['host']);
+    $scheme = $parsed['scheme'] ?? '';
+
+    $domain = $baseDomain ?? (function_exists('getBaseDomain') ? getBaseDomain() : 'aviationwx.org');
+    $domain = strtolower($domain);
+    $escaped = preg_quote($domain, '/');
+
+    if ($scheme === 'https' && ($host === $domain || preg_match('/^([a-z0-9-]+\.)*' . $escaped . '$/', $host))) {
+        return $origin;
+    }
+
+    if ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1'], true)) {
+        return $origin;
+    }
+
+    return null;
+}
 
 /**
  * Send CORS headers for embed widget API endpoints

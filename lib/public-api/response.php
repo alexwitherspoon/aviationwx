@@ -4,9 +4,11 @@
  * 
  * Provides consistent response formatting for all public API endpoints.
  * Includes success responses, error responses, and standard headers.
+ * CORS is tightened to *.aviationwx.org (M2M API, not third-party embeds).
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../cors.php';
 
 /**
  * Standard error codes for the public API
@@ -21,13 +23,14 @@ define('PUBLIC_API_ERROR_SERVICE_UNAVAILABLE', 'SERVICE_UNAVAILABLE');
 
 /**
  * Send a successful JSON response
- * 
+ *
  * @param array $data Response data
  * @param array $meta Optional metadata to include
  * @param int $httpCode HTTP status code (default 200)
  * @param array $extraHeaders Additional headers to send
+ * @param bool $useEmbedCors When true, use permissive CORS (*) for third-party embeds
  */
-function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200, array $extraHeaders = []): void
+function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200, array $extraHeaders = [], bool $useEmbedCors = false): void
 {
     $response = [
         'success' => true,
@@ -37,8 +40,7 @@ function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200
             'attribution' => getPublicApiAttributionText(),
         ], $meta),
     ];
-    
-    // Add data with appropriate key based on content
+
     if (isset($data['airports'])) {
         $response['airports'] = $data['airports'];
     } elseif (isset($data['airport'])) {
@@ -53,23 +55,26 @@ function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200
         $response['frames'] = $data['frames'];
     } elseif (isset($data['status'])) {
         $response['status'] = $data['status'];
+    } elseif (isset($data['embed']) || isset($data['diff'])) {
+        $response['data'] = $data;
     } else {
         $response['data'] = $data;
     }
-    
-    sendPublicApiResponse($response, $httpCode, $extraHeaders);
+
+    sendPublicApiResponse($response, $httpCode, $extraHeaders, $useEmbedCors);
 }
 
 /**
  * Send an error JSON response
- * 
+ *
  * @param string $code Error code constant
  * @param string $message Human-readable error message
  * @param int $httpCode HTTP status code
  * @param int|null $retryAfter Seconds until client can retry (for rate limiting)
  * @param array $extraHeaders Additional headers to send
+ * @param bool $useEmbedCors When true, use permissive CORS (*) for third-party embeds
  */
-function sendPublicApiError(string $code, string $message, int $httpCode = 400, ?int $retryAfter = null, array $extraHeaders = []): void
+function sendPublicApiError(string $code, string $message, int $httpCode = 400, ?int $retryAfter = null, array $extraHeaders = [], bool $useEmbedCors = false): void
 {
     $response = [
         'success' => false,
@@ -78,33 +83,39 @@ function sendPublicApiError(string $code, string $message, int $httpCode = 400, 
             'message' => $message,
         ],
     ];
-    
+
     if ($retryAfter !== null) {
         $response['error']['retry_after'] = $retryAfter;
         $extraHeaders['Retry-After'] = (string)$retryAfter;
     }
-    
-    sendPublicApiResponse($response, $httpCode, $extraHeaders);
+
+    sendPublicApiResponse($response, $httpCode, $extraHeaders, $useEmbedCors);
 }
 
 /**
  * Send a JSON response with headers
- * 
+ *
  * @param array $response Response data
  * @param int $httpCode HTTP status code
  * @param array $extraHeaders Additional headers
+ * @param bool $useEmbedCors When true, use permissive CORS (*) for third-party embeds
  */
-function sendPublicApiResponse(array $response, int $httpCode = 200, array $extraHeaders = []): void
+function sendPublicApiResponse(array $response, int $httpCode = 200, array $extraHeaders = [], bool $useEmbedCors = false): void
 {
-    // Set standard headers
     http_response_code($httpCode);
     header('Content-Type: application/json; charset=utf-8');
-    
-    // CORS headers for public API
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, OPTIONS');
-    header('Access-Control-Allow-Headers: X-API-Key');
-    header('Access-Control-Max-Age: 86400');
+
+    if ($useEmbedCors) {
+        sendEmbedCorsHeaders();
+    } else {
+        $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
+        if ($allowedOrigin !== null) {
+            header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+        }
+        header('Access-Control-Allow-Methods: GET, OPTIONS');
+        header('Access-Control-Allow-Headers: X-API-Key');
+        header('Access-Control-Max-Age: 86400');
+    }
     
     // Send extra headers
     foreach ($extraHeaders as $name => $value) {
@@ -172,16 +183,27 @@ function sendPublicApiCacheHeaders(string $type): void
  */
 function handlePublicApiCorsPreflightIfNeeded(): bool
 {
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(204);
-        header('Access-Control-Allow-Origin: *');
+    if ($_SERVER['REQUEST_METHOD'] !== 'OPTIONS') {
+        return false;
+    }
+
+    $uri = $_SERVER['REQUEST_URI'] ?? $_SERVER['HTTP_X_ORIGINAL_URI'] ?? '';
+    $useEmbedCors = (strpos($uri, '/embed') !== false);
+
+    http_response_code(204);
+    if ($useEmbedCors) {
+        sendEmbedCorsHeaders();
+    } else {
+        $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
+        if ($allowedOrigin !== null) {
+            header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+        }
         header('Access-Control-Allow-Methods: GET, OPTIONS');
         header('Access-Control-Allow-Headers: X-API-Key');
         header('Access-Control-Max-Age: 86400');
-        header('Content-Length: 0');
-        return true;
     }
-    return false;
+    header('Content-Length: 0');
+    return true;
 }
 
 /**

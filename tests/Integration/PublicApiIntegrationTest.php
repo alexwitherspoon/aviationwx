@@ -140,16 +140,16 @@ class PublicApiIntegrationTest extends TestCase
     }
     
     /**
-     * API responses should include CORS headers
+     * API responses should include CORS headers for *.aviationwx.org allowlist
      */
     public function testCorsHeaders_Present(): void
     {
         $this->skipIfApiDisabled();
         
-        $response = $this->apiRequest('/status');
+        $response = $this->apiRequest('/status', ['Origin: https://aviationwx.org']);
         
         $this->assertArrayHasKey('Access-Control-Allow-Origin', $response['headers']);
-        $this->assertEquals('*', $response['headers']['Access-Control-Allow-Origin']);
+        $this->assertEquals('https://aviationwx.org', $response['headers']['Access-Control-Allow-Origin']);
     }
     
     /**

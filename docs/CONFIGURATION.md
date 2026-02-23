@@ -13,7 +13,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `default_timezone` | `UTC` | Fallback timezone for airports |
-| `base_domain` | `aviationwx.org` | Base domain for subdomains |
+| `base_domain` | `aviationwx.org` | Base domain for subdomains. Used for CORS allowlist on M2M API (*.aviationwx.org). |
 | `public_ip` | — | Explicit public IPv4 (for FTP passive mode) |
 | `public_ipv6` | — | Explicit public IPv6 |
 | `upload_hostname` | `upload.{base_domain}` | Hostname for FTP/SFTP uploads |
