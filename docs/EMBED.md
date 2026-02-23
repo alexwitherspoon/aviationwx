@@ -272,12 +272,35 @@ The embed subdomain requires modified security headers to allow iframe embedding
 - Modified CSP `frame-ancestors *` (allows embedding from any origin)
 - Allows connections to `*.aviationwx.org` for webcam images
 
+## Content Security Policy (CSP)
+
+If your site uses a Content Security Policy, add these directives so embeds work:
+
+**Web component** (script + fetch):
+- `script-src` — Include `https://aviationwx.org` and `https://embed.aviationwx.org` (widget script)
+- `connect-src` — Include `https://aviationwx.org` and `https://*.aviationwx.org` (API, webcam images)
+- `style-src` — Include `https://aviationwx.org` and `https://embed.aviationwx.org` (widget CSS)
+
+**iframe embed:**
+- `frame-src` — Include `https://embed.aviationwx.org`
+
+**Example CSP additions** (append to your existing policy):
+```
+script-src ... https://aviationwx.org https://embed.aviationwx.org;
+connect-src ... https://aviationwx.org https://*.aviationwx.org;
+style-src ... https://aviationwx.org https://embed.aviationwx.org;
+frame-src ... https://embed.aviationwx.org;
+```
+
+Sites without CSP (e.g., most WordPress, Squarespace) work without changes. Add these only if the widget fails to load and your console shows CSP violations.
+
 ## Troubleshooting
 
-### Widget not loading in iframe
-- Ensure your site uses HTTPS (some browsers block mixed content)
-- Check that your platform allows iframe embeds
-- Verify the airport ID is correct
+### Widget not loading
+- **HTTPS:** Ensure your site uses HTTPS (browsers block mixed content)
+- **CSP:** If your site has a Content Security Policy, see [Content Security Policy (CSP)](#content-security-policy-csp) above
+- **iframe:** Check that your platform allows iframe embeds
+- **Airport ID:** Verify the airport ID is correct
 
 ### Webcam images not showing
 - Webcam images are fetched from the main dashboard
