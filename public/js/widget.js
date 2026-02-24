@@ -40,13 +40,8 @@
             if (src.startsWith('http')) {
                 try {
                     const url = new URL(src);
-                    // For embed subdomain (embed.example.com), use main domain (example.com)
-                    // This ensures API calls go to the main site
-                    const hostname = url.hostname;
-                    if (hostname.startsWith('embed.')) {
-                        const mainDomain = hostname.substring(6); // Remove 'embed.' prefix
-                        return `${url.protocol}//${mainDomain}`;
-                    }
+                    // Use script's origin for API calls so third-party CSPs that allow
+                    // the script domain (e.g. embed.aviationwx.org) also allow fetches
                     return url.origin;
                 } catch (e) {
                     // Invalid URL, continue checking other scripts
@@ -635,15 +630,17 @@
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
                     const runways = airport.runways || [];
+                    const fullMode = weather.wind_compass_full_mode || null;
                     
-                    // Draw compass with runways
+                    // Draw compass (full mode: runways + wind rose petals when available)
                     window.AviationWX.drawWindCompass(canvas, {
                         windSpeed: weather.wind_speed ?? null,
                         windDirection: weather.wind_direction ?? null,
                         isVRB: (weather.wind_direction_text || '') === 'VRB',
                         runways: runways,
                         isDark: isDark,
-                        size: size
+                        size: size,
+                        fullMode: fullMode
                     });
                 });
             };

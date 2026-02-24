@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/cache-paths.php';
+require_once __DIR__ . '/embed-templates/shared.php';
 
 /** APCu key prefix for embed diff */
 define('EMBED_DIFF_PREFIX', 'aviationwx_embed_');
@@ -44,8 +45,16 @@ function formatEmbedWeatherSources(array $sources): array
  */
 function buildEmbedPayloadByTopic(string $airportId, ?array $weatherData, array $airport): array
 {
+    $weatherDataMerged = $weatherData ?? [];
+    $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weatherDataMerged);
+    $hasFullMode = ($fullModeOptions['runwaySegments'] ?? []) !== []
+        || (isset($fullModeOptions['lastHourWind']) && is_array($fullModeOptions['lastHourWind']));
+    if ($hasFullMode) {
+        $weatherDataMerged['wind_compass_full_mode'] = $fullModeOptions;
+    }
+
     $weatherTopic = [
-        'weather' => $weatherData ?? [],
+        'weather' => $weatherDataMerged,
         'weather_observed_at' => null,
     ];
     if ($weatherData !== null && isset($weatherData['obs_time_primary'])) {
