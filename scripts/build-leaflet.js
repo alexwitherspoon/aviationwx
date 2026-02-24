@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * Build script for Leaflet library
- * 
- * Copies Leaflet files from node_modules to public directories:
- * - leaflet.js → public/js/leaflet.js
- * - leaflet.css → public/css/leaflet.css
- * - images/* → public/images/leaflet/
- * 
+ * Build script for Leaflet and Leaflet.markercluster
+ *
+ * Copies files from node_modules to public directories:
+ * - Leaflet: leaflet.js, leaflet.css, images/* → public/js/, public/css/, public/images/leaflet/
+ * - MarkerCluster: leaflet.markercluster.js, MarkerCluster.css, MarkerCluster.Default.css → public/js/, public/css/
+ *
  * Usage:
  *   node scripts/build-leaflet.js
  */
@@ -15,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const NODE_MODULES_LEAFLET = path.join(__dirname, '..', 'node_modules', 'leaflet', 'dist');
+const NODE_MODULES_MARKERCLUSTER = path.join(__dirname, '..', 'node_modules', 'leaflet.markercluster', 'dist');
 const PUBLIC_JS = path.join(__dirname, '..', 'public', 'js');
 const PUBLIC_CSS = path.join(__dirname, '..', 'public', 'css');
 const PUBLIC_IMAGES = path.join(__dirname, '..', 'public', 'images', 'leaflet');
@@ -95,6 +95,32 @@ if (fs.existsSync(leafletImages)) {
     process.exit(1);
 }
 
-console.log('\n✓ Leaflet build complete!');
+// Copy Leaflet.markercluster
+if (!fs.existsSync(NODE_MODULES_MARKERCLUSTER)) {
+    console.error('❌ Error: leaflet.markercluster not found in node_modules');
+    console.error('   Run: npm install');
+    process.exit(1);
+}
+
+const markerclusterFiles = [
+    { src: 'leaflet.markercluster.js', dest: PUBLIC_JS },
+    { src: 'MarkerCluster.css', dest: PUBLIC_CSS },
+    { src: 'MarkerCluster.Default.css', dest: PUBLIC_CSS },
+];
+
+markerclusterFiles.forEach(({ src, dest }) => {
+    const srcPath = path.join(NODE_MODULES_MARKERCLUSTER, src);
+    const destPath = path.join(dest, src);
+    if (fs.existsSync(srcPath)) {
+        fs.copyFileSync(srcPath, destPath);
+        const stats = fs.statSync(destPath);
+        console.log(`✓ Copied ${src} (${(stats.size / 1024).toFixed(1)} KB)`);
+    } else {
+        console.error(`❌ Error: ${srcPath} not found`);
+        process.exit(1);
+    }
+});
+
+console.log('\n✓ Leaflet and Leaflet.markercluster build complete!');
 console.log('  Files are ready in public/js/, public/css/, and public/images/leaflet/');
 

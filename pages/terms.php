@@ -313,11 +313,36 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                     <li><strong><a href="https://aviationweather.gov" target="_blank" rel="noopener">Aviation Weather Center (aviationweather.gov)</a></strong> - 
                     METAR, TAF, and other official aviation weather products. Public domain as a work of the U.S. Government.</li>
                     <li><strong><a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service (NWS) / NOAA</a></strong> - 
-                    Weather forecasts, observations, and alerts. Public domain as a work of the U.S. Government.</li>
+                    Weather forecasts, observations (ASOS), and alerts. Public domain as a work of the U.S. Government.</li>
+                    <li><strong><a href="https://www.ngdc.noaa.gov/geomag/" target="_blank" rel="noopener">NOAA NCEI Geomagnetic Data</a></strong> - 
+                    Magnetic declination for runway wind diagrams. Public domain as a work of the U.S. Government.</li>
+                    <li><strong><a href="https://dd.weather.gc.ca/" target="_blank" rel="noopener">Environment and Climate Change Canada</a></strong> - 
+                    SWOB-ML weather observations for Canadian automated and manned stations (Nav Canada AWOS/HWOS). 
+                    Data used under Open Government Licence – Canada.</li>
                     <li><strong><a href="https://ourairports.com" target="_blank" rel="noopener">OurAirports</a></strong> - 
                     Airport identifier data (ICAO, IATA, FAA codes) for 40,000+ airports worldwide. 
                     <a href="https://davidmegginson.github.io/ourairports-data/" target="_blank" rel="noopener">Data</a> 
                     released to the Public Domain. We thank David Megginson and the OurAirports community for maintaining this resource.</li>
+                </ul>
+                
+                <h3>Map and Visualization Data</h3>
+                <ul>
+                    <li><strong><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></strong> - 
+                    Base map tiles. © OpenStreetMap contributors. Data licensed under <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">ODbL</a>.</li>
+                    <li><strong><a href="https://openweathermap.org" target="_blank" rel="noopener">OpenWeatherMap</a></strong> - 
+                    Cloud cover map tiles on the airports directory. Subject to OpenWeatherMap terms of service.</li>
+                    <li><strong><a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a></strong> - 
+                    Weather radar overlay tiles. Subject to RainViewer API terms.</li>
+                </ul>
+                
+                <h3>Other Weather and Aviation Data</h3>
+                <ul>
+                    <li><strong><a href="https://awosnet.com" target="_blank" rel="noopener">AWOSnet</a></strong> - 
+                    AWOS station data for participating airports.</li>
+                    <li><strong>FAA NOTAM Management System (NMS)</strong> - 
+                    NOTAM data via CGI Federal API. U.S. Government data; access subject to API terms.</li>
+                    <li><strong><a href="https://pwsweather.com" target="_blank" rel="noopener">PWSWeather</a></strong> - 
+                    Personal weather station data via AerisWeather/XWeather API.</li>
                 </ul>
                 
                 <h3>Partner-Contributed Data</h3>
@@ -356,11 +381,11 @@ header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 3600) . ' GMT');
                 <p>
                     AviationWX.org integrates with various third-party weather station platforms and APIs. While airport 
                     partners authorize us to access and display their station data, the underlying platforms 
-                    (Tempest/WeatherFlow, Davis WeatherLink, Ambient Weather, SynopticData, etc.) have their own terms 
-                    of service. Airport partners are responsible for ensuring their use of these platforms permits 
-                    data sharing with services like AviationWX.org. We believe our non-commercial, safety-focused use 
-                    is consistent with typical personal weather station terms, but we recommend partners review their 
-                    platform's terms if they have concerns.
+                    (Tempest/WeatherFlow, Davis WeatherLink, Ambient Weather, SynopticData, PWSWeather/AerisWeather, 
+                    AWOSnet, etc.) have their own terms of service. Airport partners are responsible for ensuring their 
+                    use of these platforms permits data sharing with services like AviationWX.org. We believe our 
+                    non-commercial, safety-focused use is consistent with typical personal weather station terms, but 
+                    we recommend partners review their platform's terms if they have concerns.
                 </p>
                 
                 <h2>5. API Usage</h2>

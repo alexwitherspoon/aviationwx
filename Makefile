@@ -270,12 +270,12 @@ test-guides: ## Test guides pages (requires running containers)
 	@echo "- Guides index" && curl -sf http://127.0.0.1:8080 -H "Host: guides.localhost" >/dev/null && echo " ✓" || echo " ✗"
 	@echo "- Guides 404" && curl -sf http://127.0.0.1:8080/nonexistent -H "Host: guides.localhost" | grep -q "404" && echo " ✓" || echo " ✗"
 
-# Leaflet library management
-update-leaflet: ## Update Leaflet library (install npm package and copy to public/)
-	@echo "Updating Leaflet library..."
+# Leaflet library management (Leaflet + Leaflet.markercluster)
+update-leaflet: ## Update Leaflet and MarkerCluster (install npm packages and copy to public/)
+	@echo "Updating Leaflet and Leaflet.markercluster..."
 	@npm install
 	@npm run build:leaflet
-	@echo "✓ Leaflet updated successfully"
+	@echo "✓ Leaflet and Leaflet.markercluster updated successfully"
 
 # =============================================================================
 # ISOLATED TEST ENVIRONMENT

@@ -185,6 +185,38 @@ AviationWX supports multiple weather data sources. See the [Configuration Guide]
 - **Health Check**: `/health.php` - Simple health check endpoint
 - **Clear Cache**: `/clear-cache.php` - Clear configuration cache
 
+## Software Dependencies
+
+### Application (shipped with AviationWX)
+
+| Package | Purpose | License |
+|---------|---------|---------|
+| [Parsedown](https://github.com/erusev/parsedown) (erusev/parsedown) | Markdown parsing for guides | MIT |
+| [Leaflet](https://leafletjs.com) | Interactive maps | BSD-2-Clause |
+| [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) | Map marker clustering (airports directory) | MIT |
+
+### System / Runtime (Docker image)
+
+| Tool | Purpose | License |
+|------|---------|---------|
+| [PHP](https://www.php.net) 8.4 + Apache | Runtime (php:8.4-apache base image) | PHP License |
+| [ExifTool](https://exiftool.org) (libimage-exiftool-perl) | EXIF metadata for webcam images | Perl Artistic / GPL |
+| [FFmpeg](https://ffmpeg.org) | Image/video processing for webcam formats | GPL/LGPL |
+| [tini](https://github.com/krallin/tini) | Init process for container | MIT |
+| [Composer](https://getcomposer.org) | PHP dependency manager | MIT |
+| APCu, GD, Zip, pcntl | PHP extensions | PHP License |
+
+### Optional Services (when configured)
+
+- **Cloudflare Web Analytics** – Status page metrics (static.cloudflareinsights.com). CSP allows when enabled.
+- **Cloudflare** – CDN, DNS, analytics API (optional; see docs/CONFIGURATION.md)
+
+### Development Only (not shipped)
+
+- **PHPUnit** (phpunit/phpunit) – Testing (BSD-3-Clause)
+- **ESLint**, **globals** – JavaScript linting
+- **Playwright** (@playwright/test) – Browser tests
+
 ## License
 
 MIT License - See [LICENSE](LICENSE) file
@@ -203,10 +235,26 @@ See [Configuration Guide](docs/CONFIGURATION.md#faa-profile-crop-margins) for te
 
 ## Data Sources
 
-AviationWX uses the following external data sources:
+AviationWX uses the following external data sources. See [Terms of Service](https://terms.aviationwx.org) for full attribution and licensing details.
 
-- **Airport Identifiers (ICAO, IATA, FAA)**: Airport code validation uses data from [OurAirports](https://ourairports.com/data/) (Public Domain). OurAirports provides comprehensive airport data with 40,000+ airports worldwide, updated nightly. This data is used to validate ICAO, IATA, and FAA identifiers in the airport configuration.
-- **ICAO Airport Codes (Legacy)**: For backward compatibility, airport code validation also supports data from [lxndrblz/Airports](https://github.com/lxndrblz/Airports) (CC-BY-SA-4.0 license) as a fallback. Note: This data source is incomplete and may not include all valid ICAO codes.
+### Weather Data
+- **Aviation Weather Center** ([aviationweather.gov](https://aviationweather.gov)) – METAR, TAF (U.S. Government, public domain)
+- **National Weather Service** ([weather.gov](https://www.weather.gov)) – ASOS observations (U.S. Government, public domain)
+- **NOAA NCEI** ([geomag](https://www.ngdc.noaa.gov/geomag/)) – Magnetic declination (U.S. Government, public domain)
+- **Environment Canada** ([dd.weather.gc.ca](https://dd.weather.gc.ca/)) – SWOB-ML for Canadian stations (Open Government Licence – Canada)
+- **AWOSnet** ([awosnet.com](https://awosnet.com)) – AWOS station data
+- **PWSWeather** ([pwsweather.com](https://pwsweather.com)) – Via AerisWeather/XWeather API
+- **Tempest, Ambient, Davis WeatherLink, SynopticData** – Partner weather station platforms
+
+### Map and Tiles
+- **OpenStreetMap** ([openstreetmap.org](https://www.openstreetmap.org/copyright)) – Base map (ODbL)
+- **OpenWeatherMap** ([openweathermap.org](https://openweathermap.org)) – Cloud cover tiles
+- **RainViewer** ([rainviewer.com](https://www.rainviewer.com)) – Radar overlay tiles
+
+### Airport and Aviation Data
+- **OurAirports** ([ourairports.com/data](https://ourairports.com/data/)) – Airport identifiers, ICAO/IATA/FAA (Public Domain)
+- **lxndrblz/Airports** ([GitHub](https://github.com/lxndrblz/Airports)) – ICAO fallback (CC-BY-SA-4.0)
+- **FAA NOTAM** – Via CGI Federal NMS API (U.S. Government)
 
 ## Contributing
 

@@ -1,8 +1,13 @@
 version: 2
-# Note: Dependabot security updates are enabled by default on GitHub repositories
-# and work automatically - they create PRs immediately when vulnerabilities are detected.
-# Security updates bypass the schedule and PR limits configured below.
-# They are automatically labeled with "security" and "dependencies".
+# Dependabot configuration for AviationWX.org
+# Security updates: enabled by default, create PRs immediately, bypass schedule/limits.
+#
+# Ecosystems configured:
+#   - composer:  / (Parsedown, PHPUnit)
+#   - npm:       / (Leaflet, Leaflet.markercluster)
+#   - npm:       /tests/Browser (Playwright)
+#   - docker:    /docker (Dockerfile, docker-compose)
+#   - github-actions: / (.github/workflows)
 
 updates:
   # PHP dependencies via Composer
@@ -40,7 +45,7 @@ updates:
       prefix: "chore"
       include: "scope"
 
-  # JavaScript dependencies via npm (root - Leaflet library)
+  # JavaScript dependencies via npm (root - Leaflet, Leaflet.markercluster)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -53,12 +58,12 @@ updates:
     labels:
       - "dependencies"
       - "javascript"
-      - "leaflet"
+      - "frontend"
     commit-message:
       prefix: "chore"
       include: "scope"
 
-  # Docker base image updates
+  # Docker base image updates (Dockerfile, docker-compose)
   - package-ecosystem: "docker"
     directory: "/docker"
     schedule:
