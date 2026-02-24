@@ -90,6 +90,13 @@ class WebcamApiReliabilityTest extends TestCase
             // If Content-Length is not present, at least verify body has content
             $this->assertGreaterThan(0, strlen($response['body']), 'Body should have content');
         }
+
+        // Integrity headers (ETag, Content-Digest, Content-MD5)
+        $this->assertArrayHasKey('etag', $response['headers'], 'Should have ETag for conditional requests');
+        $this->assertArrayHasKey('content-digest', $response['headers'], 'Should have Content-Digest (RFC 9530)');
+        $this->assertArrayHasKey('content-md5', $response['headers'], 'Should have Content-MD5 for legacy clients');
+        $this->assertStringStartsWith('W/"', $response['headers']['etag'], 'ETag should be weak format');
+        $this->assertStringStartsWith('sha-256=:', $response['headers']['content-digest'], 'Content-Digest should be RFC 9530 format');
     }
     
     /**

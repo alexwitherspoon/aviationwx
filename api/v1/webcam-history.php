@@ -251,11 +251,15 @@ function handleGetHistoricalFrame(string $airportId, int $camIndex, int $timesta
     $variant = ($size === 'original') ? 'original' : (int)$size;
     $filename = $timestamp . '_' . $variant . '.' . $format;
     
+    require_once __DIR__ . '/../../lib/http-integrity.php';
+    if (addIntegrityHeadersForFile($cacheFile, $mtime)) {
+        return;
+    }
+
     // Send headers
     header('Content-Type: ' . $contentType);
     header('Content-Disposition: inline; filename="' . $filename . '"');
     header('Content-Length: ' . $fileSize);
-    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     
     // Immutable cache - historical frames never change
     header('Cache-Control: public, max-age=31536000, immutable');

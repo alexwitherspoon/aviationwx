@@ -147,7 +147,24 @@ switch ($style) {
         $widgetHtml = '<div class="no-data"><p>Style not supported</p></div>';
 }
 
-// Return widget HTML only (no page wrapper)
+require_once __DIR__ . '/../lib/http-integrity.php';
+$digest = computeContentDigestFromString($widgetHtml);
+$md5 = computeContentMd5FromString($widgetHtml);
+$etag = '"' . base64_encode(hash('sha256', $widgetHtml, true)) . '"';
+$ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+if ($ifNoneMatch !== '') {
+    foreach (array_map('trim', explode(',', $ifNoneMatch)) as $candidate) {
+        if ($candidate === $etag || $candidate === '*') {
+            http_response_code(304);
+            sendEmbedCorsHeaders();
+            header('ETag: ' . $etag);
+            exit;
+        }
+    }
+}
 header('Content-Type: text/html; charset=utf-8');
-header('Cache-Control: public, max-age=0, must-revalidate'); // Don't cache - always get fresh HTML
+header('Cache-Control: public, max-age=0, must-revalidate');
+header('ETag: ' . $etag);
+header('Content-Digest: ' . $digest);
+header('Content-MD5: ' . $md5);
 echo $widgetHtml;

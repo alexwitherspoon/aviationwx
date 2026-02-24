@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/../cors.php';
+require_once __DIR__ . '/../http-integrity.php';
 
 /**
  * Standard error codes for the public API
@@ -102,8 +103,35 @@ function sendPublicApiError(string $code, string $message, int $httpCode = 400, 
  */
 function sendPublicApiResponse(array $response, int $httpCode = 200, array $extraHeaders = [], bool $useEmbedCors = false): void
 {
+    $body = json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $digest = computeContentDigestFromString($body);
+    $md5 = computeContentMd5FromString($body);
+    $etag = '"' . base64_encode(hash('sha256', $body, true)) . '"';
+
+    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    if ($ifNoneMatch !== '') {
+        foreach (array_map('trim', explode(',', $ifNoneMatch)) as $candidate) {
+            if ($candidate === $etag || $candidate === '*') {
+                http_response_code(304);
+                if ($useEmbedCors) {
+                    sendEmbedCorsHeaders();
+                } else {
+                    $allowedOrigin = getCorsAllowOriginForAviationWx($_SERVER['HTTP_ORIGIN'] ?? null);
+                    if ($allowedOrigin !== null) {
+                        header('Access-Control-Allow-Origin: ' . $allowedOrigin);
+                    }
+                }
+                header('ETag: ' . $etag);
+                return;
+            }
+        }
+    }
+
     http_response_code($httpCode);
     header('Content-Type: application/json; charset=utf-8');
+    header('ETag: ' . $etag);
+    header('Content-Digest: ' . $digest);
+    header('Content-MD5: ' . $md5);
 
     if ($useEmbedCors) {
         sendEmbedCorsHeaders();
@@ -117,12 +145,11 @@ function sendPublicApiResponse(array $response, int $httpCode = 200, array $extr
         header('Access-Control-Max-Age: 86400');
     }
     
-    // Send extra headers
     foreach ($extraHeaders as $name => $value) {
         header($name . ': ' . $value);
     }
     
-    echo json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    echo $body;
 }
 
 /**

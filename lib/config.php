@@ -1181,6 +1181,52 @@ function getWebcamHistoryUIConfig(string $airportId): array {
 }
 
 /**
+ * Get HTTP integrity digest cache TTL in seconds
+ *
+ * Matches the oldest content we cache digests for: webcam history images
+ * (webcam_history_retention_hours) and weather data (weather_history_retention_hours).
+ * Uses the maximum across all airports and global config.
+ *
+ * Supports explicit override via config.http_integrity_digest_cache_ttl_seconds.
+ *
+ * @return int TTL in seconds (minimum 3600)
+ */
+function getHttpIntegrityDigestTtlSeconds(): int {
+    $config = loadConfig();
+    if ($config === null) {
+        return 86400; // 24h default when config unavailable
+    }
+
+    $cfg = $config['config'] ?? [];
+    if (isset($cfg['http_integrity_digest_cache_ttl_seconds'])) {
+        $override = (int)$cfg['http_integrity_digest_cache_ttl_seconds'];
+        return max(3600, $override);
+    }
+
+    $maxHours = 24.0;
+
+    // Global webcam history retention
+    if (isset($cfg['webcam_history_retention_hours'])) {
+        $maxHours = max($maxHours, (float)$cfg['webcam_history_retention_hours']);
+    }
+
+    // Weather history retention (public API)
+    $publicApi = $cfg['public_api'] ?? [];
+    if (isset($publicApi['weather_history_retention_hours'])) {
+        $maxHours = max($maxHours, (float)$publicApi['weather_history_retention_hours']);
+    }
+
+    // Per-airport webcam retention overrides (may exceed global)
+    foreach ($config['airports'] ?? [] as $airport) {
+        if (isset($airport['webcam_history_retention_hours'])) {
+            $maxHours = max($maxHours, (float)$airport['webcam_history_retention_hours']);
+        }
+    }
+
+    return (int)max(3600, ceil($maxHours * 3600));
+}
+
+/**
  * Get typical refresh rate for an airport's webcams (for legacy conversion)
  * 
  * @param string $airportId Airport ID

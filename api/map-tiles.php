@@ -187,6 +187,11 @@ if ($useCachedTile) {
     $source = $isRainViewer ? 'rainviewer' : 'openweathermap';
     metrics_track_tile_serve($source);
     
+    require_once __DIR__ . '/../lib/http-integrity.php';
+    $mtime = filemtime($cachePath);
+    if (addIntegrityHeadersForFile($cachePath, $mtime)) {
+        exit;
+    }
     // Set appropriate headers for cached content
     header('Content-Type: image/png');
     header('Cache-Control: public, max-age=' . (TILE_CACHE_TTL - $age));
@@ -262,7 +267,16 @@ if (is_dir($cacheDir) && is_writable($cacheDir)) {
 $source = $isRainViewer ? 'rainviewer' : 'openweathermap';
 metrics_track_tile_serve($source);
 
-// Serve the tile
+require_once __DIR__ . '/../lib/http-integrity.php';
+$digest = computeContentDigestFromString($tileData);
+$md5 = computeContentMd5FromString($tileData);
+$etag = '"' . base64_encode(hash('sha256', $tileData, true)) . '"';
+if (maybeSend304IfUnchanged($etag, time())) {
+    exit;
+}
+header('ETag: ' . $etag);
+header('Content-Digest: ' . $digest);
+header('Content-MD5: ' . $md5);
 header('Content-Type: image/png');
 header('Content-Length: ' . strlen($tileData));
 header('Cache-Control: public, max-age=' . TILE_CACHE_TTL);

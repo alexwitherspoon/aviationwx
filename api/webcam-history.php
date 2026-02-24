@@ -170,6 +170,11 @@ if ($timestamp !== null) {
     $retentionSeconds = $retentionHours * 3600;
     $cacheMaxAge = max(86400, min(2592000, $retentionSeconds));
     
+    require_once __DIR__ . '/../lib/http-integrity.php';
+    $mtime = filemtime($imageFile);
+    if (addIntegrityHeadersForFile($imageFile, $mtime)) {
+        exit;
+    }
     header('Content-Type: ' . $supportedFormats[$servedFormat]);
     header('Content-Disposition: inline; filename="' . $filename . '"');
     header("Cache-Control: public, max-age={$cacheMaxAge}, immutable");

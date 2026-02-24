@@ -22,6 +22,7 @@ require_once __DIR__ . '/../lib/weather/history.php';
 require_once __DIR__ . '/../lib/cache-headers.php';
 require_once __DIR__ . '/../lib/cors.php';
 require_once __DIR__ . '/../lib/heading-conversion.php';
+require_once __DIR__ . '/../lib/http-integrity.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
@@ -264,6 +265,8 @@ function generateMockWeatherData($airportId, $airport) {
             header($name . ': ' . $value);
         }
         header('ETag: ' . $etag);
+        header('Content-Digest: ' . computeContentDigestFromString($body));
+        header('Content-MD5: ' . computeContentMd5FromString($body));
         header('Vary: Accept');
         header('X-Cache-Status: MOCK');
         
@@ -364,7 +367,10 @@ function generateMockWeatherData($airportId, $airport) {
             }
             
             ob_clean();
-            echo json_encode($payload, $debugMode ? JSON_PRETTY_PRINT : 0);
+            $body = json_encode($payload, $debugMode ? JSON_PRETTY_PRINT : 0);
+            header('Content-Digest: ' . computeContentDigestFromString($body));
+            header('Content-MD5: ' . computeContentMd5FromString($body));
+            echo $body;
             exit;
         }
     } elseif (file_exists($weatherCacheFile) && !$forceRefresh) {
@@ -433,7 +439,10 @@ function generateMockWeatherData($airportId, $airport) {
             
             // Serve stale data immediately with flush
             ob_clean();
-            echo json_encode($payload, $debugMode ? JSON_PRETTY_PRINT : 0);
+            $body = json_encode($payload, $debugMode ? JSON_PRETTY_PRINT : 0);
+            header('Content-Digest: ' . computeContentDigestFromString($body));
+            header('Content-MD5: ' . computeContentMd5FromString($body));
+            echo $body;
             
             // Flush output to client immediately
             if (function_exists('fastcgi_finish_request')) {
@@ -783,6 +792,8 @@ function generateMockWeatherData($airportId, $airport) {
     header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $airportWeatherRefresh) . ' GMT');
     header('Vary: Accept');
     header('X-Cache-Status: MISS');
+    header('Content-Digest: ' . computeContentDigestFromString($body));
+    header('Content-MD5: ' . computeContentMd5FromString($body));
 
     ob_clean();
     aviationwx_log('info', 'weather request success', ['airport' => $airportId], 'user');

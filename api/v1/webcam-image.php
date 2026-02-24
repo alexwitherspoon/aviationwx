@@ -138,6 +138,12 @@ function handleGetWebcamImage(array $params, array $context): void
         // Build filename: {airport}_{cam}_{timestamp}.jpg
         $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}.jpg";
         
+        require_once __DIR__ . '/../../lib/http-integrity.php';
+        $mtime = filemtime($originalJpg);
+        if (addIntegrityHeadersForFile($originalJpg, $mtime)) {
+            exit;
+        }
+
         // Force download with proper filename
         header('Content-Type: image/jpeg');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -529,11 +535,17 @@ function sendImageResponse(
         $webcamRefresh = intval($cam['refresh_seconds']);
     }
     
+    require_once __DIR__ . '/../../lib/http-integrity.php';
+
+    // Integrity headers (ETag, Content-Digest, Content-MD5) - 304 if unchanged
+    if (addIntegrityHeadersForFile($cacheFile, $mtime)) {
+        return;
+    }
+
     // Send headers
     header('Content-Type: ' . $contentType);
     header('Content-Disposition: inline; filename="' . $filename . '"');
     header('Content-Length: ' . $fileSize);
-    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     
     // Cache headers: browser cache matches refresh interval, CDN uses half (min 5s)
     $headers = generateCacheHeaders($webcamRefresh, $webcamRefresh);

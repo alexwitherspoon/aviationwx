@@ -145,6 +145,11 @@ function servePlaceholder() {
         if ($placeholderPath !== null && file_exists($placeholderPath)) {
             $size = @filesize($placeholderPath);
             if ($size > 0) {
+                require_once __DIR__ . '/../lib/http-integrity.php';
+                $mtime = @filemtime($placeholderPath) ?: time();
+                if (addIntegrityHeadersForFile($placeholderPath, $mtime)) {
+                    exit;
+                }
                 header('Content-Type: ' . $contentType);
                 header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
                 header('X-Cache-Status: MISS'); // Placeholder served - no cache
@@ -157,11 +162,15 @@ function servePlaceholder() {
         }
         
         // Fallback to base64 1x1 transparent PNG if all else fails
+        $pngData = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        require_once __DIR__ . '/../lib/http-integrity.php';
+        header('Content-Digest: ' . computeContentDigestFromString($pngData));
+        header('Content-MD5: ' . computeContentMd5FromString($pngData));
         header('Content-Type: image/png');
         header('Cache-Control: public, max-age=' . PLACEHOLDER_CACHE_TTL);
         header('X-Cache-Status: MISS');
         header('Content-Length: 95');
-        echo base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        echo $pngData;
     } else {
         // Headers already sent - log warning in non-CLI mode
         if (php_sapi_name() !== 'cli') {
@@ -618,6 +627,10 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
         if ($originalJpg === null) {
             $originalJpg = getImagePathForSize($airportId, $camIndex, $requestedTimestamp, 'original', 'webp');
             if ($originalJpg !== null) {
+                require_once __DIR__ . '/../lib/http-integrity.php';
+                if (addIntegrityHeadersForFile($originalJpg)) {
+                    exit;
+                }
                 header('Content-Type: image/webp');
                 header('Content-Disposition: attachment; filename="' . strtolower($airportId) . "_{$camIndex}_{$requestedTimestamp}.webp\"");
                 header('Content-Length: ' . filesize($originalJpg));
@@ -651,6 +664,11 @@ if (isset($_GET['download']) && $_GET['download'] == '1') {
     }
 
     $filename = strtolower($airportId) . "_{$camIndex}_{$timestamp}.jpg";
+    require_once __DIR__ . '/../lib/http-integrity.php';
+    $mtime = filemtime($originalJpg);
+    if (addIntegrityHeadersForFile($originalJpg, $mtime)) {
+        exit;
+    }
     header('Content-Type: image/jpeg');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Content-Length: ' . filesize($originalJpg));
@@ -1138,6 +1156,16 @@ function serve200Response(string $filePath, string $contentType, ?int $mtime = n
         // No cache info - basic headers
         header('Cache-Control: public, max-age=0, must-revalidate');
     }
+
+    require_once __DIR__ . '/../lib/http-integrity.php';
+    $digest = computeFileContentDigest($filePath);
+    if ($digest !== null) {
+        header('Content-Digest: ' . $digest);
+    }
+    $md5 = computeFileContentMd5($filePath);
+    if ($md5 !== null) {
+        header('Content-MD5: ' . $md5);
+    }
     
     // Use existing serveFile() function
     if (!serveFile($filePath, $contentType)) {
@@ -1375,14 +1403,15 @@ if ($requestedTimestamp !== null && $requestedTimestamp > 0) {
             $variant = ($requestedSize === 'original') ? 'original' : (int)$requestedSize;
             $filename = $requestedTimestamp . '_' . $variant . '.' . $requestedFormat;
             
+            require_once __DIR__ . '/../lib/http-integrity.php';
+            if (addIntegrityHeadersForFile($timestampFile, $mtime !== false ? $mtime : null)) {
+                exit;
+            }
             header('Content-Type: ' . $mimeType);
             header('Content-Disposition: inline; filename="' . $filename . '"');
             header('Cache-Control: public, max-age=31536000, immutable');
             header('Content-Length: ' . filesize($timestampFile));
             header('X-Content-Type-Options: nosniff');
-            if ($mtime !== false) {
-                header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
-            }
             
             readfile($timestampFile);
             exit;
@@ -1700,6 +1729,15 @@ if (ob_get_level() > 0) {
     @ob_end_clean(); // Clear buffer before sending file (consistent with fresh cache path)
 }
 
+require_once __DIR__ . '/../lib/http-integrity.php';
+$digest = computeFileContentDigest($targetFile);
+if ($digest !== null) {
+    header('Content-Digest: ' . $digest);
+}
+$md5 = computeFileContentMd5($targetFile);
+if ($md5 !== null) {
+    header('Content-MD5: ' . $md5);
+}
 if (!serveFile($targetFile, $ctype)) {
     aviationwx_log('error', 'webcam failed to serve stale file', ['airport' => $airportId, 'cam' => $camIndex, 'file' => $targetFile], 'app');
     servePlaceholder();

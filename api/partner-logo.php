@@ -128,10 +128,8 @@ header('Content-Type: ' . $contentType);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 header('X-Cache-Status: ' . ($remainingTime > 0 ? 'HIT' : 'STALE'));
 
-// Conditional requests
-$ifModSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
-if ($ifModSince && strtotime($ifModSince) >= $mtime) {
-    http_response_code(304);
+require_once __DIR__ . '/../lib/http-integrity.php';
+if (addIntegrityHeadersForFile($cacheFile, $mtime)) {
     exit;
 }
 
