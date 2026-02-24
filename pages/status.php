@@ -5,7 +5,6 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
-require_once __DIR__ . '/../lib/sentry-js.php';
 require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
@@ -128,10 +127,6 @@ if (php_sapi_name() === 'cli') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <?php
-    // Initialize Sentry JavaScript SDK for frontend error tracking
-    renderSentryJsInit('status');
-    ?>
     <title>AviationWX Status</title>
     
     <?php

@@ -172,53 +172,6 @@ function aviationwx_log(string $level, string $message, array $context = [], str
     $logFile = aviationwx_get_log_file_path($logType);
     aviationwx_rotate_log_if_needed($logFile);
     @file_put_contents($logFile, $jsonLine, FILE_APPEND | LOCK_EX);
-    
-    // Send errors/critical to Sentry
-    if (defined('SENTRY_INITIALIZED') && SENTRY_INITIALIZED) {
-        $sentryLevels = ['error', 'critical', 'alert', 'emergency'];
-        
-        if (in_array($level, $sentryLevels, true)) {
-            // Map severity
-            $sentryLevel = match($level) {
-                'error' => \Sentry\Severity::error(),
-                'critical', 'alert', 'emergency' => \Sentry\Severity::fatal(),
-                default => \Sentry\Severity::warning(),
-            };
-            
-            // Add breadcrumb for context
-            \Sentry\addBreadcrumb(new \Sentry\Breadcrumb(
-                \Sentry\Breadcrumb::LEVEL_INFO,
-                \Sentry\Breadcrumb::TYPE_DEFAULT,
-                'log',
-                $message,
-                $context
-            ));
-            
-            // Capture with context
-            \Sentry\withScope(function (\Sentry\State\Scope $scope) use ($message, $sentryLevel, $context, $logType): void {
-                // Add tags for filtering
-                $scope->setTag('log_type', $logType);
-                
-                if (isset($context['source'])) {
-                    $scope->setTag('log_source', $context['source']);
-                }
-                
-                if (isset($context['airport_id'])) {
-                    $scope->setTag('airport_id', $context['airport_id']);
-                }
-                
-                if (isset($context['weather_source'])) {
-                    $scope->setTag('weather_source', $context['weather_source']);
-                }
-                
-                // Add full context as additional data
-                $scope->setContext('log_context', $context);
-                
-                // Send event
-                \Sentry\captureMessage($message, $sentryLevel);
-            });
-        }
-    }
 }
 }
 

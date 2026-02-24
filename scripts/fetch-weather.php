@@ -10,7 +10,6 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
-require_once __DIR__ . '/../lib/sentry.php'; // Initialize Sentry early
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/process-pool.php';
 
@@ -58,15 +57,6 @@ function getWeatherBaseUrl() {
  * @return bool True on success, false on failure
  */
 function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType) {
-    // Set Sentry service context for this worker
-    sentrySetServiceContext('worker-weather', ['airport_id' => $airportId]);
-    
-    // Start performance tracing
-    $transaction = sentryStartTransaction('worker.weather', "fetch_weather_{$airportId}", [
-        'airport_id' => $airportId,
-        'trigger' => $triggerType,
-    ]);
-    
     $weatherUrl = $baseUrl . '/weather.php?airport=' . urlencode($airportId);
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -142,7 +132,6 @@ function processAirportWeather($airportId, $baseUrl, $invocationId, $triggerType
         $success = false;
     }
     
-    sentryFinishTransaction($transaction);
     return $success;
 }
 

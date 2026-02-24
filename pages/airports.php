@@ -5,7 +5,6 @@
  */
 
 // Note: config.php is already loaded by index.php
-require_once __DIR__ . '/../lib/sentry-js.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/weather/utils.php';
@@ -138,10 +137,6 @@ $breadcrumbs = generateBreadcrumbSchema([
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <?php
-    // Initialize Sentry JavaScript SDK for frontend error tracking
-    renderSentryJsInit('directory');
-    ?>
     <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php

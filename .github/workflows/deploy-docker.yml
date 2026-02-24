@@ -1405,9 +1405,8 @@ jobs:
       - name: Deploy environment configuration
         run: |
           GIT_SHA="${{ steps.determine-sha.outputs.deploy_sha_short }}"
-          SENTRY_DSN="${{ secrets.SENTRY_DSN }}"
           
-          ssh ${{ secrets.USER }}@${{ secrets.HOST }} "GIT_SHA='${GIT_SHA}' SENTRY_DSN='${SENTRY_DSN}' bash -s" << 'ENVEOF'
+          ssh ${{ secrets.USER }}@${{ secrets.HOST }} "GIT_SHA='${GIT_SHA}' bash -s" << 'ENVEOF'
           set -euo pipefail
           
           echo "Creating production environment configuration..."
@@ -1430,13 +1429,6 @@ jobs:
           
           # Git release tracking
           GIT_SHA=${GIT_SHA}
-          
-          # Sentry error tracking and performance monitoring
-          SENTRY_DSN=${SENTRY_DSN}
-          SENTRY_ENVIRONMENT=production
-          SENTRY_SAMPLE_RATE_ERRORS=1.0
-          SENTRY_SAMPLE_RATE_TRACES=0.05
-          SENTRY_RELEASE=${GIT_SHA}
           INNEREOF
           
           # Secure the file (only owner can read)

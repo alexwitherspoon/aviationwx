@@ -6,7 +6,6 @@ header('Expires: 0');
 
 // Load SEO utilities and config (for getGitSha function)
 require_once __DIR__ . '/../lib/config.php';
-require_once __DIR__ . '/../lib/sentry-js.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/cloudflare-analytics.php';
@@ -116,10 +115,6 @@ $ogImage = file_exists($aboutPhotoWebp)
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <?php
-    // Initialize Sentry JavaScript SDK for frontend error tracking
-    renderSentryJsInit('homepage');
-    ?>
     <title><?= htmlspecialchars($pageTitle) ?></title>
     
     <?php

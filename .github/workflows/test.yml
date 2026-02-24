@@ -49,49 +49,6 @@ jobs:
         run: |
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-progress
       
-      - name: Validate Sentry Integration (CI Environment)
-        env:
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          SENTRY_ENVIRONMENT: ci
-          APP_ENV: ci
-        run: |
-          echo "Testing Sentry integration in CI environment..."
-          php << 'PHPEOF'
-          <?php
-          require_once __DIR__ . '/vendor/autoload.php';
-          require_once __DIR__ . '/lib/config.php';
-          require_once __DIR__ . '/lib/sentry.php';
-          
-          echo "Environment Check:\n";
-          echo "  CI: " . (getenv('CI') ?: 'false') . "\n";
-          echo "  APP_ENV: " . (getenv('APP_ENV') ?: 'not set') . "\n";
-          echo "  SENTRY_DSN: " . (getenv('SENTRY_DSN') ? 'SET' : 'NOT SET') . "\n";
-          echo "  SENTRY_ENVIRONMENT: " . (getenv('SENTRY_ENVIRONMENT') ?: 'not set') . "\n\n";
-          
-          $result = initSentry();
-          echo "initSentry(): " . ($result ? 'TRUE ✅' : 'FALSE ❌') . "\n";
-          
-          if (!$result) {
-              echo "\n⚠️  Sentry not initialized (expected if DSN not configured)\n";
-              exit(0);  // Not an error - just means DSN isn't set
-          }
-          
-          echo "\n✅ Sentry initialized in CI environment\n";
-          echo "Testing transaction creation...\n";
-          
-          // Test the code path that was broken in production
-          $transaction = sentryStartTransaction('test', 'ci_validation', ['ci' => 'true']);
-          if ($transaction === null) {
-              echo "❌ Transaction creation failed\n";
-              exit(1);
-          }
-          
-          echo "✅ Transaction created successfully\n";
-          sentryFinishTransaction($transaction);
-          
-          echo "✅ Sentry integration validated (init, transaction, finish)\n";
-          PHPEOF
-      
       - name: Validate PHP syntax
         run: |
           echo "Checking PHP syntax..."

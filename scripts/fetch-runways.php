@@ -12,7 +12,6 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
-require_once __DIR__ . '/../lib/sentry.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/runways.php';
@@ -376,8 +375,6 @@ function mergeRunwaySources(array $faa, array $ourairports, array $airportCenter
 if (php_sapi_name() !== 'cli') {
     exit(1);
 }
-
-sentrySetServiceContext('fetch-runways', ['process' => 'cli']);
 
 $fp = acquireRunwaysFetchLock();
 if ($fp === false) {

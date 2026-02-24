@@ -177,9 +177,9 @@ The CSP is configured in `docker/nginx.conf` with different policies for differe
 ```
 default-src 'self';
 img-src 'self' data: blob: https:;
-script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://browser.sentry-cdn.com;
+script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com;
 style-src 'self' 'unsafe-inline';
-connect-src 'self' https://cloudflareinsights.com https://api.rainviewer.com https://tilecache.rainviewer.com https://tile.openweathermap.org https://*.sentry.io https://*.ingest.us.sentry.io https://*.ingest.eu.sentry.io;
+connect-src 'self' https://cloudflareinsights.com https://api.rainviewer.com https://tilecache.rainviewer.com https://tile.openweathermap.org;
 worker-src 'self' blob:;
 frame-ancestors 'self';
 base-uri 'self';
@@ -188,12 +188,6 @@ form-action 'self';
 
 **Embed Subdomain** (`embed.aviationwx.org`):
 - Same as main site but with `frame-ancestors *` to allow embedding anywhere
-
-### Sentry Error Tracking
-
-The CSP allows Sentry for frontend error and performance monitoring:
-- ✅ **Sentry SDK** (`browser.sentry-cdn.com`) - Script loading
-- ✅ **Sentry Ingest & Bug Report** (`*.sentry.io`) - Event submission, regional ingest (us/eu/etc.), and error embed dialog
 
 ### Cloudflare Integration
 
