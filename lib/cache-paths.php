@@ -13,7 +13,8 @@
  * │       └── {airport}.json       # 24-hour weather history
  * ├── webcams/
  * │   └── {airport}/{camIndex}/
- * │       ├── {timestamp}_{variant}.{format}  # Timestamped images (current & historical)
+ * │       ├── {YYYY-MM-DD}/{HH}/   # Date/hour subdirs (~500 files each)
+ * │       │   └── {timestamp}_{variant}.{format}
  * │       ├── current.{format}     # Symlink to latest timestamped image
  * │       ├── pull_metadata.json   # Pull cameras: ETag + checksum for conditional/unchanged skip
  * │       └── state.json           # Push webcam state (last_processed)
@@ -29,9 +30,11 @@
  * ├── partners/
  * │   └── {hash}.{ext}             # Partner logo cache
  * ├── map_tiles/
- * │   └── {layer}/
- * │       └── {z}_{x}_{y}.png      # Cached map tiles (OpenWeatherMap proxy)
- * ├── rate_limits/                 # Rate limit state files
+ * │   └── {layer}/{z}/{x}/
+ * │       └── {y}.png              # Hierarchical tile cache (limits files per dir)
+ * ├── rate_limits/
+ * │   └── {prefix}/                # First 2 chars of hash (git-style sharding)
+ * │       └── {hash}.json          # Rate limit state files
  * ├── backoff.json                 # Circuit breaker state
  * ├── peak_gusts/                  # Per-airport daily peak gust tracking
  * │   └── {airport}.json
@@ -117,7 +120,7 @@ function getWebcamAirportDir(string $airportId): string {
 
 /**
  * Get directory for a specific camera's cache files
- * 
+ *
  * @param string $airportId Airport identifier (e.g., 'kczk')
  * @param int $camIndex Camera index (0-based)
  * @return string Full path to camera's cache directory
@@ -127,15 +130,72 @@ function getWebcamCameraDir(string $airportId, int $camIndex): string {
 }
 
 /**
- * Get path to camera history directory
- * 
- * @deprecated History is now stored directly in the camera cache directory.
- *             Use getWebcamCameraDir() instead. This function is kept for
- *             backward compatibility with tests and migration scripts.
- * 
+ * Get date/hour subdir for webcam frames (limits files per directory)
+ *
+ * Format: YYYY-MM-DD/HH (UTC). With 60s refresh, ~60 frames/hour × 8 files ≈ 480 files per hour dir.
+ *
+ * @param int $timestamp Unix timestamp
+ * @return string Relative subdir path (e.g., '2026-02-24/14')
+ */
+function getWebcamFramesSubdir(int $timestamp): string {
+    $date = gmdate('Y-m-d', $timestamp);
+    $hour = gmdate('H', $timestamp);
+    return $date . '/' . $hour;
+}
+
+/**
+ * Get full path to webcam frames directory for a timestamp
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
- * @return string Full path to legacy camera history directory
+ * @param int $timestamp Unix timestamp
+ * @return string Full path to frames subdir
+ */
+function getWebcamFramesDir(string $airportId, int $camIndex, int $timestamp): string {
+    return getWebcamCameraDir($airportId, $camIndex) . '/' . getWebcamFramesSubdir($timestamp);
+}
+
+/**
+ * Get all timestamped image file paths for a camera (scans date/hour subdirs)
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @param string $pattern Glob pattern for files (e.g., '*_*.{jpg,jpeg,webp}' or '*_original.{jpg,jpeg,webp}')
+ * @return array List of full paths to matching files
+ */
+function getWebcamImageFiles(string $airportId, int $camIndex, string $pattern = '*_*.{jpg,jpeg,webp}'): array {
+    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+    if (!is_dir($cacheDir)) {
+        return [];
+    }
+    $files = [];
+    // glob doesn't recurse; scan date/hour subdirs explicitly
+    $dateDirs = glob($cacheDir . '/????-??-??', GLOB_ONLYDIR);
+    if ($dateDirs !== false) {
+        foreach ($dateDirs as $dateDir) {
+            $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+            if ($hourDirs !== false) {
+                foreach ($hourDirs as $hourDir) {
+                    $hourFiles = glob($hourDir . '/' . $pattern, GLOB_BRACE);
+                    if ($hourFiles !== false) {
+                        $files = array_merge($files, $hourFiles);
+                    }
+                }
+            }
+        }
+    }
+    return $files;
+}
+
+/**
+ * Get path to camera history directory
+ *
+ * @deprecated History is now stored directly in the camera cache directory.
+ *             Use getWebcamCameraDir() instead. Kept for backward compatibility.
+ *
+ * @param string $airportId Airport identifier
+ * @param int $camIndex Camera index (0-based)
+ * @return string Full path to camera history directory
  */
 function getWebcamHistoryDir(string $airportId, int $camIndex): string {
     return getWebcamCameraDir($airportId, $camIndex) . '/history';
@@ -192,12 +252,14 @@ function getCacheSymlinkPath(string $airportId, int $camIndex, string $format): 
  * @return string Full path to timestamped image
  */
 function getWebcamTimestampedPath(string $airportId, int $camIndex, int $timestamp, string $variant, string $format): string {
-    return getWebcamCameraDir($airportId, $camIndex) . '/' . $timestamp . '_' . $variant . '.' . $format;
+    return getWebcamFramesDir($airportId, $camIndex, $timestamp) . '/' . $timestamp . '_' . $variant . '.' . $format;
 }
 
 /**
  * Get path to timestamped original webcam image
- * 
+ *
+ * Stored in date/hour subdir to limit files per directory (~500/hour).
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp
@@ -205,12 +267,14 @@ function getWebcamTimestampedPath(string $airportId, int $camIndex, int $timesta
  * @return string Full path to timestamped original image
  */
 function getWebcamOriginalTimestampedPath(string $airportId, int $camIndex, int $timestamp, string $format): string {
-    return getWebcamCameraDir($airportId, $camIndex) . '/' . $timestamp . '_original.' . $format;
+    return getWebcamFramesDir($airportId, $camIndex, $timestamp) . '/' . $timestamp . '_original.' . $format;
 }
 
 /**
  * Get path to timestamped variant webcam image (by height)
- * 
+ *
+ * Stored in date/hour subdir to limit files per directory.
+ *
  * @param string $airportId Airport identifier
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp
@@ -219,7 +283,7 @@ function getWebcamOriginalTimestampedPath(string $airportId, int $camIndex, int 
  * @return string Full path to timestamped variant image
  */
 function getWebcamVariantPath(string $airportId, int $camIndex, int $timestamp, int $height, string $format): string {
-    return getWebcamCameraDir($airportId, $camIndex) . '/' . $timestamp . '_' . $height . '.' . $format;
+    return getWebcamFramesDir($airportId, $camIndex, $timestamp) . '/' . $timestamp . '_' . $height . '.' . $format;
 }
 
 /**
@@ -444,12 +508,15 @@ if (!defined('CACHE_RATE_LIMITS_DIR')) {
 
 /**
  * Get path to rate limit state file
- * 
+ *
+ * Uses prefix subdir (first 2 chars of identifier) to limit files per directory.
+ *
  * @param string $identifier Rate limit identifier (e.g., IP address hash)
  * @return string Full path to rate limit file
  */
 function getRateLimitPath(string $identifier): string {
-    return CACHE_RATE_LIMITS_DIR . '/' . $identifier . '.json';
+    $prefix = strlen($identifier) >= 2 ? substr($identifier, 0, 2) : $identifier;
+    return CACHE_RATE_LIMITS_DIR . '/' . $prefix . '/' . $identifier . '.json';
 }
 
 // =============================================================================
@@ -657,7 +724,9 @@ function getMapTileLayerDir(string $layer): string {
 
 /**
  * Get path to cached map tile
- * 
+ *
+ * Uses hierarchical {layer}/{z}/{x}/{y}.png to limit files per directory.
+ *
  * @param string $layer Layer type (e.g., 'clouds_new')
  * @param int $z Zoom level
  * @param int $x Tile X coordinate
@@ -665,7 +734,7 @@ function getMapTileLayerDir(string $layer): string {
  * @return string Full path to cached tile
  */
 function getMapTileCachePath(string $layer, int $z, int $x, int $y): string {
-    return getMapTileLayerDir($layer) . '/' . $z . '_' . $x . '_' . $y . '.png';
+    return getMapTileLayerDir($layer) . '/' . $z . '/' . $x . '/' . $y . '.png';
 }
 
 // =============================================================================

@@ -67,8 +67,21 @@ if (is_dir(CACHE_WEBCAMS_DIR)) {
         $issues[] = "❌ cache/webcams is not writable (perms: {$perms}, owner: {$owner})";
     }
     
-    // Show cache stats (recursive in new directory structure)
-    $cacheFiles = glob(CACHE_WEBCAMS_DIR . '/*/*/*.{jpg,webp}', GLOB_BRACE) ?: [];
+    $cacheFiles = [];
+    $airportDirs = glob(CACHE_WEBCAMS_DIR . '/*', GLOB_ONLYDIR) ?: [];
+    foreach ($airportDirs as $airportDir) {
+        $camDirs = glob($airportDir . '/*', GLOB_ONLYDIR) ?: [];
+        foreach ($camDirs as $camDir) {
+            $dateDirs = glob($camDir . '/????-??-??', GLOB_ONLYDIR) ?: [];
+            foreach ($dateDirs as $dateDir) {
+                $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR) ?: [];
+                foreach ($hourDirs as $hourDir) {
+                    $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE) ?: [];
+                    $cacheFiles = array_merge($cacheFiles, $hourFiles);
+                }
+            }
+        }
+    }
     $cacheCount = count($cacheFiles);
     $cacheSize = 0;
     foreach ($cacheFiles as $file) {

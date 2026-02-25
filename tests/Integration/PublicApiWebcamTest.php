@@ -24,7 +24,7 @@ class PublicApiWebcamTest extends TestCase
     }
     
     /**
-     * Create test images for testing
+     * Create test images for testing (uses date/hour subdir structure)
      */
     private static function createTestImages(): void
     {
@@ -34,9 +34,14 @@ class PublicApiWebcamTest extends TestCase
         }
         
         $timestamp = time();
+        $framesDir = getWebcamFramesDir(self::$testAirport, self::$testCam, $timestamp);
+        if (!is_dir($framesDir)) {
+            mkdir($framesDir, 0755, true);
+        }
+        $subdir = getWebcamFramesSubdir($timestamp);
         
-        // Create original JPG
-        $originalJpg = $cacheDir . '/' . $timestamp . '_original.jpg';
+        // Create original JPG in date/hour subdir
+        $originalJpg = $framesDir . '/' . $timestamp . '_original.jpg';
         $img = imagecreatetruecolor(800, 600);
         $blue = imagecolorallocate($img, 0, 0, 255);
         imagefill($img, 0, 0, $blue);
@@ -47,12 +52,12 @@ class PublicApiWebcamTest extends TestCase
         if (file_exists($originalSymlink)) {
             @unlink($originalSymlink);
         }
-        @symlink(basename($originalJpg), $originalSymlink);
+        @symlink($subdir . '/' . $timestamp . '_original.jpg', $originalSymlink);
         
         // Create sized variants in WebP (config has 1080, 720, 360)
         $variants = [1080 => [800, 600], 720 => [720, 540], 360 => [360, 270]];
         foreach ($variants as $height => $dims) {
-            $webpFile = $cacheDir . '/' . $timestamp . '_' . $height . '.webp';
+            $webpFile = $framesDir . '/' . $timestamp . '_' . $height . '.webp';
             if (function_exists('imagewebp')) {
                 $img = imagecreatetruecolor($dims[0], $dims[1]);
                 $red = imagecolorallocate($img, 255, 0, 0);
@@ -113,6 +118,10 @@ class PublicApiWebcamTest extends TestCase
     {
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1');
         
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+        
         // Should return 200 OK
         $this->assertEquals(200, $response['status'], 'Metadata endpoint should return 200');
         $this->assertStringContainsString('application/json', $response['content_type'], 'Should return JSON');
@@ -145,6 +154,10 @@ class PublicApiWebcamTest extends TestCase
     {
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1');
         
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+        
         $data = $response['json'];
         $formats = $data['data']['formats'] ?? [];
         
@@ -161,6 +174,10 @@ class PublicApiWebcamTest extends TestCase
     public function testMetadataEndpoint_ProvidesWorkingUrls(): void
     {
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?metadata=1');
+        
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
         
         $data = $response['json'];
         $urls = $data['data']['urls'] ?? [];
@@ -197,6 +214,10 @@ class PublicApiWebcamTest extends TestCase
     {
         // Request WebP for original (which typically doesn't exist - only variants have WebP)
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image?fmt=webp');
+        
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
         
         // Should return 400 Bad Request with helpful error
         $this->assertEquals(400, $response['status'], 
@@ -254,6 +275,10 @@ class PublicApiWebcamTest extends TestCase
     {
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/image');
         
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+        
         // Should return 200 with JPG (or 503 if no image available)
         $this->assertContains($response['status'], [200, 503], 
             'Default request should return 200 or 503');
@@ -291,6 +316,10 @@ class PublicApiWebcamTest extends TestCase
         // Use a non-existent webcam
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/99/image?metadata=1');
         
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
+        
         // Should return 503 or 404
         $this->assertContains($response['status'], [404, 503], 
             'Non-existent webcam should return 404 or 503');
@@ -304,6 +333,10 @@ class PublicApiWebcamTest extends TestCase
     public function testHistoryEndpoint_ReturnsFrameList(): void
     {
         $response = $this->apiRequest('/airports/' . self::$testAirport . '/webcams/' . self::$testCam . '/history');
+        
+        if ($response['status'] === 0) {
+            $this->markTestSkipped('Web server not available at ' . self::$apiBaseUrl);
+        }
         
         // Should return 200 OK, 404 if history not configured, or 429 if rate limited
         $this->assertContains($response['status'], [200, 404, 429], 

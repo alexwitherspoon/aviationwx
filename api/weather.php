@@ -209,11 +209,13 @@ function generateMockWeatherData($airportId, $airport) {
     // Mock weather is enabled when:
     // 1. Using test config (CONFIG_PATH contains airports.json.test), OR
     // 2. Running in test environment (APP_ENV=testing, set by PHPUnit), OR
-    // 3. Explicitly enabled via MOCK_WEATHER=true (manual override)
+    // 3. Explicitly enabled via MOCK_WEATHER=true (manual override), OR
+    // 4. shouldMockExternalServices() (test keys, example.com URLs - local dev with test fixture)
     $envConfigPath = getenv('CONFIG_PATH');
     $isTestConfig = ($envConfigPath && strpos($envConfigPath, 'airports.json.test') !== false);
     $isTestEnvironment = (getenv('APP_ENV') === 'testing');
-    $useMockWeather = $isTestConfig || $isTestEnvironment || (getenv('MOCK_WEATHER') === 'true');
+    $useMockWeather = $isTestConfig || $isTestEnvironment || (getenv('MOCK_WEATHER') === 'true')
+        || (function_exists('shouldMockExternalServices') && shouldMockExternalServices());
     
     if ($useMockWeather) {
         // Generate mock weather data for local testing
@@ -257,6 +259,11 @@ function generateMockWeatherData($airportId, $airport) {
         $payload = ['success' => true, 'weather' => $mockWeather];
         $body = json_encode($payload);
         $etag = 'W/"' . sha1($body) . '"';
+        
+        // Write mock data to cache so v1 API and dashboard can read it
+        ensureCacheDir(CACHE_WEATHER_DIR);
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        @file_put_contents($weatherCacheFile, json_encode($mockWeather));
         
         // Set cache headers (use config default for consistency)
         $defaultWeatherRefresh = getDefaultWeatherRefresh();

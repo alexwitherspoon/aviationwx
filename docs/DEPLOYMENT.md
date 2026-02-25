@@ -633,8 +633,8 @@ docker compose -f docker/docker-compose.prod.yml exec web ps aux | grep cron
 docker compose -f docker/docker-compose.prod.yml exec -T web php scripts/fetch-webcam.php
 
 # Check webcam images exist
-# Cache is in /tmp/aviationwx-cache (ephemeral, cleared on reboot)
-ls -lh /tmp/aviationwx-cache/webcams/*/
+# Cache structure: webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/*.jpg
+ls -lh /tmp/aviationwx-cache/webcams/*/*/
 ```
 
 ### View Logs

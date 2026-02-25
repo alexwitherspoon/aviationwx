@@ -326,9 +326,26 @@ class WebcamApiHelperTest extends TestCase
      */
     public function testFindMostEfficientFormat_AllFormatsAvailable(): void
     {
-        // This test requires mocking getEnabledWebcamFormats()
-        // For now, we'll test the logic assuming all formats are enabled
-        $this->markTestIncomplete('Requires config mocking - test manually with airports.json');
+        $fixture = __DIR__ . '/../Fixtures/airports.json.webp-test';
+        if (!file_exists($fixture)) {
+            $this->markTestSkipped('WebP fixture not found');
+        }
+        $originalPath = getenv('CONFIG_PATH');
+        putenv('CONFIG_PATH=' . $fixture);
+        clearConfigCache();
+        try {
+            $formatStatus = [
+                'jpg' => ['exists' => true, 'mtime' => time(), 'valid' => true, 'size' => 1000],
+                'webp' => ['exists' => true, 'mtime' => time(), 'valid' => true, 'size' => 600]
+            ];
+            $result = findMostEfficientFormat($formatStatus, 'kspb', 0);
+            $this->assertNotNull($result);
+            $this->assertEquals('image/webp', $result['type']);
+            $this->assertStringEndsWith('.webp', $result['file']);
+        } finally {
+            putenv($originalPath !== false ? 'CONFIG_PATH=' . $originalPath : 'CONFIG_PATH');
+            clearConfigCache();
+        }
     }
     
     /**

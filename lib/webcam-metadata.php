@@ -253,14 +253,7 @@ function getWebcamOriginalPath(string $airportId, int $camIndex): ?string {
         }
     }
     
-    // Fallback: find latest timestamped original
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!is_dir($cacheDir)) {
-        return null;
-    }
-    
-    $pattern = $cacheDir . '/*_original.{jpg,jpeg,webp}';
-    $files = glob($pattern, GLOB_BRACE);
+    $files = getWebcamImageFiles($airportId, $camIndex, '*_original.{jpg,jpeg,webp}');
     
     if (empty($files)) {
         return null;
@@ -436,24 +429,7 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
  * @return int Unix timestamp, or 0 if no images found
  */
 function getLatestImageTimestamp(string $airportId, int $camIndex): int {
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!is_dir($cacheDir)) {
-        return 0;
-    }
-    
-    // Find all timestamped files (original or variants)
-    $pattern = $cacheDir . '/*_*.{jpg,jpeg,webp}';
-    $files = glob($pattern, GLOB_BRACE);
-    
-    if (empty($files)) {
-        // Fallback: try without GLOB_BRACE (older PHP versions)
-        $files = array_merge(
-            glob($cacheDir . '/*_*.jpg'),
-            glob($cacheDir . '/*_*.jpeg'),
-            glob($cacheDir . '/*_*.webp')
-        );
-    }
-    
+    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.{jpg,jpeg,webp}');
     if (empty($files)) {
         return 0;
     }
@@ -490,24 +466,7 @@ function getLatestImageTimestamp(string $airportId, int $camIndex): int {
  * @return int Unix timestamp, or 0 if no completed images found
  */
 function getLastCompletedImageTimestamp(string $airportId, int $camIndex): int {
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!is_dir($cacheDir)) {
-        return 0;
-    }
-    
-    // Find all timestamped files (original or variants)
-    $pattern = $cacheDir . '/*_*.{jpg,jpeg,webp}';
-    $files = glob($pattern, GLOB_BRACE);
-    
-    if (empty($files)) {
-        // Fallback: try without GLOB_BRACE (older PHP versions)
-        $files = array_merge(
-            glob($cacheDir . '/*_*.jpg'),
-            glob($cacheDir . '/*_*.jpeg'),
-            glob($cacheDir . '/*_*.webp')
-        );
-    }
-    
+    $files = getWebcamImageFiles($airportId, $camIndex, '*_*.{jpg,jpeg,webp}');
     if (empty($files)) {
         return 0;
     }

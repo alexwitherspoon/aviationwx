@@ -86,12 +86,25 @@ function checkSystemHealth(): array {
                 $latestCacheMtime = $webcamMtime;
             }
             
-            // Scan all airport directories
             $airportDirs = glob($webcamCacheDir . '/*', GLOB_ONLYDIR);
             foreach ($airportDirs as $airportDir) {
                 $camDirs = glob($airportDir . '/*', GLOB_ONLYDIR);
                 foreach ($camDirs as $camDir) {
-                    $files = glob($camDir . '/*.{jpg,webp}', GLOB_BRACE);
+                    $dateDirs = glob($camDir . '/????-??-??', GLOB_ONLYDIR);
+                    $files = [];
+                    if ($dateDirs !== false) {
+                        foreach ($dateDirs as $dateDir) {
+                            $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+                            if ($hourDirs !== false) {
+                                foreach ($hourDirs as $hourDir) {
+                                    $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
+                                    if ($hourFiles !== false) {
+                                        $files = array_merge($files, $hourFiles);
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if ($files) {
                         foreach ($files as $file) {
                             // Skip symlinks to avoid double-counting
@@ -1142,7 +1155,21 @@ function checkAirportHealth(string $airportId, array $airport): array {
         if (is_dir($airportWebcamDir)) {
             $camDirs = glob($airportWebcamDir . '/*', GLOB_ONLYDIR);
             foreach ($camDirs as $camDir) {
-                $files = glob($camDir . '/*.{jpg,webp}', GLOB_BRACE);
+                $dateDirs = glob($camDir . '/????-??-??', GLOB_ONLYDIR);
+                $files = [];
+                if ($dateDirs !== false) {
+                    foreach ($dateDirs as $dateDir) {
+                        $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+                        if ($hourDirs !== false) {
+                            foreach ($hourDirs as $hourDir) {
+                                $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
+                                if ($hourFiles !== false) {
+                                    $files = array_merge($files, $hourFiles);
+                                }
+                            }
+                        }
+                    }
+                }
                 if ($files) {
                     foreach ($files as $file) {
                         // Skip symlinks to avoid double-counting; skip missing (staging files can be deleted mid-scan)

@@ -926,13 +926,13 @@ Override margins for specific cameras with unusual timestamp positions:
 
 ## Webcam History (Time-lapse)
 
-Stores recent frames for time-lapse playback. All webcam images (current and historical) are stored in a unified directory structure at `cache/webcams/{airport}/{cam}/`.
+Stores recent frames for time-lapse playback. Webcam images are stored at `cache/webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/`.
 
 ### Storage Architecture
 
-- **Unified Storage**: All webcam images stored directly in the camera cache directory
-- **No Separate History Folder**: Timestamped files serve as both current and historical images
-- **Symlinks**: `current.jpg`, `current.webp` point to the latest timestamped image
+- **Date/Hour Subdirs**: `{YYYY-MM-DD}/{HH}/` limits files per directory (~500/hour)
+- **Unified Storage**: Timestamped files serve as both current and historical images
+- **Symlinks**: `current.jpg`, `original.jpg` at camera root point to latest in date/hour subdir
 - **Retention**: Controlled by `webcam_history_retention_hours` config
 
 ### Configuration
@@ -1524,10 +1524,13 @@ curl http://localhost:8080/api/weather.php?airport=kspb
 | `cache/weather/{airport}.json` | Cached weather data |
 | `cache/weather/history/{airport}.json` | Weather history (24h) |
 | `cache/webcams/{airport}/{cam}/` | Webcam images (current and historical) |
+| `cache/webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/` | Date/hour subdirs (~500 files each) |
+| `cache/webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/{ts}_original.{ext}` | Original timestamped images |
+| `cache/webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/{ts}_{height}.{ext}` | Variant timestamped images |
 | `cache/webcams/{airport}/{cam}/pull_metadata.json` | Pull cameras: ETag + checksum for conditional/unchanged skip |
-| `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink) |
-| `cache/webcams/{airport}/{cam}/{ts}_original.{ext}` | Original timestamped webcam images |
-| `cache/webcams/{airport}/{cam}/{ts}_{height}.{ext}` | Variant timestamped webcam images (height in pixels) |
+| `cache/webcams/{airport}/{cam}/current.{ext}` | Latest webcam (symlink to date/hour subdir) |
+| `cache/map_tiles/{layer}/{z}/{x}/{y}.png` | Map tile cache (hierarchical) |
+| `cache/rate_limits/{prefix}/{hash}.json` | Rate limit state (prefix = first 2 chars of hash) |
 | `cache/ftp/{airport}/{username}/` | FTP push uploads (ftp:www-data 2775) |
 | `/var/sftp/{username}/` | SFTP chroot (root:root 755) - outside cache |
 | `/var/sftp/{username}/files/` | SFTP push uploads (ftp:www-data 2775) |

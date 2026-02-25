@@ -164,9 +164,23 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetEnabledWebcamFormats_WebpEnabled_ReturnsJpgAndWebp(): void
     {
-        // This test would require mocking the config, which is complex
-        // For now, we'll test the logic with a note that it requires config setup
-        $this->markTestIncomplete('Requires config mocking - test manually with airports.json');
+        $fixture = __DIR__ . '/../Fixtures/airports.json.webp-test';
+        if (!file_exists($fixture)) {
+            $this->markTestSkipped('WebP fixture not found');
+        }
+        $originalPath = getenv('CONFIG_PATH');
+        putenv('CONFIG_PATH=' . $fixture);
+        clearConfigCache();
+        try {
+            $result = getEnabledWebcamFormats();
+            $this->assertIsArray($result);
+            $this->assertContains('jpg', $result);
+            $this->assertContains('webp', $result);
+            $this->assertCount(2, $result);
+        } finally {
+            putenv($originalPath !== false ? 'CONFIG_PATH=' . $originalPath : 'CONFIG_PATH');
+            clearConfigCache();
+        }
     }
 
     /**
@@ -174,9 +188,22 @@ class WebcamFormatGenerationTest extends TestCase
      */
     public function testGetEnabledWebcamFormats_BothEnabled_ReturnsAllFormats(): void
     {
-        // This test would require mocking the config, which is complex
-        // For now, we'll test the logic with a note that it requires config setup
-        $this->markTestIncomplete('Requires config mocking - test manually with airports.json');
+        $fixture = __DIR__ . '/../Fixtures/airports.json.webp-test';
+        if (!file_exists($fixture)) {
+            $this->markTestSkipped('WebP fixture not found');
+        }
+        $originalPath = getenv('CONFIG_PATH');
+        putenv('CONFIG_PATH=' . $fixture);
+        clearConfigCache();
+        try {
+            $result = getEnabledWebcamFormats();
+            $this->assertIsArray($result);
+            $this->assertContains('jpg', $result);
+            $this->assertContains('webp', $result);
+        } finally {
+            putenv($originalPath !== false ? 'CONFIG_PATH=' . $originalPath : 'CONFIG_PATH');
+            clearConfigCache();
+        }
     }
 
     /**
@@ -248,14 +275,16 @@ class WebcamFormatGenerationTest extends TestCase
     }
 
     /**
-     * Test getFinalFilePath() returns timestamp-based path format
+     * Test getFinalFilePath() returns timestamp-based path format (date/hour subdir)
      */
     public function testGetFinalFilePath_ReturnsTimestampBasedPath(): void
     {
         $timestamp = 1703700000;
         $path = getFinalFilePath('kspb', 0, 'jpg', $timestamp);
         $this->assertStringContainsString('cache/webcams', $path);
-        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
+        $this->assertStringContainsString('kspb/0/', $path);
+        $this->assertStringContainsString('1703700000_original.jpg', $path);
+        $this->assertMatchesRegularExpression('#\d{4}-\d{2}-\d{2}/\d{2}/#', $path);
         $this->assertFalse(str_ends_with($path, '.tmp'), 'Final path should not end with .tmp');
     }
 
@@ -296,14 +325,15 @@ class WebcamFormatGenerationTest extends TestCase
     }
 
     /**
-     * Test getTimestampCacheFilePath() returns timestamp-based path
+     * Test getTimestampCacheFilePath() returns timestamp-based path (date/hour subdir)
      */
     public function testGetTimestampCacheFilePath_ReturnsTimestampPath(): void
     {
         $timestamp = 1703700000;
         $path = getTimestampCacheFilePath('kspb', 0, $timestamp, 'jpg', 'original');
         $this->assertStringContainsString('cache/webcams', $path);
-        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
+        $this->assertStringContainsString('kspb/0/', $path);
+        $this->assertStringContainsString('1703700000_original.jpg', $path);
     }
 
     /**
@@ -872,12 +902,14 @@ class WebcamFormatGenerationTest extends TestCase
     }
     
     /**
-     * Test getTimestampCacheFilePath() - With variant
+     * Test getTimestampCacheFilePath() - With variant (uses date/hour subdir)
      */
     public function testGetTimestampCacheFilePath_WithVariant_IncludesVariant(): void
     {
         $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'original');
-        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
+        $this->assertStringContainsString('kspb/0/', $path);
+        $this->assertStringContainsString('1703700000_original.jpg', $path);
+        $this->assertMatchesRegularExpression('#\d{4}-\d{2}-\d{2}/\d{2}/#', $path);
     }
     
     /**
@@ -886,7 +918,7 @@ class WebcamFormatGenerationTest extends TestCase
     public function testGetTimestampCacheFilePath_WithoutVariant_UsesPrimary(): void
     {
         $path = getTimestampCacheFilePath('kspb', 0, 1703700000, 'jpg', 'original');
-        $this->assertStringContainsString('kspb/0/1703700000_original.jpg', $path);
+        $this->assertStringContainsString('1703700000_original.jpg', $path);
     }
 }
 

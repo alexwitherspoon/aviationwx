@@ -70,13 +70,12 @@ function storeVariantManifest(string $airportId, int $camIndex, int $timestamp, 
         ], 86400);
     }
     
-    // Write to disk as JSON for persistence across restarts
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!is_dir($cacheDir)) {
-        return false;
+    $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+    if (!is_dir($framesDir)) {
+        ensureCacheDir($framesDir);
     }
     
-    $manifestFile = $cacheDir . '/' . $timestamp . '_manifest.json';
+    $manifestFile = $framesDir . '/' . $timestamp . '_manifest.json';
     $jsonData = json_encode($manifest, JSON_PRETTY_PRINT);
     if ($jsonData === false) {
         return false;
@@ -105,13 +104,7 @@ function getVariantManifest(string $airportId, int $camIndex, int $timestamp): ?
         }
     }
     
-    // Fall back to disk
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!is_dir($cacheDir)) {
-        return null;
-    }
-    
-    $manifestFile = $cacheDir . '/' . $timestamp . '_manifest.json';
+    $manifestFile = getWebcamFramesDir($airportId, $camIndex, $timestamp) . '/' . $timestamp . '_manifest.json';
     if (!file_exists($manifestFile)) {
         return null;
     }
@@ -191,16 +184,9 @@ function getVariantCoverage(string $airportId, int $camIndex, ?int $timestamp = 
         return 0.0;
     }
     
-    // Count actual files on disk
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    if (!is_dir($cacheDir)) {
-        return 0.0;
-    }
-    
     $actualTimestamp = $timestamp ?? $manifest['timestamp'];
     $available = 0;
     
-    // Check original
     if ($manifest['original']['exists'] ?? false) {
         $originalFormat = $manifest['original']['format'] ?? 'jpg';
         require_once __DIR__ . '/webcam-metadata.php';
@@ -210,10 +196,9 @@ function getVariantCoverage(string $airportId, int $camIndex, ?int $timestamp = 
         }
     }
     
-    // Check variants
     foreach ($manifest['variants'] as $height => $formats) {
         foreach ($formats as $format) {
-            $variantPath = $cacheDir . '/' . $actualTimestamp . '_' . $height . '.' . $format;
+            $variantPath = getWebcamVariantPath($airportId, $camIndex, $actualTimestamp, (int)$height, $format);
             if (file_exists($variantPath)) {
                 $available++;
             }

@@ -287,10 +287,9 @@ function getWebcamCacheDir(string $airportId, int $camIndex): string {
 
 /**
  * Get timestamp-based cache file path
- * 
- * Files are stored in airport/camera-specific directories to prevent collisions.
- * Format: cache/webcams/{airportId}/{camIndex}/{timestamp}_{variant}.{format}
- * 
+ *
+ * Files stored in date/hour subdirs: {airportId}/{camIndex}/{YYYY-MM-DD}/{HH}/{timestamp}_{variant}.{format}
+ *
  * @param string $airportId Airport ID (e.g., 'kspb')
  * @param int $camIndex Camera index (0-based)
  * @param int $timestamp Unix timestamp for the image
@@ -299,8 +298,8 @@ function getWebcamCacheDir(string $airportId, int $camIndex): string {
  * @return string Timestamp-based cache file path
  */
 function getTimestampCacheFilePath(string $airportId, int $camIndex, int $timestamp, string $format, string|int $variant = 'original'): string {
-    $cacheDir = getWebcamCacheDir($airportId, $camIndex);
-    return $cacheDir . '/' . $timestamp . '_' . $variant . '.' . $format;
+    $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+    return $framesDir . '/' . $timestamp . '_' . $variant . '.' . $format;
 }
 
 // getCacheSymlinkPath() is now defined in cache-paths.php
@@ -510,10 +509,23 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
     // Ensure at least 1 frame is kept (the current image)
     $maxFrames = max(1, $maxFrames);
     
-    // Get all timestamp-based files (format: {timestamp}_{variant}.{format})
-    // Exclude symlinks and staging files
-    $allFiles = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
-    if ($allFiles === false || empty($allFiles)) {
+    // Get all timestamp-based files from date/hour subdirs
+    $allFiles = [];
+    $dateDirs = glob($cacheDir . '/????-??-??', GLOB_ONLYDIR);
+    if ($dateDirs !== false) {
+        foreach ($dateDirs as $dateDir) {
+            $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+            if ($hourDirs !== false) {
+                foreach ($hourDirs as $hourDir) {
+                    $files = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
+                    if ($files !== false) {
+                        $allFiles = array_merge($allFiles, $files);
+                    }
+                }
+            }
+        }
+    }
+    if (empty($allFiles)) {
         return 0;
     }
     
@@ -540,7 +552,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
         return 0;
     }
     
-    // Get all symlink targets to protect them from deletion
+    // Get symlink targets to protect from deletion (targets are in date/hour subdirs)
     $symlinkTargets = [];
     $symlinks = glob($cacheDir . '/current.*');
     if ($symlinks !== false) {
@@ -548,7 +560,6 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
             if (is_link($symlink)) {
                 $target = readlink($symlink);
                 if ($target !== false) {
-                    // Resolve relative path
                     $targetPath = $target[0] === '/' ? $target : dirname($symlink) . '/' . $target;
                     $realTarget = realpath($targetPath);
                     if ($realTarget !== false) {
@@ -581,8 +592,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
                 $cleaned++;
             }
         }
-        // Also delete the manifest file for this timestamp
-        $manifestFile = $cacheDir . '/' . $timestamp . '_manifest.json';
+        $manifestFile = getWebcamFramesDir($airportId, $camIndex, $timestamp) . '/' . $timestamp . '_manifest.json';
         @unlink($manifestFile);
         unset($timestampFiles[$timestamp]);
     }
@@ -606,8 +616,7 @@ function cleanupOldTimestampFiles(string $airportId, int $camIndex, ?int $keepCo
                     $cleaned++;
                 }
             }
-            // Also delete the manifest file for this timestamp
-            $manifestFile = $cacheDir . '/' . $timestamp . '_manifest.json';
+            $manifestFile = getWebcamFramesDir($airportId, $camIndex, $timestamp) . '/' . $timestamp . '_manifest.json';
             @unlink($manifestFile);
             unset($timestampFiles[$timestamp]);
         }
@@ -1068,10 +1077,13 @@ function updateCacheSymlink(string $symlinkPath, string $targetPath): bool {
         @unlink($tempSymlink);
     }
     
-    // Create symlink to target (relative path for portability)
+    // Symlink target: relative path from camera dir to file in date/hour subdir
     $targetBasename = basename($targetPath);
-    $symlinkDir = dirname($symlinkPath);
-    $relativeTarget = $targetBasename;
+    if (preg_match('/^(\d+)_/', $targetBasename, $m)) {
+        $relativeTarget = getWebcamFramesSubdir((int)$m[1]) . '/' . $targetBasename;
+    } else {
+        $relativeTarget = $targetBasename;
+    }
     
     if (!@symlink($relativeTarget, $tempSymlink)) {
         return false;
@@ -1121,13 +1133,12 @@ function promoteFormats(string $airportId, int $camIndex, array $formatResults, 
         }
     }
     
-    // Always try to promote the source format first
     $sourceStagingFile = getStagingFilePath($airportId, $camIndex, $sourceFormat);
     $sourceTimestampFile = getFinalFilePath($airportId, $camIndex, $sourceFormat, $timestamp);
     $sourceSymlink = getCacheSymlinkPath($airportId, $camIndex, $sourceFormat);
     
     if (file_exists($sourceStagingFile)) {
-        // Rename staging file to timestamp-based file
+        ensureCacheDir(getWebcamFramesDir($airportId, $camIndex, $timestamp));
         if (@rename($sourceStagingFile, $sourceTimestampFile)) {
             // Track successful image verification (centralized for all camera types)
             trackWebcamImageVerified($airportId, $camIndex);
@@ -1298,6 +1309,7 @@ function generateVariantsFromOriginal(string $sourceFile, string $airportId, int
     $originalPreserved = false;
     
     if (!file_exists($originalPath)) {
+        ensureCacheDir(getWebcamFramesDir($airportId, $camIndex, $timestamp));
         // Move source to original location (preserves EXIF automatically)
         // rename() is atomic and preserves all metadata including EXIF
         if (@rename($sourceFile, $originalPath)) {
@@ -1632,14 +1644,14 @@ function buildVariantCommandByFormat(string $sourceFile, string $destFile, strin
  * @return void
  */
 function updateWebcamSymlinks(string $airportId, int $camIndex, int $timestamp, array $promoted, string $originalPath, string $sourceFormat): void {
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
+    $framesSubdir = getWebcamFramesSubdir($timestamp);
     
     $originalSymlink = getWebcamOriginalSymlinkPath($airportId, $camIndex, $sourceFormat);
     if (file_exists($originalSymlink) || is_link($originalSymlink)) {
         @unlink($originalSymlink);
     }
-    $originalBasename = basename($originalPath);
-    @symlink($originalBasename, $originalSymlink);
+    $originalTarget = $framesSubdir . '/' . basename($originalPath);
+    @symlink($originalTarget, $originalSymlink);
     
     foreach ($promoted as $height => $formats) {
         foreach ($formats as $format => $path) {
@@ -1649,12 +1661,10 @@ function updateWebcamSymlinks(string $airportId, int $camIndex, int $timestamp, 
             if (is_link($currentSymlink)) {
                 $currentTarget = readlink($currentSymlink);
                 if ($currentTarget !== false) {
-                    // Extract timestamp and height: {timestamp}_{height}.{format}
-                    if (preg_match('/^(\d+)_(\d+)\.' . preg_quote($format, '/') . '$/', $currentTarget, $matches)) {
+                    // Match date/hour path: {date}/{hour}/{timestamp}_{height}.{format}
+                    if (preg_match('#\d{4}-\d{2}-\d{2}/\d{2}/(\d+)_(\d+)\.' . preg_quote($format, '/') . '$#', $currentTarget, $matches)) {
                         $currentTimestamp = (int)$matches[1];
                         $currentHeight = (int)$matches[2];
-                        
-                        // Update if newer timestamp, or same timestamp but higher resolution
                         if ($timestamp > $currentTimestamp || ($timestamp === $currentTimestamp && $height > $currentHeight)) {
                             $shouldUpdate = true;
                         }
@@ -1672,8 +1682,8 @@ function updateWebcamSymlinks(string $airportId, int $camIndex, int $timestamp, 
                 if (file_exists($currentSymlink) || is_link($currentSymlink)) {
                     @unlink($currentSymlink);
                 }
-                $basename = basename($path);
-                @symlink($basename, $currentSymlink);
+                $target = $framesSubdir . '/' . basename($path);
+                @symlink($target, $currentSymlink);
             }
         }
     }

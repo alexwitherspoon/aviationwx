@@ -36,9 +36,21 @@ class MapTilesCacheTest extends TestCase
     {
         $testDir = CACHE_MAP_TILES_DIR . '/test_layer';
         if (is_dir($testDir)) {
-            $files = glob($testDir . '/*.png');
+            $files = glob($testDir . '/*/*/*.png');
             foreach ($files as $file) {
                 @unlink($file);
+            }
+            $dirs = glob($testDir . '/*/*', GLOB_ONLYDIR);
+            if ($dirs !== false) {
+                foreach ($dirs as $dir) {
+                    @rmdir($dir);
+                }
+            }
+            $dirs = glob($testDir . '/*', GLOB_ONLYDIR);
+            if ($dirs !== false) {
+                foreach ($dirs as $dir) {
+                    @rmdir($dir);
+                }
             }
             @rmdir($testDir);
         }
@@ -81,17 +93,17 @@ class MapTilesCacheTest extends TestCase
     public function testGetMapTileCachePath_ReturnsCorrectPath()
     {
         $testCases = [
-            ['clouds_new', 5, 10, 12, '5_10_12.png'],
-            ['precipitation_new', 3, 5, 8, '3_5_8.png'],
-            ['temp_new', 10, 512, 387, '10_512_387.png'],
-            ['wind_new', 0, 0, 0, '0_0_0.png'],
+            ['clouds_new', 5, 10, 12, '5/10/12.png'],
+            ['precipitation_new', 3, 5, 8, '3/5/8.png'],
+            ['temp_new', 10, 512, 387, '10/512/387.png'],
+            ['wind_new', 0, 0, 0, '0/0/0.png'],
         ];
         
-        foreach ($testCases as [$layer, $z, $x, $y, $expectedFilename]) {
+        foreach ($testCases as [$layer, $z, $x, $y, $expectedSuffix]) {
             $path = getMapTileCachePath($layer, $z, $x, $y);
             
             $this->assertStringContainsString($layer, $path, "Path should contain layer name: $layer");
-            $this->assertStringEndsWith($expectedFilename, $path, "Path should end with correct filename");
+            $this->assertStringEndsWith($expectedSuffix, $path, "Path should end with correct path");
             $this->assertStringContainsString('.png', $path, 'Path should have .png extension');
         }
     }

@@ -1,0 +1,14 @@
+{
+  "config": {
+    "default_timezone": "UTC",
+    "webcam_generate_webp": true,
+    "webcam_variant_heights": [1080, 720, 360]
+  },
+  "airports": {
+    "kspb": {
+      "name": "Scappoose Airport",
+      "enabled": true,
+      "webcams": [{"name": "Test", "url": "https://example.com/cam.jpg"}]
+    }
+  }
+}

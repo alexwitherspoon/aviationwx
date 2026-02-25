@@ -21,10 +21,17 @@ class RateLimitTest extends TestCase
     
     protected function tearDown(): void
     {
-        // Clean up test rate limit files
-        $files = glob($this->testCacheDir . '/rate_limit_*.json');
-        foreach ($files as $file) {
-            @unlink($file);
+        $prefixDirs = glob(CACHE_RATE_LIMITS_DIR . '/*', GLOB_ONLYDIR);
+        if ($prefixDirs !== false) {
+            foreach ($prefixDirs as $dir) {
+                $files = glob($dir . '/*.json');
+                if ($files !== false) {
+                    foreach ($files as $file) {
+                        @unlink($file);
+                    }
+                }
+                @rmdir($dir);
+            }
         }
         parent::tearDown();
     }
@@ -211,8 +218,12 @@ class RateLimitTest extends TestCase
         $maxRequests = 5;
         $windowSeconds = 60;
         
-        // Create a rate limit file with string values (simulating JSON decode issue)
-        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $hash = md5($key . '_' . $ip);
+        $rateLimitFile = getRateLimitPath($hash);
+        $rateLimitDir = dirname($rateLimitFile);
+        if (!is_dir($rateLimitDir)) {
+            @mkdir($rateLimitDir, 0755, true);
+        }
         $now = time();
         $data = [
             'count' => '3', // String instead of int
@@ -243,8 +254,12 @@ class RateLimitTest extends TestCase
         $maxRequests = 3;
         $windowSeconds = 2;
         
-        // Create file with expired reset time as string
-        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $hash = md5($key . '_' . $ip);
+        $rateLimitFile = getRateLimitPath($hash);
+        $rateLimitDir = dirname($rateLimitFile);
+        if (!is_dir($rateLimitDir)) {
+            @mkdir($rateLimitDir, 0755, true);
+        }
         $expiredTime = time() - 10; // Expired 10 seconds ago
         $data = [
             'count' => '3', // String
@@ -278,8 +293,12 @@ class RateLimitTest extends TestCase
             $maxRequests = 10;
             $windowSeconds = 60;
             
-            // Create file with string values
-            $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+            $hash = md5($key . '_' . $ip);
+            $rateLimitFile = getRateLimitPath($hash);
+            $rateLimitDir = dirname($rateLimitFile);
+            if (!is_dir($rateLimitDir)) {
+                @mkdir($rateLimitDir, 0755, true);
+            }
             $now = time();
             $data = [
                 'count' => '7', // String
@@ -315,8 +334,12 @@ class RateLimitTest extends TestCase
         $maxRequests = 5;
         $windowSeconds = 60;
         
-        // Create file with string values
-        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $hash = md5($key . '_' . $ip);
+        $rateLimitFile = getRateLimitPath($hash);
+        $rateLimitDir = dirname($rateLimitFile);
+        if (!is_dir($rateLimitDir)) {
+            @mkdir($rateLimitDir, 0755, true);
+        }
         $now = time();
         $data = [
             'count' => '5', // String, at limit
@@ -340,8 +363,12 @@ class RateLimitTest extends TestCase
         $maxRequests = 5;
         $windowSeconds = 60;
         
-        // Create corrupted JSON file
-        $rateLimitFile = $this->testCacheDir . '/rate_limit_' . md5($key . '_' . $ip) . '.json';
+        $hash = md5($key . '_' . $ip);
+        $rateLimitFile = getRateLimitPath($hash);
+        $rateLimitDir = dirname($rateLimitFile);
+        if (!is_dir($rateLimitDir)) {
+            @mkdir($rateLimitDir, 0755, true);
+        }
         file_put_contents($rateLimitFile, 'invalid json {', LOCK_EX);
         clearstatcache();
         

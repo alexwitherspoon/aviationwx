@@ -503,18 +503,15 @@ class DailyTrackingTest extends TestCase
         $airportId = 'test_type_coercion_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
-        // Set initial peak gust
+        // Set initial peak gust (creates per-airport file)
         updatePeakGust($airportId, 15.0, $airport);
         clearstatcache();
         
-        // Manually corrupt the cache file to have string values (simulating JSON decode issue)
-        $cacheDir = getWeatherCacheDir();
-        $file = $cacheDir . '/peak_gusts.json';
+        // Manually corrupt the per-airport file to have string values (simulating JSON decode issue)
+        $file = getPeakGustTrackingPath($airportId);
         $dateKey = getAirportDateKey($airport);
-        
         $peakGusts = json_decode(file_get_contents($file), true);
-        // Simulate JSON storing numbers as strings
-        $peakGusts[$dateKey][$airportId]['value'] = '15'; // String instead of number
+        $peakGusts[$dateKey]['value'] = '15'; // String instead of number
         file_put_contents($file, json_encode($peakGusts), LOCK_EX);
         clearstatcache();
         
@@ -570,19 +567,16 @@ class DailyTrackingTest extends TestCase
         $airportId = 'test_temp_type_coercion_' . uniqid();
         $airport = createTestAirport(['timezone' => 'America/Los_Angeles']);
         
-        // Set initial temperature extremes
+        // Set initial temperature extremes (creates per-airport file)
         updateTempExtremes($airportId, 20.0, $airport);
         clearstatcache();
         
-        // Manually corrupt the cache file to have string values
-        $cacheDir = getWeatherCacheDir();
-        $file = $cacheDir . '/temp_extremes.json';
+        // Manually corrupt the per-airport file to have string values
+        $file = getTempExtremesTrackingPath($airportId);
         $dateKey = getAirportDateKey($airport);
-        
         $tempExtremes = json_decode(file_get_contents($file), true);
-        // Simulate JSON storing numbers as strings
-        $tempExtremes[$dateKey][$airportId]['high'] = '20'; // String instead of number
-        $tempExtremes[$dateKey][$airportId]['low'] = '20'; // String instead of number
+        $tempExtremes[$dateKey]['high'] = '20'; // String instead of number
+        $tempExtremes[$dateKey]['low'] = '20'; // String instead of number
         file_put_contents($file, json_encode($tempExtremes), LOCK_EX);
         clearstatcache();
         

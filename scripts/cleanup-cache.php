@@ -238,26 +238,25 @@ cleanupFilesByPattern(
     $stats, $dryRun, $verbose
 );
 
-// Webcam images (7 days - should be updated continuously)
-// Structure: cache/webcams/{airportId}/{camIndex}/*.{format}
+// Webcam images (7 days - backup for retention)
+// Structure: cache/webcams/{airportId}/{camIndex}/{YYYY-MM-DD}/{HH}/*.{format}
 cleanupFilesByPattern(
-    CACHE_WEBCAMS_DIR . '/*/*/*.jpg',
+    CACHE_WEBCAMS_DIR . '/*/*/*/*/*.jpg',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam images (backup)',
     $stats, $dryRun, $verbose
 );
 cleanupFilesByPattern(
-    CACHE_WEBCAMS_DIR . '/*/*/*.webp',
+    CACHE_WEBCAMS_DIR . '/*/*/*/*/*.webp',
     CLEANUP_WEBCAM_IMAGE_AGE,
     'Webcam WebP images (backup)',
     $stats, $dryRun, $verbose
 );
 
 // Map tiles (cached for 15min-1hr, clean up after 7 days)
-// Structure: cache/map_tiles/{layer}/{z}_{x}_{y}.png
-// Includes both OpenWeatherMap and RainViewer tiles
+// Structure: cache/map_tiles/{layer}/{z}/{x}/{y}.png
 cleanupFilesByPattern(
-    CACHE_MAP_TILES_DIR . '/*/*.png',
+    CACHE_MAP_TILES_DIR . '/*/*/*/*.png',
     604800, // 7 days
     'Map tiles (OpenWeatherMap + RainViewer cache)',
     $stats, $dryRun, $verbose

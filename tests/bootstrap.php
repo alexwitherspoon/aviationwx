@@ -94,7 +94,7 @@ function isRunningInCI(): bool {
  * - Webcam images (webcams/*.jpg, *.webp)
  * - Daily tracking files (peak_gusts.json, temp_extremes.json)
  * - Outage detection files (outage_*.json)
- * - Rate limiting files (rate_limit_*.json)
+ * - Rate limit files (rate_limits/{prefix}/*.json)
  * - Test backup files (*.backup)
  * 
  * Preserves reference data files (mappings, ourairports data, push_webcams)
@@ -112,15 +112,14 @@ function cleanTestCache(): void {
         CACHE_TEMP_EXTREMES_FILE,
     ];
     
-    // Patterns to clean in weather directory
+    // Patterns to clean (weather in CACHE_WEATHER_DIR, outage in CACHE_BASE_DIR)
     $weatherPatterns = [
-        CACHE_WEATHER_DIR . 'weather_*.json',
-        CACHE_WEATHER_DIR . 'outage_*.json',
+        CACHE_WEATHER_DIR . '/*.json',
+        $cacheDir . '/outage_*.json',
     ];
     
-    // Patterns to clean in rate limits directory
     $rateLimitPatterns = [
-        CACHE_RATE_LIMITS_DIR . '*.json',
+        CACHE_RATE_LIMITS_DIR . '/*/*.json',
     ];
     
     // Patterns to clean in base cache directory
@@ -165,15 +164,22 @@ function cleanTestCache(): void {
         }
     }
     
-    // Clean webcams directory (all image formats and staging files)
+    // Clean webcams directory (date/hour structure: airport/cam/YYYY-MM-DD/HH/*.{jpg,webp,tmp})
     $webcamsDir = CACHE_WEBCAMS_DIR;
     if (is_dir($webcamsDir)) {
-        $imagePatterns = ['*.jpg', '*.webp', '*.tmp'];
-        foreach ($imagePatterns as $pattern) {
-            $files = glob($webcamsDir . '/' . $pattern);
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    @unlink($file);
+        $webcamPatterns = [
+            $webcamsDir . '/*/*/*/*/*.jpg',
+            $webcamsDir . '/*/*/*/*/*.jpeg',
+            $webcamsDir . '/*/*/*/*/*.webp',
+            $webcamsDir . '/*/*/*.tmp',
+        ];
+        foreach ($webcamPatterns as $pattern) {
+            $files = glob($pattern);
+            if ($files !== false) {
+                foreach ($files as $file) {
+                    if (is_file($file)) {
+                        @unlink($file);
+                    }
                 }
             }
         }
@@ -369,10 +375,10 @@ function cleanTestTempFiles(): void {
  * - Test environments without external webcam access
  * 
  * Creates the full file structure expected by getWebcamMetadata():
- * - {timestamp}_original.jpg (original image)
- * - {timestamp}_480.jpg (variant)
- * - original.jpg symlink -> {timestamp}_original.jpg
- * - current.jpg symlink -> {timestamp}_480.jpg
+ * - {YYYY-MM-DD}/{HH}/{timestamp}_original.jpg (original image in date/hour subdir)
+ * - {YYYY-MM-DD}/{HH}/{timestamp}_480.jpg (variant)
+ * - original.jpg symlink -> {date}/{hour}/{timestamp}_original.jpg
+ * - current.jpg symlink -> {date}/{hour}/{timestamp}_480.jpg
  * - state.json (push webcam state)
  * 
  * @param array $airports List of airport IDs to seed (default: ['kspb'])
@@ -387,38 +393,32 @@ function seedMockWebcamData(array $airports = ['kspb'], int $webcamsPerAirport =
     foreach ($airports as $airportId) {
         for ($camIndex = 0; $camIndex < $webcamsPerAirport; $camIndex++) {
             $camDir = getWebcamCameraDir($airportId, $camIndex);
-            
-            // Ensure camera directory exists
             if (!is_dir($camDir)) {
                 @mkdir($camDir, 0755, true);
             }
             
-            // Generate mock image (640x480)
             $imageData = generateMockWebcamImage($airportId, $camIndex, 640, 480);
+            $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+            if (!is_dir($framesDir)) {
+                @mkdir($framesDir, 0755, true);
+            }
+            $subdir = getWebcamFramesSubdir($timestamp);
+            $originalBasename = $timestamp . '_original.jpg';
+            $variantBasename = $timestamp . '_480.jpg';
             
-            // Save timestamped original image (required by getWebcamMetadata)
-            $originalPath = $camDir . '/' . $timestamp . '_original.jpg';
-            @file_put_contents($originalPath, $imageData);
+            @file_put_contents($framesDir . '/' . $originalBasename, $imageData);
+            @file_put_contents($framesDir . '/' . $variantBasename, $imageData);
             
-            // Save timestamped variant (480p)
-            $variantPath = $camDir . '/' . $timestamp . '_480.jpg';
-            @file_put_contents($variantPath, $imageData);
-            
-            // Create original.jpg symlink (required by getWebcamOriginalPath)
             $originalSymlink = $camDir . '/original.jpg';
             if (is_link($originalSymlink)) {
                 @unlink($originalSymlink);
             }
-            @symlink($timestamp . '_original.jpg', $originalSymlink);
-            
-            // Create current.jpg symlink
+            @symlink($subdir . '/' . $originalBasename, $originalSymlink);
             $currentPath = $camDir . '/current.jpg';
             if (is_link($currentPath)) {
                 @unlink($currentPath);
             }
-            @symlink($timestamp . '_480.jpg', $currentPath);
-            
-            // Save state.json with timestamp (for push webcam tests)
+            @symlink($subdir . '/' . $variantBasename, $currentPath);
             $statePath = $camDir . '/state.json';
             $stateData = json_encode([
                 'last_processed' => $timestamp,

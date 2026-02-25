@@ -1106,12 +1106,15 @@ The webcam processing pipeline uses three main components:
 
 **Cache Location**: `cache/webcams/{airport_id}/{cam_index}/`
 
-**File Naming**: 
-- Current: `current.{ext}` - symlink to latest timestamped image
-- Original: `original.{ext}` - symlink to latest timestamped original
-- Timestamped: `{timestamp}_{variant}.{ext}` - actual image files
-- Example: `cache/webcams/kspb/0/current.jpg` → `1703980800_720.jpg`
-- Example: `cache/webcams/kspb/0/original.jpg` → `1703980800_original.jpg`
+**Directory Structure** (date/hour subdirs limit files per directory):
+- `{YYYY-MM-DD}/{HH}/` - Date and hour subdirs (UTC)
+- Timestamped files: `{timestamp}_{variant}.{ext}` within date/hour dirs
+- Symlinks at camera root: `current.{ext}`, `original.{ext}` → relative path to latest
+
+**File Naming**:
+- Current: `current.{ext}` - symlink to latest (e.g. `2026-02-24/14/1703980800_720.jpg`)
+- Original: `original.{ext}` - symlink to latest original
+- Timestamped: `{YYYY-MM-DD}/{HH}/{timestamp}_{variant}.{ext}`
 - Variants: `original`, `1080`, `720`, `360` (height-based)
 - Formats: JPEG (`.jpg`), WebP (`.webp`)
 

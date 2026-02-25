@@ -181,12 +181,12 @@ function checkAndIncrementWindowApcu(string $cacheKey, int $limit, int $windowSe
  */
 function checkAndIncrementWindowFile(string $cacheKey, int $limit, int $windowSeconds, int $now): array
 {
-    $cacheDir = __DIR__ . '/../../cache/rate_limits';
+    require_once __DIR__ . '/../cache-paths.php';
+    $cacheFile = getRateLimitPath($cacheKey);
+    $cacheDir = dirname($cacheFile);
     if (!is_dir($cacheDir)) {
         @mkdir($cacheDir, 0755, true);
     }
-    
-    $cacheFile = $cacheDir . '/' . $cacheKey . '.json';
     
     // Use file locking for atomic operations
     $fp = @fopen($cacheFile, 'c+');

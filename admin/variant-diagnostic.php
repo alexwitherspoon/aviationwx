@@ -121,17 +121,15 @@ foreach ($config['airports'] as $airportId => $airport) {
             }
             echo "\n";
             
-            // Check actual files
-            $cacheDir = getWebcamCameraDir($airportId, $idx);
-            echo "Cache directory: {$cacheDir}\n";
-            if (is_dir($cacheDir)) {
-                $pattern = $cacheDir . '/' . $latestTimestamp . '_*.{jpg,jpeg,webp}';
-                $files = glob($pattern, GLOB_BRACE);
+            $framesDir = getWebcamFramesDir($airportId, $idx, $latestTimestamp);
+            echo "Cache directory: {$framesDir}\n";
+            if (is_dir($framesDir)) {
+                $files = glob($framesDir . '/' . $latestTimestamp . '_*.{jpg,jpeg,webp}', GLOB_BRACE) ?: [];
                 if (empty($files)) {
                     $files = array_merge(
-                        glob($cacheDir . '/' . $latestTimestamp . '_*.jpg'),
-                        glob($cacheDir . '/' . $latestTimestamp . '_*.jpeg'),
-                        glob($cacheDir . '/' . $latestTimestamp . '_*.webp')
+                        glob($framesDir . '/' . $latestTimestamp . '_*.jpg') ?: [],
+                        glob($framesDir . '/' . $latestTimestamp . '_*.jpeg') ?: [],
+                        glob($framesDir . '/' . $latestTimestamp . '_*.webp') ?: []
                     );
                 }
                 echo "Files found for timestamp {$latestTimestamp}: " . count($files) . "\n";

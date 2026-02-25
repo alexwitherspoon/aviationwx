@@ -41,16 +41,28 @@ function getHistoryFrames(string $airportId, int $camIndex): array {
         return [];
     }
     
-    // Read from camera cache directory (unified storage)
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    
     if (!is_dir($cacheDir)) {
         return [];
     }
     
-    // Get all image files (excludes symlinks, staging files, etc.)
-    $allFiles = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
-    if ($allFiles === false || empty($allFiles)) {
+    // Scan date/hour subdirs within retention window (limits files per glob)
+    $allFiles = [];
+    $dateDirs = glob($cacheDir . '/????-??-??', GLOB_ONLYDIR);
+    if ($dateDirs !== false) {
+        foreach ($dateDirs as $dateDir) {
+            $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+            if ($hourDirs !== false) {
+                foreach ($hourDirs as $hourDir) {
+                    $files = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
+                    if ($files !== false) {
+                        $allFiles = array_merge($allFiles, $files);
+                    }
+                }
+            }
+        }
+    }
+    if (empty($allFiles)) {
         return [];
     }
     
@@ -352,14 +364,24 @@ function parseGPSTimestamp(array $gps): int {
  */
 function getHistoryDiskUsage(string $airportId, int $camIndex): int {
     $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    
     if (!is_dir($cacheDir)) {
         return 0;
     }
     
-    $files = glob($cacheDir . '/*.{jpg,webp}', GLOB_BRACE);
-    if ($files === false) {
-        return 0;
+    $files = [];
+    $dateDirs = glob($cacheDir . '/????-??-??', GLOB_ONLYDIR);
+    if ($dateDirs !== false) {
+        foreach ($dateDirs as $dateDir) {
+            $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+            if ($hourDirs !== false) {
+                foreach ($hourDirs as $hourDir) {
+                    $hourFiles = glob($hourDir . '/*.{jpg,webp}', GLOB_BRACE);
+                    if ($hourFiles !== false) {
+                        $files = array_merge($files, $hourFiles);
+                    }
+                }
+            }
+        }
     }
 
     return array_sum(array_map(function($file) {

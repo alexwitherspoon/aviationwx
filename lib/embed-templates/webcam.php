@@ -38,42 +38,23 @@ function processWebcamWidgetData($data, $options) {
         require_once __DIR__ . '/../cache-paths.php';
         require_once __DIR__ . '/../webcam-format-generation.php';
         
-        // Try to find any image file in the cache directory
-        $cacheDir = getWebcamCameraDir($airportId, $webcamIndex);
-        if (is_dir($cacheDir)) {
-            // Look for any timestamped image file (original or variant)
-            $pattern = $cacheDir . '/*_*.{jpg,jpeg,webp}';
-            $files = glob($pattern, GLOB_BRACE);
-            if (empty($files)) {
-                // Fallback without GLOB_BRACE
-                $files = array_merge(
-                    glob($cacheDir . '/*_*.jpg'),
-                    glob($cacheDir . '/*_*.jpeg'),
-                    glob($cacheDir . '/*_*.webp')
-                );
-            }
-            
-            // Sort by mtime descending to get the latest
-            if (!empty($files)) {
-                usort($files, function($a, $b) {
-                    return filemtime($b) - filemtime($a);
-                });
-                
-                // Try to build metadata from the latest file
-                $latestFile = $files[0];
-                if (file_exists($latestFile) && !is_link($latestFile)) {
-                    $webcamMetadata = buildWebcamMetadataFromFile($latestFile, $airportId, $webcamIndex);
-                    // Store in APCu for future use
-                    if ($webcamMetadata !== null && function_exists('apcu_store')) {
-                        $key = "webcam_meta_{$airportId}_{$webcamIndex}";
-                        @apcu_store($key, $webcamMetadata, 86400); // 24h TTL
-                    }
+        $files = getWebcamImageFiles($airportId, $webcamIndex, '*_*.{jpg,jpeg,webp}');
+        if (!empty($files)) {
+            usort($files, function($a, $b) {
+                return filemtime($b) - filemtime($a);
+            });
+            $latestFile = $files[0];
+            if (file_exists($latestFile) && !is_link($latestFile)) {
+                $webcamMetadata = buildWebcamMetadataFromFile($latestFile, $airportId, $webcamIndex);
+                if ($webcamMetadata !== null && function_exists('apcu_store')) {
+                    $key = "webcam_meta_{$airportId}_{$webcamIndex}";
+                    @apcu_store($key, $webcamMetadata, 86400); // 24h TTL
                 }
             }
         }
     }
     
-    $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777; // Default 16:9
+    $aspectRatio = $webcamMetadata ? ($webcamMetadata['aspect_ratio'] ?? 1.777) : 1.777;
     $webcamWidth = $webcamMetadata ? ($webcamMetadata['width'] ?? null) : null;
     $webcamHeight = $webcamMetadata ? ($webcamMetadata['height'] ?? null) : null;
     
