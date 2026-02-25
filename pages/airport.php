@@ -1451,37 +1451,41 @@ if ($themeCookie === 'dark') {
                     
                     // Helper to build srcset with width descriptors
                     // Browser selects best size based on viewport and pixel density
-                    $buildSrcset = function($format, $variants, $aspectRatio, $originalWidth, $originalHeight) use ($baseUrl) {
+                    // $excludeOriginal: when true (dashboard), omit original if sized variants exist
+                    // (Sized variants have WebP; original often JPG-only. Prefer sized for LCP.)
+                    $buildSrcset = function($format, $variants, $aspectRatio, $originalWidth, $originalHeight, $excludeOriginal = false) use ($baseUrl) {
                         $srcsetParts = [];
                         $variantList = [];
+                        $hasSized = false;
                         
-                        // Collect available variants for this format
                         foreach ($variants as $variant => $formats) {
                             if (in_array($format, $formats)) {
                                 if ($variant === 'original') {
-                                    $variantList[] = 'original';
+                                    if (!$excludeOriginal) {
+                                        $variantList[] = 'original';
+                                    }
                                 } elseif (is_numeric($variant)) {
                                     $variantList[] = (int)$variant;
+                                    $hasSized = true;
                                 }
                             }
                         }
                         
-                        // Sort numeric variants descending, original last
                         $numericVariants = array_filter($variantList, 'is_numeric');
                         rsort($numericVariants);
+                        // Add original: when not excluding, or when no sized variants exist (must have something)
                         if (in_array('original', $variantList)) {
+                            $numericVariants[] = 'original';
+                        } elseif ($excludeOriginal && !$hasSized && isset($variants['original']) && in_array($format, $variants['original'])) {
                             $numericVariants[] = 'original';
                         }
                         
                         foreach ($numericVariants as $variant) {
                             $url = $baseUrl . '&fmt=' . $format . '&size=' . $variant;
                             if ($variant === 'original') {
-                                // Use actual original width
                                 $srcsetParts[] = $url . ' ' . $originalWidth . 'w';
                             } else {
-                                // For height-based variants, calculate width
                                 $variantWidth = (int)round($aspectRatio * (int)$variant);
-                                // Cap at 3840px for ultra-wide cameras
                                 if ($variantWidth > 3840) {
                                     $variantWidth = 3840;
                                 }
@@ -1490,6 +1494,10 @@ if ($themeCookie === 'dark') {
                         }
                         return implode(', ', $srcsetParts);
                     };
+                    
+                    // Default size for initial load: prefer largest sized variant (never original if sized exist)
+                    $sizedHeights = array_filter(array_keys($availableVariants), 'is_numeric');
+                    $defaultSize = !empty($sizedHeights) ? max(array_map('intval', $sizedHeights)) : 'original';
                 ?>
                 <div class="webcam-item" 
                      data-aspect-ratio="<?= $aspectRatioStr ?>"
@@ -1499,11 +1507,11 @@ if ($themeCookie === 'dark') {
                         <div id="webcam-skeleton-<?= $index ?>" class="webcam-skeleton" style="background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s ease-in-out infinite; width: 100%; aspect-ratio: <?= $width ?>/<?= $height ?>; border-radius: 4px; position: absolute; top: 0; left: 0; z-index: 1;"></div>
                         <picture>
                             <?php if (in_array('webp', $enabledFormats) && !empty($availableVariants)): ?>
-                            <source srcset="<?= $buildSrcset('webp', $availableVariants, $aspectRatio, $width, $height) ?>" type="image/webp" sizes="100vw">
+                            <source srcset="<?= $buildSrcset('webp', $availableVariants, $aspectRatio, $width, $height, true) ?>" type="image/webp" sizes="100vw">
                             <?php endif; ?>
                             <img id="webcam-<?= $index ?>" 
-                                 srcset="<?= !empty($availableVariants) ? $buildSrcset('jpg', $availableVariants, $aspectRatio, $width, $height) : ($baseUrl . '&fmt=jpg&size=original') ?>"
-                                 src="<?= $baseUrl ?>&fmt=jpg&size=original"
+                                 srcset="<?= !empty($availableVariants) ? $buildSrcset('jpg', $availableVariants, $aspectRatio, $width, $height, true) : ($baseUrl . '&fmt=jpg&size=' . $defaultSize) ?>"
+                                 src="<?= $baseUrl ?>&fmt=jpg&size=<?= $defaultSize ?>"
                                  sizes="100vw"
                                  data-initial-timestamp="<?= $mtimeJpg ?>" 
                                  alt="<?= htmlspecialchars($cam['name']) ?> - Tap to see historical time-lapse"

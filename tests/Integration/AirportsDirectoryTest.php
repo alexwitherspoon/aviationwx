@@ -217,7 +217,10 @@ class AirportsDirectoryTest extends TestCase
         $output = $this->getAirportsPageContent();
         
         $this->assertStringContainsString('rainviewer.com', strtolower($output), 'Should integrate RainViewer API');
-        $this->assertStringContainsString('weather-maps.json', $output, 'Should fetch weather maps data');
+        // Radar may use proxy (rainviewer-weather-maps.php) or direct API (api.rainviewer.com)
+        $hasProxy = str_contains($output, 'rainviewer-weather-maps.php');
+        $hasDirectApi = str_contains($output, 'api.rainviewer.com');
+        $this->assertTrue($hasProxy || $hasDirectApi, 'Should fetch radar via proxy or direct RainViewer API');
     }
     
     /**

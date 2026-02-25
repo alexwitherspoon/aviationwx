@@ -215,9 +215,9 @@ function getTransformedImagePath(
     int $targetHeight,
     string $format = 'jpg'
 ): ?string {
-    // Build cache path for transformed image
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    $cachePath = $cacheDir . '/' . $timestamp . '_' . $targetWidth . 'x' . $targetHeight . '.' . $format;
+    // Build cache path in date/hour subdir (matches pipeline structure)
+    $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+    $cachePath = $framesDir . '/' . $timestamp . '_' . $targetWidth . 'x' . $targetHeight . '.' . $format;
     
     // Return cached version if exists
     if (file_exists($cachePath) && filesize($cachePath) > 0) {
@@ -658,9 +658,9 @@ function getFaaTransformedImagePath(
     int $timestamp,
     array $margins
 ): ?array {
-    // Build cache path for FAA transformed image
-    $cacheDir = getWebcamCameraDir($airportId, $camIndex);
-    $cachePath = $cacheDir . '/' . $timestamp . '_faa.jpg';
+    // Build cache path in date/hour subdir (matches pipeline structure)
+    $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+    $cachePath = $framesDir . '/' . $timestamp . '_faa.jpg';
     
     // Check if cached version exists and get its dimensions
     if (file_exists($cachePath) && filesize($cachePath) > 0) {
@@ -699,10 +699,10 @@ function getFaaTransformedImagePath(
     }
     
     // Ensure cache directory exists
-    if (!is_dir($cacheDir)) {
-        if (!@mkdir($cacheDir, 0755, true)) {
+    if (!is_dir($framesDir)) {
+        if (!@mkdir($framesDir, 0755, true)) {
             aviationwx_log('error', 'FAA transform cache dir creation failed', [
-                'dir' => $cacheDir,
+                'dir' => $framesDir,
             ], 'api');
             return null;
         }

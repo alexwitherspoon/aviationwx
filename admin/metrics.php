@@ -25,10 +25,10 @@ metric('php_info', 1, ['version' => PHP_VERSION]);
 metric('webcam_cache_exists', is_dir(CACHE_WEBCAMS_DIR) ? 1 : 0);
 metric('webcam_cache_writable', (is_dir(CACHE_WEBCAMS_DIR) && is_writable(CACHE_WEBCAMS_DIR)) ? 1 : 0);
 
-// Count cached files by format (recursive in new directory structure)
+// Count cached files by format (date/hour subdir structure: webcams/airport/cam/YYYY-MM-DD/HH/file)
 $counts = ['jpg' => 0, 'webp' => 0];
 if (is_dir(CACHE_WEBCAMS_DIR)) {
-    foreach (glob(CACHE_WEBCAMS_DIR . '/*/*/*.{jpg,webp}', GLOB_BRACE) ?: [] as $f) {
+    foreach (glob(CACHE_WEBCAMS_DIR . '/*/*/*/*/*.{jpg,webp}', GLOB_BRACE) ?: [] as $f) {
         $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
         if (isset($counts[$ext])) $counts[$ext]++;
     }

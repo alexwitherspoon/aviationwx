@@ -273,7 +273,7 @@ function handleGetWebcamImage(array $params, array $context): void
                 // Format doesn't exist at all
                 sendPublicApiError(
                     PUBLIC_API_ERROR_INVALID_REQUEST,
-                    "Format '{$requestedFormat}' is not available for this webcam",
+                    "Format '{$requestedFormat}' is not available for this webcam. Use the size parameter to request specific variants (e.g. 720, 1080).",
                     400
                 );
                 return;

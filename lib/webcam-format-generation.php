@@ -346,11 +346,10 @@ function getCacheFile(string $airportId, int $camIndex, string $format, string|i
         if (is_link($origJpgSymlinkPath)) {
             $jpgTarget = readlink($origJpgSymlinkPath);
             if ($jpgTarget !== false) {
-                // Extract timestamp from JPG filename
                 $jpgBasename = basename($jpgTarget);
-                if (preg_match('/^(\d+)_original\.jpg$/', $jpgBasename, $matches)) {
-                    $timestamp = $matches[1];
-                    $timestampFile = $cacheDir . '/' . $timestamp . '_original.' . $format;
+                if (preg_match('/^(\d+)_original\.(jpg|jpeg)$/', $jpgBasename, $matches)) {
+                    $ts = (int)$matches[1];
+                    $timestampFile = getWebcamOriginalTimestampedPath($airportId, $camIndex, $ts, $format);
                     if (file_exists($timestampFile)) {
                         return $timestampFile;
                     }
@@ -381,38 +380,43 @@ function getCacheFile(string $airportId, int $camIndex, string $format, string|i
         $jpgFile = $jpgSymlinkPath;
     }
     
-    // Extract timestamp from JPG filename
+    // Extract timestamp from JPG filename (resolved path may be in date/hour subdir)
     if ($jpgFile !== null) {
         $jpgBasename = basename($jpgFile);
         // Extract timestamp from filename (supports both old and new naming)
         // Old formats: "1766944401_primary.jpg" (legacy) or "1766944401.jpg" (very old)
         // New: "1766944401_original.jpg" or "1766944401_720.jpg"
-        if (preg_match('/^(\d+)(?:_(?:primary|original|\d+))?\.jpg$/', $jpgBasename, $matches)) {
-            $timestamp = $matches[1];
-            // For numeric variants (height-based), use new naming: {timestamp}_{height}.{format}
-            if (is_numeric($variant)) {
-                $variantFile = $cacheDir . '/' . $timestamp . '_' . $variant . '.' . $format;
-            } else {
-                // For named variants (legacy support), try both old and new naming
-                $variantFile = $cacheDir . '/' . $timestamp . '_' . $variant . '.' . $format;
-            }
+        if (preg_match('/^(\d+)(?:_(?:primary|original|\d+))?\.(jpg|jpeg)$/', $jpgBasename, $matches)) {
+            $ts = (int)$matches[1];
+            $variantFile = getWebcamVariantPath($airportId, $camIndex, $ts, (int)$variant, $format);
             if (file_exists($variantFile)) {
                 return $variantFile;
+            }
+            // Legacy: try old naming for non-numeric variants
+            if (!is_numeric($variant)) {
+                $variantFile = getWebcamFramesDir($airportId, $camIndex, $ts) . '/' . $ts . '_' . $variant . '.' . $format;
+                if (file_exists($variantFile)) {
+                    return $variantFile;
+                }
             }
         }
     }
     
-    // Fallback: try to find any timestamp file with this variant in this directory
-    $pattern = $cacheDir . '/*_' . $variant . '.' . $format;
-    $files = glob($pattern);
+    // Fallback: scan date/hour subdirs for this variant (uses getWebcamImageFiles)
+    $extPattern = ($format === 'jpg') ? '{jpg,jpeg}' : $format;
+    $pattern = '*_' . $variant . '.' . $extPattern;
+    $files = getWebcamImageFiles($airportId, $camIndex, $pattern);
     if (!empty($files)) {
         // Sort by filename (timestamp) descending, return most recent
         rsort($files);
         return $files[0];
     }
     
-    // Final fallback: return non-existent path (will be handled by caller)
-    return $cacheDir . '/' . time() . '_' . $variant . '.' . $format;
+    // Final fallback: return non-existent path in correct structure (will be handled by caller)
+    $ts = time();
+    return is_numeric($variant)
+        ? getWebcamVariantPath($airportId, $camIndex, $ts, (int)$variant, $format)
+        : getWebcamFramesDir($airportId, $camIndex, $ts) . '/' . $ts . '_' . $variant . '.' . $format;
 }
 
 /**

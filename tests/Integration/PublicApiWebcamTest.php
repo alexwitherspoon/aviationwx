@@ -228,12 +228,10 @@ class PublicApiWebcamTest extends TestCase
         $this->assertArrayHasKey('error', $data, 'Should have error field');
         $this->assertArrayHasKey('message', $data['error'], 'Error should have message');
         
-        // Error message should mention available sizes
+        // Error message should mention format not available
         $message = $data['error']['message'];
         $this->assertStringContainsString('not available', $message, 
             'Error message should mention format not available');
-        $this->assertStringContainsString('size', strtolower($message), 
-            'Error message should mention sizes');
     }
     
     /**

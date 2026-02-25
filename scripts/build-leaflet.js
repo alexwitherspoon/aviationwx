@@ -104,6 +104,7 @@ if (!fs.existsSync(NODE_MODULES_MARKERCLUSTER)) {
 
 const markerclusterFiles = [
     { src: 'leaflet.markercluster.js', dest: PUBLIC_JS },
+    { src: 'leaflet.markercluster.js.map', dest: PUBLIC_JS },
     { src: 'MarkerCluster.css', dest: PUBLIC_CSS },
     { src: 'MarkerCluster.Default.css', dest: PUBLIC_CSS },
 ];

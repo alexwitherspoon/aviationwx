@@ -262,6 +262,14 @@ cleanupFilesByPattern(
     $stats, $dryRun, $verbose
 );
 
+// RainViewer weather-maps JSON (cached 5 min, clean up after 7 days)
+cleanupFilesByPattern(
+    CACHE_BASE_DIR . '/rainviewer/*.json',
+    604800, // 7 days
+    'RainViewer weather-maps cache',
+    $stats, $dryRun, $verbose
+);
+
 // Clean stale entries in per-airport tracking files (primary layout)
 foreach ([CACHE_PEAK_GUSTS_DIR, CACHE_TEMP_EXTREMES_DIR] as $dir) {
     if (!is_dir($dir)) {
@@ -635,6 +643,8 @@ function cleanupFilesByAge(
 
 /**
  * Cleanup webcam history frame directories
+ *
+ * Structure: cache/webcams/{airportId}/{camIndex}/{YYYY-MM-DD}/{HH}/*.{jpg,webp}
  */
 function cleanupWebcamHistoryFrames(
     string $webcamsDir,
@@ -643,12 +653,10 @@ function cleanupWebcamHistoryFrames(
     bool $dryRun,
     bool $verbose
 ): void {
-    // New structure: cache/webcams/{airportId}/{camIndex}/history/
-    // Find all history directories using the new nested structure
-    $historyDirs = glob($webcamsDir . '/*/*/history');
-    if ($historyDirs === false || empty($historyDirs)) {
+    $airportDirs = glob($webcamsDir . '/*', GLOB_ONLYDIR);
+    if ($airportDirs === false || empty($airportDirs)) {
         if ($verbose) {
-            echo "  Webcam history frames: No history directories found\n";
+            echo "  Webcam history frames: No airport directories found\n";
         }
         return;
     }
@@ -657,47 +665,58 @@ function cleanupWebcamHistoryFrames(
     $deleted = 0;
     $bytesFreed = 0;
     
-    foreach ($historyDirs as $dir) {
-        // Clean up all image formats (jpg, webp) and variants
-        $files = array_merge(
-            glob($dir . '/*.jpg') ?: [],
-            glob($dir . '/*.webp') ?: []
-        );
-        
-        if (empty($files)) {
+    foreach ($airportDirs as $airportDir) {
+        // Skip quarantine (webcams/quarantine/airport/cam structure)
+        if (basename($airportDir) === 'quarantine') {
             continue;
         }
-        
-        foreach ($files as $file) {
-            $stats['files_checked']++;
-            $mtime = @filemtime($file);
-            
-            if ($mtime === false) {
+        $camDirs = glob($airportDir . '/*', GLOB_ONLYDIR);
+        if ($camDirs === false) {
+            continue;
+        }
+        foreach ($camDirs as $camDir) {
+            $dateDirs = glob($camDir . '/????-??-??', GLOB_ONLYDIR);
+            if ($dateDirs === false) {
                 continue;
             }
-            
-            $age = $now - $mtime;
-            if ($age > $maxAge) {
-                $size = @filesize($file) ?: 0;
-                
-                if ($verbose) {
-                    // Show airport/cam/history/filename for clarity
-                    $parts = explode('/', $dir);
-                    $camIndex = $parts[count($parts) - 2] ?? '?';
-                    $airportId = $parts[count($parts) - 3] ?? '?';
-                    echo "  🗑️  {$airportId}/{$camIndex}/history/" . basename($file) . " (age: " . formatAge($age) . ")\n";
+            foreach ($dateDirs as $dateDir) {
+                $hourDirs = glob($dateDir . '/[0-2][0-9]', GLOB_ONLYDIR);
+                if ($hourDirs === false) {
+                    continue;
                 }
-                
-                if (!$dryRun) {
-                    if (@unlink($file)) {
-                        $deleted++;
-                        $bytesFreed += $size;
-                    } else {
-                        $stats['errors']++;
+                foreach ($hourDirs as $hourDir) {
+                    $files = array_merge(
+                        glob($hourDir . '/*.jpg') ?: [],
+                        glob($hourDir . '/*.webp') ?: []
+                    );
+                    foreach ($files as $file) {
+                        $stats['files_checked']++;
+                        $mtime = @filemtime($file);
+                        if ($mtime === false) {
+                            continue;
+                        }
+                        $age = $now - $mtime;
+                        if ($age > $maxAge) {
+                            $size = @filesize($file) ?: 0;
+                            if ($verbose) {
+                                $parts = explode('/', $camDir);
+                                $camIndex = $parts[count($parts) - 1] ?? '?';
+                                $airportId = $parts[count($parts) - 2] ?? '?';
+                                echo "  🗑️  {$airportId}/{$camIndex}/" . basename($dateDir) . '/' . basename($hourDir) . '/' . basename($file) . " (age: " . formatAge($age) . ")\n";
+                            }
+                            if (!$dryRun) {
+                                if (@unlink($file)) {
+                                    $deleted++;
+                                    $bytesFreed += $size;
+                                } else {
+                                    $stats['errors']++;
+                                }
+                            } else {
+                                $deleted++;
+                                $bytesFreed += $size;
+                            }
+                        }
                     }
-                } else {
-                    $deleted++;
-                    $bytesFreed += $size;
                 }
             }
         }

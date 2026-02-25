@@ -1306,7 +1306,7 @@ $breadcrumbs = generateBreadcrumbSchema([
         
         function addRadarLayer() {
             // Fetch latest radar timestamp from RainViewer
-            fetch('https://api.rainviewer.com/public/weather-maps.json')
+            fetch('/api/rainviewer-weather-maps.php')
                 .then(function(response) { 
                     if (!response.ok) {
                         throw new Error('Radar API response not OK');
@@ -1395,7 +1395,7 @@ $breadcrumbs = generateBreadcrumbSchema([
                 return;
             }
             
-            fetch('https://api.rainviewer.com/public/weather-maps.json')
+            fetch('/api/rainviewer-weather-maps.php')
                 .then(function(response) {
                     if (!response.ok) {
                         throw new Error('Radar API response not OK');

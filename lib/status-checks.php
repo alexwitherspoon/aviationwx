@@ -79,7 +79,7 @@ function checkSystemHealth(): array {
     if ($cacheExists) {
         $latestCacheMtime = filemtime($cacheDir);
         
-        // Count webcam images (new directory structure: cache/webcams/{airport}/{cam}/*.jpg)
+        // Count webcam images (date/hour structure: cache/webcams/{airport}/{cam}/{YYYY-MM-DD}/{HH}/*.jpg)
         if ($webcamCacheExists) {
             $webcamMtime = filemtime($webcamCacheDir);
             if ($webcamMtime > $latestCacheMtime) {

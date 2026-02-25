@@ -389,8 +389,9 @@ function getAvailableVariants(string $airportId, int $camIndex, int $timestamp):
         return $variants;
     }
     
-    // Check variant files for enabled formats only
-    $pattern = $cacheDir . '/' . $timestamp . '_*.{' . implode(',', $formatExtensions) . '}';
+    // Check variant files in date/hour subdir (matches getWebcamFramesDir structure)
+    $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+    $pattern = $framesDir . '/' . $timestamp . '_*.{' . implode(',', $formatExtensions) . '}';
     $files = glob($pattern, GLOB_BRACE);
     
     foreach ($files as $file) {

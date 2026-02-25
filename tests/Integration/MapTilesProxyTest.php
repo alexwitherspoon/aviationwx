@@ -410,6 +410,37 @@ class MapTilesProxyTest extends TestCase
     }
     
     /**
+     * Test RainViewer weather-maps proxy returns valid JSON
+     */
+    public function testRainViewerWeatherMapsProxy_ReturnsValidJson()
+    {
+        $url = $this->baseUrl . '/api/rainviewer-weather-maps.php';
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        if ($httpCode === 404) {
+            $this->markTestSkipped('RainViewer proxy endpoint not found (404) - rebuild container');
+        }
+
+        $this->assertContains($httpCode, [200, 502], 'Should return 200 (OK) or 502 (upstream down)');
+
+        $data = json_decode($response, true);
+        $this->assertNotNull($data, 'Response should be valid JSON');
+
+        if ($httpCode === 200) {
+            $this->assertArrayHasKey('radar', $data, 'Success response should have radar key');
+        } else {
+            $this->assertArrayHasKey('error', $data, 'Error response should have error key');
+        }
+    }
+
+    /**
      * Test rate limiting - runs LAST to avoid interfering with other tests
      * 
      * Note: This test makes multiple requests and may trigger rate limiting,

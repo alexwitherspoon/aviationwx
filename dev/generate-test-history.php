@@ -96,8 +96,12 @@ $skippedCount = 0;
 for ($i = 0; $i < $numFrames; $i++) {
     // Calculate timestamp (oldest to newest)
     $timestamp = $now - (($numFrames - 1 - $i) * $intervalSeconds);
-    // Use variant naming for unified storage
-    $destFile = $cacheDir . '/' . $timestamp . '_original.jpg';
+    // Use date/hour subdir structure (matches pipeline)
+    $framesDir = getWebcamFramesDir($airportId, $camIndex, $timestamp);
+    if (!is_dir($framesDir)) {
+        @mkdir($framesDir, 0755, true);
+    }
+    $destFile = $framesDir . '/' . $timestamp . '_original.jpg';
     
     if (file_exists($destFile)) {
         echo "  [{$i}] SKIP: " . date('H:i:s', $timestamp) . " (already exists)\n";
