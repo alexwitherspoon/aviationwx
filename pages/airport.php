@@ -453,42 +453,41 @@ if ($themeCookie === 'dark') {
         })();
     </script>
     <?php
-    // Calculate sunrise/sunset for night mode auto-detection
-    // Uses airport's coordinates and timezone for accurate local times
+    // Night mode: evening civil twilight until morning civil twilight (FAA definition of night)
     $nightModeData = [];
     if (isset($airport['lat']) && isset($airport['lon']) && isset($airport['timezone'])) {
-        try {
+        $sunInfo = getSunInfoForAirport($airport);
+        if ($sunInfo !== null) {
             $tz = new DateTimeZone($airport['timezone']);
             $now = new DateTime('now', $tz);
             $today = $now->format('Y-m-d');
-            
-            // Get sun info for today at the airport's location
-            $sunInfo = date_sun_info(
-                strtotime($today . ' 12:00:00 ' . $airport['timezone']),
-                $airport['lat'],
-                $airport['lon']
-            );
-            
-            if ($sunInfo !== false && isset($sunInfo['sunset']) && isset($sunInfo['sunrise'])) {
-                // Format times in airport's timezone
-                $sunrise = new DateTime('@' . $sunInfo['sunrise']);
-                $sunrise->setTimezone($tz);
-                $sunset = new DateTime('@' . $sunInfo['sunset']);
-                $sunset->setTimezone($tz);
-                
+            $civilDusk = $sunInfo['civil_twilight_end'];
+            $civilDawn = $sunInfo['civil_twilight_begin'];
+            if ($civilDusk !== null && $civilDawn !== null) {
+                $dusk = new DateTime('@' . $civilDusk);
+                $dusk->setTimezone($tz);
+                $dawn = new DateTime('@' . $civilDawn);
+                $dawn->setTimezone($tz);
                 $nightModeData = [
                     'timezone' => $airport['timezone'],
-                    'sunriseHour' => (int)$sunrise->format('G'),
-                    'sunriseMin' => (int)$sunrise->format('i'),
-                    'sunsetHour' => (int)$sunset->format('G'),
-                    'sunsetMin' => (int)$sunset->format('i'),
-                    'currentHour' => (int)$now->format('G'),
-                    'currentMin' => (int)$now->format('i'),
+                    'nightStartHour' => (int) $dusk->format('G'),
+                    'nightStartMin' => (int) $dusk->format('i'),
+                    'nightEndHour' => (int) $dawn->format('G'),
+                    'nightEndMin' => (int) $dawn->format('i'),
+                    'currentHour' => (int) $now->format('G'),
+                    'currentMin' => (int) $now->format('i'),
+                    'todayDate' => $today
+                ];
+            } elseif ($sunInfo['sunrise'] === null && $sunInfo['sunset'] === null) {
+                $sunAltitude = getSunAltitude((float) $airport['lat'], (float) $airport['lon'], (int) $now->getTimestamp());
+                $nightModeData = [
+                    'timezone' => $airport['timezone'],
+                    'polarNight' => $sunAltitude <= 0,
+                    'currentHour' => (int) $now->format('G'),
+                    'currentMin' => (int) $now->format('i'),
                     'todayDate' => $today
                 ];
             }
-        } catch (Exception $e) {
-            // Silently fail - night mode just won't auto-activate
         }
     }
     ?>
@@ -496,7 +495,7 @@ if ($themeCookie === 'dark') {
         // Theme Mode - Instant activation before first paint
         // Four modes: auto (browser preference), day (light), dark (classic dark), night (red night vision)
         // Priority: 
-        //   1) Mobile after sunset → Night mode (safety priority, unless manually overridden today)
+        //   1) Mobile after evening civil twilight → Night mode (safety priority, unless manually overridden today)
         //   2) Saved cookie preference (auto/day/dark)
         //   3) Default: auto (follows browser prefers-color-scheme)
         (function() {
@@ -542,15 +541,15 @@ if ($themeCookie === 'dark') {
                 document.documentElement.classList.remove('night-mode', 'dark-mode', 'light-mode');
             }
             
-            // Check if it's currently night at the airport
+            // Check if it's currently night (evening civil twilight until morning civil twilight)
             function isNightTime() {
                 if (!nightData || !nightData.timezone) return false;
+                if (nightData.polarNight) return true;
+                if (nightData.nightStartHour === undefined || nightData.nightEndHour === undefined) return false;
                 var currentMins = nightData.currentHour * 60 + nightData.currentMin;
-                var sunriseMins = nightData.sunriseHour * 60 + nightData.sunriseMin;
-                var sunsetMins = nightData.sunsetHour * 60 + nightData.sunsetMin;
-                
-                // Night = after sunset OR before sunrise
-                return currentMins >= sunsetMins || currentMins < sunriseMins;
+                var nightStartMins = nightData.nightStartHour * 60 + nightData.nightStartMin;
+                var nightEndMins = nightData.nightEndHour * 60 + nightData.nightEndMin;
+                return currentMins >= nightStartMins || currentMins < nightEndMins;
             }
             
             // Get theme preference (auto/day/dark are stored - night is time-based)
@@ -565,7 +564,7 @@ if ($themeCookie === 'dark') {
             
             // Note: 'night' preference is now valid (manually selected by user)
             
-            // PRIORITY 1: Mobile after sunset → Auto night mode (safety priority)
+            // PRIORITY 1: Mobile after evening civil twilight → Auto night mode (safety priority)
             if (isMobile() && isNightTime()) {
                 // Check if user manually overrode auto-night today
                 if (nightData && manualOverride === nightData.todayDate) {
@@ -3242,11 +3241,11 @@ if (document.getElementById('time-format-toggle')) {
 // Theme mode toggle handler
 // Four modes: auto (default, follows browser), day, dark (classic dark theme), night (red night vision)
 // Night vision red mode protects pilot night vision (scotopic vision)
-// On mobile: auto-activates night mode after sunset until sunrise (unless manually overridden)
+// On mobile: auto-activates night mode after evening civil twilight until morning civil twilight (unless manually overridden)
 // On desktop: manual toggle only
 // Manual toggle disables auto mode until the next day
 
-// Night mode data from server (sunrise/sunset times in airport's timezone)
+// Night mode data from server (civil twilight times in airport's timezone)
 var NIGHT_MODE_DATA = <?= json_encode($nightModeData) ?>;
 
 // Theme modes: 'auto' (default, follows browser), 'day', 'dark' (night is time-based, not stored)
@@ -3319,8 +3318,9 @@ function isMobileDevice() {
 
 function isNightTimeAtAirport() {
     if (!NIGHT_MODE_DATA || !NIGHT_MODE_DATA.timezone) return false;
-    
-    // Get current time in airport's timezone
+    if (NIGHT_MODE_DATA.polarNight) return true;
+    if (NIGHT_MODE_DATA.nightStartHour === undefined || NIGHT_MODE_DATA.nightEndHour === undefined) return false;
+
     try {
         var now = new Date();
         var formatter = new Intl.DateTimeFormat('en-US', {
@@ -3335,13 +3335,12 @@ function isNightTimeAtAirport() {
             if (p.type === 'hour') hour = parseInt(p.value, 10);
             if (p.type === 'minute') minute = parseInt(p.value, 10);
         });
-        
+
         var currentMins = hour * 60 + minute;
-        var sunriseMins = NIGHT_MODE_DATA.sunriseHour * 60 + NIGHT_MODE_DATA.sunriseMin;
-        var sunsetMins = NIGHT_MODE_DATA.sunsetHour * 60 + NIGHT_MODE_DATA.sunsetMin;
-        
-        // Night = after sunset OR before sunrise
-        return currentMins >= sunsetMins || currentMins < sunriseMins;
+        var nightStartMins = NIGHT_MODE_DATA.nightStartHour * 60 + NIGHT_MODE_DATA.nightStartMin;
+        var nightEndMins = NIGHT_MODE_DATA.nightEndHour * 60 + NIGHT_MODE_DATA.nightEndMin;
+
+        return currentMins >= nightStartMins || currentMins < nightEndMins;
     } catch (e) {
         return false;
     }
