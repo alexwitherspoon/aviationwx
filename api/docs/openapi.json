@@ -651,7 +651,16 @@
             "type": "integer"
           },
           "timezone": {
-            "type": "string"
+            "type": "string",
+            "description": "IANA timezone identifier (e.g., America/Denver)"
+          },
+          "timezone_abbreviation": {
+            "type": "string",
+            "description": "Server-computed abbreviation (e.g., MST, PDT). Reliable; avoids browser Intl bugs."
+          },
+          "timezone_offset_hours": {
+            "type": "integer",
+            "description": "UTC offset in hours (e.g., -7 for MST)"
           },
           "magnetic_declination": {
             "type": "number",
@@ -737,7 +746,16 @@
                 "type": "integer"
               },
               "timezone": {
-                "type": "string"
+                "type": "string",
+                "description": "IANA timezone identifier (e.g., America/Denver)"
+              },
+              "timezone_abbreviation": {
+                "type": "string",
+                "description": "Server-computed abbreviation (e.g., MST, PDT)"
+              },
+              "timezone_offset_hours": {
+                "type": "integer",
+                "description": "UTC offset in hours (e.g., -7 for MST)"
               },
               "magnetic_declination": {
                 "type": "number",

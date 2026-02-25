@@ -8,6 +8,55 @@
 require_once __DIR__ . '/../config.php';
 
 /**
+ * Get timezone display data for airport (abbreviation + offset)
+ *
+ * Uses server-side PHP DateTime (reliable IANA data) instead of browser Intl API,
+ * which can return wrong abbreviations (e.g. PST for MST). Safety-critical for
+ * pilots making go/no-go decisions.
+ *
+ * @param array $airport Airport configuration array
+ * @param int|null $timestamp Optional Unix timestamp (defaults to now)
+ * @return array{
+ *   abbreviation: string,
+ *   offset_hours: int,
+ *   offset_display: string,
+ *   timezone: string
+ * }
+ */
+function getTimezoneDisplayForAirport(array $airport, ?int $timestamp = null): array
+{
+    $timezone = getAirportTimezone($airport);
+    $ts = $timestamp ?? time();
+
+    try {
+        $tz = new DateTimeZone($timezone);
+        $dt = new DateTime('@' . $ts);
+        $dt->setTimezone($tz);
+
+        $abbreviation = $dt->format('T');
+        $offsetSeconds = $tz->getOffset($dt);
+        $offsetHours = (int) round($offsetSeconds / 3600);
+
+        $sign = $offsetHours >= 0 ? '+' : '';
+        $offsetDisplay = '(UTC' . $sign . $offsetHours . ')';
+
+        return [
+            'abbreviation' => $abbreviation ?: 'UTC',
+            'offset_hours' => $offsetHours,
+            'offset_display' => $offsetDisplay,
+            'timezone' => $timezone,
+        ];
+    } catch (Exception $e) {
+        return [
+            'abbreviation' => 'UTC',
+            'offset_hours' => 0,
+            'offset_display' => '(UTC+0)',
+            'timezone' => 'UTC',
+        ];
+    }
+}
+
+/**
  * Get airport timezone from config, with fallback to global default
  * 
  * @param array $airport Airport configuration array

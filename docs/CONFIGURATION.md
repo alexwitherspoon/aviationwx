@@ -422,7 +422,7 @@ All identifiers are case-insensitive. Non-primary identifiers 301 redirect to pr
 
 ### Timezone
 
-Affects daily statistics reset (midnight), sunrise/sunset display. Use PHP timezone identifiers:
+Affects daily statistics reset (midnight), sunrise/sunset display, and local time display on dashboards. The dashboard uses server-computed timezone abbreviations (reliable IANA data) to avoid browser Intl API bugs (e.g., PST shown for MST). Use PHP timezone identifiers:
 - `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`
 - `America/Anchorage`, `Pacific/Honolulu`, `UTC`
 

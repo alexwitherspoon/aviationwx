@@ -115,6 +115,20 @@ class PublicApiAirportTest extends TestCase
         $this->assertSame('https://example.com/airport', $formatted['links'][0]['url']);
     }
 
+    public function testFormatAirportDetails_IncludesTimezoneDisplay(): void
+    {
+        self::loadFormatAirportDetails();
+        $airport = $this->getTestAirport('kspb');
+        $formatted = formatAirportDetails('kspb', $airport);
+
+        $this->assertArrayHasKey('timezone', $formatted);
+        $this->assertArrayHasKey('timezone_abbreviation', $formatted);
+        $this->assertArrayHasKey('timezone_offset_hours', $formatted);
+        $this->assertIsString($formatted['timezone_abbreviation']);
+        $this->assertIsInt($formatted['timezone_offset_hours']);
+        $this->assertContains($formatted['timezone_abbreviation'], ['PST', 'PDT'], 'America/Los_Angeles must return PST or PDT');
+    }
+
     public function testFormatAirportDetails_IncludesExternalLinks(): void
     {
         self::loadFormatAirportDetails();

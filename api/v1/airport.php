@@ -69,6 +69,7 @@ function handleGetAirport(array $params, array $context): void
  */
 function formatAirportDetails(string $airportId, array $airport): array
 {
+    $tzDisplay = getTimezoneDisplayForAirport($airport);
     $formatted = [
         'id' => $airportId,
         'name' => $airport['name'] ?? '',
@@ -79,6 +80,8 @@ function formatAirportDetails(string $airportId, array $airport): array
         'lon' => $airport['lon'] ?? null,
         'elevation_ft' => $airport['elevation_ft'] ?? null,
         'timezone' => $airport['timezone'] ?? 'UTC',
+        'timezone_abbreviation' => $tzDisplay['abbreviation'],
+        'timezone_offset_hours' => $tzDisplay['offset_hours'],
         'magnetic_declination' => getMagneticDeclination($airport),
         'address' => $airport['address'] ?? null,
         'maintenance' => isset($airport['maintenance']) && $airport['maintenance'] === true,

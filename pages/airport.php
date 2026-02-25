@@ -2159,6 +2159,12 @@ const DEFAULT_TIMEZONE = <?php
     echo json_encode($defaultTz, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>;
 
+// Server-computed timezone display (reliable IANA data; avoids browser Intl abbreviation bugs)
+const INITIAL_TIMEZONE_DISPLAY = <?php
+    $tzDisplay = getTimezoneDisplayForAirport($airport);
+    echo json_encode($tzDisplay, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>;
+
 // Default preferences for unit toggles (merged: global config → airport override)
 const DEFAULT_PREFERENCES = <?php
     $defaultPrefs = getDefaultPreferencesForAirport($airportId);
@@ -2555,27 +2561,45 @@ function isSafari() {
 })();
 
 /**
- * Get timezone abbreviation for the airport's timezone
- * Uses Intl.DateTimeFormat to get the correct abbreviation (e.g., PST, PDT, EST, EDT)
- * Automatically handles DST transitions based on the current date
- * @param {Date} date - Optional date to use for timezone calculation (defaults to now)
- * @returns {string} Timezone abbreviation (e.g., "PST", "PDT", "EST", "EDT") or "--" on error
+ * Get current UTC offset in hours for airport timezone (client-side)
+ * Used to detect DST boundary: if offset differs from server, show offset-only.
  */
-function getTimezoneAbbreviation(date = null) {
+function getCurrentOffsetHours() {
+    const now = new Date();
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || (typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC');
+    const utcTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const localTimeStr = now.toLocaleTimeString('en-US', { timeZone: timezone, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const parseTime = (s) => { const p = s.split(':').map(Number); return p[0] * 3600 + p[1] * 60 + p[2]; };
+    let offsetSeconds = parseTime(localTimeStr) - parseTime(utcTimeStr);
+    if (offsetSeconds > 12 * 3600) offsetSeconds -= 24 * 3600;
+    else if (offsetSeconds < -12 * 3600) offsetSeconds += 24 * 3600;
+    return Math.round(offsetSeconds / 3600);
+}
+
+/**
+ * Get timezone abbreviation for the airport's timezone
+ * When timezone is passed (e.g. NOTAM formatting): uses Intl with that date/timezone.
+ * When timezone is null (clock display): uses server INITIAL_TIMEZONE_DISPLAY (reliable IANA data).
+ * @param {Date} date - Optional date to use (defaults to now)
+ * @param {string|null} timezone - Optional timezone; when passed, uses Intl for that date
+ * @returns {string} Timezone abbreviation (e.g., "MST", "PDT") or "" on DST boundary / "--" on error
+ */
+function getTimezoneAbbreviation(date = null, timezone = null) {
     const now = date || new Date();
-    
-    // Get airport timezone, default to UTC if not available (configurable via DEFAULT_TIMEZONE)
-    const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
-    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
-    
+    const tz = timezone || (AIRPORT_DATA && AIRPORT_DATA.timezone) || (typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC');
+
+    if (timezone === null && typeof INITIAL_TIMEZONE_DISPLAY !== 'undefined' && INITIAL_TIMEZONE_DISPLAY && INITIAL_TIMEZONE_DISPLAY.abbreviation) {
+        const currentOffset = getCurrentOffsetHours();
+        if (currentOffset === INITIAL_TIMEZONE_DISPLAY.offset_hours) {
+            return INITIAL_TIMEZONE_DISPLAY.abbreviation;
+        }
+    }
+
     try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            timeZoneName: 'short'
-        });
+        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' });
         const parts = formatter.formatToParts(now);
-        const timezonePart = parts.find(part => part.type === 'timeZoneName');
-        return timezonePart ? timezonePart.value : '--';
+        const tzPart = parts.find(p => p.type === 'timeZoneName');
+        return tzPart ? tzPart.value : '--';
     } catch (error) {
         console.error('[Timezone] Error getting timezone abbreviation:', error);
         return '--';
@@ -2585,79 +2609,40 @@ function getTimezoneAbbreviation(date = null) {
 // Update clocks
 function updateClocks() {
     const now = new Date();
-    
-    // Get airport timezone, default to UTC if not available (configurable via DEFAULT_TIMEZONE)
-    const defaultTimezone = typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC';
-    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || defaultTimezone;
-    
-    // Format local time in airport's timezone based on user preference
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || (typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC');
+
     const timeFormat = getTimeFormat();
-    const localTimeOptions = {
+    const localTime = now.toLocaleTimeString('en-US', {
         timeZone: timezone,
         hour12: timeFormat === '12hr',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
-    };
-    const localTime = now.toLocaleTimeString('en-US', localTimeOptions);
+    });
     document.getElementById('localTime').textContent = localTime;
-    
-    // Get timezone abbreviation and UTC offset (e.g., PST, PDT, EST, EDT)
-    // Use the reusable function
+
     try {
-        const timezoneAbbr = getTimezoneAbbreviation(now);
-        
-        // Calculate UTC offset in hours
-        // Use a simple approach: format the same moment in both UTC and local timezone
-        // and calculate the difference
-        const utcTimeStr = now.toLocaleTimeString('en-US', {
-            timeZone: 'UTC',
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-        const localTimeStr = now.toLocaleTimeString('en-US', {
-            timeZone: timezone,
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-        
-        // Parse time strings to get hours, minutes, seconds
-        const parseTime = (timeStr) => {
-            const parts = timeStr.split(':').map(Number);
-            return parts[0] * 3600 + parts[1] * 60 + parts[2];
-        };
-        
-        let utcSeconds = parseTime(utcTimeStr);
-        let localSeconds = parseTime(localTimeStr);
-        
-        // Calculate offset (local - UTC)
-        // Handle day boundaries by checking if difference is > 12 hours
-        let offsetSeconds = localSeconds - utcSeconds;
-        if (offsetSeconds > 12 * 3600) {
-            offsetSeconds -= 24 * 3600; // Subtract a day (local is next day)
-        } else if (offsetSeconds < -12 * 3600) {
-            offsetSeconds += 24 * 3600; // Add a day (local is previous day)
+        let labelText;
+        if (typeof INITIAL_TIMEZONE_DISPLAY !== 'undefined' && INITIAL_TIMEZONE_DISPLAY) {
+            const currentOffset = getCurrentOffsetHours();
+            const serverOffset = INITIAL_TIMEZONE_DISPLAY.offset_hours;
+            if (currentOffset !== serverOffset) {
+                labelText = INITIAL_TIMEZONE_DISPLAY.offset_display;
+            } else {
+                labelText = INITIAL_TIMEZONE_DISPLAY.abbreviation + ' ' + INITIAL_TIMEZONE_DISPLAY.offset_display;
+            }
+        } else {
+            const abbr = getTimezoneAbbreviation(now);
+            const offset = getCurrentOffsetHours();
+            const sign = offset >= 0 ? '+' : '';
+            labelText = abbr ? `${abbr} (UTC${sign}${offset})` : `(UTC${sign}${offset})`;
         }
-        
-        const offsetHours = offsetSeconds / 3600;
-        
-        // Format offset as "(UTC-7)" or "(UTC+5)" with sign
-        // Note: offset is inverted (UTC-7 means UTC is 7 hours ahead, so local is UTC-7)
-        const offsetSign = offsetHours >= 0 ? '+' : '';
-        const offsetDisplay = `(UTC${offsetSign}${Math.round(offsetHours)})`;
-        
-        // Display timezone abbreviation with offset
-        document.getElementById('localTimezone').textContent = `${timezoneAbbr} ${offsetDisplay}`;
+        document.getElementById('localTimezone').textContent = labelText;
     } catch (error) {
-        console.error('[Time] Error getting timezone abbreviation:', error);
+        console.error('[Time] Error updating timezone display:', error);
         document.getElementById('localTimezone').textContent = '--';
     }
-    
-    // Zulu time (UTC)
+
     const zuluTime = now.toISOString().substr(11, 8);
     document.getElementById('zuluTime').textContent = zuluTime;
 }
@@ -6743,27 +6728,6 @@ function formatNotamTime(timeUtc, timeLocal) {
         }) + ' ' + getTimezoneAbbreviation(dt, timezone);
     } catch (e) {
         return timeUtc;
-    }
-}
-
-/**
- * Get timezone abbreviation
- * 
- * @param {Date} date Date object
- * @param {string} timezone Timezone identifier
- * @return {string} Timezone abbreviation
- */
-function getTimezoneAbbreviation(date, timezone) {
-    try {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            timeZoneName: 'short'
-        });
-        const parts = formatter.formatToParts(date);
-        const tzPart = parts.find(p => p.type === 'timeZoneName');
-        return tzPart ? tzPart.value : '';
-    } catch (e) {
-        return '';
     }
 }
 
