@@ -3697,9 +3697,6 @@ function validateAirportsJsonStructure(array $config): array {
         if (isset($airport['airnav_url']) && !$validateUrl($airport['airnav_url'])) {
             $errors[] = "Airport '{$airportCode}' has invalid airnav_url: must be a valid URL";
         }
-        if (isset($airport['skyvector_url']) && !$validateUrl($airport['skyvector_url'])) {
-            $errors[] = "Airport '{$airportCode}' has invalid skyvector_url: must be a valid URL";
-        }
         if (isset($airport['aopa_url']) && !$validateUrl($airport['aopa_url'])) {
             $errors[] = "Airport '{$airportCode}' has invalid aopa_url: must be a valid URL";
         }

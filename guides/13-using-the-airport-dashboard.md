@@ -9,7 +9,7 @@ This guide helps you get the most out of an AviationWX airport dashboard. Think 
 
 AviationWX dashboards focus on **essential, at-a-glance information** - the stuff you actually need when checking conditions before a flight. We keep it simple and fast.
 
-For deeper research, every dashboard includes links to trusted external resources like **AirNav**, **SkyVector**, **AOPA**, and **FAA Weather Cams**. We're not trying to replace these great tools - we're giving you a quick visual check and then connecting you to the experts when you need more.
+For deeper research, every dashboard includes links to trusted external resources like **AirNav**, **AOPA**, and **FAA Weather Cams**. We're not trying to replace these great tools - we're giving you a quick visual check and then connecting you to the experts when you need more.
 
 > ⚠️ **Important**: AviationWX is a **supplemental** information source. Always obtain official weather briefings and NOTAMs before flight.
 
@@ -364,11 +364,11 @@ Each airport dashboard includes quick links to external resources:
 ```
 +-----------------------------------------------------------------------------+
 |                                                                             |
-|       [ AirNav ]      [ SkyVector ]      [ AOPA ]      [ FAA Weather ]      |
+|       [ AirNav ]      [ AOPA ]      [ FAA Weather ]      |
 |                                                                             |
-|           |                 |                |                |             |
-|           v                 v                v                v             |
-|      Airport info      VFR charts      Pilot info      FAA weather          |
+|           |                |                |             |
+|           v                v                v             |
+|      Airport info      Pilot info      FAA weather          |
 |      & frequencies     & planning      & directory     cams (if avail)      |
 |                                                                             |
 +-----------------------------------------------------------------------------+

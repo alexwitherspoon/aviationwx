@@ -164,7 +164,7 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['links'] = [];
     }
 
-    // Resolved external links (same logic as dashboard - AirNav, SkyVector, AOPA, etc.)
+    // Resolved external links (same logic as dashboard - AirNav, AOPA, etc.)
     $formatted['external_links'] = buildResolvedExternalLinks($airport);
     
     // Add availability flags
@@ -195,14 +195,6 @@ function buildResolvedExternalLinks(array $airport): array
         : ($linkIdentifier ? 'https://www.airnav.com/airport/' . $linkIdentifier : null);
     if ($airnavUrl !== null) {
         $links[] = ['label' => 'AirNav', 'url' => $airnavUrl];
-    }
-
-    // SkyVector
-    $skyvectorUrl = !empty($airport['skyvector_url'])
-        ? $airport['skyvector_url']
-        : ($linkIdentifier ? 'https://skyvector.com/airport/' . $linkIdentifier : null);
-    if ($skyvectorUrl !== null) {
-        $links[] = ['label' => 'SkyVector', 'url' => $skyvectorUrl];
     }
 
     // AOPA (US or manual override)

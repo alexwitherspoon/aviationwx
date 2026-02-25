@@ -174,9 +174,8 @@ function generateAirportSchema($airport, $airportId) {
     
     // Build sameAs links to authoritative aviation databases
     $sameAs = [];
-    // AirNav and SkyVector work with any identifier (ICAO, FAA LID, etc.)
+    // AirNav works with any identifier (ICAO, FAA LID, etc.)
     $sameAs[] = 'https://www.airnav.com/airport/' . $primaryIdentifier;
-    $sameAs[] = 'https://skyvector.com/airport/' . $primaryIdentifier;
     // AOPA works best with ICAO codes
     if (!empty($airport['icao'])) {
         $sameAs[] = 'https://www.aopa.org/destinations/airports/' . $airport['icao'];

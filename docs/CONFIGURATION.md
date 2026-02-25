@@ -108,7 +108,6 @@ All configuration lives in a single `airports.json` file with two sections:
 | `links` | `[]` | Custom external links |
 | **Link Overrides** |||
 | `airnav_url` | auto | Override AirNav link |
-| `skyvector_url` | auto | Override SkyVector link |
 | `aopa_url` | auto | Override AOPA link (US airports only by default) |
 | `faa_weather_url` | auto | Override FAA Weather link (US airports only by default) |
 | `regional_weather_url` | — | Override or add regional weather camera link (Canada, Australia, or custom) |
@@ -1288,7 +1287,7 @@ Logos are cached locally for 30 days. Text fallback if logo fails.
 
 ### Custom Links
 
-Appear after standard links (AirNav, SkyVector, etc.):
+Appear after standard links (AirNav, AOPA, etc.):
 
 ```json
 "links": [
@@ -1302,8 +1301,7 @@ Appear after standard links (AirNav, SkyVector, etc.):
 Standard links auto-generate from best identifier. Override when needed:
 
 ```json
-"airnav_url": "https://www.airnav.com/airport/KSPB",
-"skyvector_url": "https://skyvector.com/airport/KSPB"
+"airnav_url": "https://www.airnav.com/airport/KSPB"
 ```
 
 **Regional weather links:** Canadian airports (ICAO C*) automatically show "NAV Canada Weather" (CFPS Weather and NOTAM). Australian airports (ICAO Y*) show "Airservices Weather Cams". To link to a specific camera site (e.g., a NAV Canada metcam site with known ID), use `regional_weather_url` and optional `regional_weather_label`:

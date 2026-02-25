@@ -310,7 +310,7 @@ class HtmlOutputValidationTest extends TestCase
         
         // First, check if any custom links are rendered in the HTML
         // Look for links with target="_blank" and rel="noopener" that have class="btn"
-        // These are the custom links (other links like AirNav, SkyVector also have these attributes)
+        // These are the custom links (other links like AirNav, AOPA also have these attributes)
         $customLinkPattern = '/<a[^>]*target=["\']_blank["\'][^>]*rel=["\']noopener["\'][^>]*class=["\'][^"\']*btn[^"\']*["\'][^>]*>/i';
         $hasCustomLinks = preg_match_all($customLinkPattern, $html, $customLinkMatches);
         

@@ -704,9 +704,6 @@ function generateConfigSnippet($formData) {
     if (!empty($formData['airnav_url'] ?? '')) {
         $airport['airnav_url'] = trim($formData['airnav_url']);
     }
-    if (!empty($formData['skyvector_url'] ?? '')) {
-        $airport['skyvector_url'] = trim($formData['skyvector_url']);
-    }
     if (!empty($formData['aopa_url'] ?? '')) {
         $airport['aopa_url'] = trim($formData['aopa_url']);
     }
@@ -1593,13 +1590,6 @@ $pageDescription = 'Generate airports.json configuration snippets for adding new
                         <input type="url" id="airnav_url" name="airnav_url"
                                value="<?= htmlspecialchars($_POST['airnav_url'] ?? '') ?>"
                                placeholder="https://www.airnav.com/airport/KSPB">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="skyvector_url">SkyVector URL</label>
-                        <input type="url" id="skyvector_url" name="skyvector_url"
-                               value="<?= htmlspecialchars($_POST['skyvector_url'] ?? '') ?>"
-                               placeholder="https://skyvector.com/airport/KSPB">
                     </div>
                     
                     <div class="form-group">

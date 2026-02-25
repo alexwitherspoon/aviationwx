@@ -126,7 +126,6 @@ class PublicApiAirportTest extends TestCase
 
         $labels = array_column($formatted['external_links'], 'label');
         $this->assertContains('AirNav', $labels);
-        $this->assertContains('SkyVector', $labels);
         $this->assertContains('AOPA', $labels);
         $this->assertContains('FAA Weather', $labels);
         $this->assertContains('ForeFlight', $labels);

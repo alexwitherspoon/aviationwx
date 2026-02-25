@@ -793,7 +793,7 @@
               },
               "external_links": {
                 "type": "array",
-                "description": "Resolved external links (AirNav, SkyVector, AOPA, etc.)",
+                "description": "Resolved external links (AirNav, AOPA, etc.)",
                 "items": {
                   "type": "object",
                   "properties": {

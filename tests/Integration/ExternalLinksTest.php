@@ -2,7 +2,7 @@
 /**
  * External Links Validation Tests
  * 
- * Tests that external links (AirNav, SkyVector, AOPA, FAA Weather, ForeFlight) are:
+ * Tests that external links (AirNav, AOPA, FAA Weather, ForeFlight) are:
  * - Generating correct URL formats
  * - Supporting manual overrides
  * - Reachable (returning valid HTTP status codes)
@@ -76,35 +76,6 @@ class ExternalLinksTest extends TestCase
             $this->assertTrue(
                 $result['valid'],
                 "AirNav URL for {$identifier} should be valid: {$result['message']}"
-            );
-        }
-    }
-    
-    /**
-     * Test SkyVector URLs are valid and reachable
-     */
-    public function testSkyVectorLinks_AreValid()
-    {
-        foreach ($this->testAirports as $airportId => $airport) {
-            // Check for manual override first
-            if (!empty($airport['skyvector_url'])) {
-                $url = $airport['skyvector_url'];
-            } else {
-                // Use auto-generated URL if identifier available
-                $linkIdentifier = getBestIdentifierForLinks($airport);
-                if ($linkIdentifier === null) {
-                    $this->markTestIncomplete("No identifier available for SkyVector URL: $airportId");
-                    continue;
-                }
-                $url = 'https://skyvector.com/airport/' . $linkIdentifier;
-            }
-            
-            $result = $this->validateUrl($url, 'skyvector.com');
-            
-            $identifier = $airport['icao'] ?? $airport['iata'] ?? $airport['faa'] ?? $airportId;
-            $this->assertTrue(
-                $result['valid'],
-                "SkyVector URL for {$identifier} should be valid: {$result['message']}"
             );
         }
     }
@@ -304,18 +275,6 @@ class ExternalLinksTest extends TestCase
         foreach ($this->testAirports as $airportId => $airport) {
             $linkIdentifier = getBestIdentifierForLinks($airport);
             $region = getAviationRegionFromAirport($airport);
-            
-            // Test SkyVector format
-            if ($linkIdentifier !== null) {
-                $skyvectorUrl = !empty($airport['skyvector_url']) 
-                    ? $airport['skyvector_url'] 
-                    : "https://skyvector.com/airport/$linkIdentifier";
-                $this->assertMatchesRegularExpression(
-                    '/^https:\/\/skyvector\.com\/airport\/[A-Z0-9]+$/',
-                    $skyvectorUrl,
-                    "SkyVector URL format should match expected pattern for {$linkIdentifier}"
-                );
-            }
             
             // Test AOPA format (US only, or override)
             if ($linkIdentifier !== null && ($region === 'US' || !empty($airport['aopa_url']))) {

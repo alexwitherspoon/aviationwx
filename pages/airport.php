@@ -1838,20 +1838,6 @@ if ($themeCookie === 'dark') {
                 <?php endif; ?>
                 
                 <?php
-                // SkyVector link (manual override or auto-generated)
-                $skyvectorUrl = null;
-                if (!empty($airport['skyvector_url'])) {
-                    $skyvectorUrl = $airport['skyvector_url'];
-                } elseif ($linkIdentifier !== null) {
-                    $skyvectorUrl = 'https://skyvector.com/airport/' . $linkIdentifier;
-                }
-                if ($skyvectorUrl !== null): ?>
-                <a href="<?= htmlspecialchars($skyvectorUrl) ?>" target="_blank" rel="noopener" class="btn" title="View aeronautical charts on SkyVector (opens in new tab)">
-                    SkyVector
-                </a>
-                <?php endif; ?>
-                
-                <?php
                 // AOPA link (US-focused; manual override or auto-generated for US airports only)
                 $aopaUrl = null;
                 if (!empty($airport['aopa_url'])) {
