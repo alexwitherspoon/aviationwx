@@ -259,7 +259,43 @@ class PixelationDetectionTest extends TestCase
         $this->assertContains($phase, $validPhases,
             'Should return a valid daylight phase');
     }
-    
+
+    /**
+     * Polar night: sun never rises. getDaylightPhase uses getSunAltitude for polar regions.
+     */
+    public function testGetDaylightPhase_PolarNight_ReturnsNight(): void
+    {
+        $airport = [
+            'lat' => 71.2906,
+            'lon' => -156.7886,
+            'timezone' => 'America/Anchorage',
+        ];
+        $winterSolsticeNoon = strtotime('2025-12-21 12:00:00 America/Anchorage');
+
+        $phase = getDaylightPhase($airport, $winterSolsticeNoon);
+
+        $this->assertEquals(DAYLIGHT_PHASE_NIGHT, $phase,
+            'Utqiaġvik AK on winter solstice: sun never rises, should be night');
+    }
+
+    /**
+     * Midnight sun: sun never sets. getDaylightPhase uses getSunAltitude for polar regions.
+     */
+    public function testGetDaylightPhase_MidnightSun_ReturnsDay(): void
+    {
+        $airport = [
+            'lat' => 66.5039,
+            'lon' => 25.7294,
+            'timezone' => 'Europe/Helsinki',
+        ];
+        $summerSolsticeNoon = strtotime('2025-06-21 12:00:00 Europe/Helsinki');
+
+        $phase = getDaylightPhase($airport, $summerSolsticeNoon);
+
+        $this->assertEquals(DAYLIGHT_PHASE_DAY, $phase,
+            'Rovaniemi on summer solstice noon: sun never sets, should be day');
+    }
+
     // ==================== Pixelation Detection Integration Tests ====================
     
     public function testDetectPixelation_SharpImage_NotPixelated(): void
