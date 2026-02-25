@@ -50,7 +50,7 @@ AviationWX.org provides real-time, localized weather data specifically designed 
 - **Unit Toggles**: Switch between temperature (F/C), distance (ft/m), wind speed (kts/mph/km/h), and barometer (inHg/hPa/mmHg) units
 - **Theme Toggle**: Four display modes - Auto (default, follows browser preference), Day (light), Dark (classic dark theme), and Night (red night vision mode for cockpit use)
   - Auto mode follows browser `prefers-color-scheme` preference in real-time
-  - Auto night mode on mobile after sunset (based on airport local time) for safety
+  - Auto night mode on mobile after evening civil twilight (based on airport local time) for safety
   - Persists user theme preference via cookie
 - **Weather Status Emojis**: Visual indicators for abnormal conditions
 - **Mobile-First Design**: Responsive layout for all devices

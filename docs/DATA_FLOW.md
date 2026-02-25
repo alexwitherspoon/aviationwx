@@ -584,6 +584,36 @@ Pressure Altitude = Station Elevation + [(29.92 - Altimeter Setting) × 1000]
 - 14 CFR § 91.155 (Basic VFR weather minimums - separate from categories)
 - National Weather Service Directive on Aviation Weather Services
 
+### Sun Calculations
+
+Sunrise, sunset, and twilight times for display and night mode. Uses NOAA Solar Calculator formulas for FAA-aligned accuracy.
+
+**Library**: `lib/sun/SunCalculator.php`  
+**Primary Reference**: [NOAA GML Solar Calculator](https://gml.noaa.gov/grad/solcalc/solareqns.PDF)  
+**Accuracy Goal**: ±1 minute for ±72° latitude (NOAA specification)
+
+**API** (`SunCalculator::getSunInfo($timestamp, $lat, $lon)`):
+- Returns: `sunrise`, `sunset`, `civil_twilight_begin`, `civil_twilight_end`, `nautical_twilight_begin`, `nautical_twilight_end` (Unix timestamps UTC, or `null`)
+- **Null** = event does not occur (polar day/night); **exceptions** = invalid input (never null for errors)
+
+**Night Definition** (FAA 14 CFR §1.1):
+- Night mode uses **civil twilight**, not sunrise/sunset
+- **Night starts**: Evening civil twilight (sun 6° below horizon)
+- **Night ends**: Morning civil twilight (sun 6° below horizon)
+
+**Integration**:
+- `lib/weather/utils.php`: `getSunInfoForAirport()`, `getSunriseTime()`, `getSunsetTime()`, `getDaylightPhase()`
+- `pages/airport.php`: Night mode auto-switch uses `civil_twilight_end` → `civil_twilight_begin`
+
+**Testing**:
+- Fixtures: `tests/Fixtures/sun-noaa-reference.json` (Denver, Anchorage, Sydney, equator, London, Tokyo, Rovaniemi, Utqiaġvik)
+- Tests: `tests/Unit/SunCalculatorTest.php`
+- Tolerance: ±5 minutes for fixture comparisons
+
+**References**:
+- [NOAA Solar Calculator Equations](https://gml.noaa.gov/grad/solcalc/solareqns.PDF)
+- [FAA 14 CFR §1.1](https://www.ecfr.gov/current/title-14/chapter-I/subchapter-A/part-1/subpart-A/section-1.1) — "Night" definition
+
 ---
 
 ## Weather Data Transformations
@@ -1553,8 +1583,10 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 #### Precipitation and Daylight
 - **Rainfall Today**: Inches (or cm if metric)
   - Daily accumulation (resets at local midnight)
-- **Sunrise**: Local time in airport timezone
-- **Sunset**: Local time in airport timezone
+- **Sunrise / Sunset**: Local time in airport timezone
+  - Computed by `lib/sun/SunCalculator.php` (NOAA formulas)
+  - See [Sun Calculations](#sun-calculations) for details
+- **Night Mode**: Auto-switches on mobile after evening civil twilight until morning civil twilight (FAA definition)
 
 ### Webcam Display
 
