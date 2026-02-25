@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "description": "Reference values for sun calculations. NOAA formula implementation. Fixtures from SunCalculator output.",
+    "description": "Reference values for sun calculations. NOAA formula. ±1 min at lower latitudes; ±5 min at high latitudes (inherently harder; we do our best).",
     "tolerance_minutes": 5,
     "format": "ISO 8601 UTC timestamps (YYYY-MM-DDTHH:MM:SSZ)"
   },

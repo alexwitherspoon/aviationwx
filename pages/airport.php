@@ -457,7 +457,15 @@ if ($themeCookie === 'dark') {
     $nightModeData = [];
     if (isset($airport['lat']) && isset($airport['lon']) && isset($airport['timezone'])) {
         $sunInfo = getSunInfoForAirport($airport);
-        if ($sunInfo !== null) {
+        if ($sunInfo === null) {
+            if (function_exists('aviationwx_log')) {
+                aviationwx_log('warning', 'sun info unavailable for night mode', [
+                    'airport' => $airport['icao'] ?? $airport['id'] ?? 'unknown',
+                    'lat' => $airport['lat'],
+                    'lon' => $airport['lon'],
+                ], 'app');
+            }
+        } else {
             $tz = new DateTimeZone($airport['timezone']);
             $now = new DateTime('now', $tz);
             $today = $now->format('Y-m-d');

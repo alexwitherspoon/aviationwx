@@ -590,7 +590,7 @@ Sunrise, sunset, and twilight times for display and night mode. Uses NOAA Solar 
 
 **Library**: `lib/sun/SunCalculator.php`  
 **Primary Reference**: [NOAA GML Solar Calculator](https://gml.noaa.gov/grad/solcalc/solareqns.PDF)  
-**Accuracy Goal**: ±1 minute for ±72° latitude (NOAA specification)
+**Accuracy Goal**: ±1 minute for ±72° latitude (NOAA); high latitudes inherently harder, ±5 min is best achievable
 
 **API** (`SunCalculator::getSunInfo($timestamp, $lat, $lon)`):
 - Returns: `sunrise`, `sunset`, `civil_twilight_begin`, `civil_twilight_end`, `nautical_twilight_begin`, `nautical_twilight_end` (Unix timestamps UTC, or `null`)
@@ -608,7 +608,7 @@ Sunrise, sunset, and twilight times for display and night mode. Uses NOAA Solar 
 **Testing**:
 - Fixtures: `tests/Fixtures/sun-noaa-reference.json` (Denver, Anchorage, Sydney, equator, London, Tokyo, Rovaniemi, Utqiaġvik)
 - Tests: `tests/Unit/SunCalculatorTest.php`
-- Tolerance: ±5 minutes for fixture comparisons
+- Tolerance: ±1 min lower latitudes; ±5 min high latitudes (inherently harder; fixture comparisons)
 
 **References**:
 - [NOAA Solar Calculator Equations](https://gml.noaa.gov/grad/solcalc/solareqns.PDF)

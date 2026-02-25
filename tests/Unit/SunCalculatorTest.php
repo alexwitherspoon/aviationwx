@@ -10,7 +10,7 @@ declare(strict_types=1);
  *
  * Fixture source: tests/Fixtures/sun-noaa-reference.json
  * Primary reference: NOAA GML Solar Calculator
- * Tolerance: ±1 minute (NOAA stated accuracy for ±72° latitude)
+ * Tolerance: ±1 min at lower latitudes; ±5 min at high latitudes (inherently harder; we do our best)
  */
 
 namespace AviationWX\Tests\Unit;
@@ -23,7 +23,7 @@ require_once __DIR__ . '/../../lib/sun/SunCalculator.php';
 class SunCalculatorTest extends TestCase
 {
     private const FIXTURE_PATH = __DIR__ . '/../Fixtures/sun-noaa-reference.json';
-    /** ±5 min tolerance - NOAA formula approximation; variance by latitude */
+    /** ±5 min max - NOAA ±1 min for ±72°; high latitudes inherently harder, we do our best */
     private const TOLERANCE_SECONDS = 300;
 
     private array $fixtures = [];

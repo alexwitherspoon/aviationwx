@@ -6,7 +6,7 @@ declare(strict_types=1);
  * SunCalculator - Sunrise, Sunset, and Twilight Times
  *
  * Implements NOAA Solar Calculator formulas for NOAA-aligned accuracy.
- * Primary reference: NOAA GML Solar Calculator (±1 min for ±72° latitude).
+ * Primary reference: NOAA GML Solar Calculator (±1 min for ±72°; high latitudes inherently harder).
  *
  * Returns null for polar regions when sun does not rise/set (no data available).
  * Errors are communicated via exceptions, not null.
