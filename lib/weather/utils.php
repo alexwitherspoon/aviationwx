@@ -501,8 +501,8 @@ function getDaylightPhase(array $airport, ?int $timestamp = null): string
         ($civilDusk !== null && $timestamp >= $sunset && $timestamp < $civilDusk)) {
         return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
     }
-    if (($nauticalDawn !== null && $timestamp >= $nauticalDawn && $timestamp < $civilDawn) ||
-        ($nauticalDusk !== null && $timestamp >= $civilDusk && $timestamp < $nauticalDusk)) {
+    if (($nauticalDawn !== null && $civilDawn !== null && $timestamp >= $nauticalDawn && $timestamp < $civilDawn) ||
+        ($nauticalDusk !== null && $civilDusk !== null && $timestamp >= $civilDusk && $timestamp < $nauticalDusk)) {
         return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
     }
 

@@ -128,7 +128,11 @@ class SunCalculator
     ): ?int {
         $latRad = deg2rad($lat);
         $cosZenith = cos(deg2rad($zenith));
-        $cosHa = ($cosZenith - sin($latRad) * sin($declRad)) / (cos($latRad) * cos($declRad));
+        $denom = cos($latRad) * cos($declRad);
+        if (abs($denom) < 1e-10) {
+            return null;
+        }
+        $cosHa = ($cosZenith - sin($latRad) * sin($declRad)) / $denom;
 
         if ($cosHa > 1.0 || $cosHa < -1.0) {
             return null;
