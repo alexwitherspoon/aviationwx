@@ -120,25 +120,35 @@ function getWeatherCacheDir() {
 /**
  * Get sun info for airport using SunCalculator (NOAA formula)
  *
- * Uses airport's local date for correct day boundary. Returns null for polar regions.
+ * Uses airport's local date for correct day boundary. For valid locations, always
+ * returns an array; polar-region cases are represented by per-event null fields
+ * (e.g., no sunrise/sunset), not by a null return value.
  *
  * @param array $airport Airport config with 'lat', 'lon', 'timezone'
- * @return array|null Sun info array or null if no location data
+ * @return array|null Sun info array, or null if location data missing/invalid or timezone invalid
  */
 function getSunInfoForAirport(array $airport): ?array
 {
     if (!isset($airport['lat']) || !isset($airport['lon'])) {
         return null;
     }
-    $timezone = getAirportTimezone($airport);
-    $today = getAirportDateKey($airport);
-    $timestamp = strtotime($today . ' 12:00:00 ' . $timezone);
-    if ($timestamp === false) {
-        return null;
-    }
     try {
+        $timezone = getAirportTimezone($airport);
+        $today = getAirportDateKey($airport);
+        $timestamp = strtotime($today . ' 12:00:00 ' . $timezone);
+        if ($timestamp === false) {
+            return null;
+        }
         return SunCalculator::getSunInfo($timestamp, (float) $airport['lat'], (float) $airport['lon']);
     } catch (InvalidArgumentException $e) {
+        return null;
+    } catch (\Exception $e) {
+        if (function_exists('aviationwx_log')) {
+            aviationwx_log('warning', 'sun info unavailable (timezone or calc error)', [
+                'airport' => $airport['icao'] ?? $airport['id'] ?? 'unknown',
+                'message' => $e->getMessage(),
+            ], 'app');
+        }
         return null;
     }
 }
@@ -467,12 +477,22 @@ function getDaylightPhase(array $airport, ?int $timestamp = null): string
     $lon = (float) $airport['lon'];
     $timestamp = $timestamp ?? time();
 
-    $timezone = getAirportTimezone($airport);
-    $dt = new DateTime('@' . $timestamp);
-    $dt->setTimezone(new DateTimeZone($timezone));
-    $localDate = $dt->format('Y-m-d');
-    $dayTimestamp = strtotime($localDate . ' 12:00:00 ' . $timezone);
-    if ($dayTimestamp === false) {
+    try {
+        $timezone = getAirportTimezone($airport);
+        $dt = new \DateTime('@' . $timestamp);
+        $dt->setTimezone(new \DateTimeZone($timezone));
+        $localDate = $dt->format('Y-m-d');
+        $dayTimestamp = strtotime($localDate . ' 12:00:00 ' . $timezone);
+        if ($dayTimestamp === false) {
+            return DAYLIGHT_PHASE_DAY;
+        }
+    } catch (\Exception $e) {
+        if (function_exists('aviationwx_log')) {
+            aviationwx_log('warning', 'daylight phase timezone error', [
+                'airport' => $airport['id'] ?? $airport['icao'] ?? null,
+                'message' => $e->getMessage(),
+            ], 'app');
+        }
         return DAYLIGHT_PHASE_DAY;
     }
 

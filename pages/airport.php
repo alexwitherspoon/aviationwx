@@ -456,18 +456,19 @@ if ($themeCookie === 'dark') {
     // Night mode: evening civil twilight until morning civil twilight (FAA definition of night)
     $nightModeData = [];
     if (isset($airport['lat']) && isset($airport['lon']) && isset($airport['timezone'])) {
-        $sunInfo = getSunInfoForAirport($airport);
-        if ($sunInfo === null) {
-            if (function_exists('aviationwx_log')) {
-                aviationwx_log('warning', 'sun info unavailable for night mode', [
-                    'airport' => $airport['icao'] ?? $airport['id'] ?? 'unknown',
-                    'lat' => $airport['lat'],
-                    'lon' => $airport['lon'],
-                ], 'app');
-            }
-        } else {
-            $tz = new DateTimeZone($airport['timezone']);
-            $now = new DateTime('now', $tz);
+        try {
+            $sunInfo = getSunInfoForAirport($airport);
+            if ($sunInfo === null) {
+                if (function_exists('aviationwx_log')) {
+                    aviationwx_log('warning', 'sun info unavailable for night mode', [
+                        'airport' => $airport['icao'] ?? $airport['id'] ?? 'unknown',
+                        'lat' => $airport['lat'],
+                        'lon' => $airport['lon'],
+                    ], 'app');
+                }
+            } else {
+                $tz = new DateTimeZone($airport['timezone']);
+                $now = new DateTime('now', $tz);
             $today = $now->format('Y-m-d');
             $civilDusk = $sunInfo['civil_twilight_end'];
             $civilDawn = $sunInfo['civil_twilight_begin'];
@@ -495,6 +496,14 @@ if ($themeCookie === 'dark') {
                     'currentMin' => (int) $now->format('i'),
                     'todayDate' => $today
                 ];
+            }
+            }
+        } catch (\Exception $e) {
+            if (function_exists('aviationwx_log')) {
+                aviationwx_log('warning', 'night mode timezone error', [
+                    'airport' => $airport['icao'] ?? $airport['id'] ?? 'unknown',
+                    'message' => $e->getMessage(),
+                ], 'app');
             }
         }
     }
