@@ -261,9 +261,10 @@ class PixelationDetectionTest extends TestCase
     }
 
     /**
-     * Polar night: sun never rises. getDaylightPhase uses getSunAltitude for polar regions.
+     * Polar night with twilight: sun never rises but reaches ~-4.7° at noon (above -6° civil threshold).
+     * getDaylightPhase uses getSunAltitude for polar regions; at noon returns civil twilight.
      */
-    public function testGetDaylightPhase_PolarNight_ReturnsNight(): void
+    public function testGetDaylightPhase_PolarNightWithTwilight_ReturnsCivilTwilightAtNoon(): void
     {
         $airport = [
             'lat' => 71.2906,
@@ -274,8 +275,8 @@ class PixelationDetectionTest extends TestCase
 
         $phase = getDaylightPhase($airport, $winterSolsticeNoon);
 
-        $this->assertEquals(DAYLIGHT_PHASE_NIGHT, $phase,
-            'Utqiaġvik AK on winter solstice: sun never rises, should be night');
+        $this->assertEquals(DAYLIGHT_PHASE_CIVIL_TWILIGHT, $phase,
+            'Utqiaġvik AK winter solstice noon: sun ~-4.7° (civil twilight), not full night');
     }
 
     /**

@@ -72,10 +72,10 @@ class SunCalculator
         $result = [
             'sunrise' => $sunrise,
             'sunset' => $sunset,
-            'civil_twilight_begin' => $sunrise === null && $sunset === null ? null : self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_CIVIL, true, $timestamp),
-            'civil_twilight_end' => $sunrise === null && $sunset === null ? null : self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_CIVIL, false, $timestamp),
-            'nautical_twilight_begin' => $sunrise === null && $sunset === null ? null : self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_NAUTICAL, true, $timestamp),
-            'nautical_twilight_end' => $sunrise === null && $sunset === null ? null : self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_NAUTICAL, false, $timestamp),
+            'civil_twilight_begin' => self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_CIVIL, true, $timestamp),
+            'civil_twilight_end' => self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_CIVIL, false, $timestamp),
+            'nautical_twilight_begin' => self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_NAUTICAL, true, $timestamp),
+            'nautical_twilight_end' => self::riseSetMinutes($lat, $lon, $decl, $eqtime, self::ZENITH_NAUTICAL, false, $timestamp),
         ];
 
         return $result;

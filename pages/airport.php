@@ -490,7 +490,7 @@ if ($themeCookie === 'dark') {
                 $sunAltitude = getSunAltitude((float) $airport['lat'], (float) $airport['lon'], (int) $now->getTimestamp());
                 $nightModeData = [
                     'timezone' => $airport['timezone'],
-                    'polarNight' => $sunAltitude <= 0,
+                    'polarNight' => $sunAltitude <= -6.0,
                     'currentHour' => (int) $now->format('G'),
                     'currentMin' => (int) $now->format('i'),
                     'todayDate' => $today

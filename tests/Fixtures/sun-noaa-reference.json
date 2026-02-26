@@ -112,12 +112,12 @@
       "timezone": "America/Anchorage",
       "sunrise": null,
       "sunset": null,
-      "civil_twilight_begin": null,
-      "civil_twilight_end": null,
-      "nautical_twilight_begin": null,
-      "nautical_twilight_end": null,
+      "civil_twilight_begin": "2025-12-21T20:55:16Z",
+      "civil_twilight_end": "2025-12-21T23:55:03Z",
+      "nautical_twilight_begin": "2025-12-21T18:44:57Z",
+      "nautical_twilight_end": "2025-12-22T02:05:22Z",
       "polar": "polar_night",
-      "source": "Utqiaġvik AK, winter solstice - sun does not rise"
+      "source": "Utqiaġvik AK, winter solstice - sun does not rise but civil/nautical twilight exist (sun max ~-4.7°)"
     },
     {
       "id": "london_mar20_2025",

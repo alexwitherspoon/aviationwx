@@ -99,9 +99,6 @@ class SunCalculatorTest extends TestCase
         $cases = [];
 
         foreach ($fixtures as $f) {
-            if (!empty($f['polar'])) {
-                continue;
-            }
             $cases[] = [
                 $f['id'],
                 (float) $f['lat'],
@@ -114,68 +111,14 @@ class SunCalculatorTest extends TestCase
         return $cases;
     }
 
-    /**
-     * Test polar region fixtures - expect null for all times (no rise/set)
-     */
-    #[DataProvider('polarFixtureProvider')]
-    public function testGetSunInfo_PolarFixture_ReturnsNullForAllTimes(
-        string $id,
-        float $lat,
-        float $lon,
-        string $date,
-        string $polarType
-    ): void {
-        $timestamp = strtotime($date . ' 12:00:00 UTC');
-        $result = \SunCalculator::getSunInfo($timestamp, $lat, $lon);
-
-        $this->assertIsArray($result, "Fixture $id: result must be array");
-
-        $fields = [
-            'sunrise', 'sunset',
-            'civil_twilight_begin', 'civil_twilight_end',
-            'nautical_twilight_begin', 'nautical_twilight_end',
-        ];
-
-        foreach ($fields as $key) {
-            $this->assertNull(
-                $result[$key] ?? null,
-                "Fixture $id ($polarType): $key should be null"
-            );
-        }
-    }
-
-    public static function polarFixtureProvider(): array
-    {
-        $path = __DIR__ . '/../Fixtures/sun-noaa-reference.json';
-        $json = file_get_contents($path);
-        $data = json_decode($json, true);
-        $fixtures = $data['fixtures'] ?? [];
-        $cases = [];
-
-        foreach ($fixtures as $f) {
-            if (empty($f['polar'])) {
-                continue;
-            }
-            $cases[] = [
-                $f['id'],
-                (float) $f['lat'],
-                (float) $f['lon'],
-                $f['date'],
-                $f['polar'],
-            ];
-        }
-
-        return $cases;
-    }
-
-    public function testGetSunInfo_InvalidLatitude_ThrowsOrReturnsError(): void
+    public function testGetSunInfo_InvalidLatitude_ThrowsInvalidArgumentException(): void
     {
         $timestamp = strtotime('2025-02-25 12:00:00 UTC');
         $this->expectException(\InvalidArgumentException::class);
         \SunCalculator::getSunInfo($timestamp, 95.0, -104.99);
     }
 
-    public function testGetSunInfo_InvalidLongitude_ThrowsOrReturnsError(): void
+    public function testGetSunInfo_InvalidLongitude_ThrowsInvalidArgumentException(): void
     {
         $timestamp = strtotime('2025-02-25 12:00:00 UTC');
         $this->expectException(\InvalidArgumentException::class);

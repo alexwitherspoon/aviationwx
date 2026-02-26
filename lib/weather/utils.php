@@ -484,7 +484,16 @@ function getDaylightPhase(array $airport, ?int $timestamp = null): string
 
     if ($sunInfo['sunrise'] === null || $sunInfo['sunset'] === null) {
         $sunPosition = getSunAltitude($lat, $lon, $timestamp);
-        return $sunPosition > 0 ? DAYLIGHT_PHASE_DAY : DAYLIGHT_PHASE_NIGHT;
+        if ($sunPosition > 0.0) {
+            return DAYLIGHT_PHASE_DAY;
+        }
+        if ($sunPosition > -6.0) {
+            return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
+        }
+        if ($sunPosition > -12.0) {
+            return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
+        }
+        return DAYLIGHT_PHASE_NIGHT;
     }
 
     $sunrise = $sunInfo['sunrise'];
