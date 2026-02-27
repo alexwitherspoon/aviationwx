@@ -128,9 +128,23 @@ $breadcrumbs = generateBreadcrumbSchema([
 <html lang="en">
 <script>
 // Apply dark mode immediately based on browser preference to prevent flash
+// Listen for preference changes so theme transitions without refresh
 (function() {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark-mode');
+    function applyDarkMode(isDark) {
+        const el = document.documentElement;
+        const body = document.body;
+        if (isDark) {
+            el.classList.add('dark-mode');
+            if (body) { body.classList.add('dark-mode'); }
+        } else {
+            el.classList.remove('dark-mode');
+            if (body) { body.classList.remove('dark-mode'); }
+        }
+    }
+    const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq) {
+        applyDarkMode(mq.matches);
+        mq.addEventListener('change', function(e) { applyDarkMode(e.matches); });
     }
 })();
 </script>
