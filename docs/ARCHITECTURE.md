@@ -37,6 +37,8 @@ aviationwx.org/
 │   ├── webcam-error-detector.php # Webcam image validation (error frames, pixelation, uniform color)
 │   ├── webcam-format-generation.php # Shared format generation (WebP, JPEG)
 │   ├── exif-utils.php        # EXIF timestamp reading, writing, and validation
+│   ├── sun/
+│   │   └── SunCalculator.php # NOAA-aligned sunrise/sunset/twilight (civil twilight for night mode)
 │   ├── notam/
 │   │   ├── auth.php          # NMS API authentication (OAuth bearer token)
 │   │   ├── fetcher.php       # NOTAM fetching (location + geospatial queries)
@@ -279,7 +281,7 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 **Theme System**:
 - **Four Modes**: Auto (default, follows browser), Day (light), Dark (classic dark), Night (red night vision)
 - **Night Vision Mode**: Red-tinted display to preserve scotopic vision for pilots
-- **Auto-Detection**: Mobile devices automatically switch to Night mode after sunset (based on airport local time)
+- **Auto-Detection**: Mobile devices automatically switch to Night mode after evening civil twilight (based on airport local time). See [Data Flow: Sun Calculations](DATA_FLOW.md#sun-calculations) for NOAA-aligned calculations.
 - **Browser Preference**: Auto mode respects `prefers-color-scheme: dark` and updates in real-time
 - **Persistence**: Theme preference saved via cookie (`aviationwx_theme`)
 - **Priority**: Mobile auto-night → Saved preference (auto/day/dark) → Default to auto

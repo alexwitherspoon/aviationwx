@@ -1,11 +1,13 @@
 <?php
 /**
  * Weather Utility Functions
- * 
+ *
  * Utility functions for weather-related operations (timezone, date keys, sunrise/sunset, cache paths).
+ * Sun calculations use SunCalculator (NOAA formula) for accuracy and polar region handling.
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../sun/SunCalculator.php';
 
 /**
  * Get timezone display data for airport (abbreviation + offset)
@@ -116,54 +118,78 @@ function getWeatherCacheDir() {
 }
 
 /**
- * Get sunrise time for airport
- * 
- * Calculates sunrise time for today based on airport's latitude, longitude, and timezone.
- * 
- * @param array $airport Airport configuration array (must contain 'lat', 'lon', and optionally 'timezone')
- * @return string|null Sunrise time in HH:mm format (local timezone), or null if calculation fails
+ * Get sun info for airport using SunCalculator (NOAA formula)
+ *
+ * Uses airport's local date for correct day boundary. For valid locations, always
+ * returns an array; polar-region cases are represented by per-event null fields
+ * (e.g., no sunrise/sunset), not by a null return value.
+ *
+ * @param array $airport Airport config with 'lat', 'lon', 'timezone'
+ * @return array|null Sun info array, or null if location data missing/invalid or timezone invalid
  */
-function getSunriseTime($airport) {
-    $lat = $airport['lat'];
-    $lon = $airport['lon'];
-    $timezone = getAirportTimezone($airport);
-    
-    $timestamp = strtotime('today');
-    $sunInfo = date_sun_info($timestamp, $lat, $lon);
-    
-    if ($sunInfo['sunrise'] === false) {
+function getSunInfoForAirport(array $airport): ?array
+{
+    if (!isset($airport['lat']) || !isset($airport['lon'])) {
         return null;
     }
-    
+    try {
+        $timezone = getAirportTimezone($airport);
+        $today = getAirportDateKey($airport);
+        $timestamp = strtotime($today . ' 12:00:00 ' . $timezone);
+        if ($timestamp === false) {
+            return null;
+        }
+        return SunCalculator::getSunInfo($timestamp, (float) $airport['lat'], (float) $airport['lon']);
+    } catch (InvalidArgumentException $e) {
+        return null;
+    } catch (\Exception $e) {
+        if (function_exists('aviationwx_log')) {
+            aviationwx_log('warning', 'sun info unavailable (timezone or calc error)', [
+                'airport' => $airport['icao'] ?? $airport['id'] ?? 'unknown',
+                'message' => $e->getMessage(),
+            ], 'app');
+        }
+        return null;
+    }
+}
+
+/**
+ * Get sunrise time for airport
+ *
+ * Uses SunCalculator (NOAA formula). Returns null for polar regions (no sunrise).
+ *
+ * @param array $airport Airport configuration array (must contain 'lat', 'lon', and optionally 'timezone')
+ * @return string|null Sunrise time in HH:mm format (local timezone), or null if no sunrise
+ */
+function getSunriseTime($airport)
+{
+    $sunInfo = getSunInfoForAirport($airport);
+    if ($sunInfo === null || $sunInfo['sunrise'] === null) {
+        return null;
+    }
+    $timezone = getAirportTimezone($airport);
     $datetime = new DateTime('@' . $sunInfo['sunrise']);
     $datetime->setTimezone(new DateTimeZone($timezone));
-    
     return $datetime->format('H:i');
 }
 
 /**
  * Get sunset time for airport
- * 
- * Calculates sunset time for today based on airport's latitude, longitude, and timezone.
- * 
+ *
+ * Uses SunCalculator (NOAA formula). Returns null for polar regions (no sunset).
+ *
  * @param array $airport Airport configuration array (must contain 'lat', 'lon', and optionally 'timezone')
- * @return string|null Sunset time in HH:mm format (local timezone), or null if calculation fails
+ * @return string|null Sunset time in HH:mm format (local timezone), or null if no sunset
  */
-function getSunsetTime($airport) {
-    $lat = $airport['lat'];
-    $lon = $airport['lon'];
-    $timezone = getAirportTimezone($airport);
-    
-    $timestamp = strtotime('today');
-    $sunInfo = date_sun_info($timestamp, $lat, $lon);
-    
-    if ($sunInfo['sunset'] === false) {
+function getSunsetTime($airport)
+{
+    $sunInfo = getSunInfoForAirport($airport);
+    if ($sunInfo === null || $sunInfo['sunset'] === null) {
         return null;
     }
-    
+    $timezone = getAirportTimezone($airport);
     $datetime = new DateTime('@' . $sunInfo['sunset']);
     $datetime->setTimezone(new DateTimeZone($timezone));
-    
     return $datetime->format('H:i');
 }
 
@@ -442,62 +468,73 @@ define('DAYLIGHT_PHASE_NIGHT', 'night');                // Sun >12° below horiz
  * @param int|null $timestamp Unix timestamp to check (default: now)
  * @return string One of: 'day', 'civil', 'nautical', 'night'
  */
-function getDaylightPhase(array $airport, ?int $timestamp = null): string {
+function getDaylightPhase(array $airport, ?int $timestamp = null): string
+{
     if (!isset($airport['lat']) || !isset($airport['lon'])) {
-        // No location data - assume day (fail safe, less aggressive rejection)
         return DAYLIGHT_PHASE_DAY;
     }
-    
-    $lat = (float)$airport['lat'];
-    $lon = (float)$airport['lon'];
+    $lat = (float) $airport['lat'];
+    $lon = (float) $airport['lon'];
     $timestamp = $timestamp ?? time();
-    
-    // Get sun info for the day containing the timestamp
-    $dayStart = strtotime('today', $timestamp);
-    $sunInfo = date_sun_info($dayStart, $lat, $lon);
-    
-    // Handle polar regions (midnight sun or polar night)
-    // If sunrise/sunset is false, check if we're in perpetual day or night
-    if ($sunInfo['sunrise'] === false || $sunInfo['sunset'] === false) {
-        // Check sun altitude at noon to determine if perpetual day or night
-        $noonTimestamp = $dayStart + 43200; // 12:00
-        $sunPosition = getSunAltitude($lat, $lon, $noonTimestamp);
-        return $sunPosition > 0 ? DAYLIGHT_PHASE_DAY : DAYLIGHT_PHASE_NIGHT;
+
+    try {
+        $timezone = getAirportTimezone($airport);
+        $dt = new \DateTime('@' . $timestamp);
+        $dt->setTimezone(new \DateTimeZone($timezone));
+        $localDate = $dt->format('Y-m-d');
+        $dayTimestamp = strtotime($localDate . ' 12:00:00 ' . $timezone);
+        if ($dayTimestamp === false) {
+            return DAYLIGHT_PHASE_DAY;
+        }
+    } catch (\Exception $e) {
+        if (function_exists('aviationwx_log')) {
+            aviationwx_log('warning', 'daylight phase timezone error', [
+                'airport' => $airport['id'] ?? $airport['icao'] ?? null,
+                'message' => $e->getMessage(),
+            ], 'app');
+        }
+        return DAYLIGHT_PHASE_DAY;
     }
-    
-    // Extract twilight boundaries from PHP's date_sun_info
-    // Morning: astronomical -> nautical -> civil -> sunrise
-    // Evening: sunset -> civil -> nautical -> astronomical
+
+    try {
+        $sunInfo = SunCalculator::getSunInfo($dayTimestamp, $lat, $lon);
+    } catch (InvalidArgumentException $e) {
+        return DAYLIGHT_PHASE_DAY;
+    }
+
+    if ($sunInfo['sunrise'] === null || $sunInfo['sunset'] === null) {
+        $sunPosition = getSunAltitude($lat, $lon, $timestamp);
+        if ($sunPosition > 0.0) {
+            return DAYLIGHT_PHASE_DAY;
+        }
+        if ($sunPosition > -6.0) {
+            return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
+        }
+        if ($sunPosition > -12.0) {
+            return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
+        }
+        return DAYLIGHT_PHASE_NIGHT;
+    }
+
     $sunrise = $sunInfo['sunrise'];
     $sunset = $sunInfo['sunset'];
     $civilDawn = $sunInfo['civil_twilight_begin'];
     $civilDusk = $sunInfo['civil_twilight_end'];
     $nauticalDawn = $sunInfo['nautical_twilight_begin'];
     $nauticalDusk = $sunInfo['nautical_twilight_end'];
-    
-    // Determine phase based on current timestamp
-    // DAY: Between sunrise and sunset
+
     if ($timestamp >= $sunrise && $timestamp < $sunset) {
         return DAYLIGHT_PHASE_DAY;
     }
-    
-    // CIVIL TWILIGHT: Between civil twilight begin/end and sunrise/sunset
-    // Morning: civilDawn to sunrise
-    // Evening: sunset to civilDusk
-    if (($timestamp >= $civilDawn && $timestamp < $sunrise) ||
-        ($timestamp >= $sunset && $timestamp < $civilDusk)) {
+    if (($civilDawn !== null && $timestamp >= $civilDawn && $timestamp < $sunrise) ||
+        ($civilDusk !== null && $timestamp >= $sunset && $timestamp < $civilDusk)) {
         return DAYLIGHT_PHASE_CIVIL_TWILIGHT;
     }
-    
-    // NAUTICAL TWILIGHT: Between nautical twilight begin/end and civil twilight
-    // Morning: nauticalDawn to civilDawn
-    // Evening: civilDusk to nauticalDusk
-    if (($timestamp >= $nauticalDawn && $timestamp < $civilDawn) ||
-        ($timestamp >= $civilDusk && $timestamp < $nauticalDusk)) {
+    if (($nauticalDawn !== null && $civilDawn !== null && $timestamp >= $nauticalDawn && $timestamp < $civilDawn) ||
+        ($nauticalDusk !== null && $civilDusk !== null && $timestamp >= $civilDusk && $timestamp < $nauticalDusk)) {
         return DAYLIGHT_PHASE_NAUTICAL_TWILIGHT;
     }
-    
-    // NIGHT: Before nautical dawn or after nautical dusk
+
     return DAYLIGHT_PHASE_NIGHT;
 }
 
