@@ -46,14 +46,14 @@ if ($config === null) {
     die('Service Unavailable: Configuration cannot be loaded');
 }
 
-// Load usage metrics with APCu caching (eliminates duplicate file reads)
+// Load usage metrics bundle (single read for rolling7/rolling1/multiPeriod)
 require_once __DIR__ . '/../lib/status-metrics.php';
-$usageMetrics = getStatusMetricsRolling(METRICS_STATUS_PAGE_DAYS, 60);
-$multiPeriodMetrics = getStatusMetricsMultiPeriod(60);
-$rolling24h = getStatusMetricsRolling(1, 60);
+$metricsBundle = getStatusMetricsBundle();
+$usageMetrics = $metricsBundle['rolling7'];
+$multiPeriodMetrics = $metricsBundle['multiPeriod'];
+$rolling24h = $metricsBundle['rolling1'];
 
 // Get local performance metrics (cached for 30s)
-require_once __DIR__ . '/../lib/status-metrics.php';
 require_once __DIR__ . '/../lib/performance-metrics.php';
 $imageProcessingMetrics = getCachedData(
     fn() => getImageProcessingMetrics(),
@@ -71,26 +71,26 @@ $nodePerformance = getCachedData(function() {
     return getNodePerformance();
 }, 'status_node_performance', null, 30);
 
-// Get system health (cached for 30s; scheduler pre-warms)
+// Get system health (cached 120s; scheduler pre-warms every 30s)
 require_once __DIR__ . '/../lib/cached-data-loader.php';
 $systemHealth = getCachedData(function() {
     return checkSystemHealth();
-}, 'status_system_health', CACHE_SYSTEM_HEALTH_FILE, 30);
+}, 'status_system_health', CACHE_SYSTEM_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
 
 // Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
 $cfAnalytics = getCloudflareAnalyticsForStatus();
 $cloudflareConfigured = !empty($cfAnalytics); // Show all CF metrics if configured
 
-// Get public API health (if enabled, cached for 30s)
+// Get public API health (if enabled, cached 120s; scheduler pre-warms every 30s)
 require_once __DIR__ . '/../lib/public-api/config.php';
 $publicApiHealth = null;
 if (isPublicApiEnabled()) {
     $publicApiHealth = getCachedData(function() {
         return checkPublicApiHealth();
-    }, 'status_public_api_health', CACHE_PUBLIC_API_HEALTH_FILE, 30);
+    }, 'status_public_api_health', CACHE_PUBLIC_API_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
 }
 
-// Get airport health for each configured airport (cached for 30s; scheduler pre-warms)
+// Get airport health (cached 120s; scheduler pre-warms every 30s)
 $airportHealth = getCachedData(function() use ($config) {
     $health = [];
     if (isset($config['airports']) && is_array($config['airports'])) {
@@ -99,7 +99,7 @@ $airportHealth = getCachedData(function() use ($config) {
         }
     }
     return $health;
-}, 'status_airport_health', CACHE_AIRPORT_HEALTH_FILE, 30);
+}, 'status_airport_health', CACHE_AIRPORT_HEALTH_FILE, STATUS_HEALTH_CACHE_TTL);
 
 // Sort airports by status (down first, then maintenance, then degraded, then operational)
 usort($airportHealth, function($a, $b) {

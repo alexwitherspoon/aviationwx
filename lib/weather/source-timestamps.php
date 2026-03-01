@@ -89,80 +89,60 @@ function getSourceTimestamps(string $airportId, array $airport): array {
         }
     }
     
-    // Check primary weather source (if any non-backup sources configured)
+    // Read weather cache once when any source needs it
+    $weatherData = null;
+    if ($hasPrimary || $hasBackup || $hasMetar) {
+        $weatherCacheFile = getWeatherCachePath($airportId);
+        if (file_exists($weatherCacheFile)) {
+            $content = @file_get_contents($weatherCacheFile);
+            if ($content !== false) {
+                $weatherData = @json_decode($content, true);
+            }
+        }
+    }
+
     if ($hasPrimary) {
         $result['primary']['available'] = true;
-        $weatherCacheFile = getWeatherCachePath($airportId);
-        
-        if (file_exists($weatherCacheFile)) {
-            // Use @ to suppress errors for non-critical file operations
-            // We handle failures explicitly with fallback mechanisms below
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-            if (is_array($weatherData)) {
-                // Use obs_time_primary only. Fetch/cache timestamps reflect API success,
-                // not real data. When API succeeds but returns no fresh obs (e.g. station offline),
-                // fallbacks would incorrectly treat primary as fresh.
-                $primaryTimestamp = 0;
-                if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
-                    $primaryTimestamp = (int)$weatherData['obs_time_primary'];
-                }
-                
-                if ($primaryTimestamp > 0) {
-                    $result['primary']['timestamp'] = $primaryTimestamp;
-                    $result['primary']['age'] = $now - $primaryTimestamp;
-                }
+        if (is_array($weatherData)) {
+            $primaryTimestamp = 0;
+            if (isset($weatherData['obs_time_primary']) && $weatherData['obs_time_primary'] > 0) {
+                $primaryTimestamp = (int)$weatherData['obs_time_primary'];
+            }
+            if ($primaryTimestamp > 0) {
+                $result['primary']['timestamp'] = $primaryTimestamp;
+                $result['primary']['age'] = $now - $primaryTimestamp;
             }
         }
     }
-    
-    // Check backup weather source (if any backup sources configured)
+
     if ($hasBackup) {
         $result['backup']['available'] = true;
-        $weatherCacheFile = getWeatherCachePath($airportId);
-        
-        if (file_exists($weatherCacheFile)) {
-            // Use @ to suppress errors for non-critical file operations
-            // We handle failures explicitly with fallback mechanisms below
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-            if (is_array($weatherData)) {
-                // Check backup source timestamp
-                $backupTimestamp = 0;
-                if (isset($weatherData['obs_time_backup']) && $weatherData['obs_time_backup'] > 0) {
-                    $backupTimestamp = (int)$weatherData['obs_time_backup'];
-                } elseif (isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
-                    $backupTimestamp = (int)$weatherData['last_updated_backup'];
-                }
-                
-                if ($backupTimestamp > 0) {
-                    $result['backup']['timestamp'] = $backupTimestamp;
-                    $result['backup']['age'] = $now - $backupTimestamp;
-                }
+        if (is_array($weatherData)) {
+            $backupTimestamp = 0;
+            if (isset($weatherData['obs_time_backup']) && $weatherData['obs_time_backup'] > 0) {
+                $backupTimestamp = (int)$weatherData['obs_time_backup'];
+            } elseif (isset($weatherData['last_updated_backup']) && $weatherData['last_updated_backup'] > 0) {
+                $backupTimestamp = (int)$weatherData['last_updated_backup'];
+            }
+            if ($backupTimestamp > 0) {
+                $result['backup']['timestamp'] = $backupTimestamp;
+                $result['backup']['age'] = $now - $backupTimestamp;
             }
         }
     }
-    
-    // Check METAR source (if configured in sources array)
+
     if ($hasMetar) {
         $result['metar']['available'] = true;
-        $weatherCacheFile = getWeatherCachePath($airportId);
-        
-        if (file_exists($weatherCacheFile)) {
-            // Use @ to suppress errors for non-critical file operations
-            // We handle failures explicitly with fallback mechanisms below
-            $weatherData = @json_decode(@file_get_contents($weatherCacheFile), true);
-            if (is_array($weatherData)) {
-                // Check METAR source timestamp
-                $metarTimestamp = 0;
-                if (isset($weatherData['obs_time_metar']) && $weatherData['obs_time_metar'] > 0) {
-                    $metarTimestamp = (int)$weatherData['obs_time_metar'];
-                } elseif (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
-                    $metarTimestamp = (int)$weatherData['last_updated_metar'];
-                }
-                
-                if ($metarTimestamp > 0) {
-                    $result['metar']['timestamp'] = $metarTimestamp;
-                    $result['metar']['age'] = $now - $metarTimestamp;
-                }
+        if (is_array($weatherData)) {
+            $metarTimestamp = 0;
+            if (isset($weatherData['obs_time_metar']) && $weatherData['obs_time_metar'] > 0) {
+                $metarTimestamp = (int)$weatherData['obs_time_metar'];
+            } elseif (isset($weatherData['last_updated_metar']) && $weatherData['last_updated_metar'] > 0) {
+                $metarTimestamp = (int)$weatherData['last_updated_metar'];
+            }
+            if ($metarTimestamp > 0) {
+                $result['metar']['timestamp'] = $metarTimestamp;
+                $result['metar']['age'] = $now - $metarTimestamp;
             }
         }
     }

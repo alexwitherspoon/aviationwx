@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/../lib/config.php';
+require_once __DIR__ . '/../lib/constants.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/status-checks.php';
@@ -19,7 +20,7 @@ if ($config === null) {
     exit(1);
 }
 
-$ttl = 30;
+$ttl = STATUS_HEALTH_CACHE_TTL;
 
 /**
  * Write cache file in getCachedData format

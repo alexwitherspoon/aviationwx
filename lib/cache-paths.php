@@ -627,6 +627,9 @@ if (!defined('CACHE_SYSTEM_HEALTH_FILE')) {
 if (!defined('CACHE_AIRPORT_HEALTH_FILE')) {
     define('CACHE_AIRPORT_HEALTH_FILE', CACHE_BASE_DIR . '/status_airport_health.json');
 }
+if (!defined('CACHE_STATUS_METRICS_BUNDLE_FILE')) {
+    define('CACHE_STATUS_METRICS_BUNDLE_FILE', CACHE_BASE_DIR . '/status_metrics_bundle.json');
+}
 
 /**
  * Get path to outage state file for an airport

@@ -279,4 +279,41 @@ class SourceTimestampsTest extends TestCase
         // Should return newest timestamp
         $this->assertLessThan(5, abs($result['webcams']['newest_timestamp'] - $newerTimestamp));
     }
+
+    /**
+     * Test that primary, backup, and metar all extract from single weather file read
+     */
+    public function testGetSourceTimestamps_PrimaryBackupMetar_AllExtractFromSingleFile(): void
+    {
+        $airport = [
+            'weather_sources' => [
+                ['type' => 'tempest', 'station_id' => '12345'],
+                ['type' => 'ambient', 'station_id' => 'x', 'backup' => true],
+                ['type' => 'metar', 'station_id' => 'KSPB']
+            ]
+        ];
+
+        $weatherCacheFile = getWeatherCachePath($this->testAirportId);
+        $primaryTime = time() - 3600;
+        $backupTime = time() - 1800;
+        $metarTime = time() - 7200;
+        $weatherData = [
+            'obs_time_primary' => $primaryTime,
+            'obs_time_backup' => $backupTime,
+            'obs_time_metar' => $metarTime,
+            'temperature' => 15.0
+        ];
+        file_put_contents($weatherCacheFile, json_encode($weatherData));
+
+        $result = getSourceTimestamps($this->testAirportId, $airport);
+
+        $this->assertTrue($result['primary']['available']);
+        $this->assertEquals($primaryTime, $result['primary']['timestamp']);
+
+        $this->assertTrue($result['backup']['available']);
+        $this->assertEquals($backupTime, $result['backup']['timestamp']);
+
+        $this->assertTrue($result['metar']['available']);
+        $this->assertEquals($metarTime, $result['metar']['timestamp']);
+    }
 }

@@ -243,7 +243,18 @@ if (!defined('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL')) {
 
 // Status page health - scheduler pre-warms cache to avoid blocking on first load
 if (!defined('STATUS_HEALTH_FETCH_INTERVAL')) {
-    define('STATUS_HEALTH_FETCH_INTERVAL', 30); // 30 seconds (matches status page TTL)
+    define('STATUS_HEALTH_FETCH_INTERVAL', 30); // 30 seconds
+}
+if (!defined('STATUS_HEALTH_CACHE_TTL')) {
+    define('STATUS_HEALTH_CACHE_TTL', 120); // 120 seconds - exceeds 4x fetch interval for safety
+}
+
+// Status page metrics bundle - single read for rolling7/rolling1/multiPeriod
+if (!defined('STATUS_METRICS_CACHE_TTL')) {
+    define('STATUS_METRICS_CACHE_TTL', 120); // 120 seconds minimum
+}
+if (!defined('STATUS_METRICS_FETCH_INTERVAL')) {
+    define('STATUS_METRICS_FETCH_INTERVAL', 60); // 60 seconds - scheduler pre-warm
 }
 
 // Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old
