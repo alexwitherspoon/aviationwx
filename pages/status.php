@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../lib/config.php';
 require_once __DIR__ . '/../lib/constants.php';
+require_once __DIR__ . '/../lib/cache-paths.php';
 require_once __DIR__ . '/../lib/logger.php';
 require_once __DIR__ . '/../lib/seo.php';
 require_once __DIR__ . '/../lib/process-utils.php';
@@ -70,11 +71,11 @@ $nodePerformance = getCachedData(function() {
     return getNodePerformance();
 }, 'status_node_performance', null, 30);
 
-// Get system health (cached for 30s)
+// Get system health (cached for 30s; scheduler pre-warms)
 require_once __DIR__ . '/../lib/cached-data-loader.php';
 $systemHealth = getCachedData(function() {
     return checkSystemHealth();
-}, 'status_system_health', null, 30);
+}, 'status_system_health', CACHE_SYSTEM_HEALTH_FILE, 30);
 
 // Get Cloudflare Analytics (cached for 30min via cloudflare-analytics.php)
 $cfAnalytics = getCloudflareAnalyticsForStatus();
@@ -89,7 +90,7 @@ if (isPublicApiEnabled()) {
     }, 'status_public_api_health', CACHE_PUBLIC_API_HEALTH_FILE, 30);
 }
 
-// Get airport health for each configured airport (cached for 30s)
+// Get airport health for each configured airport (cached for 30s; scheduler pre-warms)
 $airportHealth = getCachedData(function() use ($config) {
     $health = [];
     if (isset($config['airports']) && is_array($config['airports'])) {
@@ -98,7 +99,7 @@ $airportHealth = getCachedData(function() use ($config) {
         }
     }
     return $health;
-}, 'status_airport_health', null, 30);
+}, 'status_airport_health', CACHE_AIRPORT_HEALTH_FILE, 30);
 
 // Sort airports by status (down first, then maintenance, then degraded, then operational)
 usort($airportHealth, function($a, $b) {

@@ -236,6 +236,16 @@ if (!defined('PARTNER_LOGO_CACHE_TTL')) {
     define('PARTNER_LOGO_CACHE_TTL', 2592000); // 30 days
 }
 
+// Cloudflare analytics - scheduler pre-warms cache; on-demand fetch is fallback when empty
+if (!defined('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL')) {
+    define('CLOUDFLARE_ANALYTICS_FETCH_INTERVAL', 900); // 15 minutes
+}
+
+// Status page health - scheduler pre-warms cache to avoid blocking on first load
+if (!defined('STATUS_HEALTH_FETCH_INTERVAL')) {
+    define('STATUS_HEALTH_FETCH_INTERVAL', 30); // 30 seconds (matches status page TTL)
+}
+
 // Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old
 if (!defined('RUNWAYS_FETCH_CHECK_INTERVAL')) {
     define('RUNWAYS_FETCH_CHECK_INTERVAL', 604800); // 7 days

@@ -1,10 +1,13 @@
 <?php
 /**
  * Cloudflare Analytics Integration
- * 
+ *
+ * Primary refresh: Scheduler runs fetch-cloudflare-analytics.php every 15 min (non-blocking).
+ * Fallback: On-demand fetch when cache is empty (e.g., cold start, APCu cleared).
+ *
  * Fetches analytics data from Cloudflare Analytics API (GraphQL)
  * Uses multi-layer caching (APCu + file fallback) with 30-minute TTL
- * 
+ *
  * Setup:
  * 1. Generate Cloudflare API token with "Analytics:Read" permission
  * 2. Add to config/airports.json global section:
@@ -52,11 +55,13 @@ const CLOUDFLARE_ANALYTICS_FILE_CACHE_TTL = 7200; // 2 hours
 
 /**
  * Get Cloudflare Analytics data with multi-layer caching
- * 
+ *
+ * Scheduler pre-warms file cache; on-demand fetch only when both caches empty.
+ *
  * Priority:
  * 1. APCu cache (30 min TTL)
- * 2. File cache fallback (persists across APCu restarts)
- * 3. Fresh API fetch
+ * 2. File cache fallback (persists across APCu restarts, written by scheduler worker)
+ * 3. Fresh API fetch (fallback when cache cold)
  * 
  * @return array Analytics data with keys:
  *   - unique_visitors_today: Unique visitors in last 24h

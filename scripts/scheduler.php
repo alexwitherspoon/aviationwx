@@ -48,6 +48,8 @@ $lastWeatherHealthUpdate = 0;
 $lastStuckWorkerCleanup = 0;
 $lastDynamicDnsCheck = 0;
 $lastRunwaysFetch = 0;
+$lastCloudflareAnalyticsFetch = 0;
+$lastStatusHealthFetch = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -574,7 +576,27 @@ while ($running) {
             }
         }
 
-        // 9. Dynamic DNS check for FTP passive mode (configurable interval)
+        // 9. Cloudflare analytics pre-warm (every 15 min, non-blocking)
+        // Runs worker in background; page loads read from file cache
+        if (($now - $lastCloudflareAnalyticsFetch) >= CLOUDFLARE_ANALYTICS_FETCH_INTERVAL) {
+            $cloudflareScript = __DIR__ . '/fetch-cloudflare-analytics.php';
+            if (file_exists($cloudflareScript)) {
+                exec('php ' . escapeshellarg($cloudflareScript) . ' > /dev/null 2>&1 &');
+                $lastCloudflareAnalyticsFetch = $now;
+            }
+        }
+
+        // 10. Status page health pre-warm (every 30s, non-blocking)
+        // Pre-computes system/API/airport health so status page doesn't block on first load
+        if (($now - $lastStatusHealthFetch) >= STATUS_HEALTH_FETCH_INTERVAL) {
+            $statusHealthScript = __DIR__ . '/fetch-status-health.php';
+            if (file_exists($statusHealthScript)) {
+                exec('php ' . escapeshellarg($statusHealthScript) . ' > /dev/null 2>&1 &');
+                $lastStatusHealthFetch = $now;
+            }
+        }
+
+        // 11. Dynamic DNS check for FTP passive mode (configurable interval)
         // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
         $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
         if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {

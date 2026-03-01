@@ -621,6 +621,12 @@ if (!defined('CACHE_MEMORY_HISTORY_FILE')) {
 if (!defined('CACHE_PUBLIC_API_HEALTH_FILE')) {
     define('CACHE_PUBLIC_API_HEALTH_FILE', CACHE_BASE_DIR . '/public_api_health.json');
 }
+if (!defined('CACHE_SYSTEM_HEALTH_FILE')) {
+    define('CACHE_SYSTEM_HEALTH_FILE', CACHE_BASE_DIR . '/status_system_health.json');
+}
+if (!defined('CACHE_AIRPORT_HEALTH_FILE')) {
+    define('CACHE_AIRPORT_HEALTH_FILE', CACHE_BASE_DIR . '/status_airport_health.json');
+}
 
 /**
  * Get path to outage state file for an airport
