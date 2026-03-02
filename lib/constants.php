@@ -257,6 +257,14 @@ if (!defined('STATUS_METRICS_FETCH_INTERVAL')) {
     define('STATUS_METRICS_FETCH_INTERVAL', 60); // 60 seconds - scheduler pre-warm
 }
 
+// Status page performance metrics - node, image processing, page render
+if (!defined('PERFORMANCE_METRICS_CACHE_TTL')) {
+    define('PERFORMANCE_METRICS_CACHE_TTL', 60); // 60 seconds - exceeds 2x fetch interval
+}
+if (!defined('PERFORMANCE_METRICS_FETCH_INTERVAL')) {
+    define('PERFORMANCE_METRICS_FETCH_INTERVAL', 30); // 30 seconds - scheduler pre-warm
+}
+
 // Runway geometry (FAA + OurAirports) - weekly check, fetch when missing or >30 days old
 if (!defined('RUNWAYS_FETCH_CHECK_INTERVAL')) {
     define('RUNWAYS_FETCH_CHECK_INTERVAL', 604800); // 7 days

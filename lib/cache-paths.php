@@ -630,6 +630,15 @@ if (!defined('CACHE_AIRPORT_HEALTH_FILE')) {
 if (!defined('CACHE_STATUS_METRICS_BUNDLE_FILE')) {
     define('CACHE_STATUS_METRICS_BUNDLE_FILE', CACHE_BASE_DIR . '/status_metrics_bundle.json');
 }
+if (!defined('CACHE_NODE_PERFORMANCE_FILE')) {
+    define('CACHE_NODE_PERFORMANCE_FILE', CACHE_BASE_DIR . '/status_node_performance.json');
+}
+if (!defined('CACHE_IMAGE_PROCESSING_METRICS_FILE')) {
+    define('CACHE_IMAGE_PROCESSING_METRICS_FILE', CACHE_BASE_DIR . '/status_image_processing.json');
+}
+if (!defined('CACHE_PAGE_RENDER_METRICS_FILE')) {
+    define('CACHE_PAGE_RENDER_METRICS_FILE', CACHE_BASE_DIR . '/status_page_render.json');
+}
 
 /**
  * Get path to outage state file for an airport
