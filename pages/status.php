@@ -53,23 +53,23 @@ $usageMetrics = $metricsBundle['rolling7'];
 $multiPeriodMetrics = $metricsBundle['multiPeriod'];
 $rolling24h = $metricsBundle['rolling1'];
 
-// Get local performance metrics (cached for 30s)
+// Get local performance metrics (cached 60s; scheduler pre-warms every 30s)
 require_once __DIR__ . '/../lib/performance-metrics.php';
 $imageProcessingMetrics = getCachedData(
     fn() => getImageProcessingMetrics(),
     'status_image_processing',
-    null,
-    30
+    CACHE_IMAGE_PROCESSING_METRICS_FILE,
+    PERFORMANCE_METRICS_CACHE_TTL
 );
 $pageRenderMetrics = getCachedData(
     fn() => getPageRenderMetrics(),
     'status_page_render',
-    null,
-    30
+    CACHE_PAGE_RENDER_METRICS_FILE,
+    PERFORMANCE_METRICS_CACHE_TTL
 );
 $nodePerformance = getCachedData(function() {
     return getNodePerformance();
-}, 'status_node_performance', null, 30);
+}, 'status_node_performance', CACHE_NODE_PERFORMANCE_FILE, PERFORMANCE_METRICS_CACHE_TTL);
 
 // Get system health (cached 120s; scheduler pre-warms every 30s)
 require_once __DIR__ . '/../lib/cached-data-loader.php';
