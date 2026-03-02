@@ -27,11 +27,11 @@ $ttl = STATUS_HEALTH_CACHE_TTL;
  *
  * @param string $path File path
  * @param string $key Cache key
- * @param mixed $data Data to cache
+ * @param mixed $data Data to cache (array or object; will be JSON-encoded)
  * @param int $ttl TTL in seconds
  * @return bool True on success
  */
-function writeStatusHealthCache(string $path, string $key, $data, int $ttl): bool {
+function writeStatusHealthCache(string $path, string $key, mixed $data, int $ttl): bool {
     $cacheDir = dirname($path);
     if (!is_dir($cacheDir)) {
         @mkdir($cacheDir, 0755, true);
