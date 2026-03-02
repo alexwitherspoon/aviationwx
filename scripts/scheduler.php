@@ -51,6 +51,7 @@ $lastRunwaysFetch = 0;
 $lastCloudflareAnalyticsFetch = 0;
 $lastStatusHealthFetch = 0;
 $lastStatusMetricsFetch = 0;
+$lastPerformanceMetricsFetch = 0;
 $runwaysFetchOnStartupDone = false;
 $config = null;
 $healthStatus = 'healthy';
@@ -607,7 +608,17 @@ while ($running) {
             }
         }
 
-        // 12. Dynamic DNS check for FTP passive mode (configurable interval)
+        // 12. Performance metrics pre-warm (every 30s, non-blocking)
+        // Pre-computes node perf, image processing, page render (avoids storage calc on request)
+        if (($now - $lastPerformanceMetricsFetch) >= PERFORMANCE_METRICS_FETCH_INTERVAL) {
+            $perfMetricsScript = __DIR__ . '/fetch-performance-metrics.php';
+            if (file_exists($perfMetricsScript)) {
+                exec('php ' . escapeshellarg($perfMetricsScript) . ' > /dev/null 2>&1 &');
+                $lastPerformanceMetricsFetch = $now;
+            }
+        }
+
+        // 13. Dynamic DNS check for FTP passive mode (configurable interval)
         // Updates vsftpd pasv_address if the resolved IP has changed (useful for DDNS)
         $dynamicDnsInterval = getDynamicDnsRefreshSeconds();
         if ($dynamicDnsInterval > 0 && ($now - $lastDynamicDnsCheck) >= $dynamicDnsInterval) {
