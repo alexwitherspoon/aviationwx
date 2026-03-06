@@ -110,6 +110,24 @@ class AddWindDirectionMagneticTest extends TestCase
     }
 
     /**
+     * VRB clears stale wind_direction_magnetic from reused/merged weather array
+     */
+    public function testVRBWindDirection_ClearsStaleMagnetic(): void
+    {
+        $weather = [
+            'wind_direction' => 'VRB',
+            'wind_direction_magnetic' => 216,
+            'wind_direction_text' => 'VRB',
+        ];
+        $airport = ['magnetic_declination' => 14.0];
+
+        addWindDirectionMagneticToWeather($weather, $airport);
+
+        $this->assertArrayNotHasKey('wind_direction_magnetic', $weather, 'VRB must clear stale magnetic');
+        $this->assertSame('VRB', $weather['wind_direction_text']);
+    }
+
+    /**
      * VRB case-insensitive: "vrb" also sets wind_direction_text
      */
     public function testVRBWindDirection_CaseInsensitive(): void

@@ -61,6 +61,8 @@ function addWindDirectionMagneticToWeather(array &$weather, array $airport): voi
 {
     $wd = $weather['wind_direction'] ?? null;
 
+    unset($weather['wind_direction_magnetic'], $weather['wind_direction_text']);
+
     if (is_string($wd) && strtoupper($wd) === 'VRB') {
         $weather['wind_direction_text'] = 'VRB';
         return;
