@@ -29,16 +29,12 @@ function formatLastHourWindForApi(?array $petals): ?array
 }
 
 /**
- * Format weather data for API response
- *
- * Wind direction: true_north (degrees 0-360, internal storage), magnetic_north
- * (degrees 0-360, pilot-facing display), variable (true when METAR reports VRB).
+ * Format wind_direction as object for API response
  *
  * @param array $weather Raw weather data from cache
- * @param array $airport Airport configuration
- * @return array Formatted weather data
+ * @return array { true_north, magnetic_north, variable }
  */
-function formatWeatherResponse(array $weather, array $airport): array
+function formatWindDirectionForApi(array $weather): array
 {
     $wdRaw = $weather['wind_direction'] ?? null;
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB'
@@ -53,12 +49,25 @@ function formatWeatherResponse(array $weather, array $airport): array
         $magneticNorth = $weather['wind_direction_magnetic'] ?? null;
     }
 
-    $windDirection = [
+    return [
         'true_north' => $trueNorth,
         'magnetic_north' => $magneticNorth,
         'variable' => $isVRB,
     ];
+}
 
+/**
+ * Format weather data for API response
+ *
+ * Wind direction: true_north (degrees 0-360, internal storage), magnetic_north
+ * (degrees 0-360, pilot-facing display), variable (true when METAR reports VRB).
+ *
+ * @param array $weather Raw weather data from cache
+ * @param array $airport Airport configuration
+ * @return array Formatted weather data
+ */
+function formatWeatherResponse(array $weather, array $airport): array
+{
     return [
         'flight_category' => $weather['flight_category'] ?? null,
         'temperature' => $weather['temperature'] ?? null,
@@ -68,7 +77,7 @@ function formatWeatherResponse(array $weather, array $airport): array
         'dewpoint_spread' => $weather['dewpoint_spread'] ?? null,
         'humidity' => $weather['humidity'] ?? null,
         'wind_speed' => $weather['wind_speed'] ?? null,
-        'wind_direction' => $windDirection,
+        'wind_direction' => formatWindDirectionForApi($weather),
         'gust_speed' => $weather['gust_speed'] ?? null,
         'gust_factor' => $weather['gust_factor'] ?? null,
         'pressure' => $weather['pressure'] ?? null,

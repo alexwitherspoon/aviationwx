@@ -42,26 +42,9 @@ require_once __DIR__ . '/../lib/public-api/weather-format.php';
  */
 function formatInternalApiWeatherResponse(array $weather): array
 {
-    $wdRaw = $weather['wind_direction'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB'
-        || (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
-
-    $trueNorth = null;
-    $magneticNorth = null;
-    if (!$isVRB) {
-        $trueNorth = is_numeric($wdRaw) ? (int) round((float) $wdRaw) : null;
-        $magneticNorth = $weather['wind_direction_magnetic'] ?? null;
-    }
-
-    $windDirection = [
-        'true_north' => $trueNorth,
-        'magnetic_north' => $magneticNorth,
-        'variable' => $isVRB,
-    ];
-
     $out = $weather;
     unset($out['wind_direction_magnetic'], $out['wind_direction_text']);
-    $out['wind_direction'] = $windDirection;
+    $out['wind_direction'] = formatWindDirectionForApi($weather);
     $lhw = $weather['last_hour_wind'] ?? null;
     $out['last_hour_wind'] = formatLastHourWindForApi(is_array($lhw) ? $lhw : null);
     return $out;
