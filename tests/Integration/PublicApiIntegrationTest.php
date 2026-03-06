@@ -200,10 +200,11 @@ class PublicApiIntegrationTest extends TestCase
         if (empty($airport['runways'])) {
             return;
         }
-        if (!array_key_exists('runway_heading_reference', $airport)) {
-            $this->markTestSkipped('Server may need restart to pick up runway_heading_reference');
-            return;
-        }
+        $this->assertArrayHasKey(
+            'runway_heading_reference',
+            $airport,
+            'Response should include runway_heading_reference when runways are present'
+        );
         $this->assertContains(
             $airport['runway_heading_reference'],
             ['true_north', 'magnetic', null],
