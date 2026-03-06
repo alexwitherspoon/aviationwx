@@ -28,13 +28,6 @@ require_once __DIR__ . '/../lib/public-api/weather-format.php';
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
 /**
- * Add wind_direction_magnetic for compass display (true north → magnetic)
- * When wind_direction is VRB (variable), sets wind_direction_text for display.
- *
- * @param array $weather Weather data (modified in place)
- * @param array $airport Airport config for declination
- */
-/**
  * Format weather for Internal API response
  *
  * @param array $weather Raw weather from cache
