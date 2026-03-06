@@ -59,10 +59,9 @@ function processCardWidgetData($data, $options) {
     $visibility = $weather['visibility'] ?? null;
     $ceiling = $weather['ceiling'] ?? null;
     $humidity = $weather['humidity'] ?? null;
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     
     // Calculate dewpoint spread if we have both values
     $dewpointSpread = null;
@@ -88,12 +87,12 @@ function processCardWidgetData($data, $options) {
     // Wind speed value
     $windSpeedValue = ($windSpeed !== null && $windSpeed >= 3) ? formatEmbedWindSpeed($windSpeed, $windUnit) : 'Calm';
     
-    // Wind direction value
+    // Wind direction value (use wind_direction_magnetic; fail closed with ---)
     $windDirValue = '---';
-    if ($windDirection !== null && $windSpeed >= 3 && !$isVRB) {
-        $windDirValue = round($windDirection) . '°';
-    } elseif ($isVRB) {
+    if ($isVRB) {
         $windDirValue = 'Variable';
+    } elseif ($windDirection !== null && $windSpeed >= 3) {
+        $windDirValue = round($windDirection) . '°';
     }
     
     // Gust value

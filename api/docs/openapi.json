@@ -612,12 +612,44 @@
           },
           "request_time": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Server time when response was generated (UTC)"
           },
           "attribution": {
             "type": "string",
             "example": "Data from AviationWX.org"
+          },
+          "timestamp_timezone": {
+            "type": "string",
+            "description": "Timezone for all ISO timestamps in response. Always UTC.",
+            "example": "UTC"
+          },
+          "units": {
+            "$ref": "#/components/schemas/WeatherUnits"
+          },
+          "coordinate_system": {
+            "type": "string",
+            "description": "Coordinate reference system for lat/lon. Always WGS84.",
+            "example": "WGS84"
+          },
+          "sunrise_sunset_timezone": {
+            "type": "string",
+            "description": "IANA timezone for sunrise/sunset times (e.g., America/Denver). Present when weather is included.",
+            "example": "America/Los_Angeles"
           }
+        }
+      },
+      "WeatherUnits": {
+        "type": "object",
+        "description": "Measurement units for weather fields",
+        "properties": {
+          "temperature": { "type": "string", "example": "celsius" },
+          "wind_speed": { "type": "string", "example": "knots" },
+          "pressure": { "type": "string", "example": "inHg" },
+          "visibility": { "type": "string", "example": "statute_miles" },
+          "ceiling": { "type": "string", "example": "feet_agl" },
+          "precipitation": { "type": "string", "example": "inches" },
+          "elevation": { "type": "string", "example": "feet" }
         }
       },
       "AirportSummary": {
@@ -846,6 +878,12 @@
                   }
                 }
               },
+              "runway_heading_reference": {
+                "type": "string",
+                "nullable": true,
+                "enum": ["true_north", "magnetic"],
+                "description": "Reference for runway heading_1/heading_2. true_north when runways use true north; magnetic when runways use magnetic headings."
+              },
               "frequencies": {
                 "type": "object",
                 "description": "Radio frequencies (e.g. ctaf, tower). Empty object {} when none configured.",
@@ -905,9 +943,25 @@
             "nullable": true
           },
           "wind_direction": {
-            "type": "integer",
-            "description": "Wind direction in degrees",
-            "nullable": true
+            "type": "object",
+            "description": "Wind direction (safety-critical). true_north and magnetic_north in degrees 0-360.",
+            "required": ["true_north", "magnetic_north", "variable"],
+            "properties": {
+              "true_north": {
+                "type": "integer",
+                "description": "Degrees 0-360 (true north). Internal storage standard. Null when variable.",
+                "nullable": true
+              },
+              "magnetic_north": {
+                "type": "integer",
+                "description": "Degrees 0-360 (magnetic north). Use for compass and pilot-facing UI. Null when variable or missing; display '---' (fail closed).",
+                "nullable": true
+              },
+              "variable": {
+                "type": "boolean",
+                "description": "True when METAR reports VRB. Display 'VRB' instead of numeric direction."
+              }
+            }
           },
           "gust_speed": {
             "type": "integer",
@@ -968,6 +1022,31 @@
             "type": "string",
             "description": "Sunset time (local)",
             "nullable": true
+          },
+          "last_hour_wind": {
+            "type": "object",
+            "description": "16-sector wind rose (last hour). Sectors in knots, magnetic north reference.",
+            "nullable": true,
+            "properties": {
+              "sectors": {
+                "type": "array",
+                "items": { "type": "number" },
+                "description": "Wind speed per sector (N, NNE, NE, ... NNW). 16 values."
+              },
+              "sector_labels": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Labels for each sector (N, NNE, NE, ... NNW)"
+              },
+              "reference": {
+                "type": "string",
+                "description": "Direction reference for sectors. Always magnetic_north."
+              },
+              "unit": {
+                "type": "string",
+                "description": "Unit for sector values. Always knots."
+              }
+            }
           },
           "daily": {
             "type": "object",
@@ -1090,7 +1169,13 @@
             "nullable": true
           },
           "wind_direction": {
-            "type": "integer",
+            "type": "object",
+            "description": "Wind direction (safety-critical). true_north and magnetic_north in degrees 0-360.",
+            "properties": {
+              "true_north": { "type": "integer", "nullable": true },
+              "magnetic_north": { "type": "integer", "nullable": true },
+              "variable": { "type": "boolean" }
+            },
             "nullable": true
           },
           "gust_speed": {

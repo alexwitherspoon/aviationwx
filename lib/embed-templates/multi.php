@@ -53,10 +53,9 @@ function processMultiWidgetData($data, $options) {
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
     // Weather values (temperatures in Celsius - internal storage standard)
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     $temperature = $weather['temperature'] ?? null;
     $dewpoint = $weather['dewpoint'] ?? null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;

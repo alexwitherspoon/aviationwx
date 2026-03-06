@@ -235,10 +235,9 @@ function renderFullSingleWidget($data, $options) {
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
     // Extract weather data (temperatures in Celsius - internal storage standard)
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     $temperature = $weather['temperature'] ?? null;
     $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
@@ -284,9 +283,9 @@ function renderFullSingleWidget($data, $options) {
     $canvasId = 'full-wind-canvas-' . uniqid();
     $fullModeOptions = buildWindCompassFullModeOptions($airportId, $airport, $weather);
 
-    // Format wind display parts
-    $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
+    // Format wind display parts (use wind_direction_magnetic; fail closed with ---)
+    $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
+    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
     $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     
@@ -467,10 +466,9 @@ function renderFullDualWidget($data, $options) {
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
     // Extract weather data (temperatures in Celsius - internal storage standard)
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     $temperature = $weather['temperature'] ?? null;
     $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
@@ -498,9 +496,9 @@ function renderFullDualWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
 
-    // Format wind display
-    $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
+    // Format wind display (use wind_direction_magnetic; fail closed with ---)
+    $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
+    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
     $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     
@@ -700,10 +698,9 @@ function renderFullMultiWidget($data, $options) {
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
     // Extract weather data (temperatures in Celsius - internal storage standard)
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     $temperature = $weather['temperature'] ?? null;
     $dewpoint = $weather['dewpoint'] ?? null;
     $dewpointSpread = ($temperature !== null && $dewpoint !== null) ? ($temperature - $dewpoint) : null;
@@ -731,9 +728,9 @@ function renderFullMultiWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
 
-    // Format wind display
-    $windDir = $windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '--';
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
+    // Format wind display (use wind_direction_magnetic; fail closed with ---)
+    $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
+    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
     $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     

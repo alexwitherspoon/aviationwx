@@ -1368,7 +1368,7 @@ Best regards,
                             $temperature = ($temperature * 9/5) + 32;
                         }
                         $windSpeed = $weather['wind_speed'] ?? null;
-                        $windDirection = $weather['wind_direction'] ?? null;
+                        $windDirection = ($weather['wind_direction_text'] ?? '') === 'VRB' ? 'VRB' : ($weather['wind_direction_magnetic'] ?? null);
                         $newestTimestamp = getNewestDataTimestamp($weather);
                     ?>
                     <div class="airport-card">
@@ -1409,7 +1409,7 @@ Best regards,
                                         elseif ($windDirection !== null && is_numeric($windDirection)):
                                             echo htmlspecialchars(round($windDirection)) . '°';
                                         else:
-                                            echo '--';
+                                            echo '---';
                                         endif;
                                         ?>
                                     </div>

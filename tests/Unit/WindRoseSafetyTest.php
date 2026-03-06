@@ -12,6 +12,8 @@
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../../lib/weather/history.php';
+require_once __DIR__ . '/../../lib/heading-conversion.php';
+require_once __DIR__ . '/../../lib/config.php';
 
 class WindRoseSafetyTest extends TestCase
 {
@@ -421,5 +423,56 @@ class WindRoseSafetyTest extends TestCase
         $petals = computeLastHourWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEquals(10.5, $petals[0], 'Values must be rounded to 1 decimal');
+    }
+
+    // ============================================================================
+    // MAGNETIC CONVERSION - Petals must align with magnetic compass frame
+    // ============================================================================
+
+    /**
+     * With 14°E declination, obs at 14° true north → 0° magnetic → sector 0 (N)
+     * Compass frame is magnetic; petals must be binned by magnetic direction.
+     */
+    public function testMagneticConversion_14DegTrueWith14DegDeclination_GoesToSector0(): void
+    {
+        $airport = ['magnetic_declination' => 14.0];
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'weather_history_enabled' => true,
+                    'weather_history_retention_hours' => 24,
+                ],
+            ],
+            'airports' => [
+                $this->testAirportId => array_merge(
+                    ['name' => 'Test', 'enabled' => true, 'lat' => 45.0, 'lon' => -122.0],
+                    $airport
+                ),
+            ],
+        ]);
+
+        $baseTime = time();
+        // 14° true north; with 14°E declination → 0° magnetic → sector 0
+        $this->appendObs($baseTime - 600, 10.0, 14.0);
+        $this->appendObs($baseTime - 300, 10.0, 14.0);
+
+        $petals = computeLastHourWindRose($this->testAirportId, $airport);
+        $this->assertNotNull($petals);
+        $this->assertEqualsWithDelta(10.0, $petals[0], 0.1, '14° true with 14°E declination must map to sector 0 (N magnetic)');
+    }
+
+    /**
+     * When airport is null, use declination 0 (backward compatibility for tests)
+     */
+    public function testMagneticConversion_NullAirport_UsesDeclinationZero(): void
+    {
+        $baseTime = time();
+        $this->appendObs($baseTime - 600, 10.0, 0.0);
+        $this->appendObs($baseTime - 300, 10.0, 0.0);
+
+        $petals = computeLastHourWindRose($this->testAirportId, null);
+        $this->assertNotNull($petals);
+        $this->assertEqualsWithDelta(10.0, $petals[0], 0.1, 'Null airport must use declination 0');
     }
 }

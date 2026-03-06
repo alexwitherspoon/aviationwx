@@ -37,7 +37,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_history_max_frames` | — | *Deprecated* - use retention_hours |
 | `http_integrity_digest_cache_ttl_seconds` | max(webcam_history, weather_history) | APCu TTL for Content-Digest/MD5 cache; defaults to longest retention (images + weather) |
 | `default_preferences` | — | Default unit toggle settings (see below) |
-| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram; overridable per-airport |
+| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram and `wind_direction_magnetic`; overridable per-airport |
 | `geomag_api_key` | — | NOAA NCEI geomagnetic API key for automatic declination lookup. [Register](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml) for free. When set, declination is fetched for airports without manual override. |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
@@ -101,7 +101,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
-| `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
+| `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram and `wind_direction_magnetic`. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
 | `frequencies` | `{}` | Radio frequencies |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |

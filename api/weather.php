@@ -23,11 +23,46 @@ require_once __DIR__ . '/../lib/cache-headers.php';
 require_once __DIR__ . '/../lib/cors.php';
 require_once __DIR__ . '/../lib/heading-conversion.php';
 require_once __DIR__ . '/../lib/http-integrity.php';
+require_once __DIR__ . '/../lib/public-api/weather-format.php';
 
 // parseAmbientResponse() is now in lib/weather/adapter/ambient-v1.php
 
 /**
  * Add wind_direction_magnetic for compass display (true north → magnetic)
+ * When wind_direction is VRB (variable), sets wind_direction_text for display.
+ *
+ * @param array $weather Weather data (modified in place)
+ * @param array $airport Airport config for declination
+ */
+/**
+ * Format weather for Internal API response
+ *
+ * @param array $weather Raw weather from cache
+ * @return array Weather with wind_direction object and last_hour_wind object (sectors, reference, unit)
+ */
+function formatInternalApiWeatherResponse(array $weather): array
+{
+    $wdRaw = $weather['wind_direction'] ?? null;
+    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB'
+        || (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
+
+    $windDirection = [
+        'true_north' => is_numeric($wdRaw) ? (int) round((float) $wdRaw) : null,
+        'magnetic_north' => $weather['wind_direction_magnetic'] ?? null,
+        'variable' => $isVRB,
+    ];
+
+    $out = $weather;
+    unset($out['wind_direction_magnetic'], $out['wind_direction_text']);
+    $out['wind_direction'] = $windDirection;
+    $lhw = $weather['last_hour_wind'] ?? null;
+    $out['last_hour_wind'] = formatLastHourWindForApi(is_array($lhw) ? $lhw : null);
+    return $out;
+}
+
+/**
+ * Add wind_direction_magnetic for compass display (true north → magnetic)
+ * When wind_direction is VRB (variable), sets wind_direction_text for display.
  *
  * @param array $weather Weather data (modified in place)
  * @param array $airport Airport config for declination
@@ -35,6 +70,12 @@ require_once __DIR__ . '/../lib/http-integrity.php';
 function addWindDirectionMagneticToWeather(array &$weather, array $airport): void
 {
     $wd = $weather['wind_direction'] ?? null;
+
+    if (is_string($wd) && strtoupper($wd) === 'VRB') {
+        $weather['wind_direction_text'] = 'VRB';
+        return;
+    }
+
     if (is_numeric($wd) && $wd >= 0 && $wd <= 360) {
         $decl = getMagneticDeclination($airport);
         $weather['wind_direction_magnetic'] = (int) round(convertTrueToMagnetic((float) $wd, $decl));
@@ -255,8 +296,8 @@ function generateMockWeatherData($airportId, $airport) {
         }
         addWindDirectionMagneticToWeather($mockWeather, $airport);
 
-        // Build response
-        $payload = ['success' => true, 'weather' => $mockWeather];
+        // Format and build response
+        $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($mockWeather)];
         $body = json_encode($payload);
         $etag = 'W/"' . sha1($body) . '"';
         
@@ -347,7 +388,7 @@ function generateMockWeatherData($airportId, $airport) {
             }
             addWindDirectionMagneticToWeather($cached, $airport);
 
-            $payload = ['success' => true, 'weather' => $cached];
+            $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($cached)];
             
             // Add debug info if debug mode is enabled
             if ($debugMode) {
@@ -417,7 +458,7 @@ function generateMockWeatherData($airportId, $airport) {
             }
             addWindDirectionMagneticToWeather($staleData, $airport);
 
-            $payload = ['success' => true, 'weather' => $staleData, 'stale' => true];
+            $payload = ['success' => true, 'weather' => formatInternalApiWeatherResponse($staleData), 'stale' => true];
             
             // Add debug info if debug mode is enabled
             if ($debugMode) {
@@ -671,7 +712,7 @@ function generateMockWeatherData($airportId, $airport) {
     }
 
     // Last-hour wind rose for petal visualization (16 sectors: N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
-    $lastHourWindRose = computeLastHourWindRose($airportId);
+    $lastHourWindRose = computeLastHourWindRose($airportId, $airport);
     if ($lastHourWindRose !== null) {
         $weatherData['last_hour_wind'] = $lastHourWindRose;
     }
@@ -740,8 +781,10 @@ function generateMockWeatherData($airportId, $airport) {
         exit;
     }
 
+    $responseWeather = formatInternalApiWeatherResponse($weatherData);
+
     // Build ETag for response based on content
-    $payload = ['success' => true, 'weather' => $weatherData];
+    $payload = ['success' => true, 'weather' => $responseWeather];
     
     // Add debug info if debug mode is enabled
     if ($debugMode) {

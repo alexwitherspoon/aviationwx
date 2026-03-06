@@ -46,7 +46,11 @@ Returns weather data for the specified airport.
     "dewpoint_spread": 3.5,
     "humidity": 85,
     "wind_speed": 8,
-    "wind_direction": 230,
+    "wind_direction": {
+      "true_north": 230,
+      "magnetic_north": 216,
+      "variable": false
+    },
     "gust_speed": 12,
     "peak_gust": 12,
     "gust_factor": 4,
@@ -68,6 +72,12 @@ Returns weather data for the specified airport.
     "peak_gust_time": 1699120000,
     "sunrise": "07:15",
     "sunset": "17:45",
+    "last_hour_wind": {
+      "sectors": [2, 1, 0, 0, 5, 8, 12, 10, 3, 0, 0, 0, 0, 0, 1, 2],
+      "sector_labels": ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"],
+      "reference": "magnetic_north",
+      "unit": "knots"
+    },
     "last_updated": 1699123456,
     "last_updated_iso": "2024-11-04T12:34:56+00:00",
     "last_updated_primary": 1699123456,
@@ -109,6 +119,10 @@ Returns weather data for the specified airport.
 The API uses `s-maxage` to limit Cloudflare cache TTL separately from browser cache. This prevents Cloudflare from serving stale data longer than intended. Cloudflare automatically varies cache by query string parameters (e.g., `airport`), so each airport's data is cached separately.
 
 **Stale Data:** Data older than 3 hours is automatically nulled (displays as `null`). See [README.md](README.md#stale-data-safety-check) for details.
+
+**Wind direction:** `wind_direction` is an object with `true_north` (degrees 0–360, internal storage), `magnetic_north` (degrees 0–360, pilot-facing display), and `variable` (true when METAR reports VRB). Use `magnetic_north` for numeric display; when `variable` is true, show "VRB"; when both null, display `---` (fail closed).
+
+**Last hour wind:** When weather history is enabled, `last_hour_wind` may be present: `{ sectors, sector_labels, reference, unit }`. Sectors is a 16-element array (knots per compass sector N→NNW). Reference is always `magnetic_north`. Null when insufficient observations.
 
 ---
 

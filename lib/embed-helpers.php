@@ -92,11 +92,10 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
     // Parse public API response
     if ($httpCode === 200 && $response !== false && empty($error)) {
         $data = json_decode($response, true);
-        if (is_array($data) && isset($data['success']) && $data['success'] && isset($data['data']['weather'])) {
-            $apiWeather = $data['data']['weather'];
+        $apiWeather = $data['weather'] ?? $data['data']['weather'] ?? null;
+        if (is_array($data) && isset($data['success']) && $data['success'] && is_array($apiWeather)) {
             
-            // Convert public API format back to internal format for templates
-            // Public API uses 'daily' nested object, templates expect flat fields
+            // Convert public API format to internal format (templates expect flat fields)
             return convertPublicApiToInternalFormat($apiWeather);
         }
     }
@@ -117,8 +116,16 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
  */
 function convertPublicApiToInternalFormat(array $apiWeather): array {
     $weather = $apiWeather;
-    
-    // Flatten daily tracking data from nested 'daily' object
+
+    // Expand wind_direction object to flat fields for templates that expect flat format
+    if (isset($apiWeather['wind_direction']) && is_array($apiWeather['wind_direction'])) {
+        $wd = $apiWeather['wind_direction'];
+        $weather['wind_direction'] = $wd['true_north'] ?? null;
+        $weather['wind_direction_magnetic'] = $wd['magnetic_north'] ?? null;
+        $weather['wind_direction_text'] = !empty($wd['variable']) ? 'VRB' : null;
+    }
+
+    // Flatten daily tracking data from 'daily' object
     if (isset($apiWeather['daily']) && is_array($apiWeather['daily'])) {
         $daily = $apiWeather['daily'];
         

@@ -17,6 +17,7 @@ require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/embed-diff.php';
 require_once __DIR__ . '/../../lib/cache-paths.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
+require_once __DIR__ . '/../../lib/public-api/weather-format.php';
 
 /**
  * Handle GET /v1/airports/{id}/embed request
@@ -60,16 +61,19 @@ function handleGetEmbed(array $params, array $context): void
     $payload = buildEmbedPayloadByTopic($airportId, $weatherData, $airport);
 
     $useDiff = isset($_GET['refresh']) && $_GET['refresh'] === '1';
+    $hasWeather = $weatherData !== null && !empty($weatherData);
+    $embedMeta = ['airport_id' => $airportId];
+    if ($hasWeather) {
+        $embedMeta['units'] = getPublicApiWeatherUnits();
+        $embedMeta['sunrise_sunset_timezone'] = $airport['timezone'] ?? 'UTC';
+    }
 
     if ($useDiff) {
         $diff = getEmbedDiffPayload($airportId, $payload);
         if ($diff === null) {
             sendPublicApiSuccess(
                 ['embed' => $payload, 'diff' => false],
-                [
-                    'airport_id' => $airportId,
-                    'full' => true,
-                ],
+                array_merge($embedMeta, ['full' => true]),
                 200,
                 [],
                 true
@@ -79,7 +83,7 @@ function handleGetEmbed(array $params, array $context): void
 
         sendPublicApiSuccess(
             ['embed' => $diff, 'diff' => true],
-            ['airport_id' => $airportId],
+            $embedMeta,
             200,
             [],
             true
@@ -89,7 +93,7 @@ function handleGetEmbed(array $params, array $context): void
 
     sendPublicApiSuccess(
         ['embed' => $payload, 'diff' => false],
-        ['airport_id' => $airportId],
+        $embedMeta,
         200,
         [],
         true

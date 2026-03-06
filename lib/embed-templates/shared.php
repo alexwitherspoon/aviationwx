@@ -168,17 +168,40 @@ function formatEmbedPressure($pressureInHg, $unit) {
 }
 
 /**
+ * Extract wind direction and VRB flag from weather
+ *
+ * Accepts flat (wind_direction_magnetic) or object (wind_direction.magnetic_north) formats.
+ *
+ * @param array $weather Weather data
+ * @return array{0: int|null, 1: bool} [windDirection in degrees, isVRB]
+ */
+function getEmbedWindFromWeather(array $weather): array
+{
+    if (isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
+        $wd = $weather['wind_direction'];
+        return [
+            $wd['magnetic_north'] ?? null,
+            !empty($wd['variable']),
+        ];
+    }
+    return [
+        $weather['wind_direction_magnetic'] ?? null,
+        ($weather['wind_direction_text'] ?? '') === 'VRB',
+    ];
+}
+
+/**
  * Format wind display (direction + speed + gust)
  * 
  * @param int|null $windDirection Wind direction in degrees
  * @param float|null $windSpeed Wind speed in knots
  * @param float|null $gustSpeed Gust speed in knots
  * @param string $windUnit Unit ('kt', 'mph', or 'kmh')
- * @return string Formatted wind string (e.g., '235°@15G20kt')
+ * @return string Formatted wind string (e.g., '235°@15G20kt') or '---' for missing values
  */
 function formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit) {
-    $windDir = $windDirection !== null ? round($windDirection) . '°' : '--';
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
+    $windDir = $windDirection !== null ? round($windDirection) . '°' : '---';
+    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
     $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     
@@ -738,10 +761,18 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
             return ($s['type'] ?? '') !== 'metar';
         })) === 0;
 
+    $lastHourWind = $weather['last_hour_wind'] ?? null;
+    if (is_array($lastHourWind) && isset($lastHourWind['sectors'])) {
+        $lastHourWind = $lastHourWind['sectors'];
+    }
+    $windDirMag = $weather['wind_direction_magnetic'] ?? null;
+    if ($windDirMag === null && isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
+        $windDirMag = $weather['wind_direction']['magnetic_north'] ?? null;
+    }
     return [
         'runwaySegments' => $runwaySegments,
-        'lastHourWind' => $weather['last_hour_wind'] ?? null,
-        'windDirectionMagnetic' => $weather['wind_direction_magnetic'] ?? null,
+        'lastHourWind' => $lastHourWind,
+        'windDirectionMagnetic' => $windDirMag,
         'magneticDeclination' => (float) getMagneticDeclination($airport),
         'fieldObsTimeMap' => $weather['_field_obs_time_map'] ?? [],
         'staleFailclosedSeconds' => getStaleFailclosedSeconds($airport),

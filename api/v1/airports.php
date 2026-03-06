@@ -87,7 +87,7 @@ function handleListAirports(array $params, array $context): void
     // Send response
     sendPublicApiSuccess(
         ['airports' => $formattedAirports],
-        ['total' => count($formattedAirports)]
+        ['total' => count($formattedAirports), 'coordinate_system' => 'WGS84']
     );
 }
 

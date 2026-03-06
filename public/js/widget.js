@@ -633,10 +633,13 @@
                     const fullMode = weather.wind_compass_full_mode || null;
                     
                     // Draw compass (full mode: runways + wind rose petals when available)
+                    const wd = weather.wind_direction;
+                    const windDir = (wd && typeof wd === 'object') ? (wd.magnetic_north ?? null) : (weather.wind_direction_magnetic ?? null);
+                    const isVRB = (wd && typeof wd === 'object') ? !!wd.variable : (weather.wind_direction_text || '') === 'VRB';
                     window.AviationWX.drawWindCompass(canvas, {
                         windSpeed: weather.wind_speed ?? null,
-                        windDirection: weather.wind_direction ?? null,
-                        isVRB: (weather.wind_direction_text || '') === 'VRB',
+                        windDirection: windDir,
+                        isVRB: isVRB,
                         runways: runways,
                         isDark: isDark,
                         size: size,

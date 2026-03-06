@@ -4728,7 +4728,8 @@ function updateWindVisual(weather) {
                       isFieldStale('wind_direction', weather, refreshIntervalSeconds, isMetarOnly);
     
     // Draw wind rose petals (last hour) when available - before wind indicators
-    const lastHourWind = weather.last_hour_wind;
+    const lhwRaw = weather.last_hour_wind;
+    const lastHourWind = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw) && lhwRaw.sectors) ? lhwRaw.sectors : lhwRaw;
     canvas.title = Array.isArray(lastHourWind) && lastHourWind.length === 16
         ? 'Wind rose: Petals show last hour distribution'
         : '';
@@ -4742,9 +4743,11 @@ function updateWindVisual(weather) {
     const gustSpeedStale = isFieldStale('gust_speed', weather, refreshIntervalSeconds, isMetarOnly);
     
     // Use sanitized values for details panel (null out stale fields)
-    const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
-    const wd = windDirectionStale ? null : (weather.wind_direction ?? null);
-    const isVariableWind = wd === 'VRB' || wd === 'vrb';
+    // Display: wind_direction.magnetic_north (fail closed); staleness uses wind_direction
+    const wdObj = weather.wind_direction;
+    const wdMag = (wdObj && typeof wdObj === 'object') ? wdObj.magnetic_north : weather.wind_direction_magnetic;
+    const wd = windDirectionStale ? null : (wdMag ?? null);
+    const isVariableWind = (wdObj && typeof wdObj === 'object') ? !!wdObj.variable : (wd === 'VRB' || wd === 'vrb' || (weather.wind_direction_text || '') === 'VRB');
     // Allow 0° (north wind) - check for number type and valid range (0-360)
     const windDirNumeric = typeof wd === 'number' && wd >= 0 && wd <= 360 ? wd : null;
     
@@ -4770,7 +4773,7 @@ function updateWindVisual(weather) {
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Wind Direction:</span>
-            <span style="font-weight: bold;">${(ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) ? '--' : (isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '--'))}</span>
+            <span style="font-weight: bold;">${(ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) ? '---' : (isVariableWind ? 'VRB' : (windDirNumeric ? windDirNumeric + '°' : '---'))}</span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Gusting:</span>
@@ -4798,7 +4801,7 @@ function updateWindVisual(weather) {
                 return `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${formatted}</div>`;
             })() : ''}
         </div>
-        ${Array.isArray(weather.last_hour_wind) && weather.last_hour_wind.length === 16 ? `
+        ${(Array.isArray(lastHourWind) && lastHourWind.length === 16) ? `
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid #e0e0e0;" title="Wind direction distribution over the last hour. Petals extend in the direction wind is coming from.">
             <span style="color: #555;">Wind rose:</span>
             <span style="font-weight: bold;">Last hour</span>
@@ -4810,9 +4813,10 @@ function updateWindVisual(weather) {
     if (!windStale) {
         if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && !isVariableWind && windDirNumeric !== null) {
             // Convert wind direction FROM to TOWARD (add 180°) for windsock visualization
-            // Prefer wind_direction_magnetic from API (centralized); fallback: convert true→magnetic client-side
-            const windDirFromMag = (weather.wind_direction_magnetic != null && typeof weather.wind_direction_magnetic === 'number')
-                ? weather.wind_direction_magnetic
+            // Prefer wind_direction.magnetic_north from API (centralized); fallback: convert true→magnetic client-side
+            const wdMagApi = (weather.wind_direction && typeof weather.wind_direction === 'object') ? weather.wind_direction.magnetic_north : weather.wind_direction_magnetic;
+            const windDirFromMag = (wdMagApi != null && typeof wdMagApi === 'number')
+                ? wdMagApi
                 : (windDirNumeric - (MAGNETIC_DECLINATION || 0) + 360) % 360;
             const windDirToward = (windDirFromMag + 180) % 360;
             windDirection = (windDirToward * Math.PI) / 180;

@@ -117,12 +117,25 @@ class WeatherEndpointTest extends TestCase
                     $this->assertArrayHasKey($field, $weather, "Should have field: $field");
                 }
 
-                // SAFETY: last_hour_wind (wind rose petals) - when present, must be valid
+                // SAFETY: wind_direction object with true_north, magnetic_north, variable
+                if (isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
+                    $wd = $weather['wind_direction'];
+                    $this->assertArrayHasKey('true_north', $wd, 'wind_direction must have true_north');
+                    $this->assertArrayHasKey('magnetic_north', $wd, 'wind_direction must have magnetic_north');
+                    $this->assertArrayHasKey('variable', $wd, 'wind_direction must have variable');
+                    if (isset($wd['true_north']) && is_numeric($wd['true_north']) && $wd['true_north'] >= 0 && $wd['true_north'] <= 360) {
+                        $this->assertNotNull($wd['magnetic_north'] ?? null,
+                            'magnetic_north must be present when true_north is valid');
+                    }
+                }
+
+                // SAFETY: last_hour_wind - when present, must have sectors array with 16 numeric values
                 if (isset($weather['last_hour_wind'])) {
                     $lhw = $weather['last_hour_wind'];
-                    $this->assertIsArray($lhw, 'last_hour_wind must be array');
-                    $this->assertCount(16, $lhw, 'last_hour_wind must have exactly 16 sectors');
-                    foreach ($lhw as $i => $v) {
+                    $sectors = (is_array($lhw) && isset($lhw['sectors'])) ? $lhw['sectors'] : $lhw;
+                    $this->assertIsArray($sectors, 'last_hour_wind must be array or object with sectors');
+                    $this->assertCount(16, $sectors, 'last_hour_wind must have exactly 16 sectors');
+                    foreach ($sectors as $i => $v) {
                         $this->assertTrue(is_numeric($v), "last_hour_wind sector $i must be numeric");
                         $this->assertGreaterThanOrEqual(0, (float) $v, "last_hour_wind sector $i must be non-negative");
                     }

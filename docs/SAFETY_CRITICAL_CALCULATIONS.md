@@ -392,8 +392,9 @@ Gust Factor = Peak Gust - Steady Wind Speed
 
 ### Convention
 
-- **Storage/API**: `wind_direction` is always true north
-- **Display**: Convert to magnetic at render time when needed (runway wind diagram, compass)
+- **Storage/API**: `wind_direction` is always true north (degrees 0-360), or `"VRB"` when variable
+- **Display**: Use `wind_direction_magnetic` (computed at cache write time via `addWindDirectionMagneticToWeather`). When missing, show `---` (fail closed). Never show `wind_direction` to pilots.
+- **VRB (variable wind)**: When METAR reports variable wind, `wind_direction` is `"VRB"`. `addWindDirectionMagneticToWeather` sets `wind_direction_text` to `"VRB"` for display. Display layers check `wind_direction_text === 'VRB'` and show "VRB" instead of `---`.
 - **Conversion**: Centralized in `lib/heading-conversion.php`
 
 ### Conversion Functions

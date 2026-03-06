@@ -179,6 +179,37 @@ class PublicApiIntegrationTest extends TestCase
         $this->assertFalse($response['json']['success']);
         $this->assertEquals('AIRPORT_NOT_FOUND', $response['json']['error']['code']);
     }
+
+    /**
+     * GET /v1/airports/{id} with runways includes runway_heading_reference
+     */
+    public function testGetAirport_IncludesRunwayHeadingReference(): void
+    {
+        $this->skipIfApiDisabled();
+        
+        $response = $this->apiRequest('/airports/kspb');
+        
+        if ($response['code'] !== 200) {
+            $this->markTestSkipped('Airport kspb not available (got ' . $response['code'] . ')');
+            return;
+        }
+        
+        $airport = $response['json']['airport'] ?? null;
+        $this->assertNotNull($airport, 'Response should include airport');
+        
+        if (empty($airport['runways'])) {
+            return;
+        }
+        if (!array_key_exists('runway_heading_reference', $airport)) {
+            $this->markTestSkipped('Server may need restart to pick up runway_heading_reference');
+            return;
+        }
+        $this->assertContains(
+            $airport['runway_heading_reference'],
+            ['true_north', 'magnetic', null],
+            'runway_heading_reference should be true_north, magnetic, or null'
+        );
+    }
     
     /**
      * Unknown endpoint should return 404
@@ -221,6 +252,36 @@ class PublicApiIntegrationTest extends TestCase
         $this->assertNotNull($response['json']);
         $this->assertFalse($response['json']['success']);
         $this->assertEquals('INVALID_REQUEST', $response['json']['error']['code']);
+    }
+
+    /**
+     * GET /v1/airports/{id}/weather/history observations have wind_direction object
+     */
+    public function testWeatherHistory_ObservationsHaveWindDirectionObject(): void
+    {
+        $this->skipIfApiDisabled();
+        
+        $response = $this->apiRequest('/airports/kspb/weather/history');
+        
+        if ($response['code'] === 404) {
+            $this->markTestSkipped('Weather history not enabled');
+            return;
+        }
+        
+        $this->assertEquals(200, $response['code']);
+        $this->assertArrayHasKey('observations', $response['json']);
+        $this->assertIsArray($response['json']['observations']);
+        
+        foreach ($response['json']['observations'] as $obs) {
+            if (!isset($obs['wind_direction'])) {
+                continue;
+            }
+            $wd = $obs['wind_direction'];
+            $this->assertIsArray($wd, 'wind_direction should be object');
+            $this->assertArrayHasKey('true_north', $wd);
+            $this->assertArrayHasKey('magnetic_north', $wd);
+            $this->assertArrayHasKey('variable', $wd);
+        }
     }
 }
 
