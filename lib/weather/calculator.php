@@ -135,8 +135,8 @@ function calculatePressureAltitude($weather, $airport) {
     
     // PA = Station Elevation + (29.92 - Altimeter) × 1000
     $pressureAlt = $stationElevation + (29.92 - $pressureInHg) * 1000;
-    
-    return round($pressureAlt);
+
+    return (int) round($pressureAlt);
 }
 
 /**

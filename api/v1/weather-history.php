@@ -16,6 +16,7 @@
 require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/public-api/config.php';
+require_once __DIR__ . '/../../lib/public-api/weather-format.php';
 require_once __DIR__ . '/../../lib/weather/history.php';
 require_once __DIR__ . '/../../lib/heading-conversion.php';
 require_once __DIR__ . '/../../lib/config.php';
@@ -92,16 +93,16 @@ function handleGetWeatherHistory(array $params, array $context): void
             'temperature_f' => $obs['temperature_f'] ?? null,
             'dewpoint' => $obs['dewpoint'] ?? null,
             'humidity' => $obs['humidity'] ?? null,
-            'wind_speed' => $obs['wind_speed'] ?? null,
+            'wind_speed' => toApiInteger($obs['wind_speed'] ?? null),
             'wind_direction' => [
                 'true_north' => $isVRB ? null : $trueNorth,
                 'magnetic_north' => $isVRB ? null : $magneticNorth,
                 'variable' => $isVRB,
             ],
-            'gust_speed' => $obs['gust_speed'] ?? null,
+            'gust_speed' => toApiInteger($obs['gust_speed'] ?? null),
             'pressure' => $obs['pressure'] ?? null,
             'visibility' => $obs['visibility'] ?? null,
-            'ceiling' => $obs['ceiling'] ?? null,
+            'ceiling' => toApiInteger($obs['ceiling'] ?? null),
             'cloud_cover' => $obs['cloud_cover'] ?? null,
             'flight_category' => $obs['flight_category'] ?? null,
         ];

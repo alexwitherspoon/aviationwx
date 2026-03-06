@@ -40,9 +40,9 @@ class SwobHelperTest extends TestCase
         $this->assertEquals(86, $result['humidity'] ?? null);
         // Altimeter 29.72 inHg
         $this->assertEqualsWithDelta(29.72, $result['pressure'] ?? null, 0.01);
-        // Wind dir 299°, speed 14.8 km/h → ~7.99 kt
+        // Wind dir 299°, speed 14.8 km/h → 8 kt (rounded to int per OpenAPI)
         $this->assertEquals(299, $result['wind_direction'] ?? null);
-        $this->assertEqualsWithDelta(14.8 / 1.852, $result['wind_speed'] ?? null, 0.1);
+        $this->assertSame(8, $result['wind_speed'] ?? null);
         // Gust MSNG → null
         $this->assertNull($result['gust_speed'] ?? null);
         // Visibility MSNG → null
@@ -115,7 +115,7 @@ class SwobHelperTest extends TestCase
         );
         $result = parseSwobXmlToWeatherArray($xml);
         $this->assertNotNull($result);
-        $this->assertEqualsWithDelta(10 * 0.621371, $result['visibility'] ?? null, 0.01);
+        $this->assertEqualsWithDelta(kilometersToStatuteMiles(10), $result['visibility'] ?? null, 0.01);
     }
 
     /**
@@ -147,6 +147,6 @@ class SwobHelperTest extends TestCase
         $insert = str_replace('</elements>', $cloudEl . $cloudCode . '</elements>', $base);
         $result = parseSwobXmlToWeatherArray($insert);
         $this->assertNotNull($result);
-        $this->assertEqualsWithDelta(1000 * 3.28084, $result['ceiling'] ?? null, 1);
+        $this->assertSame(3281, $result['ceiling'] ?? null);
     }
 }

@@ -123,4 +123,29 @@ class FormatWeatherResponseTest extends TestCase
 
         $this->assertNull($result['last_hour_wind']);
     }
+
+    /**
+     * Float values normalized to integers per OpenAPI spec
+     */
+    public function testFloatValues_NormalizedToIntegers(): void
+    {
+        $weather = [
+            'wind_speed' => 11.663066954643629,
+            'gust_speed' => 16.73866090712743,
+            'ceiling' => 3000.7,
+            'density_altitude' => -1844.2,
+            'pressure_altitude' => 710.9,
+            'peak_gust_today' => 16.73866090712743,
+        ];
+        $airport = [];
+
+        $result = formatWeatherResponse($weather, $airport);
+
+        $this->assertSame(12, $result['wind_speed']);
+        $this->assertSame(17, $result['gust_speed']);
+        $this->assertSame(3001, $result['ceiling']);
+        $this->assertSame(-1844, $result['density_altitude']);
+        $this->assertSame(711, $result['pressure_altitude']);
+        $this->assertSame(17, $result['daily']['peak_gust']);
+    }
 }

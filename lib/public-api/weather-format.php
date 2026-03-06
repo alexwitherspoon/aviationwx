@@ -10,6 +10,20 @@
 const WIND_ROSE_SECTOR_LABELS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 /**
+ * Cast numeric value to integer per OpenAPI spec (round first for floats).
+ *
+ * @param mixed $value Raw value from cache
+ * @return int|null Integer or null for non-numeric
+ */
+function toApiInteger($value): ?int
+{
+    if ($value === null || !is_numeric($value)) {
+        return null;
+    }
+    return (int) round((float) $value);
+}
+
+/**
  * Format last_hour_wind as object with sectors, reference, and unit
  *
  * @param array|null $petals Raw 16-sector array or null
@@ -43,10 +57,8 @@ function formatWindDirectionForApi(array $weather): array
     $trueNorth = null;
     $magneticNorth = null;
     if (!$isVRB) {
-        $trueNorth = is_numeric($weather['wind_direction'] ?? null)
-            ? (int) round((float) $weather['wind_direction'])
-            : null;
-        $magneticNorth = $weather['wind_direction_magnetic'] ?? null;
+        $trueNorth = toApiInteger($weather['wind_direction'] ?? null);
+        $magneticNorth = toApiInteger($weather['wind_direction_magnetic'] ?? null);
     }
 
     return [
@@ -76,18 +88,18 @@ function formatWeatherResponse(array $weather, array $airport): array
         'dewpoint_f' => $weather['dewpoint_f'] ?? null,
         'dewpoint_spread' => $weather['dewpoint_spread'] ?? null,
         'humidity' => $weather['humidity'] ?? null,
-        'wind_speed' => $weather['wind_speed'] ?? null,
+        'wind_speed' => toApiInteger($weather['wind_speed'] ?? null),
         'wind_direction' => formatWindDirectionForApi($weather),
-        'gust_speed' => $weather['gust_speed'] ?? null,
+        'gust_speed' => toApiInteger($weather['gust_speed'] ?? null),
         'gust_factor' => $weather['gust_factor'] ?? null,
         'pressure' => $weather['pressure'] ?? null,
         'visibility' => $weather['visibility'] ?? null,
         'visibility_greater_than' => $weather['visibility_greater_than'] ?? false,
-        'ceiling' => $weather['ceiling'] ?? null,
+        'ceiling' => toApiInteger($weather['ceiling'] ?? null),
         'cloud_cover' => $weather['cloud_cover'] ?? null,
         'precip_accum' => $weather['precip_accum'] ?? null,
-        'density_altitude' => $weather['density_altitude'] ?? null,
-        'pressure_altitude' => $weather['pressure_altitude'] ?? null,
+        'density_altitude' => toApiInteger($weather['density_altitude'] ?? null),
+        'pressure_altitude' => toApiInteger($weather['pressure_altitude'] ?? null),
         'sunrise' => $weather['sunrise'] ?? null,
         'sunset' => $weather['sunset'] ?? null,
         'daily' => [
@@ -99,7 +111,7 @@ function formatWeatherResponse(array $weather, array $airport): array
             'temp_low_time' => isset($weather['temp_low_ts'])
                 ? gmdate('c', $weather['temp_low_ts'])
                 : null,
-            'peak_gust' => $weather['peak_gust_today'] ?? null,
+            'peak_gust' => toApiInteger($weather['peak_gust_today'] ?? null),
             'peak_gust_time' => isset($weather['peak_gust_time'])
                 ? gmdate('c', $weather['peak_gust_time'])
                 : null,

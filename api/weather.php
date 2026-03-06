@@ -30,6 +30,8 @@ require_once __DIR__ . '/../lib/public-api/weather-format.php';
 /**
  * Format weather for Internal API response
  *
+ * Normalizes integer fields per OpenAPI spec (wind_speed, gust_speed, ceiling, etc.).
+ *
  * @param array $weather Raw weather from cache
  * @return array Weather with wind_direction object and last_hour_wind object (sectors, reference, unit)
  */
@@ -40,6 +42,16 @@ function formatInternalApiWeatherResponse(array $weather): array
     $out['wind_direction'] = formatWindDirectionForApi($weather);
     $lhw = $weather['last_hour_wind'] ?? null;
     $out['last_hour_wind'] = formatLastHourWindForApi(is_array($lhw) ? $lhw : null);
+
+    $out['wind_speed'] = toApiInteger($weather['wind_speed'] ?? null);
+    $out['gust_speed'] = toApiInteger($weather['gust_speed'] ?? null);
+    $out['ceiling'] = toApiInteger($weather['ceiling'] ?? null);
+    $out['density_altitude'] = toApiInteger($weather['density_altitude'] ?? null);
+    $out['pressure_altitude'] = toApiInteger($weather['pressure_altitude'] ?? null);
+    if (array_key_exists('peak_gust_today', $out)) {
+        $out['peak_gust_today'] = toApiInteger($weather['peak_gust_today'] ?? null);
+    }
+
     return $out;
 }
 
