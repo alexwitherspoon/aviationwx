@@ -44,11 +44,18 @@ function formatWeatherResponse(array $weather, array $airport): array
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB'
         || (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
 
-    $windDirection = [
-        'true_north' => is_numeric($weather['wind_direction'] ?? null)
+    $trueNorth = null;
+    $magneticNorth = null;
+    if (!$isVRB) {
+        $trueNorth = is_numeric($weather['wind_direction'] ?? null)
             ? (int) round((float) $weather['wind_direction'])
-            : null,
-        'magnetic_north' => $weather['wind_direction_magnetic'] ?? null,
+            : null;
+        $magneticNorth = $weather['wind_direction_magnetic'] ?? null;
+    }
+
+    $windDirection = [
+        'true_north' => $trueNorth,
+        'magnetic_north' => $magneticNorth,
         'variable' => $isVRB,
     ];
 

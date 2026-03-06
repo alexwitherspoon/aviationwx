@@ -46,9 +46,16 @@ function formatInternalApiWeatherResponse(array $weather): array
     $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB'
         || (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
 
+    $trueNorth = null;
+    $magneticNorth = null;
+    if (!$isVRB) {
+        $trueNorth = is_numeric($wdRaw) ? (int) round((float) $wdRaw) : null;
+        $magneticNorth = $weather['wind_direction_magnetic'] ?? null;
+    }
+
     $windDirection = [
-        'true_north' => is_numeric($wdRaw) ? (int) round((float) $wdRaw) : null,
-        'magnetic_north' => $weather['wind_direction_magnetic'] ?? null,
+        'true_north' => $trueNorth,
+        'magnetic_north' => $magneticNorth,
         'variable' => $isVRB,
     ];
 
