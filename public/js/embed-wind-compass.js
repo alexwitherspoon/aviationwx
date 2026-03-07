@@ -132,11 +132,9 @@
             const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
             const identAtStart = seg.ident_at_start !== undefined ? seg.ident_at_start : leIdent;
             const identAtEnd = seg.ident_at_end !== undefined ? seg.ident_at_end : heIdent;
-            const runwayAngle = Math.atan2(sy - ey, ex - sx);
-            const labelAngle = runwayAngle + Math.PI / 2;
 
-            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart, angle: labelAngle });
-            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd, angle: labelAngle });
+            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart });
+            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd });
         });
 
         for (let i = 0; i < labelPositions.length; i++) {
@@ -241,10 +239,9 @@
         ctx.textBaseline = 'middle';
         labelPositions.forEach(function(lp) {
             if (!lp.ident) return;
-            const angle = lp.angle !== undefined ? lp.angle : 0;
             ctx.save();
             ctx.translate(lp.x, lp.y);
-            ctx.rotate(angle);
+            if (magneticDeclination !== 0) ctx.rotate(-magneticDeclination * deg2rad);
             const strokeW = colors.runwayLabelStrokeWidth !== undefined ? colors.runwayLabelStrokeWidth : 3;
             if (strokeW > 0) {
                 ctx.strokeStyle = colors.runwayLabelOutline !== undefined ? colors.runwayLabelOutline : colors.labelOutline;

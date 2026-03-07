@@ -4726,20 +4726,15 @@ function updateWindVisual(weather) {
         const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
         const identAtStart = seg.ident_at_start ?? leIdent;
         const identAtEnd = seg.ident_at_end ?? heIdent;
-        // Runway numbers are oriented perpendicular to centerline (readable when approaching)
-        const runwayAngle = Math.atan2(sy - ey, ex - sx);
-        const labelAngle = runwayAngle + Math.PI / 2;
         labelPositions.push({
             x: cx + rw * labelAtStart,
             y: cy - rw * labelAtStartY,
-            ident: identAtStart,
-            angle: labelAngle
+            ident: identAtStart
         });
         labelPositions.push({
             x: cx + rw * labelAtEnd,
             y: cy - rw * labelAtEndY,
-            ident: identAtEnd,
-            angle: labelAngle
+            ident: identAtEnd
         });
     });
     
@@ -4931,16 +4926,15 @@ function updateWindVisual(weather) {
     // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
     
     // Draw runway labels (after petals/arrow so labels sit on top)
-    // Oriented to runway direction like real runway threshold signs
+    // Baseline level with screen for readability (counter-rotate when canvas is rotated)
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     labelPositions.forEach((lp) => {
         if (!lp.ident) return;
-        const angle = lp.angle ?? 0;
         ctx.save();
         ctx.translate(lp.x, lp.y);
-        ctx.rotate(angle);
+        if (magDecl !== 0) ctx.rotate(-magDecl * deg2rad);
         const strokeW = colors.runwayLabelStrokeWidth ?? 3;
         if (strokeW > 0) {
             ctx.strokeStyle = colors.runwayLabelOutline ?? colors.labelOutline;
