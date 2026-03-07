@@ -122,7 +122,7 @@ The API uses `s-maxage` to limit Cloudflare cache TTL separately from browser ca
 
 **Wind direction:** `wind_direction` is an object with `true_north` (degrees 0–360, internal storage), `magnetic_north` (degrees 0–360, pilot-facing display), and `variable` (true when METAR reports VRB). Use `magnetic_north` for numeric display; when `variable` is true, show "VRB"; when both null, display `---` (fail closed).
 
-**Last hour wind:** When weather history is enabled, `last_hour_wind` may be present: `{ sectors, sector_labels, reference, unit }`. Sectors is a 16-element array (knots per compass sector N→NNW). Reference is always `magnetic_north`. Null when insufficient observations.
+**Wind rose:** When weather history is enabled, `last_hour_wind` may be present: `{ sectors, sector_labels, reference, unit, period_label }`. Sectors is a 16-element array (knots per compass sector N→NNW). Reference is always `magnetic_north`. `period_label` describes the window (e.g. "last hour", "last 3 hours") from `config.public_api.wind_rose_window_hours`. Null when insufficient observations.
 
 ---
 

@@ -890,9 +890,9 @@ When new data is fetched but some fields are missing:
 
 **API Access**: Available via Public API endpoint `/v1/airports/{id}/weather/history` with optional time filtering and resolution downsampling (all, hourly, 15min).
 
-**Wind Rose Petals**: `computeLastHourWindRose()` derives 16-sector wind distribution from observations in the rolling last hour. Observations with wind speed below `CALM_WIND_THRESHOLD_KTS` (3 knots) are excluded. Requires at least 2 valid observations. Result is added to weather cache as `last_hour_wind` when `config.public_api.weather_history_enabled` is true. Petals extend in direction wind is FROM (meteorological convention). Arrow shows direction wind is blowing TOWARD (windsock convention).
+**Wind Rose Petals**: `computeWindRose()` derives 16-sector wind distribution from observations in a configurable rolling window. Window size is set by `config.public_api.wind_rose_window_hours` (default 1). Observations with wind speed below `CALM_WIND_THRESHOLD_KTS` (3 knots) are excluded. Requires at least 2 valid observations. Result is added to weather cache as `last_hour_wind` when `config.public_api.weather_history_enabled` is true. Petals extend in direction wind is FROM (meteorological convention). Arrow shows direction wind is blowing TOWARD (windsock convention).
 
-**API Format**: The Internal and Public APIs return `last_hour_wind` as an object: `{ sectors: number[16], sector_labels: string[16], reference: "magnetic_north", unit: "knots" }`. Sectors are ordered N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW. Null when insufficient observations.
+**API Format**: The Internal and Public APIs return `last_hour_wind` as an object: `{ sectors: number[16], sector_labels: string[16], reference: "magnetic_north", unit: "knots", period_label: string }`. Sectors are ordered N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW. `period_label` is derived from `wind_rose_window_hours` (e.g. "last hour", "last 3 hours") or overridden by `wind_rose_period_label`. Null when insufficient observations.
 
 ### Refresh Intervals
 

@@ -94,7 +94,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 10.0, 0.0);
         $this->appendObs($baseTime - 300, 10.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(10.0, $petals[0], 0.1, '0° (N) must map to sector 0');
     }
@@ -108,7 +108,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 12.0, 90.0);
         $this->appendObs($baseTime - 300, 12.0, 90.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(12.0, $petals[4], 0.1, '90° (E) must map to sector 4');
     }
@@ -122,7 +122,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 8.0, 180.0);
         $this->appendObs($baseTime - 300, 8.0, 180.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(8.0, $petals[8], 0.1, '180° (S) must map to sector 8');
     }
@@ -136,7 +136,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 15.0, 270.0);
         $this->appendObs($baseTime - 300, 15.0, 270.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(15.0, $petals[12], 0.1, '270° (W) must map to sector 12');
     }
@@ -150,7 +150,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 7.0, -20.0); // -20° = 340° -> sector 15 (NNW)
         $this->appendObs($baseTime - 300, 7.0, 340.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(7.0, $petals[15], 0.1, '-20° must normalize to 340° -> sector 15 (NNW)');
     }
@@ -164,7 +164,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 7.0, 360.0);
         $this->appendObs($baseTime - 300, 7.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(7.0, $petals[0], 0.1, '360° must wrap to sector 0 (N)');
     }
@@ -178,7 +178,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 5.0, 11.0);
         $this->appendObs($baseTime - 300, 5.0, 11.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(5.0, $petals[0], 0.1, '11° must map to N (sector 0)');
     }
@@ -192,7 +192,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 6.0, 12.0);
         $this->appendObs($baseTime - 300, 6.0, 12.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(6.0, $petals[1], 0.1, '12° must map to NNE (sector 1)');
     }
@@ -211,7 +211,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 900, 14.0, 0.0);
         $this->appendObs($baseTime - 300, 6.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $expected = (10.0 + 14.0 + 6.0) / 3;
         $this->assertEqualsWithDelta($expected, $petals[0], 0.1, 'Sector 0 avg must be 10');
@@ -229,7 +229,7 @@ class WindRoseSafetyTest extends TestCase
             $this->appendObs($baseTime - (600 - $i * 30), $expected[$i], (float) $dir);
         }
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertCount(16, $petals);
         for ($i = 0; $i < 16; $i++) {
@@ -249,7 +249,7 @@ class WindRoseSafetyTest extends TestCase
         $baseTime = time();
         $this->appendObs($baseTime - 3700, 20.0, 0.0); // 61+ min ago
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'Obs older than 1 hour must be excluded - return null');
     }
 
@@ -265,7 +265,7 @@ class WindRoseSafetyTest extends TestCase
             'wind_direction' => null,
         ]);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'Obs with null wind_direction must not produce petals');
     }
 
@@ -281,7 +281,7 @@ class WindRoseSafetyTest extends TestCase
             'wind_direction' => 0.0,
         ]);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'Obs with null wind_speed must not produce petals');
     }
 
@@ -297,7 +297,7 @@ class WindRoseSafetyTest extends TestCase
             'wind_direction' => 0.0,
         ]);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'Negative wind_speed must be rejected');
     }
 
@@ -309,7 +309,7 @@ class WindRoseSafetyTest extends TestCase
         $baseTime = time();
         $this->appendObs($baseTime - 600, 10.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'Single observation must return null');
     }
 
@@ -322,7 +322,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 2.0, 0.0);  // Below 3 kts = calm, excluded
         $this->appendObs($baseTime - 300, 2.5, 90.0); // Below 3 kts = calm, excluded
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'Calm winds must not contribute - insufficient valid obs');
     }
 
@@ -336,14 +336,14 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 300, 5.0, 0.0);
         $this->appendObs($baseTime - 150, 2.0, 90.0); // Calm, excluded
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(5.0, $petals[0], 0.1, 'Sector 0 (N) should have 5.0 from non-calm obs only');
         $this->assertEqualsWithDelta(0.0, $petals[4], 0.1, 'Sector 4 (E) should be 0 - calm obs excluded');
     }
 
     /**
-     * All calm (zero speed) in last hour must return null
+     * All calm (zero speed) in configured window must return null
      */
     public function testFailSafe_AllCalm_ReturnsNull(): void
     {
@@ -351,7 +351,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 0.0, 0.0);
         $this->appendObs($baseTime - 300, 0.0, 90.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'All calm must return null (no petals to display)');
     }
 
@@ -373,7 +373,7 @@ class WindRoseSafetyTest extends TestCase
         $baseTime = time();
         $this->appendObs($baseTime - 600, 10.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals, 'When history disabled, must return null');
     }
 
@@ -390,7 +390,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 5.0, 0.0);
         $this->appendObs($baseTime - 300, 5.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertCount(16, $petals, 'Must return exactly 16 sectors');
     }
@@ -404,7 +404,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 10.0, 0.0);
         $this->appendObs($baseTime - 300, 8.0, 90.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         foreach ($petals as $i => $v) {
             $this->assertGreaterThanOrEqual(0, $v, "Sector $i must be non-negative");
@@ -420,7 +420,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 10.0, 0.0);
         $this->appendObs($baseTime - 300, 11.0, 0.0); // avg = 10.5
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertEquals(10.5, $petals[0], 'Values must be rounded to 1 decimal');
     }
@@ -457,7 +457,7 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 10.0, 14.0);
         $this->appendObs($baseTime - 300, 10.0, 14.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId, $airport);
+        $petals = computeWindRose($this->testAirportId, $airport);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(10.0, $petals[0], 0.1, '14° true with 14°E declination must map to sector 0 (N magnetic)');
     }
@@ -471,8 +471,59 @@ class WindRoseSafetyTest extends TestCase
         $this->appendObs($baseTime - 600, 10.0, 0.0);
         $this->appendObs($baseTime - 300, 10.0, 0.0);
 
-        $petals = computeLastHourWindRose($this->testAirportId, null);
+        $petals = computeWindRose($this->testAirportId, null);
         $this->assertNotNull($petals);
         $this->assertEqualsWithDelta(10.0, $petals[0], 0.1, 'Null airport must use declination 0');
+    }
+
+    // ============================================================================
+    // WINDOW CONFIG - Observations outside window must be excluded
+    // ============================================================================
+
+    /**
+     * wind_rose_window_hours: obs outside window excluded (default 1 hour)
+     */
+    public function testWindRoseWindowHours_ObsOutsideWindow_Excluded(): void
+    {
+        $baseTime = time();
+        // Obs 2 hours ago - outside default 1-hour window
+        $this->appendObs($baseTime - 7200, 10.0, 0.0);
+        $this->appendObs($baseTime - 5400, 10.0, 0.0);
+
+        $petals = computeWindRose($this->testAirportId);
+        $this->assertNull($petals, 'Obs outside 1-hour window must be excluded');
+    }
+
+    /**
+     * wind_rose_window_hours: custom 3-hour window includes obs within 3 hours
+     */
+    public function testWindRoseWindowHours_Custom3Hours_IncludesObsWithinWindow(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'weather_history_enabled' => true,
+                    'weather_history_retention_hours' => 24,
+                    'wind_rose_window_hours' => 3,
+                ],
+            ],
+            'airports' => [
+                $this->testAirportId => [
+                    'name' => 'Test',
+                    'enabled' => true,
+                    'lat' => 45.0,
+                    'lon' => -122.0,
+                ],
+            ],
+        ]);
+
+        $baseTime = time();
+        $this->appendObs($baseTime - 7200, 10.0, 0.0);  // 2 hours ago
+        $this->appendObs($baseTime - 3600, 10.0, 0.0);  // 1 hour ago
+
+        $petals = computeWindRose($this->testAirportId);
+        $this->assertNotNull($petals);
+        $this->assertEqualsWithDelta(10.0, $petals[0], 0.1, 'Obs within 3-hour window must be included');
     }
 }

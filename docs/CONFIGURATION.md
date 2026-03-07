@@ -1489,6 +1489,35 @@ php -r "require 'lib/config.php'; \$c = loadConfig(); var_dump(isset(\$c['config
 
 ---
 
+## Public API Configuration
+
+When `config.public_api.enabled` is true, the Public API and weather history features are available. Wind rose data uses a configurable rolling window.
+
+### Wind Rose Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `wind_rose_window_hours` | `1` | Hours of observations to include in wind rose petals (e.g. 1 = last hour, 3 = last 3 hours). Minimum 1. |
+| `wind_rose_period_label` | (derived) | Optional override for display label (e.g. "last hour", "last 3 hours"). When omitted, derived from `wind_rose_window_hours`. |
+
+Example:
+
+```json
+{
+  "config": {
+    "public_api": {
+      "enabled": true,
+      "weather_history_enabled": true,
+      "weather_history_retention_hours": 24,
+      "wind_rose_window_hours": 3,
+      "wind_rose_period_label": "last 3 hours"
+    }
+  }
+}
+```
+
+---
+
 ## Validation
 
 The validator uses strict checking—unknown fields are rejected.

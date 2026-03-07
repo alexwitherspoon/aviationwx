@@ -377,22 +377,26 @@ function computeDailyExtremesFromHistory(string $airportId, string $dateKey, str
 }
 
 /**
- * Compute last-hour wind rose data for wind rose petal visualization
+ * Compute wind rose data for petal visualization
  *
  * Returns 16 sectors (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
  * with average wind speed when wind was from that direction. Wind direction is "from" (meteorological).
  * Petals extend in the direction wind is coming from.
  * Observations are converted to magnetic north before binning so petals align with compass frame.
+ * Window size is configurable via config.public_api.wind_rose_window_hours (default 1).
  *
  * @param string $airportId Airport ID
  * @param array|null $airport Airport config for magnetic declination; when null, declination 0 (tests)
  * @return array|null Array of 16 floats (sector 0=N, 1=NNE, ... 15=NNW), or null if unavailable
  */
-function computeLastHourWindRose(string $airportId, ?array $airport = null): ?array
+function computeWindRose(string $airportId, ?array $airport = null): ?array
 {
     if (!isPublicApiWeatherHistoryEnabled()) {
         return null;
     }
+
+    $windowHours = getPublicApiWindRoseWindowHours();
+    $cutoff = time() - ($windowHours * 3600);
 
     $history = loadWeatherHistory($airportId);
     $observations = $history['observations'] ?? [];
@@ -400,11 +404,10 @@ function computeLastHourWindRose(string $airportId, ?array $airport = null): ?ar
         return null;
     }
 
-    $cutoff = time() - 3600; // Last hour
-    $lastHourObs = array_filter($observations, function ($obs) use ($cutoff) {
+    $windowObs = array_filter($observations, function ($obs) use ($cutoff) {
         return isset($obs['obs_time']) && $obs['obs_time'] >= $cutoff;
     });
-    if (empty($lastHourObs)) {
+    if (empty($windowObs)) {
         return null;
     }
 
@@ -415,7 +418,7 @@ function computeLastHourWindRose(string $airportId, ?array $airport = null): ?ar
     $sectorSums = array_fill(0, 16, 0.0);
     $sectorCounts = array_fill(0, 16, 0);
 
-    foreach ($lastHourObs as $obs) {
+    foreach ($windowObs as $obs) {
         $dir = $obs['wind_direction'] ?? null;
         $speed = $obs['wind_speed'] ?? null;
         if ($dir === null || $speed === null || !is_numeric($dir) || !is_numeric($speed)) {

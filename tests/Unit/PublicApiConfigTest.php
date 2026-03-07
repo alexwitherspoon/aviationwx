@@ -316,5 +316,123 @@ class PublicApiConfigTest extends TestCase
         
         $this->assertEquals(10, $max);
     }
+
+    /**
+     * Wind rose window hours defaults to 1 when not configured
+     */
+    public function testGetPublicApiWindRoseWindowHours_Default(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => ['enabled' => true]
+            ],
+            'airports' => []
+        ]);
+
+        $hours = getPublicApiWindRoseWindowHours();
+
+        $this->assertSame(1, $hours);
+    }
+
+    /**
+     * Wind rose window hours uses configured value
+     */
+    public function testGetPublicApiWindRoseWindowHours_Configured(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'wind_rose_window_hours' => 3
+                ]
+            ],
+            'airports' => []
+        ]);
+
+        $hours = getPublicApiWindRoseWindowHours();
+
+        $this->assertSame(3, $hours);
+    }
+
+    /**
+     * Wind rose window hours floors to 1 when configured value is less than 1
+     */
+    public function testGetPublicApiWindRoseWindowHours_ZeroFloorsToOne(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'wind_rose_window_hours' => 0
+                ]
+            ],
+            'airports' => []
+        ]);
+
+        $hours = getPublicApiWindRoseWindowHours();
+
+        $this->assertSame(1, $hours, 'Zero or negative must floor to 1 for safety');
+    }
+
+    /**
+     * Wind rose period label defaults to "last hour" when window is 1
+     */
+    public function testGetPublicApiWindRosePeriodLabel_DefaultOneHour(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'wind_rose_window_hours' => 1
+                ]
+            ],
+            'airports' => []
+        ]);
+
+        $label = getPublicApiWindRosePeriodLabel();
+
+        $this->assertSame('last hour', $label);
+    }
+
+    /**
+     * Wind rose period label derives "last N hours" from window
+     */
+    public function testGetPublicApiWindRosePeriodLabel_DerivedFromWindow(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'wind_rose_window_hours' => 3
+                ]
+            ],
+            'airports' => []
+        ]);
+
+        $label = getPublicApiWindRosePeriodLabel();
+
+        $this->assertSame('last 3 hours', $label);
+    }
+
+    /**
+     * Wind rose period label uses override when configured
+     */
+    public function testGetPublicApiWindRosePeriodLabel_Override(): void
+    {
+        $this->createTestConfig([
+            'config' => [
+                'public_api' => [
+                    'enabled' => true,
+                    'wind_rose_window_hours' => 3,
+                    'wind_rose_period_label' => 'last 3 hours'
+                ]
+            ],
+            'airports' => []
+        ]);
+
+        $label = getPublicApiWindRosePeriodLabel();
+
+        $this->assertSame('last 3 hours', $label);
+    }
 }
 

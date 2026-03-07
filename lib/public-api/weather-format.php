@@ -24,21 +24,23 @@ function toApiInteger($value): ?int
 }
 
 /**
- * Format last_hour_wind as object with sectors, reference, and unit
+ * Format wind rose as object with sectors, reference, unit, and period_label
  *
  * @param array|null $petals Raw 16-sector array or null
- * @return array|null { sectors, sector_labels, reference, unit } or null
+ * @return array|null { sectors, sector_labels, reference, unit, period_label } or null
  */
-function formatLastHourWindForApi(?array $petals): ?array
+function formatWindRoseForApi(?array $petals): ?array
 {
     if ($petals === null || !is_array($petals) || count($petals) !== 16) {
         return null;
     }
+    require_once __DIR__ . '/config.php';
     return [
         'sectors' => array_values($petals),
         'sector_labels' => WIND_ROSE_SECTOR_LABELS,
         'reference' => 'magnetic_north',
         'unit' => 'knots',
+        'period_label' => getPublicApiWindRosePeriodLabel(),
     ];
 }
 
@@ -122,7 +124,7 @@ function formatWeatherResponse(array $weather, array $airport): array
         'last_updated' => isset($weather['last_updated'])
             ? gmdate('c', $weather['last_updated'])
             : null,
-        'last_hour_wind' => formatLastHourWindForApi($weather['last_hour_wind'] ?? null),
+        'last_hour_wind' => formatWindRoseForApi($weather['last_hour_wind'] ?? null),
         '_field_obs_time_map' => $weather['_field_obs_time_map'] ?? [],
     ];
 }

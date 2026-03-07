@@ -221,9 +221,9 @@ class WeatherHistoryTest extends TestCase
     }
     
     /**
-     * computeLastHourWindRose returns 16-sector petal data from last hour
+     * computeWindRose returns 16-sector petal data from configured window
      */
-    public function testComputeLastHourWindRose_ReturnsPetals(): void
+    public function testComputeWindRose_ReturnsPetals(): void
     {
         $baseTime = time();
         appendWeatherHistory($this->testAirportId, [
@@ -242,7 +242,7 @@ class WeatherHistoryTest extends TestCase
             'wind_direction' => 90,  // E
         ]);
 
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNotNull($petals);
         $this->assertCount(16, $petals);
         // Sector 0 = N: avg (10+8)/2 = 9
@@ -252,11 +252,11 @@ class WeatherHistoryTest extends TestCase
     }
 
     /**
-     * computeLastHourWindRose returns null when no history
+     * computeWindRose returns null when no history
      */
-    public function testComputeLastHourWindRose_NoHistory_ReturnsNull(): void
+    public function testComputeWindRose_NoHistory_ReturnsNull(): void
     {
-        $petals = computeLastHourWindRose($this->testAirportId);
+        $petals = computeWindRose($this->testAirportId);
         $this->assertNull($petals);
     }
 

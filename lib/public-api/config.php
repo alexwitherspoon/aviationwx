@@ -115,6 +115,36 @@ function getPublicApiWeatherHistoryRetentionHours(): int
 }
 
 /**
+ * Get the wind rose window in hours (how far back to include observations)
+ *
+ * Fractional values in config are truncated to integer. Validated as positive integer in config.
+ *
+ * @return int Hours for wind rose window (default 1)
+ */
+function getPublicApiWindRoseWindowHours(): int
+{
+    $config = getPublicApiConfig();
+    $hours = $config['wind_rose_window_hours'] ?? 1;
+    return max(1, (int) $hours);
+}
+
+/**
+ * Get the wind rose period label for display (e.g. "last hour", "last 3 hours")
+ * Derived from wind_rose_window_hours unless wind_rose_period_label is explicitly set.
+ *
+ * @return string Period label for wind rose petals
+ */
+function getPublicApiWindRosePeriodLabel(): string
+{
+    $config = getPublicApiConfig();
+    if (isset($config['wind_rose_period_label']) && $config['wind_rose_period_label'] !== '') {
+        return $config['wind_rose_period_label'];
+    }
+    $hours = getPublicApiWindRoseWindowHours();
+    return $hours === 1 ? 'last hour' : 'last ' . $hours . ' hours';
+}
+
+/**
  * Get the attribution text for API responses
  * 
  * @return string Attribution text

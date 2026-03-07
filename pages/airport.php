@@ -4619,22 +4619,35 @@ function updateWindVisual(weather) {
     const ctx = canvas.getContext('2d');
     const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 20;
     
-    // Detect night mode for red color scheme
     const isNightMode = document.body.classList.contains('night-mode');
-    
-    // Color scheme based on theme
+    const isDarkMode = document.body.classList.contains('dark-mode');
+
     const colors = isNightMode ? {
-        circle: '#660000',          // Dark red circle
-        runway: '#cc4444',          // Red runways
-        runwayLabel: '#ff5555',     // Bright red runway labels
-        labelOutline: '#330000',    // Dark red outline
-        compass: '#993333',         // Muted red compass
-        windArrow: '#ff4444',       // Red wind arrow
-        windFill: 'rgba(255, 68, 68, 0.2)',  // Red transparent fill (legacy, replaced by petals)
-        windRosePetal: 'rgba(255, 68, 68, 0.5)',      // Wind rose petal fill
-        windRosePetalStroke: 'rgba(255, 68, 68, 0.4)', // Wind rose petal stroke
-        calmText: '#cc4444',        // Red calm text
-        vrbText: '#ff4444'          // Red VRB text
+        circle: '#660000',
+        runway: '#cc4444',
+        runwayLabel: '#ff5555',
+        labelOutline: '#330000',
+        compass: '#993333',
+        windArrow: '#ff4444',
+        windFill: 'rgba(255, 68, 68, 0.2)',
+        windRosePetal: 'rgba(255, 68, 68, 0.5)',
+        windRosePetalStroke: 'rgba(255, 68, 68, 0.4)',
+        calmText: '#cc4444',
+        vrbText: '#ff4444',
+        trueNorth: '#ff5555'
+    } : isDarkMode ? {
+        circle: '#888',
+        runway: '#4a9eff',
+        runwayLabel: '#6bb3ff',
+        labelOutline: '#000',
+        compass: '#999',
+        windArrow: '#dc3545',
+        windFill: 'rgba(220, 53, 69, 0.2)',
+        windRosePetal: 'rgba(220, 53, 69, 0.5)',
+        windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+        calmText: '#ddd',
+        vrbText: '#dc3545',
+        trueNorth: '#6b9'
     } : {
         circle: '#333',
         runway: '#0066cc',
@@ -4643,10 +4656,11 @@ function updateWindVisual(weather) {
         compass: '#666',
         windArrow: '#dc3545',
         windFill: 'rgba(220, 53, 69, 0.2)',
-        windRosePetal: 'rgba(220, 53, 69, 0.5)',      // Wind rose petal fill
-        windRosePetalStroke: 'rgba(220, 53, 69, 0.4)', // Wind rose petal stroke
+        windRosePetal: 'rgba(220, 53, 69, 0.5)',
+        windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
         calmText: '#333',
-        vrbText: '#dc3545'
+        vrbText: '#dc3545',
+        trueNorth: '#4a7'
     };
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4730,8 +4744,9 @@ function updateWindVisual(weather) {
     // Draw wind rose petals (last hour) when available - before wind indicators
     const lhwRaw = weather.last_hour_wind;
     const lastHourWind = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw) && lhwRaw.sectors) ? lhwRaw.sectors : lhwRaw;
+    const lhwPeriodLabel = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw) && lhwRaw.period_label) ? lhwRaw.period_label : 'last hour';
     canvas.title = Array.isArray(lastHourWind) && lastHourWind.length === 16
-        ? 'Wind rose: Petals show last hour distribution'
+        ? 'Wind rose: Petals show ' + lhwPeriodLabel + ' distribution'
         : '';
     if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
         drawWindRosePetals(ctx, cx, cy, r, lastHourWind, colors);
@@ -4763,7 +4778,8 @@ function updateWindVisual(weather) {
     
     // Get gust speed/peak gust value (null if stale)
     const gustSpeed = gustSpeedStale ? null : (weather.gust_speed || weather.peak_gust || null);
-    
+    const ws = windSpeedStale ? null : (weather.wind_speed ?? null);
+
     const windUnitLabel = getWindSpeedUnitLabel();
     const CALM_WIND_THRESHOLD = 3; // Winds below 3 knots are considered calm in aviation
     windDetails.innerHTML = `
@@ -4771,9 +4787,12 @@ function updateWindVisual(weather) {
             <span style="color: #555;">Wind Speed:</span>
             <span style="font-weight: bold;">${ws === null || ws === undefined ? '--' : (ws < CALM_WIND_THRESHOLD ? 'Calm' : formatWindSpeed(ws) + ' ' + windUnitLabel)}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
-            <span style="color: #555;">Wind Direction:</span>
-            <span style="font-weight: bold;">${(ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) ? '---' : (isVariableWind ? 'VRB' : (windDirNumeric !== null && windDirNumeric !== undefined ? windDirNumeric + '°' : '---'))}</span>
+        <div style="padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span style="color: #555;">Wind Direction:</span>
+                <span style="font-weight: bold;">${(ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD) ? '---' : (isVariableWind ? 'VRB' : (windDirNumeric !== null && windDirNumeric !== undefined ? windDirNumeric + '\u00B0' : '---'))}</span>
+            </div>
+            <div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">Magnetic</div>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e0e0e0;">
             <span style="color: #555;">Gusting:</span>
@@ -4801,12 +4820,25 @@ function updateWindVisual(weather) {
                 return `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${formatted}</div>`;
             })() : ''}
         </div>
-        ${(Array.isArray(lastHourWind) && lastHourWind.length === 16) ? `
-        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid #e0e0e0;" title="Wind direction distribution over the last hour. Petals extend in the direction wind is coming from.">
-            <span style="color: #555;">Wind rose:</span>
-            <span style="font-weight: bold;">Last hour</span>
+        ${(Array.isArray(lastHourWind) && lastHourWind.length === 16) ? (() => {
+            const magDecl = MAGNETIC_DECLINATION || 0;
+            const magVarLabel = magDecl !== 0 ? Math.round(Math.abs(magDecl)) + '\u00B0' + (magDecl > 0 ? 'E' : 'W') : null;
+            const trueNorthColor = colors.trueNorth;
+            const runwayColor = colors.runway;
+            const windArrowColor = colors.windArrow;
+            const hasActivePetals = lastHourWind.some(s => (s || 0) > 0);
+            const lhwObj = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw)) ? lhwRaw : null;
+            const periodLabel = (lhwObj && lhwObj.period_label) ? lhwObj.period_label : 'last hour';
+            const petalLegendItem = hasActivePetals ? `<span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="18" height="18" viewBox="0 0 14 14" style="vertical-align: middle;"><path d="M7 10 L7 2 A7 7 0 0 1 13 6 Z" fill="${colors.windRosePetal}" stroke="${colors.windRosePetalStroke}" stroke-width="1"/></svg> wind rose petal (${periodLabel})</span>` : '';
+            return `
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.5rem 0; border-top: 1px solid #e0e0e0; font-size: 0.85rem;" title="Symbols on the wind compass">
+            <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><span style="color: ${trueNorthColor}; font-size: 1rem;">\u2605</span> True N${magVarLabel ? ' (' + magVarLabel + ')' : ''}</span>
+            <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="18" height="10" viewBox="0 0 18 10" style="vertical-align: middle;"><line x1="0" y1="5" x2="6" y2="5" stroke="${windArrowColor}" stroke-width="2" stroke-linecap="butt"/><path d="M16 5 L6 0 L6 10 Z" fill="${windArrowColor}"/></svg> current wind</span>
+            <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="14" height="3" viewBox="0 0 14 3" style="vertical-align: middle;"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="${runwayColor}" stroke-width="2.5" stroke-linecap="round"/></svg> runways</span>
+            ${petalLegendItem}
         </div>
-        ` : ''}
+        `;
+        })() : ''}
     `;
     
     // Only draw wind indicators if data is fresh (not stale)
@@ -4866,6 +4898,55 @@ function updateWindVisual(weather) {
         ctx.fillStyle = colors.compass; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(l, cx + Math.sin(ang) * (r + 10), cy - Math.cos(ang) * (r + 10));
     });
+
+    drawTrueNorthMarker(ctx, cx, cy, r, MAGNETIC_DECLINATION || 0, colors);
+}
+
+function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
+    const absDecl = Math.abs(declination);
+    if (absDecl === 0) return;
+    const arcColor = colors.trueNorth ?? '#4a7';
+    const deg2rad = Math.PI / 180;
+    const canvasNorth = -Math.PI / 2;
+    const compassTrueNorth = -declination * deg2rad;
+    const canvasTrueNorth = canvasNorth + compassTrueNorth;
+
+    ctx.strokeStyle = arcColor;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, canvasTrueNorth, canvasNorth, declination < 0);
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const starX = cx + Math.sin(compassTrueNorth) * r;
+    const starY = cy - Math.cos(compassTrueNorth) * r;
+    ctx.font = '14px sans-serif';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.strokeText('\u2605', starX, starY);
+    ctx.fillStyle = arcColor;
+    ctx.fillText('\u2605', starX, starY);
+
+    const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
+    const labelRadius = r - 12;
+    const labelX = cx + Math.sin(compassTrueNorth) * labelRadius;
+    const labelY = cy - Math.cos(compassTrueNorth) * labelRadius;
+    const tangentAngle = compassTrueNorth;
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.save();
+    ctx.translate(labelX, labelY);
+    ctx.rotate(tangentAngle);
+    ctx.strokeStyle = colors.labelOutline;
+    ctx.lineWidth = 2.5;
+    ctx.strokeText(declLabel, 0, 0);
+    ctx.fillStyle = colors.compass;
+    ctx.fillText(declLabel, 0, 0);
+    ctx.restore();
 }
 
 function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
@@ -4914,13 +4995,13 @@ function drawWindArrow(ctx, cx, cy, r, angle, speed, offset = 0, colors = null) 
     const arrowLength = Math.min(speed * 6, r - 30);
     const arrowEndX = cx + Math.sin(angle) * arrowLength;
     const arrowEndY = cy - Math.cos(angle) * arrowLength;
-    
-    // Faded circle replaced by wind rose petals (drawn earlier when last_hour_wind available)
-    
-    ctx.strokeStyle = colors.windArrow; ctx.fillStyle = colors.windArrow; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(arrowEndX, arrowEndY); ctx.stroke();
-    
     const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
+    const triangleBaseDist = 15 * Math.cos(Math.PI / 6);
+    const lineEndX = arrowEndX - triangleBaseDist * Math.cos(arrowAngle);
+    const lineEndY = arrowEndY - triangleBaseDist * Math.sin(arrowAngle);
+
+    ctx.strokeStyle = colors.windArrow; ctx.fillStyle = colors.windArrow; ctx.lineWidth = 4; ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(lineEndX, lineEndY); ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(arrowEndX, arrowEndY);
     ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle - Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle - Math.PI / 6));

@@ -49,18 +49,20 @@
 
         const full = options.fullMode || {};
         const isDark = options.isDark ?? false;
+        const magneticDeclination = full.magneticDeclination || 0;
 
         const colors = isDark ? {
             circle: '#888',
-            runway: '#aaa',
-            runwayLabel: '#ddd',
+            runway: '#4a9eff',
+            runwayLabel: '#6bb3ff',
             labelOutline: '#000',
             compass: '#999',
             windArrow: '#dc3545',
             windRosePetal: 'rgba(220, 53, 69, 0.5)',
             windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
             calmText: '#ddd',
-            vrbText: '#dc3545'
+            vrbText: '#dc3545',
+            trueNorth: '#6b9'
         } : {
             circle: '#333',
             runway: '#0066cc',
@@ -71,7 +73,8 @@
             windRosePetal: 'rgba(220, 53, 69, 0.5)',
             windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
             calmText: '#333',
-            vrbText: '#dc3545'
+            vrbText: '#dc3545',
+            trueNorth: '#4a7'
         };
 
         ctx.clearRect(0, 0, width, height);
@@ -81,6 +84,8 @@
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, 2 * Math.PI);
         ctx.stroke();
+
+        drawTrueNorthMarker(ctx, cx, cy, r, magneticDeclination, colors);
 
         const runwayScale = 0.86;
         const LABEL_POSITION = 0.85;
@@ -149,8 +154,9 @@
             isFieldStale('wind_direction', fieldObsTimeMap, isMetarOnly, staleFailclosed, metarStaleFailclosed);
 
         const lastHourWind = full.lastHourWind;
+        const periodLabel = full.periodLabel || 'last hour';
         canvas.title = Array.isArray(lastHourWind) && lastHourWind.length === 16
-            ? 'Wind rose: Petals show last hour distribution'
+            ? 'Wind rose: Petals show ' + periodLabel + ' distribution'
             : '';
 
         if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
@@ -161,7 +167,6 @@
         const windDirRaw = options.windDirection ?? null;
         const isVRB = options.isVRB ?? false;
         const windDirMag = full.windDirectionMagnetic;
-        const magneticDeclination = full.magneticDeclination || 0;
 
         let windDirNumeric = null;
         if (typeof windDirRaw === 'number' && windDirRaw >= 0 && windDirRaw <= 360) {
@@ -220,6 +225,57 @@
         });
     }
 
+    /**
+     * Draw True North marker on the compass circle: arc from star to N, star at True N, mag var label.
+     * Star and label sit on the circle; arc highlights the variation segment.
+     */
+    function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
+        const absDecl = Math.abs(declination);
+        if (absDecl === 0) return;
+        const arcColor = colors.trueNorth ?? '#4a7';
+        const deg2rad = Math.PI / 180;
+        const canvasNorth = -Math.PI / 2;
+        const compassTrueNorth = -declination * deg2rad;
+        const canvasTrueNorth = canvasNorth + compassTrueNorth;
+
+        ctx.strokeStyle = arcColor;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, canvasTrueNorth, canvasNorth, declination < 0);
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const starX = cx + Math.sin(compassTrueNorth) * r;
+        const starY = cy - Math.cos(compassTrueNorth) * r;
+        ctx.font = '14px sans-serif';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText('\u2605', starX, starY);
+        ctx.fillStyle = arcColor;
+        ctx.fillText('\u2605', starX, starY);
+
+        const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
+        const labelRadius = r - 12;
+        const labelX = cx + Math.sin(compassTrueNorth) * labelRadius;
+        const labelY = cy - Math.cos(compassTrueNorth) * labelRadius;
+        const tangentAngle = compassTrueNorth;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.save();
+        ctx.translate(labelX, labelY);
+        ctx.rotate(tangentAngle);
+        ctx.strokeStyle = colors.labelOutline;
+        ctx.lineWidth = 2.5;
+        ctx.strokeText(declLabel, 0, 0);
+        ctx.fillStyle = colors.compass;
+        ctx.fillText(declLabel, 0, 0);
+        ctx.restore();
+    }
+
     function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
         const maxPetalLength = Math.min(45, r * 0.35);
         const maxSpeed = Math.max(1, Math.max.apply(null, petals));
@@ -252,17 +308,19 @@
         const arrowLength = Math.min(speed * 6, r - 30);
         const arrowEndX = cx + Math.sin(angle) * arrowLength;
         const arrowEndY = cy - Math.cos(angle) * arrowLength;
+        const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
+        const triangleBaseDist = 15 * Math.cos(Math.PI / 6);
+        const lineEndX = arrowEndX - triangleBaseDist * Math.cos(arrowAngle);
+        const lineEndY = arrowEndY - triangleBaseDist * Math.sin(arrowAngle);
 
         ctx.strokeStyle = colors.windArrow;
         ctx.fillStyle = colors.windArrow;
         ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(arrowEndX, arrowEndY);
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
-
-        const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
         ctx.beginPath();
         ctx.moveTo(arrowEndX, arrowEndY);
         ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle - Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle - Math.PI / 6));
@@ -282,7 +340,7 @@
      * @param {Array} options.runways - Array of runway objects with heading_1 (legacy)
      * @param {boolean} options.isDark - Whether to use dark theme colors
      * @param {string} options.size - Size variant: 'mini', 'small', 'medium', 'large', 'full'
-     * @param {Object} [options.fullMode] - Full-mode options (runwaySegments, lastHourWind, etc.)
+     * @param {Object} [options.fullMode] - Full-mode options (runwaySegments, lastHourWind, periodLabel, etc.)
      */
     function drawWindCompass(canvas, options) {
         if (!canvas || !canvas.getContext) {
@@ -411,24 +469,26 @@
 
         const endX = cx + Math.sin(windAngle) * arrowLen;
         const endY = cy - Math.cos(windAngle) * arrowLen;
+        const headAngle = Math.atan2(endY - cy, endX - cx);
+        const triangleBaseDist = headSize * Math.cos(Math.PI / 6);
+        const lineEndX = endX - triangleBaseDist * Math.cos(headAngle);
+        const lineEndY = endY - triangleBaseDist * Math.sin(headAngle);
 
         ctx.strokeStyle = isDark ? '#000' : '#fff';
         ctx.lineWidth = lineWidth + 2;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(endX, endY);
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
 
         ctx.strokeStyle = '#dc3545';
         ctx.lineWidth = lineWidth;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(endX, endY);
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
-
-        const headAngle = Math.atan2(endY - cy, endX - cx);
 
         ctx.strokeStyle = isDark ? '#000' : '#fff';
         ctx.lineWidth = 2;

@@ -1,9 +1,10 @@
 <?php
 /**
- * SAFETY-CRITICAL: formatWeatherResponse (Public API v1)
+ * SAFETY-CRITICAL: formatWeatherResponse and formatWindRoseForApi (Public API v1)
  *
  * Verifies formatWeatherResponse produces correct wind_direction and
- * last_hour_wind structure for API safety.
+ * last_hour_wind structure for API safety. formatWindRoseForApi must
+ * reject invalid input to prevent malformed wind rose data reaching pilots.
  */
 
 use PHPUnit\Framework\TestCase;
@@ -122,6 +123,52 @@ class FormatWeatherResponseTest extends TestCase
         $result = formatWeatherResponse($weather, $airport);
 
         $this->assertNull($result['last_hour_wind']);
+    }
+
+    /**
+     * formatWindRoseForApi: null returns null (fail closed)
+     */
+    public function testFormatWindRoseForApi_Null_ReturnsNull(): void
+    {
+        $result = formatWindRoseForApi(null);
+        $this->assertNull($result, 'Null input must return null for API safety');
+    }
+
+    /**
+     * formatWindRoseForApi: wrong sector count returns null (must be exactly 16)
+     */
+    public function testFormatWindRoseForApi_WrongCount_ReturnsNull(): void
+    {
+        $petals15 = array_fill(0, 15, 0);
+        $this->assertNull(formatWindRoseForApi($petals15), '15 sectors must return null');
+
+        $petals17 = array_fill(0, 17, 0);
+        $this->assertNull(formatWindRoseForApi($petals17), '17 sectors must return null');
+    }
+
+    /**
+     * formatWindRoseForApi: valid 16 sectors returns object with required fields
+     */
+    public function testFormatWindRoseForApi_Valid16Sectors_ReturnsWrappedObject(): void
+    {
+        $petals = array_fill(0, 16, 0);
+        $petals[0] = 5.0;
+        $petals[4] = 10.0;
+
+        $result = formatWindRoseForApi($petals);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('sectors', $result);
+        $this->assertArrayHasKey('sector_labels', $result);
+        $this->assertArrayHasKey('reference', $result);
+        $this->assertArrayHasKey('unit', $result);
+        $this->assertArrayHasKey('period_label', $result);
+        $this->assertSame('magnetic_north', $result['reference']);
+        $this->assertSame('knots', $result['unit']);
+        $this->assertCount(16, $result['sectors']);
+        $this->assertSame(5.0, $result['sectors'][0]);
+        $this->assertSame(10.0, $result['sectors'][4]);
+        $this->assertIsString($result['period_label']);
     }
 
     /**

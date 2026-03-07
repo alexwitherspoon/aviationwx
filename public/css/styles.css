@@ -2904,6 +2904,14 @@ body.dark-mode #wind-details span[style*="font-weight: bold"] {
     color: var(--dark-text-bright) !important;
 }
 
+/* Override inline color: #555 in wind details for dark mode */
+body.dark-mode #wind-details span[style*="color: #555"],
+body.dark-mode #wind-details span[style*="color:#555"],
+body.dark-mode #wind-details div[style*="color: #555"],
+body.dark-mode #wind-details div[style*="color:#555"] {
+    color: var(--dark-text-muted) !important;
+}
+
 /* Webcam section */
 body.dark-mode .webcam-item {
     background: #000 !important;

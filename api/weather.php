@@ -33,7 +33,7 @@ require_once __DIR__ . '/../lib/public-api/weather-format.php';
  * Normalizes integer fields per OpenAPI spec (wind_speed, gust_speed, ceiling, etc.).
  *
  * @param array $weather Raw weather from cache
- * @return array Weather with wind_direction object and last_hour_wind object (sectors, reference, unit)
+ * @return array Weather with wind_direction object and last_hour_wind object (sectors, reference, unit, period_label)
  */
 function formatInternalApiWeatherResponse(array $weather): array
 {
@@ -41,7 +41,7 @@ function formatInternalApiWeatherResponse(array $weather): array
     unset($out['wind_direction_magnetic'], $out['wind_direction_text']);
     $out['wind_direction'] = formatWindDirectionForApi($weather);
     $lhw = $weather['last_hour_wind'] ?? null;
-    $out['last_hour_wind'] = formatLastHourWindForApi(is_array($lhw) ? $lhw : null);
+    $out['last_hour_wind'] = formatWindRoseForApi(is_array($lhw) ? $lhw : null);
 
     $out['wind_speed'] = toApiInteger($weather['wind_speed'] ?? null);
     $out['gust_speed'] = toApiInteger($weather['gust_speed'] ?? null);
@@ -708,10 +708,10 @@ function generateMockWeatherData($airportId, $airport) {
         $weatherData['_field_obs_time_map'] = [];
     }
 
-    // Last-hour wind rose for petal visualization (16 sectors: N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
-    $lastHourWindRose = computeLastHourWindRose($airportId, $airport);
-    if ($lastHourWindRose !== null) {
-        $weatherData['last_hour_wind'] = $lastHourWindRose;
+    // Wind rose for petal visualization (16 sectors: N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
+    $windRose = computeWindRose($airportId, $airport);
+    if ($windRose !== null) {
+        $weatherData['last_hour_wind'] = $windRose;
     }
 
     addWindDirectionMagneticToWeather($weatherData, $airport);

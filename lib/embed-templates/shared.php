@@ -762,8 +762,13 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
         })) === 0;
 
     $lastHourWind = $weather['last_hour_wind'] ?? null;
+    $periodLabel = 'last hour';
     if (is_array($lastHourWind) && isset($lastHourWind['sectors'])) {
+        $periodLabel = $lastHourWind['period_label'] ?? 'last hour';
         $lastHourWind = $lastHourWind['sectors'];
+    } elseif (is_array($lastHourWind) && count($lastHourWind) === 16) {
+        require_once __DIR__ . '/../public-api/config.php';
+        $periodLabel = getPublicApiWindRosePeriodLabel();
     }
     $windDirMag = $weather['wind_direction_magnetic'] ?? null;
     if ($windDirMag === null && isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
@@ -772,6 +777,7 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
     return [
         'runwaySegments' => $runwaySegments,
         'lastHourWind' => $lastHourWind,
+        'periodLabel' => $periodLabel,
         'windDirectionMagnetic' => $windDirMag,
         'magneticDeclination' => (float) getMagneticDeclination($airport),
         'fieldObsTimeMap' => $weather['_field_obs_time_map'] ?? [],
@@ -786,7 +792,7 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
  * Works in both regular DOM and shadow DOM contexts
  *
  * Full mode (dashboard-matching): pass fullModeOptions with runwaySegments,
- * lastHourWind, windDirectionMagnetic, staleness data. Uses 300x300 canvas.
+ * lastHourWind, periodLabel, windDirectionMagnetic, staleness data. Uses 300x300 canvas.
  *
  * @param string $canvasId Canvas element ID
  * @param float|null $windSpeed Wind speed in knots
@@ -795,7 +801,7 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
  * @param array $runways Array of runway headings (legacy; ignored when fullModeOptions.runwaySegments provided)
  * @param bool|null $isDark Dark mode flag (null for auto-detect)
  * @param int $size Canvas size in pixels (default: 60; use 300 for full mode)
- * @param array|null $fullModeOptions Optional full-mode options (runwaySegments, lastHourWind, etc.)
+ * @param array|null $fullModeOptions Optional full-mode options (runwaySegments, lastHourWind, periodLabel, etc.)
  * @return string JavaScript code to initialize compass
  */
 function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, $size = 60, $fullModeOptions = null) {
