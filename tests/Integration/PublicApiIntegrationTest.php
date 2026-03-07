@@ -196,20 +196,25 @@ class PublicApiIntegrationTest extends TestCase
         
         $airport = $response['json']['airport'] ?? null;
         $this->assertNotNull($airport, 'Response should include airport');
-        
-        if (empty($airport['runways'])) {
-            return;
-        }
+
         $this->assertArrayHasKey(
             'runway_heading_reference',
             $airport,
-            'Response should include runway_heading_reference when runways are present'
+            'Response should include runway_heading_reference for all airports'
         );
-        $this->assertContains(
-            $airport['runway_heading_reference'],
-            ['true_north', 'magnetic', null],
-            'runway_heading_reference should be true_north, magnetic, or null'
-        );
+
+        if (empty($airport['runways'])) {
+            $this->assertNull(
+                $airport['runway_heading_reference'],
+                'runway_heading_reference should be null when runways are empty'
+            );
+        } else {
+            $this->assertContains(
+                $airport['runway_heading_reference'],
+                ['true_north', 'magnetic'],
+                'runway_heading_reference should be true_north or magnetic when runways present'
+            );
+        }
     }
     
     /**
