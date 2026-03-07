@@ -4851,13 +4851,14 @@ function updateWindVisual(weather) {
                 return `<div style="text-align: right; font-size: 0.9rem; color: #555; padding-left: 0.5rem;">at ${formatted}</div>`;
             })() : ''}
         </div>
-        ${(Array.isArray(lastHourWind) && lastHourWind.length === 16) ? (() => {
+        ${(() => {
             const magDecl = MAGNETIC_DECLINATION || 0;
             const magVarLabel = magDecl !== 0 ? Math.round(Math.abs(magDecl)) + '\u00B0' + (magDecl > 0 ? 'E' : 'W') : null;
             const trueNorthColor = colors.trueNorth;
             const runwayColor = colors.runway;
             const windArrowColor = colors.windArrow;
-            const hasActivePetals = lastHourWind.some(s => (s || 0) > 0);
+            const hasPetals = Array.isArray(lastHourWind) && lastHourWind.length === 16;
+            const hasActivePetals = hasPetals && lastHourWind.some(s => (s || 0) > 0);
             const lhwObj = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw)) ? lhwRaw : null;
             const periodLabel = (lhwObj && lhwObj.period_label) ? lhwObj.period_label : 'last hour';
             const petalLegendItem = hasActivePetals ? `<span style="display: inline-flex; align-items: center; gap: 0;"><svg width="28" height="14" viewBox="4 4 9 5" style="display: block; flex-shrink: 0;"><path d="M4 6 L11.85 4.44 A8 8 0 0 1 11.85 7.56 Z" fill="${colors.windRosePetal}" stroke="${colors.windRosePetalStroke}" stroke-width="1"/><polyline points="10.5,4.87 9.5,6 10.5,7.13" fill="none" stroke="${colors.chevron}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9,5.15 8,6 9,6.85" fill="none" stroke="${colors.chevron}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="margin-left: 0.15rem;">wind rose petal (${periodLabel})</span></span>` : '';
@@ -4869,7 +4870,7 @@ function updateWindVisual(weather) {
             ${petalLegendItem}
         </div>
         `;
-        })() : ''}
+        })()}
     `;
     
     // Only draw wind indicators if data is fresh (not stale)
