@@ -39,6 +39,7 @@ function sendPublicApiSuccess(array $data, array $meta = [], int $httpCode = 200
             'api_version' => getPublicApiVersion(),
             'request_time' => gmdate('c'),
             'attribution' => getPublicApiAttributionText(),
+            'timestamp_timezone' => 'UTC',
         ], $meta),
     ];
 

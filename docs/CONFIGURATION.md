@@ -37,7 +37,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcam_history_max_frames` | — | *Deprecated* - use retention_hours |
 | `http_integrity_digest_cache_ttl_seconds` | max(webcam_history, weather_history) | APCu TTL for Content-Digest/MD5 cache; defaults to longest retention (images + weather) |
 | `default_preferences` | — | Default unit toggle settings (see below) |
-| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram; overridable per-airport |
+| `magnetic_declination` | `0` | Default magnetic declination (degrees) for runway diagram and `wind_direction_magnetic`; overridable per-airport |
 | `geomag_api_key` | — | NOAA NCEI geomagnetic API key for automatic declination lookup. [Register](https://www.ngdc.noaa.gov/geomag/CalcSurvey.shtml) for free. When set, declination is fetched for airports without manual override. |
 | `notam_cache_ttl_seconds` | `3600` | NOTAM cache TTL |
 | `notam_api_client_id` | — | NOTAM API client ID |
@@ -101,7 +101,7 @@ All configuration lives in a single `airports.json` file with two sections:
 | `webcams` | `[]` | Array of webcam configurations |
 | **Metadata** |||
 | `runways` | `[]` | Runway definitions |
-| `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
+| `magnetic_declination` | global or API | Magnetic declination in degrees for runway wind diagram and `wind_direction_magnetic`. Positive = East (mag N east of true N), negative = West. Manual override; when absent and `geomag_api_key` is set, fetched from NOAA NCEI. |
 | `frequencies` | `{}` | Radio frequencies |
 | `services` | `{}` | Available services |
 | `partners` | `[]` | Partner organizations |
@@ -1486,6 +1486,35 @@ php -r "require 'lib/config.php'; \$c = loadConfig(); var_dump(isset(\$c['config
 - Token expired or revoked (regenerate in Cloudflare Dashboard)
 - Rate limit exceeded (wait 5-10 minutes, caching should prevent this)
 - Zone not on account (verify Zone ID matches your domain)
+
+---
+
+## Public API Configuration
+
+When `config.public_api.enabled` is true, the Public API and weather history features are available. Wind rose data uses a configurable rolling window.
+
+### Wind Rose Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `wind_rose_window_hours` | `1` | Hours of observations to include in wind rose petals (e.g. 1 = last hour, 3 = last 3 hours). Minimum 1. |
+| `wind_rose_period_label` | (derived) | Optional override for display label (e.g. "last hour", "last 3 hours"). When omitted, derived from `wind_rose_window_hours`. |
+
+Example:
+
+```json
+{
+  "config": {
+    "public_api": {
+      "enabled": true,
+      "weather_history_enabled": true,
+      "weather_history_retention_hours": 24,
+      "wind_rose_window_hours": 3,
+      "wind_rose_period_label": "last 3 hours"
+    }
+  }
+}
+```
 
 ---
 

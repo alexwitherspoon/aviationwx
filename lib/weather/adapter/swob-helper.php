@@ -8,6 +8,8 @@
  * @package AviationWX\Weather\Adapter
  */
 
+require_once __DIR__ . '/../../units.php';
+
 /**
  * Parse SWOB date_tm as UTC timestamp.
  *
@@ -96,13 +98,13 @@ function parseSwobXmlToWeatherArray(string $xml): ?array
 
     $windDir = $parseFloat($getValue('avg_wnd_dir_10m_pst10mts'));
     $windSpdKmh = $parseFloat($getValue('avg_wnd_spd_10m_pst10mts'));
-    $windSpeed = $windSpdKmh !== null ? $windSpdKmh / 1.852 : null;
+    $windSpeed = $windSpdKmh !== null ? (int) round(kmhToKnots($windSpdKmh)) : null;
 
     $gustKmh = $parseFloat($getValue('max_wnd_gst_spd_10m_pst10mts'));
-    $gustSpeed = $gustKmh !== null ? $gustKmh / 1.852 : null;
+    $gustSpeed = $gustKmh !== null ? (int) round(kmhToKnots($gustKmh)) : null;
 
     $visKm = $parseFloat($getValue('avg_vis_pst10mts'));
-    $visibility = $visKm !== null ? $visKm * 0.621371 : null;
+    $visibility = $visKm !== null ? kilometersToStatuteMiles($visKm) : null;
 
     $cldCode = $parseFloat($getValue('cld_amt_code_1'));
     $cldHgtM = $parseFloat($getValue('cld_bas_hgt_1'));
@@ -110,7 +112,7 @@ function parseSwobXmlToWeatherArray(string $xml): ?array
     $cloudCover = mapWmoCloudCodeToCover($cldCode);
     $ceiling = null;
     if ($cloudCover !== null && in_array($cloudCover, ['BKN', 'OVC'], true) && $cldHgtM !== null) {
-        $ceiling = $cldHgtM * 3.28084;
+        $ceiling = (int) round(metersToFeet($cldHgtM));
     }
 
     return [

@@ -112,7 +112,7 @@ aviationwx.org/
   - Debug endpoint (`?debug=1`) for troubleshooting
   - Legacy fallback (`?legacy=1`) for backward compatibility
 
-**Wind direction**: All internal values use true north. See [Wind Direction: True North](SAFETY_CRITICAL_CALCULATIONS.md#wind-direction-true-north) and [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source). Conversion in `lib/heading-conversion.php` (safety-critical).
+**Wind direction**: All internal values use true north. Display layers use `wind_direction_magnetic`; fail closed (`---`) when missing. See [Wind Direction: True North](SAFETY_CRITICAL_CALCULATIONS.md#wind-direction-true-north) and [Wind Direction Conventions by Source](DATA_FLOW.md#wind-direction-conventions-by-source). Conversion in `lib/heading-conversion.php` (safety-critical).
 
 **Data Flow** (Unified Fetcher):
 1. Request validation (airport ID, rate limiting)

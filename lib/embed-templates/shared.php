@@ -168,20 +168,53 @@ function formatEmbedPressure($pressureInHg, $unit) {
 }
 
 /**
+ * Extract wind direction and VRB flag from weather
+ *
+ * Accepts flat (wind_direction_magnetic) or object (wind_direction.magnetic_north) formats.
+ *
+ * @param array $weather Weather data
+ * @return array{0: int|null, 1: bool} [windDirection in degrees, isVRB]
+ */
+function getEmbedWindFromWeather(array $weather): array
+{
+    if (isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
+        $wd = $weather['wind_direction'];
+        return [
+            $wd['magnetic_north'] ?? null,
+            !empty($wd['variable']),
+        ];
+    }
+    return [
+        $weather['wind_direction_magnetic'] ?? null,
+        ($weather['wind_direction_text'] ?? '') === 'VRB',
+    ];
+}
+
+/**
  * Format wind display (direction + speed + gust)
- * 
+ *
  * @param int|null $windDirection Wind direction in degrees
  * @param float|null $windSpeed Wind speed in knots
  * @param float|null $gustSpeed Gust speed in knots
  * @param string $windUnit Unit ('kt', 'mph', or 'kmh')
- * @return string Formatted wind string (e.g., '235°@15G20kt')
+ * @return string Formatted wind string (e.g., '235°@15G20kt', '---@---kt' when direction/speed missing)
  */
 function formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit) {
-    $windDir = $windDirection !== null ? round($windDirection) . '°' : '--';
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '--';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
+    $windDir = $windDirection !== null ? round($windDirection) . '°' : '---';
+
+    if ($windSpeed !== null) {
+        $windSpd = $windUnit === 'mph' ? round(knotsToMph($windSpeed)) : ($windUnit === 'kmh' ? round(knotsToKmh($windSpeed)) : round($windSpeed));
+    } else {
+        $windSpd = '---';
+    }
+
+    if ($gustSpeed !== null && $gustSpeed > 0) {
+        $gustVal = 'G' . ($windUnit === 'mph' ? round(knotsToMph($gustSpeed)) : ($windUnit === 'kmh' ? round(knotsToKmh($gustSpeed)) : round($gustSpeed)));
+    } else {
+        $gustVal = '';
+    }
+
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
-    
     return $windDir . '@' . $windSpd . $gustVal . $windUnitLabel;
 }
 
@@ -738,10 +771,24 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
             return ($s['type'] ?? '') !== 'metar';
         })) === 0;
 
+    $lastHourWind = $weather['last_hour_wind'] ?? null;
+    $periodLabel = 'last hour';
+    if (is_array($lastHourWind) && isset($lastHourWind['sectors'])) {
+        $periodLabel = $lastHourWind['period_label'] ?? 'last hour';
+        $lastHourWind = $lastHourWind['sectors'];
+    } elseif (is_array($lastHourWind) && count($lastHourWind) === 16) {
+        require_once __DIR__ . '/../public-api/config.php';
+        $periodLabel = getPublicApiWindRosePeriodLabel();
+    }
+    $windDirMag = $weather['wind_direction_magnetic'] ?? null;
+    if ($windDirMag === null && isset($weather['wind_direction']) && is_array($weather['wind_direction'])) {
+        $windDirMag = $weather['wind_direction']['magnetic_north'] ?? null;
+    }
     return [
         'runwaySegments' => $runwaySegments,
-        'lastHourWind' => $weather['last_hour_wind'] ?? null,
-        'windDirectionMagnetic' => $weather['wind_direction_magnetic'] ?? null,
+        'lastHourWind' => $lastHourWind,
+        'periodLabel' => $periodLabel,
+        'windDirectionMagnetic' => $windDirMag,
         'magneticDeclination' => (float) getMagneticDeclination($airport),
         'fieldObsTimeMap' => $weather['_field_obs_time_map'] ?? [],
         'staleFailclosedSeconds' => getStaleFailclosedSeconds($airport),
@@ -755,7 +802,7 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
  * Works in both regular DOM and shadow DOM contexts
  *
  * Full mode (dashboard-matching): pass fullModeOptions with runwaySegments,
- * lastHourWind, windDirectionMagnetic, staleness data. Uses 300x300 canvas.
+ * lastHourWind, periodLabel, windDirectionMagnetic, staleness data. Uses 300x300 canvas.
  *
  * @param string $canvasId Canvas element ID
  * @param float|null $windSpeed Wind speed in knots
@@ -764,7 +811,7 @@ function buildWindCompassFullModeOptions($airportId, $airport, $weather) {
  * @param array $runways Array of runway headings (legacy; ignored when fullModeOptions.runwaySegments provided)
  * @param bool|null $isDark Dark mode flag (null for auto-detect)
  * @param int $size Canvas size in pixels (default: 60; use 300 for full mode)
- * @param array|null $fullModeOptions Optional full-mode options (runwaySegments, lastHourWind, etc.)
+ * @param array|null $fullModeOptions Optional full-mode options (runwaySegments, lastHourWind, periodLabel, etc.)
  * @return string JavaScript code to initialize compass
  */
 function renderWindCompassScript($canvasId, $windSpeed, $windDirection, $isVRB, $runways, $isDark, $size = 60, $fullModeOptions = null) {

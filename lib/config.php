@@ -1441,6 +1441,21 @@ function validatePublicApiConfig(mixed $publicApi): array {
         }
     }
     
+    // wind_rose_window_hours: positive number (min 1); fractional values truncated by getPublicApiWindRoseWindowHours
+    if (isset($publicApi['wind_rose_window_hours'])) {
+        $val = $publicApi['wind_rose_window_hours'];
+        if ((!is_int($val) && !is_float($val)) || $val < 1) {
+            $errors[] = "config.public_api.wind_rose_window_hours must be a positive number (min 1)";
+        }
+    }
+    
+    // wind_rose_period_label: string (optional override)
+    if (isset($publicApi['wind_rose_period_label'])) {
+        if (!is_string($publicApi['wind_rose_period_label'])) {
+            $errors[] = "config.public_api.wind_rose_period_label must be a string";
+        }
+    }
+    
     // attribution_text: string
     if (isset($publicApi['attribution_text'])) {
         if (!is_string($publicApi['attribution_text'])) {

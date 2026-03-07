@@ -4442,6 +4442,52 @@ class ConfigValidationTest extends TestCase
         $this->assertTrue($result['valid'], 'Valid ak_test_ key should pass: ' . implode(', ', $result['errors']));
     }
 
+    /**
+     * Test public_api.wind_rose_window_hours validation - Invalid (zero)
+     */
+    public function testPublicApiWindRoseWindowHours_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['wind_rose_window_hours' => 0];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Zero wind_rose_window_hours should be invalid');
+        $this->assertStringContainsString('wind_rose_window_hours', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.wind_rose_window_hours validation - Valid
+     */
+    public function testPublicApiWindRoseWindowHours_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['wind_rose_window_hours' => 3];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid wind_rose_window_hours should pass: ' . implode(', ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.wind_rose_period_label validation - Invalid (non-string)
+     */
+    public function testPublicApiWindRosePeriodLabel_Invalid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['wind_rose_period_label' => 123];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertFalse($result['valid'], 'Non-string wind_rose_period_label should be invalid');
+        $this->assertStringContainsString('wind_rose_period_label', implode(' ', $result['errors']));
+    }
+
+    /**
+     * Test public_api.wind_rose_period_label validation - Valid
+     */
+    public function testPublicApiWindRosePeriodLabel_Valid()
+    {
+        $config = $this->createMinimalConfig();
+        $config['config']['public_api'] = ['wind_rose_period_label' => 'last 3 hours'];
+        $result = validateAirportsJsonStructure($config);
+        $this->assertTrue($result['valid'], 'Valid wind_rose_period_label should pass: ' . implode(', ', $result['errors']));
+    }
+
     // =========================================================================
     // Existing Config Fields - Ensure Still Validated
     // =========================================================================

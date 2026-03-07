@@ -11,6 +11,8 @@ require_once __DIR__ . '/../constants.php';
 require_once __DIR__ . '/../public-api/config.php';
 require_once __DIR__ . '/../logger.php';
 require_once __DIR__ . '/../cache-paths.php';
+require_once __DIR__ . '/../heading-conversion.php';
+require_once __DIR__ . '/../config.php';
 
 // Maximum observations to store (safety limit)
 define('WEATHER_HISTORY_MAX_OBSERVATIONS', 1500);
@@ -375,20 +377,26 @@ function computeDailyExtremesFromHistory(string $airportId, string $dateKey, str
 }
 
 /**
- * Compute last-hour wind rose data for wind rose petal visualization
+ * Compute wind rose data for petal visualization
  *
  * Returns 16 sectors (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
  * with average wind speed when wind was from that direction. Wind direction is "from" (meteorological).
  * Petals extend in the direction wind is coming from.
+ * Observations are converted to magnetic north before binning so petals align with compass frame.
+ * Window size is configurable via config.public_api.wind_rose_window_hours (default 1).
  *
  * @param string $airportId Airport ID
+ * @param array|null $airport Airport config for magnetic declination; when null, declination 0 (tests)
  * @return array|null Array of 16 floats (sector 0=N, 1=NNE, ... 15=NNW), or null if unavailable
  */
-function computeLastHourWindRose(string $airportId): ?array
+function computeWindRose(string $airportId, ?array $airport = null): ?array
 {
     if (!isPublicApiWeatherHistoryEnabled()) {
         return null;
     }
+
+    $windowHours = getPublicApiWindRoseWindowHours();
+    $cutoff = time() - ($windowHours * 3600);
 
     $history = loadWeatherHistory($airportId);
     $observations = $history['observations'] ?? [];
@@ -396,20 +404,21 @@ function computeLastHourWindRose(string $airportId): ?array
         return null;
     }
 
-    $cutoff = time() - 3600; // Last hour
-    $lastHourObs = array_filter($observations, function ($obs) use ($cutoff) {
+    $windowObs = array_filter($observations, function ($obs) use ($cutoff) {
         return isset($obs['obs_time']) && $obs['obs_time'] >= $cutoff;
     });
-    if (empty($lastHourObs)) {
+    if (empty($windowObs)) {
         return null;
     }
 
     // 16 sectors: N=0, NNE=1, NE=2, ENE=3, E=4, ESE=5, SE=6, SSE=7, S=8, SSW=9, SW=10, WSW=11, W=12, WNW=13, NW=14, NNW=15
     // Sector i is centered at i*22.5°. Assign obs to sector by round(dir/22.5) % 16
+    // Convert true north to magnetic before binning so petals align with compass frame
+    $declination = ($airport !== null) ? getMagneticDeclination($airport) : 0.0;
     $sectorSums = array_fill(0, 16, 0.0);
     $sectorCounts = array_fill(0, 16, 0);
 
-    foreach ($lastHourObs as $obs) {
+    foreach ($windowObs as $obs) {
         $dir = $obs['wind_direction'] ?? null;
         $speed = $obs['wind_speed'] ?? null;
         if ($dir === null || $speed === null || !is_numeric($dir) || !is_numeric($speed)) {
@@ -428,6 +437,8 @@ function computeLastHourWindRose(string $airportId): ?array
         if ($dir < 0) {
             $dir += 360.0;
         }
+        // Convert true north to magnetic for compass alignment
+        $dir = convertTrueToMagnetic($dir, $declination);
         $sector = (int) round($dir / 22.5) % 16;
         if ($sector < 0 || $sector >= 16) {
             continue;

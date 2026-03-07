@@ -53,10 +53,9 @@ function processDualWidgetData($data, $options) {
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
     // Weather values (temperatures in Celsius - internal storage standard)
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     $temperature = $weather['temperature'] ?? null;
     $dewpoint = $weather['dewpoint'] ?? null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
@@ -193,7 +192,7 @@ function renderDualOnlyWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
-    $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
+    $sourceAttribution = ''; // Webcam-only: no weather source attribution
 
     $html = '<div class="style-dual style-dual-only">';
     $html .= '<div class="dual-webcam-grid">';

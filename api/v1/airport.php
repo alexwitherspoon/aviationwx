@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../lib/public-api/middleware.php';
 require_once __DIR__ . '/../../lib/public-api/response.php';
 require_once __DIR__ . '/../../lib/config.php';
 require_once __DIR__ . '/../../lib/weather/utils.php';
+require_once __DIR__ . '/../../lib/runways.php';
 
 /**
  * Handle GET /v1/airports/{id} request
@@ -52,7 +53,7 @@ function handleGetAirport(array $params, array $context): void
     // Send response
     sendPublicApiSuccess(
         ['airport' => $formatted],
-        ['airport_id' => $airportId]
+        ['airport_id' => $airportId, 'coordinate_system' => 'WGS84']
     );
 }
 
@@ -104,7 +105,7 @@ function formatAirportDetails(string $airportId, array $airport): array
         $formatted['tower_status'] = null;
     }
     
-    // Add runways
+    // Add runways with explicit heading reference
     if (isset($airport['runways']) && is_array($airport['runways'])) {
         $formatted['runways'] = array_map(function ($runway) {
             return [
@@ -113,8 +114,10 @@ function formatAirportDetails(string $airportId, array $airport): array
                 'heading_2' => $runway['heading_2'] ?? null,
             ];
         }, $airport['runways']);
+        $formatted['runway_heading_reference'] = runwaysSegmentsAreInTrueNorth($airport) ? 'true_north' : 'magnetic';
     } else {
         $formatted['runways'] = [];
+        $formatted['runway_heading_reference'] = null;
     }
     
     // Frequencies and services: empty returns {} for schema consistency

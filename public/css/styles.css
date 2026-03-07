@@ -2900,8 +2900,20 @@ body.dark-mode #wind-details span {
     color: var(--dark-text-muted) !important;
 }
 
+body.dark-mode #wind-details span.legend-true-north-star {
+    color: #6b9 !important;
+}
+
 body.dark-mode #wind-details span[style*="font-weight: bold"] {
     color: var(--dark-text-bright) !important;
+}
+
+/* Override inline color: #555 in wind details for dark mode */
+body.dark-mode #wind-details span[style*="color: #555"],
+body.dark-mode #wind-details span[style*="color:#555"],
+body.dark-mode #wind-details div[style*="color: #555"],
+body.dark-mode #wind-details div[style*="color:#555"] {
+    color: var(--dark-text-muted) !important;
 }
 
 /* Webcam section */

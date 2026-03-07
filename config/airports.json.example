@@ -91,6 +91,8 @@
       "bulk_max_airports": 10,
       "weather_history_enabled": true,
       "weather_history_retention_hours": 24,
+      "wind_rose_window_hours": 1,
+      "_comment_wind_rose": "wind_rose_period_label: optional override for display (e.g. 'last 3 hours'); when omitted, derived from wind_rose_window_hours",
       "attribution_text": "Data from AviationWX.org",
       "partner_keys": {
         "ak_live_example1234567890abcd": {

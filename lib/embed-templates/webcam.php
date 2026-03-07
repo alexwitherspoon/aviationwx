@@ -82,10 +82,9 @@ function processWebcamWidgetData($data, $options) {
     $flightCategoryData = getFlightCategoryData($flightCategory);
     
     // Weather values (temperatures in Celsius - internal storage standard)
-    $windDirection = $weather['wind_direction'] ?? null;
+    [$windDirection, $isVRB] = getEmbedWindFromWeather($weather);
     $windSpeed = $weather['wind_speed'] ?? null;
     $gustSpeed = $weather['gust_speed'] ?? null;
-    $isVRB = ($weather['wind_direction_text'] ?? '') === 'VRB';
     $temperature = $weather['temperature'] ?? null;
     $dewpoint = $weather['dewpoint'] ?? null;
     $pressure = $weather['pressure_inhg'] ?? $weather['pressure'] ?? null;
@@ -201,7 +200,7 @@ function renderWebcamOnlyWidget($data, $options) {
     $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
     $webcamUrl = $webcamCount > 0 ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex) : null;
-    $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
+    $sourceAttribution = ''; // Webcam-only: no weather source attribution
     $aspectRatioCss = ($aspectRatio > 0 && is_finite($aspectRatio) && $aspectRatio >= 0.1 && $aspectRatio <= 10)
         ? round($aspectRatio, 6) : 1.777;
 

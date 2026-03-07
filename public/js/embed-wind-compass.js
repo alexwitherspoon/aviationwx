@@ -49,32 +49,48 @@
 
         const full = options.fullMode || {};
         const isDark = options.isDark ?? false;
+        const magneticDeclination = full.magneticDeclination || 0;
 
         const colors = isDark ? {
-            circle: '#888',
-            runway: '#aaa',
-            runwayLabel: '#ddd',
-            labelOutline: '#000',
+            circle: '#666',
+            runway: '#4a9eff',
+            runwayLabel: '#6bb3ff',
+            runwayLabelStrokeWidth: 2,
+            runwayLabelOutline: '#1a1a1a',
+            labelOutline: '#333',
             compass: '#999',
             windArrow: '#dc3545',
             windRosePetal: 'rgba(220, 53, 69, 0.5)',
             windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+            chevron: 'rgba(220, 53, 69, 0.75)',
             calmText: '#ddd',
-            vrbText: '#dc3545'
+            vrbText: '#dc3545',
+            trueNorth: '#6b9'
         } : {
             circle: '#333',
             runway: '#0066cc',
             runwayLabel: '#0066cc',
+            runwayLabelStrokeWidth: 3,
             labelOutline: '#ffffff',
             compass: '#666',
             windArrow: '#dc3545',
             windRosePetal: 'rgba(220, 53, 69, 0.5)',
             windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+            chevron: 'rgba(220, 53, 69, 0.75)',
             calmText: '#333',
-            vrbText: '#dc3545'
+            vrbText: '#dc3545',
+            trueNorth: '#4a7'
         };
 
         ctx.clearRect(0, 0, width, height);
+
+        const deg2rad = Math.PI / 180;
+        if (magneticDeclination !== 0) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(magneticDeclination * deg2rad);
+            ctx.translate(-cx, -cy);
+        }
 
         ctx.strokeStyle = colors.circle;
         ctx.lineWidth = 2;
@@ -116,9 +132,11 @@
             const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
             const identAtStart = seg.ident_at_start !== undefined ? seg.ident_at_start : leIdent;
             const identAtEnd = seg.ident_at_end !== undefined ? seg.ident_at_end : heIdent;
+            const runwayAngle = Math.atan2(sy - ey, ex - sx);
+            const labelAngle = runwayAngle + Math.PI / 2;
 
-            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart });
-            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd });
+            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart, angle: labelAngle });
+            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd, angle: labelAngle });
         });
 
         for (let i = 0; i < labelPositions.length; i++) {
@@ -149,8 +167,9 @@
             isFieldStale('wind_direction', fieldObsTimeMap, isMetarOnly, staleFailclosed, metarStaleFailclosed);
 
         const lastHourWind = full.lastHourWind;
+        const periodLabel = full.periodLabel || 'last hour';
         canvas.title = Array.isArray(lastHourWind) && lastHourWind.length === 16
-            ? 'Wind rose: Petals show last hour distribution'
+            ? 'Wind rose: Petals show ' + periodLabel + ' distribution'
             : '';
 
         if (Array.isArray(lastHourWind) && lastHourWind.length === 16) {
@@ -161,7 +180,6 @@
         const windDirRaw = options.windDirection ?? null;
         const isVRB = options.isVRB ?? false;
         const windDirMag = full.windDirectionMagnetic;
-        const magneticDeclination = full.magneticDeclination || 0;
 
         let windDirNumeric = null;
         if (typeof windDirRaw === 'number' && windDirRaw >= 0 && windDirRaw <= 360) {
@@ -183,18 +201,38 @@
                 ctx.strokeStyle = colors.labelOutline;
                 ctx.lineWidth = 3;
                 ctx.lineJoin = 'round';
-                ctx.strokeText('VRB', cx, cy);
-                ctx.fillStyle = colors.vrbText;
-                ctx.fillText('VRB', cx, cy);
+                if (magneticDeclination !== 0) {
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.rotate(-magneticDeclination * deg2rad);
+                    ctx.strokeText('VRB', 0, 0);
+                    ctx.fillStyle = colors.vrbText;
+                    ctx.fillText('VRB', 0, 0);
+                    ctx.restore();
+                } else {
+                    ctx.strokeText('VRB', cx, cy);
+                    ctx.fillStyle = colors.vrbText;
+                    ctx.fillText('VRB', cx, cy);
+                }
             } else if (ws === null || ws < CALM_WIND_THRESHOLD) {
                 ctx.font = 'bold 20px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.strokeStyle = colors.labelOutline;
                 ctx.lineWidth = 3;
                 ctx.lineJoin = 'round';
-                ctx.strokeText('CALM', cx, cy);
-                ctx.fillStyle = colors.calmText;
-                ctx.fillText('CALM', cx, cy);
+                if (magneticDeclination !== 0) {
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.rotate(-magneticDeclination * deg2rad);
+                    ctx.strokeText('CALM', 0, 0);
+                    ctx.fillStyle = colors.calmText;
+                    ctx.fillText('CALM', 0, 0);
+                    ctx.restore();
+                } else {
+                    ctx.strokeText('CALM', cx, cy);
+                    ctx.fillStyle = colors.calmText;
+                    ctx.fillText('CALM', cx, cy);
+                }
             }
         }
 
@@ -203,27 +241,110 @@
         ctx.textBaseline = 'middle';
         labelPositions.forEach(function(lp) {
             if (!lp.ident) return;
-            ctx.strokeStyle = colors.labelOutline;
-            ctx.lineWidth = 3;
-            ctx.strokeText(lp.ident, lp.x, lp.y);
+            const angle = lp.angle !== undefined ? lp.angle : 0;
+            ctx.save();
+            ctx.translate(lp.x, lp.y);
+            ctx.rotate(angle);
+            const strokeW = colors.runwayLabelStrokeWidth !== undefined ? colors.runwayLabelStrokeWidth : 3;
+            if (strokeW > 0) {
+                ctx.strokeStyle = colors.runwayLabelOutline !== undefined ? colors.runwayLabelOutline : colors.labelOutline;
+                ctx.lineWidth = strokeW;
+                ctx.strokeText(lp.ident, 0, 0);
+            }
             ctx.fillStyle = colors.runwayLabel;
-            ctx.fillText(lp.ident, lp.x, lp.y);
+            ctx.fillText(lp.ident, 0, 0);
+            ctx.restore();
         });
 
         ['N', 'E', 'S', 'W'].forEach(function(l, i) {
-            const ang = (i * 90 * Math.PI) / 180;
+            const ang = (i * 90) * deg2rad;
+            const labelX = cx + Math.sin(ang) * (r + 10);
+            const labelY = cy - Math.cos(ang) * (r + 10);
+            const tangentAngle = Math.atan2(-Math.cos(ang), Math.sin(ang)) + Math.PI / 2;
             ctx.fillStyle = colors.compass;
             ctx.font = 'bold 16px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(l, cx + Math.sin(ang) * (r + 10), cy - Math.cos(ang) * (r + 10));
+            ctx.save();
+            ctx.translate(labelX, labelY);
+            ctx.rotate(tangentAngle);
+            ctx.fillText(l, 0, 0);
+            ctx.restore();
         });
+
+        drawTrueNorthMarker(ctx, cx, cy, r, magneticDeclination, colors);
+
+        if (magneticDeclination !== 0) {
+            ctx.restore();
+        }
+    }
+
+    /**
+     * Draw True North marker: star at top (0°), arc to N (magnetic), mag var label below N.
+     * Compass is rotated so True North is at top; N/S/E/W are skewed by mag var.
+     */
+    function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
+        const absDecl = Math.abs(declination);
+        if (absDecl === 0) return;
+        const arcColor = colors.trueNorth ?? '#4a7';
+        const deg2rad = Math.PI / 180;
+        const trueNorthAngle = -declination * deg2rad;
+        const magneticNorthAngle = 0;
+        const canvasNorth = -Math.PI / 2 + trueNorthAngle;
+        const canvasMagneticNorth = -Math.PI / 2;
+
+        ctx.strokeStyle = arcColor;
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        if (declination > 0) {
+            ctx.arc(cx, cy, r, canvasNorth, canvasMagneticNorth, false);
+        } else {
+            ctx.arc(cx, cy, r, canvasMagneticNorth, canvasNorth, false);
+        }
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const starX = cx + Math.sin(trueNorthAngle) * r;
+        const starY = cy - Math.cos(trueNorthAngle) * r;
+        ctx.font = '14px sans-serif';
+        ctx.strokeStyle = colors.labelOutline || '#fff';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.save();
+        ctx.translate(starX, starY);
+        ctx.rotate(-declination * deg2rad);
+        ctx.strokeText('\u2605', 0, 0);
+        ctx.fillStyle = arcColor;
+        ctx.fillText('\u2605', 0, 0);
+        ctx.restore();
+
+        const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
+        const labelRadius = r - 12;
+        const labelX = cx + Math.sin(magneticNorthAngle) * labelRadius;
+        const labelY = cy - Math.cos(magneticNorthAngle) * labelRadius;
+        const tangentAngle = canvasMagneticNorth + Math.PI / 2;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.save();
+        ctx.translate(labelX, labelY);
+        ctx.rotate(tangentAngle);
+        ctx.strokeStyle = colors.labelOutline;
+        ctx.lineWidth = 2.5;
+        ctx.strokeText(declLabel, 0, 0);
+        ctx.fillStyle = colors.compass;
+        ctx.fillText(declLabel, 0, 0);
+        ctx.restore();
     }
 
     function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
         const maxPetalLength = Math.min(45, r * 0.35);
         const maxSpeed = Math.max(1, Math.max.apply(null, petals));
         const deg2rad = Math.PI / 180;
+        const chevronColor = colors.chevron || 'rgba(220, 53, 69, 0.75)';
 
         for (let i = 0; i < 16; i++) {
             const speed = petals[i] || 0;
@@ -245,6 +366,35 @@
             ctx.strokeStyle = colors.windRosePetalStroke || 'rgba(220, 53, 69, 0.4)';
             ctx.lineWidth = 1;
             ctx.stroke();
+
+            if (length < 18) continue;
+            const cosA = Math.cos(centerAngle);
+            const sinA = Math.sin(centerAngle);
+            const petalHalfAngle = (22.5 / 2) * deg2rad;
+            const chevronH = Math.max(2.5, length * 0.07);
+            const chevronSpacing = length * 0.22;
+            const chevronStroke = Math.max(1.2, length * 0.05);
+            const innerBound = length * 0.25 + chevronH;
+            let d = length - chevronH;
+            ctx.strokeStyle = chevronColor;
+            ctx.lineWidth = chevronStroke;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            while (d > innerBound) {
+                const chevronW = d * Math.tan(petalHalfAngle) * 0.95;
+                const tipX = cx + cosA * (d - chevronH);
+                const tipY = cy + sinA * (d - chevronH);
+                const baseX = cx + cosA * (d + chevronH);
+                const baseY = cy + sinA * (d + chevronH);
+                const perpX = -sinA * chevronW;
+                const perpY = cosA * chevronW;
+                ctx.beginPath();
+                ctx.moveTo(baseX + perpX, baseY + perpY);
+                ctx.lineTo(tipX, tipY);
+                ctx.lineTo(baseX - perpX, baseY - perpY);
+                ctx.stroke();
+                d -= chevronSpacing;
+            }
         }
     }
 
@@ -252,17 +402,19 @@
         const arrowLength = Math.min(speed * 6, r - 30);
         const arrowEndX = cx + Math.sin(angle) * arrowLength;
         const arrowEndY = cy - Math.cos(angle) * arrowLength;
+        const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
+        const triangleBaseDist = 15 * Math.cos(Math.PI / 6);
+        const lineEndX = arrowEndX - triangleBaseDist * Math.cos(arrowAngle);
+        const lineEndY = arrowEndY - triangleBaseDist * Math.sin(arrowAngle);
 
         ctx.strokeStyle = colors.windArrow;
         ctx.fillStyle = colors.windArrow;
         ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(arrowEndX, arrowEndY);
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
-
-        const arrowAngle = Math.atan2(arrowEndY - cy, arrowEndX - cx);
         ctx.beginPath();
         ctx.moveTo(arrowEndX, arrowEndY);
         ctx.lineTo(arrowEndX - 15 * Math.cos(arrowAngle - Math.PI / 6), arrowEndY - 15 * Math.sin(arrowAngle - Math.PI / 6));
@@ -282,7 +434,7 @@
      * @param {Array} options.runways - Array of runway objects with heading_1 (legacy)
      * @param {boolean} options.isDark - Whether to use dark theme colors
      * @param {string} options.size - Size variant: 'mini', 'small', 'medium', 'large', 'full'
-     * @param {Object} [options.fullMode] - Full-mode options (runwaySegments, lastHourWind, etc.)
+     * @param {Object} [options.fullMode] - Full-mode options (runwaySegments, lastHourWind, periodLabel, etc.)
      */
     function drawWindCompass(canvas, options) {
         if (!canvas || !canvas.getContext) {
@@ -411,24 +563,26 @@
 
         const endX = cx + Math.sin(windAngle) * arrowLen;
         const endY = cy - Math.cos(windAngle) * arrowLen;
+        const headAngle = Math.atan2(endY - cy, endX - cx);
+        const triangleBaseDist = headSize * Math.cos(Math.PI / 6);
+        const lineEndX = endX - triangleBaseDist * Math.cos(headAngle);
+        const lineEndY = endY - triangleBaseDist * Math.sin(headAngle);
 
         ctx.strokeStyle = isDark ? '#000' : '#fff';
         ctx.lineWidth = lineWidth + 2;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(endX, endY);
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
 
         ctx.strokeStyle = '#dc3545';
         ctx.lineWidth = lineWidth;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(endX, endY);
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
-
-        const headAngle = Math.atan2(endY - cy, endX - cx);
 
         ctx.strokeStyle = isDark ? '#000' : '#fff';
         ctx.lineWidth = 2;

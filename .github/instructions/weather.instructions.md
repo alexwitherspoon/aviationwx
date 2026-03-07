@@ -17,7 +17,7 @@ applyTo: "lib/weather/**/*.php,api/weather.php"
 - Each source has an adapter: `tempest-v1.php`, `metar-v1.php`, `ambient-v1.php`, etc.
 - Use `WeatherReading` factory methods: `WeatherReading::celsius()`, `::knots()`, `::inHg()`, `::feet()`
 - Never hardcode conversion factors – use `lib/units.php`
-- Wind direction: internal values use **true north**; conversion in `lib/heading-conversion.php`
+- Wind direction: internal values use **true north**; conversion in `lib/heading-conversion.php`. Display: use `wind_direction_magnetic`; fail closed (`---`) when missing.
 
 ## Staleness
 
