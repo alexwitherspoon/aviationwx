@@ -200,7 +200,7 @@ function renderWebcamOnlyWidget($data, $options) {
     $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
     $webcamUrl = $webcamCount > 0 ? buildEmbedWebcamUrl($dashboardUrl, $airportId, $webcamIndex) : null;
-    $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
+    $sourceAttribution = ''; // Webcam-only: no weather source attribution
     $aspectRatioCss = ($aspectRatio > 0 && is_finite($aspectRatio) && $aspectRatio >= 0.1 && $aspectRatio <= 10)
         ? round($aspectRatio, 6) : 1.777;
 

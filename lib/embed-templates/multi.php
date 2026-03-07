@@ -187,7 +187,7 @@ function renderMultiOnlyWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
-    $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
+    $sourceAttribution = ''; // Webcam-only: no weather source attribution
     $displayCamCount = count($webcamData);
     $gridClass = 'cams-' . max(1, $displayCamCount);
 

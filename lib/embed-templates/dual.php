@@ -192,7 +192,7 @@ function renderDualOnlyWidget($data, $options) {
     $target = $options['target'] ?? '_blank';
     $linkAttrs = buildEmbedLinkAttrs($target);
     $airportId = $data['airportId'];
-    $sourceAttribution = ' & ' . htmlspecialchars($dataSource);
+    $sourceAttribution = ''; // Webcam-only: no weather source attribution
 
     $html = '<div class="style-dual style-dual-only">';
     $html .= '<div class="dual-webcam-grid">';
