@@ -4875,14 +4875,11 @@ function updateWindVisual(weather) {
     
     // Only draw wind indicators if data is fresh (not stale)
     if (!windStale) {
-        if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && !isVariableWind && windDirNumeric !== null) {
+        const wdMagApi = (weather.wind_direction && typeof weather.wind_direction === 'object') ? weather.wind_direction.magnetic_north : weather.wind_direction_magnetic;
+        const hasMagDir = wdMagApi != null && typeof wdMagApi === 'number' && wdMagApi >= 0 && wdMagApi <= 360;
+        if (ws !== null && ws !== undefined && ws >= CALM_WIND_THRESHOLD && !isVariableWind && hasMagDir) {
             // Convert wind direction FROM to TOWARD (add 180°) for windsock visualization
-            // Prefer wind_direction.magnetic_north from API (centralized); fallback: convert true→magnetic client-side
-            const wdMagApi = (weather.wind_direction && typeof weather.wind_direction === 'object') ? weather.wind_direction.magnetic_north : weather.wind_direction_magnetic;
-            const windDirFromMag = (wdMagApi != null && typeof wdMagApi === 'number')
-                ? wdMagApi
-                : (windDirNumeric - (MAGNETIC_DECLINATION || 0) + 360) % 360;
-            const windDirToward = (windDirFromMag + 180) % 360;
+            const windDirToward = (wdMagApi + 180) % 360;
             windDirection = (windDirToward * Math.PI) / 180;
             windSpeed = ws;
             
