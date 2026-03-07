@@ -50,9 +50,16 @@ function formatWindRoseForApi(?array $petals): ?array
     if ($petals === null || !is_array($petals) || count($petals) !== 16) {
         return null;
     }
+    $sectors = [];
+    foreach (array_values($petals) as $v) {
+        if (!is_numeric($v) || (float) $v < 0) {
+            return null;
+        }
+        $sectors[] = (int) round((float) $v);
+    }
     require_once __DIR__ . '/config.php';
     return [
-        'sectors' => array_values($petals),
+        'sectors' => $sectors,
         'sector_labels' => WIND_ROSE_SECTOR_LABELS,
         'reference' => 'magnetic_north',
         'unit' => 'knots',

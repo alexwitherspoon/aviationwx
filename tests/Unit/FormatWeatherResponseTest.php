@@ -183,6 +183,20 @@ class FormatWeatherResponseTest extends TestCase
     }
 
     /**
+     * formatWindRoseForApi: invalid sector (negative or non-numeric) returns null
+     */
+    public function testFormatWindRoseForApi_InvalidSector_ReturnsNull(): void
+    {
+        $petalsNegative = array_fill(0, 16, 0);
+        $petalsNegative[0] = -1;
+        $this->assertNull(formatWindRoseForApi($petalsNegative), 'Negative sector must return null');
+
+        $petalsNonNumeric = array_fill(0, 16, 0);
+        $petalsNonNumeric[0] = 'invalid';
+        $this->assertNull(formatWindRoseForApi($petalsNonNumeric), 'Non-numeric sector must return null');
+    }
+
+    /**
      * formatWindRoseForApi: valid 16 sectors returns object with required fields
      */
     public function testFormatWindRoseForApi_Valid16Sectors_ReturnsWrappedObject(): void
@@ -202,8 +216,8 @@ class FormatWeatherResponseTest extends TestCase
         $this->assertSame('magnetic_north', $result['reference']);
         $this->assertSame('knots', $result['unit']);
         $this->assertCount(16, $result['sectors']);
-        $this->assertSame(5.0, $result['sectors'][0]);
-        $this->assertSame(10.0, $result['sectors'][4]);
+        $this->assertSame(5, $result['sectors'][0]);
+        $this->assertSame(10, $result['sectors'][4]);
         $this->assertIsString($result['period_label']);
     }
 
