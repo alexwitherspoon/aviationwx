@@ -190,15 +190,13 @@ switch ($style) {
             height: 100%;
             overflow: hidden;
         }
-        /* Responsive: allow content to grow vertically so 16:9 images aren't cut off */
+        /* Responsive: size to content so parent can resize iframe dynamically (no min-height) */
         body.embed-responsive {
             height: auto;
-            min-height: 100%;
             overflow: visible;
         }
         body.embed-responsive .embed-container {
             height: auto;
-            min-height: 100%;
         }
     </style>
     <?php if ($theme === 'auto'): ?>
