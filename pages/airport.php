@@ -4696,7 +4696,7 @@ function updateWindVisual(weather) {
 
     // Runway segments are pre-rotated to magnetic north in PHP (lib/heading-conversion.php)
     const runwayScale = 0.86; // Runways extend to 86% of circle (14% buffer; was 72%/28%)
-    const LABEL_POSITION = 0.85; // Place labels at 85% along runway (15% inward from end)
+    const LABEL_POSITION = 0.93; // Place labels at 93% along runway (7% inward from end)
     const MIN_LABEL_DIST = 18;
 
     const labelPositions = [];
@@ -4719,26 +4719,52 @@ function updateWindVisual(weather) {
         
         const leIdent = seg.le_ident || '';
         const heIdent = seg.he_ident || '';
-        // Place labels at 90% along runway line (10% inward from each end) to reduce overlap at intersections
+        // Place labels at 93% along runway line (7% inward from each end) to reduce overlap at intersections
         const labelAtStart = LABEL_POSITION * sx + (1 - LABEL_POSITION) * ex;
         const labelAtStartY = LABEL_POSITION * sy + (1 - LABEL_POSITION) * ey;
         const labelAtEnd = LABEL_POSITION * ex + (1 - LABEL_POSITION) * sx;
         const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
         const identAtStart = seg.ident_at_start ?? leIdent;
         const identAtEnd = seg.ident_at_end ?? heIdent;
+        const xStart = cx + rw * labelAtStart;
+        const yStart = cy - rw * labelAtStartY;
+        const xEnd = cx + rw * labelAtEnd;
+        const yEnd = cy - rw * labelAtEndY;
+        const dirStartX = sx - ex;
+        const dirStartY = -(sy - ey);
+        const dirEndX = ex - sx;
+        const dirEndY = -(ey - sy);
+        const dStart = Math.sqrt(dirStartX * dirStartX + dirStartY * dirStartY) || 1;
+        const dEnd = Math.sqrt(dirEndX * dirEndX + dirEndY * dirEndY) || 1;
+        const distStartToStart = Math.hypot(startX - xStart, startY - yStart);
+        const distStartToEnd = Math.hypot(endX - xStart, endY - yStart);
+        const distEndToStart = Math.hypot(startX - xEnd, startY - yEnd);
+        const distEndToEnd = Math.hypot(endX - xEnd, endY - yEnd);
+        const pushStart = distStartToEnd > distStartToStart ? 1 : -1;
+        const pushEnd = distEndToStart > distEndToEnd ? 1 : -1;
         labelPositions.push({
-            x: cx + rw * labelAtStart,
-            y: cy - rw * labelAtStartY,
-            ident: identAtStart
+            x: xStart,
+            y: yStart,
+            ident: identAtStart,
+            origX: xStart,
+            origY: yStart,
+            dirX: dirStartX / dStart,
+            dirY: dirStartY / dStart,
+            pushSign: pushStart
         });
         labelPositions.push({
-            x: cx + rw * labelAtEnd,
-            y: cy - rw * labelAtEndY,
-            ident: identAtEnd
+            x: xEnd,
+            y: yEnd,
+            ident: identAtEnd,
+            origX: xEnd,
+            origY: yEnd,
+            dirX: dirEndX / dEnd,
+            dirY: dirEndY / dEnd,
+            pushSign: pushEnd
         });
     });
     
-    // Resolve label overlaps (e.g. CYAV intersecting runways) by pushing apart along connecting line
+    // Resolve label overlaps by pushing each inward along its runway (keeps labels on runways)
     for (let i = 0; i < labelPositions.length; i++) {
         for (let j = i + 1; j < labelPositions.length; j++) {
             const a = labelPositions[i];
@@ -4748,12 +4774,16 @@ function updateWindVisual(weather) {
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < MIN_LABEL_DIST && dist > 0) {
                 const push = (MIN_LABEL_DIST - dist) / 2;
-                const ux = dx / dist;
-                const uy = dy / dist;
-                a.x -= ux * push;
-                a.y -= uy * push;
-                b.x += ux * push;
-                b.y += uy * push;
+                if (a.dirX !== undefined && a.dirY !== undefined) {
+                    const sign = a.pushSign !== undefined ? a.pushSign : -1;
+                    a.x -= sign * a.dirX * push;
+                    a.y -= sign * a.dirY * push;
+                }
+                if (b.dirX !== undefined && b.dirY !== undefined) {
+                    const sign = b.pushSign !== undefined ? b.pushSign : -1;
+                    b.x -= sign * b.dirX * push;
+                    b.y -= sign * b.dirY * push;
+                }
             }
         }
     }
@@ -4929,13 +4959,12 @@ function updateWindVisual(weather) {
     if (willShowCenterText) {
         const CENTER_EXCLUSION = 48;
         labelPositions.forEach((lp) => {
-            const dx = lp.x - cx;
-            const dy = lp.y - cy;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 0 && dist < CENTER_EXCLUSION) {
-                const scale = CENTER_EXCLUSION / dist;
-                lp.x = cx + dx * scale;
-                lp.y = cy + dy * scale;
+            const dist = Math.sqrt((lp.x - cx) ** 2 + (lp.y - cy) ** 2);
+            if (dist < CENTER_EXCLUSION && lp.dirX !== undefined && lp.dirY !== undefined) {
+                const push = CENTER_EXCLUSION - dist;
+                const sign = lp.pushSign !== undefined ? lp.pushSign : -1;
+                lp.x -= sign * lp.dirX * push;
+                lp.y -= sign * lp.dirY * push;
             }
         });
     }

@@ -99,7 +99,7 @@
         ctx.stroke();
 
         const runwayScale = 0.86;
-        const LABEL_POSITION = 0.85;
+        const LABEL_POSITION = 0.93;
         const MIN_LABEL_DIST = 18;
 
         const segments = full.runwaySegments || [];
@@ -133,8 +133,30 @@
             const identAtStart = seg.ident_at_start !== undefined ? seg.ident_at_start : leIdent;
             const identAtEnd = seg.ident_at_end !== undefined ? seg.ident_at_end : heIdent;
 
-            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart });
-            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd });
+            const xStart = cx + rw * labelAtStart;
+            const yStart = cy - rw * labelAtStartY;
+            const xEnd = cx + rw * labelAtEnd;
+            const yEnd = cy - rw * labelAtEndY;
+            const dirStartX = sx - ex;
+            const dirStartY = -(sy - ey);
+            const dirEndX = ex - sx;
+            const dirEndY = -(ey - sy);
+            const dStart = Math.sqrt(dirStartX * dirStartX + dirStartY * dirStartY) || 1;
+            const dEnd = Math.sqrt(dirEndX * dirEndX + dirEndY * dirEndY) || 1;
+            const distStartToStart = Math.hypot(startX - xStart, startY - yStart);
+            const distStartToEnd = Math.hypot(endX - xStart, endY - yStart);
+            const distEndToStart = Math.hypot(startX - xEnd, startY - yEnd);
+            const distEndToEnd = Math.hypot(endX - xEnd, endY - yEnd);
+            const pushStart = distStartToEnd > distStartToStart ? 1 : -1;
+            const pushEnd = distEndToStart > distEndToEnd ? 1 : -1;
+            labelPositions.push({
+                x: xStart, y: yStart, ident: identAtStart, origX: xStart, origY: yStart,
+                dirX: dirStartX / dStart, dirY: dirStartY / dStart, pushSign: pushStart
+            });
+            labelPositions.push({
+                x: xEnd, y: yEnd, ident: identAtEnd, origX: xEnd, origY: yEnd,
+                dirX: dirEndX / dEnd, dirY: dirEndY / dEnd, pushSign: pushEnd
+            });
         });
 
         for (let i = 0; i < labelPositions.length; i++) {
@@ -146,12 +168,16 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist < MIN_LABEL_DIST && dist > 0) {
                     const push = (MIN_LABEL_DIST - dist) / 2;
-                    const ux = dx / dist;
-                    const uy = dy / dist;
-                    a.x -= ux * push;
-                    a.y -= uy * push;
-                    b.x += ux * push;
-                    b.y += uy * push;
+                    if (a.dirX !== undefined && a.dirY !== undefined) {
+                        const sign = a.pushSign !== undefined ? a.pushSign : -1;
+                        a.x -= sign * a.dirX * push;
+                        a.y -= sign * a.dirY * push;
+                    }
+                    if (b.dirX !== undefined && b.dirY !== undefined) {
+                        const sign = b.pushSign !== undefined ? b.pushSign : -1;
+                        b.x -= sign * b.dirX * push;
+                        b.y -= sign * b.dirY * push;
+                    }
                 }
             }
         }
@@ -238,13 +264,12 @@
         if (willShowCenterText) {
             const CENTER_EXCLUSION = 48;
             labelPositions.forEach(function(lp) {
-                const dx = lp.x - cx;
-                const dy = lp.y - cy;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 0 && dist < CENTER_EXCLUSION) {
-                    const scale = CENTER_EXCLUSION / dist;
-                    lp.x = cx + dx * scale;
-                    lp.y = cy + dy * scale;
+                const dist = Math.sqrt((lp.x - cx) ** 2 + (lp.y - cy) ** 2);
+                if (dist < CENTER_EXCLUSION && lp.dirX !== undefined && lp.dirY !== undefined) {
+                    const push = CENTER_EXCLUSION - dist;
+                    const sign = lp.pushSign !== undefined ? lp.pushSign : -1;
+                    lp.x -= sign * lp.dirX * push;
+                    lp.y -= sign * lp.dirY * push;
                 }
             });
         }
