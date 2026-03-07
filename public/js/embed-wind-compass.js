@@ -79,13 +79,19 @@
 
         ctx.clearRect(0, 0, width, height);
 
+        const deg2rad = Math.PI / 180;
+        if (magneticDeclination !== 0) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(magneticDeclination * deg2rad);
+            ctx.translate(-cx, -cy);
+        }
+
         ctx.strokeStyle = colors.circle;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, 2 * Math.PI);
         ctx.stroke();
-
-        drawTrueNorthMarker(ctx, cx, cy, r, magneticDeclination, colors);
 
         const runwayScale = 0.86;
         const LABEL_POSITION = 0.85;
@@ -188,18 +194,38 @@
                 ctx.strokeStyle = colors.labelOutline;
                 ctx.lineWidth = 3;
                 ctx.lineJoin = 'round';
-                ctx.strokeText('VRB', cx, cy);
-                ctx.fillStyle = colors.vrbText;
-                ctx.fillText('VRB', cx, cy);
+                if (magneticDeclination !== 0) {
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.rotate(-magneticDeclination * deg2rad);
+                    ctx.strokeText('VRB', 0, 0);
+                    ctx.fillStyle = colors.vrbText;
+                    ctx.fillText('VRB', 0, 0);
+                    ctx.restore();
+                } else {
+                    ctx.strokeText('VRB', cx, cy);
+                    ctx.fillStyle = colors.vrbText;
+                    ctx.fillText('VRB', cx, cy);
+                }
             } else if (ws === null || ws < CALM_WIND_THRESHOLD) {
                 ctx.font = 'bold 20px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.strokeStyle = colors.labelOutline;
                 ctx.lineWidth = 3;
                 ctx.lineJoin = 'round';
-                ctx.strokeText('CALM', cx, cy);
-                ctx.fillStyle = colors.calmText;
-                ctx.fillText('CALM', cx, cy);
+                if (magneticDeclination !== 0) {
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.rotate(-magneticDeclination * deg2rad);
+                    ctx.strokeText('CALM', 0, 0);
+                    ctx.fillStyle = colors.calmText;
+                    ctx.fillText('CALM', 0, 0);
+                    ctx.restore();
+                } else {
+                    ctx.strokeText('CALM', cx, cy);
+                    ctx.fillStyle = colors.calmText;
+                    ctx.fillText('CALM', cx, cy);
+                }
             }
         }
 
@@ -216,52 +242,75 @@
         });
 
         ['N', 'E', 'S', 'W'].forEach(function(l, i) {
-            const ang = (i * 90 * Math.PI) / 180;
+            const ang = (i * 90) * deg2rad;
+            const labelX = cx + Math.sin(ang) * (r + 10);
+            const labelY = cy - Math.cos(ang) * (r + 10);
+            const tangentAngle = Math.atan2(-Math.cos(ang), Math.sin(ang)) + Math.PI / 2;
             ctx.fillStyle = colors.compass;
             ctx.font = 'bold 16px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(l, cx + Math.sin(ang) * (r + 10), cy - Math.cos(ang) * (r + 10));
+            ctx.save();
+            ctx.translate(labelX, labelY);
+            ctx.rotate(tangentAngle);
+            ctx.fillText(l, 0, 0);
+            ctx.restore();
         });
+
+        drawTrueNorthMarker(ctx, cx, cy, r, magneticDeclination, colors);
+
+        if (magneticDeclination !== 0) {
+            ctx.restore();
+        }
     }
 
     /**
-     * Draw True North marker on the compass circle: arc from star to N, star at True N, mag var label.
-     * Star and label sit on the circle; arc highlights the variation segment.
+     * Draw True North marker: star at top (0°), arc to N (magnetic), mag var label below N.
+     * Compass is rotated so True North is at top; N/S/E/W are skewed by mag var.
      */
     function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
         const absDecl = Math.abs(declination);
         if (absDecl === 0) return;
         const arcColor = colors.trueNorth ?? '#4a7';
         const deg2rad = Math.PI / 180;
-        const canvasNorth = -Math.PI / 2;
-        const compassTrueNorth = -declination * deg2rad;
-        const canvasTrueNorth = canvasNorth + compassTrueNorth;
+        const trueNorthAngle = -declination * deg2rad;
+        const magneticNorthAngle = 0;
+        const canvasNorth = -Math.PI / 2 + trueNorthAngle;
+        const canvasMagneticNorth = -Math.PI / 2;
 
         ctx.strokeStyle = arcColor;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 5;
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.arc(cx, cy, r, canvasTrueNorth, canvasNorth, declination < 0);
+        if (declination > 0) {
+            ctx.arc(cx, cy, r, canvasNorth, canvasMagneticNorth, false);
+        } else {
+            ctx.arc(cx, cy, r, canvasMagneticNorth, canvasNorth, false);
+        }
         ctx.stroke();
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const starX = cx + Math.sin(compassTrueNorth) * r;
-        const starY = cy - Math.cos(compassTrueNorth) * r;
+        const starX = cx + Math.sin(trueNorthAngle) * r;
+        const starY = cy - Math.cos(trueNorthAngle) * r;
         ctx.font = '14px sans-serif';
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
-        ctx.strokeText('\u2605', starX, starY);
+        ctx.save();
+        ctx.translate(starX, starY);
+        ctx.rotate(-declination * deg2rad);
+        ctx.strokeText('\u2605', 0, 0);
         ctx.fillStyle = arcColor;
-        ctx.fillText('\u2605', starX, starY);
+        ctx.fillText('\u2605', 0, 0);
+        ctx.restore();
 
         const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
         const labelRadius = r - 12;
-        const labelX = cx + Math.sin(compassTrueNorth) * labelRadius;
-        const labelY = cy - Math.cos(compassTrueNorth) * labelRadius;
-        const tangentAngle = compassTrueNorth;
+        const labelX = cx + Math.sin(magneticNorthAngle) * labelRadius;
+        const labelY = cy - Math.cos(magneticNorthAngle) * labelRadius;
+        const tangentAngle = canvasMagneticNorth + Math.PI / 2;
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -280,6 +329,7 @@
         const maxPetalLength = Math.min(45, r * 0.35);
         const maxSpeed = Math.max(1, Math.max.apply(null, petals));
         const deg2rad = Math.PI / 180;
+        const chevronColor = 'rgba(220, 53, 69, 0.9)';
 
         for (let i = 0; i < 16; i++) {
             const speed = petals[i] || 0;
@@ -301,6 +351,29 @@
             ctx.strokeStyle = colors.windRosePetalStroke || 'rgba(220, 53, 69, 0.4)';
             ctx.lineWidth = 1;
             ctx.stroke();
+
+            const cosA = Math.cos(centerAngle);
+            const sinA = Math.sin(centerAngle);
+            const chevronH = 4;
+            const chevronW = 3;
+            const chevronSpacing = 10;
+            let d = chevronSpacing;
+            while (d < length - chevronH) {
+                const tipX = cx + cosA * (d - chevronH);
+                const tipY = cy + sinA * (d - chevronH);
+                const baseX = cx + cosA * (d + chevronH);
+                const baseY = cy + sinA * (d + chevronH);
+                const perpX = -sinA * chevronW;
+                const perpY = cosA * chevronW;
+                ctx.beginPath();
+                ctx.moveTo(tipX, tipY);
+                ctx.lineTo(baseX + perpX, baseY + perpY);
+                ctx.lineTo(baseX - perpX, baseY - perpY);
+                ctx.closePath();
+                ctx.fillStyle = chevronColor;
+                ctx.fill();
+                d += chevronSpacing;
+            }
         }
     }
 
