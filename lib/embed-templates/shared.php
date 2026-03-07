@@ -192,12 +192,12 @@ function getEmbedWindFromWeather(array $weather): array
 
 /**
  * Format wind display (direction + speed + gust)
- * 
+ *
  * @param int|null $windDirection Wind direction in degrees
  * @param float|null $windSpeed Wind speed in knots
  * @param float|null $gustSpeed Gust speed in knots
  * @param string $windUnit Unit ('kt', 'mph', or 'kmh')
- * @return string Formatted wind string (e.g., '235°@15G20kt') or '---' for missing values
+ * @return string Formatted wind string (e.g., '235°@15G20kt', '---@---kt' when direction/speed missing)
  */
 function formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit) {
     $windDir = $windDirection !== null ? round($windDirection) . '°' : '---';
