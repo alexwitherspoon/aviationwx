@@ -279,9 +279,11 @@ class PublicApiIntegrationTest extends TestCase
         $this->assertIsArray($response['json']['observations']);
         
         foreach ($response['json']['observations'] as $obs) {
-            if (!isset($obs['wind_direction'])) {
-                continue;
-            }
+            $this->assertArrayHasKey(
+                'wind_direction',
+                $obs,
+                'Each observation should include wind_direction object'
+            );
             $wd = $obs['wind_direction'];
             $this->assertIsArray($wd, 'wind_direction should be object');
             $this->assertArrayHasKey('true_north', $wd);
