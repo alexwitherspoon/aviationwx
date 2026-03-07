@@ -24,6 +24,22 @@ function toApiInteger($value): ?int
 }
 
 /**
+ * Cast numeric value to heading (0-360 degrees) for API.
+ * Returns null if value is non-numeric or outside valid range.
+ *
+ * @param mixed $value Raw value from cache
+ * @return int|null Integer 0-360 or null
+ */
+function toApiHeading($value): ?int
+{
+    if ($value === null || !is_numeric($value)) {
+        return null;
+    }
+    $candidate = (int) round((float) $value);
+    return ($candidate >= 0 && $candidate <= 360) ? $candidate : null;
+}
+
+/**
  * Format wind rose as object with sectors, reference, unit, and period_label
  *
  * @param array|null $petals Raw 16-sector array or null
@@ -59,8 +75,8 @@ function formatWindDirectionForApi(array $weather): array
     $trueNorth = null;
     $magneticNorth = null;
     if (!$isVRB) {
-        $trueNorth = toApiInteger($weather['wind_direction'] ?? null);
-        $magneticNorth = toApiInteger($weather['wind_direction_magnetic'] ?? null);
+        $trueNorth = toApiHeading($weather['wind_direction'] ?? null);
+        $magneticNorth = toApiHeading($weather['wind_direction_magnetic'] ?? null);
     }
 
     return [

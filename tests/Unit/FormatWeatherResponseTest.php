@@ -71,6 +71,42 @@ class FormatWeatherResponseTest extends TestCase
     }
 
     /**
+     * Out-of-range headings: 361 and -1 return null (valid range 0-360)
+     */
+    public function testOutOfRangeHeadings_ReturnsNull(): void
+    {
+        $weather = [
+            'wind_direction' => 361,
+            'wind_direction_magnetic' => -1,
+            'wind_direction_text' => null,
+        ];
+        $airport = [];
+
+        $result = formatWeatherResponse($weather, $airport);
+
+        $this->assertNull($result['wind_direction']['true_north']);
+        $this->assertNull($result['wind_direction']['magnetic_north']);
+    }
+
+    /**
+     * Boundary headings 0 and 360: accepted as valid
+     */
+    public function testBoundaryHeadings_Accepted(): void
+    {
+        $weather = [
+            'wind_direction' => 0,
+            'wind_direction_magnetic' => 360,
+            'wind_direction_text' => null,
+        ];
+        $airport = [];
+
+        $result = formatWeatherResponse($weather, $airport);
+
+        $this->assertSame(0, $result['wind_direction']['true_north']);
+        $this->assertSame(360, $result['wind_direction']['magnetic_north']);
+    }
+
+    /**
      * Null wind_direction: true_north null, variable false
      */
     public function testNullWindDirection_ReturnsNullTrueNorth(): void
