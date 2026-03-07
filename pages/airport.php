@@ -5025,11 +5025,11 @@ function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
     ctx.restore();
 
     const declLabel = Math.round(absDecl) + '\u00B0' + (declination > 0 ? 'E' : (declination < 0 ? 'W' : ''));
-    // Place label below the arc (inside circle), oriented 90° right of tangent (radial)
     const labelRadius = r - 12;
-    const labelX = cx + Math.sin(magneticNorthAngle) * labelRadius;
-    const labelY = cy - Math.cos(magneticNorthAngle) * labelRadius;
-    const tangentAngle = canvasMagneticNorth + Math.PI / 2;
+    const midCanvasAngle = (canvasNorth + canvasMagneticNorth) / 2;
+    const labelX = cx + labelRadius * Math.cos(midCanvasAngle);
+    const labelY = cy + labelRadius * Math.sin(midCanvasAngle);
+    const tangentAngle = midCanvasAngle + Math.PI / 2;
     ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -5039,7 +5039,7 @@ function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
     ctx.strokeStyle = colors.labelOutline;
     ctx.lineWidth = 2.5;
     ctx.strokeText(declLabel, 0, 0);
-    ctx.fillStyle = colors.compass;
+    ctx.fillStyle = arcColor;
     ctx.fillText(declLabel, 0, 0);
     ctx.restore();
 }
