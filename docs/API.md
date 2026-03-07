@@ -76,7 +76,8 @@ Returns weather data for the specified airport.
       "sectors": [2, 1, 0, 0, 5, 8, 12, 10, 3, 0, 0, 0, 0, 0, 1, 2],
       "sector_labels": ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"],
       "reference": "magnetic_north",
-      "unit": "knots"
+      "unit": "knots",
+      "period_label": "last hour"
     },
     "last_updated": 1699123456,
     "last_updated_iso": "2024-11-04T12:34:56+00:00",

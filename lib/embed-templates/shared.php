@@ -201,10 +201,20 @@ function getEmbedWindFromWeather(array $weather): array
  */
 function formatEmbedWind($windDirection, $windSpeed, $gustSpeed, $windUnit) {
     $windDir = $windDirection !== null ? round($windDirection) . '°' : '---';
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
+
+    if ($windSpeed !== null) {
+        $windSpd = $windUnit === 'mph' ? round(knotsToMph($windSpeed)) : ($windUnit === 'kmh' ? round(knotsToKmh($windSpeed)) : round($windSpeed));
+    } else {
+        $windSpd = '---';
+    }
+
+    if ($gustSpeed !== null && $gustSpeed > 0) {
+        $gustVal = 'G' . ($windUnit === 'mph' ? round(knotsToMph($gustSpeed)) : ($windUnit === 'kmh' ? round(knotsToKmh($gustSpeed)) : round($gustSpeed)));
+    } else {
+        $gustVal = '';
+    }
+
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
-    
     return $windDir . '@' . $windSpd . $gustVal . $windUnitLabel;
 }
 
