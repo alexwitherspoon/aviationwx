@@ -265,7 +265,11 @@ function fetchEmbedDataFromEmbedApi(string $airportId): ?array
     $airport = $embed['airport'] ?? [];
     $weather = $embed['weather'] ?? [];
 
-    // Embed API returns full airport (runways, weather_sources, webcams) - use directly
+    // Embed API returns public format (nested wind_direction, daily.*); templates expect internal format
+    if (!empty($weather)) {
+        $weather = convertPublicApiToInternalFormat($weather);
+    }
+
     $airport['id'] = $airportId;
 
     return [
