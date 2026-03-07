@@ -234,6 +234,21 @@
             }
         }
 
+        const willShowCenterText = !windStale && (windSpeed === null || windSpeed === undefined || windSpeed < CALM_WIND_THRESHOLD || isVRB);
+        if (willShowCenterText) {
+            const CENTER_EXCLUSION = 48;
+            labelPositions.forEach(function(lp) {
+                const dx = lp.x - cx;
+                const dy = lp.y - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0 && dist < CENTER_EXCLUSION) {
+                    const scale = CENTER_EXCLUSION / dist;
+                    lp.x = cx + dx * scale;
+                    lp.y = cy + dy * scale;
+                }
+            });
+        }
+
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

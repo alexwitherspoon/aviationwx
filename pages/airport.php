@@ -4924,7 +4924,22 @@ function updateWindVisual(weather) {
         }
     }
     // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
-    
+
+    const willShowCenterText = !windStale && (ws === null || ws === undefined || ws < CALM_WIND_THRESHOLD || isVariableWind);
+    if (willShowCenterText) {
+        const CENTER_EXCLUSION = 48;
+        labelPositions.forEach((lp) => {
+            const dx = lp.x - cx;
+            const dy = lp.y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0 && dist < CENTER_EXCLUSION) {
+                const scale = CENTER_EXCLUSION / dist;
+                lp.x = cx + dx * scale;
+                lp.y = cy + dy * scale;
+            }
+        });
+    }
+
     // Draw runway labels (after petals/arrow so labels sit on top)
     // Baseline level with screen for readability (counter-rotate when canvas is rotated)
     ctx.font = 'bold 14px sans-serif';
