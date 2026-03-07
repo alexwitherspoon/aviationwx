@@ -4840,7 +4840,8 @@ function updateWindVisual(weather) {
             const hasActivePetals = lastHourWind.some(s => (s || 0) > 0);
             const lhwObj = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw)) ? lhwRaw : null;
             const periodLabel = (lhwObj && lhwObj.period_label) ? lhwObj.period_label : 'last hour';
-            const petalLegendItem = hasActivePetals ? `<span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="18" height="18" viewBox="0 0 14 14" style="vertical-align: middle;"><path d="M7 10 L7 2 A7 7 0 0 1 13 6 Z" fill="${colors.windRosePetal}" stroke="${colors.windRosePetalStroke}" stroke-width="1"/></svg> wind rose petal (${periodLabel})</span>` : '';
+            const chevronLegendColor = (colors.windRosePetal || 'rgba(220, 53, 69, 0.5)').replace(/[\d.]+\)$/, '0.75)');
+            const petalLegendItem = hasActivePetals ? `<span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="18" height="18" viewBox="0 0 14 14" style="vertical-align: middle;"><path d="M7 10 L7 2 A7 7 0 0 1 13 6 Z" fill="${colors.windRosePetal}" stroke="${colors.windRosePetalStroke}" stroke-width="1"/><polyline points="6,3 7,4.5 8,3" fill="none" stroke="${chevronLegendColor}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,4.5 7,6 8,4.5" fill="none" stroke="${chevronLegendColor}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg> wind rose petal (${periodLabel})</span>` : '';
             return `
         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.5rem 0; border-top: 1px solid #e0e0e0; font-size: 0.85rem;" title="Symbols on the wind compass">
             <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><span style="color: ${trueNorthColor}; font-size: 1rem;">\u2605</span> True N${magVarLabel ? ' (' + magVarLabel + ')' : ''}</span>
@@ -5013,7 +5014,7 @@ function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
     const maxPetalLength = Math.min(45, r * 0.35);
     const maxSpeed = Math.max(1, ...petals);
     const deg2rad = Math.PI / 180;
-    const chevronColor = 'rgba(220, 53, 69, 0.9)';
+    const chevronColor = 'rgba(220, 53, 69, 0.75)';
 
     for (let i = 0; i < 16; i++) {
         const speed = petals[i] || 0;
@@ -5037,15 +5038,22 @@ function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Chevrons along centerline: point toward center (wind blows toward = opposite of petal direction)
-        // Use same coords as ctx.arc: angle 0=East, x=cos, y=sin
+        // Chevrons from outer edge inward; wide V touching petal edge; skip short petals
+        if (length < 18) continue;
         const cosA = Math.cos(centerAngle);
         const sinA = Math.sin(centerAngle);
-        const chevronH = 4;
-        const chevronW = 3;
-        const chevronSpacing = 10;
-        let d = chevronSpacing;
-        while (d < length - chevronH) {
+        const petalHalfAngle = (22.5 / 2) * deg2rad;
+        const chevronH = Math.max(2.5, length * 0.07);
+        const chevronSpacing = length * 0.22;
+        const chevronStroke = Math.max(1.2, length * 0.05);
+        const innerBound = length * 0.25 + chevronH;
+        let d = length - chevronH;
+        ctx.strokeStyle = chevronColor;
+        ctx.lineWidth = chevronStroke;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        while (d > innerBound) {
+            const chevronW = d * Math.tan(petalHalfAngle) * 0.95;
             const tipX = cx + cosA * (d - chevronH);
             const tipY = cy + sinA * (d - chevronH);
             const baseX = cx + cosA * (d + chevronH);
@@ -5053,13 +5061,11 @@ function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
             const perpX = -sinA * chevronW;
             const perpY = cosA * chevronW;
             ctx.beginPath();
-            ctx.moveTo(tipX, tipY);
-            ctx.lineTo(baseX + perpX, baseY + perpY);
+            ctx.moveTo(baseX + perpX, baseY + perpY);
+            ctx.lineTo(tipX, tipY);
             ctx.lineTo(baseX - perpX, baseY - perpY);
-            ctx.closePath();
-            ctx.fillStyle = chevronColor;
-            ctx.fill();
-            d += chevronSpacing;
+            ctx.stroke();
+            d -= chevronSpacing;
         }
     }
 }
