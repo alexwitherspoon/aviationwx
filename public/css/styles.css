@@ -2900,6 +2900,10 @@ body.dark-mode #wind-details span {
     color: var(--dark-text-muted) !important;
 }
 
+body.dark-mode #wind-details span.legend-true-north-star {
+    color: #6b9 !important;
+}
+
 body.dark-mode #wind-details span[style*="font-weight: bold"] {
     color: var(--dark-text-bright) !important;
 }

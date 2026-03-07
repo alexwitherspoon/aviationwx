@@ -3473,9 +3473,11 @@ function initThemeToggle() {
         // Update button display
         updateToggle();
         
-        // Update wind canvas colors if needed
+        // Defer canvas redraw so DOM/classes are fully applied before we read theme
         if (typeof updateWindVisual === 'function' && currentWeatherData) {
-            updateWindVisual(currentWeatherData);
+            requestAnimationFrame(function() {
+                updateWindVisual(currentWeatherData);
+            });
         }
     });
     
@@ -3499,9 +3501,8 @@ function initThemeToggle() {
             // Only react if we're in auto mode and not in mobile night mode
             if (currentPreference === 'auto' && getCurrentTheme() !== 'night') {
                 applyTheme('auto'); // Reapply auto mode (removes all classes)
-                // Update wind canvas if needed
                 if (typeof updateWindVisual === 'function' && currentWeatherData) {
-                    updateWindVisual(currentWeatherData);
+                    requestAnimationFrame(function() { updateWindVisual(currentWeatherData); });
                 }
             }
         });
@@ -4619,32 +4620,44 @@ function updateWindVisual(weather) {
     const ctx = canvas.getContext('2d');
     const cx = canvas.width / 2, cy = canvas.height / 2, r = Math.min(canvas.width, canvas.height) / 2 - 20;
     
-    const isNightMode = document.body.classList.contains('night-mode');
-    const isDarkMode = document.body.classList.contains('dark-mode');
+    // Detect effective theme: check both html and body (body may not be synced yet on initial load),
+    // and auto mode with system dark (no explicit class, but prefers-color-scheme: dark)
+    const hasNight = document.documentElement.classList.contains('night-mode') || document.body.classList.contains('night-mode');
+    const hasDark = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
+    const hasLight = document.documentElement.classList.contains('light-mode') || document.body.classList.contains('light-mode');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isAutoDark = !hasNight && !hasDark && !hasLight && prefersDark;
+    const isNightMode = hasNight;
+    const isDarkMode = hasDark || isAutoDark;
 
     const colors = isNightMode ? {
         circle: '#660000',
         runway: '#cc4444',
         runwayLabel: '#ff5555',
+        runwayLabelStrokeWidth: 3,
         labelOutline: '#330000',
         compass: '#993333',
         windArrow: '#ff4444',
         windFill: 'rgba(255, 68, 68, 0.2)',
         windRosePetal: 'rgba(255, 68, 68, 0.5)',
         windRosePetalStroke: 'rgba(255, 68, 68, 0.4)',
+        chevron: 'rgba(255, 100, 100, 0.9)',
         calmText: '#cc4444',
         vrbText: '#ff4444',
         trueNorth: '#ff5555'
     } : isDarkMode ? {
-        circle: '#888',
+        circle: '#666',
         runway: '#4a9eff',
         runwayLabel: '#6bb3ff',
-        labelOutline: '#000',
+        runwayLabelStrokeWidth: 2,
+        runwayLabelOutline: '#1a1a1a',
+        labelOutline: '#333',
         compass: '#999',
         windArrow: '#dc3545',
         windFill: 'rgba(220, 53, 69, 0.2)',
         windRosePetal: 'rgba(220, 53, 69, 0.5)',
         windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+        chevron: 'rgba(220, 53, 69, 0.75)',
         calmText: '#ddd',
         vrbText: '#dc3545',
         trueNorth: '#6b9'
@@ -4652,12 +4665,14 @@ function updateWindVisual(weather) {
         circle: '#333',
         runway: '#0066cc',
         runwayLabel: '#0066cc',
+        runwayLabelStrokeWidth: 3,
         labelOutline: '#ffffff',
         compass: '#666',
         windArrow: '#dc3545',
         windFill: 'rgba(220, 53, 69, 0.2)',
         windRosePetal: 'rgba(220, 53, 69, 0.5)',
         windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+        chevron: 'rgba(220, 53, 69, 0.75)',
         calmText: '#333',
         vrbText: '#dc3545',
         trueNorth: '#4a7'
@@ -4711,15 +4726,20 @@ function updateWindVisual(weather) {
         const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
         const identAtStart = seg.ident_at_start ?? leIdent;
         const identAtEnd = seg.ident_at_end ?? heIdent;
+        // Runway numbers are oriented perpendicular to centerline (readable when approaching)
+        const runwayAngle = Math.atan2(sy - ey, ex - sx);
+        const labelAngle = runwayAngle + Math.PI / 2;
         labelPositions.push({
             x: cx + rw * labelAtStart,
             y: cy - rw * labelAtStartY,
-            ident: identAtStart
+            ident: identAtStart,
+            angle: labelAngle
         });
         labelPositions.push({
             x: cx + rw * labelAtEnd,
             y: cy - rw * labelAtEndY,
-            ident: identAtEnd
+            ident: identAtEnd,
+            angle: labelAngle
         });
     });
     
@@ -4840,11 +4860,10 @@ function updateWindVisual(weather) {
             const hasActivePetals = lastHourWind.some(s => (s || 0) > 0);
             const lhwObj = (lhwRaw && typeof lhwRaw === 'object' && !Array.isArray(lhwRaw)) ? lhwRaw : null;
             const periodLabel = (lhwObj && lhwObj.period_label) ? lhwObj.period_label : 'last hour';
-            const chevronLegendColor = (colors.windRosePetal || 'rgba(220, 53, 69, 0.5)').replace(/[\d.]+\)$/, '0.75)');
-            const petalLegendItem = hasActivePetals ? `<span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="18" height="18" viewBox="0 0 14 14" style="vertical-align: middle;"><path d="M7 10 L7 2 A7 7 0 0 1 13 6 Z" fill="${colors.windRosePetal}" stroke="${colors.windRosePetalStroke}" stroke-width="1"/><polyline points="6,3 7,4.5 8,3" fill="none" stroke="${chevronLegendColor}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="6,4.5 7,6 8,4.5" fill="none" stroke="${chevronLegendColor}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg> wind rose petal (${periodLabel})</span>` : '';
+            const petalLegendItem = hasActivePetals ? `<span style="display: inline-flex; align-items: center; gap: 0;"><svg width="28" height="14" viewBox="4 4 9 5" style="display: block; flex-shrink: 0;"><path d="M4 6 L11.85 4.44 A8 8 0 0 1 11.85 7.56 Z" fill="${colors.windRosePetal}" stroke="${colors.windRosePetalStroke}" stroke-width="1"/><polyline points="10.5,4.87 9.5,6 10.5,7.13" fill="none" stroke="${colors.chevron}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9,5.15 8,6 9,6.85" fill="none" stroke="${colors.chevron}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="margin-left: 0.15rem;">wind rose petal (${periodLabel})</span></span>` : '';
             return `
         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.5rem 0; border-top: 1px solid #e0e0e0; font-size: 0.85rem;" title="Symbols on the wind compass">
-            <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><span style="color: ${trueNorthColor}; font-size: 1rem;">\u2605</span> True N${magVarLabel ? ' (' + magVarLabel + ')' : ''}</span>
+            <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><span class="legend-true-north-star" style="color: ${trueNorthColor}; font-size: 1rem;">\u2605</span> True N${magVarLabel ? ' (' + magVarLabel + ')' : ''}</span>
             <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="18" height="10" viewBox="0 0 18 10" style="vertical-align: middle;"><line x1="0" y1="5" x2="6" y2="5" stroke="${windArrowColor}" stroke-width="2" stroke-linecap="butt"/><path d="M16 5 L6 0 L6 10 Z" fill="${windArrowColor}"/></svg> current wind</span>
             <span style="display: inline-flex; align-items: center; gap: 0.25rem;"><svg width="14" height="3" viewBox="0 0 14 3" style="vertical-align: middle;"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="${runwayColor}" stroke-width="2.5" stroke-linecap="round"/></svg> runways</span>
             ${petalLegendItem}
@@ -4912,16 +4931,25 @@ function updateWindVisual(weather) {
     // If windStale is true, we don't draw any wind indicators (just runways + compass already drawn above)
     
     // Draw runway labels (after petals/arrow so labels sit on top)
+    // Oriented to runway direction like real runway threshold signs
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     labelPositions.forEach((lp) => {
         if (!lp.ident) return;
-        ctx.strokeStyle = colors.labelOutline;
-        ctx.lineWidth = 3;
-        ctx.strokeText(lp.ident, lp.x, lp.y);
+        const angle = lp.angle ?? 0;
+        ctx.save();
+        ctx.translate(lp.x, lp.y);
+        ctx.rotate(angle);
+        const strokeW = colors.runwayLabelStrokeWidth ?? 3;
+        if (strokeW > 0) {
+            ctx.strokeStyle = colors.runwayLabelOutline ?? colors.labelOutline;
+            ctx.lineWidth = strokeW;
+            ctx.strokeText(lp.ident, 0, 0);
+        }
         ctx.fillStyle = colors.runwayLabel;
-        ctx.fillText(lp.ident, lp.x, lp.y);
+        ctx.fillText(lp.ident, 0, 0);
+        ctx.restore();
     });
     
     // Draw cardinal directions: baseline perpendicular to radial (along tangent to circle)
@@ -4976,7 +5004,7 @@ function drawTrueNorthMarker(ctx, cx, cy, r, declination, colors) {
     const starX = cx + Math.sin(trueNorthAngle) * r;
     const starY = cy - Math.cos(trueNorthAngle) * r;
     ctx.font = '14px sans-serif';
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = colors.labelOutline || '#fff';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.save();
@@ -5014,7 +5042,7 @@ function drawWindRosePetals(ctx, cx, cy, r, petals, colors) {
     const maxPetalLength = Math.min(45, r * 0.35);
     const maxSpeed = Math.max(1, ...petals);
     const deg2rad = Math.PI / 180;
-    const chevronColor = 'rgba(220, 53, 69, 0.75)';
+    const chevronColor = colors.chevron || 'rgba(220, 53, 69, 0.75)';
 
     for (let i = 0; i < 16; i++) {
         const speed = petals[i] || 0;

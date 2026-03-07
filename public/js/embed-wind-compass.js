@@ -52,14 +52,17 @@
         const magneticDeclination = full.magneticDeclination || 0;
 
         const colors = isDark ? {
-            circle: '#888',
+            circle: '#666',
             runway: '#4a9eff',
             runwayLabel: '#6bb3ff',
-            labelOutline: '#000',
+            runwayLabelStrokeWidth: 2,
+            runwayLabelOutline: '#1a1a1a',
+            labelOutline: '#333',
             compass: '#999',
             windArrow: '#dc3545',
             windRosePetal: 'rgba(220, 53, 69, 0.5)',
             windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+            chevron: 'rgba(220, 53, 69, 0.75)',
             calmText: '#ddd',
             vrbText: '#dc3545',
             trueNorth: '#6b9'
@@ -67,11 +70,13 @@
             circle: '#333',
             runway: '#0066cc',
             runwayLabel: '#0066cc',
+            runwayLabelStrokeWidth: 3,
             labelOutline: '#ffffff',
             compass: '#666',
             windArrow: '#dc3545',
             windRosePetal: 'rgba(220, 53, 69, 0.5)',
             windRosePetalStroke: 'rgba(220, 53, 69, 0.4)',
+            chevron: 'rgba(220, 53, 69, 0.75)',
             calmText: '#333',
             vrbText: '#dc3545',
             trueNorth: '#4a7'
@@ -127,9 +132,11 @@
             const labelAtEndY = LABEL_POSITION * ey + (1 - LABEL_POSITION) * sy;
             const identAtStart = seg.ident_at_start !== undefined ? seg.ident_at_start : leIdent;
             const identAtEnd = seg.ident_at_end !== undefined ? seg.ident_at_end : heIdent;
+            const runwayAngle = Math.atan2(sy - ey, ex - sx);
+            const labelAngle = runwayAngle + Math.PI / 2;
 
-            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart });
-            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd });
+            labelPositions.push({ x: cx + rw * labelAtStart, y: cy - rw * labelAtStartY, ident: identAtStart, angle: labelAngle });
+            labelPositions.push({ x: cx + rw * labelAtEnd, y: cy - rw * labelAtEndY, ident: identAtEnd, angle: labelAngle });
         });
 
         for (let i = 0; i < labelPositions.length; i++) {
@@ -234,11 +241,19 @@
         ctx.textBaseline = 'middle';
         labelPositions.forEach(function(lp) {
             if (!lp.ident) return;
-            ctx.strokeStyle = colors.labelOutline;
-            ctx.lineWidth = 3;
-            ctx.strokeText(lp.ident, lp.x, lp.y);
+            const angle = lp.angle !== undefined ? lp.angle : 0;
+            ctx.save();
+            ctx.translate(lp.x, lp.y);
+            ctx.rotate(angle);
+            const strokeW = colors.runwayLabelStrokeWidth !== undefined ? colors.runwayLabelStrokeWidth : 3;
+            if (strokeW > 0) {
+                ctx.strokeStyle = colors.runwayLabelOutline !== undefined ? colors.runwayLabelOutline : colors.labelOutline;
+                ctx.lineWidth = strokeW;
+                ctx.strokeText(lp.ident, 0, 0);
+            }
             ctx.fillStyle = colors.runwayLabel;
-            ctx.fillText(lp.ident, lp.x, lp.y);
+            ctx.fillText(lp.ident, 0, 0);
+            ctx.restore();
         });
 
         ['N', 'E', 'S', 'W'].forEach(function(l, i) {
@@ -295,7 +310,7 @@
         const starX = cx + Math.sin(trueNorthAngle) * r;
         const starY = cy - Math.cos(trueNorthAngle) * r;
         ctx.font = '14px sans-serif';
-        ctx.strokeStyle = '#fff';
+        ctx.strokeStyle = colors.labelOutline || '#fff';
         ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
         ctx.save();
@@ -329,7 +344,7 @@
         const maxPetalLength = Math.min(45, r * 0.35);
         const maxSpeed = Math.max(1, Math.max.apply(null, petals));
         const deg2rad = Math.PI / 180;
-        const chevronColor = 'rgba(220, 53, 69, 0.9)';
+        const chevronColor = colors.chevron || 'rgba(220, 53, 69, 0.75)';
 
         for (let i = 0; i < 16; i++) {
             const speed = petals[i] || 0;
@@ -352,13 +367,21 @@
             ctx.lineWidth = 1;
             ctx.stroke();
 
+            if (length < 18) continue;
             const cosA = Math.cos(centerAngle);
             const sinA = Math.sin(centerAngle);
-            const chevronH = 4;
-            const chevronW = 3;
-            const chevronSpacing = 10;
-            let d = chevronSpacing;
-            while (d < length - chevronH) {
+            const petalHalfAngle = (22.5 / 2) * deg2rad;
+            const chevronH = Math.max(2.5, length * 0.07);
+            const chevronSpacing = length * 0.22;
+            const chevronStroke = Math.max(1.2, length * 0.05);
+            const innerBound = length * 0.25 + chevronH;
+            let d = length - chevronH;
+            ctx.strokeStyle = chevronColor;
+            ctx.lineWidth = chevronStroke;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            while (d > innerBound) {
+                const chevronW = d * Math.tan(petalHalfAngle) * 0.95;
                 const tipX = cx + cosA * (d - chevronH);
                 const tipY = cy + sinA * (d - chevronH);
                 const baseX = cx + cosA * (d + chevronH);
@@ -366,13 +389,11 @@
                 const perpX = -sinA * chevronW;
                 const perpY = cosA * chevronW;
                 ctx.beginPath();
-                ctx.moveTo(tipX, tipY);
-                ctx.lineTo(baseX + perpX, baseY + perpY);
+                ctx.moveTo(baseX + perpX, baseY + perpY);
+                ctx.lineTo(tipX, tipY);
                 ctx.lineTo(baseX - perpX, baseY - perpY);
-                ctx.closePath();
-                ctx.fillStyle = chevronColor;
-                ctx.fill();
-                d += chevronSpacing;
+                ctx.stroke();
+                d -= chevronSpacing;
             }
         }
     }
