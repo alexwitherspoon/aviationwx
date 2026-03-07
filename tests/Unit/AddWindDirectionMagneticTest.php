@@ -41,7 +41,7 @@ class AddWindDirectionMagneticTest extends TestCase
     }
 
     /**
-     * 14° true with 14°E declination → 0° magnetic (360° normalized to 0 in output)
+     * 14° true with 14°E declination → 360° magnetic (north; convertTrueToMagnetic uses 360 not 0)
      */
     public function test14TrueWith14Declination_ProducesNorthMagnetic(): void
     {
