@@ -92,11 +92,11 @@ function fetchWeatherFromPublicApi(string $airportId): ?array {
     // Parse public API response
     if ($httpCode === 200 && $response !== false && empty($error)) {
         $data = json_decode($response, true);
-        $apiWeather = $data['weather'] ?? $data['data']['weather'] ?? null;
-        if (is_array($data) && isset($data['success']) && $data['success'] && is_array($apiWeather)) {
-            
-            // Convert public API format to internal format (templates expect flat fields)
-            return convertPublicApiToInternalFormat($apiWeather);
+        if (is_array($data) && isset($data['success']) && $data['success']) {
+            $apiWeather = $data['weather'] ?? $data['data']['weather'] ?? null;
+            if (is_array($apiWeather)) {
+                return convertPublicApiToInternalFormat($apiWeather);
+            }
         }
     }
     
