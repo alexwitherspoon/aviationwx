@@ -285,8 +285,8 @@ function renderFullSingleWidget($data, $options) {
 
     // Format wind display parts (use wind_direction_magnetic; fail closed with ---)
     $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
+    $windSpd = $windSpeed !== null ? round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed)) : '---';
+    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     
     // Weather emojis
@@ -498,8 +498,8 @@ function renderFullDualWidget($data, $options) {
 
     // Format wind display (use wind_direction_magnetic; fail closed with ---)
     $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
+    $windSpd = $windSpeed !== null ? round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed)) : '---';
+    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     
     // Weather emojis
@@ -730,8 +730,8 @@ function renderFullMultiWidget($data, $options) {
 
     // Format wind display (use wind_direction_magnetic; fail closed with ---)
     $windDir = $isVRB ? 'VRB' : ($windDirection !== null ? (is_numeric($windDirection) ? round($windDirection) . '°' : $windDirection) : '---');
-    $windSpd = $windSpeed !== null ? round($windSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '---';
-    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($gustSpeed * ($windUnit === 'mph' ? 1.15078 : ($windUnit === 'kmh' ? 1.852 : 1))) : '';
+    $windSpd = $windSpeed !== null ? round($windUnit === 'mph' ? knotsToMph($windSpeed) : ($windUnit === 'kmh' ? knotsToKmh($windSpeed) : $windSpeed)) : '---';
+    $gustVal = ($gustSpeed !== null && $gustSpeed > 0) ? 'G' . round($windUnit === 'mph' ? knotsToMph($gustSpeed) : ($windUnit === 'kmh' ? knotsToKmh($gustSpeed) : $gustSpeed)) : '';
     $windUnitLabel = $windUnit === 'kmh' ? 'km/h' : $windUnit;
     
     // Weather emojis
