@@ -81,10 +81,12 @@ function handleGetWeatherHistory(array $params, array $context): void
     $observations = array_map(function ($obs) use ($decl) {
         $wdRaw = $obs['wind_direction'] ?? null;
         $isVRB = (is_string($wdRaw) && strtoupper($wdRaw) === 'VRB');
-        $trueNorth = is_numeric($wdRaw) ? (int) round((float) $wdRaw) : null;
-        $magneticNorth = ($trueNorth !== null && $trueNorth >= 0 && $trueNorth <= 360)
-            ? (int) round(convertTrueToMagnetic((float) $trueNorth, $decl))
-            : null;
+        $trueNorth = $isVRB ? null : toApiHeading($wdRaw);
+        $magneticNorth = null;
+        if ($trueNorth !== null) {
+            $magVal = (int) round(convertTrueToMagnetic((float) $trueNorth, $decl));
+            $magneticNorth = toApiHeading($magVal);
+        }
 
         $formatted = [
             'obs_time' => $obs['obs_time'] ?? null,
