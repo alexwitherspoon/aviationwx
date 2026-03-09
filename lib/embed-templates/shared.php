@@ -316,6 +316,7 @@ function buildEmbedWebcamPicture($dashboardUrl, $airportId, $camIndex, $aspectRa
         <img src="{$simpleUrl}" 
              alt="{$altText}" 
              class="{$cssClass}"
+             data-cam-index="{$camIndex}"
              style="aspect-ratio: {$aspectRatioCss}; width: 100%; height: auto; display: block;">
 HTML;
     }
@@ -410,13 +411,14 @@ HTML;
         $html .= "\n            <source type=\"image/jpeg\" srcset=\"{$jpgSrcsetStr}\">";
     }
     
-    // Fallback img element
+    // Fallback img element (data-cam-index for stale fallback script)
     $fallbackUrl = buildEmbedWebcamUrl($dashboardUrl, $airportId, $camIndex);
     $html .= <<<HTML
 
             <img src="{$fallbackUrl}" 
                  alt="{$altText}" 
                  class="{$cssClass}"
+                 data-cam-index="{$camIndex}"
                  style="aspect-ratio: {$aspectRatioCss}; width: 100%; height: auto; display: block;"
                  loading="lazy">
         </picture>

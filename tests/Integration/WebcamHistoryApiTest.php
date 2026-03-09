@@ -86,6 +86,10 @@ class WebcamHistoryApiTest extends TestCase
         $contentType = $response['headers']['content-type'] ?? '';
         $this->assertStringContainsString('application/json', $contentType, 'Should return JSON');
         
+        // CORS header for cross-origin embed stale fallback
+        $this->assertArrayHasKey('access-control-allow-origin', $response['headers'],
+            'Should include CORS header for embed stale fallback');
+        
         // Parse JSON
         $data = json_decode($response['body'], true);
         $this->assertNotNull($data, 'Response should be valid JSON');
@@ -227,6 +231,40 @@ class WebcamHistoryApiTest extends TestCase
         }
     }
     
+    /**
+     * Test that when history has frames, each frame includes url and timestamp for stale overlay client
+     */
+    public function testWebcamHistoryApi_WhenFramesExist_EachFrameHasUrlAndTimestamp(): void
+    {
+        $response = $this->makeRequest("api/webcam-history.php?id={$this->testAirport}&cam={$this->testCamIndex}");
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped('Endpoint not available');
+            return;
+        }
+
+        if ($response['http_code'] == 404) {
+            $this->markTestSkipped('Webcam history not enabled for test airport');
+            return;
+        }
+
+        $data = json_decode($response['body'], true);
+        if (!$data['enabled'] || !$data['available'] || empty($data['frames'])) {
+            $this->markTestSkipped('Webcam history has no frames for test airport');
+            return;
+        }
+
+        foreach ($data['frames'] as $i => $frame) {
+            $this->assertArrayHasKey('timestamp', $frame, "Frame {$i} must have timestamp for stale overlay client");
+            $this->assertArrayHasKey('url', $frame, "Frame {$i} must have url for stale overlay client");
+            $this->assertIsInt($frame['timestamp'], "Frame {$i} timestamp must be integer");
+            $this->assertNotEmpty($frame['url'], "Frame {$i} url must be non-empty");
+        }
+
+        $latest = $data['frames'][count($data['frames']) - 1];
+        $this->assertStringContainsString('ts=', $latest['url'], 'Latest frame url must include ts= for image fetch');
+    }
+
     /**
      * Test that webcam history API handles invalid airport ID
      */

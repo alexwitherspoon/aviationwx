@@ -313,6 +313,7 @@ The widget script uses short cache headers (`max-age=300`, `stale-while-revalida
 - Webcam images are fetched from the main dashboard
 - Check that the airport has webcams configured
 - Verify the webcam index is valid for that airport
+- If main image fails (stale/503), embed tries history API and shows dimmed overlay "Live image unavailable. Tap for time-lapse history." when frames exist; otherwise placeholder
 
 ### Widget appears too small/large
 - **iframe:** Add `responsive=1` to the URL for auto-height; the iframe posts its height to the parent. Or set fixed `width` and `height` attributes.

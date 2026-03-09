@@ -191,12 +191,14 @@ if ($timestamp !== null) {
 
 // Return JSON manifest
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
 
 // Get history status (enabled, available, frame count)
 $historyStatus = getHistoryStatus($airportId, $camIndex);
 
 // History disabled by config (max_frames < 2)
 if (!$historyStatus['enabled']) {
+    header('Access-Control-Allow-Origin: *');
     // Config-based response - cache for longer (1 hour) since it rarely changes
     header('Cache-Control: public, max-age=3600, s-maxage=3600, stale-while-revalidate=3600');
     echo json_encode([

@@ -795,9 +795,8 @@ The system tracks daily extremes that reset at local midnight:
 - Timestamp display updates every 60 seconds
 
 **Webcam Staleness Warning**:
-- Individual webcam timestamps show warning emoji (⚠️) when age exceeds `MAX_STALE_HOURS` (3 hours)
-- Warning appears before timestamp in "Last updated:" label
-- Provides immediate visual feedback for stale webcam data
+- Individual webcam timestamps show warning emoji (⚠️) when age exceeds fail-closed threshold (default 3 hours)
+- At fail-closed: image replaced with stale overlay (dimmed last frame + "Live image unavailable. Tap for time-lapse history.") if history has frames; otherwise placeholder
 
 ### Data Merging with Fallback
 
@@ -1142,6 +1141,7 @@ The webcam processing pipeline uses three main components:
 - Failed acquisition: Stale cache served by API
 - No cache: Serves placeholder image
 - **Server-Side Staleness Enforcement**: API returns 503 for images older than 3 hours (fail-closed safety)
+- **Stale Overlay**: When 503 (or load error), client tries history API first; if frames exist, shows latest with dimmed overlay "Live image unavailable. Tap for time-lapse history." and timestamp; otherwise placeholder
 
 ---
 
@@ -1608,8 +1608,9 @@ The `/api/notam.php` endpoint serves cached NOTAM data:
 #### Image Display
 - **Format**: JPEG or WebP (based on browser support)
 - **Refresh**: Automatic refresh based on cache age
-- **Placeholder**: Shown if image unavailable
 - **Loading State**: Shown during fetch
+- **Stale Overlay**: When image exceeds fail-closed threshold but history has frames—shows last image dimmed with overlay "Live image unavailable. Tap for time-lapse history." and timestamp; user can tap to open history player
+- **Placeholder**: Shown when no image exists or history unavailable (no frames, history disabled)
 
 #### Timestamp Display
 - **Last Updated**: Shows when image was captured

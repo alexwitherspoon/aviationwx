@@ -132,7 +132,36 @@ class WebcamRefreshInitializationTest extends TestCase
                        preg_match('/safeSwapCameraImage\s*[:=]\s*function/', $html);
         $this->assertTrue($hasFunction, 'safeSwapCameraImage function should be defined');
     }
-    
+
+    /**
+     * Test that airport page includes webcam stale overlay markup when webcams are configured.
+     * Overlay is created by JS when image goes stale; this verifies the page has the
+     * structure and functions needed for the overlay to be created.
+     */
+    public function testAirportPage_WhenWebcamsConfigured_IncludesStaleOverlayStructure(): void
+    {
+        $response = $this->makeRequest("?airport={$this->airport}");
+
+        if ($response['http_code'] == 0 || $response['http_code'] != 200) {
+            $this->markTestSkipped("Airport page not available (HTTP {$response['http_code']})");
+            return;
+        }
+
+        $html = $response['body'];
+
+        if (!preg_match('/class=["\'][^"\']*webcam-container[^"\']*["\']/', $html)) {
+            $this->markTestSkipped('No webcam-container found - airport may not have webcams');
+            return;
+        }
+
+        $this->assertStringContainsString('showStaleWebcamOverlay', $html,
+            'Page should define showStaleWebcamOverlay for stale overlay display');
+        $this->assertStringContainsString('tryFetchStaleFromHistory', $html,
+            'Page should define tryFetchStaleFromHistory for history fallback');
+        $this->assertStringContainsString('webcam-stale-overlay', $html,
+            'Page should reference webcam-stale-overlay class (in JS or CSS)');
+    }
+
     /**
      * Test that timer worker is set up for webcam refresh
      * 

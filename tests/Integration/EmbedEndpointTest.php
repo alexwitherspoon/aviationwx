@@ -352,6 +352,37 @@ class EmbedEndpointTest extends TestCase
     }
 
     /**
+     * Test embed webcam-only style includes data attributes for stale webcam fallback
+     */
+    public function testEmbedRenderer_WebcamOnlyStyle_IncludesStaleFallbackDataAttributes()
+    {
+        $response = $this->makeRequest('?embed&airport=kspb&style=webcam-only&theme=light&webcam=0&render=1');
+
+        if ($response['http_code'] == 0) {
+            $this->markTestSkipped("Endpoint not available");
+            return;
+        }
+
+        if ($response['http_code'] == 200) {
+            $this->assertStringContainsString(
+                'data-dashboard-url',
+                $response['body'],
+                "Embed should include data-dashboard-url for stale fallback"
+            );
+            $this->assertStringContainsString(
+                'data-airport-id',
+                $response['body'],
+                "Embed should include data-airport-id for stale fallback"
+            );
+            $this->assertStringContainsString(
+                'data-cam-index',
+                $response['body'],
+                "Webcam images should include data-cam-index for stale fallback"
+            );
+        }
+    }
+
+    /**
      * Test embed webcam-only style contains per-webcam link to history player
      */
     public function testEmbedRenderer_WebcamOnlyStyle_ContainsHistoryPlayerLink()

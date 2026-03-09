@@ -749,6 +749,39 @@ a {
     min-height: 0;
 }
 
+/* Stale webcam overlay - when image exists but exceeds fail-closed threshold */
+.webcam-cell .webcam-stale-overlay,
+.dual-webcam-cell .webcam-stale-overlay,
+.webcam-container .webcam-stale-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    text-align: center;
+    padding: 1rem;
+    z-index: 3;
+    pointer-events: none;
+}
+.webcam-stale-overlay .stale-message {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+.webcam-stale-overlay .stale-timestamp {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+.webcam-cell.webcam-stale-dimmed .webcam-image,
+.dual-webcam-cell.webcam-stale-dimmed .webcam-image,
+.webcam-cell.webcam-stale-dimmed picture img,
+.dual-webcam-cell.webcam-stale-dimmed picture img {
+    filter: brightness(0.7);
+}
+
 .style-webcam .webcam-container {
     position: relative;
     background: #000;

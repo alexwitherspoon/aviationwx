@@ -342,9 +342,62 @@ switch ($style) {
     </script>
     <?php endif; ?>
 </head>
-<body class="<?= htmlspecialchars($themeClass) ?><?= $responsive ? ' embed-responsive' : '' ?>">
+<body class="<?= htmlspecialchars($themeClass) ?><?= $responsive ? ' embed-responsive' : '' ?>" data-dashboard-url="<?= htmlspecialchars($dashboardUrl) ?>" data-airport-id="<?= htmlspecialchars($airportId) ?>">
     <div class="embed-container <?= htmlspecialchars($themeClass) ?>">
         <?= $widgetHtml ?>
     </div>
+    <script>
+    (function() {
+        'use strict';
+        function tryHistoryOnWebcamError(img) {
+            var airportId = document.body.dataset.airportId;
+            var dashboardUrl = document.body.dataset.dashboardUrl;
+            var camIndex = img.dataset.camIndex;
+            if (!airportId || !dashboardUrl || camIndex === undefined) return false;
+            var historyUrl = dashboardUrl + '/api/webcam-history.php?id=' + encodeURIComponent(airportId) + '&cam=' + camIndex;
+            fetch(historyUrl, { cache: 'no-store', credentials: 'include' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(json) {
+                    if (!json || !json.enabled || !json.available || !Array.isArray(json.frames) || json.frames.length === 0) return;
+                    var latest = json.frames[json.frames.length - 1];
+                    var relUrl = latest.url || ('/api/webcam-history.php?id=' + encodeURIComponent(airportId) + '&cam=' + camIndex + '&ts=' + latest.timestamp);
+                    var frameUrl = relUrl.startsWith('http') ? relUrl : (dashboardUrl.replace(/\/$/, '') + (relUrl.startsWith('/') ? '' : '/') + relUrl);
+                    var container = img.closest('.webcam-cell, .dual-webcam-cell, .webcam-container');
+                    if (!container) return;
+                    img.onerror = null;
+                    img.src = frameUrl;
+                    img.srcset = '';
+                    var picture = img.closest('picture');
+                    if (picture) picture.querySelectorAll('source').forEach(function(s) { s.srcset = ''; });
+                    img.onload = function() {
+                        if (!container.querySelector('.webcam-stale-overlay')) {
+                            var overlay = document.createElement('div');
+                            overlay.className = 'webcam-stale-overlay';
+                            overlay.setAttribute('role', 'status');
+                            overlay.innerHTML = '<span class="stale-message">Live image unavailable. Tap for time-lapse history.</span>';
+                            container.appendChild(overlay);
+                        }
+                        container.classList.add('webcam-stale-dimmed');
+                    };
+                })
+                .catch(function() {});
+        }
+        function initEmbedWebcamStaleFallback() {
+            document.querySelectorAll('.webcam-image[data-cam-index]').forEach(function(img) {
+                if (img.dataset.staleFallbackInit) return;
+                img.dataset.staleFallbackInit = '1';
+                img.addEventListener('error', function onErr() {
+                    img.removeEventListener('error', onErr);
+                    tryHistoryOnWebcamError(img);
+                });
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initEmbedWebcamStaleFallback);
+        } else {
+            initEmbedWebcamStaleFallback();
+        }
+    })();
+    </script>
 </body>
 </html>

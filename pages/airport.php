@@ -7274,13 +7274,132 @@ function isWebcamStale(camIndex) {
     return age >= STALE_FAILCLOSED_SECONDS;
 }
 
-// Handle webcam image load errors - show placeholder image
+/**
+ * Check if we have a real webcam image (not placeholder)
+ * Used to decide: show stale overlay vs try history vs placeholder
+ */
+function hasRealWebcamImage(camIndex) {
+    const img = document.getElementById(`webcam-${camIndex}`);
+    if (!img) return false;
+    if (img.src && img.src.includes('cam=999')) return false;
+    return img.complete && img.naturalHeight > 0;
+}
+
+/**
+ * Show stale overlay on webcam - keep image, dim it, add message
+ * Call when image exists but exceeds fail-closed threshold
+ */
+function showStaleWebcamOverlay(camIndex, timestamp) {
+    const container = document.querySelector(`#webcam-${camIndex}`)?.closest('.webcam-container');
+    if (!container) return;
+    let overlay = container.querySelector('.webcam-stale-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'webcam-stale-overlay';
+        overlay.setAttribute('role', 'status');
+        overlay.setAttribute('aria-live', 'polite');
+        container.appendChild(overlay);
+    }
+    const updateDate = timestamp ? new Date(timestamp * 1000) : new Date();
+    const now = new Date();
+    const diffSeconds = Math.floor((now - updateDate) / 1000);
+    const relativeTime = typeof formatRelativeTime === 'function' ? formatRelativeTime(diffSeconds) : (diffSeconds + 's ago');
+    const timeStr = timestamp
+        ? (typeof formatObservationTimeForClockSkew === 'function' && typeof clientClockSkewDetected !== 'undefined' && clientClockSkewDetected
+            ? formatObservationTimeForClockSkew(timestamp)
+            : (updateDate.toLocaleTimeString() + ' (' + relativeTime + ')'))
+        : '';
+    overlay.innerHTML = '<span class="stale-message">Live image unavailable. Tap for time-lapse history.</span>' +
+        (timeStr ? '<span class="stale-timestamp">' + timeStr + '</span>' : '');
+    overlay.style.display = 'flex';
+    container.classList.add('webcam-stale-dimmed');
+    const timestampElem = document.getElementById(`webcam-timestamp-${camIndex}`);
+    if (timestampElem && timestamp) updateTimestampDisplay(timestampElem, timestamp);
+}
+
+/**
+ * Hide stale overlay when image becomes fresh again
+ */
+function hideStaleWebcamOverlay(camIndex) {
+    const container = document.querySelector(`#webcam-${camIndex}`)?.closest('.webcam-container');
+    if (container) {
+        container.classList.remove('webcam-stale-dimmed');
+        const overlay = container.querySelector('.webcam-stale-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+}
+
+/**
+ * Fetch latest frame from history API when main webcam is stale
+ * Phase 2: First-load or refresh when already stale - get image from history
+ * @param {number} camIndex Camera index
+ * @param {number} timestamp Latest timestamp (from mtime, may be stale)
+ * @param {HTMLImageElement|null} imgEl Image element to update
+ */
+function tryFetchStaleFromHistory(camIndex, timestamp, imgEl) {
+    const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
+    const host = window.location.host;
+    const historyUrl = `${protocol}//${host}/api/webcam-history.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=${camIndex}`;
+    fetch(historyUrl, { cache: 'no-store', credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+            if (!json || !json.enabled || !json.available || !Array.isArray(json.frames) || json.frames.length === 0) {
+                if (imgEl) {
+                    imgEl.onerror = null;
+                    setWebcamPlaceholder(imgEl, camIndex);
+                }
+                console.warn('[Webcam ' + camIndex + '] Stale, no history - showing placeholder');
+                return;
+            }
+            const latest = json.frames[json.frames.length - 1];
+            const relUrl = latest.url || `/api/webcam-history.php?id=${encodeURIComponent(AIRPORT_ID)}&cam=${camIndex}&ts=${latest.timestamp}`;
+            const frameUrl = relUrl.startsWith('http') ? relUrl : `${protocol}//${host}${relUrl}`;
+            const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
+            if (skeleton) skeleton.style.display = 'none';
+            const img = imgEl || document.getElementById(`webcam-${camIndex}`);
+            if (!img) return;
+            img.onerror = () => {
+                if (img) {
+                    img.onerror = null;
+                    setWebcamPlaceholder(img, camIndex);
+                }
+            };
+            img.src = frameUrl;
+            img.srcset = '';
+            const picture = img.closest('picture');
+            if (picture) picture.querySelectorAll('source').forEach(s => { s.srcset = ''; });
+            CAM_TS[camIndex] = latest.timestamp;
+            img.dataset.initialTimestamp = String(latest.timestamp);
+            img.setAttribute('data-ts', String(latest.timestamp));
+            img.onload = () => {
+                const tsEl = document.getElementById(`webcam-timestamp-${camIndex}`);
+                if (tsEl) updateTimestampDisplay(tsEl, latest.timestamp);
+                showStaleWebcamOverlay(camIndex, latest.timestamp);
+            };
+            console.warn('[Webcam ' + camIndex + '] Stale - loaded from history, showing overlay');
+        })
+        .catch(() => {
+            if (imgEl) {
+                imgEl.onerror = null;
+                setWebcamPlaceholder(imgEl, camIndex);
+            }
+            console.warn('[Webcam ' + camIndex + '] Stale, history fetch failed - showing placeholder');
+        });
+}
+
+// Handle webcam image load errors - try history first (seamless initial load when stale), then placeholder
 // Expose on window for inline onerror handlers (ensures availability before script fully executes)
 function handleWebcamError(camIndex, img) {
     // Prevent infinite loops - if we've already handled this error or it's a placeholder URL, stop
     const errorKey = `${camIndex}-${img.src}`;
     if (webcamErrorHandled.has(errorKey) || img.src.includes('cam=999')) {
         return; // Already handled or is placeholder - prevent infinite loop
+    }
+    // If failed URL is from history API, we already tried history - go straight to placeholder
+    if (img.src.includes('webcam-history.php')) {
+        webcamErrorHandled.add(errorKey);
+        showPlaceholderAfterError(camIndex, img);
+        return;
     }
     
     webcamErrorHandled.add(errorKey);
@@ -7295,20 +7414,22 @@ function handleWebcamError(camIndex, img) {
     const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
     if (skeleton) skeleton.style.display = 'none';
     
-    // Show placeholder image instead of broken image
-    // Use webcam.php endpoint with invalid cam index to trigger placeholder serving
-    // This ensures placeholder is served via the same endpoint with proper fallbacks
+    // Option 1: Try history first for seamless initial load when main webcam returns 503 (stale)
+    tryFetchStaleFromHistory(camIndex, null, img);
+}
+
+/**
+ * Show placeholder after error - used when history already tried or not applicable
+ */
+function showPlaceholderAfterError(camIndex, img) {
+    const skeleton = document.getElementById(`webcam-skeleton-${camIndex}`);
+    if (skeleton) skeleton.style.display = 'none';
     const protocol = (window.location.protocol === 'https:') ? 'https:' : 'http:';
     const host = window.location.host;
     const airportId = AIRPORT_ID || '';
-    // Use cam index 999 which will be out of bounds and trigger servePlaceholder()
     const placeholderUrl = `${protocol}//${host}/webcam.php?id=${encodeURIComponent(airportId)}&cam=999`;
-    
-    // Remove onerror attribute to prevent infinite loop
     img.onerror = null;
-    // Remove all error event listeners by cloning the node (preserves other attributes)
     const newImg = img.cloneNode(false);
-    // Copy over important attributes
     if (img.id) newImg.id = img.id;
     if (img.className) newImg.className = img.className;
     if (img.dataset) {
@@ -7316,11 +7437,9 @@ function handleWebcamError(camIndex, img) {
             newImg.dataset[key] = img.dataset[key];
         });
     }
-    // Replace the node to remove all event listeners
     if (img.parentNode) {
         img.parentNode.replaceChild(newImg, img);
         newImg.src = placeholderUrl;
-        // Mark placeholder URL as handled immediately
         webcamErrorHandled.add(`${camIndex}-${placeholderUrl}`);
     }
 }
@@ -8160,16 +8279,21 @@ function safeSwapCameraImage(camIndex, forceRefresh = false) {
             // Update CAM_TS with new timestamp for staleness check
             CAM_TS[camIndex] = newTs;
             
-            // Check staleness FIRST - even if timestamp unchanged, we need to show placeholder if stale
+            // Check staleness FIRST - even if timestamp unchanged
             if (isWebcamStale(camIndex)) {
-                // Webcam is stale - show placeholder instead of loading stale image
-                if (imgEl) {
-                    setWebcamPlaceholder(imgEl, camIndex);
-                }
                 CAM_LAST_FETCH[camIndex] = Date.now();
-                console.warn('[Webcam ' + camIndex + '] Stale image detected - showing placeholder');
-                return; // Don't load stale image
+                if (hasRealWebcamImage(camIndex)) {
+                    // Phase 1: Keep image, show stale overlay (dim + message)
+                    showStaleWebcamOverlay(camIndex, newTs);
+                    console.warn('[Webcam ' + camIndex + '] Stale image - showing overlay');
+                } else {
+                    // Phase 2: No image yet - try history API for latest frame
+                    tryFetchStaleFromHistory(camIndex, newTs, imgEl);
+                }
+                return;
             }
+            // Image is fresh - hide overlay if it was shown
+            hideStaleWebcamOverlay(camIndex);
             
             // Only update image if timestamp is newer (strictly greater) OR if force refresh is requested
             // Force refresh is used when returning from background to verify image is displaying correctly
