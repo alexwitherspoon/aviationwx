@@ -355,7 +355,7 @@ switch ($style) {
             var camIndex = img.dataset.camIndex;
             if (!airportId || !dashboardUrl || camIndex === undefined) return false;
             var historyUrl = dashboardUrl + '/api/webcam-history.php?id=' + encodeURIComponent(airportId) + '&cam=' + camIndex;
-            fetch(historyUrl, { cache: 'no-store', credentials: 'include' })
+            fetch(historyUrl, { cache: 'no-store', credentials: 'omit' })
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(json) {
                     if (!json || !json.enabled || !json.available || !Array.isArray(json.frames) || json.frames.length === 0) return;
