@@ -1549,7 +1549,7 @@ if ($themeCookie === 'dark') {
                     </div>
                     <div class="webcam-name-label">
                         <span class="webcam-name-text"><?= htmlspecialchars($cam['name']) ?></span>
-                        <span class="webcam-timestamp">Last updated: <span id="webcam-timestamp-clock-skew-<?= $index ?>" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="webcam-timestamp-warning-<?= $index ?>" class="webcam-timestamp-warning" style="display: none;">⚠️ </span><span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
+                        <span class="webcam-timestamp">Last Updated: <span id="webcam-timestamp-clock-skew-<?= $index ?>" class="timestamp-clock-skew" style="display: none;" title="Your device clock may be incorrect">🕐⚠️ </span><span id="webcam-timestamp-warning-<?= $index ?>" class="webcam-timestamp-warning" style="display: none;">⚠️ </span><span id="webcam-timestamp-<?= $index ?>" data-timestamp="<?= $mtimeJpg ?>">--</span></span>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -6424,6 +6424,31 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+// Format webcam timestamp for overlay/banner display - always uses airport timezone
+function formatWebcamTimestampForDisplay(timestamp, includeRelative) {
+    const ts = parseInt(timestamp, 10);
+    if (isNaN(ts) || ts <= 0) return '--';
+    const date = new Date(ts * 1000);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - date) / 1000);
+    const relativeTime = typeof formatRelativeTime === 'function' ? formatRelativeTime(diffSeconds) : (diffSeconds + 's ago');
+    const timezone = (AIRPORT_DATA && AIRPORT_DATA.timezone) || (typeof DEFAULT_TIMEZONE !== 'undefined' ? DEFAULT_TIMEZONE : 'UTC');
+    const timeFormat = typeof getTimeFormat === 'function' ? getTimeFormat() : '12hr';
+    const timeOptions = {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: timeFormat === '12hr'
+    };
+    try {
+        const actualTime = date.toLocaleTimeString('en-US', timeOptions);
+        return includeRelative !== false ? actualTime + ' (' + relativeTime + ')' : actualTime;
+    } catch (e) {
+        return relativeTime;
+    }
+}
+
 // Format observation time for display when clock skew detected (no relative time - client clock unreliable)
 // Always uses local/airport timezone; respects 12hr/24hr format preference
 function formatObservationTimeForClockSkew(timestamp) {
@@ -7300,17 +7325,13 @@ function showStaleWebcamOverlay(camIndex, timestamp) {
         overlay.setAttribute('aria-live', 'polite');
         container.appendChild(overlay);
     }
-    const updateDate = timestamp ? new Date(timestamp * 1000) : new Date();
-    const now = new Date();
-    const diffSeconds = Math.floor((now - updateDate) / 1000);
-    const relativeTime = typeof formatRelativeTime === 'function' ? formatRelativeTime(diffSeconds) : (diffSeconds + 's ago');
     const timeStr = timestamp
-        ? (typeof formatObservationTimeForClockSkew === 'function' && typeof clientClockSkewDetected !== 'undefined' && clientClockSkewDetected
+        ? (typeof clientClockSkewDetected !== 'undefined' && clientClockSkewDetected && typeof formatObservationTimeForClockSkew === 'function'
             ? formatObservationTimeForClockSkew(timestamp)
-            : (updateDate.toLocaleTimeString() + ' (' + relativeTime + ')'))
+            : (typeof formatWebcamTimestampForDisplay === 'function' ? formatWebcamTimestampForDisplay(timestamp) : '--'))
         : '';
     overlay.innerHTML = '<span class="stale-message">Live image unavailable. Tap for time-lapse history.</span>' +
-        (timeStr ? '<span class="stale-timestamp">' + timeStr + '</span>' : '');
+        (timeStr ? '<span class="stale-timestamp">Last Updated: ' + timeStr + '</span>' : '');
     overlay.style.display = 'flex';
     container.classList.add('webcam-stale-dimmed');
     const timestampElem = document.getElementById(`webcam-timestamp-${camIndex}`);

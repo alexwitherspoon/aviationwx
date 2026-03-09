@@ -1574,7 +1574,7 @@ $shouldNoIndex = $hasQueryParams;
                     var iframeAttrs = 'src="' + embedUrl + '" frameborder="0" loading="lazy" title="' + state.airport.identifier + ' Weather - AviationWX.org"';
                     if (state.sizeMode === 'responsive') {
                         iframeAttrs += '\n  style="width: 100%; height: ' + iframeHeight + 'px;"';
-                        return '<div class="aviationwx-embed" style="width:100%;">\n<iframe\n  ' + iframeAttrs + '>\n</iframe>\n</div>\n<script>\n(function(){var d=document.currentScript.previousElementSibling,f=d&&d.querySelector("iframe");if(f){window.addEventListener("message",function(e){if(e.data&&e.data.type==="aviationwx-resize"&&e.source===f.contentWindow){var h=Math.max(200,Math.min(5000,e.data.height||0));f.style.height=h+"px";}});}})();\n</script>';
+                        return '<div class="aviationwx-embed" style="width:100%;">\n<iframe\n  ' + iframeAttrs + '>\n</iframe>\n</div>\n<' + 'script>\n(function(){var d=document.currentScript.previousElementSibling,f=d&&d.querySelector("iframe");if(f){window.addEventListener("message",function(e){if(e.data&&e.data.type==="aviationwx-resize"&&e.source===f.contentWindow){var h=Math.max(200,Math.min(5000,e.data.height||0));f.style.height=h+"px";}});}})();\n<' + '/script>';
                     } else {
                         iframeAttrs += '\n  width="' + state.width + '" height="' + state.height + '"';
                         return '<iframe\n  ' + iframeAttrs + '>\n</iframe>';
